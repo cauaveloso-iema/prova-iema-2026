@@ -1,5 +1,29 @@
 const mongoose = require('mongoose');
 
+// ============================================
+// SUB-SCHEMA: REMARCAÇÃO
+// ============================================
+const RemarcacaoSchema = new mongoose.Schema({
+  id: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: () => new mongoose.Types.ObjectId()
+  },
+  dataRemarcacao: { type: String, required: true },
+  horarioRemarcacao: { type: String, required: true },
+  motivoRemarcacao: { type: String, required: true, trim: true },
+  observacoesRemarcacao: { type: String, default: '', trim: true },
+  status: {
+    type: String,
+    enum: ['pendente', 'realizado', 'cancelado'],
+    default: 'pendente'
+  },
+  criadaEm: { type: Date, default: Date.now },
+  criadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  criadaPorNome: { type: String, default: '' },
+  finalizadaEm: { type: Date, default: null },
+  finalizadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
+}, { _id: false });
+
 const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   alunoId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -12,7 +36,6 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   alunoCurso: String,
   alunoFoto: String,
   
-  // Tipo de tarefa de assistente social
   tipoTarefa: {
     type: String,
     enum: [
@@ -31,7 +54,6 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     required: true
   },
   
-  // Dados da entrada/registro
   entrada: {
     dataHora: { type: Date, default: Date.now },
     descricao: { type: String, required: true },
@@ -42,40 +64,37 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
       default: 'media'
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    registradoPorNome: String
+    registradoPorNome: String,
+    // 🔥 Assinatura digital
+    assinaturaBase64: {
+      type: String,
+      default: ''
+    }
   },
   
-  // Campos específicos por tipo
   detalhes: {
-    // Comuns
     contextoFamiliar: String,
     historicoAnterior: String,
     profissionaisEnvolvidos: [String],
     condicaoSocial: String,
     
-    // Encaminhamento
     encaminhadoPara: String,
     motivoEncaminhamento: String,
     agendadoPara: Date,
     
-    // Intervenção
     tipoIntervencao: String,
     metodosUtilizados: String,
     duracaoSessao: Number,
     
-    // Atendimento
     modalidadeAtendimento: String,
     participantesAtendimento: [String],
     
-    // Outros
     tipoTarefaOutros: String,
     
-    // Comuns finais
     providenciasTomadas: String,
     proximosPassos: String
   },
   
-  // Dados da saída/conclusão
   saida: {
     dataHora: Date,
     resultado: {
@@ -87,6 +106,16 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     observacoesFinais: String,
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String
+  },
+  
+  // 🔥 Remarcações
+  remarcacoes: {
+    type: [RemarcacaoSchema],
+    default: []
+  },
+  temRemarcacaoPendente: {
+    type: Boolean,
+    default: false
   },
   
   anexos: [{
@@ -117,6 +146,8 @@ AtendimentoAssistenteSocialSchema.index({ alunoId: 1, status: 1 });
 AtendimentoAssistenteSocialSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ createdAt: -1 });
+AtendimentoAssistenteSocialSchema.index({ temRemarcacaoPendente: 1, status: 1 });
+AtendimentoAssistenteSocialSchema.index({ 'remarcacoes.status': 1 });
 
 // Métodos estáticos
 AtendimentoAssistenteSocialSchema.statics.alunoEmAtendimento = async function(alunoId) {
@@ -143,6 +174,27 @@ AtendimentoAssistenteSocialSchema.statics.getTipoTarefaLabel = function(tipo) {
     'outros': 'Outros'
   };
   return labels[tipo] || tipo;
+};
+
+// Método para adicionar remarcação
+AtendimentoAssistenteSocialSchema.methods.adicionarRemarcacao = function(dados) {
+  if (!this.remarcacoes) this.remarcacoes = [];
+  
+  this.remarcacoes.push({
+    id: new mongoose.Types.ObjectId(),
+    dataRemarcacao: dados.dataRemarcacao,
+    horarioRemarcacao: dados.horarioRemarcacao,
+    motivoRemarcacao: dados.motivoRemarcacao,
+    observacoesRemarcacao: dados.observacoesRemarcacao || '',
+    status: 'pendente',
+    criadaEm: new Date(),
+    criadaPor: dados.criadaPor,
+    criadaPorNome: dados.criadaPorNome || ''
+  });
+  
+  this.temRemarcacaoPendente = true;
+  this.updatedAt = new Date();
+  return this.save();
 };
 
 module.exports = mongoose.model('AtendimentoAssistenteSocial', AtendimentoAssistenteSocialSchema);

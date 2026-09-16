@@ -1,5 +1,29 @@
 const mongoose = require('mongoose');
 
+// ============================================
+// SUB-SCHEMA: REMARCAÇÃO
+// ============================================
+const RemarcacaoSchema = new mongoose.Schema({
+  id: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: () => new mongoose.Types.ObjectId()
+  },
+  dataRemarcacao: { type: String, required: true },
+  horarioRemarcacao: { type: String, required: true },
+  motivoRemarcacao: { type: String, required: true, trim: true },
+  observacoesRemarcacao: { type: String, default: '', trim: true },
+  status: {
+    type: String,
+    enum: ['pendente', 'realizado', 'cancelado'],
+    default: 'pendente'
+  },
+  criadaEm: { type: Date, default: Date.now },
+  criadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  criadaPorNome: { type: String, default: '' },
+  finalizadaEm: { type: Date, default: null },
+  finalizadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
+}, { _id: false });
+
 const AtendimentoSupervisaoSchema = new mongoose.Schema({
   alunoId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -12,7 +36,6 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   alunoCurso: String,
   alunoFoto: String,
   
-  // Tipo de tarefa de supervisão
   tipoTarefa: {
     type: String,
     enum: [
@@ -28,7 +51,6 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     required: true
   },
   
-  // Dados da entrada/registro
   entrada: {
     dataHora: { type: Date, default: Date.now },
     descricao: { type: String, required: true },
@@ -39,10 +61,14 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
       default: 'media'
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    registradoPorNome: String
+    registradoPorNome: String,
+    // 🔥 Assinatura digital
+    assinaturaBase64: {
+      type: String,
+      default: ''
+    }
   },
   
-  // Campos específicos por tipo
   detalhes: {
     testemunhas: [String],
     descricaoOcorrido: String,
@@ -76,6 +102,16 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     registradoPorNome: String
   },
   
+  // 🔥 Remarcações
+  remarcacoes: {
+    type: [RemarcacaoSchema],
+    default: []
+  },
+  temRemarcacaoPendente: {
+    type: Boolean,
+    default: false
+  },
+  
   anexos: [{
     nome: String,
     url: String,
@@ -99,11 +135,15 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Índices
 AtendimentoSupervisaoSchema.index({ alunoId: 1, status: 1 });
 AtendimentoSupervisaoSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ createdAt: -1 });
+AtendimentoSupervisaoSchema.index({ temRemarcacaoPendente: 1, status: 1 });
+AtendimentoSupervisaoSchema.index({ 'remarcacoes.status': 1 });
 
+// Métodos estáticos
 AtendimentoSupervisaoSchema.statics.alunoEmAtendimento = async function(alunoId) {
   const atendimento = await this.findOne({ alunoId, status: 'em_andamento' });
   return !!atendimento;
@@ -125,6 +165,27 @@ AtendimentoSupervisaoSchema.statics.getTipoTarefaLabel = function(tipo) {
     'outros': 'Outros'
   };
   return labels[tipo] || tipo;
+};
+
+// Método para adicionar remarcação
+AtendimentoSupervisaoSchema.methods.adicionarRemarcacao = function(dados) {
+  if (!this.remarcacoes) this.remarcacoes = [];
+  
+  this.remarcacoes.push({
+    id: new mongoose.Types.ObjectId(),
+    dataRemarcacao: dados.dataRemarcacao,
+    horarioRemarcacao: dados.horarioRemarcacao,
+    motivoRemarcacao: dados.motivoRemarcacao,
+    observacoesRemarcacao: dados.observacoesRemarcacao || '',
+    status: 'pendente',
+    criadaEm: new Date(),
+    criadaPor: dados.criadaPor,
+    criadaPorNome: dados.criadaPorNome || ''
+  });
+  
+  this.temRemarcacaoPendente = true;
+  this.updatedAt = new Date();
+  return this.save();
 };
 
 module.exports = mongoose.model('AtendimentoSupervisao', AtendimentoSupervisaoSchema);

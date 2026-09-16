@@ -21,7 +21,11 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
     queixa: { type: String, required: true },
     observacoes: String,
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    registradoPorNome: String
+    registradoPorNome: String,
+    // 🆕 Auditoria de edição
+    editadoEm: { type: Date, default: null },
+    editadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    editadoPorNome: { type: String, default: null }
   },
   
   // Dados da saída (preenchido quando finalizado)
@@ -33,7 +37,7 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
       required: false
     },
     desfechoOutrosTexto: String,
-    coordenadorPatioNome: String, // Nome do coordenador de pátio quando liberado com ele
+    coordenadorPatioNome: String,
     observacoes: String,
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String
@@ -51,26 +55,19 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Índices para buscas eficientes
+// Índices
 AtendimentoEnfermariaSchema.index({ alunoId: 1, status: 1 });
 AtendimentoEnfermariaSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoEnfermariaSchema.index({ createdAt: -1 });
 
-// Método para verificar se aluno está em atendimento
+// Métodos estáticos
 AtendimentoEnfermariaSchema.statics.alunoEmAtendimento = async function(alunoId) {
-  const atendimento = await this.findOne({ 
-    alunoId, 
-    status: 'em_atendimento' 
-  });
+  const atendimento = await this.findOne({ alunoId, status: 'em_atendimento' });
   return !!atendimento;
 };
 
-// Método para buscar atendimento ativo de um aluno
 AtendimentoEnfermariaSchema.statics.getAtendimentoAtivo = async function(alunoId) {
-  return await this.findOne({ 
-    alunoId, 
-    status: 'em_atendimento' 
-  }).sort({ createdAt: -1 });
+  return await this.findOne({ alunoId, status: 'em_atendimento' }).sort({ createdAt: -1 });
 };
 
 module.exports = mongoose.model('AtendimentoEnfermaria', AtendimentoEnfermariaSchema);

@@ -911,6 +911,14 @@ app.use('/api/gestao-geral/autorizacao', autorizacaoRoutes);
 const permissaoModulosRoutes = require('./routes/permissao-modulos-routes');
 app.use('/api/admin/permissoes-modulos', permissaoModulosRoutes);
 
+// ============ ROTAS DE ACOMPANHAMENTO ============
+const acompanhamentoRoutes = require('./routes/acompanhamento');
+app.use('/api/acompanhamento', acompanhamentoRoutes);
+
+// Importar e registrar a rota de substituição de professores
+const substituicaoProfessorRoutes = require('./routes/substituicao-professor-routes');
+app.use('/api/substituicao-professor', substituicaoProfessorRoutes);
+
 
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26
@@ -3962,8 +3970,6 @@ app.get('/api/turmas', authenticateToken, async (req, res) => {
     let query = {};
     let eixoDoAluno = null;
     
-    console.log(`🔍 Buscando turmas para usuário: ${req.userId} (${req.userRole})`);
-    
     if (req.userRole === 'professor') {
       query.professorId = req.userId;
     } else if (req.userRole === 'aluno') {
@@ -3988,8 +3994,6 @@ app.get('/api/turmas', authenticateToken, async (req, res) => {
       .populate('professorId', 'nome email')
       .populate('alunos', 'nome email')
       .sort({ createdAt: -1 });
-
-    console.log(`📊 Total de turmas encontradas: ${turmas.length}`);
 
     // Para cada turma, buscar informações do eixo baseado no nome
     const turmasComInfo = await Promise.all(turmas.map(async (t) => {

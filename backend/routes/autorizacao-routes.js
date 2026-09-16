@@ -4,8 +4,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 
 // ============================================
-// 🔥 LAZY LOADING - NÃO importar modelos no topo!
-// Isso evita conflito com a conexão do MongoDB no server.js
+// 🔥 LAZY LOADING
 // ============================================
 function getUser() {
     return require('../models/User');
@@ -13,6 +12,21 @@ function getUser() {
 
 function getAutorizacao() {
     return require('../models/Autorizacao');
+}
+
+// ============================================
+// 🔥 HELPER: Timezone Brasil (UTC-3) com TOLERÂNCIA
+// ============================================
+function inicioDoDiaBrasil(dataStr) {
+    const d = new Date(dataStr + 'T00:00:00.000-03:00');
+    d.setDate(d.getDate() - 1);
+    return d;
+}
+
+function fimDoDiaBrasil(dataStr) {
+    const d = new Date(dataStr + 'T23:59:59.999-03:00');
+    d.setDate(d.getDate() + 1);
+    return d;
 }
 
 // ============================================
@@ -42,16 +56,11 @@ const authenticateToken = async (req, res, next) => {
             
             next();
         } catch (dbError) {
-            console.error('❌ Erro auth:', dbError);
             return res.status(500).json({ success: false, error: 'Erro ao autenticar' });
         }
     });
 };
 
-// ============================================
-// ✅ MIDDLEWARE SIMPLIFICADO
-// Agora permite Setor Pedagógico também.
-// ============================================
 const verificarGestaoGeral = (req, res, next) => {
     const allowedRoles = ['gestao_geral', 'super_admin', 'admin', 'setor_pedagogico'];
     if (!allowedRoles.includes(req.userRole)) {
@@ -60,7 +69,6 @@ const verificarGestaoGeral = (req, res, next) => {
     next();
 };
 
-// Motivos válidos por tipo
 const MOTIVOS_POR_TIPO = {
     'autorizacao': [
         'problemas_pessoais',
@@ -142,8 +150,8 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
             Autorizacao.countDocuments({
                 tipo,
                 data: {
-                    $gte: new Date(hojeStr),
-                    $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
+                    $gte: inicioDoDiaBrasil(hojeStr),
+                    $lte: fimDoDiaBrasil(hojeStr)
                 }
             }),
             Autorizacao.countDocuments({ tipo, data: { $gte: inicioSemana } }),
@@ -163,12 +171,13 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
             const d = new Date();
             d.setDate(d.getDate() - i);
             const diaStr = d.toISOString().split('T')[0];
-            const nextDia = new Date(d);
-            nextDia.setDate(nextDia.getDate() + 1);
 
             const count = await Autorizacao.countDocuments({
                 tipo,
-                data: { $gte: new Date(diaStr), $lt: nextDia }
+                data: { 
+                    $gte: inicioDoDiaBrasil(diaStr), 
+                    $lte: fimDoDiaBrasil(diaStr) 
+                }
             });
 
             ultimos7Dias.push({
@@ -225,13 +234,12 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
             }
         });
     } catch (error) {
-        console.error('❌ Erro dashboard:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // ============================================
-// 5. RELATÓRIO GERAL
+// 5. RELATÓRIO GERAL — 🔥 AGORA COM `registros`
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -239,13 +247,14 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
         const { tipo = 'autorizacao', dataInicio, dataFim } = req.query;
 
         let matchStage = { tipo };
+        
         if (dataInicio || dataFim) {
             matchStage.data = {};
-            if (dataInicio) matchStage.data.$gte = new Date(dataInicio);
-            if (dataFim) matchStage.data.$lte = new Date(dataFim + 'T23:59:59');
+            if (dataInicio) matchStage.data.$gte = inicioDoDiaBrasil(dataInicio);
+            if (dataFim) matchStage.data.$lte = fimDoDiaBrasil(dataFim);
         }
 
-        const [total, comAssinatura, porMotivo, porTurma] = await Promise.all([
+        const [total, comAssinatura, porMotivo, porTurma, registros] = await Promise.all([
             Autorizacao.countDocuments(matchStage),
             Autorizacao.countDocuments({ ...matchStage, temAssinatura: true }),
             Autorizacao.aggregate([
@@ -263,7 +272,12 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
                     }
                 },
                 { $sort: { total: -1 } }
-            ])
+            ]),
+            // 🔥 NOVO: registros detalhados para CSV
+            Autorizacao.find(matchStage)
+                .select('-assinaturaBase64')
+                .sort({ data: -1 })
+                .limit(1000)
         ]);
 
         res.json({
@@ -280,6 +294,30 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
                 turma: t._id || 'Sem turma',
                 total: t.total,
                 totalAlunos: t.alunos.length
+            })),
+            // 🔥 NOVO: array com todos os registros
+            registros: registros.map(a => ({
+                id: a._id,
+                tipo: a.tipo,
+                alunoNome: a.alunoNome,
+                alunoMatricula: a.alunoMatricula,
+                alunoTurma: a.alunoTurma,
+                alunoCurso: a.alunoCurso,
+                data: a.data,
+                dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
+                horarioEntrada: a.horarioEntrada,
+                horarioSaida: a.horarioSaida,
+                horarioAusencia: a.horarioAusencia,
+                horarioRetorno: a.horarioRetorno,
+                motivo: a.motivo,
+                motivoLabel: Autorizacao.getMotivoLabel(a.motivo, a.tipo),
+                motivoOutros: a.motivoOutros,
+                responsavelNome: a.responsavelNome,
+                responsavelCPF: a.responsavelCPF,
+                responsavelTelefone: a.responsavelTelefone,
+                observacoes: a.observacoes,
+                temAssinatura: a.temAssinatura,
+                registradoPorNome: a.registradoPorNome
             }))
         });
     } catch (error) {
@@ -297,10 +335,11 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
         const { tipo = 'autorizacao', dataInicio, dataFim } = req.query;
 
         let matchStage = { tipo, alunoTurma: turma };
+        
         if (dataInicio || dataFim) {
             matchStage.data = {};
-            if (dataInicio) matchStage.data.$gte = new Date(dataInicio);
-            if (dataFim) matchStage.data.$lte = new Date(dataFim + 'T23:59:59');
+            if (dataInicio) matchStage.data.$gte = inicioDoDiaBrasil(dataInicio);
+            if (dataFim) matchStage.data.$lte = fimDoDiaBrasil(dataFim);
         }
 
         const [total, porAluno, porMotivo, registros] = await Promise.all([
@@ -378,10 +417,11 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
         const { tipo = 'autorizacao', dataInicio, dataFim } = req.query;
 
         let matchStage = { tipo, alunoId };
+        
         if (dataInicio || dataFim) {
             matchStage.data = {};
-            if (dataInicio) matchStage.data.$gte = new Date(dataInicio);
-            if (dataFim) matchStage.data.$lte = new Date(dataFim + 'T23:59:59');
+            if (dataInicio) matchStage.data.$gte = inicioDoDiaBrasil(dataInicio);
+            if (dataFim) matchStage.data.$lte = fimDoDiaBrasil(dataFim);
         }
 
         const [aluno, total, porMotivo, registros] = await Promise.all([
@@ -484,10 +524,11 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
         if (motivo && motivo !== 'todos') query.motivo = motivo;
         if (turma && turma !== 'todas') query.alunoTurma = turma;
         if (alunoNome) query.alunoNome = { $regex: alunoNome, $options: 'i' };
+        
         if (dataInicio || dataFim) {
             query.data = {};
-            if (dataInicio) query.data.$gte = new Date(dataInicio);
-            if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59');
+            if (dataInicio) query.data.$gte = inicioDoDiaBrasil(dataInicio);
+            if (dataFim) query.data.$lte = fimDoDiaBrasil(dataFim);
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -536,7 +577,6 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
             }))
         });
     } catch (error) {
-        console.error('❌ Erro ao listar:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -627,8 +667,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                     return res.status(400).json({ success: false, error: 'Assinatura muito grande (máx 500KB)' });
                 }
                 assinaturaValida = assinaturaBase64;
-            } else if (assinaturaBase64.length > 0) {
-                console.warn('⚠️ Assinatura em formato inválido, ignorando...');
             }
         }
 
@@ -639,6 +677,17 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
         const gestor = await User.findById(req.userId).select('nome');
 
+        let dataFinal;
+        if (data) {
+            if (data.length === 10) {
+                dataFinal = new Date(data + 'T12:00:00.000-03:00');
+            } else {
+                dataFinal = new Date(data);
+            }
+        } else {
+            dataFinal = new Date();
+        }
+
         const autorizacao = new Autorizacao({
             tipo,
             alunoId: aluno._id,
@@ -647,7 +696,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             alunoTurma: aluno.turma || 'Não informada',
             alunoCurso: aluno.curso || 'Não informado',
             alunoFoto: aluno.fotoPerfil,
-            data: data ? new Date(data) : new Date(),
+            data: dataFinal,
             horarioEntrada, horarioSaida,
             responsavelNome: responsavelNome || undefined,
             responsavelCPF: responsavelCPF || undefined,
@@ -667,8 +716,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
         await autorizacao.save();
 
-        console.log(`✅ ${tipo} registrada: ${autorizacao._id} (${aluno.nome})${assinaturaValida ? ' [ASSINADO]' : ''}${origemId ? ` [ORIGEM: ${origemTipo}]` : ''}`);
-
         res.json({
             success: true,
             message: `Registro salvo para ${aluno.nome}`,
@@ -685,13 +732,12 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             }
         });
     } catch (error) {
-        console.error('❌ Erro ao registrar:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // ============================================
-// 12. BUSCAR POR ID (com assinatura completa)
+// 12. BUSCAR POR ID
 // ============================================
 router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -753,7 +799,6 @@ router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) 
 
         const a = await Autorizacao.findByIdAndDelete(req.params.id);
         if (!a) return res.status(404).json({ success: false, error: 'Registro não encontrado' });
-        console.log(`🗑️ Registro excluído: ${a._id} (${a.alunoNome})`);
         res.json({ success: true, message: 'Registro excluído com sucesso' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

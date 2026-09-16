@@ -599,26 +599,53 @@ async function carregarAtendimentosAtivos() {
         if (data.success && Array.isArray(data.atendimentos) && data.atendimentos.length > 0) {
             container.innerHTML = data.atendimentos.map(a => `
                 <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>${escapeHTML(a.alunoNome || '')}</strong>
-                            <br>
-                            <small class="text-muted">Turma: ${escapeHTML(a.alunoTurma || '-')}</small>
-                            <br>
-                            <small class="text-muted">Há ${a.tempoAtendimento || 0} minutos</small>
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
+                                 style="width:50px;height:50px;border-radius:50%;object-fit:cover;"
+                                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome || '?')}'">
+                            <div>
+                                <strong>${escapeHTML(a.alunoNome || '')}</strong>
+                                <br><small class="text-muted">Turma: ${escapeHTML(a.alunoTurma || '-')}</small>
+                                <br><small class="text-muted">
+                                    <i class="fas fa-clock"></i> Há ${a.tempoAtendimento || 0} minutos
+                                </small>
+                                <br>
+                                <span class="badge bg-warning text-dark">Em atendimento</span>
+                            </div>
                         </div>
-                        <div>
-                            <span class="badge-status badge-em_atendimento">Em atendimento</span>
-                            <br>
-                            <small>${escapeHTML((a.queixa || '').substring(0, 50))}${(a.queixa || '').length > 50 ? '...' : ''}</small>
+                        <div class="d-flex flex-wrap gap-1 justify-content-end">
+                            <button class="btn btn-sm btn-info" 
+                                    onclick="verAtendimento('${a.id}')" 
+                                    title="Ver detalhes">
+                                <i class="fas fa-eye"></i> Ver
+                            </button>
+                            <button class="btn btn-sm btn-warning" 
+                                    onclick="editarAtendimento('${a.id}')" 
+                                    title="Editar queixa/observações">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            <button class="btn btn-sm btn-success" 
+                                    onclick="finalizarAtendimentoAtivo('${a.alunoId}')" 
+                                    title="Finalizar atendimento">
+                                <i class="fas fa-check"></i> Finalizar
+                            </button>
+                            <button class="btn btn-sm btn-danger" 
+                                    onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
+                                    title="Excluir atendimento">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
+                    </div>
+                    <div class="mt-2 p-2" style="background:#f8fafc;border-radius:8px;font-size:13px;">
+                        <strong>Queixa:</strong> ${escapeHTML((a.queixa || '').substring(0, 200))}${(a.queixa || '').length > 200 ? '...' : ''}
                     </div>
                 </div>
             `).join('');
         } else {
             container.innerHTML = `
                 <div class="text-center text-muted py-5">
-                    <i class="fas fa-check-circle fa-3x mb-3"></i>
+                    <i class="fas fa-check-circle fa-3x mb-3" style="color:#10b981;"></i>
                     <p>Nenhum atendimento ativo no momento</p>
                 </div>
             `;
@@ -626,6 +653,358 @@ async function carregarAtendimentosAtivos() {
     } catch (error) {
         console.error('Erro:', error);
         container.innerHTML = '<div class="alert alert-danger">Erro ao carregar atendimentos</div>';
+    }
+}
+
+// ============================================
+// 🆕 VER ATENDIMENTO (MODAL DE DETALHES)
+// ============================================
+async function verAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            alert('Erro ao carregar atendimento');
+            return;
+        }
+        
+        const a = data.atendimento;
+        
+        // Montar HTML das informações de saída (se houver)
+        let saidaHTML = '';
+        if (a.saida) {
+            saidaHTML = `
+                <div class="section-title">🎯 Resultado / Saída</div>
+                <div class="info-row">
+                    <div class="info-label">Desfecho:</div>
+                    <div class="info-value"><strong>${escapeHTML(a.saida.desfechoTexto || '')}</strong></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Data da Saída:</div>
+                    <div class="info-value">${escapeHTML(a.saida.dataHoraFormatada || '-')}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Registrado por:</div>
+                    <div class="info-value">${escapeHTML(a.saida.registradoPorNome || '-')}</div>
+                </div>
+                ${a.saida.observacoes ? `
+                    <div class="info-row">
+                        <div class="info-label">Observações finais:</div>
+                        <div class="info-value">${escapeHTML(a.saida.observacoes)}</div>
+                    </div>
+                ` : ''}
+            `;
+        }
+        
+        // Info sobre edição
+        let editadoHTML = '';
+        if (a.entrada.editadoEm) {
+            editadoHTML = `
+                <div class="alert alert-info mt-2" style="font-size: 12px;">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Editado em:</strong> ${new Date(a.entrada.editadoEm).toLocaleString('pt-BR')} 
+                    por <strong>${escapeHTML(a.entrada.editadoPorNome || 'Enfermeiro')}</strong>
+                </div>
+            `;
+        }
+        
+        const oldModal = safeGet('modalVerAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-eye"></i> Detalhes do Atendimento</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body detalhe-atendimento">
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f0fdf4; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                                     style="width: 50px; height: 50px; border-radius: 50%;"
+                                     onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #065f46;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                                <span class="badge" style="background: ${a.status === 'finalizado' ? '#10b981' : '#f59e0b'}; font-size: 12px;">
+                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Atendimento'}
+                                </span>
+                            </div>
+                            
+                            <div class="section-title">📌 Informações da Entrada</div>
+                            <div class="info-row">
+                                <div class="info-label">Data de Entrada:</div>
+                                <div class="info-value">${escapeHTML(a.entrada.dataHoraFormatada || '-')}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Registrado por:</div>
+                                <div class="info-value">${escapeHTML(a.entrada.registradoPorNome || '-')}</div>
+                            </div>
+                            
+                            <div class="section-title">📝 Queixa</div>
+                            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 14px; color: #374151; line-height: 1.5;">
+                                ${escapeHTML(a.entrada.queixa || '-').replace(/\n/g, '<br>')}
+                            </div>
+                            
+                            ${a.entrada.observacoes ? `
+                                <div class="section-title">💬 Observações</div>
+                                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
+                                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
+                                </div>
+                            ` : ''}
+                            
+                            ${editadoHTML}
+                            ${saidaHTML}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                            ${a.status === 'em_atendimento' ? `
+                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); editarAtendimento('${a.id}')">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
+                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); finalizarAtendimentoAtivo('${a.alunoId}')">
+                                    <i class="fas fa-check"></i> Finalizar
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn btn-danger" onclick="fecharVerAtendimento(); excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome)}')">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(safeGet('modalVerAtendimento'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao ver atendimento:', error);
+        alert('Erro ao carregar detalhes do atendimento');
+    }
+}
+
+function fecharVerAtendimento() {
+    const modal = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
+    if (modal) modal.hide();
+    setTimeout(() => {
+        const el = safeGet('modalVerAtendimento');
+        if (el) el.remove();
+    }, 300);
+}
+
+// ============================================
+// 🆕 EDITAR ATENDIMENTO
+// ============================================
+async function editarAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        // Buscar dados atuais
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            alert('Erro ao carregar atendimento');
+            return;
+        }
+        
+        const a = data.atendimento;
+        
+        if (a.status === 'finalizado') {
+            alert('⚠️ Não é possível editar atendimentos já finalizados');
+            return;
+        }
+        
+        const oldModal = safeGet('modalEditarAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-edit"></i> Editar Atendimento</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="editarAtendimentoId" value="${atendimentoId}">
+                            
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fffbeb; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                                     style="width: 50px; height: 50px; border-radius: 50%;"
+                                     onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                                <div>
+                                    <strong>${escapeHTML(a.alunoNome)}</strong><br>
+                                    <small class="text-muted">${escapeHTML(a.alunoMatricula || '-')} • ${escapeHTML(a.alunoTurma || '-')}</small>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Queixa / Motivo <span class="text-danger">*</span></label>
+                                <textarea id="editarQueixa" class="form-control" rows="4" placeholder="Descreva o que o aluno está sentindo...">${escapeHTML(a.entrada.queixa || '')}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="editarObservacoes" class="form-control" rows="3" placeholder="Sinais vitais, medicamentos, etc...">${escapeHTML(a.entrada.observacoes || '')}</textarea>
+                            </div>
+                            
+                            <div class="alert alert-info" style="font-size: 13px;">
+                                <i class="fas fa-info-circle"></i>
+                                As alterações serão registradas no histórico com seu nome e data/hora.
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-warning" onclick="salvarEdicaoAtendimento()">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(safeGet('modalEditarAtendimento'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao editar atendimento:', error);
+        alert('Erro ao carregar atendimento para edição');
+    }
+}
+
+async function salvarEdicaoAtendimento() {
+    const atendimentoId = safeGet('editarAtendimentoId')?.value;
+    const queixa = safeGet('editarQueixa')?.value.trim();
+    const observacoes = safeGet('editarObservacoes')?.value || '';
+    
+    if (!queixa) {
+        alert('A queixa é obrigatória');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ queixa, observacoes })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Atendimento atualizado com sucesso!');
+            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
+            if (modal) modal.hide();
+            setTimeout(() => safeGet('modalEditarAtendimento')?.remove(), 300);
+            
+            carregarAtendimentosAtivos();
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao salvar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações');
+    }
+}
+
+// ============================================
+// 🆕 EXCLUIR ATENDIMENTO
+// ============================================
+async function excluirAtendimento(atendimentoId, alunoNome) {
+    if (!atendimentoId) return;
+    
+    if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação NÃO pode ser desfeita!`)) {
+        return;
+    }
+    
+    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Atendimento excluído com sucesso!');
+            
+            // Remover linha com animação
+            const row = document.querySelector(`[data-id="${atendimentoId}"]`);
+            if (row) {
+                row.style.transition = 'all 0.3s';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-20px)';
+                setTimeout(() => row.remove(), 300);
+            }
+            
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao excluir'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao excluir atendimento');
+    }
+}
+
+// ============================================
+// 🆕 FINALIZAR ATENDIMENTO ATIVO (a partir do botão)
+// ============================================
+async function finalizarAtendimentoAtivo(alunoId) {
+    if (!alunoId) return;
+    
+    // Buscar o aluno para pegar seus dados
+    try {
+        const response = await fetch(`/api/enfermaria/aluno/${alunoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.aluno) {
+            currentAluno = data.aluno;
+            // Fechar modal se estiver aberto
+            const modalVer = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
+            if (modalVer) modalVer.hide();
+            
+            // Ir para a aba de atendimento
+            const tabAtendimento = safeGet('atendimento-tab');
+            if (tabAtendimento) {
+                new bootstrap.Tab(tabAtendimento).show();
+            }
+            
+            // Exibir aluno e formulário de saída
+            exibirAluno(data);
+            mostrarFormSaida();
+        } else {
+            alert('Erro ao carregar dados do aluno');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar aluno');
     }
 }
 
@@ -991,4 +1370,10 @@ window.carregarRelatorio = carregarRelatorio;
 window.exportarCSV = exportarCSV;
 window.exportarPDF = exportarPDF;
 window.toggleRelatorioFiltros = toggleRelatorioFiltros;
+window.verAtendimento = verAtendimento;
+window.fecharVerAtendimento = fecharVerAtendimento;
+window.editarAtendimento = editarAtendimento;
+window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
+window.excluirAtendimento = excluirAtendimento;
+window.finalizarAtendimentoAtivo = finalizarAtendimentoAtivo;
 window.logout = logout;

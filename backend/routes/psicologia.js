@@ -36,6 +36,16 @@ const verificarPsicologia = (req, res, next) => {
 };
 
 // ============================================
+// 🔥 HELPER: Timezone Brasil (UTC-3)
+// ============================================
+function inicioDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T00:00:00.000-03:00');
+}
+function fimDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T23:59:59.999-03:00');
+}
+
+// ============================================
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
@@ -199,11 +209,14 @@ router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, 
 });
 
 // ============================================
-// REGISTRAR NOVO ATENDIMENTO
+// REGISTRAR NOVO ATENDIMENTO (COM ASSINATURA)
 // ============================================
 router.post('/registrar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
-    const { alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes } = req.body;
+    const { 
+      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
+      assinaturaBase64 
+    } = req.body;
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -229,6 +242,13 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
     
     const psicologo = await User.findById(req.userId).select('nome');
     
+    let assinaturaValida = '';
+    if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
+      if (assinaturaBase64.startsWith('data:image/') && assinaturaBase64.length < 500000) {
+        assinaturaValida = assinaturaBase64;
+      }
+    }
+    
     const atendimento = new AtendimentoPsicologia({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -243,7 +263,8 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
         observacoes: observacoes || '',
         gravidade: gravidade || 'media',
         registradoPor: req.userId,
-        registradoPorNome: psicologo?.nome || req.userNome || 'Psicólogo'
+        registradoPorNome: psicologo?.nome || req.userNome || 'Psicólogo',
+        assinaturaBase64: assinaturaValida
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
@@ -260,7 +281,8 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
         tipoTarefa: atendimento.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(tipoTarefa),
         status: atendimento.status,
-        dataHora: atendimento.entrada.dataHora
+        dataHora: atendimento.entrada.dataHora,
+        temAssinatura: !!assinaturaValida
       }
     });
     
@@ -332,7 +354,264 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
 });
 
 // ============================================
-// DASHBOARD
+// REMARCAR ATENDIMENTO
+// ============================================
+router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const { 
+      atendimentoId, 
+      dataRemarcacao, 
+      horarioRemarcacao, 
+      motivoRemarcacao, 
+      observacoesRemarcacao 
+    } = req.body;
+    
+    if (!atendimentoId) {
+      return res.status(400).json({ success: false, error: 'ID do atendimento é obrigatório' });
+    }
+    if (!dataRemarcacao) {
+      return res.status(400).json({ success: false, error: 'Data da remarcação é obrigatória' });
+    }
+    if (!horarioRemarcacao) {
+      return res.status(400).json({ success: false, error: 'Horário da remarcação é obrigatório' });
+    }
+    if (!motivoRemarcacao) {
+      return res.status(400).json({ success: false, error: 'Motivo da remarcação é obrigatório' });
+    }
+    
+    const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
+    if (!atendimento) {
+      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+    
+    const dataObj = new Date(dataRemarcacao + 'T00:00:00');
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    if (dataObj < hoje) {
+      return res.status(400).json({ success: false, error: 'A data deve ser hoje ou no futuro' });
+    }
+    
+    const psicologo = await User.findById(req.userId).select('nome');
+    
+    const remarcacao = {
+      id: new (require('mongoose').Types.ObjectId)(),
+      dataRemarcacao,
+      horarioRemarcacao,
+      motivoRemarcacao,
+      observacoesRemarcacao: observacoesRemarcacao || '',
+      status: 'pendente',
+      criadaEm: new Date(),
+      criadaPor: req.userId,
+      criadaPorNome: psicologo?.nome || req.userNome || 'Psicólogo'
+    };
+    
+    if (!atendimento.remarcacoes) atendimento.remarcacoes = [];
+    atendimento.remarcacoes.push(remarcacao);
+    atendimento.temRemarcacaoPendente = true;
+    atendimento.updatedAt = new Date();
+    
+    await atendimento.save();
+    
+    console.log(`📅 Remarcação criada: ${atendimento.alunoNome} → ${dataRemarcacao} ${horarioRemarcacao}`);
+    
+    res.json({
+      success: true,
+      message: `Atendimento remarcado para ${dataObj.toLocaleDateString('pt-BR')} às ${horarioRemarcacao}`,
+      remarcacao: {
+        id: remarcacao.id,
+        atendimentoId: atendimento._id,
+        dataRemarcacao,
+        horarioRemarcacao,
+        motivoRemarcacao,
+        observacoesRemarcacao: remarcacao.observacoesRemarcacao,
+        status: 'pendente'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao remarcar:', error);
+    res.status(500).json({ success: false, error: 'Erro ao remarcar: ' + error.message });
+  }
+});
+
+// ============================================
+// LISTAR REMARCAÇÕES PENDENTES
+// ============================================
+router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const atendimentos = await AtendimentoPsicologia.find({
+      'remarcacoes.status': 'pendente',
+      status: { $ne: 'cancelado' }
+    }).sort({ 'remarcacoes.dataRemarcacao': 1 });
+    
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    const remarcacoes = [];
+    
+    atendimentos.forEach(atendimento => {
+      (atendimento.remarcacoes || []).forEach(rem => {
+        if (rem.status !== 'pendente') return;
+        
+        const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
+        const atrasado = dataRem < hoje;
+        const ehHoje = dataRem.getTime() === hoje.getTime();
+        
+        remarcacoes.push({
+          id: rem.id.toString(),
+          atendimentoId: atendimento._id,
+          alunoId: atendimento.alunoId,
+          alunoNome: atendimento.alunoNome,
+          alunoTurma: atendimento.alunoTurma,
+          alunoFoto: atendimento.alunoFoto,
+          tipoTarefa: atendimento.tipoTarefa,
+          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa),
+          dataRemarcacao: rem.dataRemarcacao,
+          horarioRemarcacao: rem.horarioRemarcacao,
+          motivoRemarcacao: rem.motivoRemarcacao,
+          observacoesRemarcacao: rem.observacoesRemarcacao,
+          status: rem.status,
+          atrasado,
+          hoje: ehHoje,
+          criadaEm: rem.criadaEm,
+          criadaPorNome: rem.criadaPorNome
+        });
+      });
+    });
+    
+    remarcacoes.sort((a, b) => {
+      if (a.atrasado && !b.atrasado) return -1;
+      if (!a.atrasado && b.atrasado) return 1;
+      if (a.hoje && !b.hoje) return -1;
+      if (!a.hoje && b.hoje) return 1;
+      return new Date(a.dataRemarcacao) - new Date(b.dataRemarcacao);
+    });
+    
+    res.json({
+      success: true,
+      total: remarcacoes.length,
+      remarcacoes
+    });
+    
+  } catch (error) {
+    console.error('Erro ao buscar remarcações:', error);
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// BUSCAR REMARCAÇÃO POR ID
+// ============================================
+router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const atendimento = await AtendimentoPsicologia.findOne({
+      'remarcacoes.id': req.params.id
+    });
+    
+    if (!atendimento) {
+      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    }
+    
+    const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === req.params.id);
+    
+    if (!remarcacao) {
+      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    }
+    
+    res.json({
+      success: true,
+      remarcacao: {
+        id: remarcacao.id.toString(),
+        atendimentoId: atendimento._id,
+        alunoId: atendimento.alunoId,
+        alunoNome: atendimento.alunoNome,
+        alunoTurma: atendimento.alunoTurma,
+        dataRemarcacao: remarcacao.dataRemarcacao,
+        horarioRemarcacao: remarcacao.horarioRemarcacao,
+        motivoRemarcacao: remarcacao.motivoRemarcacao,
+        observacoesRemarcacao: remarcacao.observacoesRemarcacao,
+        status: remarcacao.status,
+        criadaEm: remarcacao.criadaEm
+      }
+    });
+    
+  } catch (error) {
+    console.error('Erro ao buscar remarcação:', error);
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// FINALIZAR REMARCAÇÃO
+// ============================================
+router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const { remarcacaoId, acao } = req.body;
+    
+    if (!remarcacaoId) {
+      return res.status(400).json({ success: false, error: 'ID da remarcação é obrigatório' });
+    }
+    
+    if (!['realizado', 'cancelado'].includes(acao)) {
+      return res.status(400).json({ success: false, error: 'Ação inválida. Use "realizado" ou "cancelado"' });
+    }
+    
+    const atendimento = await AtendimentoPsicologia.findOne({
+      'remarcacoes.id': remarcacaoId
+    });
+    
+    if (!atendimento) {
+      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    }
+    
+    const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === remarcacaoId);
+    
+    if (!remarcacao) {
+      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    }
+    
+    remarcacao.status = acao === 'realizado' ? 'realizado' : 'cancelado';
+    remarcacao.finalizadaEm = new Date();
+    remarcacao.finalizadaPor = req.userId;
+    
+    const temPendente = (atendimento.remarcacoes || []).some(r => r.status === 'pendente');
+    atendimento.temRemarcacaoPendente = temPendente;
+    
+    if (acao === 'realizado' && atendimento.status === 'em_andamento') {
+      atendimento.status = 'finalizado';
+      atendimento.saida = {
+        dataHora: new Date(),
+        resultado: 'resolvido',
+        resultadoTexto: 'Atendimento remarcado e realizado',
+        observacoesFinais: `Remarcação realizada em ${new Date().toLocaleString('pt-BR')}`,
+        registradoPor: req.userId,
+        registradoPorNome: req.userNome
+      };
+    }
+    
+    atendimento.updatedAt = new Date();
+    await atendimento.save();
+    
+    const mensagem = acao === 'realizado' 
+      ? '✅ Remarcação marcada como realizada!' 
+      : '❌ Remarcação cancelada.';
+    
+    console.log(`📅 Remarcação ${acao}: ${atendimento.alunoNome}`);
+    
+    res.json({
+      success: true,
+      message: mensagem
+    });
+    
+  } catch (error) {
+    console.error('Erro ao finalizar remarcação:', error);
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// DASHBOARD — 🔥 CORRIGIDO
 // ============================================
 router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -347,8 +626,8 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
       AtendimentoPsicologia.countDocuments({
         'entrada.dataHora': {
-          $gte: new Date(hojeStr),
-          $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
+          $gte: inicioDoDiaBrasil(hojeStr),
+          $lte: fimDoDiaBrasil(hojeStr)
         }
       }),
       AtendimentoPsicologia.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
@@ -360,8 +639,8 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     const finalizadosHoje = await AtendimentoPsicologia.countDocuments({
       status: 'finalizado',
       'saida.dataHora': {
-        $gte: new Date(hojeStr),
-        $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
+        $gte: inicioDoDiaBrasil(hojeStr),
+        $lte: fimDoDiaBrasil(hojeStr)
       }
     });
     
@@ -387,12 +666,9 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
       const data = new Date();
       data.setDate(data.getDate() - i);
       const dataStr = data.toISOString().split('T')[0];
-      const inicio = new Date(dataStr);
-      const fim = new Date(dataStr);
-      fim.setDate(fim.getDate() + 1);
       
       const count = await AtendimentoPsicologia.countDocuments({
-        'entrada.dataHora': { $gte: inicio, $lt: fim }
+        'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
       });
       
       ultimos7Dias.push({
@@ -498,7 +774,9 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
         gravidade: a.entrada.gravidade,
         prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
-        tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000)
+        tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
+        temRemarcacaoPendente: a.temRemarcacaoPendente || false,
+        temAssinatura: !!(a.entrada?.assinaturaBase64)
       }))
     });
     
@@ -509,7 +787,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS
+// LISTAR TODOS OS ATENDIMENTOS — 🔥 CORRIGIDO
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -519,10 +797,12 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
+    
+    // 🔥 CORRIGIDO: Timezone Brasil UTC-3
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -560,6 +840,7 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
         dataEntrada: a.entrada.dataHora,
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
         registradoPor: a.entrada.registradoPorNome,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
         saida: a.saida ? {
           dataHora: a.saida.dataHora,
           dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
@@ -612,7 +893,9 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
           descricao: atendimento.entrada.descricao,
           observacoes: atendimento.entrada.observacoes,
           gravidade: atendimento.entrada.gravidade,
-          registradoPor: atendimento.entrada.registradoPorNome
+          registradoPor: atendimento.entrada.registradoPorNome,
+          temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
+          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null
         },
         detalhes: atendimento.detalhes,
         saida: atendimento.saida ? {
@@ -625,6 +908,8 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
         } : null,
         status: atendimento.status,
         prioridade: atendimento.prioridade,
+        remarcacoes: atendimento.remarcacoes || [],
+        temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
         anexos: atendimento.anexos,
         createdAt: atendimento.createdAt
       }
@@ -690,6 +975,8 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     }
     
+    console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id})`);
+    
     res.json({ success: true, message: 'Atendimento excluído com sucesso' });
     
   } catch (error) {
@@ -699,7 +986,66 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
 });
 
 // ============================================
-// RELATÓRIO POR ALUNO
+// EXCLUSÃO EM MASSA
+// ============================================
+router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const { dataCorte, status = 'finalizado', confirmacao } = req.body;
+
+    if (confirmacao !== 'CONFIRMAR') {
+      return res.status(400).json({ success: false, error: 'Confirmação inválida' });
+    }
+
+    if (!dataCorte) {
+      return res.status(400).json({ success: false, error: 'Data de corte é obrigatória' });
+    }
+
+    const dataObj = fimDoDiaBrasil(dataCorte);
+
+    if (isNaN(dataObj.getTime())) {
+      return res.status(400).json({ success: false, error: 'Data de corte inválida' });
+    }
+
+    const filtro = {
+      status: status,
+      'saida.dataHora': { $lt: dataObj }
+    };
+
+    const totalAntes = await AtendimentoPsicologia.countDocuments(filtro);
+
+    if (totalAntes === 0) {
+      return res.json({
+        success: true,
+        message: 'Nenhum atendimento encontrado para os critérios',
+        excluidos: 0
+      });
+    }
+
+    const resultado = await AtendimentoPsicologia.deleteMany(filtro);
+
+    console.log(`🗑️ EXCLUSÃO EM MASSA: ${resultado.deletedCount} atendimentos excluídos pelo usuário ${req.userId}`);
+    console.log(`   Data de corte: ${dataCorte}`);
+    console.log(`   Status filtrado: ${status}`);
+
+    res.json({
+      success: true,
+      message: `${resultado.deletedCount} atendimento(s) excluído(s) com sucesso`,
+      excluidos: resultado.deletedCount,
+      dataCorte: dataCorte,
+      status: status
+    });
+
+  } catch (error) {
+    console.error('Erro na exclusão em massa:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro ao excluir atendimentos: ' + error.message 
+    });
+  }
+});
+
+// ============================================
+// RELATÓRIO POR ALUNO — 🔥 CORRIGIDO
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -708,8 +1054,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
     let query = { alunoId: req.params.alunoId };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atendimentos = await AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 });
@@ -753,7 +1099,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
         gravidade: a.entrada.gravidade,
         status: a.status,
         dataSaida: a.saida?.dataHora || null,
-        resultado: a.saida?.resultado || null
+        resultado: a.saida?.resultado || null,
+        temAssinatura: !!(a.entrada?.assinaturaBase64)
       }))
     });
     
@@ -764,7 +1111,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
 });
 
 // ============================================
-// RELATÓRIO POR TURMA
+// RELATÓRIO POR TURMA — 🔥 CORRIGIDO
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -773,8 +1120,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
     let query = { alunoTurma: req.params.turma };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atendimentos = await AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 });
@@ -831,7 +1178,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
 });
 
 // ============================================
-// RELATÓRIO GERAL
+// RELATÓRIO GERAL — 🔥 COM REGISTROS
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -840,13 +1187,18 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
     let query = {};
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
+    
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
-    const atendimentos = await AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 });
+    const [atendimentos, total, comAssinatura] = await Promise.all([
+      AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 }).limit(1000),
+      AtendimentoPsicologia.countDocuments(query),
+      AtendimentoPsicologia.countDocuments({ ...query, 'entrada.assinaturaBase64': { $exists: true, $ne: '' } })
+    ]);
     
     const porTurma = {};
     const porTipo = {};
@@ -874,7 +1226,8 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       success: true,
       filtros: { dataInicio, dataFim, turma, tipo },
       turmasDisponiveis: turmas.filter(t => t && t !== 'Não informada'),
-      totalAtendimentos: atendimentos.length,
+      totalAtendimentos: total,
+      comAssinatura,
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
       porTipo: Object.entries(porTipo).map(([t, count]) => ({
         tipo: t,
@@ -882,6 +1235,24 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
         count
       })).sort((a, b) => b.count - a.count),
       porGravidade,
+      // 🔥 NOVO: registros detalhados para CSV
+      registros: atendimentos.map(a => ({
+        id: a._id,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        tipoTarefa: a.tipoTarefa,
+        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+        dataEntrada: a.entrada.dataHora,
+        dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
+        descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade,
+        status: a.status,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        registradoPorNome: a.entrada?.registradoPorNome
+      })),
+      // Retrocompatibilidade
       atendimentos: atendimentos.slice(0, 100).map(a => ({
         id: a._id,
         alunoNome: a.alunoNome,
@@ -891,7 +1262,8 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
         dataEntrada: a.entrada.dataHora,
         descricao: a.entrada.descricao.substring(0, 100),
         gravidade: a.entrada.gravidade,
-        status: a.status
+        status: a.status,
+        temAssinatura: !!(a.entrada?.assinaturaBase64)
       }))
     });
     

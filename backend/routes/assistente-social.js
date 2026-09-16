@@ -36,6 +36,16 @@ const verificarAssistenteSocial = (req, res, next) => {
 };
 
 // ============================================
+// 🔥 HELPER: Timezone Brasil (UTC-3)
+// ============================================
+function inicioDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T00:00:00.000-03:00');
+}
+function fimDoDiaBrasil(dataStr) {
+  return new Date(dataStr + 'T23:59:59.999-03:00');
+}
+
+// ============================================
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
@@ -43,20 +53,17 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// LISTAR TURMAS DISPONÍVEIS
+// LISTAR TURMAS
 // ============================================
 router.get('/turmas', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
-      role: 'aluno', 
-      ativo: true, 
+      role: 'aluno', ativo: true, 
       turma: { $nin: [null, '', 'Não informada'] } 
     });
-    
     res.json({ success: true, turmas: turmas.sort() });
   } catch (error) {
-    console.error('Erro ao listar turmas:', error);
-    res.status(500).json({ success: false, error: 'Erro ao listar turmas: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -68,91 +75,61 @@ router.get('/alunos-por-turma', authenticateToken, verificarAssistenteSocial, as
     const { turma } = req.query;
     if (!turma) return res.status(400).json({ success: false, error: 'Turma é obrigatória' });
     
-    const alunos = await User.find({ 
-      role: 'aluno', 
-      ativo: true, 
-      turma 
-    })
-    .select('nome matricula turma curso fotoPerfil')
-    .sort({ nome: 1 });
+    const alunos = await User.find({ role: 'aluno', ativo: true, turma })
+      .select('nome matricula turma curso fotoPerfil')
+      .sort({ nome: 1 });
     
     res.json({
       success: true,
       total: alunos.length,
       alunos: alunos.map(a => ({
-        id: a._id,
-        nome: a.nome,
-        matricula: a.matricula,
-        turma: a.turma,
-        curso: a.curso,
-        fotoPerfil: a.fotoPerfil
+        id: a._id, nome: a.nome, matricula: a.matricula,
+        turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
   } catch (error) {
-    console.error('Erro ao listar alunos por turma:', error);
-    res.status(500).json({ success: false, error: 'Erro ao listar alunos: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// BUSCAR ALUNO POR ID (QR CODE)
+// BUSCAR ALUNO POR ID
 // ============================================
 router.get('/aluno/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
-    const aluno = await User.findOne({ 
-      _id: req.params.id, 
-      ativo: true 
-    }).select('nome email matricula curso turma fotoPerfil role');
+    const aluno = await User.findOne({ _id: req.params.id, ativo: true })
+      .select('nome email matricula curso turma fotoPerfil role');
     
-    if (!aluno) {
-      return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
-    }
-    
-    if (aluno.role !== 'aluno') {
-      return res.status(400).json({ success: false, error: 'Usuário não é um aluno' });
-    }
+    if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
+    if (aluno.role !== 'aluno') return res.status(400).json({ success: false, error: 'Usuário não é aluno' });
     
     const atendimentosAtivos = await AtendimentoAssistenteSocial.find({
-      alunoId: aluno._id,
-      status: 'em_andamento'
+      alunoId: aluno._id, status: 'em_andamento'
     }).sort({ createdAt: -1 });
     
     const historicoRecente = await AtendimentoAssistenteSocial.find({
-      alunoId: aluno._id,
-      status: 'finalizado'
+      alunoId: aluno._id, status: 'finalizado'
     }).sort({ createdAt: -1 }).limit(5);
     
     res.json({
       success: true,
       aluno: {
-        id: aluno._id,
-        nome: aluno.nome,
-        matricula: aluno.matricula,
-        turma: aluno.turma,
-        curso: aluno.curso,
-        fotoPerfil: aluno.fotoPerfil || null
+        id: aluno._id, nome: aluno.nome, matricula: aluno.matricula,
+        turma: aluno.turma, curso: aluno.curso, fotoPerfil: aluno.fotoPerfil || null
       },
       atendimentosAtivos: atendimentosAtivos.map(a => ({
-        id: a._id,
-        tipoTarefa: a.tipoTarefa,
+        id: a._id, tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        dataHoraEntrada: a.entrada.dataHora,
-        prioridade: a.prioridade
+        descricao: a.entrada.descricao, dataHoraEntrada: a.entrada.dataHora, prioridade: a.prioridade
       })),
       historicoRecente: historicoRecente.map(a => ({
-        id: a._id,
-        tipoTarefa: a.tipoTarefa,
+        id: a._id, tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        dataHora: a.entrada.dataHora,
-        resultado: a.saida?.resultado
+        descricao: a.entrada.descricao, dataHora: a.entrada.dataHora, resultado: a.saida?.resultado
       }))
     });
-    
   } catch (error) {
-    console.error('Erro ao buscar aluno:', error);
-    res.status(500).json({ success: false, error: 'Erro ao buscar aluno: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -162,39 +139,30 @@ router.get('/aluno/:id', authenticateToken, verificarAssistenteSocial, async (re
 router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { termo } = req.query;
-    
     if (!termo || termo.length < 2) {
       return res.status(400).json({ success: false, error: 'Digite pelo menos 2 caracteres' });
     }
     
     const alunos = await User.find({
-      role: 'aluno',
-      ativo: true,
+      role: 'aluno', ativo: true,
       $or: [
         { nome: { $regex: termo, $options: 'i' } },
         { matricula: { $regex: termo, $options: 'i' } }
       ]
     })
     .select('nome matricula turma curso fotoPerfil')
-    .limit(20)
-    .sort({ nome: 1 });
+    .limit(20).sort({ nome: 1 });
     
     res.json({
       success: true,
       total: alunos.length,
       alunos: alunos.map(a => ({
-        id: a._id,
-        nome: a.nome,
-        matricula: a.matricula,
-        turma: a.turma,
-        curso: a.curso,
-        fotoPerfil: a.fotoPerfil
+        id: a._id, nome: a.nome, matricula: a.matricula,
+        turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
-    
   } catch (error) {
-    console.error('Erro na busca:', error);
-    res.status(500).json({ success: false, error: 'Erro na busca: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -203,7 +171,10 @@ router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async 
 // ============================================
 router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
-    const { alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes } = req.body;
+    const { 
+      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
+      assinaturaBase64 
+    } = req.body;
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -226,6 +197,13 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
     
     const assistente = await User.findById(req.userId).select('nome');
     
+    let assinaturaValida = '';
+    if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
+      if (assinaturaBase64.startsWith('data:image/') && assinaturaBase64.length < 500000) {
+        assinaturaValida = assinaturaBase64;
+      }
+    }
+    
     const atendimento = new AtendimentoAssistenteSocial({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -240,7 +218,8 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
         observacoes: observacoes || '',
         gravidade: gravidade || 'media',
         registradoPor: req.userId,
-        registradoPorNome: assistente?.nome || req.userNome || 'Assistente Social'
+        registradoPorNome: assistente?.nome || req.userNome || 'Assistente Social',
+        assinaturaBase64: assinaturaValida
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
@@ -257,12 +236,11 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
         tipoTarefa: atendimento.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(tipoTarefa),
         status: atendimento.status,
-        dataHora: atendimento.entrada.dataHora
+        dataHora: atendimento.entrada.dataHora,
+        temAssinatura: !!assinaturaValida
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao registrar:', error);
     res.status(500).json({ success: false, error: 'Erro ao registrar: ' + error.message });
   }
 });
@@ -280,10 +258,7 @@ router.post('/finalizar', authenticateToken, verificarAssistenteSocial, async (r
     }
     
     const atendimento = await AtendimentoAssistenteSocial.findById(atendimentoId);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-    
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     if (atendimento.status === 'finalizado') {
       return res.status(400).json({ success: false, error: 'Atendimento já finalizado' });
     }
@@ -304,27 +279,226 @@ router.post('/finalizar', authenticateToken, verificarAssistenteSocial, async (r
     await atendimento.save();
     
     const resultadoLabel = {
-      'resolvido': 'Resolvido',
-      'em_acompanhamento': 'Em Acompanhamento',
-      'reincidente': 'Reincidente',
-      'encaminhado': 'Encaminhado',
-      'pendente': 'Pendente'
+      'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+      'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
     }[resultado];
     
     res.json({
       success: true,
       message: `Atendimento finalizado. Resultado: ${resultadoLabel}`,
       atendimento: {
-        id: atendimento._id,
-        status: atendimento.status,
-        resultado: resultadoLabel,
-        dataHoraSaida: atendimento.saida.dataHora
+        id: atendimento._id, status: atendimento.status,
+        resultado: resultadoLabel, dataHoraSaida: atendimento.saida.dataHora
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao finalizar:', error);
-    res.status(500).json({ success: false, error: 'Erro ao finalizar: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// REMARCAR ATENDIMENTO
+// ============================================
+router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
+  try {
+    const { atendimentoId, dataRemarcacao, horarioRemarcacao, motivoRemarcacao, observacoesRemarcacao } = req.body;
+    
+    if (!atendimentoId) return res.status(400).json({ success: false, error: 'ID obrigatório' });
+    if (!dataRemarcacao) return res.status(400).json({ success: false, error: 'Data obrigatória' });
+    if (!horarioRemarcacao) return res.status(400).json({ success: false, error: 'Horário obrigatório' });
+    if (!motivoRemarcacao) return res.status(400).json({ success: false, error: 'Motivo obrigatório' });
+    
+    const atendimento = await AtendimentoAssistenteSocial.findById(atendimentoId);
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    const dataObj = new Date(dataRemarcacao + 'T00:00:00');
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    if (dataObj < hoje) {
+      return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
+    }
+    
+    const assistente = await User.findById(req.userId).select('nome');
+    
+    const remarcacao = {
+      id: new (require('mongoose').Types.ObjectId)(),
+      dataRemarcacao,
+      horarioRemarcacao,
+      motivoRemarcacao,
+      observacoesRemarcacao: observacoesRemarcacao || '',
+      status: 'pendente',
+      criadaEm: new Date(),
+      criadaPor: req.userId,
+      criadaPorNome: assistente?.nome || req.userNome || 'Assistente Social'
+    };
+    
+    if (!atendimento.remarcacoes) atendimento.remarcacoes = [];
+    atendimento.remarcacoes.push(remarcacao);
+    atendimento.temRemarcacaoPendente = true;
+    atendimento.updatedAt = new Date();
+    
+    await atendimento.save();
+    
+    res.json({
+      success: true,
+      message: `Atendimento remarcado para ${dataObj.toLocaleDateString('pt-BR')} às ${horarioRemarcacao}`,
+      remarcacao: {
+        id: remarcacao.id,
+        atendimentoId: atendimento._id,
+        dataRemarcacao, horarioRemarcacao, motivoRemarcacao,
+        observacoesRemarcacao: remarcacao.observacoesRemarcacao,
+        status: 'pendente'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro ao remarcar: ' + error.message });
+  }
+});
+
+// ============================================
+// LISTAR REMARCAÇÕES PENDENTES
+// ============================================
+router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocial, async (req, res) => {
+  try {
+    const atendimentos = await AtendimentoAssistenteSocial.find({
+      'remarcacoes.status': 'pendente',
+      status: { $ne: 'cancelado' }
+    }).sort({ 'remarcacoes.dataRemarcacao': 1 });
+    
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    
+    const remarcacoes = [];
+    
+    atendimentos.forEach(atendimento => {
+      (atendimento.remarcacoes || []).forEach(rem => {
+        if (rem.status !== 'pendente') return;
+        
+        const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
+        const atrasado = dataRem < hoje;
+        const ehHoje = dataRem.getTime() === hoje.getTime();
+        
+        remarcacoes.push({
+          id: rem.id.toString(),
+          atendimentoId: atendimento._id,
+          alunoId: atendimento.alunoId,
+          alunoNome: atendimento.alunoNome,
+          alunoTurma: atendimento.alunoTurma,
+          alunoFoto: atendimento.alunoFoto,
+          tipoTarefa: atendimento.tipoTarefa,
+          tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(atendimento.tipoTarefa),
+          dataRemarcacao: rem.dataRemarcacao,
+          horarioRemarcacao: rem.horarioRemarcacao,
+          motivoRemarcacao: rem.motivoRemarcacao,
+          observacoesRemarcacao: rem.observacoesRemarcacao,
+          status: rem.status,
+          atrasado, hoje: ehHoje,
+          criadaEm: rem.criadaEm,
+          criadaPorNome: rem.criadaPorNome
+        });
+      });
+    });
+    
+    remarcacoes.sort((a, b) => {
+      if (a.atrasado && !b.atrasado) return -1;
+      if (!a.atrasado && b.atrasado) return 1;
+      if (a.hoje && !b.hoje) return -1;
+      if (!a.hoje && b.hoje) return 1;
+      return new Date(a.dataRemarcacao) - new Date(b.dataRemarcacao);
+    });
+    
+    res.json({ success: true, total: remarcacoes.length, remarcacoes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// BUSCAR REMARCAÇÃO POR ID
+// ============================================
+router.get('/remarcacoes/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
+  try {
+    const atendimento = await AtendimentoAssistenteSocial.findOne({
+      'remarcacoes.id': req.params.id
+    });
+    
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    
+    const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === req.params.id);
+    if (!remarcacao) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    
+    res.json({
+      success: true,
+      remarcacao: {
+        id: remarcacao.id.toString(),
+        atendimentoId: atendimento._id,
+        alunoId: atendimento.alunoId,
+        alunoNome: atendimento.alunoNome,
+        alunoTurma: atendimento.alunoTurma,
+        dataRemarcacao: remarcacao.dataRemarcacao,
+        horarioRemarcacao: remarcacao.horarioRemarcacao,
+        motivoRemarcacao: remarcacao.motivoRemarcacao,
+        observacoesRemarcacao: remarcacao.observacoesRemarcacao,
+        status: remarcacao.status,
+        criadaEm: remarcacao.criadaEm
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// FINALIZAR REMARCAÇÃO
+// ============================================
+router.post('/remarcacoes/finalizar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
+  try {
+    const { remarcacaoId, acao } = req.body;
+    
+    if (!remarcacaoId) return res.status(400).json({ success: false, error: 'ID obrigatório' });
+    if (!['realizado', 'cancelado'].includes(acao)) {
+      return res.status(400).json({ success: false, error: 'Ação inválida' });
+    }
+    
+    const atendimento = await AtendimentoAssistenteSocial.findOne({
+      'remarcacoes.id': remarcacaoId
+    });
+    
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    
+    const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === remarcacaoId);
+    if (!remarcacao) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    
+    remarcacao.status = acao === 'realizado' ? 'realizado' : 'cancelado';
+    remarcacao.finalizadaEm = new Date();
+    remarcacao.finalizadaPor = req.userId;
+    
+    const temPendente = (atendimento.remarcacoes || []).some(r => r.status === 'pendente');
+    atendimento.temRemarcacaoPendente = temPendente;
+    
+    if (acao === 'realizado' && atendimento.status === 'em_andamento') {
+      atendimento.status = 'finalizado';
+      atendimento.saida = {
+        dataHora: new Date(),
+        resultado: 'resolvido',
+        resultadoTexto: 'Atendimento remarcado e realizado',
+        observacoesFinais: `Remarcação realizada em ${new Date().toLocaleString('pt-BR')}`,
+        registradoPor: req.userId,
+        registradoPorNome: req.userNome
+      };
+    }
+    
+    atendimento.updatedAt = new Date();
+    await atendimento.save();
+    
+    const mensagem = acao === 'realizado' 
+      ? '✅ Remarcação marcada como realizada!' 
+      : '❌ Remarcação cancelada.';
+    
+    res.json({ success: true, message: mensagem });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -344,8 +518,8 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
       AtendimentoAssistenteSocial.countDocuments({
         'entrada.dataHora': {
-          $gte: new Date(hojeStr),
-          $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
+          $gte: inicioDoDiaBrasil(hojeStr),
+          $lte: fimDoDiaBrasil(hojeStr)
         }
       }),
       AtendimentoAssistenteSocial.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
@@ -357,8 +531,8 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
     const finalizadosHoje = await AtendimentoAssistenteSocial.countDocuments({
       status: 'finalizado',
       'saida.dataHora': {
-        $gte: new Date(hojeStr),
-        $lt: new Date(new Date(hojeStr).setDate(new Date(hojeStr).getDate() + 1))
+        $gte: inicioDoDiaBrasil(hojeStr),
+        $lte: fimDoDiaBrasil(hojeStr)
       }
     });
     
@@ -384,12 +558,9 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
       const data = new Date();
       data.setDate(data.getDate() - i);
       const dataStr = data.toISOString().split('T')[0];
-      const inicio = new Date(dataStr);
-      const fim = new Date(dataStr);
-      fim.setDate(fim.getDate() + 1);
       
       const count = await AtendimentoAssistenteSocial.countDocuments({
-        'entrada.dataHora': { $gte: inicio, $lt: fim }
+        'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
       });
       
       ultimos7Dias.push({
@@ -443,18 +614,12 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
         label: AtendimentoAssistenteSocial.getTipoTarefaLabel(t._id),
         count: t.count
       })),
-      porGravidade: porGravidade.map(g => ({
-        gravidade: g._id,
-        count: g.count
-      })),
+      porGravidade: porGravidade.map(g => ({ gravidade: g._id, count: g.count })),
       resultados: resultados.map(r => ({
         resultado: r._id,
         label: {
-          'resolvido': 'Resolvido',
-          'em_acompanhamento': 'Em Acompanhamento',
-          'reincidente': 'Reincidente',
-          'encaminhado': 'Encaminhado',
-          'pendente': 'Pendente'
+          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
         }[r._id] || r._id,
         count: r.count
       })),
@@ -465,10 +630,8 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
         distribuicaoHoraria: horasDistribuicao
       }
     });
-    
   } catch (error) {
-    console.error('Erro no dashboard:', error);
-    res.status(500).json({ success: false, error: 'Erro no dashboard: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -495,18 +658,18 @@ router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial,
         gravidade: a.entrada.gravidade,
         prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
-        tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000)
+        tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
+        temRemarcacaoPendente: a.temRemarcacaoPendente || false,
+        temAssinatura: !!(a.entrada?.assinaturaBase64)
       }))
     });
-    
   } catch (error) {
-    console.error('Erro ao buscar ativos:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS
+// LISTAR TODOS OS ATENDIMENTOS (COM FILTROS) — 🔥 CORRIGIDO
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -516,10 +679,12 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
+    
+    // 🔥 CORRIGIDO: Timezone Brasil UTC-3
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -534,8 +699,7 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
     
     const turmasAtendimento = await AtendimentoAssistenteSocial.distinct('alunoTurma');
     const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', 
-      ativo: true, 
+      role: 'aluno', ativo: true, 
       turma: { $nin: [null, '', 'Não informada'] } 
     });
 
@@ -567,16 +731,14 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
         dataEntrada: a.entrada.dataHora,
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
         registradoPor: a.entrada.registradoPorNome,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
         saida: a.saida ? {
           dataHora: a.saida.dataHora,
           dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
           resultado: a.saida.resultado,
           resultadoTexto: {
-            'resolvido': 'Resolvido',
-            'em_acompanhamento': 'Em Acompanhamento',
-            'reincidente': 'Reincidente',
-            'encaminhado': 'Encaminhado',
-            'pendente': 'Pendente'
+            'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+            'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
           }[a.saida.resultado] || a.saida.resultado,
           observacoesFinais: a.saida.observacoesFinais,
           registradoPor: a.saida.registradoPorNome
@@ -584,9 +746,7 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
         createdAt: a.createdAt
       }))
     });
-    
   } catch (error) {
-    console.error('Erro ao listar:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -597,10 +757,7 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
 router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
-    
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     res.json({
       success: true,
@@ -619,7 +776,9 @@ router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
           descricao: atendimento.entrada.descricao,
           observacoes: atendimento.entrada.observacoes,
           gravidade: atendimento.entrada.gravidade,
-          registradoPor: atendimento.entrada.registradoPorNome
+          registradoPor: atendimento.entrada.registradoPorNome,
+          temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
+          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null
         },
         detalhes: atendimento.detalhes,
         saida: atendimento.saida ? {
@@ -632,13 +791,13 @@ router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
         } : null,
         status: atendimento.status,
         prioridade: atendimento.prioridade,
+        remarcacoes: atendimento.remarcacoes || [],
+        temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
         anexos: atendimento.anexos,
         createdAt: atendimento.createdAt
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao buscar:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -649,11 +808,8 @@ router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
 router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
-    
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     if (descricao) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
@@ -663,25 +819,14 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
     if (status) atendimento.status = status;
     
     if (saida) {
-      atendimento.saida = {
-        ...atendimento.saida,
-        ...saida,
-        registradoPor: req.userId,
-        registradoPorNome: req.userNome
-      };
+      atendimento.saida = { ...atendimento.saida, ...saida, registradoPor: req.userId, registradoPorNome: req.userNome };
     }
     
     atendimento.updatedAt = new Date();
     await atendimento.save();
     
-    res.json({
-      success: true,
-      message: 'Atendimento atualizado com sucesso',
-      atendimento: { id: atendimento._id }
-    });
-    
+    res.json({ success: true, message: 'Atendimento atualizado com sucesso', atendimento: { id: atendimento._id } });
   } catch (error) {
-    console.error('Erro ao editar:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -692,21 +837,53 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
 router.delete('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findByIdAndDelete(req.params.id);
-    
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-    
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id})`);
     res.json({ success: true, message: 'Atendimento excluído com sucesso' });
-    
   } catch (error) {
-    console.error('Erro ao excluir:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// RELATÓRIO POR ALUNO
+// EXCLUSÃO EM MASSA
+// ============================================
+router.post('/atendimentos/exclusao-massa', authenticateToken, verificarAssistenteSocial, async (req, res) => {
+  try {
+    const { dataCorte, status = 'finalizado', confirmacao } = req.body;
+    if (confirmacao !== 'CONFIRMAR') {
+      return res.status(400).json({ success: false, error: 'Confirmação inválida' });
+    }
+    if (!dataCorte) return res.status(400).json({ success: false, error: 'Data de corte é obrigatória' });
+
+    const dataObj = fimDoDiaBrasil(dataCorte);
+    if (isNaN(dataObj.getTime())) {
+      return res.status(400).json({ success: false, error: 'Data de corte inválida' });
+    }
+
+    const filtro = { status, 'saida.dataHora': { $lt: dataObj } };
+    const totalAntes = await AtendimentoAssistenteSocial.countDocuments(filtro);
+
+    if (totalAntes === 0) {
+      return res.json({ success: true, message: 'Nenhum atendimento encontrado', excluidos: 0 });
+    }
+
+    const resultado = await AtendimentoAssistenteSocial.deleteMany(filtro);
+    console.log(`🗑️ EXCLUSÃO EM MASSA: ${resultado.deletedCount} excluídos`);
+
+    res.json({
+      success: true,
+      message: `${resultado.deletedCount} atendimento(s) excluído(s)`,
+      excluidos: resultado.deletedCount,
+      dataCorte, status
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro ao excluir: ' + error.message });
+  }
+});
+
+// ============================================
+// RELATÓRIO POR ALUNO — 🔥 CORRIGIDO
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -715,8 +892,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
     let query = { alunoId: req.params.alunoId };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atendimentos = await AtendimentoAssistenteSocial.find(query).sort({ 'entrada.dataHora': -1 });
@@ -732,46 +909,33 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
     
     res.json({
       success: true,
-      aluno: {
-        id: aluno._id,
-        nome: aluno.nome,
-        matricula: aluno.matricula,
-        turma: aluno.turma,
-        curso: aluno.curso
-      },
+      aluno: { id: aluno._id, nome: aluno.nome, matricula: aluno.matricula, turma: aluno.turma, curso: aluno.curso },
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtendimentos: atendimentos.length,
         porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo,
-          label: AtendimentoAssistenteSocial.getTipoTarefaLabel(tipo),
-          count
+          tipo, label: AtendimentoAssistenteSocial.getTipoTarefaLabel(tipo), count
         })),
         porGravidade,
         emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
         finalizados: atendimentos.filter(a => a.status === 'finalizado').length
       },
       atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        tipoTarefa: a.tipoTarefa,
+        id: a._id, tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora,
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        status: a.status,
-        dataSaida: a.saida?.dataHora || null,
-        resultado: a.saida?.resultado || null
+        dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade, status: a.status,
+        dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
+        temAssinatura: !!(a.entrada?.assinaturaBase64)
       }))
     });
-    
   } catch (error) {
-    console.error('Erro no relatório:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// RELATÓRIO POR TURMA
+// RELATÓRIO POR TURMA — 🔥 CORRIGIDO
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -780,8 +944,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
     let query = { alunoTurma: req.params.turma };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
     const atendimentos = await AtendimentoAssistenteSocial.find(query).sort({ 'entrada.dataHora': -1 });
@@ -792,13 +956,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
     atendimentos.forEach(a => {
       const key = a.alunoId.toString();
       if (!porAluno[key]) {
-        porAluno[key] = {
-          alunoId: a.alunoId,
-          alunoNome: a.alunoNome,
-          alunoMatricula: a.alunoMatricula,
-          total: 0,
-          tipos: {}
-        };
+        porAluno[key] = { alunoId: a.alunoId, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula, total: 0, tipos: {} };
       }
       porAluno[key].total++;
       porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
@@ -813,32 +971,26 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
         totalAtendimentos: atendimentos.length,
         totalAlunosAtendidos: Object.keys(porAluno).length,
         porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo,
-          label: AtendimentoAssistenteSocial.getTipoTarefaLabel(tipo),
-          count
+          tipo, label: AtendimentoAssistenteSocial.getTipoTarefaLabel(tipo), count
         }))
       },
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoNome: a.alunoNome,
+        id: a._id, alunoNome: a.alunoNome,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora,
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        status: a.status
+        dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade, status: a.status
       }))
     });
-    
   } catch (error) {
-    console.error('Erro no relatório:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
+
 // ============================================
-// RELATÓRIO GERAL
+// RELATÓRIO GERAL — 🔥 COM REGISTROS
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -847,13 +999,18 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
     let query = {};
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
+    
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
-      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
-      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
-    const atendimentos = await AtendimentoAssistenteSocial.find(query).sort({ 'entrada.dataHora': -1 });
+    const [atendimentos, total, comAssinatura] = await Promise.all([
+      AtendimentoAssistenteSocial.find(query).sort({ 'entrada.dataHora': -1 }).limit(1000),
+      AtendimentoAssistenteSocial.countDocuments(query),
+      AtendimentoAssistenteSocial.countDocuments({ ...query, 'entrada.assinaturaBase64': { $exists: true, $ne: '' } })
+    ]);
     
     const porTurma = {};
     const porTipo = {};
@@ -877,8 +1034,7 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
     
     const turmasAtendimento = await AtendimentoAssistenteSocial.distinct('alunoTurma');
     const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', 
-      ativo: true, 
+      role: 'aluno', ativo: true,
       turma: { $nin: [null, '', 'Não informada'] } 
     });
 
@@ -891,7 +1047,8 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
       success: true,
       filtros: { dataInicio, dataFim, turma, tipo },
       turmasDisponiveis: turmas,
-      totalAtendimentos: atendimentos.length,
+      totalAtendimentos: total,
+      comAssinatura,
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
       porTipo: Object.entries(porTipo).map(([t, count]) => ({
         tipo: t,
@@ -899,21 +1056,35 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
         count
       })).sort((a, b) => b.count - a.count),
       porGravidade,
-      atendimentos: atendimentos.slice(0, 100).map(a => ({
+      // 🔥 NOVO: registros detalhados para CSV
+      registros: atendimentos.map(a => ({
         id: a._id,
         alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
         alunoTurma: a.alunoTurma,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
         dataEntrada: a.entrada.dataHora,
-        descricao: a.entrada.descricao.substring(0, 100),
+        dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
+        descricao: a.entrada.descricao,
         gravidade: a.entrada.gravidade,
-        status: a.status
+        prioridade: a.prioridade,
+        status: a.status,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        registradoPorNome: a.entrada?.registradoPorNome
+      })),
+      // Retrocompatibilidade: mantém atendimentos
+      atendimentos: atendimentos.slice(0, 100).map(a => ({
+        id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
+        tipoTarefa: a.tipoTarefa,
+        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+        dataEntrada: a.entrada.dataHora,
+        descricao: a.entrada.descricao.substring(0, 100),
+        gravidade: a.entrada.gravidade, status: a.status,
+        temAssinatura: !!(a.entrada?.assinaturaBase64)
       }))
     });
-    
   } catch (error) {
-    console.error('Erro no relatório:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });

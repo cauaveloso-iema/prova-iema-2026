@@ -267,6 +267,19 @@
                                 <div id="formRegistro" class="form-container" style="display: none;">
                                     <h5><i class="fas fa-clock"></i> Registrar Atraso</h5>
                                     
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Data do Atraso <span class="text-danger">*</span></label>
+                                            <input type="date" id="atrasoData" class="form-control" required>
+                                            <small class="text-muted">Quando ocorreu o atraso</small>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Hora da Chegada</label>
+                                            <input type="time" id="atrasoHoraChegada" class="form-control">
+                                            <small class="text-muted">Horário em que o aluno chegou</small>
+                                        </div>
+                                    </div>
+                                    
                                     <div class="mb-3">
                                         <label class="form-label">Motivo do Atraso <span class="text-danger">*</span></label>
                                         <div class="tipos-tarefa-grid">
@@ -298,31 +311,33 @@
                                         <div class="mb-3">
                                             <label class="form-label">Especifique o Motivo <span class="text-danger">*</span></label>
                                             <input type="text" id="motivoOutrosTexto" class="form-control" 
-                                                   placeholder="Descreva o motivo do atraso...">
+                                                placeholder="Descreva o motivo do atraso...">
                                         </div>
                                     </div>
                                     
                                     <div class="mb-3">
                                         <label class="form-label">Descrição do Ocorrido <span class="text-danger">*</span></label>
                                         <textarea id="descricao" class="form-control" rows="3" 
-                                                  placeholder="Descreva detalhadamente o que aconteceu..."></textarea>
+                                                placeholder="Descreva detalhadamente o que aconteceu..."></textarea>
                                     </div>
                                     
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Horário Previsto</label>
                                             <input type="time" id="horarioPrevisto" class="form-control">
+                                            <small class="text-muted">Horário que deveria chegar</small>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Horário de Chegada</label>
                                             <input type="time" id="horarioChegada" class="form-control">
+                                            <small class="text-muted">Horário real de chegada</small>
                                         </div>
                                     </div>
                                     
                                     <div class="mb-3">
                                         <label class="form-label">Observações Adicionais</label>
                                         <textarea id="observacoes" class="form-control" rows="2" 
-                                                  placeholder="Informações complementares..."></textarea>
+                                                placeholder="Informações complementares..."></textarea>
                                     </div>
                                     
                                     <div class="d-flex gap-2">

@@ -659,6 +659,23 @@ function mostrarFormRegistro() {
     safeGet('horarioChegada').value = '';
     safeGet('motivoOutrosTexto').value = '';
     safeGet('campoOutros').style.display = 'none';
+    
+    // 🔥 NOVO: Preenche data de hoje automaticamente
+    const hoje = new Date().toISOString().split('T')[0];
+    const dataEl = safeGet('atrasoData');
+    if (dataEl) dataEl.value = hoje;
+    
+    // 🔥 NOVO: Preenche hora atual automaticamente
+    const agora = new Date();
+    const horaAtual = String(agora.getHours()).padStart(2, '0') + ':' + 
+                      String(agora.getMinutes()).padStart(2, '0');
+    const horaEl = safeGet('atrasoHoraChegada');
+    if (horaEl) horaEl.value = horaAtual;
+    
+    // 🔥 NOVO: Foca no campo de data
+    setTimeout(() => {
+        dataEl?.focus();
+    }, 100);
 }
 
 function selecionarMotivo(motivo) {
@@ -673,6 +690,21 @@ function selecionarMotivo(motivo) {
 
 async function registrarAtraso() {
     if (!motivoSelecionado) { alert('Selecione o motivo do atraso'); return; }
+    
+    // 🔥 NOVO: Valida data
+    const dataAtraso = safeGet('atrasoData')?.value;
+    if (!dataAtraso) { alert('Selecione a data do atraso'); return; }
+    
+    // 🔥 NOVO: Valida se data não é futura
+    const hoje = new Date();
+    hoje.setHours(23, 59, 59, 999);
+    const dataSelecionada = new Date(dataAtraso + 'T00:00:00');
+    if (dataSelecionada > hoje) {
+        if (!confirm('⚠️ A data selecionada é no futuro. Deseja continuar mesmo assim?')) {
+            return;
+        }
+    }
+    
     const descricao = (safeGet('descricao')?.value || '').trim();
     if (!descricao) { alert('Descreva o ocorrido'); return; }
     if (!currentAluno || !currentAluno.id) { alert('Nenhum aluno selecionado'); return; }
@@ -685,6 +717,17 @@ async function registrarAtraso() {
     if (btn) btn.disabled = true;
     
     try {
+        // 🔥 NOVO: Combina data + hora para montar dataHora completa
+        const horaChegada = safeGet('atrasoHoraChegada')?.value || '';
+        let dataHoraCompleta;
+        
+        if (horaChegada) {
+            dataHoraCompleta = new Date(dataAtraso + 'T' + horaChegada + ':00');
+        } else {
+            // Se não informou hora, usa meio-dia para não bugar timezone
+            dataHoraCompleta = new Date(dataAtraso + 'T12:00:00');
+        }
+        
         const response = await fetch('/api/gestao-geral/atraso/registrar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -693,6 +736,7 @@ async function registrarAtraso() {
                 motivo: motivoSelecionado,
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
+                dataHora: dataHoraCompleta.toISOString(), // 🔥 NOVO
                 detalhes: {
                     motivoOutros: safeGet('motivoOutrosTexto')?.value || '',
                     horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
@@ -2218,9 +2262,16 @@ async function carregarRelatorioModulo(modulo) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
+        
         if (data.success) {
             relatoriosModulo[modulo] = data;
             exibirRelatorioModulo(modulo, data, tipo);
+            
+            // 🔥 NOVO: Avisa se não encontrou nada
+            const total = data.totalRegistros || 0;
+            if (total === 0) {
+                alert('⚠️ Nenhum registro encontrado.\n\nVerifique:\n• Se as datas estão corretas\n• Se o motivo está preenchido\n• Se existem registros neste período');
+            }
         } else {
             alert('Erro ao carregar relatório: ' + (data.error || ''));
         }
@@ -2316,10 +2367,19 @@ function exibirRelatorioModulo(modulo, data, tipo) {
 
 function exportarCSVModulo(modulo) {
     const data = relatoriosModulo[modulo];
-    if (!data) { alert('Nenhum relatório carregado'); return; }
+    
+    if (!data) {
+        alert('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.');
+        return;
+    }
 
-    const registros = data.registros || [];
-    if (registros.length === 0) { alert('Nenhum dado para exportar'); return; }
+    // 🔥 Aceita 'registros', 'autorizacoes' ou 'atendimentos'
+    const registros = data.registros || data.autorizacoes || data.atendimentos || [];
+    
+    if (registros.length === 0) {
+        alert('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.');
+        return;
+    }
 
     const cfg = getCfg(modulo);
     let csv = "Data,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
@@ -2329,7 +2389,7 @@ function exportarCSVModulo(modulo) {
             a.dataFormatada || '',
             `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
             `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoTurma || data.turma || data.aluno?.turma || '').replace(/"/g, '""')}"`,
+            `"${(a.alunoTurma || data.turma || '').replace(/"/g, '""')}"`,
             `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
             `"${(a.observacoes || '').replace(/"/g, '""')}"`,
             `"${(a.responsavelNome || '').replace(/"/g, '""')}"`
@@ -2413,6 +2473,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
     const cfg = getCfg(modulo);
     const titulo = cfg.nomeAmigavel.toUpperCase();
     const logo = '/uploads/logo-iema.png';
+    const carimboGestao = '/icons/assinatura_gestao.ico'; // 🔥 NOVO: Caminho do carimbo
     const dataExt = new Date(a.data).toLocaleDateString('pt-BR', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
@@ -2429,6 +2490,12 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
     const assinaturaHTML = a.assinaturaBase64 
         ? `<div class="assinatura-digital"><img src="${a.assinaturaBase64}" alt="Assinatura"></div>`
         : '<div class="assinatura-vazia">_____________________________________</div>';
+    
+    // 🔥 NOVO: Carimbo da Gestão Geral (aparece na 2ª assinatura - Coordenação)
+    const carimboGestaoHTML = `
+        <div class="carimbo-gestao">
+            <img src="${carimboGestao}" alt="Carimbo Gestão Geral">
+        </div>`;
     
     return `<!DOCTYPE html>
     <html lang="pt-BR">
@@ -2486,7 +2553,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
             .observacoes { border: 1px solid #000; padding: 6px 8px; min-height: 18mm; margin: 6px 0; font-size: 8.5pt; }
             .observacoes strong { display: block; margin-bottom: 3px; font-size: 9pt; }
             .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 8pt; }
+            .assinatura { text-align: center; flex: 1; font-size: 8pt; position: relative; }
             .assinatura-digital { 
                 border-bottom: 1px solid #000;
                 min-height: 15mm;
@@ -2513,6 +2580,21 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
             .assinatura-linha {
                 padding-top: 3px;
                 font-size: 8pt;
+            }
+            /* 🔥 NOVO: Carimbo da Gestão */
+            .carimbo-gestao {
+                border-bottom: 1px solid #000;
+                min-height: 15mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 2px;
+            }
+            .carimbo-gestao img {
+                max-height: 14mm;
+                max-width: 100%;
+                object-fit: contain;
+                opacity: 0.9;
             }
             .qr-code { text-align: center; margin-top: 4px; }
             .qr-code img { width: 18mm; height: 18mm; border: 1px solid #000; padding: 1px; }
@@ -2606,7 +2688,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                     <div class="assinatura-linha">Assinatura do Responsável</div>
                 </div>
                 <div class="assinatura">
-                    <div class="assinatura-vazia" style="visibility: hidden;"></div>
+                    ${carimboGestaoHTML}
                     <div class="assinatura-linha">Coordenação / Gestão Geral</div>
                 </div>
             </div>

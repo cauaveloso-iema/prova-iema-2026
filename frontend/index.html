@@ -752,6 +752,44 @@ window.addEventListener('scroll', function() {
                         </div>
                     </div>
 
+                    <!--BOTÃO ACOMPANHAMENTO -->
+                    <button onclick="mostrarTab('acompanhamento')" 
+                            id="btnAcompanhamentoTopo"
+                            style="
+                                background: linear-gradient(135deg, #0891b2, #0e7490);
+                                color: white;
+                                border: none;
+                                border-radius: 40px;
+                                padding: 8px 20px;
+                                font-size: 0.9rem;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 10px;
+                                margin-right: 10px;
+                                transition: all 0.3s ease;
+                                box-shadow: 0 4px 10px rgba(8, 145, 178, 0.3);
+                                position: relative;
+                            " 
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(8,145,178,0.4)'" 
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(8,145,178,0.3)'">
+                        <i class="fas fa-user-clock"></i>
+                        <span>Acompanhamento</span>
+                        <span id="badgeAcompanhamentoTopo" 
+                            style="
+                                background: #ef4444;
+                                color: white;
+                                font-size: 11px;
+                                font-weight: 700;
+                                padding: 2px 8px;
+                                border-radius: 20px;
+                                min-width: 18px;
+                                text-align: center;
+                                display: none;
+                            ">0</span>
+                    </button>
+
                     <!-- 🔥 BOTÃO DE ADAPTAÇÃO DE DOCUMENTOS - ADICIONAR AQUI -->
                     <button onclick="abrirModalUploadAdaptarDocumento()" style="
                         background: linear-gradient(135deg, #8b5cf6, #7c3aed);
@@ -2898,46 +2936,97 @@ window.addEventListener('scroll', function() {
                         </div>
                     </div>
                 </div>
-        </main>
-    </div>
-    
-    <!-- Modal de Confirmação para Excluir Turma -->
-    <div class="modal" id="modalExcluirTurma">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 style="margin: 0; color: var(--gray-800);">
-                    <i class="fas fa-exclamation-triangle"></i> Excluir Turma
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalExcluirTurma')">&times;</button>
             </div>
-            <div id="modalExcluirConteudo" style="margin: 1.5rem 0;">
-                <!-- Conteúdo será preenchido via JS -->
-            </div>
-            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                <button class="btn btn-danger" onclick="confirmarExclusaoTurma()" style="flex: 1;">
-                    <i class="fas fa-trash"></i> Excluir Turma
-                </button>
-                <button class="btn" onclick="fecharModal('modalExcluirTurma')" style="flex: 1; background: var(--gray-200); color: var(--gray-700);">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-            </div>
-        </div>
-    </div>
+            <!-- ✅ FECHAMENTO DE #resultados-gerais MOVIDO PARA CÁ (antes de #acompanhamento) -->
 
-    <!-- Modal de Prova Corrigida -->
-    <div class="modal" id="modalProvaCorrigida">
-        <div class="modal-content modal-prova-corrigida">
-            <div class="modal-header">
-                <h3 style="margin: 0; color: var(--gray-800); display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-file-check" style="color: #f59e0b;"></i> Prova Corrigida
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalProvaCorrigida')">&times;</button>
+
+            <!-- ============================================================ -->
+            <!-- Aba Acompanhamento - AGORA É IRMÃ DE #resultados-gerais      -->
+            <!-- ============================================================ -->
+            <div id="acompanhamento" class="tab-content">
+                <div class="acompanhamento-hero">
+                    <div class="acompanhamento-hero-left">
+                        <div class="acompanhamento-hero-icon">
+                            <i class="fas fa-user-clock"></i>
+                        </div>
+                        <div>
+                            <h2>Acompanhamento de Alunos</h2>
+                            <p>Veja em tempo real onde seus alunos estão sendo atendidos</p>
+                        </div>
+                    </div>
+                    <div class="acompanhamento-hero-right">
+                        <div class="acompanhamento-status">
+                            <span class="status-dot"></span>
+                            <span id="acompanhamentoStatusTexto">Conectando...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estatísticas -->
+                <div class="acompanhamento-stats" id="acompanhamentoStats">
+                    <div class="acompanhamento-stat-card">
+                        <div class="acompanhamento-stat-icon" style="background: linear-gradient(135deg, #4f46e5, #7c3aed);">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div>
+                            <div class="acompanhamento-stat-value" id="acompanhamentoTotal">0</div>
+                            <div class="acompanhamento-stat-label">Alunos em Atendimento</div>
+                        </div>
+                    </div>
+                    <div class="acompanhamento-stat-card">
+                        <div class="acompanhamento-stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <i class="fas fa-hospital"></i>
+                        </div>
+                        <div>
+                            <div class="acompanhamento-stat-value" id="acompanhamentoPorSetor">0</div>
+                            <div class="acompanhamento-stat-label">Setores Ativos</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtros -->
+                <div class="acompanhamento-filtros">
+                    <div class="acompanhamento-filtro-item">
+                        <label><i class="fas fa-school"></i> Turma</label>
+                        <select id="acompanhamentoFiltroTurma" onchange="aplicarFiltrosAcompanhamento()">
+                            <option value="">Todas as turmas</option>
+                        </select>
+                    </div>
+                    <div class="acompanhamento-filtro-item">
+                        <label><i class="fas fa-building"></i> Setor</label>
+                        <select id="acompanhamentoFiltroSetor" onchange="aplicarFiltrosAcompanhamento()">
+                            <option value="todos">Todos os setores</option>
+                            <option value="enfermaria">🏥 Enfermaria</option>
+                            <option value="psicologia">🧠 Psicologia</option>
+                            <option value="gestao_geral">📊 Gestão Geral</option>
+                            <option value="supervisao">🛡️ Supervisão</option>
+                            <option value="assistente_social">🤝 Assistente Social</option>
+                        </select>
+                    </div>
+                    <div class="acompanhamento-filtro-item acompanhamento-filtro-busca">
+                        <label><i class="fas fa-search"></i> Buscar</label>
+                        <input type="text" id="acompanhamentoFiltroBusca" 
+                            placeholder="Nome ou matrícula..."
+                            oninput="aplicarFiltrosAcompanhamento()">
+                    </div>
+                    <button class="acompanhamento-btn-refresh" onclick="carregarAcompanhamento()" title="Atualizar agora">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+
+                <!-- Lista -->
+                <div id="acompanhamentoLista" class="acompanhamento-lista">
+                    <div class="acompanhamento-empty">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Carregando...</p>
+                    </div>
+                </div>
             </div>
-            <div id="provaCorrigidaConteudo" class="prova-corrigida-container">
-                <!-- Conteúdo será preenchido via JavaScript -->
+            <!-- ✅ FECHAMENTO DE #acompanhamento -->
+
+
+            </main>
             </div>
-        </div>
-    </div>
     
     <!-- JavaScript -->
     <script>
@@ -17070,6 +17159,672 @@ document.addEventListener('DOMContentLoaded', function() {
     if (aba) observerAba.observe(aba, { attributes: true });
     
 })();
+</script>
+
+<script>
+// ============================================================================
+// MÓDULO DE ACOMPANHAMENTO DE ALUNOS - VERSÃO FINAL CORRIGIDA
+// ============================================================================
+
+// ============================================
+// VARIÁVEIS GLOBAIS (expor no window)
+// ============================================
+window.acompanhamentoInterval = null;
+window.acompanhamentoUltimaConsulta = null;
+window.acompanhamentoAtendimentosConhecidos = new Set();
+window.acompanhamentoPrimeiraExecucao = true;
+
+// ============================================
+// INICIAR MONITORAMENTO
+// ============================================
+function iniciarAcompanhamento() {
+    console.log('👥 Iniciando módulo de acompanhamento...');
+    
+    carregarAcompanhamento();
+    
+    if (window.acompanhamentoInterval) {
+        clearInterval(window.acompanhamentoInterval);
+    }
+    
+    window.acompanhamentoInterval = setInterval(() => {
+        const abaAtiva = document.getElementById('acompanhamento')?.classList.contains('active');
+        if (abaAtiva) {
+            carregarAcompanhamento();
+        }
+        verificarNovosAtendimentos();
+    }, 30000);
+    
+    console.log('✅ Acompanhamento iniciado (polling 30s)');
+}
+
+// ============================================
+// CARREGAR DADOS
+// ============================================
+async function carregarAcompanhamento() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+            console.warn('⚠️ Sem token de autenticação');
+            return;
+        }
+        
+        const params = new URLSearchParams();
+        const turma = document.getElementById('acompanhamentoFiltroTurma')?.value;
+        const setor = document.getElementById('acompanhamentoFiltroSetor')?.value;
+        const busca = document.getElementById('acompanhamentoFiltroBusca')?.value;
+        
+        if (turma) params.append('turmaId', turma);
+        if (setor && setor !== 'todos') params.append('setor', setor);
+        if (busca) params.append('busca', busca);
+        
+        const response = await fetch(`/api/acompanhamento/ativos?${params}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Erro ao carregar');
+        }
+        
+        window.acompanhamentoUltimaConsulta = data.timestamp;
+        renderizarAcompanhamento(data);
+        atualizarStatusAcompanhamento('online', `${data.total} aluno(s) em atendimento`);
+        
+        // 🔥 Popular filtro de turmas SEMPRE (usa dados da API ou busca da API do professor)
+        if (typeof popularFiltroTurmasAcompanhamento === 'function') {
+            popularFiltroTurmasAcompanhamento(data.turmas);
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro no acompanhamento:', error);
+        atualizarStatusAcompanhamento('erro', 'Erro ao carregar');
+        
+        const lista = document.getElementById('acompanhamentoLista');
+        if (lista) {
+            lista.innerHTML = `
+                <div class="acompanhamento-empty acompanhamento-empty-erro">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Erro ao carregar. Tentando novamente...</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// ============================================
+// RENDERIZAR LISTA
+// ============================================
+function renderizarAcompanhamento(data) {
+    const lista = document.getElementById('acompanhamentoLista');
+    const totalEl = document.getElementById('acompanhamentoTotal');
+    const setorEl = document.getElementById('acompanhamentoPorSetor');
+    
+    if (totalEl) totalEl.textContent = data.total || 0;
+    if (setorEl) setorEl.textContent = Object.keys(data.estatisticas?.porSetor || {}).length;
+    
+    atualizarBadgeAcompanhamento(data.total || 0);
+    
+    if (!lista) return;
+    
+    if (data.total === 0) {
+        lista.innerHTML = `
+            <div class="acompanhamento-empty">
+                <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                <h3>Nenhum aluno em atendimento</h3>
+                <p>Todos os seus alunos estão em sala de aula.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const atendimentos = data.atendimentos || [];
+    
+    let html = '';
+    atendimentos.forEach(a => {
+        const tempoClass = a.tempoMinutos > 60 ? 'acompanhamento-tempo-alerta' : '';
+        const nomeSeguro = escapeHtmlAcompanhamento(a.alunoNome || 'Aluno');
+        const turmaSegura = escapeHtmlAcompanhamento(a.turmaPrincipal || 'Sem turma');
+
+        html += `
+            <div class="acompanhamento-card" data-atendimento-id="${a.atendimentoId}">
+                <div class="acompanhamento-card-avatar" style="background: ${a.setorCor};">
+                    ${(a.alunoNome || 'A').charAt(0).toUpperCase()}
+                </div>
+                
+                <div class="acompanhamento-card-content">
+                    <div class="acompanhamento-card-header">
+                        <div>
+                            <h4 class="acompanhamento-card-nome">${nomeSeguro}</h4>
+                            <div class="acompanhamento-card-turma">
+                                <i class="fas fa-users"></i> ${turmaSegura}
+                                ${a.alunoMatricula ? `• ${escapeHtmlAcompanhamento(a.alunoMatricula)}` : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="acompanhamento-card-setor" style="background: ${a.setorCor}20; color: ${a.setorCor}; border: 1px solid ${a.setorCor}40;">
+                            <span>${a.setorIcone}</span>
+                            <span>${escapeHtmlAcompanhamento(a.setorLabel)}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="acompanhamento-card-info">
+                        <div class="acompanhamento-card-tempo ${tempoClass}">
+                            <i class="fas fa-clock"></i>
+                            <span>Há ${a.tempoFormatado || a.tempoMinutos + ' min'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    lista.innerHTML = html;
+}
+
+// ============================================
+// VERIFICAR NOVOS ATENDIMENTOS
+// ============================================
+async function verificarNovosAtendimentos() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const params = new URLSearchParams();
+        if (window.acompanhamentoUltimaConsulta) {
+            params.append('desde', window.acompanhamentoUltimaConsulta);
+        }
+        
+        const response = await fetch(`/api/acompanhamento/notificacoes?${params}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) return;
+        
+        (data.novos || []).forEach(novo => {
+            if (window.acompanhamentoAtendimentosConhecidos.has(novo.atendimentoId)) {
+                return;
+            }
+            
+            window.acompanhamentoAtendimentosConhecidos.add(novo.atendimentoId);
+            mostrarNotificacaoAcompanhamento(novo);
+            enviarNotificacaoNavegador(novo);
+        });
+        
+    } catch (error) {
+        console.debug('Erro ao verificar novos atendimentos:', error.message);
+    }
+}
+
+// ============================================
+// NOTIFICAÇÃO IN-APP (TOAST)
+// ============================================
+function mostrarNotificacaoAcompanhamento(novo) {
+    const existente = document.querySelector(`[data-toast-atendimento="${novo.atendimentoId}"]`);
+    if (existente) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'acompanhamento-toast';
+    toast.setAttribute('data-toast-atendimento', novo.atendimentoId);
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: white;
+        border-radius: 16px;
+        padding: 16px 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        z-index: 10000;
+        max-width: 400px;
+        border-left: 4px solid ${novo.setorCor};
+        animation: slideInRight 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+    `;
+    
+    toast.innerHTML = `
+        <div style="
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: ${novo.setorCor};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+            color: white;
+        ">
+            ${novo.setorIcone}
+        </div>
+        <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; color: ${novo.setorCor}; font-weight: 600; margin-bottom: 4px;">
+                🚨 NOVO ATENDIMENTO • ${escapeHtmlAcompanhamento(novo.setorLabel)}
+            </div>
+            <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px; font-size: 14px;">
+                ${escapeHtmlAcompanhamento(novo.alunoNome)}
+            </div>
+            <div style="font-size: 12px; color: #6b7280;">
+                <i class="fas fa-users"></i> ${escapeHtmlAcompanhamento(novo.turmaPrincipal || 'Sem turma')}
+            </div>
+        </div>
+        <button style="
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 0 5px;
+            flex-shrink: 0;
+        " onclick="event.stopPropagation(); this.parentElement.remove();">
+            &times;
+        </button>
+    `;
+    
+    toast.onclick = () => {
+        mostrarTab('acompanhamento');
+        toast.remove();
+    };
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.style.animation = 'slideOutRight 0.4s ease';
+            setTimeout(() => toast.remove(), 400);
+        }
+    }, 10000);
+    
+    if (!document.getElementById('acompanhamentoAnimacoes')) {
+        const style = document.createElement('style');
+        style.id = 'acompanhamentoAnimacoes';
+        style.textContent = `
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOutRight {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// ============================================
+// NOTIFICAÇÃO DO NAVEGADOR
+// ============================================
+function enviarNotificacaoNavegador(novo) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    
+    try {
+        const titulo = `${novo.setorIcone} Novo atendimento - ${novo.setorLabel}`;
+        const corpo = `${novo.alunoNome} (${novo.turmaPrincipal || 'Sem turma'})`;
+        
+        const notif = new Notification(titulo, {
+            body: corpo,
+            icon: '/icons/favicon.ico',
+            badge: '/icons/favicon.ico',
+            tag: `acompanhamento-${novo.atendimentoId}`,
+            requireInteraction: false,
+            silent: false,
+            vibrate: [200, 100, 200]
+        });
+        
+        notif.onclick = () => {
+            window.focus();
+            mostrarTab('acompanhamento');
+            notif.close();
+        };
+        
+        setTimeout(() => {
+            try { notif.close(); } catch(e) {}
+        }, 8000);
+        
+    } catch (e) {
+        console.warn('Erro ao enviar notificação do navegador:', e);
+    }
+}
+
+// ============================================
+// BADGE NA TAB
+// ============================================
+function atualizarBadgeAcompanhamento(total) {
+    const badge = document.getElementById('badgeAcompanhamento');
+    if (badge) {
+        if (total > 0) {
+            badge.textContent = total > 99 ? '99+' : total;
+            badge.style.display = 'inline-flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+    
+    const badgeTopo = document.getElementById('badgeAcompanhamentoTopo');
+    if (badgeTopo) {
+        if (total > 0) {
+            badgeTopo.textContent = total > 99 ? '99+' : total;
+            badgeTopo.style.display = 'inline-flex';
+            badgeTopo.style.animation = 'pulse-notification 2s infinite';
+        } else {
+            badgeTopo.style.display = 'none';
+            badgeTopo.style.animation = 'none';
+        }
+    }
+}
+
+// ============================================
+// STATUS (online/offline)
+// ============================================
+function atualizarStatusAcompanhamento(status, texto) {
+    const el = document.getElementById('acompanhamentoStatusTexto');
+    const dot = document.querySelector('.acompanhamento-status .status-dot');
+    
+    if (!el) return;
+    el.textContent = texto;
+    
+    if (dot) {
+        if (status === 'online') {
+            dot.style.background = '#10b981';
+            dot.style.animation = 'pulse-dot 2s infinite';
+        } else if (status === 'erro') {
+            dot.style.background = '#ef4444';
+            dot.style.animation = 'none';
+        }
+    }
+}
+
+// ============================================
+// FILTROS
+// ============================================
+function aplicarFiltrosAcompanhamento() {
+    carregarAcompanhamento();
+}
+
+// ============================================
+// POPULAR FILTRO DE TURMAS DO ACOMPANHAMENTO
+// ISOLADO - Só afeta a aba de acompanhamento
+// ============================================
+async function popularFiltroTurmasAcompanhamento(turmasDaAPI) {
+    const select = document.getElementById('acompanhamentoFiltroTurma');
+    if (!select) {
+        console.warn('⚠️ Select #acompanhamentoFiltroTurma não encontrado');
+        return;
+    }
+    
+    console.log('📚 Populando filtro de turmas do acompanhamento...');
+    
+    const valorAtual = select.value;
+    
+    // FONTE 1: turmasDaAPI
+    let listaTurmas = [];
+    
+    if (turmasDaAPI && Array.isArray(turmasDaAPI) && turmasDaAPI.length > 0) {
+        listaTurmas = turmasDaAPI.map(t => {
+            if (typeof t === 'string') {
+                return { id: t, nome: t };
+            }
+            return {
+                id: t.id || t._id || t.nome,
+                nome: t.nome || t
+            };
+        });
+        console.log(`   ✅ ${listaTurmas.length} turmas da API de acompanhamento`);
+    }
+    
+    // FONTE 2: Buscar da API do professor se a API de acompanhamento não retornou
+    if (listaTurmas.length === 0) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/turmas', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && Array.isArray(data.turmas)) {
+                    listaTurmas = data.turmas.map(t => ({
+                        id: t.id || t._id,
+                        nome: t.nome
+                    }));
+                    console.log(`   ✅ ${listaTurmas.length} turmas da API /api/turmas`);
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ Erro ao buscar turmas:', error.message);
+        }
+    }
+    
+    if (listaTurmas.length === 0) {
+        console.warn('⚠️ Nenhuma turma disponível para o filtro');
+        select.innerHTML = '<option value="">🏫 Todas as turmas</option>';
+        return;
+    }
+    
+    // Ordenar alfabeticamente
+    listaTurmas.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+    
+    // Montar opções
+    let html = '<option value="">🏫 Todas as turmas</option>';
+    
+    listaTurmas.forEach(t => {
+        const nome = typeof escapeHtmlAcompanhamento === 'function' 
+            ? escapeHtmlAcompanhamento(t.nome || 'Turma sem nome')
+            : (t.nome || 'Turma sem nome');
+        
+        html += `<option value="${t.id}">${nome}</option>`;
+    });
+    
+    select.innerHTML = html;
+    
+    // Restaurar valor anterior
+    if (valorAtual) {
+        const existe = Array.from(select.options).some(opt => opt.value === valorAtual);
+        if (existe) select.value = valorAtual;
+    }
+    
+    console.log(`✅ Filtro populado com ${listaTurmas.length} turmas`);
+}
+
+// ============================================
+// UTILITÁRIO
+// ============================================
+function escapeHtmlAcompanhamento(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// ============================================
+// EXPOR FUNÇÕES GLOBALMENTE
+// ============================================
+window.iniciarAcompanhamento = iniciarAcompanhamento;
+window.carregarAcompanhamento = carregarAcompanhamento;
+window.renderizarAcompanhamento = renderizarAcompanhamento;
+window.verificarNovosAtendimentos = verificarNovosAtendimentos;
+window.mostrarNotificacaoAcompanhamento = mostrarNotificacaoAcompanhamento;
+window.enviarNotificacaoNavegador = enviarNotificacaoNavegador;
+window.atualizarBadgeAcompanhamento = atualizarBadgeAcompanhamento;
+window.atualizarStatusAcompanhamento = atualizarStatusAcompanhamento;
+window.aplicarFiltrosAcompanhamento = aplicarFiltrosAcompanhamento;
+window.popularFiltroTurmasAcompanhamento = popularFiltroTurmasAcompanhamento;
+window.escapeHtmlAcompanhamento = escapeHtmlAcompanhamento;
+
+console.log('✅ Funções de acompanhamento expostas globalmente');
+
+// ============================================
+// 🔥 GERENCIAR BOTÃO DO HEADER vs MENU MOBILE
+// ✅ CORREÇÃO: Só esconde o botão do header em MOBILE
+// ============================================
+(function gerenciarBotaoAcompanhamento() {
+    const isMobile = () => window.innerWidth < 768;
+    
+    function gerenciar() {
+        const btnHeader = document.getElementById('btnAcompanhamentoTopo');
+        const menuContainer = document.querySelector('.professor-mobile-menu-items');
+        
+        if (!btnHeader) {
+            console.warn('⚠️ Botão #btnAcompanhamentoTopo não encontrado no header');
+            return;
+        }
+        
+        const mobile = isMobile();
+        
+        if (mobile && menuContainer) {
+            // ===== MOBILE: Adicionar ao menu e esconder do header =====
+            const jaExisteNoMenu = menuContainer.querySelector('.mobile-menu-item[data-original="acompanhamento"]');
+            
+            if (!jaExisteNoMenu) {
+                const menuItem = document.createElement('a');
+                menuItem.href = '#';
+                menuItem.className = 'mobile-menu-item';
+                menuItem.setAttribute('data-original', 'acompanhamento');
+                menuItem.innerHTML = `
+                    <i class="fas fa-user-clock"></i>
+                    <span>Acompanhamento</span>
+                `;
+                menuItem.onclick = function(e) {
+                    e.preventDefault();
+                    mostrarTab('acompanhamento');
+                    if (typeof fecharMenuMobile === 'function') fecharMenuMobile();
+                };
+                
+                // Inserir antes do logout
+                const logoutBtn = menuContainer.querySelector('.mobile-logout-btn, .logout-item');
+                if (logoutBtn) {
+                    menuContainer.insertBefore(menuItem, logoutBtn);
+                } else {
+                    menuContainer.appendChild(menuItem);
+                }
+                
+                console.log('📱 Botão Acompanhamento adicionado ao menu mobile');
+            }
+            
+            // Esconder do header SOMENTE em mobile
+            btnHeader.style.display = 'none';
+            
+        } else {
+            // ===== DESKTOP: Mostrar no header e remover do menu =====
+            btnHeader.style.display = 'inline-flex';
+            
+            // Remover do menu mobile se estiver lá
+            const itemNoMenu = menuContainer?.querySelector('.mobile-menu-item[data-original="acompanhamento"]');
+            if (itemNoMenu) {
+                itemNoMenu.remove();
+            }
+        }
+    }
+    
+    // Executar quando DOM estiver pronto
+    const tentar = () => {
+        if (document.querySelector('.professor-mobile-menu-items') || document.getElementById('btnAcompanhamentoTopo')) {
+            gerenciar();
+        } else {
+            setTimeout(tentar, 300);
+        }
+    };
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tentar);
+    } else {
+        tentar();
+    }
+    
+    // 🔥 Re-gerenciar quando redimensionar a janela
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(gerenciar, 200);
+    });
+    
+    // Expor função globalmente para uso manual
+    window.gerenciarBotaoAcompanhamento = gerenciar;
+})();
+
+// ============================================
+// INICIALIZAÇÃO ROBUSTA
+// ============================================
+(function inicializarAcompanhamentoSeguro() {
+    const iniciar = () => {
+        console.log('🚀 Inicializando acompanhamento...');
+        setTimeout(() => {
+            iniciarAcompanhamento();
+        }, 1000);
+    };
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', iniciar);
+    } else {
+        iniciar();
+    }
+})();
+
+// ============================================
+// WRAPPER PARA mostrarTab
+// ============================================
+(function wrapperMostrarTab() {
+    const tentarWrapper = () => {
+        if (typeof window.mostrarTab === 'function' && !window.mostrarTab._wrapped) {
+            const originalMostrarTab = window.mostrarTab;
+            
+            window.mostrarTab = function(tabId) {
+                originalMostrarTab.apply(this, arguments);
+                
+                if (tabId === 'acompanhamento') {
+                    console.log('📊 Aba acompanhamento ativada - carregando dados...');
+                    setTimeout(async () => {
+                        // 🔥 Popular filtro de turmas PRIMEIRO (função assíncrona)
+                        if (typeof popularFiltroTurmasAcompanhamento === 'function') {
+                            await popularFiltroTurmasAcompanhamento();
+                        }
+                        
+                        // Depois carregar os dados
+                        if (typeof carregarAcompanhamento === 'function') {
+                            carregarAcompanhamento();
+                        }
+                        
+                        if (!window.acompanhamentoInterval && typeof iniciarAcompanhamento === 'function') {
+                            iniciarAcompanhamento();
+                        }
+                    }, 100);
+                }
+            };
+            
+            window.mostrarTab._wrapped = true;
+            console.log('✅ mostrarTab envolvida para carregar acompanhamento automaticamente');
+            
+        } else if (!window.mostrarTab) {
+            setTimeout(tentarWrapper, 200);
+        }
+    };
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tentarWrapper);
+    } else {
+        tentarWrapper();
+    }
+})();
+
+// ============================================
+// PAUSAR QUANDO SAIR DA PÁGINA
+// ============================================
+window.addEventListener('beforeunload', function() {
+    if (window.acompanhamentoInterval) {
+        clearInterval(window.acompanhamentoInterval);
+        console.log('🛑 Polling de acompanhamento interrompido');
+    }
+});
+
 </script>
 
 </body>

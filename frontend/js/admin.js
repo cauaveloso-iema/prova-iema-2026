@@ -448,6 +448,7 @@ class AdminPanel {
             'cozinha-monitoramento': 'Cozinha - Monitoramento',
             'enfermaria-monitoramento': 'Enfermaria - Monitoramento',
             'gestao-geral': 'Painel de Gestão Geral',
+            'setor-pedagogico': 'Painel do Setor Pedagógico',
             supervisao: 'Painel de Supervisão',
             psicologia: 'Painel de Psicologia',
             'assistente-social': 'Painel do Assistente Social',
@@ -571,6 +572,9 @@ class AdminPanel {
                     break;
             case 'gestao-geral':
                 await this.loadGestaoGeral();
+                break;
+            case 'setor-pedagogico': 
+                await this.loadSetorPedagogico();
                 break;
             case 'supervisao':
                 await this.loadSupervisao();
@@ -28101,19 +28105,30 @@ class AdminPanel {
                     notificarResultado: document.getElementById('config_notificar_resultado')?.checked !== false,
                     notificarCancelamento: document.getElementById('config_notificar_cancelamento')?.checked !== false
                 },
-                email: {
-                    servico: document.getElementById('config_email_servico')?.value,
-                    host: document.getElementById('config_email_host')?.value,
-                    porta: parseInt(document.getElementById('config_email_porta')?.value) || 587,
-                    seguranca: document.getElementById('config_email_seguranca')?.value,
-                    usuario: document.getElementById('config_email_usuario')?.value,
-                    senha: document.getElementById('config_email_senha')?.value === '********' ? null : document.getElementById('config_email_senha')?.value,
-                    remetente: document.getElementById('config_email_remetente')?.value,
-                    nomeRemetente: document.getElementById('config_email_nome')?.value,
-                    notificacoes: document.getElementById('config_email_notificacoes')?.checked !== false,
-                    lembretes: document.getElementById('config_email_lembretes')?.checked !== false,
-                    resultados: document.getElementById('config_email_resultados')?.checked !== false
-                },
+                email: (() => {
+                    const senhaInput = document.getElementById('config_email_senha');
+                    let senhaValor = senhaInput?.value;
+                    
+                    // 🔥 CORREÇÃO: nunca enviar máscara, vazio ou undefined como senha
+                    // - null sinaliza ao backend para NÃO alterar a senha
+                    if (!senhaValor || senhaValor.trim() === '' || senhaValor === '********') {
+                        senhaValor = null;
+                    }
+                    
+                    return {
+                        servico: document.getElementById('config_email_servico')?.value || 'resend',
+                        host: document.getElementById('config_email_host')?.value || '',
+                        porta: parseInt(document.getElementById('config_email_porta')?.value) || 587,
+                        seguranca: document.getElementById('config_email_seguranca')?.value || 'tls',
+                        usuario: document.getElementById('config_email_usuario')?.value || '',
+                        senha: senhaValor,  // null = não altera
+                        remetente: document.getElementById('config_email_remetente')?.value || '',
+                        nomeRemetente: document.getElementById('config_email_nome')?.value || '',
+                        notificacoes: document.getElementById('config_email_notificacoes')?.checked !== false,
+                        lembretes: document.getElementById('config_email_lembretes')?.checked !== false,
+                        resultados: document.getElementById('config_email_resultados')?.checked !== false
+                    };
+                })(),
                 logs: {
                     nivel: document.getElementById('config_log_level')?.value,
                     retencaoDias: parseInt(document.getElementById('config_log_retention')?.value) || 30,
@@ -38051,6 +38066,167 @@ class AdminPanel {
         `;
 
         console.log('✅ Painel de Protagonismo carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO: CARREGAR PAINEL DO SETOR PEDAGÓGICO
+    // ============================================
+    async loadSetorPedagogico() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel do Setor Pedagógico.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renderizar o iframe com a página do setor pedagógico
+        contentArea.innerHTML = `
+            <div class="setor-pedagogico-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header do Setor Pedagógico -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #a855f7, #7c3aed);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-chalkboard-user"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel do Setor Pedagógico</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Gerencie alunos AEE, relatórios e adaptações
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarSetorPedagogico()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel do setor pedagógico"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirSetorPedagogicoNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #7c3aed;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe do Setor Pedagógico -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="setorPedagogicoIframe"
+                        src="/setor-pedagogico.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel do Setor Pedagógico"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel do Setor Pedagógico carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO SETOR PEDAGÓGICO
+    // ============================================
+    recarregarSetorPedagogico() {
+        const iframe = document.getElementById('setorPedagogicoIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel do setor pedagógico...', 'info');
+            }
+            console.log('🔄 Iframe do setor pedagógico recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR SETOR PEDAGÓGICO EM NOVA ABA
+    // ============================================
+    abrirSetorPedagogicoNovaAba() {
+        window.open('/setor-pedagogico.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Setor Pedagógico aberto em nova aba', 'success');
+        }
     }
 
     // ============================================

@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#14b8a6">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,7 +19,6 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Acessibilidade -->
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
@@ -30,121 +28,365 @@
 
     <link rel="stylesheet" href="css/psicologia.css">
 
-    <!-- CSS DO AUTOCOMPLETE -->
     <style>
-        /* ============================================
-           AUTOCOMPLETE DE ALUNO
-           ============================================ */
-        .autocomplete-aluno-wrapper {
-            position: relative;
-        }
-
+        /* AUTOCOMPLETE */
+        .autocomplete-aluno-wrapper { position: relative; }
         .autocomplete-aluno-list {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 2px solid #14b8a6;
-            border-radius: 10px;
-            max-height: 280px;
-            overflow-y: auto;
-            z-index: 1000;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-            margin-top: 4px;
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: white; border: 2px solid #14b8a6; border-radius: 10px;
+            max-height: 280px; overflow-y: auto; z-index: 1000;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15); margin-top: 4px;
         }
-
-        .autocomplete-aluno-list::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .autocomplete-aluno-list::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
-        }
-
+        .autocomplete-aluno-list::-webkit-scrollbar { width: 6px; }
+        .autocomplete-aluno-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .autocomplete-aluno-item {
-            padding: 10px 14px;
-            cursor: pointer;
-            border-bottom: 1px solid #f3f4f6;
-            transition: background 0.15s;
+            padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6;
+            transition: background 0.15s; display: flex; justify-content: space-between;
+            align-items: center; gap: 10px;
+        }
+        .autocomplete-aluno-item:last-child { border-bottom: none; }
+        .autocomplete-aluno-item:hover, .autocomplete-aluno-item.selected { background: #f0fdfa; }
+        .autocomplete-aluno-item .aluno-nome { font-weight: 600; color: #1f2937; flex: 1; }
+        .autocomplete-aluno-item .aluno-nome mark {
+            background: #fef3c7; color: #92400e; padding: 0 2px; border-radius: 3px; font-weight: 700;
+        }
+        .autocomplete-aluno-item .aluno-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+        .autocomplete-aluno-item .aluno-turma {
+            background: #ccfbf1; color: #115e59; font-size: 11px;
+            padding: 2px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap;
+        }
+        .autocomplete-aluno-item .aluno-matricula { font-size: 10px; color: #9ca3af; }
+        .autocomplete-aluno-empty { padding: 16px; text-align: center; color: #9ca3af; font-size: 13px; }
+        .autocomplete-aluno-loading {
+            padding: 16px; text-align: center; color: #6b7280; font-size: 13px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .autocomplete-aluno-loading::before {
+            content: ''; width: 14px; height: 14px; border: 2px solid #e5e7eb;
+            border-top: 2px solid #14b8a6; border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+
+        /* 🔔 SINO */
+        .sino-wrapper { position: relative; display: inline-block; }
+        .sino-btn {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border-radius: 50%; width: 40px; height: 40px;
+            display: inline-flex; align-items: center; justify-content: center;
+            text-decoration: none; color: white; transition: all 0.3s;
+            border: none; cursor: pointer; position: relative;
+        }
+        .sino-btn:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
+        .sino-btn.tem-novidade {
+            animation: sino-pulse 1.5s infinite;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        .sino-btn.tem-novidade i { animation: sino-shake 1s infinite; }
+        @keyframes sino-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+        }
+        @keyframes sino-shake {
+            0%, 100% { transform: rotate(0deg); }
+            15% { transform: rotate(15deg); }
+            30% { transform: rotate(-15deg); }
+            45% { transform: rotate(10deg); }
+            60% { transform: rotate(-10deg); }
+            75% { transform: rotate(5deg); }
+        }
+        .sino-badge {
+            position: absolute; top: -4px; right: -4px;
+            background: #ef4444; color: white; font-size: 11px; font-weight: bold;
+            min-width: 20px; height: 20px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 5px; border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .sino-dropdown {
+            position: absolute; top: 100%; right: 0; margin-top: 10px;
+            width: 400px; max-width: 90vw; background: white; border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2); z-index: 2000;
+            max-height: 550px; overflow: hidden; display: none; border: 1px solid #e5e7eb;
+        }
+        .sino-dropdown.aberto { display: block; animation: dropdown-fade 0.2s ease-out; }
+        @keyframes dropdown-fade {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .sino-dropdown-header {
+            padding: 12px 16px; background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white; display: flex; justify-content: space-between; align-items: center; font-weight: 600;
+        }
+        .sino-dropdown-body { max-height: 420px; overflow-y: auto; }
+        .sino-dropdown-body::-webkit-scrollbar { width: 6px; }
+        .sino-dropdown-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .lembrete-item { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; transition: background 0.15s; cursor: pointer; }
+        .lembrete-item:hover { background: #f9fafb; }
+        .lembrete-item:last-child { border-bottom: none; }
+        .lembrete-item.atrasado { background: #fef2f2; border-left: 4px solid #dc2626; }
+        .lembrete-item.urgente { background: #fef2f2; border-left: 4px solid #ef4444; animation: urgente-pulse 2s infinite; }
+        @keyframes urgente-pulse { 0%, 100% { background: #fef2f2; } 50% { background: #fee2e2; } }
+        .lembrete-item.proximo { background: #fff7ed; border-left: 4px solid #f97316; }
+        .lembrete-item.hoje { background: #fffbeb; border-left: 4px solid #f59e0b; }
+        .lembrete-item.amanha { background: #eff6ff; border-left: 4px solid #3b82f6; }
+        .lembrete-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; }
+        .lembrete-nome { font-weight: 600; color: #1f2937; font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lembrete-badge {
+            font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 700;
+            white-space: nowrap; text-transform: uppercase;
+        }
+        .lembrete-badge.atrasado { background: #dc2626; color: white; }
+        .lembrete-badge.urgente { background: #ef4444; color: white; }
+        .lembrete-badge.proximo { background: #f97316; color: white; }
+        .lembrete-badge.hoje { background: #f59e0b; color: white; }
+        .lembrete-badge.amanha { background: #3b82f6; color: white; }
+        .lembrete-badge.futuro { background: #64748b; color: white; }
+        .lembrete-turma { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+        .lembrete-data { font-size: 12px; color: #6b7280; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+        .lembrete-tipo {
+            display: inline-block; background: #ccfbf1; color: #115e59;
+            font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-bottom: 8px;
+        }
+        .lembrete-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+        .lembrete-acoes .btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; }
+        .sino-dropdown-footer {
+            padding: 10px 16px; background: #f9fafb; text-align: center;
+            font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .sino-notif-status { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+        .sino-notif-status.ativo { color: #10b981; }
+        .sino-notif-status.inativo { color: #6b7280; }
+        .sino-vazio { padding: 40px 20px; text-align: center; color: #9ca3af; }
+        .sino-vazio i { font-size: 40px; color: #d1d5db; margin-bottom: 12px; display: block; }
+
+        /* ASSINATURA */
+        .assinatura-wrapper { margin-top: 15px; }
+        .assinatura-container {
+            position: relative; width: 100%; height: 150px;
+            background: #f8fafc; border: 2px dashed #cbd5e1;
+            border-radius: 12px; overflow: hidden; transition: border-color 0.3s;
+        }
+        .assinatura-container.ativa { border-color: #14b8a6; border-style: solid; }
+        .assinatura-canvas {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; cursor: crosshair; touch-action: none; z-index: 2;
+        }
+        .assinatura-placeholder {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #94a3b8; pointer-events: none; z-index: 1; transition: opacity 0.3s;
+        }
+        .assinatura-placeholder.escondido { opacity: 0; }
+        .assinatura-placeholder i { font-size: 32px; margin-bottom: 8px; }
+        .assinatura-placeholder span { font-size: 14px; }
+        .assinatura-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+        /* MODAL DETALHES */
+        .detalhe-atendimento .info-row {
+            display: flex; padding: 8px 0; border-bottom: 1px solid #f3f4f6;
+        }
+        .detalhe-atendimento .info-row:last-child { border-bottom: none; }
+        .detalhe-atendimento .info-label {
+            font-weight: 600; color: #6b7280; min-width: 140px; font-size: 13px;
+        }
+        .detalhe-atendimento .info-value { color: #1f2937; font-size: 14px; flex: 1; }
+        .detalhe-atendimento .section-title {
+            font-size: 13px; font-weight: 700; color: #0d9488;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin: 16px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #ccfbf1;
+        }
+        .assinatura-preview {
+            background: #f8fafc; border: 1px solid #e5e7eb;
+            border-radius: 8px; padding: 10px; text-align: center;
+        }
+        .assinatura-preview img { max-height: 80px; max-width: 100%; }
+
+        /* ═══════════════════════════════════════════
+           🎯 FILTROS DA ABA EM ANDAMENTO
+           ═══════════════════════════════════════════ */
+        .filtros-andamento {
+            background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid #99f6e4;
+        }
+
+        .filtros-andamento .filtro-titulo {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 10px;
-        }
-
-        .autocomplete-aluno-item:last-child {
-            border-bottom: none;
-        }
-
-        .autocomplete-aluno-item:hover,
-        .autocomplete-aluno-item.selected {
-            background: #f0fdfa;
-        }
-
-        .autocomplete-aluno-item .aluno-nome {
-            font-weight: 600;
-            color: #1f2937;
-            flex: 1;
-        }
-
-        .autocomplete-aluno-item .aluno-nome mark {
-            background: #fef3c7;
-            color: #92400e;
-            padding: 0 2px;
-            border-radius: 3px;
-            font-weight: 700;
-        }
-
-        .autocomplete-aluno-item .aluno-info {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 2px;
-        }
-
-        .autocomplete-aluno-item .aluno-turma {
-            background: #ccfbf1;
-            color: #115e59;
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .autocomplete-aluno-item .aluno-matricula {
-            font-size: 10px;
-            color: #9ca3af;
-        }
-
-        .autocomplete-aluno-empty {
-            padding: 16px;
-            text-align: center;
-            color: #9ca3af;
-            font-size: 13px;
-        }
-
-        .autocomplete-aluno-loading {
-            padding: 16px;
-            text-align: center;
-            color: #6b7280;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
             gap: 8px;
         }
 
-        .autocomplete-aluno-loading::before {
-            content: '';
-            width: 14px;
-            height: 14px;
-            border: 2px solid #e5e7eb;
-            border-top: 2px solid #14b8a6;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+        .filtros-andamento .filtro-titulo h6 {
+            margin: 0;
+            color: #0d9488;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .filtros-andamento .filtro-titulo .contador-resultados {
+            background: #0d9488;
+            color: white;
+            font-size: 12px;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .filtros-andamento .filtro-titulo .contador-resultados.zero {
+            background: #9ca3af;
+        }
+
+        .filtros-andamento .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #115e59;
+            margin-bottom: 4px;
+        }
+
+        .filtros-andamento .form-control,
+        .filtros-andamento .form-select {
+            font-size: 13px;
+            border: 1px solid #5eead4;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .filtros-andamento .form-control:focus,
+        .filtros-andamento .form-select:focus {
+            border-color: #14b8a6;
+            box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+        }
+
+        .filtros-andamento .btn-limpar-filtros {
+            background: white;
+            border: 1px solid #14b8a6;
+            color: #0d9488;
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .filtros-andamento .btn-limpar-filtros:hover {
+            background: #14b8a6;
+            color: white;
+        }
+
+        .filtros-andamento .btn-limpar-filtros:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Botão de toggle para filtros avançados (mobile) */
+        .filtro-avancado-toggle {
+            background: transparent;
+            border: 1px dashed #14b8a6;
+            color: #0d9488;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            width: 100%;
+            margin-top: 8px;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .filtro-avancado-toggle:hover {
+            background: #ccfbf1;
+        }
+
+        /* Chips de filtros ativos */
+        .chips-filtros-ativos {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .chip-filtro {
+            background: #0d9488;
+            color: white;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .chip-filtro i.fa-times {
+            cursor: pointer;
+            opacity: 0.8;
+            font-size: 10px;
+        }
+
+        .chip-filtro i.fa-times:hover {
+            opacity: 1;
+        }
+
+        /* Contador de badges por tipo */
+        .badge-count-tipo {
+            background: #0d9488;
+            color: white;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+            font-weight: 700;
+        }
+
+        /* Animação ao filtrar */
+        .list-group-item.filtrado {
+            animation: fadeInItem 0.3s ease-out;
+        }
+
+        @keyframes fadeInItem {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Estado vazio */
+        .estado-vazio-filtro {
+            text-align: center;
+            padding: 40px 20px;
+            color: #9ca3af;
+        }
+
+        .estado-vazio-filtro i {
+            font-size: 48px;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .estado-vazio-filtro p {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .estado-vazio-filtro .btn {
+            margin-top: 12px;
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .filtros-andamento {
+                padding: 12px;
+            }
+            .filtros-andamento .row {
+                gap: 8px;
+            }
+            .sino-dropdown {
+                width: calc(100vw - 30px);
+                right: -50px;
+            }
         }
     </style>
 </head>
@@ -162,20 +404,42 @@
                 </div>
             </div>
             <div class="btn-actions">
+                <!-- 🔔 SINO -->
+                <div class="sino-wrapper">
+                    <button class="sino-btn" id="sinoBtn" title="Lembretes de Remarcação">
+                        <i class="fas fa-bell"></i>
+                        <span class="sino-badge" id="sinoBadge" style="display: none;">0</span>
+                    </button>
+                    <div class="sino-dropdown" id="sinoDropdown">
+                        <div class="sino-dropdown-header">
+                            <span><i class="fas fa-bell"></i> Lembretes de Remarcação</span>
+                            <button onclick="carregarLembretes()" 
+                                    style="background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 6px; padding: 4px 8px; cursor: pointer;">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="sino-dropdown-body" id="sinoDropdownBody">
+                            <div class="sino-vazio">
+                                <i class="fas fa-bell-slash"></i>
+                                <p>Nenhum lembrete pendente</p>
+                            </div>
+                        </div>
+                        <div class="sino-dropdown-footer">
+                            <div class="sino-notif-status" id="sinoNotifStatus">
+                                <i class="fas fa-bell-slash"></i> Notificações desativadas
+                            </div>
+                            <small>Atualiza a cada 30s</small>
+                        </div>
+                    </div>
+                </div>
+
                 <a href="https://drive.google.com/file/d/1AcB6NmGjKO0JlmKmQURonscInc-1MfQn/view?usp=sharing" 
                    target="_blank" class="btn-icon" style="
                     background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 50%;
-                    width: 40px;
-                    height: 40px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    text-decoration: none;
-                    color: white;
-                    transition: all 0.3s;
-                    border: none;
-                    cursor: pointer;
+                    border-radius: 50%; width: 40px; height: 40px;
+                    display: inline-flex; align-items: center; justify-content: center;
+                    text-decoration: none; color: white; transition: all 0.3s;
+                    border: none; cursor: pointer;
                 " title="Baixar App">
                     <i class="fas fa-download"></i>
                 </a>
@@ -227,6 +491,7 @@
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="ativos-tab" data-bs-toggle="tab" data-bs-target="#ativos" type="button" role="tab">
                             <i class="fas fa-clock"></i> Em Andamento
+                            <span class="badge bg-warning text-dark ms-1" id="badgeAtivosTab" style="display: none;">0</span>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
@@ -244,14 +509,10 @@
                 <div class="tab-content mt-3">
                     <!-- ABA ATENDIMENTO -->
                     <div class="tab-pane fade show active" id="atendimento" role="tabpanel">
-                        
-                        <!-- MODO AUTOMÁTICO (QR CODE) -->
                         <div id="modoAutomatico">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5 class="card-title">
-                                        <i class="fas fa-qrcode me-2"></i> Escanear QR Code do Aluno
-                                    </h5>
+                                    <h5 class="card-title"><i class="fas fa-qrcode me-2"></i> Escanear QR Code do Aluno</h5>
                                     <div id="qr-reader-auto" class="qr-scanner-container"></div>
                                     <div class="text-center mt-2">
                                         <small class="text-muted">Aponte a câmera para o QR Code do aluno</small>
@@ -260,16 +521,12 @@
                             </div>
                         </div>
                         
-                        <!-- MODO MANUAL (Selecionar Aluno por Turma) -->
                         <div id="modoManual" style="display: none;">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5 class="card-title">
-                                        <i class="fas fa-users me-2"></i> Selecionar Aluno por Turma
-                                    </h5>
+                                    <h5 class="card-title"><i class="fas fa-users me-2"></i> Selecionar Aluno por Turma</h5>
                                     <p class="text-muted mb-3">
-                                        <i class="fas fa-info-circle"></i> 
-                                        Selecione uma turma e clique no aluno para registrá-lo diretamente.
+                                        <i class="fas fa-info-circle"></i> Selecione uma turma e clique no aluno.
                                     </p>
                                     
                                     <div class="row g-3 mb-3">
@@ -390,8 +647,29 @@
                                 <textarea id="observacoes" class="form-control" rows="2" 
                                           placeholder="Informações complementares..."></textarea>
                             </div>
+
+                            <!-- ASSINATURA DIGITAL -->
+                            <div class="assinatura-wrapper">
+                                <label class="form-label">
+                                    <i class="fas fa-signature"></i> Assinatura do Responsável
+                                    <small class="text-muted">(assine com o dedo ou mouse)</small>
+                                </label>
+                                <div class="assinatura-container">
+                                    <canvas id="assinaturaCanvas" class="assinatura-canvas"></canvas>
+                                    <div class="assinatura-placeholder" id="assinaturaPlaceholder">
+                                        <i class="fas fa-pen-fancy"></i>
+                                        <span>Assine aqui</span>
+                                    </div>
+                                </div>
+                                <div class="assinatura-actions">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparAssinatura()">
+                                        <i class="fas fa-eraser"></i> Limpar
+                                    </button>
+                                </div>
+                                <input type="hidden" id="assinaturaBase64" value="">
+                            </div>
                             
-                            <div class="d-flex gap-2">
+                            <div class="d-flex gap-2 mt-3">
                                 <button class="btn-primary-custom" onclick="registrarOcorrencia()">
                                     <i class="fas fa-check-circle me-2"></i> Registrar
                                 </button>
@@ -402,8 +680,130 @@
                         </div>
                     </div>
                     
-                    <!-- ABA EM ANDAMENTO -->
+                    <!-- ══════════════════════════════════════════════
+                         ABA EM ANDAMENTO (COM FILTROS)
+                         ══════════════════════════════════════════════ -->
                     <div class="tab-pane fade" id="ativos" role="tabpanel">
+                        <!-- FILTROS -->
+                        <div class="filtros-andamento">
+                            <div class="filtro-titulo">
+                                <h6><i class="fas fa-filter"></i> Filtrar Atendimentos</h6>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="contador-resultados" id="contadorResultados">0</span>
+                                    <button class="btn-limpar-filtros" id="btnLimparFiltros" onclick="limparFiltrosAndamento()" disabled>
+                                        <i class="fas fa-times"></i> Limpar
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Filtros principais (sempre visíveis) -->
+                            <div class="row g-2">
+                                <div class="col-md-6 col-lg-4">
+                                    <label class="form-label">
+                                        <i class="fas fa-search"></i> Buscar Aluno
+                                    </label>
+                                    <input type="text" 
+                                           id="filtroAndamentoBusca" 
+                                           class="form-control form-control-sm" 
+                                           placeholder="Nome ou matrícula..."
+                                           autocomplete="off">
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <label class="form-label">
+                                        <i class="fas fa-graduation-cap"></i> Turma
+                                    </label>
+                                    <select id="filtroAndamentoTurma" class="form-select form-select-sm">
+                                        <option value="">Todas as turmas</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 col-lg-3">
+                                    <label class="form-label">
+                                        <i class="fas fa-clipboard-list"></i> Tipo de Tarefa
+                                    </label>
+                                    <select id="filtroAndamentoTipo" class="form-select form-select-sm">
+                                        <option value="">Todos os tipos</option>
+                                        <option value="escuta_acolhimento">Escutas de Acolhimento</option>
+                                        <option value="manejo_crises_emocionais">Manejo de Crises</option>
+                                        <option value="atividades_grupos">Atividades em Grupos</option>
+                                        <option value="acoes_atividades_saude">Ações em Saúde</option>
+                                        <option value="acoes_socioemocionais_culturais">Socioemocionais e Culturais</option>
+                                        <option value="outros">Outros</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 col-lg-2">
+                                    <label class="form-label">
+                                        <i class="fas fa-sort"></i> Ordenar por
+                                    </label>
+                                    <select id="filtroAndamentoOrdenar" class="form-select form-select-sm">
+                                        <option value="recente">Mais recente</option>
+                                        <option value="antigo">Mais antigo</option>
+                                        <option value="prioridade">Prioridade</option>
+                                        <option value="gravidade">Gravidade</option>
+                                        <option value="nome">Nome (A-Z)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Toggle filtros avançados -->
+                            <button class="filtro-avancado-toggle" id="btnToggleAvancado" onclick="toggleFiltrosAvancados()">
+                                <i class="fas fa-chevron-down"></i> Mais filtros
+                            </button>
+                            
+                            <!-- Filtros avançados (escondidos por padrão) -->
+                            <div id="filtrosAvancados" style="display: none; margin-top: 10px;">
+                                <div class="row g-2">
+                                    <div class="col-md-6 col-lg-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-bolt"></i> Prioridade
+                                        </label>
+                                        <select id="filtroAndamentoPrioridade" class="form-select form-select-sm">
+                                            <option value="">Todas</option>
+                                            <option value="urgente">🔴 Urgente</option>
+                                            <option value="alta">🟠 Alta</option>
+                                            <option value="normal">🟡 Normal</option>
+                                            <option value="baixa">🟢 Baixa</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 col-lg-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-exclamation-triangle"></i> Gravidade
+                                        </label>
+                                        <select id="filtroAndamentoGravidade" class="form-select form-select-sm">
+                                            <option value="">Todas</option>
+                                            <option value="critica">🔴 Crítica</option>
+                                            <option value="alta">🟠 Alta</option>
+                                            <option value="media">🟡 Média</option>
+                                            <option value="baixa">🟢 Baixa</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 col-lg-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-calendar-plus"></i> Remarcados
+                                        </label>
+                                        <select id="filtroAndamentoRemarcado" class="form-select form-select-sm">
+                                            <option value="">Todos</option>
+                                            <option value="sim">✅ Apenas remarcados</option>
+                                            <option value="nao">❌ Apenas sem remarcação</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 col-lg-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-signature"></i> Assinatura
+                                        </label>
+                                        <select id="filtroAndamentoAssinatura" class="form-select form-select-sm">
+                                            <option value="">Todos</option>
+                                            <option value="sim">✅ Com assinatura</option>
+                                            <option value="nao">❌ Sem assinatura</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Chips de filtros ativos -->
+                            <div class="chips-filtros-ativos" id="chipsFiltrosAtivos"></div>
+                        </div>
+                        
+                        <!-- Lista de atendimentos -->
                         <div id="listaAtendimentosAtivos" class="list-group">
                             <div class="text-center py-3">
                                 <div class="loading"></div>
@@ -414,6 +814,7 @@
                     
                     <!-- ABA DASHBOARD -->
                     <div class="tab-pane fade" id="dashboard" role="tabpanel">
+                        <!-- MÉTRICAS -->
                         <div class="row mb-4">
                             <div class="col-md-3 mb-3">
                                 <div class="metric-card">
@@ -445,6 +846,7 @@
                             </div>
                         </div>
                         
+                        <!-- GRÁFICOS -->
                         <div class="row">
                             <div class="col-md-6 mb-4">
                                 <div class="card h-100">
@@ -480,7 +882,8 @@
                             </div>
                         </div>
                         
-                        <div class="card">
+                        <!-- REINCIDENTES -->
+                        <div class="card mb-4">
                             <div class="card-body">
                                 <h6 class="card-title">
                                     <i class="fas fa-exclamation-triangle text-warning"></i> 
@@ -488,6 +891,96 @@
                                 </h6>
                                 <div id="alunosReincidentes" class="mt-3">
                                     <div class="text-center py-3">Carregando...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ═══════════════════════════════════════════════════════
+                            🗑️ NOVA SEÇÃO: GERENCIAR ATENDIMENTOS CONCLUÍDOS
+                            ═══════════════════════════════════════════════════════ -->
+                        <div class="card" id="cardConcluidos">
+                            <div class="card-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                <div>
+                                    <i class="fas fa-archive"></i> 
+                                    <strong>Atendimentos Concluídos</strong>
+                                    <span class="badge bg-light text-dark ms-2" id="contadorConcluidos">0</span>
+                                </div>
+                                <button class="btn btn-sm btn-light" onclick="carregarAtendimentosConcluidos()">
+                                    <i class="fas fa-sync-alt"></i> Atualizar
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <!-- FILTROS -->
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-4">
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                            <input type="text" 
+                                                id="filtroConcluidosBusca" 
+                                                class="form-control" 
+                                                placeholder="Buscar por nome ou matrícula..."
+                                                autocomplete="off">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <select id="filtroConcluidosTipo" class="form-select form-select-sm">
+                                            <option value="">Todos os tipos</option>
+                                            <option value="escuta_acolhimento">Escutas de Acolhimento</option>
+                                            <option value="manejo_crises_emocionais">Manejo de Crises</option>
+                                            <option value="atividades_grupos">Atividades em Grupos</option>
+                                            <option value="acoes_atividades_saude">Ações em Saúde</option>
+                                            <option value="acoes_socioemocionais_culturais">Socioemocionais e Culturais</option>
+                                            <option value="outros">Outros</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <select id="filtroConcluidosResultado" class="form-select form-select-sm">
+                                            <option value="">Todos os resultados</option>
+                                            <option value="resolvido">✅ Resolvido</option>
+                                            <option value="em_acompanhamento">🔄 Em Acompanhamento</option>
+                                            <option value="reincidente">⚠️ Reincidente</option>
+                                            <option value="encaminhado">↗️ Encaminhado</option>
+                                            <option value="pendente">⏳ Pendente</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button class="btn btn-sm btn-outline-secondary w-100" onclick="limparFiltrosConcluidos()">
+                                            <i class="fas fa-times"></i> Limpar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- LISTA -->
+                                <div id="listaConcluidos">
+                                    <div class="text-center py-4">
+                                        <div class="spinner-border spinner-border-sm text-teal" role="status"></div>
+                                        <p class="text-muted mt-2 mb-0">Carregando atendimentos...</p>
+                                    </div>
+                                </div>
+
+                                <!-- PAGINAÇÃO -->
+                                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                                    <small class="text-muted" id="infoPaginacaoConcluidos"></small>
+                                    <div id="paginacaoConcluidos"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ═══════════════════════════════════════════════════════
+                            ⚡ NOVA SEÇÃO: ZONA DE PERIGO (AÇÕES EM MASSA)
+                            ═══════════════════════════════════════════════════════ -->
+                        <div class="card mt-4" style="border-left: 4px solid #dc2626;">
+                            <div class="card-body">
+                                <h6 class="text-danger mb-3">
+                                    <i class="fas fa-exclamation-triangle"></i> Ações em Massa
+                                </h6>
+                                <p class="text-muted small mb-3">
+                                    Use com cuidado! Ações irreversíveis.
+                                </p>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="abrirExclusaoEmMassa()">
+                                        <i class="fas fa-trash-alt"></i> Excluir Atendimentos Antigos
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -514,16 +1007,10 @@
                                 <div class="col-md-4" id="filtroAlunoDiv" style="display: none;">
                                     <label class="form-label">Aluno</label>
                                     <div class="autocomplete-aluno-wrapper">
-                                        <input type="text" 
-                                               id="buscaAlunoRelatorio" 
-                                               class="form-control" 
-                                               placeholder="Digite o nome do aluno..."
-                                               autocomplete="off">
+                                        <input type="text" id="buscaAlunoRelatorio" class="form-control" 
+                                               placeholder="Digite o nome do aluno..." autocomplete="off">
                                         <input type="hidden" id="filtroAluno" value="">
-                                        <div id="autocompleteAlunoList" 
-                                             class="autocomplete-aluno-list" 
-                                             style="display: none;">
-                                        </div>
+                                        <div id="autocompleteAlunoList" class="autocomplete-aluno-list" style="display: none;"></div>
                                     </div>
                                     <small class="text-muted mt-1 d-block" id="alunoSelecionadoInfo"></small>
                                 </div>
@@ -565,7 +1052,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/psicologia.js"></script>
 
-    <!-- Sistema de Escalonamento Mobile -->
     <script>
         (function() {
             if (window.innerWidth > 768) return;

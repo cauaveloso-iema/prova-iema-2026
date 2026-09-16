@@ -1,5 +1,62 @@
 const mongoose = require('mongoose');
 
+// ============================================
+// SUB-SCHEMA: REMARCAÇÃO
+// ============================================
+const RemarcacaoSchema = new mongoose.Schema({
+  id: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: () => new mongoose.Types.ObjectId()
+  },
+  dataRemarcacao: {
+    type: String,  // Formato YYYY-MM-DD
+    required: true
+  },
+  horarioRemarcacao: {
+    type: String,  // Formato HH:MM
+    required: true
+  },
+  motivoRemarcacao: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  observacoesRemarcacao: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  status: {
+    type: String,
+    enum: ['pendente', 'realizado', 'cancelado'],
+    default: 'pendente'
+  },
+  criadaEm: {
+    type: Date,
+    default: Date.now
+  },
+  criadaPor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  criadaPorNome: {
+    type: String,
+    default: ''
+  },
+  finalizadaEm: {
+    type: Date,
+    default: null
+  },
+  finalizadaPor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  }
+}, { _id: false });
+
+// ============================================
+// SCHEMA PRINCIPAL: ATENDIMENTO PSICOLOGIA
+// ============================================
 const AtendimentoPsicologiaSchema = new mongoose.Schema({
   alunoId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -36,7 +93,12 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
       default: 'media'
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    registradoPorNome: String
+    registradoPorNome: String,
+    // 🔥 NOVO: Assinatura digital
+    assinaturaBase64: {
+      type: String,
+      default: ''
+    }
   },
   
   detalhes: {
@@ -90,6 +152,16 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
     registradoPorNome: String
   },
   
+  // 🔥 NOVO: Remarcações
+  remarcacoes: {
+    type: [RemarcacaoSchema],
+    default: []
+  },
+  temRemarcacaoPendente: {
+    type: Boolean,
+    default: false
+  },
+  
   anexos: [{
     nome: String,
     url: String,
@@ -113,11 +185,19 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// ============================================
+// ÍNDICES
+// ============================================
 AtendimentoPsicologiaSchema.index({ alunoId: 1, status: 1 });
 AtendimentoPsicologiaSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoPsicologiaSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoPsicologiaSchema.index({ createdAt: -1 });
+AtendimentoPsicologiaSchema.index({ temRemarcacaoPendente: 1, status: 1 }); // 🔥 NOVO
+AtendimentoPsicologiaSchema.index({ 'remarcacoes.status': 1 }); // 🔥 NOVO
 
+// ============================================
+// MÉTODOS ESTÁTICOS
+// ============================================
 AtendimentoPsicologiaSchema.statics.alunoEmAtendimento = async function(alunoId) {
   const atendimento = await this.findOne({ alunoId, status: 'em_andamento' });
   return !!atendimento;
@@ -137,6 +217,27 @@ AtendimentoPsicologiaSchema.statics.getTipoTarefaLabel = function(tipo) {
     'outros': 'Outros'
   };
   return labels[tipo] || tipo;
+};
+
+// 🔥 NOVO: Método para adicionar remarcação
+AtendimentoPsicologiaSchema.methods.adicionarRemarcacao = function(dados) {
+  if (!this.remarcacoes) this.remarcacoes = [];
+  
+  this.remarcacoes.push({
+    id: new mongoose.Types.ObjectId(),
+    dataRemarcacao: dados.dataRemarcacao,
+    horarioRemarcacao: dados.horarioRemarcacao,
+    motivoRemarcacao: dados.motivoRemarcacao,
+    observacoesRemarcacao: dados.observacoesRemarcacao || '',
+    status: 'pendente',
+    criadaEm: new Date(),
+    criadaPor: dados.criadaPor,
+    criadaPorNome: dados.criadaPorNome || ''
+  });
+  
+  this.temRemarcacaoPendente = true;
+  this.updatedAt = new Date();
+  return this.save();
 };
 
 module.exports = mongoose.model('AtendimentoPsicologia', AtendimentoPsicologiaSchema);

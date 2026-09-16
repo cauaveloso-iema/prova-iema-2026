@@ -77,6 +77,11 @@ const MODULOS_DISPONIVEIS = {
     'exportar_dados_setor_pedagogico': {
         nomeAmigavel: 'Exportar Dados - Setor Pedagógico',
         descricao: 'Permite exportar dados de alunos AEE'
+    },
+    // 🔥 NOVO MÓDULO
+    'substituicao_professores_setor_pedagogico': {
+        nomeAmigavel: 'Substituição de Professores',
+        descricao: 'Permite registrar substituições de professores quando há ausências'
     }
 };
 

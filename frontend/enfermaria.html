@@ -31,6 +31,60 @@
 
     <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/enfermaria.css">
+
+    <!-- 🆕 Estilos para modal de detalhes -->
+    <style>
+        /* Estilos para modal de detalhes do atendimento */
+        .detalhe-atendimento .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #065f46;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 2px solid #d1fae5;
+        }
+
+        .detalhe-atendimento .info-row {
+            display: flex;
+            margin-bottom: 8px;
+            gap: 10px;
+            align-items: baseline;
+            font-size: 14px;
+        }
+
+        .detalhe-atendimento .info-label {
+            font-weight: 600;
+            color: #4b5563;
+            min-width: 140px;
+        }
+
+        .detalhe-atendimento .info-value {
+            color: #1f2937;
+            flex: 1;
+        }
+
+        /* Melhorias visuais nos botões de ação */
+        .list-group-item .btn-sm {
+            padding: 0.35rem 0.6rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .list-group-item .btn-sm:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .list-group-item .btn-sm i {
+            font-size: 0.85em;
+        }
+    </style>
 </head>
 <body>
     <div class="container">

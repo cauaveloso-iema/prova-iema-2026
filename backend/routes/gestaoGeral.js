@@ -269,7 +269,7 @@ router.get('/atraso/buscar-aluno', authenticateToken, verificarGestaoGeral, asyn
 // Registrar atraso
 router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    const { alunoId, motivo, descricao, observacoes, detalhes } = req.body;
+    const { alunoId, motivo, descricao, observacoes, detalhes, dataHora } = req.body;
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -287,6 +287,25 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     
     const gestor = await User.findById(req.userId).select('nome');
     
+    // 🔥 NOVO: Usa a dataHora enviada ou a data atual
+    let dataFinal = new Date();
+    if (dataHora) {
+      const dataParsed = new Date(dataHora);
+      if (!isNaN(dataParsed.getTime())) {
+        dataFinal = dataParsed;
+      }
+    }
+    
+    // 🔥 NOVO: Valida se data não é muito futura (> 1 ano)
+    const umAnoFuturo = new Date();
+    umAnoFuturo.setFullYear(umAnoFuturo.getFullYear() + 1);
+    if (dataFinal > umAnoFuturo) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Data do atraso não pode ser superior a 1 ano no futuro' 
+      });
+    }
+    
     const atraso = new Atraso({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -295,7 +314,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       alunoCurso: aluno.curso || 'Não informado',
       alunoFoto: aluno.fotoPerfil,
       motivo,
-      dataHora: new Date(),
+      dataHora: dataFinal, // 🔥 NOVO: usa a data enviada
       descricao: descricao.trim(),
       observacoes: observacoes || '',
       detalhes: detalhes || {},
@@ -305,17 +324,22 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     
     await atraso.save();
     
+    // Formata a data para o retorno
+    const dataFormatada = dataFinal.toLocaleString('pt-BR');
+    
     res.json({
       success: true,
-      message: `Atraso registrado para ${aluno.nome}`,
+      message: `Atraso de ${dataFormatada} registrado para ${aluno.nome}`,
       atraso: {
         id: atraso._id,
         motivo: atraso.motivo,
         motivoLabel: Atraso.getMotivoLabel(motivo),
-        dataHora: atraso.dataHora
+        dataHora: atraso.dataHora,
+        dataHoraFormatada: dataFormatada
       }
     });
   } catch (error) {
+    console.error('Erro ao registrar atraso:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
