@@ -1,5 +1,6 @@
 // js/toggle-buttons.js
 // Script para controlar visibilidade dos ícones de acessibilidade e chatbot
+// + Controle do VLibras (corrigido)
 
 (function() {
     'use strict';
@@ -28,7 +29,7 @@
         btn.id = 'toggle-buttons-btn';
         btn.setAttribute('aria-label', 'Mostrar/esconder ícones de acessibilidade e chatbot');
         btn.setAttribute('title', 'Mostrar/esconder ícones de acessibilidade e chatbot');
-        
+
         Object.assign(btn.style, {
             position: 'fixed',
             bottom: '620px',
@@ -68,41 +69,45 @@
     }
 
     // ============================================
-    // FUNÇÃO PARA ESCONDER VLIBRAS (CSS)
+    // SELETORES DO VLIBRAS
+    // ============================================
+    const VLIBRAS_SELETORES = [
+        'div[vw]',
+        '[vw-access-button]',
+        '[vw-plugin-wrapper]',
+        '#vlibras-access-wrapper',
+        '[class*="vlibras"]',
+        '[id*="vlibras"]',
+        '[id*="VLibras"]'
+    ];
+
+    // ============================================
+    // FUNÇÃO PARA ESCONDER VLIBRAS (CSS) - CORRIGIDA
     // ============================================
     function esconderVLibras() {
         console.log('🙈 Escondendo VLibras...');
-        
-        let totalEscondido = 0;
-        const elementos = document.querySelectorAll(
-            'div[vw], [vw-access-button], [vw-plugin-wrapper], ' +
-            '[class*="vlibras"], [id*="vlibras"], [id*="VLibras"]'
-        );
 
-        elementos.forEach(el => {
-            if (el) {
-                // Salvar estado original para restaurar depois
-                if (!el.dataset.originalDisplay) {
-                    el.dataset.originalDisplay = el.style.display || '';
-                    el.dataset.originalOpacity = el.style.opacity || '';
-                    el.dataset.originalVisibility = el.style.visibility || '';
-                    el.dataset.originalPointerEvents = el.style.pointerEvents || '';
+        let totalEscondido = 0;
+
+        VLIBRAS_SELETORES.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                if (!el) return;
+
+                // Salvar SOMENTE o display original
+                // (o resto é controlado pelo CSS do VLibras)
+                if (el.dataset.vlibrasOriginalDisplay === undefined) {
+                    el.dataset.vlibrasOriginalDisplay = el.style.display || '';
                 }
 
-                // Esconder completamente
+                // Esconder APENAS com display:none
+                // NÃO mexer em position / left / top (isso quebrava o VLibras)
                 el.style.setProperty('display', 'none', 'important');
                 el.style.setProperty('opacity', '0', 'important');
                 el.style.setProperty('visibility', 'hidden', 'important');
                 el.style.setProperty('pointer-events', 'none', 'important');
-                el.style.setProperty('width', '0', 'important');
-                el.style.setProperty('height', '0', 'important');
-                el.style.setProperty('overflow', 'hidden', 'important');
-                el.style.setProperty('position', 'absolute', 'important');
-                el.style.setProperty('left', '-9999px', 'important');
-                el.style.setProperty('top', '-9999px', 'important');
-                
+
                 totalEscondido++;
-            }
+            });
         });
 
         console.log(`✅ VLibras escondido! (${totalEscondido} elementos)`);
@@ -110,54 +115,50 @@
     }
 
     // ============================================
-    // FUNÇÃO PARA MOSTRAR VLIBRAS (CSS)
+    // FUNÇÃO PARA MOSTRAR VLIBRAS (CSS) - CORRIGIDA
     // ============================================
     function mostrarVLibras() {
         console.log('🙉 Mostrando VLibras...');
-        
-        let totalMostrado = 0;
-        const elementos = document.querySelectorAll(
-            'div[vw], [vw-access-button], [vw-plugin-wrapper], ' +
-            '[class*="vlibras"], [id*="vlibras"], [id*="VLibras"]'
-        );
 
-        elementos.forEach(el => {
-            if (el) {
-                // Restaurar estilos originais
-                el.style.setProperty('display', el.dataset.originalDisplay || '', 'important');
-                el.style.setProperty('opacity', el.dataset.originalOpacity || '1', 'important');
-                el.style.setProperty('visibility', el.dataset.originalVisibility || 'visible', 'important');
-                el.style.setProperty('pointer-events', el.dataset.originalPointerEvents || 'auto', 'important');
-                el.style.setProperty('width', '', 'important');
-                el.style.setProperty('height', '', 'important');
-                el.style.setProperty('overflow', '', 'important');
-                el.style.setProperty('position', '', 'important');
-                el.style.setProperty('left', '', 'important');
-                el.style.setProperty('top', '', 'important');
-                
+        let totalMostrado = 0;
+
+        VLIBRAS_SELETORES.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                if (!el) return;
+
+                // Restaurar display original (ou '' para voltar ao padrão do CSS do VLibras)
+                const displayOriginal = el.dataset.vlibrasOriginalDisplay || '';
+                el.style.setProperty('display', displayOriginal, 'important');
+
+                // Limpar APENAS os estilos que nós aplicamos
+                el.style.removeProperty('opacity');
+                el.style.removeProperty('visibility');
+                el.style.removeProperty('pointer-events');
+
                 // Limpar dados salvos
-                delete el.dataset.originalDisplay;
-                delete el.dataset.originalOpacity;
-                delete el.dataset.originalVisibility;
-                delete el.dataset.originalPointerEvents;
-                
+                delete el.dataset.vlibrasOriginalDisplay;
+
                 totalMostrado++;
-            }
+            });
         });
+
+        // Garantir que o wrapper principal do VLibras fique visível
+        const divVw = document.querySelector('div[vw]');
+        if (divVw) {
+            divVw.style.setProperty('display', 'block', 'important');
+        }
 
         console.log(`✅ VLibras mostrado! (${totalMostrado} elementos)`);
         return totalMostrado;
     }
 
     // ============================================
-    // LISTA DE ÍCONES A CONTROLAR
+    // LISTA DE ÍCONES A CONTROLAR (SEM VLIBRAS)
     // ============================================
     function getIcones() {
         const icones = [];
 
-        // VLibras - várias formas de selecionar
-        const vlibras = document.querySelector('div[vw], [vw-access-button], [vw-plugin-wrapper]');
-        if (vlibras) icones.push(vlibras);
+        // ⚠️ NÃO incluir VLibras aqui — ele é controlado por esconderVLibras/mostrarVLibras
 
         // Botão de acessibilidade (várias classes possíveis)
         const acessibilidade = document.querySelector(
@@ -179,8 +180,7 @@
         if (chatbotContainer) icones.push(chatbotContainer);
 
         // Qualquer outro elemento que você queira controlar
-        const outros = document.querySelectorAll('.hide-on-toggle');
-        outros.forEach(el => icones.push(el));
+        document.querySelectorAll('.hide-on-toggle').forEach(el => icones.push(el));
 
         return icones;
     }
@@ -202,10 +202,8 @@
 
         // ===== CONTROLAR VLIBRAS =====
         if (!iconesVisiveis) {
-            // ESCONDER VLIBRAS
             esconderVLibras();
         } else {
-            // MOSTRAR VLIBRAS
             mostrarVLibras();
         }
 
@@ -215,11 +213,6 @@
 
         icones.forEach(icon => {
             if (!icon) return;
-
-            // Pular VLibras (já foi controlado separadamente)
-            if (icon.hasAttribute && (icon.hasAttribute('vw') || icon.hasAttribute('vw-access-button'))) {
-                return;
-            }
 
             if (esconder) {
                 icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease, visibility ${CONFIG.animationDuration}ms ease`;
@@ -253,7 +246,7 @@
     }
 
     // ============================================
-    // EXPORTAR A FUNÇÃO PARA O ESCOPO GLOBAL
+    // EXPORTAR FUNÇÕES PARA O ESCOPO GLOBAL
     // ============================================
     window.toggleIcones = toggleIcones;
     window.esconderVLibras = esconderVLibras;
@@ -269,7 +262,7 @@
         if (salvo !== null) {
             iconesVisiveis = salvo === 'true';
             console.log(`📂 Estado carregado: ${iconesVisiveis ? 'visíveis' : 'escondidos'}`);
-            
+
             // Se estava escondido, aplicar estado
             if (!iconesVisiveis) {
                 setTimeout(() => {
@@ -297,20 +290,16 @@
             // Garantir que os ícones mantenham o estado correto
             const icones = getIcones();
             const esconder = !iconesVisiveis;
-            
+
             icones.forEach(icon => {
                 if (!icon) return;
-                
-                if (icon.hasAttribute && (icon.hasAttribute('vw') || icon.hasAttribute('vw-access-button'))) {
-                    return;
-                }
-                
+
                 icon.style.transition = 'none';
                 icon.style.opacity = esconder ? '0' : '1';
                 icon.style.transform = esconder ? 'scale(0.5)' : 'scale(1)';
                 icon.style.pointerEvents = esconder ? 'none' : 'auto';
                 icon.style.visibility = esconder ? 'hidden' : 'visible';
-                
+
                 setTimeout(() => {
                     icon.style.transition = `opacity ${CONFIG.animationDuration}ms ease, transform ${CONFIG.animationDuration}ms ease, visibility ${CONFIG.animationDuration}ms ease`;
                 }, 50);

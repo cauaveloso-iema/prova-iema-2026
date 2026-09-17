@@ -436,3 +436,107 @@ body {
     .metric-value { font-size: 1.8rem; }
     .modo-selector { flex-direction: column; }
 }
+
+/* ===== CARDS RESUMO DIA ===== */
+.card-acompanhamento {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 5px solid #ccc;
+}
+.card-acompanhamento:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+
+.card-acompanhamento.card-gestao { border-left-color: #1e3c72; }
+.card-acompanhamento.card-as { border-left-color: #7c3aed; }
+.card-acompanhamento.card-psico { border-left-color: #14b8a6; }
+.card-acompanhamento.card-supervisao { border-left-color: #0ea5e9; }
+
+.card-acompanhamento .card-icon {
+  width: 50px; height: 50px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; color: #fff; flex-shrink: 0;
+}
+.card-gestao .card-icon { background: linear-gradient(135deg, #1e3c72, #2a5298); }
+.card-as .card-icon { background: linear-gradient(135deg, #7c3aed, #8b5cf6); }
+.card-psico .card-icon { background: linear-gradient(135deg, #14b8a6, #0d9488); }
+.card-supervisao .card-icon { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+
+.card-acompanhamento .card-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.card-acompanhamento .card-label { font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+.card-acompanhamento .card-value { font-size: 26px; font-weight: 800; color: #111827; line-height: 1.1; }
+.card-acompanhamento .card-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== CARD DE ALUNO ===== */
+.card-acompanhamento-aluno {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  border: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.card-acompanhamento-aluno:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+
+.avatar-acomp {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 20px; flex-shrink: 0;
+}
+
+.total-badge { text-align: center; }
+.total-badge .total-num {
+  display: block; font-size: 24px; font-weight: 800; color: #dc2626;
+}
+.total-badge small { font-size: 10px; color: #6b7280; text-transform: uppercase; }
+
+/* ===== GRID DE SETORES ===== */
+.setores-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.setor-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: #f8fafc; border-left: 4px solid #ccc;
+}
+.setor-card.vazio { opacity: 0.5; }
+.setor-card.setor-gestao { border-left-color: #1e3c72; background: #eef2ff; }
+.setor-card.setor-assistente_social { border-left-color: #7c3aed; background: #f5f3ff; }
+.setor-card.setor-psicologia { border-left-color: #14b8a6; background: #f0fdfa; }
+.setor-card.setor-supervisao { border-left-color: #0ea5e9; background: #f0f9ff; }
+
+.setor-card .setor-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 14px; flex-shrink: 0;
+}
+.setor-gestao .setor-icon { background: #1e3c72; }
+.setor-assistente_social .setor-icon { background: #7c3aed; }
+.setor-psicologia .setor-icon { background: #14b8a6; }
+.setor-supervisao .setor-icon { background: #0ea5e9; }
+
+.setor-card .setor-info { flex: 1; min-width: 0; }
+.setor-card .setor-label { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+.setor-card .setor-total { font-size: 20px; font-weight: 800; color: #111827; }
+.setor-card .setor-motivos { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.motivo-tag {
+  font-size: 9px; padding: 1px 6px; border-radius: 8px;
+  background: rgba(0,0,0,0.06); color: #4b5563;
+}
+
+/* ===== MODAL DETALHE ===== */
+.secao-detalhe {
+  border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px;
+}
+.secao-detalhe.vazia { opacity: 0.6; }
+.secao-detalhe h6 { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }

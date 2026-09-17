@@ -10,16 +10,10 @@
   "start_url": "/login.html",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "src": "/icons/favicon.ico",
+      "sizes": "16x16 32x32 48x48 64x64 128x128 256x256",
+      "type": "image/x-icon",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -27,22 +21,19 @@
       "name": "Painel Aluno",
       "short_name": "Aluno",
       "description": "Acessar painel do aluno",
-      "url": "/aluno.html",
-      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png", "sizes": "192x192" }]
+      "url": "/aluno.html"
     },
     {
       "name": "Painel Professor",
       "short_name": "Professor",
       "description": "Acessar painel do professor",
-      "url": "/index.html",
-      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png", "sizes": "192x192" }]
+      "url": "/index.html"
     },
     {
       "name": "Painel Admin",
       "short_name": "Admin",
       "description": "Acessar painel administrativo",
-      "url": "/admin.html",
-      "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png", "sizes": "192x192" }]
+      "url": "/admin.html"
     }
   ],
   "categories": ["education", "productivity"],

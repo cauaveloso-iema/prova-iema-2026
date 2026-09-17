@@ -150,47 +150,79 @@ class PushService {
                 };
             }
 
-            // Verificar se já existe
-            const existe = await PushSubscription.findOne({
-                endpoint: subscription.endpoint
-            });
-
-            if (existe) {
-                existe.keys = subscription.keys;
-                existe.userAgent = userAgent;
-                existe.deviceInfo = deviceInfo;
-                existe.ultimoUso = new Date();
-                existe.ativo = true;
-                await existe.save();
-                
-                return {
-                    success: true,
-                    subscription: existe,
-                    message: 'Subscription atualizada'
-                };
+            // ✅ Validação
+            if (!subscription || !subscription.endpoint) {
+                return { success: false, error: 'Subscription inválida' };
             }
 
-            const nova = new PushSubscription({
-                usuarioId,
-                endpoint: subscription.endpoint,
-                keys: subscription.keys,
-                userAgent,
-                deviceInfo,
-                ativo: true,
-                ultimoUso: new Date()
-            });
+            if (!subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
+                return { success: false, error: 'Keys da subscription inválidas' };
+            }
 
-            await nova.save();
-            console.log(`✅ Push subscription salva para usuário ${usuarioId}`);
+            // ✅ UPSERT ATÔMICO: tudo em uma única operação no MongoDB
+            // Não importa se chamarem 10 vezes em paralelo — só uma vai criar
+            const sub = await PushSubscription.findOneAndUpdate(
+                { endpoint: subscription.endpoint },
+                {
+                    $set: {
+                        usuarioId: usuarioId,
+                        endpoint: subscription.endpoint,
+                        keys: subscription.keys,
+                        userAgent: userAgent || '',
+                        deviceInfo: deviceInfo || '',
+                        ativo: true,
+                        ultimoUso: new Date()
+                    }
+                },
+                {
+                    upsert: true,
+                    new: true,
+                    setDefaultsOnInsert: true
+                }
+            );
+
+            console.log(`✅ Push subscription salva/atualizada para usuário ${usuarioId}`);
 
             return {
                 success: true,
-                subscription: nova,
-                message: 'Subscription criada'
+                subscription: sub,
+                message: sub.createdAt && sub.updatedAt && (sub.createdAt.getTime() === sub.updatedAt.getTime())
+                    ? 'Subscription criada'
+                    : 'Subscription atualizada'
             };
 
         } catch (error) {
             console.error('❌ Erro ao salvar subscription:', error);
+
+            // Fallback: se ainda der duplicata (raro, mas possível)
+            if (error.code === 11000) {
+                try {
+                    const sub = await PushSubscription.findOneAndUpdate(
+                        { endpoint: subscription.endpoint },
+                        {
+                            $set: {
+                                usuarioId,
+                                keys: subscription.keys,
+                                userAgent: userAgent || '',
+                                deviceInfo: deviceInfo || '',
+                                ativo: true,
+                                ultimoUso: new Date()
+                            }
+                        },
+                        { new: true }
+                    );
+                    if (sub) {
+                        return {
+                            success: true,
+                            subscription: sub,
+                            message: 'Subscription atualizada (retry)'
+                        };
+                    }
+                } catch (e) {
+                    console.error('❌ Retry também falhou:', e);
+                }
+            }
+
             return {
                 success: false,
                 error: error.message

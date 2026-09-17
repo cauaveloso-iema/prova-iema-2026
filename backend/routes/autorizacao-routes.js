@@ -787,6 +787,118 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
 });
 
 // ============================================
+// 12.5. EDITAR (PUT)
+// ============================================
+router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
+    try {
+        const Autorizacao = getAutorizacao();
+        
+        if (!req.params.id.match(/^[a-f0-9]{24}$/i)) {
+            return res.status(400).json({ success: false, error: 'ID inválido' });
+        }
+
+        const a = await Autorizacao.findById(req.params.id);
+        if (!a) return res.status(404).json({ success: false, error: 'Registro não encontrado' });
+
+        const {
+            data,
+            horarioEntrada,
+            horarioSaida,
+            horarioAusencia,
+            horarioRetorno,
+            motivo,
+            motivoOutros,
+            responsavelNome,
+            responsavelCPF,
+            responsavelTelefone,
+            observacoes
+        } = req.body;
+
+        // Valida motivo se foi enviado
+        if (motivo) {
+            const motivosValidos = MOTIVOS_POR_TIPO[a.tipo] || MOTIVOS_POR_TIPO['autorizacao'];
+            if (!motivosValidos.includes(motivo)) {
+                return res.status(400).json({ success: false, error: 'Motivo inválido' });
+            }
+            a.motivo = motivo;
+        }
+
+        // Valida data
+        if (data) {
+            let dataFinal;
+            if (data.length === 10) {
+                dataFinal = new Date(data + 'T12:00:00.000-03:00');
+            } else {
+                dataFinal = new Date(data);
+            }
+            if (isNaN(dataFinal.getTime())) {
+                return res.status(400).json({ success: false, error: 'Data inválida' });
+            }
+            a.data = dataFinal;
+        }
+
+        // Valida motivoOutros
+        const motivoAtual = a.motivo;
+        if (motivoAtual === 'outros') {
+            const mOutros = (motivoOutros || a.motivoOutros || '').trim();
+            if (!mOutros) {
+                return res.status(400).json({ success: false, error: 'Especifique o motivo "Outros"' });
+            }
+            a.motivoOutros = mOutros;
+        } else if (motivoOutros !== undefined) {
+            a.motivoOutros = undefined;
+        }
+
+        // Valida horários de ausência/retorno
+        if (motivoAtual === 'necessita_ausentar_retornar') {
+            const hA = horarioAusencia || a.horarioAusencia;
+            const hR = horarioRetorno || a.horarioRetorno;
+            if (!hA || !hR) {
+                return res.status(400).json({ success: false, error: 'Informe ausência e retorno' });
+            }
+            a.horarioAusencia = hA;
+            a.horarioRetorno = hR;
+        }
+
+        // Campos simples
+        if (horarioEntrada !== undefined) a.horarioEntrada = horarioEntrada;
+        if (horarioSaida !== undefined) a.horarioSaida = horarioSaida;
+        if (responsavelNome !== undefined) a.responsavelNome = responsavelNome;
+        if (responsavelCPF !== undefined) a.responsavelCPF = responsavelCPF;
+        if (responsavelTelefone !== undefined) a.responsavelTelefone = responsavelTelefone;
+        if (observacoes !== undefined) a.observacoes = observacoes;
+
+        a.atualizadoEm = new Date();
+        a.atualizadoPor = req.userId;
+        a.atualizadoPorNome = req.userNome;
+
+        await a.save();
+
+        console.log(`✏️ ${a.tipo} editado: ${a.alunoNome} (${a._id}) por ${req.userNome}`);
+
+        res.json({
+            success: true,
+            message: 'Registro atualizado com sucesso!',
+            autorizacao: {
+                id: a._id,
+                tipo: a.tipo,
+                alunoNome: a.alunoNome,
+                motivo: a.motivo,
+                motivoLabel: Autorizacao.getMotivoLabel(a.motivo, a.tipo),
+                data: a.data,
+                horarioEntrada: a.horarioEntrada,
+                horarioSaida: a.horarioSaida,
+                observacoes: a.observacoes
+            }
+        });
+
+    } catch (error) {
+        console.error('Erro ao editar:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
 // 13. EXCLUIR
 // ============================================
 router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {

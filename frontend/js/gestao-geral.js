@@ -140,7 +140,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
     
-    safeGet('atraso-dashboard-tab')?.addEventListener('shown.bs.tab', () => carregarDashboardAtrasos());
+    safeGet('atraso-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
+        carregarDashboardAtrasos();
+        carregarAtrasosRecentes(1);
+        configurarFiltrosAtrasosRecentes();
+    });
     safeGet('atraso-relatorios-tab')?.addEventListener('shown.bs.tab', () => carregarTurmasParaRelatorio());
     safeGet('aba-atrasos')?.addEventListener('shown.bs.tab', () => {
         setTimeout(() => {
@@ -848,6 +852,680 @@ async function carregarDashboardAtrasos() {
             }
         }
     } catch (error) { console.error('Erro no dashboard:', error); }
+}
+
+// ============================================
+// 📋 ATRASOS RECENTES (DASHBOARD)
+// ============================================
+let __atrasosRecentes = [];
+
+async function carregarAtrasosRecentes(pagina = 1) {
+    const container = safeGet('listaAtrasosRecentes');
+    if (!container) return;
+    
+    const busca = (safeGet('filtroAtrasosRecentesBusca')?.value || '').trim().toLowerCase();
+    const turma = safeGet('filtroAtrasosRecentesTurma')?.value || '';
+    
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <p class="text-muted mt-2 mb-0">Carregando atrasos...</p>
+        </div>`;
+    
+    try {
+        const params = new URLSearchParams();
+        params.append('limit', '20');
+        params.append('page', pagina);
+        if (turma) params.append('turma', turma);
+        
+        const response = await fetch(`/api/gestao-geral/atraso/listar?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !Array.isArray(data.atrasos)) {
+            container.innerHTML = `<div class="alert alert-warning">Nenhum atraso encontrado</div>`;
+            return;
+        }
+        
+        let lista = data.atrasos;
+        
+        if (busca) {
+            lista = lista.filter(a =>
+                (a.alunoNome || '').toLowerCase().includes(busca) ||
+                (a.alunoMatricula || '').toLowerCase().includes(busca)
+            );
+        }
+        
+        __atrasosRecentes = lista;
+        atualizarContadorAtrasosRecentes(lista.length);
+        renderizarListaAtrasosRecentes(lista);
+    } catch (error) {
+        console.error('Erro ao carregar atrasos:', error);
+        container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
+    }
+}
+
+function atualizarContadorAtrasosRecentes(total) {
+    const el = safeGet('contadorAtrasosRecentes');
+    if (el) el.textContent = total;
+}
+
+function renderizarListaAtrasosRecentes(lista) {
+    const container = safeGet('listaAtrasosRecentes');
+    if (!container) return;
+    
+    if (lista.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
+                <p>Nenhum atraso corresponde aos filtros</p>
+            </div>`;
+        return;
+    }
+    
+    const corMotivo = {
+        'onibus': '#1e3c72',
+        'transito': '#0284c7',
+        'problemas_pessoais': '#f59e0b',
+        'fardamento': '#8b5cf6',
+        'outros': '#6b7280'
+    };
+    
+    container.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle">
+                <thead style="background: #eef2ff;">
+                    <tr>
+                        <th style="width: 28%;">Aluno</th>
+                        <th style="width: 15%;">Turma</th>
+                        <th style="width: 15%;">Motivo</th>
+                        <th style="width: 20%;">Data/Hora</th>
+                        <th style="width: 22%; text-align: center;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lista.map(a => {
+                        const cor = corMotivo[a.motivo] || '#6b7280';
+                        return `
+                            <tr data-id="${a.id}">
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <img src="${gerarAvatarSVG(a.alunoNome || '?')}" 
+                                             style="width: 32px; height: 32px; border-radius: 50%;" alt="">
+                                        <div>
+                                            <strong style="font-size: 13px;">${escapeHTML(a.alunoNome || '')}</strong>
+                                            <br><small class="text-muted" style="font-size: 11px;">${escapeHTML(a.alunoMatricula || '')}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><small>${escapeHTML(a.alunoTurma || '-')}</small></td>
+                                <td>
+                                    <span class="badge" style="background: ${cor}; font-size: 11px;">
+                                        ${escapeHTML(a.motivoLabel || a.motivo || '-')}
+                                    </span>
+                                </td>
+                                <td><small>${a.dataHoraFormatada || (a.dataHora ? new Date(a.dataHora).toLocaleString('pt-BR') : '-')}</small></td>
+                                <td class="text-center">
+                                    <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                        <button class="btn btn-sm btn-info" 
+                                                onclick="verAtraso('${a.id}')" 
+                                                title="Ver detalhes">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" 
+                                                onclick="editarAtraso('${a.id}')" 
+                                                title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-success" 
+                                                onclick="imprimirAtraso('${a.id}')" 
+                                                title="Imprimir">
+                                            <i class="fas fa-print"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" 
+                                                onclick="excluirAtraso('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+// ============================================
+// 👁️ VER ATRASO
+// ============================================
+async function verAtraso(atrasoId) {
+    if (!atrasoId) return;
+    
+    try {
+        const response = await fetch(`/api/gestao-geral/atraso/${atrasoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atraso) {
+            alert('Erro ao carregar atraso');
+            return;
+        }
+        
+        const a = data.atraso;
+        const oldModal = safeGet('modalVerAtraso');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalVerAtraso" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-eye"></i> Detalhes do Atraso
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #eef2ff; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${gerarAvatarSVG(a.alunoNome)}" 
+                                     style="width: 50px; height: 50px; border-radius: 50%;" alt="">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #1e3c72;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                                <span class="badge" style="background: #1e3c72; font-size: 12px;">
+                                    ${escapeHTML(a.motivoLabel || a.motivo)}
+                                </span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong><i class="fas fa-clock"></i> Data/Hora:</strong>
+                                <p class="mb-0">${a.dataHoraFormatada || new Date(a.dataHora).toLocaleString('pt-BR')}</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong><i class="fas fa-align-left"></i> Descrição:</strong>
+                                <p class="mb-0" style="background: #f9fafb; padding: 10px; border-radius: 8px;">
+                                    ${escapeHTML(a.descricao || '-')}
+                                </p>
+                            </div>
+                            
+                            ${a.observacoes ? `
+                                <div class="mb-3">
+                                    <strong><i class="fas fa-comment"></i> Observações:</strong>
+                                    <p class="mb-0" style="background: #f9fafb; padding: 10px; border-radius: 8px;">
+                                        ${escapeHTML(a.observacoes)}
+                                    </p>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="mb-3">
+                                <strong><i class="fas fa-user-tie"></i> Registrado por:</strong>
+                                <p class="mb-0">${escapeHTML(a.registradoPor || '-')}</p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                            <button type="button" class="btn btn-success" onclick="imprimirAtraso('${a.id}')">
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalVerAtraso')).show();
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar detalhes');
+    }
+}
+
+// ============================================
+// ✏️ EDITAR ATRASO
+// ============================================
+async function editarAtraso(atrasoId) {
+    if (!atrasoId) return;
+    
+    try {
+        const response = await fetch(`/api/gestao-geral/atraso/${atrasoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atraso) {
+            alert('Erro ao carregar atraso');
+            return;
+        }
+        
+        const a = data.atraso;
+        const oldModal = safeGet('modalEditarAtraso');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalEditarAtraso" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-edit"></i> Editar Atraso
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="editAtrasoId" value="${a.id}">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Aluno</label>
+                                <input type="text" class="form-control" value="${escapeHTML(a.alunoNome || '')}" disabled>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                                <select id="editAtrasoMotivo" class="form-select">
+                                    <option value="onibus" ${a.motivo === 'onibus' ? 'selected' : ''}>Ônibus</option>
+                                    <option value="transito" ${a.motivo === 'transito' ? 'selected' : ''}>Trânsito</option>
+                                    <option value="problemas_pessoais" ${a.motivo === 'problemas_pessoais' ? 'selected' : ''}>Problemas Pessoais</option>
+                                    <option value="fardamento" ${a.motivo === 'fardamento' ? 'selected' : ''}>Fardamento</option>
+                                    <option value="outros" ${a.motivo === 'outros' ? 'selected' : ''}>Outros</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Data/Hora <span class="text-danger">*</span></label>
+                                <input type="datetime-local" 
+                                       id="editAtrasoDataHora" 
+                                       class="form-control" 
+                                       value="${a.dataHora ? new Date(a.dataHora).toISOString().slice(0, 16) : ''}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Descrição <span class="text-danger">*</span></label>
+                                <textarea id="editAtrasoDescricao" class="form-control" rows="3">${escapeHTML(a.descricao || '')}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="editAtrasoObservacoes" class="form-control" rows="2">${escapeHTML(a.observacoes || '')}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-warning" onclick="salvarEdicaoAtraso()">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalEditarAtraso')).show();
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar para edição');
+    }
+}
+
+async function salvarEdicaoAtraso() {
+    const atrasoId = safeGet('editAtrasoId')?.value;
+    const motivo = safeGet('editAtrasoMotivo')?.value;
+    const dataHora = safeGet('editAtrasoDataHora')?.value;
+    const descricao = (safeGet('editAtrasoDescricao')?.value || '').trim();
+    const observacoes = safeGet('editAtrasoObservacoes')?.value || '';
+    
+    if (!motivo || !dataHora || !descricao) {
+        alert('Preencha todos os campos obrigatórios');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/gestao-geral/atraso/${atrasoId}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({
+                motivo,
+                dataHora: new Date(dataHora).toISOString(),
+                descricao,
+                observacoes
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtraso'));
+            if (modal) modal.hide();
+            
+            // Toast de sucesso
+            mostrarToastConcluido('✅ Atraso atualizado com sucesso!', 'success');
+            
+            // Recarrega a lista
+            carregarAtrasosRecentes();
+            carregarDashboardAtrasos();
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao salvar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações');
+    }
+}
+
+// ============================================
+// 🖨️ IMPRIMIR ATRASO
+// ============================================
+async function imprimirAtraso(atrasoId) {
+    if (!atrasoId) return;
+    
+    try {
+        const response = await fetch(`/api/gestao-geral/atraso/${atrasoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atraso) {
+            alert('Erro ao carregar atraso');
+            return;
+        }
+        
+        const a = data.atraso;
+        const win = window.open('', '_blank');
+        win.document.write(gerarHTMLImpressaoAtraso(a));
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao imprimir');
+    }
+}
+
+function gerarHTMLImpressaoAtraso(a) {
+    const logo = '/uploads/logo-iema.png';
+    const carimboGestao = '/icons/assinatura_gestao.ico';
+    const dataExt = new Date(a.dataHora).toLocaleDateString('pt-BR', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const horaExt = new Date(a.dataHora).toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit'
+    });
+
+    const carimboGestaoHTML = `
+        <div class="carimbo-gestao">
+            <img src="${carimboGestao}" alt="Carimbo Gestão Geral">
+        </div>`;
+
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Atraso - ${a.alunoNome}</title>
+        <style>
+            @page { size: A4 landscape; margin: 0; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            html, body {
+                width: 297mm;
+                height: 210mm;
+                font-family: 'Times New Roman', Times, serif;
+                background: #f0f0f0;
+            }
+            .folha-metade {
+                width: 148.5mm;
+                height: 210mm;
+                padding: 8mm 10mm;
+                background: white;
+                position: relative;
+                margin: 0;
+                page-break-after: always;
+                overflow: hidden;
+                font-size: 9pt;
+                line-height: 1.3;
+            }
+            @media print {
+                html, body { width: 297mm; height: 210mm; background: white; }
+                .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; }
+                .btn-print { display: none !important; }
+            }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 5px; margin-bottom: 6px; }
+            .header img { max-width: 100%; height: auto; max-height: 22mm; object-fit: contain; }
+            .header h1 { font-size: 9pt; margin: 3px 0 0 0; text-transform: uppercase; font-weight: bold; }
+            .titulo {
+                text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase;
+                margin: 6px 0; background: #eef2ff; padding: 5px; border: 1.5px solid #000; letter-spacing: 1px;
+            }
+            .info-section { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; }
+            .info-row { display: flex; margin-bottom: 4px; gap: 10px; align-items: baseline; }
+            .info-row:last-child { margin-bottom: 0; }
+            .info-item { flex: 1; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+            .label { font-weight: bold; font-size: 8pt; white-space: nowrap; }
+            .underline {
+                border-bottom: 1px dotted #000; flex: 1; height: 14px; min-height: 14px;
+                font-size: 9pt; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            }
+            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
+            .motivo-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
+            .motivo-box p { margin: 0; font-size: 9pt; font-weight: bold; }
+            .observacoes { border: 1px solid #000; padding: 6px 8px; min-height: 18mm; margin: 6px 0; font-size: 8.5pt; }
+            .observacoes strong { display: block; margin-bottom: 3px; font-size: 9pt; }
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
+            .assinatura { text-align: center; flex: 1; font-size: 8pt; position: relative; }
+            .assinatura-vazia {
+                border-bottom: 1px solid #000;
+                min-height: 15mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                color: #999;
+                font-size: 8pt;
+                padding-bottom: 2px;
+            }
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; }
+            .carimbo-gestao {
+                border-bottom: 1px solid #000;
+                min-height: 15mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 2px;
+            }
+            .carimbo-gestao img {
+                max-height: 14mm;
+                max-width: 100%;
+                object-fit: contain;
+                opacity: 0.9;
+            }
+            .footer {
+                text-align: center; margin-top: 5px; padding-top: 4px;
+                border-top: 1px solid #000; font-size: 7pt; color: #444;
+            }
+            .footer p { margin: 1px 0; }
+            .btn-print {
+                display: block; margin: 15px auto; padding: 10px 30px;
+                background: #1e3c72; color: white; border: none; border-radius: 8px;
+                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #2a5298; }
+            .linha-corte {
+                position: fixed; left: 148.5mm; top: 0; width: 0; height: 210mm;
+                border-left: 1px dashed #999; pointer-events: none;
+            }
+            @media print { .linha-corte { display: none; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        <div class="linha-corte"></div>
+        <div class="folha-metade">
+            <div class="header">
+                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
+            </div>
+            <div class="titulo">📋 REGISTRO DE ATRASO</div>
+            <div class="info-section">
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Estudante:</span>
+                        <span class="underline">${a.alunoNome || ''}</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Matrícula:</span>
+                        <span class="underline">${a.alunoMatricula || ''}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Turma:</span>
+                        <span class="underline">${a.alunoTurma || ''}</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Curso:</span>
+                        <span class="underline">${a.alunoCurso || ''}</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Data:</span>
+                        <span class="underline">${dataExt}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Horário:</span>
+                        <span class="underline">${horaExt}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="motivo-box">
+                <h3>📌 Motivo:</h3>
+                <p>☑ ${a.motivoLabel || a.motivo || '-'}</p>
+            </div>
+            <div class="observacoes">
+                <strong>📝 Descrição:</strong>
+                ${a.descricao || '___________________________________________________________________'}
+            </div>
+            ${a.observacoes ? `
+                <div class="observacoes" style="min-height: 12mm;">
+                    <strong>💬 Observações:</strong>
+                    ${a.observacoes}
+                </div>
+            ` : ''}
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-vazia">_____________________________________</div>
+                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                </div>
+                <div class="assinatura">
+                    ${carimboGestaoHTML}
+                    <div class="assinatura-linha">Coordenação / Gestão Geral</div>
+                </div>
+            </div>
+            <div class="footer">
+                <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.registradoPor || 'Gestão Geral'}</p>
+                <p>Sistema de Provas IEMA</p>
+            </div>
+        </div>
+    </body>
+    </html>`;
+}
+
+// ============================================
+// 🗑️ EXCLUIR ATRASO
+// ============================================
+async function excluirAtraso(atrasoId, alunoNome) {
+    if (!atrasoId) return;
+    
+    if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR este atraso?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`)) {
+        return;
+    }
+    
+    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nDeseja realmente excluir permanentemente?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/gestao-geral/atraso/${atrasoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            // Remove a linha da tabela com animação
+            const row = document.querySelector(`tr[data-id="${atrasoId}"]`);
+            if (row) {
+                row.style.transition = 'all 0.3s';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-20px)';
+                setTimeout(() => {
+                    row.remove();
+                    const contador = safeGet('contadorAtrasosRecentes');
+                    if (contador) {
+                        const atual = parseInt(contador.textContent) || 0;
+                        contador.textContent = Math.max(0, atual - 1);
+                    }
+                    const tabela = document.querySelector('#listaAtrasosRecentes tbody');
+                    if (tabela && tabela.children.length === 0) {
+                        carregarAtrasosRecentes();
+                    }
+                }, 300);
+            }
+            
+            mostrarToastConcluido('✅ Atraso excluído com sucesso!', 'success');
+            carregarDashboardAtrasos();
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao excluir'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao excluir atraso');
+    }
+}
+
+// ============================================
+// 🔧 INICIALIZAÇÃO DOS FILTROS
+// ============================================
+function configurarFiltrosAtrasosRecentes() {
+    const busca = safeGet('filtroAtrasosRecentesBusca');
+    if (busca) {
+        let timeout;
+        busca.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => carregarAtrasosRecentes(1), 300);
+        });
+    }
+    
+    const turma = safeGet('filtroAtrasosRecentesTurma');
+    if (turma) {
+        turma.addEventListener('change', () => carregarAtrasosRecentes(1));
+    }
+}
+
+function popularFiltroTurmasAtrasosRecentes() {
+    const select = safeGet('filtroAtrasosRecentesTurma');
+    if (!select) return;
+    
+    const valorAtual = select.value;
+    const turmas = [...new Set(__atrasosRecentes.map(a => a.alunoTurma).filter(Boolean))].sort();
+    
+    select.innerHTML = '<option value="">Todas as turmas</option>';
+    turmas.forEach(t => {
+        select.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`;
+    });
+    
+    if (valorAtual && turmas.includes(valorAtual)) select.value = valorAtual;
 }
 
 async function carregarTurmasParaRelatorio() {
@@ -1777,6 +2455,9 @@ async function carregarListaModulo(modulo) {
                                     <button class="btn btn-sm btn-primary" onclick="imprimirModulo('${modulo}', '${a.id}')" title="Imprimir">
                                         <i class="fas fa-print"></i>
                                     </button>
+                                    <button class="btn btn-sm btn-warning" onclick="abrirEditarModulo('${modulo}', '${a.id}')" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
                                     <button class="btn btn-sm btn-danger" onclick="excluirModulo('${modulo}', '${a.id}')" title="Excluir">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -1962,6 +2643,247 @@ async function carregarDashboardModulo(modulo) {
         console.log(`✅ Dashboard ${modulo} carregado`);
     } catch (error) {
         console.error(`Erro no dashboard ${cfg.nomeAmigavel}:`, error);
+    }
+}
+
+// ============================================
+// ✏️ EDITAR MÓDULO (AUTORIZAÇÃO / JUSTIFICATIVA / 2ª CHAMADA)
+// ============================================
+async function abrirEditarModulo(modulo, id) {
+    if (!modulo || !id) return;
+
+    const cfg = getCfg(modulo);
+
+    try {
+        const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const d = await r.json();
+
+        if (!d.success || !d.autorizacao) {
+            alert('Erro ao carregar registro');
+            return;
+        }
+
+        const a = d.autorizacao;
+        const old = safeGet('modalEditarModulo');
+        if (old) old.remove();
+
+        // Motivos por tipo
+        const motivos = getMotivosPorTipo(cfg.tipo);
+        const motivosOptions = motivos.map(m =>
+            `<option value="${m.valor}" ${a.motivo === m.valor ? 'selected' : ''}>${m.label}</option>`
+        ).join('');
+
+        // Formata data para input date
+        let dataInput = '';
+        if (a.data) {
+            const dObj = new Date(a.data);
+            dataInput = dObj.toISOString().split('T')[0];
+        }
+
+        const modalHtml = `
+            <div class="modal fade" id="modalEditarModulo" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-edit"></i> Editar ${cfg.nomeAmigavel}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="editModuloId" value="${a.id}">
+                            <input type="hidden" id="editModuloTipo" value="${modulo}">
+
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #eef2ff; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #1e3c72;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Data <span class="text-danger">*</span></label>
+                                    <input type="date" id="editModuloData" class="form-control" value="${dataInput}">
+                                </div>
+                                ${cfg.tipo === 'autorizacao' ? `
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Entrada</label>
+                                        <input type="time" id="editModuloHorarioEntrada" class="form-control" value="${a.horarioEntrada || ''}">
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <label class="form-label">Saída</label>
+                                        <input type="time" id="editModuloHorarioSaida" class="form-control" value="${a.horarioSaida || ''}">
+                                    </div>
+                                ` : `
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Horário</label>
+                                        <input type="time" id="editModuloHorario" class="form-control" value="${a.horarioEntrada || ''}">
+                                    </div>
+                                `}
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                                <select id="editModuloMotivo" class="form-select" onchange="toggleEditMotivoOutros()">
+                                    ${motivosOptions}
+                                </select>
+                            </div>
+
+                            <div id="editCampoOutros" style="display: ${a.motivo === 'outros' ? 'block' : 'none'};">
+                                <div class="mb-3">
+                                    <label class="form-label">Especifique o Motivo</label>
+                                    <input type="text" id="editModuloMotivoOutros" class="form-control" value="${escapeHTML(a.motivoOutros || '')}">
+                                </div>
+                            </div>
+
+                            ${cfg.tipo === 'autorizacao' ? `
+                                <div id="editCampoAusenciaRetorno" style="display: ${a.motivo === 'necessita_ausentar_retornar' ? 'block' : 'none'};">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Horário de Ausência</label>
+                                            <input type="time" id="editModuloHorarioAusencia" class="form-control" value="${a.horarioAusencia || ''}">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Horário de Retorno</label>
+                                            <input type="time" id="editModuloHorarioRetorno" class="form-control" value="${a.horarioRetorno || ''}">
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                                <div class="card-body">
+                                    <h6 style="margin-bottom: 15px; color: #1e3c72;">
+                                        <i class="fas fa-user-shield"></i> Dados do Responsável
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Nome do Responsável</label>
+                                            <input type="text" id="editModuloResponsavelNome" class="form-control" value="${escapeHTML(a.responsavelNome || '')}">
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">CPF</label>
+                                            <input type="text" id="editModuloResponsavelCPF" class="form-control" value="${escapeHTML(a.responsavelCPF || '')}" maxlength="14">
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label">Telefone</label>
+                                            <input type="text" id="editModuloResponsavelTelefone" class="form-control" value="${escapeHTML(a.responsavelTelefone || '')}" maxlength="15">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="editModuloObservacoes" class="form-control" rows="3">${escapeHTML(a.observacoes || '')}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoModulo()">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalEditarModulo')).show();
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar registro para edição');
+    }
+}
+
+function toggleEditMotivoOutros() {
+    const motivo = safeGet('editModuloMotivo')?.value;
+    const campo = safeGet('editCampoOutros');
+    if (campo) campo.style.display = motivo === 'outros' ? 'block' : 'none';
+
+    const campoAusencia = safeGet('editCampoAusenciaRetorno');
+    if (campoAusencia) campoAusencia.style.display = motivo === 'necessita_ausentar_retornar' ? 'block' : 'none';
+}
+
+async function salvarEdicaoModulo() {
+    const id = safeGet('editModuloId')?.value;
+    const modulo = safeGet('editModuloTipo')?.value;
+    const data = safeGet('editModuloData')?.value;
+    const motivo = safeGet('editModuloMotivo')?.value;
+    const motivoOutros = safeGet('editModuloMotivoOutros')?.value || '';
+    const responsavelNome = safeGet('editModuloResponsavelNome')?.value || '';
+    const responsavelCPF = safeGet('editModuloResponsavelCPF')?.value || '';
+    const responsavelTelefone = safeGet('editModuloResponsavelTelefone')?.value || '';
+    const observacoes = safeGet('editModuloObservacoes')?.value || '';
+    const horarioAusencia = safeGet('editModuloHorarioAusencia')?.value || '';
+    const horarioRetorno = safeGet('editModuloHorarioRetorno')?.value || '';
+
+    const horarioEntrada = safeGet('editModuloHorarioEntrada')?.value || safeGet('editModuloHorario')?.value || '';
+    const horarioSaida = safeGet('editModuloHorarioSaida')?.value || '';
+
+    if (!data || !motivo) {
+        alert('Preencha os campos obrigatórios');
+        return;
+    }
+
+    if (motivo === 'outros' && !motivoOutros.trim()) {
+        alert('Especifique o motivo "Outros"');
+        return;
+    }
+
+    try {
+        const body = {
+            data,
+            motivo,
+            motivoOutros,
+            responsavelNome,
+            responsavelCPF,
+            responsavelTelefone,
+            observacoes,
+            horarioEntrada,
+            horarioSaida,
+            horarioAusencia,
+            horarioRetorno
+        };
+
+        const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(body)
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarModulo'));
+            if (modal) modal.hide();
+
+            // Toast
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido('✅ Registro atualizado com sucesso!', 'success');
+            } else {
+                alert('✅ Registro atualizado com sucesso!');
+            }
+
+            // Recarrega
+            carregarListaModulo(modulo);
+        } else {
+            alert('❌ ' + (result.error || 'Erro ao salvar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações');
     }
 }
 
@@ -2793,14 +3715,21 @@ window.imprimirModulo = imprimirModulo;
 window.excluirModulo = excluirModulo;
 window.carregarListaModulo = carregarListaModulo;
 window.setModoModulo = setModoModulo;
-
+window.carregarAtrasosRecentes = carregarAtrasosRecentes;
+window.verAtraso = verAtraso;
+window.editarAtraso = editarAtraso;
+window.salvarEdicaoAtraso = salvarEdicaoAtraso;
+window.imprimirAtraso = imprimirAtraso;
+window.excluirAtraso = excluirAtraso;
 window.aplicarFiltrosLista = aplicarFiltrosLista;
 window.carregarDashboardModulo = carregarDashboardModulo;
 window.carregarRelatorioModulo = carregarRelatorioModulo;
 window.exportarCSVModulo = exportarCSVModulo;
 window.toggleRelatorioFiltrosModulo = toggleRelatorioFiltrosModulo;
 window.selecionarAlunoAutocompleteModulo = selecionarAlunoAutocompleteModulo;
-
+window.abrirEditarModulo = abrirEditarModulo;
+window.salvarEdicaoModulo = salvarEdicaoModulo;
+window.toggleEditMotivoOutros = toggleEditMotivoOutros;
 // Assinatura
 window.limparAssinatura = limparAssinatura;
 window.inicializarAssinatura = inicializarAssinatura;

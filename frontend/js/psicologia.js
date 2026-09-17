@@ -997,6 +997,9 @@ async function verAtendimento(atendimentoId) {
                                 <i class="fas fa-print"></i> Imprimir
                             </button>
                             ${a.status === 'em_andamento' ? `
+                                <button type="button" class="btn btn-secondary" onclick="fecharVerAtendimento(); abrirEditarAtendimento('${a.id}')">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
                                 <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')">
                                     <i class="fas fa-calendar-plus"></i> Remarcar
                                 </button>
@@ -1027,6 +1030,165 @@ function fecharVerAtendimento() {
         const el = safeGet('modalVerAtendimento');
         if (el) el.remove();
     }, 300);
+}
+
+// ============================================
+// ✏️ EDITAR ATENDIMENTO
+// ============================================
+async function abrirEditarAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            alert('Erro ao carregar atendimento');
+            return;
+        }
+        
+        const a = data.atendimento;
+        const oldModal = safeGet('modalEditarAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        // Monta as opções de tipo de tarefa
+        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
+            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
+        ).join('');
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-edit"></i> Editar Atendimento
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="editAtendimentoId" value="${a.id}">
+                            
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f0fdfa; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #0f766e;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
+                                <select id="editTipoTarefa" class="form-select">
+                                    ${tiposOptions}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Descrição <span class="text-danger">*</span></label>
+                                <textarea id="editDescricao" class="form-control" rows="3">${escapeHTML(a.entrada?.descricao || '')}</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Gravidade</label>
+                                    <select id="editGravidade" class="form-select">
+                                        <option value="baixa" ${a.entrada?.gravidade === 'baixa' ? 'selected' : ''}>Baixa</option>
+                                        <option value="media" ${a.entrada?.gravidade === 'media' ? 'selected' : ''}>Média</option>
+                                        <option value="alta" ${a.entrada?.gravidade === 'alta' ? 'selected' : ''}>Alta</option>
+                                        <option value="critica" ${a.entrada?.gravidade === 'critica' ? 'selected' : ''}>Crítica</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Prioridade</label>
+                                    <select id="editPrioridade" class="form-select">
+                                        <option value="baixa" ${a.prioridade === 'baixa' ? 'selected' : ''}>Baixa</option>
+                                        <option value="normal" ${a.prioridade === 'normal' ? 'selected' : ''}>Normal</option>
+                                        <option value="alta" ${a.prioridade === 'alta' ? 'selected' : ''}>Alta</option>
+                                        <option value="urgente" ${a.prioridade === 'urgente' ? 'selected' : ''}>Urgente</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoAtendimento()">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar para edição');
+    }
+}
+
+async function salvarEdicaoAtendimento() {
+    const atendimentoId = safeGet('editAtendimentoId')?.value;
+    const tipoTarefa = safeGet('editTipoTarefa')?.value;
+    const descricao = (safeGet('editDescricao')?.value || '').trim();
+    const gravidade = safeGet('editGravidade')?.value;
+    const prioridade = safeGet('editPrioridade')?.value;
+    const observacoes = safeGet('editObservacoes')?.value || '';
+    
+    if (!tipoTarefa || !descricao) {
+        alert('Preencha todos os campos obrigatórios');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                tipoTarefa,
+                descricao,
+                gravidade,
+                prioridade,
+                observacoes
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
+            if (modal) modal.hide();
+            
+            // Toast
+            mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
+            
+            // Recarrega
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+            carregarLembretes();
+            carregarAtendimentosConcluidos(__concluidosPaginaAtual);
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao salvar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações');
+    }
 }
 
 // ============================================================================
@@ -1853,6 +2015,9 @@ function renderizarListaAtendimentosAtivos(lista) {
                             <i class="fas fa-eye"></i> Ver
                         </button>
                         <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir"><i class="fas fa-print"></i></button>
+                        <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <button class="btn btn-sm btn-primary" onclick="abrirFinalizacao('${a.id}')" title="Finalizar">
                             <i class="fas fa-check"></i>
                         </button>
@@ -3486,6 +3651,8 @@ window.carregarLembretes = carregarLembretes;
 window.toggleFiltrosAvancados = toggleFiltrosAvancados;
 window.limparFiltrosAndamento = limparFiltrosAndamento;
 window.limparFiltroIndividual = limparFiltroIndividual;
+window.abrirEditarAtendimento = abrirEditarAtendimento;
+window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
 
 // Novas funções para Concluídos
 window.carregarAtendimentosConcluidos = carregarAtendimentosConcluidos;

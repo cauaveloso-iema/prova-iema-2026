@@ -919,6 +919,10 @@ app.use('/api/acompanhamento', acompanhamentoRoutes);
 const substituicaoProfessorRoutes = require('./routes/substituicao-professor-routes');
 app.use('/api/substituicao-professor', substituicaoProfessorRoutes);
 
+// NOVA rota compartilhada
+const acompanhamentoCompartilhadoRoutes = require('./routes/acompanhamento-compartilhado');
+app.use('/api/acompanhamento-compartilhado', acompanhamentoCompartilhadoRoutes);
+
 
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26

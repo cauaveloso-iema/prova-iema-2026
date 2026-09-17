@@ -925,43 +925,43 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 // EDITAR ATENDIMENTO
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
-  try {
-    const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
-    
-    const atendimento = await AtendimentoPsicologia.findById(req.params.id);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    try {
+        const { tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
+        
+        const atendimento = await AtendimentoPsicologia.findById(req.params.id);
+        if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+        
+        // ✅ NOVO: permite editar tipo de tarefa
+        if (tipoTarefa) atendimento.tipoTarefa = tipoTarefa;
+        
+        if (descricao) atendimento.entrada.descricao = descricao;
+        if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
+        if (gravidade) atendimento.entrada.gravidade = gravidade;
+        if (prioridade) atendimento.prioridade = prioridade;
+        if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
+        if (status) atendimento.status = status;
+        
+        if (saida) {
+            atendimento.saida = {
+                ...atendimento.saida,
+                ...saida,
+                registradoPor: req.userId,
+                registradoPorNome: req.userNome
+            };
+        }
+        
+        atendimento.updatedAt = new Date();
+        await atendimento.save();
+        
+        res.json({
+            success: true,
+            message: 'Atendimento atualizado com sucesso',
+            atendimento: { id: atendimento._id }
+        });
+    } catch (error) {
+        console.error('Erro ao editar:', error);
+        res.status(500).json({ success: false, error: 'Erro: ' + error.message });
     }
-    
-    if (descricao) atendimento.entrada.descricao = descricao;
-    if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
-    if (gravidade) atendimento.entrada.gravidade = gravidade;
-    if (prioridade) atendimento.prioridade = prioridade;
-    if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
-    if (status) atendimento.status = status;
-    
-    if (saida) {
-      atendimento.saida = {
-        ...atendimento.saida,
-        ...saida,
-        registradoPor: req.userId,
-        registradoPorNome: req.userNome
-      };
-    }
-    
-    atendimento.updatedAt = new Date();
-    await atendimento.save();
-    
-    res.json({
-      success: true,
-      message: 'Atendimento atualizado com sucesso',
-      atendimento: { id: atendimento._id }
-    });
-    
-  } catch (error) {
-    console.error('Erro ao editar:', error);
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
 });
 
 // ============================================

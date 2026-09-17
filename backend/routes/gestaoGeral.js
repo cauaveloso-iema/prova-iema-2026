@@ -474,6 +474,130 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
   }
 });
 
+// ============================================
+// 🔍 BUSCAR ATRASO POR ID (para Ver/Editar/Imprimir)
+// ============================================
+router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
+  try {
+    // Proteção: não deixar "/atraso/listar" cair aqui
+    if (req.params.id === 'listar' || req.params.id === 'dashboard' || req.params.id === 'registrar') {
+      return res.status(404).json({ success: false, error: 'Rota não encontrada' });
+    }
+
+    const atraso = await Atraso.findById(req.params.id);
+
+    if (!atraso) {
+      return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
+    }
+
+    res.json({
+      success: true,
+      atraso: {
+        id: atraso._id,
+        alunoId: atraso.alunoId,
+        alunoNome: atraso.alunoNome,
+        alunoMatricula: atraso.alunoMatricula,
+        alunoTurma: atraso.alunoTurma,
+        alunoCurso: atraso.alunoCurso,
+        alunoFoto: atraso.alunoFoto,
+        motivo: atraso.motivo,
+        motivoLabel: Atraso.getMotivoLabel(atraso.motivo),
+        dataHora: atraso.dataHora,
+        dataHoraFormatada: new Date(atraso.dataHora).toLocaleString('pt-BR'),
+        descricao: atraso.descricao,
+        observacoes: atraso.observacoes,
+        detalhes: atraso.detalhes,
+        registradoPor: atraso.registradoPorNome,
+        createdAt: atraso.createdAt,
+        updatedAt: atraso.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar atraso:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ✏️ EDITAR ATRASO
+// ============================================
+router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
+  try {
+    const { motivo, dataHora, descricao, observacoes, detalhes } = req.body;
+
+    const atraso = await Atraso.findById(req.params.id);
+    if (!atraso) {
+      return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
+    }
+
+    // Valida motivo se foi enviado
+    if (motivo) {
+      const motivosValidos = ['onibus', 'transito', 'problemas_pessoais', 'fardamento', 'outros'];
+      if (!motivosValidos.includes(motivo)) {
+        return res.status(400).json({ success: false, error: 'Motivo inválido' });
+      }
+      atraso.motivo = motivo;
+    }
+
+    // Valida dataHora se foi enviada
+    if (dataHora) {
+      const dataParsed = new Date(dataHora);
+      if (isNaN(dataParsed.getTime())) {
+        return res.status(400).json({ success: false, error: 'Data/hora inválida' });
+      }
+
+      // Não permitir mais de 1 ano no futuro
+      const umAnoFuturo = new Date();
+      umAnoFuturo.setFullYear(umAnoFuturo.getFullYear() + 1);
+      if (dataParsed > umAnoFuturo) {
+        return res.status(400).json({
+          success: false,
+          error: 'Data do atraso não pode ser superior a 1 ano no futuro'
+        });
+      }
+
+      atraso.dataHora = dataParsed;
+    }
+
+    if (descricao !== undefined) {
+      if (!descricao || descricao.trim() === '') {
+        return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
+      }
+      atraso.descricao = descricao.trim();
+    }
+
+    if (observacoes !== undefined) {
+      atraso.observacoes = observacoes;
+    }
+
+    if (detalhes !== undefined) {
+      atraso.detalhes = { ...atraso.detalhes, ...detalhes };
+    }
+
+    atraso.updatedAt = new Date();
+    await atraso.save();
+
+    console.log(`✏️ Atraso editado: ${atraso.alunoNome} (${atraso._id}) por ${req.userNome}`);
+
+    res.json({
+      success: true,
+      message: 'Atraso atualizado com sucesso!',
+      atraso: {
+        id: atraso._id,
+        motivo: atraso.motivo,
+        motivoLabel: Atraso.getMotivoLabel(atraso.motivo),
+        dataHora: atraso.dataHora,
+        dataHoraFormatada: new Date(atraso.dataHora).toLocaleString('pt-BR'),
+        descricao: atraso.descricao,
+        observacoes: atraso.observacoes
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao editar atraso:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Excluir atraso
 router.delete('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {

@@ -792,10 +792,22 @@ async function verAtendimento(atendimentoId) {
                                 </div>` : ''}
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> Fechar</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                            <button type="button" class="btn btn-info" onclick="imprimirAtendimento('${a.id}')">
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
                             ${a.status === 'em_andamento' ? `
-                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')"><i class="fas fa-calendar-plus"></i> Remarcar</button>
-                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); abrirFinalizacao('${a.id}')"><i class="fas fa-check"></i> Finalizar</button>
+                                <button type="button" class="btn btn-secondary" onclick="fecharVerAtendimento(); abrirEditarAtendimento('${a.id}')">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')">
+                                    <i class="fas fa-calendar-plus"></i> Remarcar
+                                </button>
+                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); abrirFinalizacao('${a.id}')">
+                                    <i class="fas fa-check"></i> Finalizar
+                                </button>
                             ` : ''}
                         </div>
                     </div>
@@ -814,6 +826,394 @@ function fecharVerAtendimento() {
     if (modal) modal.hide();
     setTimeout(() => { const el = safeGet('modalVerAtendimento'); if (el) el.remove(); }, 300);
 }
+
+// ============================================
+// ✏️ EDITAR ATENDIMENTO
+// ============================================
+async function abrirEditarAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            alert('Erro ao carregar atendimento');
+            return;
+        }
+        
+        const a = data.atendimento;
+        const oldModal = safeGet('modalEditarAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        // Monta as opções de tipo de tarefa
+        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
+            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
+        ).join('');
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-edit"></i> Editar Atendimento
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="editAtendimentoId" value="${a.id}">
+                            
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f3ff; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #5b21b6;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
+                                <select id="editTipoTarefa" class="form-select">
+                                    ${tiposOptions}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Descrição <span class="text-danger">*</span></label>
+                                <textarea id="editDescricao" class="form-control" rows="3">${escapeHTML(a.entrada?.descricao || '')}</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Gravidade</label>
+                                    <select id="editGravidade" class="form-select">
+                                        <option value="baixa" ${a.entrada?.gravidade === 'baixa' ? 'selected' : ''}>Baixa</option>
+                                        <option value="media" ${a.entrada?.gravidade === 'media' ? 'selected' : ''}>Média</option>
+                                        <option value="alta" ${a.entrada?.gravidade === 'alta' ? 'selected' : ''}>Alta</option>
+                                        <option value="critica" ${a.entrada?.gravidade === 'critica' ? 'selected' : ''}>Crítica</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Prioridade</label>
+                                    <select id="editPrioridade" class="form-select">
+                                        <option value="baixa" ${a.prioridade === 'baixa' ? 'selected' : ''}>Baixa</option>
+                                        <option value="normal" ${a.prioridade === 'normal' ? 'selected' : ''}>Normal</option>
+                                        <option value="alta" ${a.prioridade === 'alta' ? 'selected' : ''}>Alta</option>
+                                        <option value="urgente" ${a.prioridade === 'urgente' ? 'selected' : ''}>Urgente</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoAtendimento()">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar para edição');
+    }
+}
+
+async function salvarEdicaoAtendimento() {
+    const atendimentoId = safeGet('editAtendimentoId')?.value;
+    const tipoTarefa = safeGet('editTipoTarefa')?.value;
+    const descricao = (safeGet('editDescricao')?.value || '').trim();
+    const gravidade = safeGet('editGravidade')?.value;
+    const prioridade = safeGet('editPrioridade')?.value;
+    const observacoes = safeGet('editObservacoes')?.value || '';
+    
+    if (!tipoTarefa || !descricao) {
+        alert('Preencha todos os campos obrigatórios');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                tipoTarefa,
+                descricao,
+                gravidade,
+                prioridade,
+                observacoes
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
+            if (modal) modal.hide();
+            
+            // Toast
+            mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
+            
+            // Recarrega
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+            carregarLembretes();
+            carregarAtendimentosConcluidos(__concluidosPaginaAtual);
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao salvar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações');
+    }
+}
+
+// ============================================
+// 🖨️ IMPRESSÃO DE ATENDIMENTO (COM CARIMBO DO ASSISTENTE SOCIAL)
+// ============================================
+async function imprimirAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            alert('Erro ao carregar atendimento');
+            return;
+        }
+        
+        const a = data.atendimento;
+        
+        // QR Code (opcional)
+        let qr = '';
+        try {
+            const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const qrD = await qrR.json();
+            if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+        } catch (e) { console.warn('Sem QR Code'); }
+        
+        const win = window.open('', '_blank');
+        win.document.write(gerarHTMLImpressaoAS(a, qr));
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+    } catch (e) {
+        console.error(e);
+        alert('Erro ao imprimir atendimento');
+    }
+}
+
+function gerarHTMLImpressaoAS(a, qrCodeUrl) {
+    const logo = '/uploads/logo-iema.png';
+    const carimboAS = '/icons/assinatura_assistente_social.ico';
+    const dataExt = new Date(a.entrada.dataHora).toLocaleDateString('pt-BR', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    
+    const assinaturaHTML = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64
+        ? `<div class="assinatura-digital"><img src="${a.entrada.assinaturaBase64}" alt="Assinatura"></div>`
+        : '<div class="assinatura-vazia">_____________________________________</div>';
+    
+    const carimboHTML = `
+        <div class="carimbo-as">
+            <img src="${carimboAS}" alt="Carimbo Assistente Social">
+        </div>`;
+    
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Atendimento Assistente Social - ${a.alunoNome}</title>
+        <style>
+            @page { size: A4 landscape; margin: 0; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            html, body { width: 297mm; height: 210mm; font-family: 'Times New Roman', Times, serif; background: #f0f0f0; }
+            .folha-metade {
+                width: 148.5mm; height: 210mm; padding: 8mm 10mm;
+                background: white; position: relative; margin: 0;
+                page-break-after: always; overflow: hidden;
+                font-size: 9pt; line-height: 1.3;
+            }
+            @media print {
+                html, body { width: 297mm; height: 210mm; background: white; }
+                .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; }
+                .btn-print { display: none !important; }
+            }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 5px; margin-bottom: 6px; }
+            .header img { max-width: 100%; height: auto; max-height: 22mm; object-fit: contain; }
+            .header h1 { font-size: 9pt; margin: 3px 0 0 0; text-transform: uppercase; font-weight: bold; }
+            .titulo {
+                text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase;
+                margin: 6px 0; background: #ede9fe; padding: 5px; border: 1.5px solid #000; letter-spacing: 1px;
+            }
+            .info-section { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; }
+            .info-row { display: flex; margin-bottom: 4px; gap: 10px; align-items: baseline; }
+            .info-row:last-child { margin-bottom: 0; }
+            .info-item { flex: 1; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+            .label { font-weight: bold; font-size: 8pt; white-space: nowrap; }
+            .underline {
+                border-bottom: 1px dotted #000; flex: 1; height: 14px; min-height: 14px;
+                font-size: 9pt; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            }
+            .section-box { background: #f5f5f5; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
+            .section-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
+            .section-box p { margin: 0; font-size: 9pt; }
+            .descricao-box { border: 1px solid #000; padding: 6px 8px; min-height: 20mm; margin: 6px 0; font-size: 8.5pt; }
+            .descricao-box strong { display: block; margin-bottom: 3px; font-size: 9pt; }
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
+            .assinatura { text-align: center; flex: 1; font-size: 8pt; }
+            .assinatura-digital {
+                border-bottom: 1px solid #000; min-height: 15mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
+            }
+            .assinatura-digital img { max-height: 14mm; max-width: 100%; object-fit: contain; }
+            .assinatura-vazia {
+                border-bottom: 1px solid #000; min-height: 15mm;
+                display: flex; align-items: flex-end; justify-content: center;
+                color: #999; font-size: 8pt; padding-bottom: 2px;
+            }
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; }
+            .carimbo-as {
+                border-bottom: 1px solid #000; min-height: 15mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
+            }
+            .carimbo-as img {
+                max-height: 14mm; max-width: 100%; object-fit: contain; opacity: 0.9;
+            }
+            .qr-code { text-align: center; margin-top: 4px; }
+            .qr-code img { width: 18mm; height: 18mm; border: 1px solid #000; padding: 1px; }
+            .qr-code p { font-size: 7pt; margin: 2px 0 0 0; }
+            .footer {
+                text-align: center; margin-top: 5px; padding-top: 4px;
+                border-top: 1px solid #000; font-size: 7pt; color: #444;
+            }
+            .footer p { margin: 1px 0; }
+            .btn-print {
+                display: block; margin: 15px auto; padding: 10px 30px;
+                background: #8b5cf6; color: white; border: none; border-radius: 8px;
+                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #7c3aed; }
+            .linha-corte {
+                position: fixed; left: 148.5mm; top: 0; width: 0; height: 210mm;
+                border-left: 1px dashed #999; pointer-events: none;
+            }
+            @media print { .linha-corte { display: none; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        <div class="linha-corte"></div>
+        <div class="folha-metade">
+            <div class="header">
+                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
+            </div>
+            <div class="titulo">🤝 ATENDIMENTO ASSISTENTE SOCIAL</div>
+            
+            <div class="info-section">
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Estudante:</span>
+                        <span class="underline">${a.alunoNome || ''}</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Matrícula:</span>
+                        <span class="underline">${a.alunoMatricula || ''}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Turma:</span>
+                        <span class="underline">${a.alunoTurma || ''}</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Curso:</span>
+                        <span class="underline">${a.alunoCurso || ''}</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="label">Data:</span>
+                        <span class="underline">${dataExt}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section-box">
+                <h3>📌 Tipo de Tarefa:</h3>
+                <p><strong>${a.tipoTarefaLabel || '-'}</strong></p>
+            </div>
+            
+            <div class="section-box">
+                <h3>⚠️ Gravidade / Prioridade:</h3>
+                <p>Gravidade: <strong>${(a.entrada?.gravidade || 'media').toUpperCase()}</strong> | 
+                   Prioridade: <strong>${(a.prioridade || 'normal').toUpperCase()}</strong></p>
+            </div>
+            
+            <div class="descricao-box">
+                <strong>📝 Descrição do Ocorrido:</strong>
+                ${a.entrada?.descricao || '_______________________________________________________________'}
+            </div>
+            
+            ${a.entrada?.observacoes ? `
+                <div class="descricao-box" style="min-height: 12mm;">
+                    <strong>💬 Observações:</strong>
+                    ${a.entrada.observacoes}
+                </div>
+            ` : ''}
+            
+            <div class="assinaturas">
+                <div class="assinatura">
+                    ${assinaturaHTML}
+                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                </div>
+                <div class="assinatura">
+                    ${carimboHTML}
+                    <div class="assinatura-linha">Assistente Social</div>
+                </div>
+            </div>
+            
+            ${qrCodeUrl ? `
+                <div class="qr-code">
+                    <img src="${qrCodeUrl}" alt="QR Code">
+                    <p>Identificação do Aluno</p>
+                </div>` : ''}
+            
+            <div class="footer">
+                <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.entrada?.registradoPor || 'Assistente Social'}</p>
+                <p>Sistema de Provas IEMA</p>
+            </div>
+        </div>
+    </body>
+    </html>`;
+}
+
+
 
 // ============================================
 // ASSINATURA DIGITAL
@@ -1401,6 +1801,12 @@ function renderizarListaAtendimentosAtivos(lista) {
                     <div class="mt-2 d-flex gap-1 flex-wrap justify-content-end">
                         <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes">
                             <i class="fas fa-eye"></i> Ver
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir">
+                            <i class="fas fa-print"></i>
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
+                            <i class="fas fa-edit"></i>
                         </button>
                         <button class="btn btn-sm btn-primary" onclick="abrirFinalizacao('${a.id}')" title="Finalizar">
                             <i class="fas fa-check"></i>
@@ -2327,4 +2733,5 @@ window.carregarAtendimentosConcluidos = carregarAtendimentosConcluidos;
 window.limparFiltrosConcluidos = limparFiltrosConcluidos;
 window.abrirExclusaoEmMassa = abrirExclusaoEmMassa;
 window.confirmarExclusaoMassa = confirmarExclusaoMassa;
+window.imprimirAtendimento = imprimirAtendimento;
 window.mostrarToastConcluido = mostrarToastConcluido;

@@ -2639,6 +2639,9 @@
                                                 <button class="btn btn-sm btn-primary" onclick="setorPedagogico.imprimirSegundaChamada('${a.id}')" title="Imprimir">
                                                     <i class="fas fa-print"></i>
                                                 </button>
+                                                <button class="btn btn-sm btn-warning" onclick="setorPedagogico.abrirEditarSegundaChamada('${a.id}')" title="Editar">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
                                                 <button class="btn btn-sm btn-danger" onclick="setorPedagogico.excluirSegundaChamada('${a.id}')" title="Excluir">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
@@ -3368,6 +3371,208 @@
                 } catch (e) {
                     console.error(e);
                     alert('Erro ao excluir');
+                }
+            }
+
+            // ============================================
+            // ✏️ EDITAR 2ª CHAMADA
+            // ============================================
+            async abrirEditarSegundaChamada(id) {
+                if (!id) return;
+                
+                try {
+                    const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
+                        headers: { 'Authorization': `Bearer ${this.token}` }
+                    });
+                    const d = await r.json();
+                    
+                    if (!d.success || !d.autorizacao) {
+                        this.showToast('Erro ao carregar registro', 'error');
+                        return;
+                    }
+                    
+                    const a = d.autorizacao;
+                    const old = document.getElementById('modalEditar2Chamada');
+                    if (old) old.remove();
+                    
+                    // Motivos disponíveis
+                    const motivos = [
+                        { valor: 'problemas_pessoais', label: 'Problemas Pessoais' },
+                        { valor: 'problemas_saude', label: 'Problemas de Saúde' },
+                        { valor: 'viagem', label: 'Viagem' },
+                        { valor: 'outros', label: 'Outros' }
+                    ];
+                    
+                    const motivosOptions = motivos.map(m => 
+                        `<option value="${m.valor}" ${a.motivo === m.valor ? 'selected' : ''}>${m.label}</option>`
+                    ).join('');
+                    
+                    // Formata data para input date
+                    let dataInput = '';
+                    if (a.data) {
+                        const dObj = new Date(a.data);
+                        dataInput = dObj.toISOString().split('T')[0];
+                    }
+                    
+                    const modalHtml = `
+                        <div class="modal fade" id="modalEditar2Chamada" tabindex="-1">
+                            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                                <div class="modal-content">
+                                    <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
+                                        <h5 class="modal-title">
+                                            <i class="fas fa-edit"></i> Editar 2ª Chamada
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <input type="hidden" id="edit2ChamadaId" value="${a.id}">
+                                        
+                                        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #eef2ff; border-radius: 10px; margin-bottom: 16px;">
+                                            <img src="${a.alunoFoto || this.gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
+                                            <div style="flex: 1;">
+                                                <h5 style="margin: 0; color: #1e3c72;">${this.escapeHtml(a.alunoNome)}</h5>
+                                                <small style="color: #6b7280;">
+                                                    <i class="fas fa-id-card"></i> ${this.escapeHtml(a.alunoMatricula || '-')} • 
+                                                    <i class="fas fa-graduation-cap"></i> ${this.escapeHtml(a.alunoTurma || '-')}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">Data <span class="text-danger">*</span></label>
+                                                <input type="date" id="edit2ChamadaData" class="form-control" value="${dataInput}">
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">Horário</label>
+                                                <input type="time" id="edit2ChamadaHorario" class="form-control" value="${a.horarioEntrada || ''}">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                                            <select id="edit2ChamadaMotivo" class="form-select" onchange="setorPedagogico.toggleEdit2ChamadaOutros()">
+                                                ${motivosOptions}
+                                            </select>
+                                        </div>
+                                        
+                                        <div id="edit2ChamadaCampoOutros" style="display: ${a.motivo === 'outros' ? 'block' : 'none'};">
+                                            <div class="mb-3">
+                                                <label class="form-label">Especifique o Motivo</label>
+                                                <input type="text" id="edit2ChamadaMotivoOutros" class="form-control" value="${this.escapeHtml(a.motivoOutros || '')}">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                                            <div class="card-body">
+                                                <h6 style="margin-bottom: 15px; color: #1e3c72;">
+                                                    <i class="fas fa-user-shield"></i> Dados do Responsável
+                                                </h6>
+                                                <div class="row">
+                                                    <div class="col-md-6 mb-3">
+                                                        <label class="form-label">Nome do Responsável</label>
+                                                        <input type="text" id="edit2ChamadaResponsavelNome" class="form-control" value="${this.escapeHtml(a.responsavelNome || '')}">
+                                                    </div>
+                                                    <div class="col-md-3 mb-3">
+                                                        <label class="form-label">CPF</label>
+                                                        <input type="text" id="edit2ChamadaResponsavelCPF" class="form-control" value="${this.escapeHtml(a.responsavelCPF || '')}" maxlength="14">
+                                                    </div>
+                                                    <div class="col-md-3 mb-3">
+                                                        <label class="form-label">Telefone</label>
+                                                        <input type="text" id="edit2ChamadaResponsavelTelefone" class="form-control" value="${this.escapeHtml(a.responsavelTelefone || '')}" maxlength="15">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Observações</label>
+                                            <textarea id="edit2ChamadaObservacoes" class="form-control" rows="3">${this.escapeHtml(a.observacoes || '')}</textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                            <i class="fas fa-times"></i> Cancelar
+                                        </button>
+                                        <button type="button" class="btn btn-primary" onclick="setorPedagogico.salvarEdicaoSegundaChamada()">
+                                            <i class="fas fa-save"></i> Salvar Alterações
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    new bootstrap.Modal(document.getElementById('modalEditar2Chamada')).show();
+                } catch (error) {
+                    console.error('Erro:', error);
+                    this.showToast('Erro ao carregar registro para edição', 'error');
+                }
+            }
+
+            toggleEdit2ChamadaOutros() {
+                const motivo = document.getElementById('edit2ChamadaMotivo')?.value;
+                const campo = document.getElementById('edit2ChamadaCampoOutros');
+                if (campo) campo.style.display = motivo === 'outros' ? 'block' : 'none';
+            }
+
+            async salvarEdicaoSegundaChamada() {
+                const id = document.getElementById('edit2ChamadaId')?.value;
+                const data = document.getElementById('edit2ChamadaData')?.value;
+                const horario = document.getElementById('edit2ChamadaHorario')?.value || '';
+                const motivo = document.getElementById('edit2ChamadaMotivo')?.value;
+                const motivoOutros = document.getElementById('edit2ChamadaMotivoOutros')?.value || '';
+                const responsavelNome = document.getElementById('edit2ChamadaResponsavelNome')?.value || '';
+                const responsavelCPF = document.getElementById('edit2ChamadaResponsavelCPF')?.value || '';
+                const responsavelTelefone = document.getElementById('edit2ChamadaResponsavelTelefone')?.value || '';
+                const observacoes = document.getElementById('edit2ChamadaObservacoes')?.value || '';
+                
+                if (!data || !motivo) {
+                    this.showToast('Preencha os campos obrigatórios', 'warning');
+                    return;
+                }
+                
+                if (motivo === 'outros' && !motivoOutros.trim()) {
+                    this.showToast('Especifique o motivo "Outros"', 'warning');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: JSON.stringify({
+                            data,
+                            horarioEntrada: horario,
+                            horarioSaida: horario,
+                            motivo,
+                            motivoOutros,
+                            responsavelNome,
+                            responsavelCPF,
+                            responsavelTelefone,
+                            observacoes
+                        })
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditar2Chamada'));
+                        if (modal) modal.hide();
+                        
+                        this.showToast('✅ Registro atualizado com sucesso!', 'success');
+                        
+                        // Recarrega a lista
+                        await this.carregarListaSegundaChamada();
+                        await this.carregarDashboardSegundaChamada();
+                    } else {
+                        this.showToast('❌ ' + (result.error || 'Erro ao salvar'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Erro:', error);
+                    this.showToast('Erro ao salvar alterações', 'error');
                 }
             }
 
