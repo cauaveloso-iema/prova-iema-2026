@@ -22,8 +22,15 @@ class AdminPanel {
             this.init();
         }
         this.filtros = {
-            usuarios: { role: 'todos', search: '', page: 1, limit: 10 },
-            turmas: { search: '', eixo: 'todos', page: 1, limit: 10 },
+            usuarios: { role: 'todos', search: '', status: 'todos', turma: 'todas', page: 1, limit: 10 },
+            turmas: { 
+                search: '', 
+                eixo: 'todos', 
+                professor: 'todos',      
+                status: 'todas',          
+                page: 1, 
+                limit: 10 
+            },
             provas: { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 }
         };
         
@@ -3398,6 +3405,12 @@ class AdminPanel {
                             <i class="fas fa-file-excel"></i>
                             <span>Upload Alunos</span>
                         </button>
+
+                        <!-- UPLOAD PROFESSORES-->
+                        <button class="btn-header" onclick="admin.abrirModalUploadProfessores()" title="Upload de Professores" style="background: #3b82f6; color: white;">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            <span>Upload Professores</span>
+                        </button>
                         
                         <button class="btn-header btn-primary" onclick="admin.abrirModalUsuario()">
                             <i class="fas fa-plus-circle"></i>
@@ -5665,6 +5678,1749 @@ class AdminPanel {
         const btnProcessar = document.getElementById('btnProcessarUpload');
         if (btnProcessar) {
             btnProcessar.disabled = true;
+        }
+    }
+
+    // ============================================
+    // 📤 UPLOAD DE PROFESSORES - COM TABS (DADOS + EMAILS)
+    // ============================================
+
+    abrirModalUploadProfessores() {
+        const modalBody = document.getElementById('modalBody');
+        
+        modalBody.innerHTML = `
+            <div class="upload-professores-container" style="max-width: 850px; margin: 0 auto;">
+                <!-- Header -->
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #3b82f6, #2563eb); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                        <i class="fas fa-chalkboard-teacher" style="font-size: 32px; color: white;"></i>
+                    </div>
+                    <h2 style="margin: 15px 0 5px;">Gerenciar Professores</h2>
+                    <p style="color: #6b7280;">Atualize dados ou vincule emails institucionais</p>
+                </div>
+
+                <!-- ABAS -->
+                <div class="tabs-professores" style="display: flex; gap: 10px; margin-bottom: 25px; background: #f3f4f6; padding: 6px; border-radius: 14px;">
+                    <button id="tabDadosProfessor" onclick="admin.mudarTabProfessor('dados')" style="
+                        flex: 1; padding: 14px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;
+                        background: #3b82f6; color: white; transition: all 0.3s;
+                        display: flex; align-items: center; justify-content: center; gap: 8px;
+                    ">
+                        <i class="fas fa-user-edit"></i> Upload de Dados (Nome + CPF)
+                    </button>
+                    <button id="tabEmailsProfessor" onclick="admin.mudarTabProfessor('emails')" style="
+                        flex: 1; padding: 14px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;
+                        background: transparent; color: #6b7280; transition: all 0.3s;
+                        display: flex; align-items: center; justify-content: center; gap: 8px;
+                    ">
+                        <i class="fas fa-envelope"></i> Vincular Emails
+                    </button>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- CONTEÚDO DA ABA: DADOS (Nome + CPF) -->
+                <!-- ============================================ -->
+                <div id="conteudoTabDadosProfessor">
+                    <!-- Download do Modelo -->
+                    <div style="background: #e6f7ff; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                            <div style="width: 50px; height: 50px; background: #0d6efd; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-download" style="font-size: 24px; color: white;"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0;">📥 Baixar Modelo de Planilha</h4>
+                                <p style="margin: 5px 0 0; font-size: 13px; color: #6b7280;">Colunas: Nº, NOME, CPF</p>
+                            </div>
+                            <button class="btn-primary" onclick="admin.baixarModeloExcelProfessores()" style="background: #0d6efd; padding: 10px 20px; white-space: nowrap;">
+                                <i class="fas fa-download"></i> Baixar Modelo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preview Planilha -->
+                    <div id="previewPlanilhaProfessores" style="display: none; background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="margin: 0;"><i class="fas fa-table"></i> Colunas Detectadas</h4>
+                            <span id="colunasDetectadasCountProfessores" style="background: #10b981; color: white; padding: 2px 8px; border-radius: 20px; font-size: 12px;">0</span>
+                        </div>
+                        <div id="colunasDetectadasProfessores" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;"></div>
+                        <div id="previewDadosProfessores" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: white; font-size: 12px;"></div>
+                    </div>
+
+                    <!-- Upload -->
+                    <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <div id="uploadAreaProfessores" 
+                            style="border: 2px dashed #cbd5e0; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s;"
+                            onclick="document.getElementById('excelInputProfessores').click()"
+                            ondrop="admin.handleDropExcelProfessores(event)"
+                            ondragover="admin.handleDragOverExcelProfessores(event)"
+                            ondragleave="admin.handleDragLeaveExcelProfessores(event)">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #3b82f6; margin-bottom: 15px;"></i>
+                            <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                            <p style="margin: 0; color: #6b7280;">Arquivos Excel (.xlsx, .xls) - Máximo 10MB</p>
+                        </div>
+                        <input type="file" id="excelInputProfessores" style="display: none;" accept=".xlsx,.xls" onchange="admin.handleFileSelectExcelProfessores(event)">
+                        
+                        <div id="previewArquivoProfessores" style="display: none; margin-top: 20px; padding: 15px; background: #e5e7eb; border-radius: 12px;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <i class="fas fa-file-excel" style="font-size: 40px; color: #3b82f6;"></i>
+                                <div style="flex: 1;">
+                                    <div><strong id="nomeArquivoExcelProfessores">-</strong></div>
+                                    <div><small id="tamanhoArquivoExcelProfessores">-</small></div>
+                                </div>
+                                <button onclick="admin.removerArquivoExcelProfessores()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Info -->
+                    <div style="background: #fef3c7; border-radius: 16px; padding: 15px; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 10px;">
+                            <i class="fas fa-info-circle" style="color: #f59e0b;"></i>
+                            <div style="font-size: 13px; color: #92400e;">
+                                <strong>📋 Como funciona:</strong>
+                                <ul style="margin: 5px 0 0 20px;">
+                                    <li>O professor deve existir no sistema</li>
+                                    <li>O sistema buscará pelo <strong>NOME</strong> e atualizará o <strong>CPF</strong></li>
+                                    <li>Professores não encontrados serão reportados</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progresso -->
+                    <div id="progressoUploadProfessores" style="display: none; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span><i class="fas fa-spinner fa-spin"></i> Processando...</span>
+                            <span id="progressoPercentualProfessores">0%</span>
+                        </div>
+                        <div style="height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                            <div id="progressoBarraProfessores" style="height: 100%; background: linear-gradient(90deg, #3b82f6, #2563eb); width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Botão -->
+                    <button id="btnProcessarUploadProfessores" onclick="admin.processarUploadExcelProfessores()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 15px;" disabled>
+                        <i class="fas fa-upload"></i> Atualizar Professores
+                    </button>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- CONTEÚDO DA ABA: EMAILS (Nome + Email) -->
+                <!-- ============================================ -->
+                <div id="conteudoTabEmailsProfessor" style="display: none;">
+                    <!-- Download Modelo Emails -->
+                    <div style="background: #f3e8ff; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                            <div style="width: 50px; height: 50px; background: #8b5cf6; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-download" style="font-size: 24px; color: white;"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0;">📥 Baixar Modelo de Emails</h4>
+                                <p style="margin: 5px 0 0; font-size: 13px; color: #6b7280;">Colunas: Member Name, Member Email</p>
+                            </div>
+                            <button class="btn-primary" onclick="admin.baixarModeloExcelEmailsProfessores()" style="background: #8b5cf6; padding: 10px 20px; white-space: nowrap;">
+                                <i class="fas fa-download"></i> Baixar Modelo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Upload Emails -->
+                    <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <div id="uploadAreaEmailsProfessores" 
+                            style="border: 2px dashed #cbd5e0; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s;"
+                            onclick="document.getElementById('excelInputEmailsProfessores').click()"
+                            ondrop="admin.handleDropExcelEmailsProfessores(event)"
+                            ondragover="admin.handleDragOverExcelEmailsProfessores(event)"
+                            ondragleave="admin.handleDragLeaveExcelEmailsProfessores(event)">
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #8b5cf6; margin-bottom: 15px;"></i>
+                            <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                            <p style="margin: 0; color: #6b7280;">Colunas: Member Name, Member Email</p>
+                        </div>
+                        <input type="file" id="excelInputEmailsProfessores" style="display: none;" accept=".xlsx,.xls" onchange="admin.handleFileSelectExcelEmailsProfessores(event)">
+                        
+                        <div id="previewArquivoEmailsProfessores" style="display: none; margin-top: 20px; padding: 15px; background: #e5e7eb; border-radius: 12px;">
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <i class="fas fa-file-excel" style="font-size: 40px; color: #8b5cf6;"></i>
+                                <div style="flex: 1;">
+                                    <div><strong id="nomeArquivoExcelEmailsProfessores">-</strong></div>
+                                    <div><small id="tamanhoArquivoExcelEmailsProfessores">-</small></div>
+                                </div>
+                                <button onclick="admin.removerArquivoExcelEmailsProfessores()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview Planilha Emails -->
+                    <div id="previewPlanilhaEmailsProfessores" style="display: none; background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 15px;"><i class="fas fa-table"></i> Preview da Planilha</h4>
+                        <div id="previewDadosEmailsProfessores" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: white; font-size: 12px;"></div>
+                    </div>
+
+                    <!-- Info Emails -->
+                    <div style="background: #e0e7ff; border-radius: 16px; padding: 15px; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 10px;">
+                            <i class="fas fa-info-circle" style="color: #4f46e5;"></i>
+                            <div style="font-size: 13px; color: #3730a3;">
+                                <strong>📋 Como funciona:</strong>
+                                <ul style="margin: 5px 0 0 20px;">
+                                    <li>Envie uma planilha com as colunas: <strong>Member Name</strong> e <strong>Member Email</strong></li>
+                                    <li>O sistema buscará cada professor pelo <strong>NOME</strong></li>
+                                    <li>O email será vinculado ao professor encontrado</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progresso Emails -->
+                    <div id="progressoVincularEmailsProfessores" style="display: none; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span><i class="fas fa-spinner fa-spin"></i> Processando...</span>
+                            <span id="progressoPercentualVincularEmailsProfessores">0%</span>
+                        </div>
+                        <div style="height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                            <div id="progressoBarraVincularEmailsProfessores" style="height: 100%; background: linear-gradient(90deg, #8b5cf6, #7c3aed); width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Botão -->
+                    <button id="btnVincularEmailsProfessores" onclick="admin.processarVincularEmailsProfessores()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 15px;" disabled>
+                        <i class="fas fa-link"></i> Vincular Emails
+                    </button>
+                </div>
+
+                <!-- Botão Fechar -->
+                <div style="margin-top: 20px;">
+                    <button onclick="admin.closeModal()" style="width: 100%; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+
+            <style>
+                .upload-professores-container {
+                    max-height: 85vh;
+                    overflow-y: auto;
+                    padding: 5px;
+                }
+                #uploadAreaProfessores.drag-over {
+                    border-color: #3b82f6 !important;
+                    background: #eff6ff !important;
+                }
+                #uploadAreaEmailsProfessores.drag-over {
+                    border-color: #8b5cf6 !important;
+                    background: #f3e8ff !important;
+                }
+            </style>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-chalkboard-teacher"></i> Gerenciar Professores';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        
+        this.arquivoExcelProfessores = null;
+        this.dadosExcelProfessores = null;
+        this.arquivoExcelEmailsProfessores = null;
+        this.dadosExcelEmailsProfessores = null;
+        this.openModal();
+    }
+
+    // ============ MUDAR ABA DO MODAL DE PROFESSORES ============
+    mudarTabProfessor(tab) {
+        const tabDados = document.getElementById('tabDadosProfessor');
+        const tabEmails = document.getElementById('tabEmailsProfessor');
+        const conteudoDados = document.getElementById('conteudoTabDadosProfessor');
+        const conteudoEmails = document.getElementById('conteudoTabEmailsProfessor');
+        
+        if (tab === 'dados') {
+            tabDados.style.background = '#3b82f6';
+            tabDados.style.color = 'white';
+            tabEmails.style.background = 'transparent';
+            tabEmails.style.color = '#6b7280';
+            conteudoDados.style.display = 'block';
+            conteudoEmails.style.display = 'none';
+        } else {
+            tabDados.style.background = 'transparent';
+            tabDados.style.color = '#6b7280';
+            tabEmails.style.background = '#8b5cf6';
+            tabEmails.style.color = 'white';
+            conteudoDados.style.display = 'none';
+            conteudoEmails.style.display = 'block';
+        }
+    }
+
+    // ============ BAIXAR MODELO EXCEL PROFESSORES ============
+    baixarModeloExcelProfessores() {
+        const wsData = [
+            ['Nº', 'NOME', 'CPF'],
+            [1, 'ADRIANA DINIZ AZEVEDO', '665.991.303-30'],
+            [2, 'ADRIANNE DE CÁSSIA DE ASSUNÇÃO VELOZO', '040.976.593-75'],
+            [3, 'ALAN JHONES DA SILVA SANTOS', '979.423.593-87']
+        ];
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{wch:8}, {wch:45}, {wch:18}];
+        XLSX.utils.book_append_sheet(wb, ws, 'SERVIDORES');
+        
+        const instrucoesData = [
+            ['INSTRUÇÕES PARA ATUALIZAÇÃO DE PROFESSORES'],
+            [''],
+            ['Colunas:'],
+            ['Nº - Número sequencial (não é usado pelo sistema)'],
+            ['NOME - Nome completo do professor (DEVE SER IDÊNTICO ao cadastro atual)'],
+            ['CPF - CPF do professor (com ou sem pontuação)'],
+            [''],
+            ['IMPORTANTE:'],
+            ['- O professor JÁ DEVE existir no sistema'],
+            ['- O sistema buscará pelo NOME para encontrar o professor'],
+            ['- Apenas o CPF será atualizado'],
+            ['- Professores não encontrados serão reportados']
+        ];
+        
+        const wsInstrucoes = XLSX.utils.aoa_to_sheet(instrucoesData);
+        wsInstrucoes['!cols'] = [{wch:70}];
+        XLSX.utils.book_append_sheet(wb, wsInstrucoes, 'Instruções');
+        
+        XLSX.writeFile(wb, 'modelo_atualizacao_professores.xlsx');
+        this.showToast('✅ Modelo baixado!', 'success');
+    }
+
+    // ============ HANDLE FILE SELECT PROFESSORES ============
+    async handleFileSelectExcelProfessores(event) {
+        const files = event.target.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelProfessores(files[0]);
+        }
+    }
+
+    // ============ HANDLE DROP PROFESSORES ============
+    async handleDropExcelProfessores(event) {
+        event.preventDefault();
+        const area = event.currentTarget;
+        area.classList.remove('drag-over');
+        
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelProfessores(files[0]);
+        }
+    }
+
+    handleDragOverExcelProfessores(event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('drag-over');
+    }
+
+    handleDragLeaveExcelProfessores(event) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+    }
+
+    // ============ PROCESSAR ARQUIVO EXCEL PROFESSORES ============
+    async processarArquivoExcelProfessores(file) {
+        const extensoes = ['xlsx', 'xls'];
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        if (!extensoes.includes(ext)) {
+            this.showToast('❌ Tipo de arquivo não suportado. Use .xlsx ou .xls', 'error');
+            return;
+        }
+        
+        if (file.size > 10 * 1024 * 1024) {
+            this.showToast('❌ Arquivo muito grande. Máximo 10MB.', 'error');
+            return;
+        }
+        
+        this.arquivoExcelProfessores = file;
+        
+        if (typeof XLSX === 'undefined') {
+            this.showToast('🔄 Carregando biblioteca...', 'info');
+            await this.carregarBibliotecaXLSX();
+        }
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const primeiraSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(primeiraSheet);
+            
+            this.dadosExcelProfessores = jsonData;
+            
+            document.getElementById('previewArquivoProfessores').style.display = 'block';
+            document.getElementById('nomeArquivoExcelProfessores').textContent = file.name;
+            document.getElementById('tamanhoArquivoExcelProfessores').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+            
+            this.detectarColunasProfessores(jsonData);
+            this.mostrarPreviewDadosProfessores(jsonData);
+            document.getElementById('previewPlanilhaProfessores').style.display = 'block';
+            
+            const btnProcessar = document.getElementById('btnProcessarUploadProfessores');
+            if (btnProcessar) btnProcessar.disabled = false;
+            
+            this.showToast(`✅ Arquivo carregado! ${jsonData.length} professores encontrados.`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao ler arquivo:', error);
+            this.showToast('❌ Erro ao ler arquivo: ' + error.message, 'error');
+        }
+    }
+
+    // ============ DETECTAR COLUNAS PROFESSORES ============
+    detectarColunasProfessores(jsonData) {
+        if (!jsonData || jsonData.length === 0) return;
+        
+        const colunas = Object.keys(jsonData[0]);
+        
+        const mapeamento = {
+            nome: ['nome', 'Nome', 'NOME', 'name', 'NAME', 'professor', 'Professor', 'servidor', 'Servidor'],
+            cpf: ['cpf', 'CPF', 'Cpf', 'cpf_professor', 'CPF_PROFESSOR']
+        };
+        
+        const colunasDetectadas = {};
+        
+        for (const [campo, possibilidades] of Object.entries(mapeamento)) {
+            for (const coluna of colunas) {
+                const colunaLower = coluna.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                if (possibilidades.some(p => p.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === colunaLower)) {
+                    colunasDetectadas[campo] = coluna;
+                    break;
+                }
+            }
+        }
+        
+        this.colunasDetectadasProfessores = colunasDetectadas;
+        
+        const container = document.getElementById('colunasDetectadasProfessores');
+        const countSpan = document.getElementById('colunasDetectadasCountProfessores');
+        
+        if (container) {
+            let html = '';
+            let detectadas = 0;
+            
+            for (const [campo, coluna] of Object.entries(colunasDetectadas)) {
+                detectadas++;
+                const nomeCampo = campo === 'nome' ? 'Nome' : 'CPF';
+                html += `<span style="background: #3b82f6; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px;"><i class="fas fa-check"></i> ${coluna} → ${nomeCampo}</span>`;
+            }
+            
+            for (const coluna of colunas) {
+                const foiDetectada = Object.values(colunasDetectadas).includes(coluna);
+                if (!foiDetectada) {
+                    html += `<span style="background: #e5e7eb; padding: 4px 12px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px;"><i class="fas fa-question"></i> ${coluna}</span>`;
+                }
+            }
+            
+            container.innerHTML = html;
+            if (countSpan) countSpan.textContent = detectadas;
+        }
+    }
+
+    // ============ MOSTRAR PREVIEW DADOS PROFESSORES ============
+    mostrarPreviewDadosProfessores(jsonData) {
+        const container = document.getElementById('previewDadosProfessores');
+        if (!container || !jsonData || jsonData.length === 0) return;
+        
+        const qtdPreview = Math.min(5, jsonData.length);
+        const previewData = jsonData.slice(0, qtdPreview);
+        
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<thead><tr style="background: #f1f5f9;">';
+        const colunas = Object.keys(jsonData[0]);
+        colunas.forEach(col => {
+            html += `<th style="padding: 8px; text-align: left; font-size: 11px; border-bottom: 1px solid #e5e7eb;">${col}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+        
+        previewData.forEach(linha => {
+            html += '<tr>';
+            colunas.forEach(col => {
+                let valor = linha[col] || '';
+                if (typeof valor === 'string' && valor.length > 30) valor = valor.substring(0, 27) + '...';
+                html += `<td style="padding: 6px; font-size: 11px; border-bottom: 1px solid #f0f0f0;">${valor}</td>`;
+            });
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        
+        if (jsonData.length > 5) {
+            html += `<p style="margin-top: 8px; font-size: 11px; color: #6b7280; text-align: center;">+ ${jsonData.length - 5} registros...</p>`;
+        }
+        
+        container.innerHTML = html;
+    }
+    // ============ PROCESSAR UPLOAD PROFESSORES ============
+    async processarUploadExcelProfessores() {
+        if (!this.dadosExcelProfessores || this.dadosExcelProfessores.length === 0) {
+            this.showToast('❌ Nenhum dado para processar', 'error');
+            return;
+        }
+        
+        if (typeof XLSX === 'undefined') {
+            this.showToast('🔄 Carregando biblioteca...', 'info');
+            await this.carregarBibliotecaXLSX();
+        }
+        
+        const progressoDiv = document.getElementById('progressoUploadProfessores');
+        const progressoBarra = document.getElementById('progressoBarraProfessores');
+        const progressoPercentual = document.getElementById('progressoPercentualProfessores');
+        
+        progressoDiv.style.display = 'block';
+        progressoBarra.style.width = '5%';
+        progressoPercentual.textContent = '5%';
+        
+        try {
+            // 🔥 BUSCAR TODOS OS PROFESSORES UMA VEZ (otimização)
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/usuarios?role=professor&limit=1000`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success || !data.usuarios) {
+                throw new Error('Erro ao buscar professores do sistema');
+            }
+            
+            const professoresExistentes = data.usuarios;
+            console.log(`📚 ${professoresExistentes.length} professores encontrados no sistema`);
+            
+            // 🔥 LIMPAR CACHE DE MATRÍCULAS AUTORIZADAS (será recarregado na 1ª busca)
+            this.matriculasAutorizadas = null;
+            
+            const resultados = [];
+            let sucessos = 0;
+            let criados = 0;            // 🔥 NOVO
+            let naoEncontrados = 0;
+            let erros = 0;
+            let jaAtualizados = 0;
+            
+            for (let i = 0; i < this.dadosExcelProfessores.length; i++) {
+                const linha = this.dadosExcelProfessores[i];
+                const resultado = await this.atualizarProfessorDaPlanilha(linha, professoresExistentes, i + 1);
+                resultados.push(resultado);
+                
+                if (resultado.success) {
+                    if (resultado.criado) criados++;             // 🔥 NOVO
+                    else if (resultado.jaAtualizado) jaAtualizados++;
+                    else sucessos++;
+                }
+                else if (resultado.naoEncontrado) naoEncontrados++;
+                else erros++;
+                
+                const percentual = 5 + ((i + 1) / this.dadosExcelProfessores.length) * 90;
+                progressoBarra.style.width = `${percentual}%`;
+                progressoPercentual.textContent = `${Math.round(percentual)}%`;
+            }
+            
+            progressoBarra.style.width = '100%';
+            progressoPercentual.textContent = '100%';
+            
+            // 🔥 PASSAR O CONTADOR DE CRIADOS
+            this.mostrarResultadoUploadProfessores(sucessos, naoEncontrados, erros, jaAtualizados, criados, resultados);
+            
+            if (sucessos > 0 || criados > 0) {                    // 🔥 Atualizar se criou também
+                await this.loadUsuarios();
+                await this.carregarDadosReais();
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao processar: ' + error.message, 'error');
+            progressoDiv.style.display = 'none';
+        }
+    }
+
+    // ============ ATUALIZAR/CRIAR PROFESSOR DA PLANILHA ============
+    async atualizarProfessorDaPlanilha(linha, professoresExistentes, linhaNumero) {
+        try {
+            const getValor = (campo) => {
+                const coluna = this.colunasDetectadasProfessores?.[campo];
+                if (!coluna) return null;
+                let valor = linha[coluna];
+                if (typeof valor === 'string') valor = valor.trim();
+                if (valor === '' || valor === undefined) return null;
+                return valor;
+            };
+            
+            const nome = getValor('nome');
+            let cpf = getValor('cpf');
+            
+            // ===== VALIDAÇÕES =====
+            if (!nome) {
+                return { success: false, linha: linhaNumero, erro: 'Nome não encontrado', nome: '-', cpf: '-' };
+            }
+            if (!cpf) {
+                return { success: false, linha: linhaNumero, erro: 'CPF não encontrado', nome: nome, cpf: '-' };
+            }
+            
+            cpf = cpf.toString().replace(/\D/g, '');
+            if (cpf.length !== 11) {
+                return { success: false, linha: linhaNumero, erro: `CPF inválido - deve ter 11 dígitos: ${cpf}`, nome: nome, cpf: cpf };
+            }
+            
+            if (!this.validarCPF(cpf)) {
+                return { success: false, linha: linhaNumero, erro: `CPF inválido - dígitos verificadores incorretos`, nome: nome, cpf: cpf };
+            }
+            
+            // ===== NORMALIZAR NOME =====
+            const normalizarNome = (str) => {
+                if (!str) return '';
+                return str
+                    .toString()
+                    .toUpperCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')   // Remove acentos
+                    .replace(/[?]/g, '')                // Remove ?
+                    .replace(/[^\w\s]/g, ' ')           // Remove pontuação
+                    .replace(/\s+/g, ' ')               // Espaços únicos
+                    .trim();
+            };
+            
+            const nomeNormalizado = normalizarNome(nome);
+            const nomeSemEspacos = nomeNormalizado.replace(/\s+/g, '');
+            
+            console.log(`\n🔍 [Linha ${linhaNumero}] "${nome}"`);
+            console.log(`   Normalizado: "${nomeNormalizado}"`);
+            
+            // ============================================
+            // 🔥 FUNÇÃO DE COMPARAÇÃO INTELIGENTE
+            // ============================================
+            const nomeBate = (nomeA, nomeB) => {
+                const a = normalizarNome(nomeA);
+                const b = normalizarNome(nomeB);
+                
+                // 1. Igual exato
+                if (a === b) return { match: true, tipo: 'exato' };
+                
+                // 2. Sem espaços
+                if (a.replace(/\s+/g, '') === b.replace(/\s+/g, '')) {
+                    return { match: true, tipo: 'sem_espacos' };
+                }
+                
+                // 3. 🔥 Um é PREFIXO do outro (para nomes truncados)
+                // Ex: "ADRIANNE DE C" é prefixo de "ADRIANNE DE CASSIA"
+                const aLimpo = a.replace(/\s+/g, ' ').trim();
+                const bLimpo = b.replace(/\s+/g, ' ').trim();
+                
+                if (aLimpo.length >= 8 && bLimpo.startsWith(aLimpo)) {
+                    return { match: true, tipo: 'banco_prefixo_excel' };
+                }
+                if (bLimpo.length >= 8 && aLimpo.startsWith(bLimpo)) {
+                    return { match: true, tipo: 'excel_prefixo_banco' };
+                }
+                
+                // 4. 🔥 Comparar primeiras 2 palavras
+                const palavrasA = aLimpo.split(' ').filter(p => p.length >= 2);
+                const palavrasB = bLimpo.split(' ').filter(p => p.length >= 2);
+                
+                if (palavrasA.length >= 2 && palavrasB.length >= 2) {
+                    const primeirasA = palavrasA.slice(0, 2).join(' ');
+                    const primeirasB = palavrasB.slice(0, 2).join(' ');
+                    
+                    if (primeirasA === primeirasB) {
+                        return { match: true, tipo: 'primeiras_2_palavras' };
+                    }
+                    
+                    // 🔥 Primeira palavra + primeira sílaba da segunda
+                    // Ex: "ADRIANNE DE" vs "ADRIANNE DE CASSIA"
+                    const primeirasA3 = palavrasA.slice(0, 3).join(' ');
+                    const primeirasB3 = palavrasB.slice(0, 3).join(' ');
+                    
+                    if (primeirasA3 === primeirasB3) {
+                        return { match: true, tipo: 'primeiras_3_palavras' };
+                    }
+                    
+                    // 🔥 Comparar se as 2 primeiras palavras de um são prefixo do outro
+                    const p2A = palavrasA.slice(0, 2).join(' ');
+                    const p2B = palavrasB.slice(0, 2).join(' ');
+                    
+                    if (p2A.length >= 8 && p2B.startsWith(p2A)) {
+                        return { match: true, tipo: 'prefixo_2_palavras' };
+                    }
+                    if (p2B.length >= 8 && p2A.startsWith(p2B)) {
+                        return { match: true, tipo: 'prefixo_2_palavras' };
+                    }
+                }
+                
+                return { match: false };
+            };
+            
+            // ============================================
+            // PASSO 1: BUSCAR PROFESSOR EXISTENTE
+            // ============================================
+            let professor = null;
+            let tipoMatchProfessor = '';
+            
+            for (const p of professoresExistentes) {
+                const resultado = nomeBate(nome, p.nome);
+                if (resultado.match) {
+                    professor = p;
+                    tipoMatchProfessor = resultado.tipo;
+                    break;
+                }
+            }
+            
+            // ============================================
+            // SE ENCONTROU → ATUALIZAR CPF
+            // ============================================
+            if (professor) {
+                console.log(`   ✅ Professor encontrado (${tipoMatchProfessor}): "${professor.nome}"`);
+                
+                if (professor.cpf && professor.cpf === cpf) {
+                    return { 
+                        success: true, 
+                        linha: linhaNumero,
+                        professor: professor,
+                        nome: nome, 
+                        cpf: cpf,
+                        jaAtualizado: true,
+                        mensagem: 'CPF já estava cadastrado'
+                    };
+                }
+                
+                const cpfEmUso = professoresExistentes.find(u => 
+                    u.cpf === cpf && u._id !== professor._id
+                );
+                
+                if (cpfEmUso) {
+                    return { 
+                        success: false, 
+                        linha: linhaNumero, 
+                        erro: `CPF ${cpf} já cadastrado para ${cpfEmUso.nome}`,
+                        nome: nome, 
+                        cpf: cpf 
+                    };
+                }
+                
+                const token = localStorage.getItem('auth_token');
+                const updateResponse = await fetch(`/api/admin/usuarios/${professor._id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ cpf: cpf })
+                });
+                
+                const updateData = await updateResponse.json();
+                
+                if (!updateData.success) {
+                    throw new Error(updateData.error || 'Erro ao atualizar');
+                }
+                
+                console.log(`   ✅ CPF ${cpf} atualizado`);
+                
+                const idx = professoresExistentes.findIndex(p => p._id === professor._id);
+                if (idx !== -1) professoresExistentes[idx].cpf = cpf;
+                
+                return {
+                    success: true,
+                    linha: linhaNumero,
+                    professor: {
+                        id: professor._id,
+                        nome: professor.nome,
+                        email: professor.email,
+                        matricula: professor.matricula
+                    },
+                    nome: nome,
+                    cpf: cpf,
+                    mensagem: `CPF atualizado (${tipoMatchProfessor})`
+                };
+            }
+            
+            // ============================================
+            // PASSO 2: NÃO ENCONTROU → BUSCAR EM MATRÍCULAS AUTORIZADAS
+            // ============================================
+            console.log(`   🔎 Buscando em matrículas autorizadas...`);
+            
+            if (!this.matriculasAutorizadas || this.matriculasAutorizadas.length === 0) {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const matResponse = await fetch(`/api/admin/matriculas-autorizadas`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const matData = await matResponse.json();
+                    
+                    if (matData.success && matData.matriculas) {
+                        this.matriculasAutorizadas = matData.matriculas;
+                    } else {
+                        this.matriculasAutorizadas = [];
+                    }
+                } catch (e) {
+                    console.error('   ❌ Erro ao buscar matrículas:', e);
+                    this.matriculasAutorizadas = [];
+                }
+            }
+            
+            console.log(`   📋 ${this.matriculasAutorizadas.length} matrículas disponíveis`);
+            
+            // 🔥 BUSCA INTELIGENTE NA LISTA DE MATRÍCULAS
+            let matriculaEncontrada = null;
+            let tipoMatchMatricula = '';
+            
+            for (const mat of this.matriculasAutorizadas) {
+                const resultado = nomeBate(nome, mat.nome);
+                if (resultado.match) {
+                    matriculaEncontrada = mat;
+                    tipoMatchMatricula = resultado.tipo;
+                    break;
+                }
+            }
+            
+            // Se NÃO encontrou
+            if (!matriculaEncontrada) {
+                console.log(`   ❌ Não corresponde a nenhuma matrícula autorizada`);
+                
+                // Debug: mostrar primeiras 10
+                console.log(`   📋 Primeiras 10 matrículas:`);
+                this.matriculasAutorizadas.slice(0, 10).forEach(m => {
+                    console.log(`      • "${m.nome}" (mat: ${m.matricula})`);
+                });
+                
+                return { 
+                    success: false, 
+                    linha: linhaNumero, 
+                    naoEncontrado: true,
+                    erro: `Nome "${nome}" não corresponde a nenhuma matrícula autorizada`,
+                    nome: nome, 
+                    cpf: cpf 
+                };
+            }
+            
+            console.log(`   ✅ Matrícula encontrada (${tipoMatchMatricula}): ${matriculaEncontrada.matricula} - "${matriculaEncontrada.nome}"`);
+            
+            // Verificar se matrícula já foi usada
+            const matriculaJaUsada = professoresExistentes.find(p => 
+                p.matricula === matriculaEncontrada.matricula
+            );
+            
+            if (matriculaJaUsada) {
+                return {
+                    success: false,
+                    linha: linhaNumero,
+                    erro: `Matrícula ${matriculaEncontrada.matricula} já usada por "${matriculaJaUsada.nome}"`,
+                    nome: nome,
+                    cpf: cpf
+                };
+            }
+            
+            // Verificar se CPF já está em uso
+            const cpfJaUsado = professoresExistentes.find(u => u.cpf === cpf);
+            
+            if (cpfJaUsado) {
+                return {
+                    success: false,
+                    linha: linhaNumero,
+                    erro: `CPF ${cpf} já cadastrado para "${cpfJaUsado.nome}"`,
+                    nome: nome,
+                    cpf: cpf
+                };
+            }
+            
+            // ============================================
+            // CRIAR PROFESSOR
+            // ============================================
+            console.log(`   🆕 Criando professor com matrícula ${matriculaEncontrada.matricula}`);
+            
+            const token = localStorage.getItem('auth_token');
+            const email = `${cpf}@iemasaoluiscentro.net`;
+            
+            const createResponse = await fetch(`/api/admin/usuarios`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    nome: nome.toUpperCase(),
+                    email: email,
+                    cpf: cpf,
+                    telefone: '99999999999',
+                    password: '123456',
+                    role: 'professor',
+                    ativo: true,
+                    forcePasswordChange: true,
+                    matricula: matriculaEncontrada.matricula
+                })
+            });
+            
+            const createData = await createResponse.json();
+            
+            if (!createData.success) {
+                throw new Error(createData.error || 'Erro ao criar professor');
+            }
+            
+            console.log(`   ✅ PROFESSOR CRIADO: "${nome}" com matrícula ${matriculaEncontrada.matricula}`);
+            
+            professoresExistentes.push({
+                _id: createData.user.id,
+                nome: createData.user.nome,
+                email: createData.user.email,
+                matricula: matriculaEncontrada.matricula,
+                cpf: cpf,
+                role: 'professor'
+            });
+            
+            return {
+                success: true,
+                criado: true,
+                linha: linhaNumero,
+                professor: {
+                    id: createData.user.id,
+                    nome: createData.user.nome,
+                    email: createData.user.email,
+                    matricula: matriculaEncontrada.matricula
+                },
+                nome: nome,
+                cpf: cpf,
+                matricula: matriculaEncontrada.matricula,
+                mensagem: `Professor criado (${tipoMatchMatricula})`
+            };
+            
+        } catch (error) {
+            console.error('❌ Erro ao processar professor:', error);
+            return {
+                success: false,
+                linha: linhaNumero,
+                erro: error.message,
+                nome: linha['NOME'] || linha['Nome'] || linha['nome'] || '-',
+                cpf: linha['CPF'] || linha['cpf'] || '-'
+            };
+        }
+    }
+
+    // ============ MOSTRAR RESULTADO UPLOAD PROFESSORES ============
+    mostrarResultadoUploadProfessores(sucessos, naoEncontrados, erros, jaAtualizados, criados, resultados) {
+        const modalBody = document.getElementById('modalBody');
+        
+        let naoEncontradosHtml = '';
+        if (naoEncontrados > 0) {
+            const naoEncontradosLista = resultados.filter(r => r.naoEncontrado === true);
+            naoEncontradosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #92400e;"><i class="fas fa-exclamation-triangle"></i> Não encontrados (${naoEncontrados})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${naoEncontradosLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fde68a;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome}
+                                </div>
+                            `).join('')}
+                        </div>
+                        <p style="margin: 10px 0 0; font-size: 12px; color: #92400e;">
+                            <i class="fas fa-info-circle"></i> 
+                            Estes nomes não estão cadastrados em <strong>Matrículas Autorizadas</strong>.
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let errosHtml = '';
+        if (erros > 0) {
+            const errosLista = resultados.filter(r => !r.success && !r.naoEncontrado);
+            errosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #dc2626;"><i class="fas fa-exclamation-circle"></i> Erros (${erros})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${errosLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fecaca;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome || '-'} - ${e.erro}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="width: 80px; height: 80px; background: ${(sucessos > 0 || criados > 0) ? '#3b82f6' : '#6b7280'}; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                    <i class="fas ${(sucessos > 0 || criados > 0) ? 'fa-check' : 'fa-info'}" style="font-size: 40px; color: white;"></i>
+                </div>
+                
+                <h2 style="margin: 0 0 10px;">Processamento Concluído!</h2>
+                
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0;">
+                    <div style="background: #d1fae5; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 28px; font-weight: bold; color: #065f46;">${criados}</div>
+                        <div style="color: #065f46; font-size: 11px;">Criados</div>
+                    </div>
+                    <div style="background: #dbeafe; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 28px; font-weight: bold; color: #1e40af;">${sucessos}</div>
+                        <div style="color: #1e40af; font-size: 11px;">Atualizados</div>
+                    </div>
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 28px; font-weight: bold; color: #92400e;">${naoEncontrados}</div>
+                        <div style="color: #92400e; font-size: 11px;">Não encontrados</div>
+                    </div>
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 28px; font-weight: bold; color: #991b1b;">${erros}</div>
+                        <div style="color: #991b1b; font-size: 11px;">Erros</div>
+                    </div>
+                </div>
+                
+                ${naoEncontradosHtml}
+                ${errosHtml}
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Fechar
+                    </button>
+                    ${(erros > 0 || naoEncontrados > 0) ? `
+                        <button onclick="admin.baixarRelatorioProfessores(${JSON.stringify(resultados).replace(/"/g, '&quot;')})" style="flex: 1; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-download"></i> Baixar Relatório
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-chart-bar"></i> Resultado do Upload';
+        this.openModal();
+    }
+
+    // ============ BAIXAR RELATÓRIO PROFESSORES ============
+    baixarRelatorioProfessores(resultados) {
+        if (!resultados || resultados.length === 0) return;
+        
+        const wsData = [['Linha', 'Nome', 'CPF', 'Status', 'Mensagem']];
+        
+        resultados.forEach(r => {
+            let status = '';
+            let mensagem = '';
+            
+            if (r.success && r.jaAtualizado) {
+                status = '✅ JÁ ATUALIZADO';
+                mensagem = 'CPF já estava correto';
+            } else if (r.success) {
+                status = '✅ ATUALIZADO';
+                mensagem = r.mensagem || 'CPF atualizado';
+            } else if (r.naoEncontrado) {
+                status = '⚠️ NÃO ENCONTRADO';
+                mensagem = r.erro;
+            } else {
+                status = '❌ ERRO';
+                mensagem = r.erro;
+            }
+            
+            wsData.push([
+                r.linha,
+                r.nome || '-',
+                r.cpf || '-',
+                status,
+                mensagem
+            ]);
+        });
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{wch:8}, {wch:45}, {wch:18}, {wch:20}, {wch:50}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+        
+        XLSX.writeFile(wb, `relatorio_professores_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
+        this.showToast('📥 Relatório baixado!', 'success');
+    }
+
+    // ============ REMOVER ARQUIVO EXCEL PROFESSORES ============
+    removerArquivoExcelProfessores() {
+        this.arquivoExcelProfessores = null;
+        this.dadosExcelProfessores = null;
+        document.getElementById('previewArquivoProfessores').style.display = 'none';
+        document.getElementById('previewPlanilhaProfessores').style.display = 'none';
+        document.getElementById('excelInputProfessores').value = '';
+        
+        const btnProcessar = document.getElementById('btnProcessarUploadProfessores');
+        if (btnProcessar) {
+            btnProcessar.disabled = true;
+        }
+    }
+
+    // ============================================
+    // 📧 VINCULAR EMAILS DE PROFESSORES (SEM TURMA)
+    // ============================================
+
+    abrirModalVincularEmailsProfessores() {
+        const modalBody = document.getElementById('modalBody');
+        
+        modalBody.innerHTML = `
+            <div class="vincular-emails-professores-container" style="max-width: 800px; margin: 0 auto;">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                        <i class="fas fa-envelope" style="font-size: 32px; color: white;"></i>
+                    </div>
+                    <h2 style="margin: 15px 0 5px;">Vincular Emails Institucionais</h2>
+                    <p style="color: #6b7280;">Vincule emails institucionais aos professores cadastrados</p>
+                    <p style="color: #10b981; font-size: 13px;"><i class="fas fa-magic"></i> Colunas: Nome, Email</p>
+                </div>
+
+                <!-- Download do Modelo -->
+                <div style="background: #e6f7ff; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div style="width: 50px; height: 50px; background: #0d6efd; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-download" style="font-size: 24px; color: white;"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0;">📥 Baixar Modelo de Emails</h4>
+                            <p style="margin: 5px 0 0; font-size: 13px; color: #6b7280;">Colunas: Member Name, Member Email</p>
+                        </div>
+                        <button class="btn-primary" onclick="admin.baixarModeloExcelEmailsProfessores()" style="background: #0d6efd; padding: 10px 20px; white-space: nowrap;">
+                            <i class="fas fa-download"></i> Baixar Modelo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Upload -->
+                <div style="background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div id="uploadAreaEmailsProfessores" 
+                        style="border: 2px dashed #cbd5e0; border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s;"
+                        onclick="document.getElementById('excelInputEmailsProfessores').click()"
+                        ondrop="admin.handleDropExcelEmailsProfessores(event)"
+                        ondragover="admin.handleDragOverExcelEmailsProfessores(event)"
+                        ondragleave="admin.handleDragLeaveExcelEmailsProfessores(event)">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #8b5cf6; margin-bottom: 15px;"></i>
+                        <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
+                        <p style="margin: 0; color: #6b7280;">Aceita arquivos com: Member Name, Member Email</p>
+                    </div>
+                    <input type="file" id="excelInputEmailsProfessores" style="display: none;" accept=".xlsx,.xls" onchange="admin.handleFileSelectExcelEmailsProfessores(event)">
+                    
+                    <div id="previewArquivoEmailsProfessores" style="display: none; margin-top: 20px; padding: 15px; background: #e5e7eb; border-radius: 12px;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <i class="fas fa-file-excel" style="font-size: 40px; color: #8b5cf6;"></i>
+                            <div style="flex: 1;">
+                                <div><strong id="nomeArquivoExcelEmailsProfessores">-</strong></div>
+                                <div><small id="tamanhoArquivoExcelEmailsProfessores">-</small></div>
+                            </div>
+                            <button onclick="admin.removerArquivoExcelEmailsProfessores()" style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #dc2626;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview da Planilha -->
+                <div id="previewPlanilhaEmailsProfessores" style="display: none; background: #f8fafc; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 15px;"><i class="fas fa-table"></i> Preview da Planilha</h4>
+                    <div id="previewDadosEmailsProfessores" style="max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: white; font-size: 12px;"></div>
+                </div>
+
+                <!-- Informações -->
+                <div style="background: #fef3c7; border-radius: 16px; padding: 15px; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 10px;">
+                        <i class="fas fa-info-circle" style="color: #f59e0b; font-size: 18px;"></i>
+                        <div style="font-size: 13px; color: #92400e;">
+                            <strong>📋 Como funciona:</strong>
+                            <ul style="margin: 5px 0 0 20px;">
+                                <li>O professor deve existir no sistema ou ter matrícula autorizada</li>
+                                <li>O sistema buscará pelo <strong>NOME</strong> e atualizará o <strong>CPF</strong></li>
+                                <li>Se o professor não existir mas tiver matrícula autorizada, ele será <strong>criado automaticamente</strong></li>
+                                <li>Professores não encontrados serão reportados</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🔥 CARD DE CREDENCIAIS GERADAS -->
+                <div style="background: linear-gradient(135deg, #dbeafe, #eff6ff); border-radius: 16px; padding: 18px; margin-bottom: 20px; border: 2px solid #3b82f6;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <div style="width: 40px; height: 40px; background: #3b82f6; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-key" style="color: white; font-size: 18px;"></i>
+                        </div>
+                        <div>
+                            <strong style="color: #1e40af; font-size: 15px; display: block;">Credenciais Geradas Automaticamente</h4>
+                            <small style="color: #3b82f6; font-size: 12px;">Ao criar um novo professor, estes dados são definidos</small>
+                        </div>
+                    </div>
+                    
+                    <div style="background: white; border-radius: 12px; padding: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; font-weight: 600;">
+                                <i class="fas fa-envelope"></i> Email
+                            </div>
+                            <div style="font-family: monospace; font-size: 13px; color: #1e40af; font-weight: 600; background: #eff6ff; padding: 6px 10px; border-radius: 6px;">
+                                CPF@iemasaoluiscentro.net
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; font-weight: 600;">
+                                <i class="fas fa-lock"></i> Senha Padrão
+                            </div>
+                            <div style="font-family: monospace; font-size: 16px; color: #1e40af; font-weight: 700; background: #eff6ff; padding: 6px 10px; border-radius: 6px; letter-spacing: 3px;">
+                                123456
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; font-weight: 600;">
+                                <i class="fas fa-phone"></i> Telefone
+                            </div>
+                            <div style="font-family: monospace; font-size: 13px; color: #1e40af; font-weight: 600; background: #eff6ff; padding: 6px 10px; border-radius: 6px;">
+                                99999999999
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; font-weight: 600;">
+                                <i class="fas fa-hashtag"></i> Matrícula
+                            </div>
+                            <div style="font-family: monospace; font-size: 13px; color: #1e40af; font-weight: 600; background: #eff6ff; padding: 6px 10px; border-radius: 6px;">
+                                Autorizada
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 12px; padding: 10px 12px; background: #fef3c7; border-radius: 8px; display: flex; align-items: flex-start; gap: 10px; border-left: 4px solid #f59e0b;">
+                        <i class="fas fa-exclamation-triangle" style="color: #f59e0b; font-size: 16px; margin-top: 2px;"></i>
+                        <div style="font-size: 12px; color: #92400e; line-height: 1.5;">
+                            <strong>⚠️ Troca de Senha Obrigatória</strong><br>
+                            No <strong>primeiro login</strong>, o professor será redirecionado para criar uma nova senha pessoal. Só depois conseguirá acessar o sistema.
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 10px; padding: 10px 12px; background: #ecfdf5; border-radius: 8px; display: flex; align-items: flex-start; gap: 10px; border-left: 4px solid #10b981;">
+                        <i class="fas fa-lightbulb" style="color: #10b981; font-size: 16px; margin-top: 2px;"></i>
+                        <div style="font-size: 12px; color: #065f46; line-height: 1.5;">
+                            <strong>💡 Dica:</strong> Compartilhe o link de acesso e a senha padrão com os professores:<br>
+                            <code style="background: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">/login.html</code>
+                            &nbsp;→&nbsp;
+                            <code style="background: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">123456</code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progresso -->
+                <div id="progressoVincularEmailsProfessores" style="display: none; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span><i class="fas fa-spinner fa-spin"></i> Processando...</span>
+                        <span id="progressoPercentualVincularEmailsProfessores">0%</span>
+                    </div>
+                    <div style="height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                        <div id="progressoBarraVincularEmailsProfessores" style="height: 100%; background: linear-gradient(90deg, #8b5cf6, #7c3aed); width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+
+                <!-- Botões -->
+                <div style="display: flex; gap: 12px;">
+                    <button onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Cancelar
+                    </button>
+                    <button id="btnVincularEmailsProfessores" onclick="admin.processarVincularEmailsProfessores()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;" disabled>
+                        <i class="fas fa-link"></i> Vincular Emails
+                    </button>
+                </div>
+            </div>
+
+            <style>
+                .vincular-emails-professores-container {
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    padding: 5px;
+                }
+                #uploadAreaEmailsProfessores.drag-over {
+                    border-color: #8b5cf6 !important;
+                    background: #f3e8ff !important;
+                }
+            </style>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-envelope"></i> Vincular Emails - Professores';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        
+        this.arquivoExcelEmailsProfessores = null;
+        this.dadosExcelEmailsProfessores = null;
+        this.openModal();
+    }
+
+    // ============ BAIXAR MODELO EXCEL DE EMAILS ============
+    baixarModeloExcelEmailsProfessores() {
+        const dados = [
+            ['Member Name', 'Member Email', 'Member Role', 'Member Type'],
+            ['ADRIANA DINIZ AZEVEDO', 'adriana.azevedo@iemasaoluiscentro.net', 'MEMBER', 'USER'],
+            ['ADRIANNE DE CÁSSIA DE ASSUNÇÃO VELOZO', 'adrianne.velozo@iemasaoluiscentro.net', 'MEMBER', 'USER'],
+            ['ALAN JHONES DA SILVA SANTOS', 'alan.santos@iemasaoluiscentro.net', 'MEMBER', 'USER']
+        ];
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(dados);
+        ws['!cols'] = [{wch:45}, {wch:50}, {wch:12}, {wch:10}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Members');
+        
+        const instrucoesData = [
+            ['INSTRUÇÕES PARA VINCULAR EMAILS AOS PROFESSORES'],
+            [''],
+            ['Colunas:'],
+            ['Member Name - Nome do professor (DEVE SER IDÊNTICO ao cadastro)'],
+            ['Member Email - Email institucional a ser vinculado'],
+            ['Member Role - Mantenha como MEMBER'],
+            ['Member Type - Mantenha como USER'],
+            [''],
+            ['O sistema irá vincular cada email ao professor correspondente pelo nome.'],
+            ['Professores não encontrados serão reportados.']
+        ];
+        
+        const wsInstrucoes = XLSX.utils.aoa_to_sheet(instrucoesData);
+        wsInstrucoes['!cols'] = [{wch:70}];
+        XLSX.utils.book_append_sheet(wb, wsInstrucoes, 'Instruções');
+        
+        XLSX.writeFile(wb, 'modelo_emails_professores.xlsx');
+        this.showToast('✅ Modelo baixado!', 'success');
+    }
+
+    // ============ HANDLERS ============
+    async handleFileSelectExcelEmailsProfessores(event) {
+        const files = event.target.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelEmailsProfessores(files[0]);
+        }
+    }
+
+    async handleDropExcelEmailsProfessores(event) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+            await this.processarArquivoExcelEmailsProfessores(files[0]);
+        }
+    }
+
+    handleDragOverExcelEmailsProfessores(event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('drag-over');
+    }
+
+    handleDragLeaveExcelEmailsProfessores(event) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+    }
+
+    // ============ PROCESSAR ARQUIVO EXCEL DE EMAILS ============
+    async processarArquivoExcelEmailsProfessores(file) {
+        const extensoes = ['xlsx', 'xls'];
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        if (!extensoes.includes(ext)) {
+            this.showToast('❌ Tipo de arquivo não suportado. Use .xlsx ou .xls', 'error');
+            return;
+        }
+        
+        if (file.size > 10 * 1024 * 1024) {
+            this.showToast('❌ Arquivo muito grande. Máximo 10MB.', 'error');
+            return;
+        }
+        
+        this.arquivoExcelEmailsProfessores = file;
+        
+        if (typeof XLSX === 'undefined') {
+            this.showToast('🔄 Carregando biblioteca...', 'info');
+            await this.carregarBibliotecaXLSX();
+        }
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const primeiraSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(primeiraSheet);
+            
+            // Mapear os dados para extrair Nome e Email
+            this.dadosExcelEmailsProfessores = jsonData.map(row => ({
+                nome: row['Member Name'] || row['Nome'] || row['nome'] || row['name'] || Object.values(row)[0] || '',
+                email: row['Member Email'] || row['Email'] || row['email'] || Object.values(row)[1] || ''
+            })).filter(item => item.nome && item.email);
+            
+            document.getElementById('previewArquivoEmailsProfessores').style.display = 'block';
+            document.getElementById('nomeArquivoExcelEmailsProfessores').textContent = file.name;
+            document.getElementById('tamanhoArquivoExcelEmailsProfessores').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+            
+            this.mostrarPreviewDadosEmailsProfessores(this.dadosExcelEmailsProfessores);
+            document.getElementById('previewPlanilhaEmailsProfessores').style.display = 'block';
+            
+            const btnVincular = document.getElementById('btnVincularEmailsProfessores');
+            if (btnVincular) btnVincular.disabled = false;
+            
+            this.showToast(`✅ Arquivo carregado! ${this.dadosExcelEmailsProfessores.length} registros encontrados.`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao ler arquivo:', error);
+            this.showToast('❌ Erro ao ler arquivo: ' + error.message, 'error');
+        }
+    }
+
+    // ============ MOSTRAR PREVIEW DADOS EMAILS ============
+    mostrarPreviewDadosEmailsProfessores(dados) {
+        const container = document.getElementById('previewDadosEmailsProfessores');
+        if (!container || !dados || dados.length === 0) return;
+        
+        const qtdPreview = Math.min(5, dados.length);
+        const previewData = dados.slice(0, qtdPreview);
+        
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<thead><tr style="background: #f1f5f9;">';
+        html += '<th style="padding: 8px; text-align: left;">Nome do Professor</th>';
+        html += '<th style="padding: 8px; text-align: left;">Email Institucional</th>';
+        html += '</tr></thead><tbody>';
+        
+        previewData.forEach(item => {
+            html += '<tr>';
+            html += `<td style="padding: 6px; border-bottom: 1px solid #f0f0f0;">${item.nome}</td>`;
+            html += `<td style="padding: 6px; border-bottom: 1px solid #f0f0f0;">${item.email}</td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        
+        if (dados.length > 5) {
+            html += `<p style="margin-top: 8px; font-size: 11px; color: #6b7280; text-align: center;">+ ${dados.length - 5} registros...</p>`;
+        }
+        
+        container.innerHTML = html;
+    }
+
+    // ============ PROCESSAR VÍNCULO DE EMAILS ============
+    async processarVincularEmailsProfessores() {
+        if (!this.dadosExcelEmailsProfessores || this.dadosExcelEmailsProfessores.length === 0) {
+            this.showToast('❌ Nenhum arquivo de emails carregado', 'error');
+            return;
+        }
+        
+        const progressoDiv = document.getElementById('progressoVincularEmailsProfessores');
+        const progressoBarra = document.getElementById('progressoBarraVincularEmailsProfessores');
+        const progressoPercentual = document.getElementById('progressoPercentualVincularEmailsProfessores');
+        
+        progressoDiv.style.display = 'block';
+        progressoBarra.style.width = '5%';
+        progressoPercentual.textContent = '5%';
+        
+        try {
+            // Buscar todos os professores
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/usuarios?role=professor&limit=1000`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success || !data.usuarios) {
+                throw new Error('Erro ao buscar professores do sistema');
+            }
+            
+            const professoresExistentes = data.usuarios;
+            console.log(`📚 ${professoresExistentes.length} professores encontrados no sistema`);
+            
+            const resultados = [];
+            let sucessos = 0;
+            let naoEncontrados = 0;
+            let erros = 0;
+            
+            for (let i = 0; i < this.dadosExcelEmailsProfessores.length; i++) {
+                const item = this.dadosExcelEmailsProfessores[i];
+                const resultado = await this.vincularEmailProfessor(item, professoresExistentes, i + 1);
+                resultados.push(resultado);
+                
+                if (resultado.success) sucessos++;
+                else if (resultado.naoEncontrado) naoEncontrados++;
+                else erros++;
+                
+                const percentual = 5 + ((i + 1) / this.dadosExcelEmailsProfessores.length) * 90;
+                progressoBarra.style.width = `${percentual}%`;
+                progressoPercentual.textContent = `${Math.round(percentual)}%`;
+            }
+            
+            progressoBarra.style.width = '100%';
+            progressoPercentual.textContent = '100%';
+            
+            this.mostrarResultadoVincularEmailsProfessores(sucessos, naoEncontrados, erros, resultados);
+            
+            if (sucessos > 0) {
+                await this.loadUsuarios();
+                await this.carregarDadosReais();
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao processar: ' + error.message, 'error');
+            progressoDiv.style.display = 'none';
+        }
+    }
+
+    // ============ VINCULAR EMAIL A UM PROFESSOR ============
+    async vincularEmailProfessor(item, professoresExistentes, linhaNumero) {
+        try {
+            const nomePlanilha = item.nome;
+            const emailPlanilha = item.email;
+            
+            if (!nomePlanilha) {
+                return { success: false, linha: linhaNumero, erro: 'Nome vazio na planilha' };
+            }
+            
+            if (!emailPlanilha) {
+                return { success: false, linha: linhaNumero, erro: 'Email vazio na planilha', nome: nomePlanilha };
+            }
+            
+            if (!this.validarEmail(emailPlanilha)) {
+                return { success: false, linha: linhaNumero, erro: `Email inválido: ${emailPlanilha}`, nome: nomePlanilha };
+            }
+            
+            // Normalizar nome para comparação
+            const normalizarNome = (str) => {
+                return str
+                    .toString()
+                    .toLowerCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            };
+            
+            const nomeNormalizadoPlanilha = normalizarNome(nomePlanilha);
+            
+            // Buscar professor pelo nome
+            let professor = professoresExistentes.find(u => 
+                normalizarNome(u.nome) === nomeNormalizadoPlanilha
+            );
+            
+            // Tentar com nome sem espaços duplicados
+            if (!professor) {
+                const nomeSemEspacos = nomeNormalizadoPlanilha.replace(/\s+/g, '');
+                professor = professoresExistentes.find(u => {
+                    const nomeUserSemEspacos = normalizarNome(u.nome).replace(/\s+/g, '');
+                    return nomeUserSemEspacos === nomeSemEspacos;
+                });
+            }
+            
+            if (!professor) {
+                return { 
+                    success: false, 
+                    linha: linhaNumero, 
+                    naoEncontrado: true, 
+                    erro: `Professor "${nomePlanilha}" não encontrado`,
+                    nome: nomePlanilha 
+                };
+            }
+            
+            // Verificar se o email já está sendo usado por outro usuário
+            const emailEmUso = professoresExistentes.find(u => 
+                u.email && u.email.toLowerCase() === emailPlanilha.toLowerCase() && 
+                u._id !== professor._id
+            );
+            
+            if (emailEmUso) {
+                return { 
+                    success: false, 
+                    linha: linhaNumero, 
+                    erro: `Email ${emailPlanilha} já está em uso por ${emailEmUso.nome}`,
+                    nome: nomePlanilha 
+                };
+            }
+            
+            // Verificar se o email já é o mesmo
+            if (professor.email && professor.email.toLowerCase() === emailPlanilha.toLowerCase()) {
+                return {
+                    success: true,
+                    linha: linhaNumero,
+                    jaAtualizado: true,
+                    nome: professor.nome,
+                    email: emailPlanilha,
+                    mensagem: 'Email já estava vinculado'
+                };
+            }
+            
+            // 🔥 ATUALIZAR EMAIL DO PROFESSOR
+            const token = localStorage.getItem('auth_token');
+            const updateResponse = await fetch(`/api/admin/usuarios/${professor._id}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: emailPlanilha })
+            });
+            
+            const updateData = await updateResponse.json();
+            
+            if (!updateData.success) {
+                throw new Error(updateData.error || 'Erro ao atualizar email');
+            }
+            
+            console.log(`✅ Email ${emailPlanilha} vinculado a ${professor.nome}`);
+            
+            // Atualizar no array local
+            const idx = professoresExistentes.findIndex(p => p._id === professor._id);
+            if (idx !== -1) {
+                professoresExistentes[idx].email = emailPlanilha;
+            }
+            
+            return {
+                success: true,
+                linha: linhaNumero,
+                professor: {
+                    id: professor._id,
+                    nome: professor.nome,
+                    matricula: professor.matricula
+                },
+                nome: professor.nome,
+                email: emailPlanilha,
+                mensagem: 'Email vinculado com sucesso!'
+            };
+            
+        } catch (error) {
+            console.error('❌ Erro ao vincular email:', error);
+            return {
+                success: false,
+                linha: linhaNumero,
+                erro: error.message,
+                nome: item.nome || '-'
+            };
+        }
+    }
+
+    // ============ VALIDAR EMAIL ============
+    validarEmail(email) {
+        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return regex.test(email);
+    }
+
+    // ============ MOSTRAR RESULTADO VINCULAR EMAILS ============
+    mostrarResultadoVincularEmailsProfessores(sucessos, naoEncontrados, erros, resultados) {
+        const modalBody = document.getElementById('modalBody');
+        
+        let naoEncontradosHtml = '';
+        if (naoEncontrados > 0) {
+            const naoEncontradosLista = resultados.filter(r => r.naoEncontrado === true);
+            naoEncontradosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #92400e;"><i class="fas fa-exclamation-triangle"></i> Professores não encontrados (${naoEncontrados})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${naoEncontradosLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fde68a;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let errosHtml = '';
+        if (erros > 0) {
+            const errosLista = resultados.filter(r => !r.success && !r.naoEncontrado);
+            errosHtml = `
+                <div style="margin-top: 20px;">
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px; color: #dc2626;"><i class="fas fa-exclamation-circle"></i> Erros (${erros})</h4>
+                        <div style="max-height: 150px; overflow-y: auto; font-size: 13px;">
+                            ${errosLista.map(e => `
+                                <div style="padding: 6px; border-bottom: 1px solid #fecaca;">
+                                    <strong>Linha ${e.linha}:</strong> ${e.nome || '-'} - ${e.erro}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        modalBody.innerHTML = `
+            <div style="padding: 20px; text-align: center;">
+                <div style="width: 80px; height: 80px; background: ${sucessos > 0 ? '#8b5cf6' : '#6b7280'}; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                    <i class="fas ${sucessos > 0 ? 'fa-envelope' : 'fa-info'}" style="font-size: 40px; color: white;"></i>
+                </div>
+                
+                <h2 style="margin: 0 0 10px;">Vinculação Concluída!</h2>
+                
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0;">
+                    <div style="background: #ede9fe; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #6d28d9;">${sucessos}</div>
+                        <div style="color: #6d28d9; font-size: 12px;">Vinculados</div>
+                    </div>
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #92400e;">${naoEncontrados}</div>
+                        <div style="color: #92400e; font-size: 12px;">Não encontrados</div>
+                    </div>
+                    <div style="background: #fee2e2; border-radius: 12px; padding: 15px;">
+                        <div style="font-size: 32px; font-weight: bold; color: #991b1b;">${erros}</div>
+                        <div style="color: #991b1b; font-size: 12px;">Erros</div>
+                    </div>
+                </div>
+                
+                ${naoEncontradosHtml}
+                ${errosHtml}
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button onclick="admin.closeModal()" style="flex: 1; padding: 12px; background: #6b7280; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                        Fechar
+                    </button>
+                    ${(erros > 0 || naoEncontrados > 0) ? `
+                        <button onclick="admin.baixarRelatorioEmailsProfessores(${JSON.stringify(resultados).replace(/"/g, '&quot;')})" style="flex: 1; padding: 12px; background: #8b5cf6; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-download"></i> Baixar Relatório
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-chart-bar"></i> Resultado da Vinculação';
+        this.openModal();
+    }
+
+    // ============ BAIXAR RELATÓRIO EMAILS PROFESSORES ============
+    baixarRelatorioEmailsProfessores(resultados) {
+        if (!resultados || resultados.length === 0) return;
+        
+        const wsData = [['Linha', 'Nome', 'Email', 'Status', 'Mensagem']];
+        
+        resultados.forEach(r => {
+            let status = '';
+            let mensagem = '';
+            
+            if (r.success && r.jaAtualizado) {
+                status = '✅ JÁ VINCULADO';
+                mensagem = 'Email já estava vinculado';
+            } else if (r.success) {
+                status = '✅ VINCULADO';
+                mensagem = r.mensagem || 'Email vinculado';
+            } else if (r.naoEncontrado) {
+                status = '⚠️ NÃO ENCONTRADO';
+                mensagem = r.erro;
+            } else {
+                status = '❌ ERRO';
+                mensagem = r.erro;
+            }
+            
+            wsData.push([
+                r.linha,
+                r.nome || '-',
+                r.email || '-',
+                status,
+                mensagem
+            ]);
+        });
+        
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{wch:8}, {wch:45}, {wch:50}, {wch:20}, {wch:50}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+        
+        XLSX.writeFile(wb, `relatorio_emails_professores_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.xlsx`);
+        this.showToast('📥 Relatório baixado!', 'success');
+    }
+
+    // ============ REMOVER ARQUIVO EMAILS ============
+    removerArquivoExcelEmailsProfessores() {
+        this.arquivoExcelEmailsProfessores = null;
+        this.dadosExcelEmailsProfessores = null;
+        document.getElementById('previewArquivoEmailsProfessores').style.display = 'none';
+        document.getElementById('previewPlanilhaEmailsProfessores').style.display = 'none';
+        document.getElementById('excelInputEmailsProfessores').value = '';
+        
+        const btnVincular = document.getElementById('btnVincularEmailsProfessores');
+        if (btnVincular) {
+            btnVincular.disabled = true;
         }
     }
 
@@ -8585,76 +10341,101 @@ class AdminPanel {
 
     // ============ TURMAS ============
 
+    // ============ LOAD TURMAS ============
     async loadTurmas() {
         const contentArea = document.getElementById('contentArea');
         
         try {
-            const { search, eixo, page, limit } = this.filtros.turmas;
+            const { search, eixo, professor, status, page, limit } = this.filtros.turmas;
             
-            // MOSTRAR LOADING
             contentArea.innerHTML = `
                 <div style="text-align: center; padding: 60px;">
-                    <div class="spinner" style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #667eea; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                    <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #667eea; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
                     <p style="color: #6b7280;">Carregando turmas...</p>
                 </div>
                 <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
             `;
 
-            // BUSCAR DADOS REAIS DO BACKEND
-            console.log('📡 Buscando turmas do backend...');
-            const response = await fetch(
-                `${this.apiBase}/turmas?search=${search}&eixo=${eixo}&page=${page}&limit=${limit}`,
-                { 
-                    headers: { 
-                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                        'Content-Type': 'application/json'
-                    } 
-                }
-            );
+            const token = localStorage.getItem('auth_token');
             
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status}`);
+            // 🔥 BUSCAR TURMAS E PROFESSORES EM PARALELO
+            const [turmasResponse, professoresResponse] = await Promise.all([
+                fetch(`${this.apiBase}/turmas?search=${search}&eixo=${eixo}&limit=1000`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${this.apiBase}/usuarios?role=professor&limit=1000`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+            
+            const turmasData = await turmasResponse.json();
+            const professoresData = await professoresResponse.json();
+
+            if (!turmasData.success) throw new Error(turmasData.error || 'Erro ao carregar turmas');
+
+            let todasTurmas = turmasData.turmas || [];
+            this.turmas = todasTurmas; // Guardar todas
+            
+            // 🔥 LISTA COMPLETA DE PROFESSORES
+            const todosProfessores = (professoresData.success && professoresData.usuarios) 
+                ? professoresData.usuarios.map(p => p.nome).sort()
+                : [];
+            
+            // 🔥 CONTAGEM DE TURMAS POR PROFESSOR
+            const contagemPorProfessor = {};
+            todasTurmas.forEach(t => {
+                const prof = t.professor?.nome || 'Sem professor';
+                contagemPorProfessor[prof] = (contagemPorProfessor[prof] || 0) + 1;
+            });
+
+            // 🔥 APLICAR FILTROS LOCAIS
+            let turmasFiltradas = [...todasTurmas];
+            
+            if (professor && professor !== 'todos') {
+                turmasFiltradas = turmasFiltradas.filter(t => t.professor?.nome === professor);
             }
             
-            const data = await response.json();
-            console.log('📦 Dados recebidos:', data);
+            if (status && status !== 'todas') {
+                turmasFiltradas = turmasFiltradas.filter(t => 
+                    status === 'ativas' ? t.ativa === true : t.ativa === false
+                );
+            }
 
-            if (!data.success) throw new Error(data.error || 'Erro ao carregar turmas');
-
-            // ARMAZENAR DADOS NO OBJETO PRINCIPAL
-            this.turmas = data.turmas || [];
-            
-            // BUSCAR PROFESSORES PARA OS SELECTS
-            await this.carregarProfessoresParaSelect();
-
-            // CALCULAR ESTATÍSTICAS REAIS
-            const totalTurmas = this.turmas.length;
-            const turmasAtivas = this.turmas.filter(t => t.ativa === true).length;
-            const turmasInativas = this.turmas.filter(t => t.ativa === false).length;
-            const totalAlunos = this.turmas.reduce((acc, t) => acc + (t.totalAlunos || 0), 0);
-            const totalProvas = this.turmas.reduce((acc, t) => acc + (t.totalProvas || 0), 0);
-            const alunosComAcessibilidade = this.turmas.reduce((acc, t) => acc + (t.alunosComAcessibilidade || 0), 0);
+            // Estatísticas
+            const totalTurmas = turmasFiltradas.length;
+            const turmasAtivas = turmasFiltradas.filter(t => t.ativa === true).length;
+            const turmasInativas = turmasFiltradas.filter(t => t.ativa === false).length;
+            const totalAlunos = turmasFiltradas.reduce((acc, t) => acc + (t.totalAlunos || 0), 0);
+            const totalProvas = turmasFiltradas.reduce((acc, t) => acc + (t.totalProvas || 0), 0);
+            const alunosComAcessibilidade = turmasFiltradas.reduce((acc, t) => acc + (t.alunosComAcessibilidade || 0), 0);
             const mediaAlunosPorTurma = totalTurmas > 0 ? (totalAlunos / totalTurmas).toFixed(1) : 0;
 
-            // RENDERIZAR HTML COMPLETO
+            // Paginação local
+            const inicio = (page - 1) * limit;
+            const fim = inicio + limit;
+            const turmasPaginadas = turmasFiltradas.slice(inicio, fim);
+            const totalPaginas = Math.ceil(turmasFiltradas.length / limit);
+
             contentArea.innerHTML = this.renderTurmasHTML({
                 search, eixo, page, limit,
                 totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, 
                 alunosComAcessibilidade, mediaAlunosPorTurma,
-                pagination: data.pagination,
-                turmas: this.turmas
+                pagination: {
+                    page: page,
+                    limit: limit,
+                    total: turmasFiltradas.length,
+                    pages: totalPaginas
+                },
+                turmas: turmasPaginadas,
+                todosProfessores: todosProfessores,
+                contagemPorProfessor: contagemPorProfessor
             });
 
-            // ATUALIZAR BADGES E CONTADORES
-            this.atualizarBadgesTurmas();
-
-            console.log('✅ Turmas carregadas com sucesso:', this.turmas.length);
+            console.log(`✅ ${turmasFiltradas.length} turmas | ${todosProfessores.length} professores`);
 
         } catch (error) {
             console.error('❌ Erro ao carregar turmas:', error);
-            contentArea.innerHTML = this.renderErroTurmas ? 
-                this.renderErroTurmas(error.message) : 
-                this.renderErroPadrao(error.message);
+            contentArea.innerHTML = this.renderErroPadrao(error.message);
         }
     }
 
@@ -8677,232 +10458,1006 @@ class AdminPanel {
         return this.renderErroPadrao(mensagem);
     }
 
-    // ============ RENDERIZAR HTML DAS TURMAS ============
-    renderTurmasHTML({ search, eixo, totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, alunosComAcessibilidade, mediaAlunosPorTurma, pagination, turmas }) {
+    // ============ RENDERIZAR HTML DAS TURMAS (VERSÃO COMPLETA) ============
+    renderTurmasHTML({ search, eixo, totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, alunosComAcessibilidade, mediaAlunosPorTurma, pagination, turmas, todosProfessores = [], contagemPorProfessor = {} }) {
+        
+        // 🔥 USAR A LISTA COMPLETA DE PROFESSORES
+        const professores = todosProfessores && todosProfessores.length > 0 
+            ? todosProfessores 
+            : [...new Set(turmas.map(t => t.professor?.nome).filter(Boolean))].sort();
+        
+        console.log(`🎓 Professores para o filtro: ${professores.length}`);
+        
+        // Contagem local (fallback)
+        const contagemLocal = { ...contagemPorProfessor };
+        if (Object.keys(contagemLocal).length === 0) {
+            turmas.forEach(t => {
+                const prof = t.professor?.nome || 'Sem professor';
+                contagemLocal[prof] = (contagemLocal[prof] || 0) + 1;
+            });
+        }
+        
+        // Filtros ativos
+        const filtrosAtivos = [];
+        if (search && search.trim()) filtrosAtivos.push({ tipo: 'search', label: 'Busca', valor: search });
+        if (this.filtros.turmas.professor && this.filtros.turmas.professor !== 'todos') filtrosAtivos.push({ tipo: 'professor', label: 'Professor', valor: this.filtros.turmas.professor });
+        if (eixo && eixo !== 'todos') filtrosAtivos.push({ tipo: 'eixo', label: 'Eixo', valor: eixo });
+        if (this.filtros.turmas.status && this.filtros.turmas.status !== 'todas') filtrosAtivos.push({ tipo: 'status', label: 'Status', valor: this.filtros.turmas.status });
+
         return `
-            <div class="turmas-container">
-                <!-- HEADER PROFISSIONAL -->
-                <div class="turmas-header">
-                    <div class="header-left">
-                        <div class="header-icon">
+            <style>
+                /* ============ CONTAINER ============ */
+                .trm-container { padding: 24px; max-width: 1400px; margin: 0 auto; font-family: 'Inter', -apple-system, sans-serif; }
+                
+                /* ============ HEADER ============ */
+                .trm-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 24px;
+                    padding: 32px;
+                    margin-bottom: 24px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.35);
+                    position: relative;
+                    overflow: hidden;
+                }
+                .trm-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -60px;
+                    right: -60px;
+                    width: 240px;
+                    height: 240px;
+                    background: rgba(255,255,255,0.08);
+                    border-radius: 50%;
+                }
+                .trm-header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
+                .trm-header-icon {
+                    width: 72px; height: 72px;
+                    background: rgba(255,255,255,0.18);
+                    border-radius: 20px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 32px; color: white;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.25);
+                }
+                .trm-header-text h1 { color: white; font-size: 28px; font-weight: 700; margin: 0 0 4px; }
+                .trm-header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
+                .trm-header-actions { display: flex; gap: 10px; position: relative; z-index: 2; }
+                .trm-btn-header {
+                    padding: 12px 24px;
+                    border-radius: 40px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex; align-items: center; gap: 8px;
+                    transition: all 0.3s;
+                    border: none;
+                }
+                .trm-btn-header.white { background: white; color: #667eea; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+                .trm-btn-header.white:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
+                .trm-btn-header.transparent {
+                    background: rgba(255,255,255,0.15);
+                    color: white;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    padding: 12px;
+                }
+                .trm-btn-header.transparent:hover { background: rgba(255,255,255,0.25); }
+
+                /* ============ STATS ============ */
+                .trm-stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 20px;
+                    margin-bottom: 24px;
+                }
+                .trm-stat-card {
+                    background: white;
+                    border-radius: 18px;
+                    padding: 22px;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    gap: 18px;
+                    transition: all 0.3s;
+                    border: 1px solid rgba(0,0,0,0.04);
+                    cursor: pointer;
+                }
+                .trm-stat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+                .trm-stat-icon {
+                    width: 56px; height: 56px;
+                    border-radius: 16px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 22px; color: white;
+                    flex-shrink: 0;
+                }
+                .trm-stat-icon.purple { background: linear-gradient(135deg, #667eea, #764ba2); }
+                .trm-stat-icon.green { background: linear-gradient(135deg, #10b981, #059669); }
+                .trm-stat-icon.orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .trm-stat-icon.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .trm-stat-content { flex: 1; min-width: 0; }
+                .trm-stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; font-weight: 500; }
+                .trm-stat-value { display: block; font-size: 28px; font-weight: 700; color: #111827; line-height: 1.1; }
+                .trm-stat-detail { font-size: 11px; color: #9ca3af; margin-top: 4px; display: block; }
+
+                /* ============ FILTROS ============ */
+                .trm-filters-wrapper {
+                    background: white;
+                    border-radius: 24px;
+                    padding: 28px;
+                    margin-bottom: 24px;
+                    box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+                    border: 1px solid rgba(0,0,0,0.04);
+                }
+                .trm-filters-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 24px;
+                    padding-bottom: 20px;
+                    border-bottom: 2px solid #f3f4f6;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+                .trm-filters-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                }
+                .trm-filters-title-icon {
+                    width: 48px; height: 48px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    border-radius: 14px;
+                    display: flex; align-items: center; justify-content: center;
+                    color: white; font-size: 20px;
+                    box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+                }
+                .trm-filters-title h3 { margin: 0; font-size: 18px; color: #111827; font-weight: 700; }
+                .trm-filters-title p { margin: 2px 0 0; font-size: 13px; color: #6b7280; }
+
+                .trm-btn-clear-all {
+                    padding: 10px 20px;
+                    background: #f3f4f6;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    cursor: pointer;
+                    display: flex; align-items: center; gap: 8px;
+                    transition: all 0.3s;
+                }
+                .trm-btn-clear-all:hover {
+                    background: #fee2e2;
+                    color: #dc2626;
+                    transform: translateY(-2px);
+                }
+
+                .trm-filters-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1.5fr 1fr 1.2fr;
+                    gap: 18px;
+                    margin-bottom: 20px;
+                }
+
+                .trm-filter-card {
+                    background: #f9fafb;
+                    border-radius: 16px;
+                    padding: 16px;
+                    border: 2px solid #f3f4f6;
+                    transition: all 0.3s;
+                }
+                .trm-filter-card:focus-within {
+                    border-color: #667eea;
+                    box-shadow: 0 4px 16px rgba(102,126,234,0.12);
+                    background: white;
+                }
+
+                .trm-filter-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: #4b5563;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 10px;
+                }
+                .trm-filter-label i { color: #667eea; font-size: 13px; }
+                .trm-filter-count {
+                    margin-left: auto;
+                    background: #667eea;
+                    color: white;
+                    padding: 2px 8px;
+                    border-radius: 20px;
+                    font-size: 10px;
+                    font-weight: 700;
+                }
+
+                .trm-input-wrapper { position: relative; }
+                .trm-input-wrapper input {
+                    width: 100%;
+                    padding: 12px 40px 12px 42px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 10px;
+                    font-size: 14px;
+                    background: white;
+                    transition: all 0.3s;
+                    font-family: inherit;
+                    color: #111827;
+                }
+                .trm-input-wrapper input:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 0 4px rgba(102,126,234,0.1);
+                }
+                .trm-input-icon {
+                    position: absolute;
+                    left: 14px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    font-size: 14px;
+                    pointer-events: none;
+                }
+                .trm-input-clear {
+                    position: absolute;
+                    right: 10px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    background: #f3f4f6;
+                    border: none;
+                    color: #6b7280;
+                    cursor: pointer;
+                    width: 26px; height: 26px;
+                    border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    transition: all 0.2s;
+                }
+                .trm-input-clear:hover { background: #fee2e2; color: #dc2626; }
+
+                .trm-select-wrapper { position: relative; }
+                .trm-select-wrapper select {
+                    width: 100%;
+                    padding: 12px 40px 12px 42px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 10px;
+                    font-size: 14px;
+                    background: white;
+                    cursor: pointer;
+                    appearance: none;
+                    font-family: inherit;
+                    transition: all 0.3s;
+                    color: #111827;
+                }
+                .trm-select-wrapper select:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 0 4px rgba(102,126,234,0.1);
+                }
+                .trm-select-icon {
+                    position: absolute;
+                    left: 14px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    font-size: 14px;
+                    pointer-events: none;
+                }
+                .trm-select-arrow {
+                    position: absolute;
+                    right: 14px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #9ca3af;
+                    font-size: 12px;
+                    pointer-events: none;
+                }
+
+                .trm-status-buttons {
+                    display: flex;
+                    gap: 4px;
+                    background: white;
+                    padding: 4px;
+                    border-radius: 10px;
+                    border: 2px solid #e5e7eb;
+                }
+                .trm-status-btn {
+                    flex: 1;
+                    padding: 9px 8px;
+                    border: none;
+                    background: transparent;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #6b7280;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    display: flex; align-items: center; justify-content: center;
+                    gap: 5px;
+                    white-space: nowrap;
+                }
+                .trm-status-btn:hover { background: #f3f4f6; color: #111827; }
+                .trm-status-btn.active {
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    box-shadow: 0 2px 8px rgba(102,126,234,0.3);
+                }
+                .trm-status-btn.success.active { background: linear-gradient(135deg, #10b981, #059669); }
+                .trm-status-btn.warning.active { background: linear-gradient(135deg, #f59e0b, #d97706); }
+
+                /* ============ CHIPS ============ */
+                .trm-chips-container {
+                    display: flex;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    padding: 16px;
+                    background: #f9fafb;
+                    border-radius: 14px;
+                    margin-bottom: 16px;
+                    align-items: center;
+                }
+                .trm-chips-label {
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: #6b7280;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .trm-chip {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 8px 8px 8px 14px;
+                    background: white;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 30px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #4b5563;
+                    transition: all 0.3s;
+                }
+                .trm-chip:hover { border-color: #667eea; box-shadow: 0 4px 12px rgba(102,126,234,0.15); }
+                .trm-chip-label {
+                    color: #9ca3af;
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                }
+                .trm-chip-value { color: #111827; font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .trm-chip-remove {
+                    background: #f3f4f6;
+                    border: none;
+                    color: #6b7280;
+                    cursor: pointer;
+                    width: 22px; height: 22px;
+                    border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 10px;
+                    transition: all 0.2s;
+                }
+                .trm-chip-remove:hover { background: #fee2e2; color: #dc2626; transform: rotate(90deg); }
+
+                /* ============ RESULTADOS ============ */
+                .trm-results-bar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding-top: 18px;
+                    border-top: 2px solid #f3f4f6;
+                    flex-wrap: wrap;
+                    gap: 12px;
+                }
+                .trm-results-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-size: 14px;
+                    color: #4b5563;
+                }
+                .trm-results-info i { color: #667eea; font-size: 16px; }
+                .trm-results-info strong { color: #111827; font-weight: 700; font-size: 15px; }
+                .trm-results-total { color: #9ca3af; font-size: 13px; }
+
+                .trm-btn-export {
+                    padding: 10px 20px;
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    display: flex; align-items: center; gap: 8px;
+                    transition: all 0.3s;
+                    box-shadow: 0 4px 12px rgba(16,185,129,0.3);
+                }
+                .trm-btn-export:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,185,129,0.4); }
+
+                /* ============ CARDS DE TURMA ============ */
+                .trm-cards-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 24px;
+                }
+
+                .trm-turma-card {
+                    background: white;
+                    border-radius: 18px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+                    transition: all 0.3s;
+                    border: 1px solid rgba(0,0,0,0.05);
+                    position: relative;
+                }
+                .trm-turma-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.12); }
+                .trm-turma-card-header {
+                    padding: 20px;
+                    color: white;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .trm-turma-card-header::before {
+                    content: '';
+                    position: absolute;
+                    top: -30px; right: -30px;
+                    width: 100px; height: 100px;
+                    background: rgba(255,255,255,0.1);
+                    border-radius: 50%;
+                }
+                .trm-turma-card-header-content { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; }
+                .trm-turma-card-title { font-size: 18px; font-weight: 700; margin: 0; flex: 1; }
+                .trm-turma-status {
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    background: rgba(255,255,255,0.2);
+                    backdrop-filter: blur(10px);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                .trm-turma-status .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+                .trm-turma-status .dot.green { background: #10b981; }
+                .trm-turma-status .dot.red { background: #ef4444; }
+                .trm-turma-codigo {
+                    display: inline-block;
+                    margin-top: 10px;
+                    padding: 4px 12px;
+                    background: rgba(0,0,0,0.15);
+                    border-radius: 30px;
+                    font-size: 11px;
+                    font-family: monospace;
+                }
+
+                .trm-turma-card-body { padding: 20px; }
+                .trm-info-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 12px;
+                    color: #4b5563;
+                    font-size: 14px;
+                }
+                .trm-info-row i { width: 18px; color: #667eea; }
+                .trm-info-row strong { color: #111827; font-weight: 600; }
+
+                .trm-professor-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px;
+                    background: #f9fafb;
+                    border-radius: 12px;
+                    margin: 15px 0;
+                }
+                .trm-professor-avatar {
+                    width: 40px; height: 40px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    color: white; font-weight: 700; font-size: 14px;
+                    flex-shrink: 0;
+                }
+                .trm-professor-details { flex: 1; min-width: 0; }
+                .trm-professor-nome { font-weight: 600; color: #111827; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+                .trm-professor-email { font-size: 11px; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+                .trm-mini-stats {
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 10px;
+                    margin: 15px 0;
+                }
+                .trm-mini-stat {
+                    text-align: center;
+                    padding: 10px 8px;
+                    background: #f9fafb;
+                    border-radius: 10px;
+                }
+                .trm-mini-stat .number { display: block; font-size: 18px; font-weight: 700; color: #111827; }
+                .trm-mini-stat .label { font-size: 10px; color: #6b7280; margin-top: 2px; display: block; }
+
+                .trm-card-footer {
+                    display: flex;
+                    border-top: 1px solid #f3f4f6;
+                }
+                .trm-card-action {
+                    flex: 1;
+                    padding: 14px;
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                    font-size: 12px;
+                    color: #6b7280;
+                    transition: all 0.2s;
+                    border-right: 1px solid #f3f4f6;
+                }
+                .trm-card-action:last-child { border-right: none; }
+                .trm-card-action:hover { background: #f9fafb; color: #667eea; }
+                .trm-card-action.danger:hover { color: #dc2626; background: #fef2f2; }
+                .trm-card-action.primary:hover { color: #3b82f6; background: #eff6ff; }
+
+                /* ============ EMPTY STATE ============ */
+                .trm-empty-state {
+                    grid-column: 1 / -1;
+                    text-align: center;
+                    padding: 80px 40px;
+                    background: white;
+                    border-radius: 20px;
+                    border: 2px dashed #e5e7eb;
+                }
+                .trm-empty-state i { font-size: 64px; color: #d1d5db; margin-bottom: 20px; }
+                .trm-empty-state h3 { color: #374151; margin-bottom: 10px; font-size: 20px; }
+                .trm-empty-state p { color: #6b7280; margin-bottom: 25px; }
+                .trm-btn-create {
+                    padding: 14px 32px;
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    border: none;
+                    border-radius: 40px;
+                    font-weight: 600;
+                    font-size: 14px;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    transition: all 0.3s;
+                    box-shadow: 0 8px 20px rgba(102,126,234,0.35);
+                }
+                .trm-btn-create:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(102,126,234,0.45); }
+
+                /* ============ PAGINAÇÃO ============ */
+                .trm-pagination {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 20px 24px;
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+                    flex-wrap: wrap;
+                    gap: 15px;
+                }
+                .trm-pagination-info { font-size: 13px; color: #6b7280; }
+                .trm-pagination-controls { display: flex; gap: 8px; }
+                .trm-page-btn {
+                    min-width: 40px; height: 40px;
+                    border: 1px solid #e5e7eb;
+                    background: white;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    display: flex; align-items: center; justify-content: center;
+                    color: #4b5563;
+                    font-size: 13px;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                }
+                .trm-page-btn:hover:not(:disabled) { background: #f3f4f6; border-color: #667eea; color: #667eea; }
+                .trm-page-btn.active { background: #667eea; border-color: #667eea; color: white; }
+                .trm-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+                /* ============ RESPONSIVO ============ */
+                @media (max-width: 1200px) {
+                    .trm-filters-grid { grid-template-columns: 1fr 1fr; }
+                    .trm-stats-grid { grid-template-columns: repeat(2, 1fr); }
+                }
+                @media (max-width: 768px) {
+                    .trm-header { flex-direction: column; align-items: flex-start; padding: 24px; }
+                    .trm-header-actions { width: 100%; }
+                    .trm-btn-header { flex: 1; justify-content: center; }
+                    .trm-stats-grid { grid-template-columns: 1fr; }
+                    .trm-filters-grid { grid-template-columns: 1fr; }
+                    .trm-filters-header { flex-direction: column; align-items: flex-start; }
+                    .trm-btn-clear-all { width: 100%; justify-content: center; }
+                    .trm-cards-grid { grid-template-columns: 1fr; }
+                    .trm-results-bar { flex-direction: column; align-items: stretch; }
+                    .trm-btn-export { width: 100%; justify-content: center; }
+                    .trm-pagination { flex-direction: column; align-items: stretch; }
+                    .trm-pagination-controls { justify-content: center; }
+                }
+            </style>
+
+            <div class="trm-container">
+                <!-- HEADER -->
+                <div class="trm-header">
+                    <div class="trm-header-left">
+                        <div class="trm-header-icon">
                             <i class="fas fa-school"></i>
                         </div>
-                        <div class="header-text">
+                        <div class="trm-header-text">
                             <h1>Gerenciar Turmas</h1>
-                            <p>Gerencie todas as turmas do sistema, professores e alunos matriculados</p>
+                            <p>Visualize e gerencie todas as turmas do sistema</p>
                         </div>
                     </div>
-                    
-                    <div class="header-actions">
-                        <button class="btn-header btn-refresh" onclick="admin.atualizarTurmas()" title="Atualizar dados">
+                    <div class="trm-header-actions">
+                        <button class="trm-btn-header transparent" onclick="admin.atualizarTurmas()" title="Atualizar">
                             <i class="fas fa-sync-alt"></i>
                         </button>
-                        <button class="btn-header btn-primary" onclick="admin.abrirModalTurma()">
+                        <button class="trm-btn-header white" onclick="admin.abrirModalTurma()">
                             <i class="fas fa-plus-circle"></i>
                             <span>Nova Turma</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- CARDS DE ESTATÍSTICAS COM DADOS REAIS -->
-                <div class="stats-grid" id="statsTurmas">
-                    <div class="stat-card primary" onclick="admin.filtrarPorStatus('todas')">
-                        <div class="stat-icon">
-                            <i class="fas fa-school"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Total de Turmas</span>
-                            <span class="stat-value" id="totalTurmas">${totalTurmas}</span>
-                            <span class="stat-detail" id="turmasAtivas">${turmasAtivas} ativas • ${turmasInativas} inativas</span>
+                <!-- STATS -->
+                <div class="trm-stats-grid">
+                    <div class="trm-stat-card" onclick="admin.filtrarPorStatus('todas')">
+                        <div class="trm-stat-icon purple"><i class="fas fa-school"></i></div>
+                        <div class="trm-stat-content">
+                            <span class="trm-stat-label">Total de Turmas</span>
+                            <span class="trm-stat-value">${totalTurmas}</span>
+                            <span class="trm-stat-detail">${turmasAtivas} ativas • ${turmasInativas} inativas</span>
                         </div>
                     </div>
-
-                    <div class="stat-card success" onclick="admin.filtrarPorStatus('ativas')">
-                        <div class="stat-icon">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Turmas Ativas</span>
-                            <span class="stat-value" id="turmasAtivasCount">${turmasAtivas}</span>
-                            <span class="stat-detail">Clique para filtrar</span>
+                    <div class="trm-stat-card" onclick="admin.filtrarPorStatus('ativas')">
+                        <div class="trm-stat-icon green"><i class="fas fa-check-circle"></i></div>
+                        <div class="trm-stat-content">
+                            <span class="trm-stat-label">Turmas Ativas</span>
+                            <span class="trm-stat-value">${turmasAtivas}</span>
+                            <span class="trm-stat-detail">Clique para filtrar</span>
                         </div>
                     </div>
-
-                    <div class="stat-card warning" onclick="admin.filtrarPorStatus('inativas')">
-                        <div class="stat-icon">
-                            <i class="fas fa-pause-circle"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Turmas Inativas</span>
-                            <span class="stat-value" id="turmasInativasCount">${turmasInativas}</span>
-                            <span class="stat-detail">Clique para filtrar</span>
+                    <div class="trm-stat-card" onclick="admin.filtrarPorStatus('inativas')">
+                        <div class="trm-stat-icon orange"><i class="fas fa-pause-circle"></i></div>
+                        <div class="trm-stat-content">
+                            <span class="trm-stat-label">Turmas Inativas</span>
+                            <span class="trm-stat-value">${turmasInativas}</span>
+                            <span class="trm-stat-detail">Clique para filtrar</span>
                         </div>
                     </div>
-
-                    <div class="stat-card info" onclick="admin.filtrarPorAcessibilidade()">
-                        <div class="stat-icon">
-                            <i class="fas fa-wheelchair"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Acessibilidade</span>
-                            <span class="stat-value" id="alunosAcessibilidade">${alunosComAcessibilidade}</span>
-                            <span class="stat-detail">alunos com necessidades</span>
+                    <div class="trm-stat-card" onclick="admin.filtrarPorAcessibilidade()">
+                        <div class="trm-stat-icon blue"><i class="fas fa-wheelchair"></i></div>
+                        <div class="trm-stat-content">
+                            <span class="trm-stat-label">Acessibilidade</span>
+                            <span class="trm-stat-value">${alunosComAcessibilidade}</span>
+                            <span class="trm-stat-detail">alunos com necessidades</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- BARRA DE FILTROS -->
-                <div class="filters-card">
-                    <div class="filters-header">
-                        <div class="filters-title">
-                            <i class="fas fa-sliders-h"></i>
-                            <h3>Filtros e Busca</h3>
+                <!-- FILTROS -->
+                <div class="trm-filters-wrapper">
+                    <div class="trm-filters-header">
+                        <div class="trm-filters-title">
+                            <div class="trm-filters-title-icon">
+                                <i class="fas fa-sliders-h"></i>
+                            </div>
+                            <div>
+                                <h3>Filtros de Busca</h3>
+                                <p>Refine sua busca por professor, eixo ou status</p>
+                            </div>
                         </div>
-                        <span class="filters-badge" id="resultadosEncontrados">${turmas.length} turmas encontradas</span>
+                        <button class="trm-btn-clear-all" onclick="admin.limparFiltrosTurmas()">
+                            <i class="fas fa-eraser"></i>
+                            <span>Limpar Tudo</span>
+                        </button>
                     </div>
-                    
-                    <div class="filters-grid">
-                        <div class="filter-group">
-                            <label><i class="fas fa-search"></i> Buscar turma</label>
-                            <div class="input-wrapper">
-                                <input type="text" id="searchTurmas" 
-                                    placeholder="Nome da turma, disciplina ou código..." 
-                                    value="${search}" 
-                                    onkeyup="admin.filtrarTurmas()"
+
+                    <div class="trm-filters-grid">
+                        <!-- BUSCA -->
+                        <div class="trm-filter-card">
+                            <div class="trm-filter-label">
+                                <i class="fas fa-search"></i>
+                                <span>Busca Rápida</span>
+                            </div>
+                            <div class="trm-input-wrapper">
+                                <i class="fas fa-search trm-input-icon"></i>
+                                <input type="text" 
+                                    id="searchTurmas" 
+                                    placeholder="Nome, código, disciplina..." 
+                                    value="${search || ''}"
+                                    oninput="admin.filtrarTurmasDebounce(this.value)"
                                     autocomplete="off">
-                                <i class="fas fa-search input-icon"></i>
                                 ${search ? `
-                                    <button class="input-clear" onclick="admin.limparBuscaTurmas()">
+                                    <button class="trm-input-clear" onclick="admin.limparBuscaTurmas()">
                                         <i class="fas fa-times"></i>
                                     </button>
                                 ` : ''}
                             </div>
                         </div>
-                        
-                        <div class="filter-group">
-                            <label><i class="fas fa-sitemap"></i> Eixo</label>
-                            <select id="filterEixo" class="filter-select" onchange="admin.filtrarTurmas()">
-                                <option value="todos" ${eixo === 'todos' ? 'selected' : ''}>Todos os eixos</option>
-                                <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
-                                <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
-                                <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
-                                <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
-                                <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
-                                <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
-                                <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
-                            </select>
+
+                        <!-- PROFESSOR -->
+                        <div class="trm-filter-card">
+                            <div class="trm-filter-label">
+                                <i class="fas fa-chalkboard-teacher"></i>
+                                <span>Professor</span>
+                                ${professores.length > 0 ? `<span class="trm-filter-count">${professores.length}</span>` : ''}
+                            </div>
+                            <div class="trm-select-wrapper">
+                                <i class="fas fa-user-tie trm-select-icon"></i>
+                                <select id="filterProfessor" onchange="admin.filtrarPorProfessor()">
+                                    <option value="todos">Todos os professores</option>
+                                    ${professores.map(p => {
+                                        const count = contagemLocal[p] || 0;
+                                        const selected = this.filtros.turmas.professor === p ? 'selected' : '';
+                                        const countText = count > 0 ? ` (${count} ${count === 1 ? 'turma' : 'turmas'})` : '';
+                                        return `<option value="${p}" ${selected}>${p}${countText}</option>`;
+                                    }).join('')}
+                                </select>
+                                <i class="fas fa-chevron-down trm-select-arrow"></i>
+                            </div>
                         </div>
-                        
-                        <div class="filter-group">
-                            <label><i class="fas fa-circle"></i> Status</label>
-                            <select id="filterStatusTurma" class="filter-select" onchange="admin.filtrarTurmas()">
-                                <option value="todos" selected>Todas</option>
-                                <option value="ativas">Ativas</option>
-                                <option value="inativas">Inativas</option>
-                            </select>
+
+                        <!-- EIXO -->
+                        <div class="trm-filter-card">
+                            <div class="trm-filter-label">
+                                <i class="fas fa-sitemap"></i>
+                                <span>Eixo</span>
+                            </div>
+                            <div class="trm-select-wrapper">
+                                <i class="fas fa-book trm-select-icon"></i>
+                                <select id="filterEixo" onchange="admin.filtrarTurmas()">
+                                    <option value="todos">Todos os eixos</option>
+                                    <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
+                                    <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
+                                    <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
+                                    <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
+                                    <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
+                                    <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
+                                    <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
+                                </select>
+                                <i class="fas fa-chevron-down trm-select-arrow"></i>
+                            </div>
                         </div>
-                        
-                        <div class="filter-actions">
-                            <button class="btn-filter" onclick="admin.limparFiltrosTurmas()">
-                                <i class="fas fa-eraser"></i> Limpar
-                            </button>
-                            <button class="btn-filter btn-export" onclick="admin.exportarTurmasCSV()">
-                                <i class="fas fa-download"></i> Exportar
-                            </button>
+
+                        <!-- STATUS -->
+                        <div class="trm-filter-card">
+                            <div class="trm-filter-label">
+                                <i class="fas fa-circle"></i>
+                                <span>Status</span>
+                            </div>
+                            <div class="trm-status-buttons">
+                                <button class="trm-status-btn ${!this.filtros.turmas.status || this.filtros.turmas.status === 'todas' ? 'active' : ''}" 
+                                    onclick="admin.filtrarPorStatus('todas')">
+                                    <i class="fas fa-list"></i> Todas
+                                </button>
+                                <button class="trm-status-btn success ${this.filtros.turmas.status === 'ativas' ? 'active' : ''}" 
+                                    onclick="admin.filtrarPorStatus('ativas')">
+                                    <i class="fas fa-check"></i> Ativas
+                                </button>
+                                <button class="trm-status-btn warning ${this.filtros.turmas.status === 'inativas' ? 'active' : ''}" 
+                                    onclick="admin.filtrarPorStatus('inativas')">
+                                    <i class="fas fa-pause"></i> Inativas
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- TAGS DE FILTROS ATIVOS -->
-                    ${this.gerarTagsFiltrosAtivos(search, eixo)}
+                    <!-- CHIPS -->
+                    <div class="trm-chips-container" style="${filtrosAtivos.length === 0 ? 'display:none;' : ''}">
+                        <span class="trm-chips-label"><i class="fas fa-filter"></i> Filtros ativos:</span>
+                        ${filtrosAtivos.map(f => `
+                            <div class="trm-chip">
+                                <span class="trm-chip-label">${f.label}:</span>
+                                <span class="trm-chip-value">${f.valor}</span>
+                                <button class="trm-chip-remove" onclick="admin.removerFiltro('${f.tipo}')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- RESULTADOS -->
+                    <div class="trm-results-bar">
+                        <div class="trm-results-info">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Mostrando <strong>${turmas.length}</strong> ${turmas.length === 1 ? 'turma' : 'turmas'}</span>
+                            ${pagination && pagination.total ? `<span class="trm-results-total">de <strong>${pagination.total}</strong> no total</span>` : ''}
+                        </div>
+                        <button class="trm-btn-export" onclick="admin.exportarTurmasCSV()">
+                            <i class="fas fa-download"></i>
+                            <span>Exportar CSV</span>
+                        </button>
+                    </div>
                 </div>
 
-                <!-- CARDS DAS TURMAS -->
-                <div class="turmas-cards-grid" id="turmasCardsGrid">
+                <!-- CARDS DE TURMAS -->
+                <div class="trm-cards-grid" id="turmasCardsGrid">
                     ${this.gerarCardsTurmasProfissional(turmas)}
                 </div>
 
                 <!-- PAGINAÇÃO -->
-                ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'turmas') : ''}
+                ${pagination && pagination.pages > 1 ? `
+                    <div class="trm-pagination">
+                        <div class="trm-pagination-info">
+                            Página ${pagination.page} de ${pagination.pages} • ${pagination.total} turmas no total
+                        </div>
+                        <div class="trm-pagination-controls">
+                            <button class="trm-page-btn" ${pagination.page === 1 ? 'disabled' : ''} 
+                                onclick="admin.mudarPagina('turmas', ${pagination.page - 1})">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            ${Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                                let pageNum;
+                                if (pagination.pages <= 5) {
+                                    pageNum = i + 1;
+                                } else if (pagination.page <= 3) {
+                                    pageNum = i + 1;
+                                } else if (pagination.page >= pagination.pages - 2) {
+                                    pageNum = pagination.pages - 4 + i;
+                                } else {
+                                    pageNum = pagination.page - 2 + i;
+                                }
+                                return `
+                                    <button class="trm-page-btn ${pageNum === pagination.page ? 'active' : ''}" 
+                                        onclick="admin.mudarPagina('turmas', ${pageNum})">
+                                        ${pageNum}
+                                    </button>
+                                `;
+                            }).join('')}
+                            <button class="trm-page-btn" ${pagination.page === pagination.pages ? 'disabled' : ''} 
+                                onclick="admin.mudarPagina('turmas', ${pagination.page + 1})">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                ` : ''}
             </div>
-
-            <style>
-                .turmas-container { padding: 24px; max-width: 1400px; margin: 0 auto; font-family: 'Inter', -apple-system, sans-serif; }
-                .turmas-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; padding: 30px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3); position: relative; overflow: hidden; }
-                .turmas-header::before { content: ''; position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255,255,255,0.1); border-radius: 50%; }
-                .turmas-header::after { content: ''; position: absolute; bottom: -80px; left: -80px; width: 300px; height: 300px; background: rgba(255,255,255,0.05); border-radius: 50%; }
-                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
-                .header-icon { width: 70px; height: 70px; background: rgba(255,255,255,0.15); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: white; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
-                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
-                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
-                .btn-header { padding: 12px 24px; border-radius: 40px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s; border: none; position: relative; z-index: 2; }
-                .btn-header.btn-primary { background: white; color: #667eea; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
-                .btn-header.btn-refresh { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(5px); padding: 12px; }
-                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
-                .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
-                .stat-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; transition: all 0.3s; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; }
-                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
-                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
-                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
-                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
-                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-                .stat-icon { width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; }
-                .stat-content { flex: 1; }
-                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
-                .stat-detail { font-size: 11px; color: #9ca3af; }
-                .filters-card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05); }
-                .filters-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f0f0; }
-                .filters-title { display: flex; align-items: center; gap: 10px; }
-                .filters-title i { font-size: 18px; color: #667eea; background: #f0f4ff; padding: 8px; border-radius: 10px; }
-                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
-                .filters-badge { background: #667eea; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
-                .filters-grid { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; margin-bottom: 20px; }
-                .filter-group { display: flex; flex-direction: column; gap: 5px; }
-                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
-                .input-wrapper { position: relative; }
-                .input-wrapper input { width: 100%; padding: 10px 35px 10px 40px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; transition: all 0.3s; }
-                .input-wrapper input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 4px rgba(102,126,234,0.1); }
-                .input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px; }
-                .input-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #9ca3af; cursor: pointer; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
-                .filter-select { width: 100%; padding: 10px 15px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px; background: white; cursor: pointer; }
-                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
-                .btn-filter { padding: 10px 20px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s; background: #f3f4f6; color: #4b5563; white-space: nowrap; }
-                .btn-filter:hover { background: #e5e7eb; }
-                .btn-filter.btn-export { background: #10b981; color: white; }
-                .btn-filter.btn-export:hover { background: #059669; }
-                .active-filters { margin-top: 15px; padding: 15px; background: #f9fafb; border-radius: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-                .active-filters-label { font-size: 12px; color: #6b7280; font-weight: 500; }
-                .filter-tags { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
-                .filter-tag { background: white; border: 1px solid #e5e7eb; border-radius: 30px; padding: 4px 12px; font-size: 12px; display: flex; align-items: center; gap: 5px; }
-                .filter-tag i { color: #9ca3af; cursor: pointer; }
-                .filter-tag i:hover { color: #ef4444; }
-                .clear-all-filters { background: none; border: none; color: #667eea; font-size: 12px; font-weight: 600; cursor: pointer; }
-                .turmas-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }
-                .pagination-professional { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-                .pagination-info { font-size: 13px; color: #6b7280; }
-                .pagination-controls { display: flex; gap: 8px; }
-                .btn-page { width: 38px; height: 38px; border: 1px solid #e5e7eb; background: white; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #4b5563; transition: all 0.2s; }
-                .btn-page:hover:not(:disabled) { background: #f3f4f6; border-color: #667eea; color: #667eea; }
-                .btn-page.active { background: #667eea; border-color: #667eea; color: white; }
-                .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
-                .page-ellipsis { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; color: #9ca3af; }
-                .empty-state { grid-column: 1 / -1; text-align: center; padding: 60px; background: white; border-radius: 16px; }
-                .empty-state i { font-size: 64px; color: #d1d5db; margin-bottom: 20px; }
-                .empty-state h3 { color: #374151; margin-bottom: 10px; }
-                .empty-state p { color: #6b7280; margin-bottom: 20px; }
-                .btn-empty-state { padding: 12px 30px; background: #667eea; color: white; border: none; border-radius: 40px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
-                .btn-empty-state:hover { background: #5a67d8; transform: translateY(-2px); }
-                .error-container { text-align: center; padding: 60px; background: white; border-radius: 16px; }
-                .error-container i { font-size: 48px; color: #dc3545; margin-bottom: 20px; }
-                .error-container h3 { color: #721c24; margin-bottom: 10px; }
-                .error-container p { color: #6c757d; margin-bottom: 20px; }
-                .error-container button { background: #667eea; color: white; border: none; padding: 10px 30px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-                @media (max-width: 1024px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .filters-grid { grid-template-columns: 1fr; } }
-                @media (max-width: 768px) { .turmas-header { flex-direction: column; align-items: flex-start; } .header-actions { width: 100%; display: flex; gap: 10px; } .btn-header { flex: 1; } .stats-grid { grid-template-columns: 1fr; } .turmas-cards-grid { grid-template-columns: 1fr; } .pagination-professional { flex-direction: column; gap: 15px; } }
-            </style>
         `;
+    }
+
+    // ============ GERAR CHIPS DE FILTROS ATIVOS ============
+    gerarChipsFiltrosAtivos(search, eixo, professores) {
+        const chips = [];
+        
+        if (search && search.trim()) {
+            chips.push(`
+                <div class="filter-chip">
+                    <span class="filter-chip-label">Busca:</span>
+                    <span class="filter-chip-value">"${search}"</span>
+                    <button class="filter-chip-remove" onclick="admin.limparBuscaTurmas()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+        }
+        
+        if (this.filtros.turmas.professor && this.filtros.turmas.professor !== 'todos') {
+            chips.push(`
+                <div class="filter-chip">
+                    <span class="filter-chip-label">Professor:</span>
+                    <span class="filter-chip-value">${this.filtros.turmas.professor}</span>
+                    <button class="filter-chip-remove" onclick="admin.removerFiltroProfessor()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+        }
+        
+        if (eixo && eixo !== 'todos') {
+            const eixoLabels = { 
+                'natureza': '🌿 Natureza', 
+                'humanas': '📜 Humanas', 
+                'linguagens': '📚 Linguagens', 
+                'desenvolvimento': '💻 Desenvolvimento', 
+                'gestao': '📊 Gestão', 
+                'turismo': '✈️ Turismo', 
+                'ambiente': '🌱 Ambiente' 
+            };
+            chips.push(`
+                <div class="filter-chip">
+                    <span class="filter-chip-label">Eixo:</span>
+                    <span class="filter-chip-value">${eixoLabels[eixo] || eixo}</span>
+                    <button class="filter-chip-remove" onclick="admin.removerFiltroEixo()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+        }
+        
+        if (this.filtros.turmas.status && this.filtros.turmas.status !== 'todas') {
+            const statusLabel = this.filtros.turmas.status === 'ativas' ? '✅ Ativas' : '⏸️ Inativas';
+            chips.push(`
+                <div class="filter-chip">
+                    <span class="filter-chip-label">Status:</span>
+                    <span class="filter-chip-value">${statusLabel}</span>
+                    <button class="filter-chip-remove" onclick="admin.removerFiltroStatus()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+        }
+        
+        if (chips.length === 0) {
+            return '<span style="color: #9ca3af; font-size: 13px;"><i class="fas fa-info-circle"></i> Nenhum filtro ativo</span>';
+        }
+        
+        return chips.join('');
+    }
+
+    // ============ REMOVER FILTRO ESPECÍFICO ============
+    removerFiltro(tipo) {
+        if (tipo === 'search') {
+            this.filtros.turmas.search = '';
+        } else if (tipo === 'professor') {
+            this.filtros.turmas.professor = 'todos';
+        } else if (tipo === 'eixo') {
+            this.filtros.turmas.eixo = 'todos';
+        } else if (tipo === 'status') {
+            this.filtros.turmas.status = 'todas';
+        }
+        this.filtros.turmas.page = 1;
+        this.loadTurmas();
+    }
+
+    // ============ FILTRAR POR PROFESSOR ============
+    filtrarPorProfessor() {
+        const professor = document.getElementById('filterProfessor')?.value || 'todos';
+        this.filtros.turmas.professor = professor;
+        this.filtros.turmas.page = 1;
+        this.loadTurmas();
+    }
+
+    // ============ FILTRAR TURMAS COM DEBOUNCE ============
+    filtrarTurmasDebounce(valor) {
+        clearTimeout(this._debounceBuscaTurmas);
+        this._debounceBuscaTurmas = setTimeout(() => {
+            this.filtros.turmas.search = valor;
+            this.filtros.turmas.page = 1;
+            this.loadTurmas();
+        }, 500);
+    }
+
+    // ============ LIMPAR BUSCA ============
+    limparBuscaTurmas() {
+        this.filtros.turmas.search = '';
+        this.filtros.turmas.page = 1;
+        this.loadTurmas();
+    }
+
+    // ============ FILTRAR POR STATUS ============
+    filtrarPorStatus(status) {
+        this.filtros.turmas.status = status || 'todas';
+        this.filtros.turmas.page = 1;
+        this.loadTurmas();
+    }
+
+    // ============ LIMPAR TODOS OS FILTROS ============
+    limparFiltrosTurmas() {
+        this.filtros.turmas = { 
+            search: '', 
+            eixo: 'todos', 
+            professor: 'todos',
+            status: 'todas', 
+            page: 1, 
+            limit: 10 
+        };
+        this.loadTurmas();
     }
 
     // ============ GERAR CARDS DAS TURMAS COM BOTÕES CORRIGIDOS ============
@@ -11071,30 +13626,32 @@ class AdminPanel {
 
     // ============ LIMPAR FILTROS ============
     limparFiltrosTurmas() {
-        this.filtros.turmas = { search: '', eixo: 'todos', page: 1, limit: 10 };
+        this.filtros.turmas = { 
+            search: '', 
+            eixo: 'todos', 
+            professor: 'todos',
+            status: 'todas', 
+            page: 1, 
+            limit: 10 
+        };
         
+        // Limpar campos visuais
         const searchInput = document.getElementById('searchTurmas');
         const eixoSelect = document.getElementById('filterEixo');
-        const statusSelect = document.getElementById('filterStatusTurma');
+        const professorSelect = document.getElementById('filterProfessor');
         
         if (searchInput) searchInput.value = '';
         if (eixoSelect) eixoSelect.value = 'todos';
-        if (statusSelect) statusSelect.value = 'todos';
+        if (professorSelect) professorSelect.value = 'todos';
         
         this.loadTurmas();
     }
 
     // ============ FILTRAR POR STATUS ============
     filtrarPorStatus(status) {
-        const statusSelect = document.getElementById('filterStatusTurma');
-        if (statusSelect) {
-            if (status === 'ativas' || status === 'inativas') {
-                statusSelect.value = status;
-            } else {
-                statusSelect.value = 'todos';
-            }
-        }
-        this.filtrarTurmas();
+        this.filtros.turmas.status = status || 'todas';
+        this.filtros.turmas.page = 1;
+        this.loadTurmas();
     }
 
     // ============ FILTRAR POR ACESSIBILIDADE ============

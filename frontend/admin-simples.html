@@ -8212,9 +8212,7 @@
                 const tipo = document.getElementById('filtroTipoProva')?.value || 'todas';
                 
                 const agora = new Date();
-                
-                console.log('Filtrando provas. Total:', this.provas.length);
-                
+                                
                 const filtradas = this.provas.filter(p => {
                     // Nome do professor para busca
                     let nomeProfessor = '';

@@ -11285,9 +11285,7 @@ app.get('/api/admin/usuarios-online', authenticateToken, isSuperAdmin, async (re
 app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
         const { role, search, status, turma, page = 1, limit = 10 } = req.query;
-        
-        console.log(`📋 Admin ${req.userId} listando usuários - Role: ${role}, Status: ${status}, Turma: ${turma}, Search: ${search}, Page: ${page}`);
-        
+                
         let query = {};
         
         // 🔥 FILTRAR POR ROLE
@@ -11323,9 +11321,7 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
             ];
             console.log(`   🔍 Buscando por: "${search}"`);
         }
-        
-        console.log(`   📝 Query final:`, JSON.stringify(query, null, 2));
-        
+                
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
         const [usuarios, total] = await Promise.all([
@@ -11368,8 +11364,6 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
             qrCodeUsuarioTipo: user.qrCodeUsuarioTipo || null
         }));
         
-        console.log(`✅ ${usuariosFormatados.length} usuários encontrados (total: ${total})`);
-        console.log(`   📱 Usuários com QR Code: ${usuariosFormatados.filter(u => u.qrCodeUsuario).length}`);
         
         res.json({
             success: true,
