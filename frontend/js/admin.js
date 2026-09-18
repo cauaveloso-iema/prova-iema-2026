@@ -12402,7 +12402,7 @@ class AdminPanel {
         }
     }
     
-    // ============ ABRIR MODAL TURMA (VERSÃO FINAL - FUNCIONA EM AMBOS OS MENUS) ============
+    // ============ ABRIR MODAL TURMA (VERSÃO COM CARREGAMENTO DE PROFESSORES) ============
     abrirModalTurma(param1 = null, param2 = null) {
         console.log('📝 Abrindo modal turma. Parâmetros:', { param1, param2 });
         
@@ -12424,71 +12424,39 @@ class AdminPanel {
         
         // ===== CASO 1: MENU DE CURSOS =====
         if (isMenuCursos) {
-            console.log('🔍 Modo: Edição no menu de Cursos');
-            
-            // No menu de Cursos, os parâmetros podem vir de duas formas:
-            // Forma 1: (cursoId, turmaId) - quando vem do botão "Nova Turma"
-            // Forma 2: (turmaId, cursoId) - quando vem do botão "Editar" (parâmetros trocados)
-            
-            // Tentativa 1: Assumir que param1 é cursoId e param2 é turmaId
             if (param1 && param2) {
-                // Verificar se param1 é um curso válido
                 const possivelCurso = this.cursos?.find(c => c._id === param1 || c.id === param1);
-                
                 if (possivelCurso) {
-                    // Caso: (cursoId, turmaId)
                     cursoId = param1;
                     turmaId = param2;
-                    console.log('✅ Formato (cursoId, turmaId) detectado');
                 } else {
-                    // Se param1 não é curso, provavelmente é (turmaId, cursoId)
                     cursoId = param2;
                     turmaId = param1;
-                    console.log('✅ Formato (turmaId, cursoId) detectado (parâmetros trocados)');
                 }
             } else if (param1 && !param2) {
-                // Apenas um parâmetro - pode ser cursoId (nova turma) ou turmaId (edição direta)
                 const possivelCurso = this.cursos?.find(c => c._id === param1 || c.id === param1);
-                
                 if (possivelCurso) {
-                    // É um cursoId - criar nova turma
                     cursoId = param1;
-                    turmaId = null;
-                    console.log('✅ Nova turma no curso:', possivelCurso.nome);
                 } else {
-                    // É um turmaId - editar turma existente
                     turmaId = param1;
-                    cursoId = null;
-                    console.log('✅ Editar turma com ID:', turmaId);
                 }
             }
             
-            // Buscar o curso se temos cursoId
             if (cursoId && this.cursos) {
                 curso = this.cursos.find(c => c._id === cursoId || c.id === cursoId);
-                if (curso) {
-                    console.log('✅ Curso encontrado:', curso.nome);
-                    this.cursoAtual = curso;
-                }
+                if (curso) this.cursoAtual = curso;
             }
             
-            // Buscar a turma
             if (turmaId) {
-                // Primeiro: procurar dentro do curso (se temos o curso)
                 if (curso && curso.turmas) {
                     turma = curso.turmas.find(t => t._id === turmaId);
-                    if (turma) {
-                        console.log('✅ Turma encontrada no curso:', turma.codigo);
-                    }
                 }
                 
-                // Segundo: se não encontrou, procurar em todos os cursos
                 if (!turma && this.cursos) {
                     for (const c of this.cursos) {
                         if (c.turmas) {
                             turma = c.turmas.find(t => t._id === turmaId);
                             if (turma) {
-                                console.log('✅ Turma encontrada no curso:', c.nome);
                                 curso = c;
                                 this.cursoAtual = curso;
                                 break;
@@ -12496,57 +12464,28 @@ class AdminPanel {
                         }
                     }
                 }
-                
-                // Terceiro: procurar em this.turmas (fallback)
-                if (!turma && this.turmas) {
-                    turma = this.turmas.find(t => t.id === turmaId || t._id === turmaId);
-                    if (turma) {
-                        console.log('✅ Turma encontrada em this.turmas (fallback)');
-                    }
-                }
             }
         }
         
         // ===== CASO 2: MENU DE TURMAS =====
         if (isMenuTurmas) {
-            console.log('🔍 Modo: Edição no menu de Turmas');
-            
-            // No menu de Turmas, o primeiro parâmetro é sempre o ID da turma
             turmaId = param1 || param2;
             
             if (turmaId && this.turmas) {
                 turma = this.turmas.find(t => t.id === turmaId || t._id === turmaId);
-                
-                if (turma) {
-                    console.log('✅ Turma encontrada em this.turmas:', turma.nome || turma.codigo);
-                } else {
-                    console.log('⚠️ Turma não encontrada em this.turmas');
-                }
             }
         }
         
-        // ===== CASO 3: CRIAÇÃO DE NOVA TURMA (sem IDs) =====
+        // ===== CASO 3: CRIAÇÃO =====
         if (!param1 && !param2) {
-            console.log('➕ Criando nova turma');
             turma = null;
-            curso = null;
-            turmaId = null;
-            cursoId = null;
-        }
-        
-        // ===== VERIFICAÇÃO FINAL =====
-        if (turmaId && !turma) {
-            console.error('❌ Turma não encontrada em nenhum lugar');
-            console.log('📊 IDs disponíveis em this.turmas:', this.turmas?.map(t => ({ id: t.id, nome: t.nome })));
-            this.showToast('❌ Turma não encontrada', 'error');
-            return;
         }
         
         // ===== RENDERIZAR MODAL =====
         this.renderizarModalTurma(turma, cursoId, turmaId);
     }
 
-    // ============ RENDERIZAR MODAL TURMA (MENU DE TURMAS) - VERSÃO MELHORADA ============
+    // ============ RENDERIZAR MODAL TURMA (COM SELECT VAZIO INICIALMENTE) ============
     renderizarModalTurma(turma, cursoId, turmaId) {
         const modalBody = document.getElementById('modalBody');
         if (!modalBody) {
@@ -12554,14 +12493,13 @@ class AdminPanel {
             return;
         }
         
-        // Detectar qual menu
         const isMenuCursos = window.location.hash.includes('cursos') || 
                             document.querySelector('.cursos-container') !== null;
         
         let html = '';
         
         if (isMenuCursos) {
-            // HTML para menu de Cursos (já existente)
+            // HTML para menu de Cursos (mantém como está)
             html = `
                 <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
                     <div style="padding: 20px;">
@@ -12592,10 +12530,10 @@ class AdminPanel {
                 </form>
             `;
         } else {
-            // ===== HTML PARA MENU DE TURMAS - VERSÃO MELHORADA =====
+            // 🔥 HTML PARA MENU DE TURMAS - SELECT VAZIO (será preenchido via JS)
             html = `
                 <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
-                    <!-- HEADER DO MODAL COM GRADIENTE -->
+                    <!-- HEADER -->
                     <div style="background: linear-gradient(135deg, #667eea, #764ba2); margin: -20px -20px 20px -20px; padding: 25px 30px; border-radius: 12px 12px 0 0; color: white;">
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
@@ -12611,10 +12549,9 @@ class AdminPanel {
                     </div>
 
                     <div style="padding: 10px 20px 20px 20px;">
-                        <!-- CARD DE INFORMAÇÕES -->
                         <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                             
-                            <!-- Nome da Turma -->
+                            <!-- Nome -->
                             <div class="form-group" style="margin-bottom: 20px;">
                                 <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
                                     <i class="fas fa-tag" style="color: #667eea;"></i>
@@ -12625,14 +12562,10 @@ class AdminPanel {
                                     placeholder="Ex: Turma A - 2024"
                                     style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; transition: all 0.3s;"
                                     required>
-                                <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;">
-                                    <i class="fas fa-info-circle"></i> Nome que identificará a turma
-                                </div>
                             </div>
 
-                            <!-- Linha: Disciplina e Eixo -->
+                            <!-- Disciplina + Eixo -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-                                <!-- Disciplina -->
                                 <div class="form-group">
                                     <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
                                         <i class="fas fa-book" style="color: #667eea;"></i>
@@ -12641,11 +12574,9 @@ class AdminPanel {
                                     <input type="text" id="turmaDisciplina" class="form-control" 
                                         value="${turma?.disciplina || ''}" 
                                         placeholder="Ex: Matemática"
-                                        style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; transition: all 0.3s;"
+                                        style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px;"
                                         required>
                                 </div>
-                                
-                                <!-- Eixo -->
                                 <div class="form-group">
                                     <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
                                         <i class="fas fa-sitemap" style="color: #667eea;"></i>
@@ -12666,7 +12597,7 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <!-- Professor -->
+                            <!-- 🔥 PROFESSOR RESPONSÁVEL - SELECT VAZIO (será preenchido via JS) -->
                             <div class="form-group" style="margin-bottom: 20px;">
                                 <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
                                     <i class="fas fa-chalkboard-teacher" style="color: #667eea;"></i>
@@ -12674,10 +12605,7 @@ class AdminPanel {
                                 </label>
                                 <select id="turmaProfessor" class="form-control" 
                                     style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: white;">
-                                    <option value="">Selecione um professor...</option>
-                                    ${this.professores?.map(p => 
-                                        `<option value="${p._id}" ${turma?.professor?.id === p._id ? 'selected' : ''}>${p.nome} - ${p.email}</option>`
-                                    ).join('') || ''}
+                                    <option value="">Carregando professores...</option>
                                 </select>
                                 <div style="font-size: 11px; color: #94a3b8; margin-top: 5px;">
                                     <i class="fas fa-info-circle"></i> Opcional por enquanto
@@ -12696,10 +12624,10 @@ class AdminPanel {
                                     style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; resize: vertical;">${turma?.descricao || ''}</textarea>
                             </div>
 
-                            <!-- Status da Turma -->
-                            <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-radius: 12px; padding: 15px; margin-top: 15px; border: 1px solid #e2e8f0;">
-                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
-                                    <div style="width: 40px; height: 40px; background: ${turma?.ativa !== false ? '#10b981' : '#ef4444'}20; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                            <!-- Status -->
+                            <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-radius: 12px; padding: 15px; border: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 40px; height: 40px; background: ${turma?.ativa !== false ? '#10b98120' : '#ef444420'}; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
                                         <i class="fas ${turma?.ativa !== false ? 'fa-check-circle' : 'fa-pause-circle'}" style="color: ${turma?.ativa !== false ? '#10b981' : '#ef4444'}; font-size: 20px;"></i>
                                     </div>
                                     <div style="flex: 1;">
@@ -12716,7 +12644,7 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <!-- Informações adicionais -->
+                            <!-- Dica -->
                             <div style="background: #f0f4ff; border-radius: 10px; padding: 12px 15px; margin-top: 20px; display: flex; align-items: center; gap: 10px; border-left: 4px solid #667eea;">
                                 <i class="fas fa-lightbulb" style="color: #667eea; font-size: 18px;"></i>
                                 <div style="font-size: 13px; color: #1e40af;">
@@ -12731,7 +12659,7 @@ class AdminPanel {
         
         modalBody.innerHTML = html;
         
-        // Adicionar foco no primeiro campo
+        // Foco no primeiro campo
         setTimeout(() => {
             const primeiroCampo = document.getElementById(isMenuCursos ? 'turmaCodigo' : 'turmaNome');
             if (primeiroCampo) primeiroCampo.focus();
@@ -12763,7 +12691,110 @@ class AdminPanel {
         }
         
         this.openModal();
-        console.log('✅ Modal renderizado com dados da turma');
+        
+        // 🔥 CARREGAR PROFESSORES APÓS ABRIR O MODAL
+        if (!isMenuCursos) {
+            setTimeout(() => {
+                this.carregarProfessoresNoModalTurma(turma);
+            }, 200);
+        }
+        
+        console.log('✅ Modal renderizado');
+    }
+
+    // ============ CARREGAR PROFESSORES NO MODAL DE TURMA ============
+    async carregarProfessoresNoModalTurma(turma = null) {
+        try {
+            const select = document.getElementById('turmaProfessor');
+            if (!select) {
+                console.warn('⚠️ Select de professor não encontrado');
+                return;
+            }
+            
+            console.log('📚 Carregando professores para o modal de turma...');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${this.apiBase}/usuarios?role=professor&limit=1000&status=ativo`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success || !data.usuarios) {
+                throw new Error(data.error || 'Erro ao carregar professores');
+            }
+            
+            const professores = data.usuarios;
+            console.log(`✅ ${professores.length} professores carregados`);
+            
+            // 🔥 MONTAR AS OPÇÕES
+            let options = '<option value="">Selecione um professor...</option>';
+            
+            if (professores.length === 0) {
+                options += '<option value="" disabled>Nenhum professor disponível</option>';
+            } else {
+                // Ordenar alfabeticamente
+                const professoresOrdenados = [...professores].sort((a, b) => 
+                    a.nome.localeCompare(b.nome)
+                );
+                
+                // Salvar lista completa para busca
+                this.professoresModalTurma = professoresOrdenados;
+                
+                professoresOrdenados.forEach(p => {
+                    const selected = turma?.professor?.id === p._id ? 'selected' : '';
+                    const email = p.email ? ` - ${p.email}` : '';
+                    const matricula = p.matricula ? ` (${p.matricula})` : '';
+                    options += `<option value="${p._id}" ${selected}>${p.nome}${matricula}${email}</option>`;
+                });
+            }
+            
+            select.innerHTML = options;
+            
+            // 🔥 ADICIONAR CAMPO DE BUSCA ACIMA DO SELECT
+            const parentDiv = select.closest('.form-group');
+            if (parentDiv && !parentDiv.querySelector('.busca-professor-turma')) {
+                const buscaHtml = `
+                    <div class="busca-professor-turma" style="margin-bottom: 8px; position: relative;">
+                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 14px;"></i>
+                        <input type="text" 
+                            id="buscaProfessorTurma" 
+                            placeholder="🔍 Buscar professor por nome..."
+                            style="width: 100%; padding: 10px 12px 10px 38px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; outline: none; transition: all 0.3s;"
+                            onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 4px rgba(102,126,234,0.1)';"
+                            onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                    </div>
+                `;
+                parentDiv.querySelector('label').insertAdjacentHTML('afterend', buscaHtml);
+                
+                // Evento de busca
+                const buscaInput = document.getElementById('buscaProfessorTurma');
+                buscaInput.addEventListener('input', (e) => {
+                    const termo = e.target.value.toLowerCase().trim();
+                    const select = document.getElementById('turmaProfessor');
+                    const options = select.options;
+                    
+                    for (let i = 0; i < options.length; i++) {
+                        const texto = options[i].text.toLowerCase();
+                        if (texto.includes(termo) || termo === '') {
+                            options[i].style.display = '';
+                        } else {
+                            options[i].style.display = 'none';
+                        }
+                    }
+                });
+            }
+            
+            console.log('✅ Select de professores preenchido!');
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar professores:', error);
+            
+            const select = document.getElementById('turmaProfessor');
+            if (select) {
+                select.innerHTML = '<option value="">Erro ao carregar professores</option>';
+            }
+        }
     }
 
     // ============ SALVAR TURMA (VERSÃO UNIFICADA) ============
