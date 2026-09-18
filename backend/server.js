@@ -1115,6 +1115,9 @@ const connectToDatabase = async () => {
       console.warn('⏰ Timeout na conexão com MongoDB');
     });
     // ============================================
+
+    const matriculasManager = require('./matriculas');
+    await matriculasManager.importarDadosIniciais();
     
     if (groq) {
       setTimeout(() => testarModelosDisponiveis(), 2000);
@@ -1529,8 +1532,8 @@ app.post('/api/auth/register', [
         console.log('🔍 Verificando matrícula de professor:', matriculaNumeros);
         
         // Verificar se a matrícula está na lista de autorizadas
-        const autorizada = matriculasManager.verificar(matriculaNumeros);
-        const nomeProfessor = autorizada ? matriculasManager.obterNome(matriculaNumeros) : null;
+        const autorizada =  await matriculasManager.verificar(matriculaNumeros);
+        const nomeProfessor = autorizada ? await matriculasManager.obterNome(matriculaNumeros) : null;
 
         console.log(`🔍 Resultado: ${autorizada ? '✅ AUTORIZADA' : '❌ NÃO AUTORIZADA'} - Nome: ${nomeProfessor || 'Não encontrado'}`);
         
@@ -11291,24 +11294,20 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
         // 🔥 FILTRAR POR ROLE
         if (role && role !== 'todos') {
             query.role = role;
-            console.log(`   🔍 Filtrando por role: ${role}`);
         }
         
         // 🔥 FILTRAR POR STATUS (ATIVO/INATIVO)
         if (status && status !== 'todos') {
             if (status === 'ativo') {
                 query.ativo = true;
-                console.log(`   🔍 Filtrando por status: ATIVO (true)`);
             } else if (status === 'inativo') {
                 query.ativo = false;
-                console.log(`   🔍 Filtrando por status: INATIVO (false)`);
             }
         }
         
         //  FILTRAR POR TURMA
         if (turma && turma !== 'todas' && turma !== '') {
             query.turma = turma;
-            console.log(`   🔍 Filtrando por turma: ${turma}`);
         }
         
         //  BUSCA POR NOME, EMAIL, MATRÍCULA OU CPF
@@ -14761,28 +14760,21 @@ app.get('/api/admin/matriculas-autorizadas', authenticateToken, isSuperAdmin, as
     try {
         const { busca } = req.query;
         
-        console.log(`📋 Admin ${req.userId} acessando matrículas autorizadas`);
-        
-        let matriculas = matriculasManager.listar();
-        
-        // Aplicar busca se houver
+        let matriculas;
         if (busca) {
-            matriculas = matriculasManager.buscar(busca);
+            matriculas = await matriculasManager.buscar(busca);
+        } else {
+            matriculas = await matriculasManager.listarAsync();
         }
         
         res.json({
             success: true,
             matriculas: matriculas,
             total: matriculas.length,
-            totalGeral: matriculasManager.listar().length
+            totalGeral: await matriculasManager.contar()
         });
-        
     } catch (error) {
-        console.error('❌ Erro:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -14815,7 +14807,7 @@ app.post('/api/admin/matriculas-autorizadas', authenticateToken, isSuperAdmin, a
             });
         }
         
-        const resultado = matriculasManager.adicionar(matriculaStr, nome.toUpperCase().trim());
+        const resultado = await matriculasManager.adicionar(matriculaStr, nome.toUpperCase().trim(), req.userId);
         
         if (!resultado.success) {
             return res.status(400).json({
@@ -14870,7 +14862,7 @@ app.put('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, isSup
             });
         }
         
-        const resultado = matriculasManager.editar(matricula, novaMatriculaStr, nome.toUpperCase().trim());
+        const resultado = await matriculasManager.editar(matricula, novaMatriculaStr, nome.toUpperCase().trim(), req.userId);
         
         if (!resultado.success) {
             return res.status(404).json({
@@ -14900,7 +14892,7 @@ app.delete('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, is
     try {
         const { matricula } = req.params;
         
-        const resultado = matriculasManager.excluir(matricula);
+        const resultado = await matriculasManager.excluir(matricula, req.userId);
         
         if (!resultado.success) {
             return res.status(404).json({
@@ -14931,8 +14923,8 @@ app.get('/api/matriculas-autorizadas/verificar/:matricula', async (req, res) => 
         const { matricula } = req.params;
         const matriculaStr = matricula.toString().replace(/\D/g, '');
         
-        const autorizada = matriculasManager.verificarMatricula(matriculaStr);
-        const nome = autorizada ? matriculasManager.obterNome(matriculaStr) : null;
+        const autorizada = await matriculasManager.verificar(matriculaStr);
+        const nome = autorizada ? await matriculasManager.obterNome(matriculaStr) : null;
         
         res.json({
             success: true,
@@ -14940,28 +14932,20 @@ app.get('/api/matriculas-autorizadas/verificar/:matricula', async (req, res) => 
             matricula: matriculaStr,
             nome: nome
         });
-        
     } catch (error) {
-        console.error('❌ Erro:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // ============ ROTA PARA BUSCAR TODOS OS USUÁRIOS COM MATRÍCULA (PROFESSORES, ADMINS, SUPER_ADMINS) ============
 app.get('/api/admin/professores-cadastrados', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`📋 Admin ${req.userId} buscando usuários com matrícula cadastrada`);
         
         // 🔥 CORREÇÃO: Buscar TODOS os usuários com matrícula (professor, admin, super_admin)
         const usuarios = await User.find({ 
             matricula: { $exists: true, $ne: null, $ne: '' } // Qualquer um que tenha matrícula
         }).select('nome email matricula ativo createdAt role'); // Incluir role!
-        
-        console.log(`📊 Usuários encontrados com matrícula: ${usuarios.length}`);
-        
+                
         // Criar um mapa de matrículas para consulta rápida
         const usuariosMap = {};
         usuarios.forEach(user => {
@@ -14975,8 +14959,6 @@ app.get('/api/admin/professores-cadastrados', authenticateToken, isSuperAdmin, a
                     createdAt: user.createdAt
                 };
                 
-                // Log para debug
-                console.log(`   → Matrícula: ${user.matricula} | Nome: ${user.nome} | Role: ${user.role} | Ativo: ${user.ativo}`);
             }
         });
         
@@ -14989,9 +14971,7 @@ app.get('/api/admin/professores-cadastrados', authenticateToken, isSuperAdmin, a
             ativos: usuarios.filter(u => u.ativo === true).length,
             inativos: usuarios.filter(u => u.ativo === false).length
         };
-        
-        console.log('✅ Estatísticas:', stats);
-        
+                
         res.json({
             success: true,
             professores: usuarios, // Mantendo o nome para compatibilidade
