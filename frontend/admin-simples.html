@@ -2907,30 +2907,37 @@
                 
                 const novaSenha = Math.random().toString(36).slice(-8);
                 
-                if (confirm(`Resetar senha de ${usuario.nome}? Nova senha: ${novaSenha}`)) {
-                    try {
-                        this.showToast('Processando...', 'info');
-                        
-                        const response = await fetch(`/api/admin/usuarios/${id}/reset-password`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                            },
-                            body: JSON.stringify({ novaSenha })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            this.showToast(`✅ Nova senha: ${novaSenha}`, 'success');
-                        } else {
-                            throw new Error(data.error || 'Erro ao resetar senha');
-                        }
-                        
-                    } catch (error) {
-                        this.showToast('❌ ' + error.message, 'error');
+                const confirmar = await this.confirmar(
+                    '🔑 Resetar Senha',
+                    `Deseja resetar a senha de <strong>${usuario.nome}</strong>?<br><br>Nova senha: <code>${novaSenha}</code>`,
+                    'Sim, resetar',
+                    'Cancelar'
+                );
+                
+                if (!confirmar) return;
+                
+                try {
+                    this.showToast('Processando...', 'info');
+                    
+                    const response = await fetch(`/api/admin/usuarios/${id}/reset-password`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                        },
+                        body: JSON.stringify({ novaSenha })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showToast(`✅ Nova senha: ${novaSenha}`, 'success');
+                    } else {
+                        throw new Error(data.error || 'Erro ao resetar senha');
                     }
+                    
+                } catch (error) {
+                    this.showToast('❌ ' + error.message, 'error');
                 }
             }
 
@@ -7362,7 +7369,12 @@
                 const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
                 
                 if (nenhumaOpcao) {
-                    const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
+                    const confirmar = await this.confirmar(
+                        '📄 Nenhuma Adaptação',
+                        'Nenhuma opção de adaptação foi selecionada.<br><br>Deseja imprimir a prova normalmente?',
+                        'Sim, imprimir normal',
+                        'Cancelar'
+                    );
                     if (confirmar) {
                         this.fecharModalOpcoesAdaptacao();
                         await this.gerarImpressaoNormal();
@@ -7394,7 +7406,7 @@
                     return;
                 }
                 
-                // 🔥 BUSCAR QR CODE DO ALUNO SALVO NO BANCO
+                // Buscar QR Code do aluno salvo no banco
                 let qrCodeAlunoUrl = null;
                 try {
                     const token = localStorage.getItem('auth_token');
@@ -10904,8 +10916,9 @@
                     const btnNao = document.querySelector('#confirmModal .btn-cancel');
                     
                     if (!modal || !titleEl || !messageEl || !btnSim || !btnNao) {
-                        // Fallback para confirm nativo
-                        return Promise.resolve(confirm(mensagem));
+                        // Fallback seguro: assume "sim" (evita travar no WebView)
+                        console.warn('⚠️ Modal de confirmação não encontrado, assumindo SIM');
+                        return resolve(true);
                     }
                     
                     titleEl.innerHTML = titulo;
@@ -10915,27 +10928,26 @@
                     
                     modal.style.display = 'flex';
                     
-                    const handlerSim = () => {
+                    // Remove listeners antigos clonando os botões
+                    const novoBtnSim = btnSim.cloneNode(true);
+                    const novoBtnNao = btnNao.cloneNode(true);
+                    btnSim.parentNode.replaceChild(novoBtnSim, btnSim);
+                    btnNao.parentNode.replaceChild(novoBtnNao, btnNao);
+                    
+                    const fechar = (resultado) => {
                         modal.style.display = 'none';
-                        btnSim.removeEventListener('click', handlerSim);
-                        btnNao.removeEventListener('click', handlerNao);
-                        resolve(true);
+                        resolve(resultado);
                     };
                     
-                    const handlerNao = () => {
-                        modal.style.display = 'none';
-                        btnSim.removeEventListener('click', handlerSim);
-                        btnNao.removeEventListener('click', handlerNao);
-                        resolve(false);
-                    };
-                    
-                    btnSim.addEventListener('click', handlerSim);
-                    btnNao.addEventListener('click', handlerNao);
+                    novoBtnSim.addEventListener('click', () => fechar(true));
+                    novoBtnNao.addEventListener('click', () => fechar(false));
                     
                     // Fechar ao clicar no X
                     const closeBtn = modal.querySelector('.modal-close');
                     if (closeBtn) {
-                        closeBtn.addEventListener('click', handlerNao);
+                        const novoClose = closeBtn.cloneNode(true);
+                        closeBtn.parentNode.replaceChild(novoClose, closeBtn);
+                        novoClose.addEventListener('click', () => fechar(false));
                     }
                 });
             }
@@ -11029,7 +11041,7 @@
 
     <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
-
+    <script src="js/dialog-helper.js"></script>
         <script>
 
     // ============================================

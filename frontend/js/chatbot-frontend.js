@@ -1255,8 +1255,9 @@ Site: sistemadeprovas.com
         }
     }
 
-    clearConversation() {
-        if (confirm('Limpar histórico da conversa?')) {
+    async clearConversation() {
+        const confirmar = await confirm('Limpar histórico da conversa?');
+        if (confirmar) {
             this.conversation = [];
             localStorage.removeItem('chatbot_conversation');
             const messagesContainer = document.getElementById('chatbotMessages');

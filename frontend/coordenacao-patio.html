@@ -26,6 +26,7 @@
     <script src="js/draggable.js"></script>
     <script src="js/chatbot-frontend.js"></script>
     <script src="js/push-client.js"></script>
+    <script src="js/dialog-helper.js"></script> 
 
     <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/coordenacao-patio.css">
@@ -738,8 +739,9 @@
             }
         }
         
-        function logout() {
-            if (confirm('Tem certeza que deseja sair do sistema?')) {
+        async function logout() {
+            const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
+            if (confirmar) {
                 localStorage.removeItem('auth_token');
                 localStorage.removeItem('user_data');
                 window.location.href = '/login.html';

@@ -353,6 +353,7 @@
 
     <!-- Sistema de Acessibilidade (SEGUNDO) -->
     <script src="js/acessibilidade.js"></script>
+    <script src="js/dialog-helper.js"></script> 
 
     <script>
 
@@ -3444,7 +3445,7 @@
         // ============ FUNÇÃO AUXILIAR PARA MOSTRAR CONFIRMAÇÃO SEGURA ============
         const mostrarConfirmacaoSegura = (mensagem) => {
             return new Promise((resolve) => {
-                console.log(`❓ Exibindo confirmação: ${mensagem.substring(0, 50)}...`);
+                console.log(`📍 Exibindo confirmação: ${mensagem.substring(0, 50)}...`);
                 
                 // 🔥 ATIVAR FLAGS DE ACESSIBILIDADE
                 window.acessibilidadeAtiva = true;
@@ -3465,9 +3466,9 @@
                 });
                 
                 // Pequena pausa para garantir
-                setTimeout(() => {
+                setTimeout(async () => {
                     try {
-                        const resultado = confirm(mensagem);
+                        const resultado = await confirm(mensagem);
                         
                         // 🔥 SE O USUÁRIO CANCELOU, MARCAR ISSO
                         if (!resultado) {
@@ -3812,24 +3813,27 @@
             document.getElementById('errorMessage').textContent = mensagem;
         }
         
-        function voltarAoPainel() {
+        async function voltarAoPainel() {
             if (Object.keys(respostas).length === 0) {
-                // Ativar flag de acessibilidade
                 window.acessibilidadeAtiva = true;
                 window.acessibilidadeClicada = true;
                 
-                if (confirm('Deseja realmente voltar ao painel?')) {
+                const confirmar = await confirm('Deseja realmente voltar ao painel?');
+                if (confirmar) {
                     if (document.exitFullscreen) {
                         document.exitFullscreen();
                     }
                     window.location.href = '/aluno.html';
                 }
                 
-                // Desativar flag
                 window.acessibilidadeAtiva = false;
                 window.acessibilidadeClicada = false;
             } else {
-                alert('Você já começou a prova. Não é possível voltar agora.');
+                if (typeof showToast === 'function') {
+                    showToast('Você já começou a prova. Não é possível voltar agora.', 'warning');
+                } else {
+                    console.warn('Você já começou a prova. Não é possível voltar agora.');
+                }
             }
         }
         

@@ -1397,14 +1397,12 @@ class MonitoramentoSupervisao {
         if (window.admin?.showToast) window.admin.showToast('✅ CSV exportado!', 'success');
     }
 
-    confirmar(titulo, mensagem) {
-        return new Promise((resolve) => {
-            if (window.admin?.confirmar) {
-                resolve(window.admin.confirmar(titulo, mensagem));
-            } else {
-                resolve(confirm(mensagem.replace(/<[^>]*>/g, '')));
-            }
-        });
+    async confirmar(titulo, mensagem) {
+        if (window.admin?.confirmar) {
+            return await window.admin.confirmar(titulo, mensagem);
+        } else {
+            return await confirm(mensagem.replace(/<[^>]*>/g, ''));
+        }
     }
 
     configurarEventos() {

@@ -113,6 +113,7 @@
 
 <!-- Incluir o chatbot -->
 <script src="js/chatbot-frontend.js"></script>
+<script src="js/dialog-helper.js"></script> 
 
 <!-- Botão Rolar para Baixo (Seta Pulsante) -->
 <button id="btnScrollToBottom" onclick="scrollToBottom()" style="
@@ -313,15 +314,17 @@ function renderizarNotificacoes(notificacoes) {
 }
 
 async function limparMinhasNotificacoes() {
+    // Pega o botão logo no início (antes do try)
+    const btn = document.querySelector('.notificacao-footer button');
+    
     try {
         const token = localStorage.getItem('auth_token');
         
-        const confirmacao = confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+        const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
         
         if (!confirmacao) return;
         
         // Mostrar loading no botão
-        const btn = event?.currentTarget;
         if (btn) {
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
             btn.disabled = true;
@@ -338,26 +341,30 @@ async function limparMinhasNotificacoes() {
         const data = await response.json();
         
         if (data.success) {
-            // Recarregar lista
             await carregarListaNotificacoes();
             
-            // Atualizar badge
             document.getElementById('notificacoesBadge').style.display = 'none';
             document.getElementById('notificacoesBtn').classList.remove('tem-notificacao');
             
-            // Mostrar mensagem
-            alert(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`);
-            
+            // Toast em vez de alert
+            if (typeof showToast === 'function') {
+                showToast(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`, 'success');
+            } else {
+                console.log(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`);
+            }
         } else {
             throw new Error(data.error || 'Erro ao excluir notificações');
         }
         
     } catch (error) {
         console.error('❌ Erro:', error);
-        alert('❌ ' + error.message);
+        if (typeof showToast === 'function') {
+            showToast('❌ ' + error.message, 'error');
+        } else {
+            console.error('❌ ' + error.message);
+        }
     } finally {
-        // Restaurar botão
-        const btn = document.querySelector('.notificacao-footer button');
+        // Restaurar o MESMO botão
         if (btn) {
             btn.innerHTML = '<i class="fas fa-trash"></i> Limpar todas';
             btn.disabled = false;
@@ -942,7 +949,7 @@ window.addEventListener('scroll', function() {
                                 </a>
                                 
                                 <!-- BOTÃO LIMPAR TODAS -->
-                                <button onclick="limparMinhasNotificacoes()" style="
+                                <button onclick="limparMinhasNotificacoes(event)" style="
                                     background: none;
                                     border: none;
                                     color: #dc2626;
@@ -3836,7 +3843,7 @@ window.addEventListener('scroll', function() {
             
             try {
                 const token = localStorage.getItem('auth_token');
-                const confirmacao = confirm('Enviar esta correção para o aluno? O aluno poderá visualizar a prova corrigida.');
+                const confirmacao = await confirm('Enviar esta correção para o aluno? O aluno poderá visualizar a prova corrigida.');
                 
                 if (!confirmacao) return;
                 
@@ -4274,7 +4281,6 @@ window.addEventListener('scroll', function() {
             }
         }
         // ============ FUNÇÕES PARA LIBERAR NOTAS ============
-        // Função para liberar TODAS as notas de uma prova (CORRIGIDA)
         async function liberarTodasNotas(provaId, provaTitulo) {
             try {
                 const token = localStorage.getItem('auth_token');
@@ -4287,7 +4293,7 @@ window.addEventListener('scroll', function() {
                     return;
                 }
                 
-                const confirmacao = confirm(
+                const confirmacao = await confirm(
                     `Deseja liberar TODAS as notas da prova "${provaTitulo}"?\n\n` +
                     `• ${resultados.length} aluno(s) realizaram a prova\n` +
                     `• Esta ação enviará a prova corrigida para cada aluno`
@@ -4433,47 +4439,46 @@ window.addEventListener('scroll', function() {
 
         // Função para liberar nota de UM aluno específico
         async function liberarNotaAluno(provaId, alunoId, alunoNome, notaAtual) {
-        try {
-            const token = localStorage.getItem('auth_token');
-            
-            const confirmacao = confirm(`Liberar nota para o aluno ${alunoNome}?\nNota: ${notaAtual !== undefined ? notaAtual.toFixed(1) : 'N/A'}`);
-            
-            if (!confirmacao) return;
-            
-            // Mostrar loading
-            mostrarAlerta('alertMinhasProvas', `🔧 Liberando nota para ${alunoNome}...`, 'info');
-            
-            const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                alunoId: alunoId,
-                nota: notaAtual || 0,
-                liberarNota: true
-            })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-            mostrarAlerta('alertMinhasProvas', `✅ Nota liberada para ${alunoNome}!`, 'success');
-            
-            // Recarregar a lista de provas após 2 segundos
-            setTimeout(() => {
-                carregarProvasProfessor();
-            }, 2000);
-            
-            } else {
-            throw new Error(data.error || 'Erro ao liberar nota');
+            try {
+                const token = localStorage.getItem('auth_token');
+                
+                const confirmacao = await confirm(`Liberar nota para o aluno ${alunoNome}?\nNota: ${notaAtual !== undefined ? notaAtual.toFixed(1) : 'N/A'}`);
+                
+                if (!confirmacao) return;
+                
+                // Mostrar loading
+                mostrarAlerta('alertMinhasProvas', `🔧 Liberando nota para ${alunoNome}...`, 'info');
+                
+                const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        alunoId: alunoId,
+                        nota: notaAtual || 0,
+                        liberarNota: true
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarAlerta('alertMinhasProvas', `✅ Nota liberada para ${alunoNome}!`, 'success');
+                    
+                    // Recarregar a lista de provas após 2 segundos
+                    setTimeout(() => {
+                        carregarProvasProfessor();
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Erro ao liberar nota');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao liberar nota:', error);
+                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
-            
-        } catch (error) {
-            console.error('❌ Erro ao liberar nota:', error);
-            mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
-        }
         }
 
         // ============ PROCESSAR RESULTADOS POR TURMA ============
@@ -8524,7 +8529,7 @@ window.addEventListener('scroll', function() {
             const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
             
             if (nenhumaOpcao) {
-                const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
+                const confirmar = await confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
                 if (confirmar) {
                     await gerarImpressaoNormal();
                 } else {
@@ -9562,8 +9567,9 @@ window.addEventListener('scroll', function() {
         }
 
         // Função para remover arquivo do preview
-        function removerArquivoPreview(fileId, fileName) {
-            if (confirm(`Remover o arquivo "${fileName}" da lista?`)) {
+        async function removerArquivoPreview(fileId, fileName) {
+            const confirmar = await confirm(`Remover o arquivo "${fileName}" da lista?`);
+            if (confirmar) {
                 // Remover do DOM
                 const element = document.getElementById(fileId);
                 if (element) {
@@ -9674,8 +9680,9 @@ window.addEventListener('scroll', function() {
         }
 
         // Função para remover anexo
-        function removerAnexo(index) {
-            if (confirm('Remover este material?')) {
+        async function removerAnexo(index) {
+            const confirmar = await confirm('Remover este material?');
+            if (confirmar) {
                 anexos.splice(index, 1);
                 atualizarListaAnexos();
             }
@@ -9793,8 +9800,9 @@ window.addEventListener('scroll', function() {
         }
 
         // Função para limpar todos os anexos
-        function limparTodosAnexos() {
-            if (confirm('Tem certeza que deseja remover todos os materiais adicionados?')) {
+        async function limparTodosAnexos() {
+            const confirmar = await confirm('Tem certeza que deseja remover todos os materiais adicionados?');
+            if (confirmar) {
                 anexos = [];
                 arquivosParaUpload = [];
                 
@@ -9940,8 +9948,9 @@ window.addEventListener('scroll', function() {
         }
 
         // Função para remover arquivo da lista de upload
-        function removerArquivoUpload(fileId, fileName) {
-        if (confirm(`Remover o arquivo "${fileName}"?`)) {
+        async function removerArquivoUpload(fileId, fileName) {
+            const confirmar = await confirm(`Remover o arquivo "${fileName}"?`);
+            if (confirmar) {
             // Remover do DOM
             const element = document.getElementById(fileId);
             if (element) {
@@ -12342,7 +12351,7 @@ window.addEventListener('scroll', function() {
                                 opcoes.tamanho_fonte === 12;
             
             if (nenhumaOpcao) {
-                const confirmar = confirm('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
+                const confirmar = await confirm('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
                 if (!confirmar) return;
             }
             
@@ -13787,7 +13796,7 @@ window.addEventListener('scroll', function() {
         }
 
         // Função CORRIGIDA para remover questão
-        function removerQuestaoEditor(index) {
+        async function removerQuestaoEditor(index) {
             console.log(`🗑️ Tentando remover questão ${index + 1}...`);
             
             // Verificar se temos questões para editar
@@ -13811,8 +13820,7 @@ window.addEventListener('scroll', function() {
             }
             
             // Usar confirm nativo do navegador (funciona melhor)
-            const confirmacao = window.confirm(`Tem certeza que deseja remover a Questão ${index + 1}?\n\nEsta ação não pode ser desfeita.`);
-            
+            const confirmacao = await confirm(`Tem certeza que deseja remover a Questão ${index + 1}?\n\nEsta ação não pode ser desfeita.`);
             if (!confirmacao) {
                 console.log('❌ Remoção cancelada pelo usuário');
                 return;
@@ -14285,8 +14293,9 @@ window.addEventListener('scroll', function() {
         }
 
         // ============ REMOVER IMAGEM DA QUESTÃO (MELHORADA) ============
-        function removerImagemQuestao(questaoIndex, imgIndex) {
-            if (!confirm('🗑️ Remover esta imagem da questão?')) {
+        async function removerImagemQuestao(questaoIndex, imgIndex) {
+            const confirmar = await confirm('🗑️ Remover esta imagem da questão?');
+            if (!confirmar) {
                 return;
             }
             
@@ -14493,8 +14502,9 @@ window.addEventListener('scroll', function() {
         }
 
         // Função para remover imagem da questão
-        function removerImagemQuestao(questaoIndex, imgIndex) {
-            if (!confirm('Remover esta imagem da questão?')) {
+        async function removerImagemQuestao(questaoIndex, imgIndex) {
+            const confirmar = await confirm('🗑️ Remover esta imagem da questão?');
+            if (!confirmar) {
                 return;
             }
             

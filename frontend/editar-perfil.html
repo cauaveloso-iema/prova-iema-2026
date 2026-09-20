@@ -28,6 +28,7 @@
 
     <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
+    <script src="js/dialog-helper.js"></script> 
 
     <!-- ===== MOBILE OPTIMIZATION ===== -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
@@ -724,7 +725,8 @@
         }
         
         async function removerFotoPerfil() {
-            if (!confirm('Tem certeza que deseja remover sua foto de perfil?')) return;
+            const confirmar = await confirm('Tem certeza que deseja remover sua foto de perfil?');
+            if (!confirmar) return;
             
             try {
                 mostrarAlerta('Removendo foto...', 'info');

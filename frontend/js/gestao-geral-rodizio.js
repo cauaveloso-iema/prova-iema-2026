@@ -274,7 +274,8 @@ async function salvarRodizio() {
 function editarRodizio(turma) { abrirModalRodizio(turma); }
 
 async function excluirRodizio(turma) {
-    if (!confirm(`Excluir rodízio da turma ${turma}?`)) return;
+    const confirmar = await confirm(`Excluir rodízio da turma ${turma}?`);
+    if (!confirmar) return;
     
     try {
         const response = await fetch(`/api/gestao-geral/rodizios/${turma}`, {
@@ -284,14 +285,27 @@ async function excluirRodizio(turma) {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Rodízio excluído!');
+            // ✅ Trocar alert por toast
+            if (typeof showToast === 'function') {
+                showToast('✅ Rodízio excluído!', 'success');
+            } else {
+                console.log('✅ Rodízio excluído!');
+            }
             await carregarRodizios();
         } else {
-            alert('❌ Erro: ' + data.error);
+            if (typeof showToast === 'function') {
+                showToast('❌ Erro: ' + data.error, 'error');
+            } else {
+                console.error('❌ Erro:', data.error);
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir rodízio');
+        if (typeof showToast === 'function') {
+            showToast('Erro ao excluir rodízio', 'error');
+        } else {
+            console.error('Erro ao excluir rodízio');
+        }
     }
 }
 

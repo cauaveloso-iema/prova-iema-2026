@@ -20,6 +20,7 @@
 
     <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/validar-face-prova.css">
+    <script src="js/dialog-helper.js"></script> 
 
 </head>
 <body>
@@ -597,8 +598,9 @@
         // ============================================
         // CANCELAR VALIDAÇÃO
         // ============================================
-        function cancelarValidacao() {
-            if (confirm('Deseja cancelar a validação? Você será redirecionado para o painel.')) {
+        async function cancelarValidacao() {
+            const confirmar = await confirm('Deseja cancelar a validação?...');
+            if (confirmar) {
                 window.location.href = '/aluno.html';
             }
         }

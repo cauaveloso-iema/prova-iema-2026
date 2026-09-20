@@ -105,7 +105,7 @@
 
 <!-- Incluir o chatbot -->
 <script src="js/chatbot-frontend.js"></script>
-
+<script src="js/dialog-helper.js"></script>
 <!-- Opcional: Ação específica para alunos -->
 
 <script>
@@ -337,11 +337,11 @@ async function marcarTodasLidas() {
 }
 
 // ============ LIMPAR MINHAS NOTIFICAÇÕES ============
-async function limparMinhasNotificacoes() {
+async function limparMinhasNotificacoes(event) {
     try {
         const token = localStorage.getItem('auth_token');
         
-        const confirmacao = confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+        const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
         
         if (!confirmacao) return;
         
@@ -653,7 +653,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes()" style="
+                                <button onclick="limparMinhasNotificacoes(event)" style="
                                     background: none;
                                     border: none;
                                     color: #6b7280;
@@ -4831,7 +4831,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     if (!faceData.temFace) {
                         console.log('⚠️ Usuário sem Face ID cadastrada');
-                        if (confirm('📸 Esta prova exige validação facial. Você precisa cadastrar sua Face ID antes de acessar. Deseja cadastrar agora?')) {
+                        const confirmar = await confirm('📸 Esta prova exige validação facial. Você precisa cadastrar sua Face ID antes de acessar. Deseja cadastrar agora?');
+                        if (confirmar) {
                             window.location.href = '/capturar-face.html';
                         }
                         return;

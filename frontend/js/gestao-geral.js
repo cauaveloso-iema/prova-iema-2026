@@ -693,28 +693,49 @@ function selecionarMotivo(motivo) {
 }
 
 async function registrarAtraso() {
-    if (!motivoSelecionado) { alert('Selecione o motivo do atraso'); return; }
+    if (!motivoSelecionado) { 
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Selecione o motivo do atraso', 'error');
+        else console.error('Selecione o motivo do atraso');
+        return; 
+    }
     
     // 🔥 NOVO: Valida data
     const dataAtraso = safeGet('atrasoData')?.value;
-    if (!dataAtraso) { alert('Selecione a data do atraso'); return; }
+    if (!dataAtraso) { 
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Selecione a data do atraso', 'error');
+        else console.error('Selecione a data do atraso');
+        return; 
+    }
     
     // 🔥 NOVO: Valida se data não é futura
     const hoje = new Date();
     hoje.setHours(23, 59, 59, 999);
     const dataSelecionada = new Date(dataAtraso + 'T00:00:00');
     if (dataSelecionada > hoje) {
-        if (!confirm('⚠️ A data selecionada é no futuro. Deseja continuar mesmo assim?')) {
+        const confirmar = await confirm('⚠️ A data selecionada é no futuro. Deseja continuar mesmo assim?');
+        if (!confirmar) {
             return;
         }
     }
     
     const descricao = (safeGet('descricao')?.value || '').trim();
-    if (!descricao) { alert('Descreva o ocorrido'); return; }
-    if (!currentAluno || !currentAluno.id) { alert('Nenhum aluno selecionado'); return; }
+    if (!descricao) { 
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Descreva o ocorrido', 'error');
+        else console.error('Descreva o ocorrido');
+        return; 
+    }
+    if (!currentAluno || !currentAluno.id) { 
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Nenhum aluno selecionado', 'error');
+        else console.error('Nenhum aluno selecionado');
+        return; 
+    }
     if (motivoSelecionado === 'outros') {
         const motivoOutros = (safeGet('motivoOutrosTexto')?.value || '').trim();
-        if (!motivoOutros) { alert('Especifique o motivo'); return; }
+        if (!motivoOutros) { 
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Especifique o motivo', 'error');
+            else console.error('Especifique o motivo');
+            return; 
+        }
     }
     
     const btn = document.querySelector('#formRegistro .btn-primary-custom');
@@ -740,7 +761,7 @@ async function registrarAtraso() {
                 motivo: motivoSelecionado,
                 descricao,
                 observacoes: safeGet('observacoes')?.value || '',
-                dataHora: dataHoraCompleta.toISOString(), // 🔥 NOVO
+                dataHora: dataHoraCompleta.toISOString(),
                 detalhes: {
                     motivoOutros: safeGet('motivoOutrosTexto')?.value || '',
                     horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
@@ -750,15 +771,22 @@ async function registrarAtraso() {
         });
         const data = await response.json();
         if (data.success) {
-            alert(`✅ ${data.message}`);
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido(`✅ ${data.message}`, 'success');
+            else console.log(`✅ ${data.message}`);
             limparTela();
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
             else carregarAlunosPorTurma();
-        } else alert('❌ ' + (data.error || 'Erro'));
+        } else {
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
+            else console.error('❌ ' + (data.error || 'Erro'));
+        }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao registrar');
-    } finally { if (btn) btn.disabled = false; }
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao registrar', 'error');
+        else console.error('Erro ao registrar');
+    } finally { 
+        if (btn) btn.disabled = false; 
+    }
 }
 
 function limparTela() {
@@ -1447,11 +1475,13 @@ function gerarHTMLImpressaoAtraso(a) {
 async function excluirAtraso(atrasoId, alunoNome) {
     if (!atrasoId) return;
     
-    if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR este atraso?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`)) {
+    const confirmar1 = await confirm(`⚠️ Tem certeza que deseja EXCLUIR este atraso?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`);
+    if (!confirmar1) {
         return;
     }
     
-    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nDeseja realmente excluir permanentemente?')) {
+    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nDeseja realmente excluir permanentemente?');
+    if (!confirmar2) {
         return;
     }
     
@@ -1483,14 +1513,17 @@ async function excluirAtraso(atrasoId, alunoNome) {
                 }, 300);
             }
             
-            mostrarToastConcluido('✅ Atraso excluído com sucesso!', 'success');
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('✅ Atraso excluído com sucesso!', 'success');
+            else console.log('✅ Atraso excluído com sucesso!');
             carregarDashboardAtrasos();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao excluir'));
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (data.error || 'Erro ao excluir'), 'error');
+            else console.error('❌ ' + (data.error || 'Erro ao excluir'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir atraso');
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao excluir atraso', 'error');
+        else console.error('Erro ao excluir atraso');
     }
 }
 
@@ -2169,25 +2202,46 @@ async function registrarModulo(modulo) {
     const est = estados[modulo];
     const P = getPrefixo(modulo);
     
-    if (!est.motivoSelecionado) { alert('Selecione o motivo'); return; }
+    if (!est.motivoSelecionado) { 
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Selecione o motivo', 'error');
+        else console.error('Selecione o motivo');
+        return; 
+    }
     const data = safeGet(`${cfg.tipo}Data`)?.value;
-    if (!data) { alert('Preencha a data'); return; }
+    if (!data) { 
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Preencha a data', 'error');
+        else console.error('Preencha a data');
+        return; 
+    }
     
     if (est.motivoSelecionado === 'outros') {
         const motivoOutros = safeGet(`${cfg.tipo}MotivoOutros`)?.value.trim();
-        if (!motivoOutros) { alert('Especifique o motivo'); return; }
+        if (!motivoOutros) { 
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Especifique o motivo', 'error');
+            else console.error('Especifique o motivo');
+            return; 
+        }
     }
     if (est.motivoSelecionado === 'necessita_ausentar_retornar') {
         const ha = safeGet(`${cfg.tipo}HorarioAusencia`)?.value;
         const hr = safeGet(`${cfg.tipo}HorarioRetorno`)?.value;
-        if (!ha || !hr) { alert('Informe os horários de ausência e retorno'); return; }
+        if (!ha || !hr) { 
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Informe os horários de ausência e retorno', 'error');
+            else console.error('Informe os horários');
+            return; 
+        }
     }
-    if (!est.currentAluno) { alert('Nenhum aluno selecionado'); return; }
+    if (!est.currentAluno) { 
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Nenhum aluno selecionado', 'error');
+        else console.error('Nenhum aluno selecionado');
+        return; 
+    }
     
     // VALIDAÇÃO DA ASSINATURA
     const assinaturaBase64 = obterAssinaturaBase64(modulo);
     if (!assinaturaBase64) {
-        if (!confirm('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?')) {
+        const confirmar = await confirm('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?');
+        if (!confirmar) {
             return;
         }
     }
@@ -2222,7 +2276,8 @@ async function registrarModulo(modulo) {
         const d = await r.json();
         
         if (!d.success) {
-            alert('❌ ' + (d.error || 'Erro'));
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (d.error || 'Erro'), 'error');
+            else console.error('❌ ' + (d.error || 'Erro'));
             return;
         }
         
@@ -2274,12 +2329,14 @@ async function registrarModulo(modulo) {
         // ========== FEEDBACK ==========
         let msg = `✅ ${d.message}`;
         if (justificativaCriada) {
-            msg += `\n\n✅ Justificativa de Falta criada automaticamente!`;
+            msg += ' — Justificativa de Falta criada automaticamente!';
         }
-        alert(msg);
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido(msg, 'success');
+        else console.log(msg);
         
         // ========== IMPRESSÃO ==========
-        if (confirm('Deseja IMPRIMIR agora?')) {
+        const imprimir = await confirm('Deseja IMPRIMIR agora?');
+        if (imprimir) {
             imprimirModulo(modulo, d.autorizacao.id);
         }
         
@@ -2295,8 +2352,11 @@ async function registrarModulo(modulo) {
         if (est.modoAtual === 'automatico') reiniciarScannerModulo(modulo);
     } catch (e) {
         console.error(e);
-        alert('Erro ao registrar');
-    } finally { if (btn) btn.disabled = false; }
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao registrar', 'error');
+        else console.error('Erro ao registrar');
+    } finally { 
+        if (btn) btn.disabled = false; 
+    }
 }
 
 /**
@@ -3630,7 +3690,8 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
 
 async function excluirModulo(modulo, id) {
     const cfg = getCfg(modulo);
-    if (!confirm(`Tem certeza que deseja EXCLUIR este registro de ${cfg.nomeAmigavel}?\n\nEsta ação não pode ser desfeita.`)) return;
+    const confirmar = await confirm(`Tem certeza que deseja EXCLUIR este registro de ${cfg.nomeAmigavel}?\n\nEsta ação não pode ser desfeita.`);
+    if (!confirmar) return;
     
     try {
         const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
@@ -3639,12 +3700,17 @@ async function excluirModulo(modulo, id) {
         });
         const d = await r.json();
         if (d.success) {
-            alert('✅ Excluído com sucesso!');
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('✅ Excluído com sucesso!', 'success');
+            else console.log('✅ Excluído com sucesso!');
             carregarListaModulo(modulo);
-        } else alert('❌ ' + (d.error || 'Erro'));
+        } else {
+            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (d.error || 'Erro'), 'error');
+            else console.error('❌ ' + (d.error || 'Erro'));
+        }
     } catch (e) {
         console.error(e);
-        alert('Erro ao excluir');
+        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao excluir', 'error');
+        else console.error('Erro ao excluir');
     }
 }
 
@@ -3678,8 +3744,9 @@ function excluirSegundaChamada(id) { excluirModulo('segundaChamada', id); }
 // ============================================
 // LOGOUT
 // ============================================
-function logout() {
-    if (confirm('Tem certeza que deseja sair do sistema?')) {
+async function logout() {
+    const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
+    if (confirmar) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         window.location.href = '/login.html';

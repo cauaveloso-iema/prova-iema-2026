@@ -1340,14 +1340,12 @@ class MonitoramentoEnfermaria {
         console.log('Filtrando por período:', periodo);
     }
 
-    confirmar(titulo, mensagem) {
-        return new Promise((resolve) => {
-            if (window.admin && typeof window.admin.confirmar === 'function') {
-                resolve(window.admin.confirmar(titulo, mensagem));
-            } else {
-                resolve(confirm(mensagem));
-            }
-        });
+    async confirmar(titulo, mensagem) {
+        if (window.admin && typeof window.admin.confirmar === 'function') {
+            return await window.admin.confirmar(titulo, mensagem);
+        } else {
+            return await confirm(mensagem);
+        }
     }
 
     configurarEventos() {

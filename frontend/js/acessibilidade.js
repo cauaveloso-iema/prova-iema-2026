@@ -2213,8 +2213,9 @@ class SistemaAcessibilidade {
         }
     }
 
-    restoreDefaults() {
-        if (confirm('Restaurar configurações padrão?')) {
+    async restoreDefaults() {
+        const confirmar = await confirm('Restaurar configurações padrão?');
+        if (confirmar) {
             this.fontSize = 16;
             this.lineHeight = 1.5;
             this.letterSpacing = 'normal';

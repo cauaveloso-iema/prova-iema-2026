@@ -1052,45 +1052,46 @@ class MonitoramentoTempoReal {
   }
   
   async executarLimpezaRegistros(meses = 1) {
-    let confirmado = false;
-    
-    if (typeof admin !== 'undefined' && admin.confirmar) {
-      confirmado = await admin.confirmar(
-        '🗑️ Limpeza de Registros Antigos',
-        `Tem certeza que deseja remover registros com mais de <strong>${meses} mês(es)</strong>?<br><br>
-        <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>`
-      );
-    } else {
-      confirmado = confirm(`⚠️ Remover registros com mais de ${meses} mês(es)?`);
-    }
-    
-    if (!confirmado) return;
-    
-    try {
-      this.showToastMessage('🔄 Executando limpeza...', 'info');
+      let confirmado = false;
       
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/monitoramento-cozinha/limpar-registros-antigos', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ meses })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        this.showToastMessage(`✅ ${data.deletados} registros removidos!`, 'success');
-        await this.carregarDadosCompleto(null, false);
+      if (typeof admin !== 'undefined' && admin.confirmar) {
+          confirmado = await admin.confirmar(
+              '🗑️ Limpeza de Registros Antigos',
+              `Tem certeza que deseja remover registros com mais de <strong>${meses} mês(es)</strong>?<br><br>
+              <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>`
+          );
       } else {
-        throw new Error(data.error || 'Erro na limpeza');
+          // ✅ MUDANÇA: await confirm
+          confirmado = await confirm(`⚠️ Remover registros com mais de ${meses} mês(es)?`);
       }
-    } catch (error) {
-      console.error('❌ Erro:', error);
-      this.showToastMessage('❌ ' + error.message, 'error');
-    }
+      
+      if (!confirmado) return;
+      
+      try {
+          this.showToastMessage('🔄 Executando limpeza...', 'info');
+          
+          const token = localStorage.getItem('auth_token');
+          const response = await fetch('/api/monitoramento-cozinha/limpar-registros-antigos', {
+              method: 'POST',
+              headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ meses })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+              this.showToastMessage(`✅ ${data.deletados} registros removidos!`, 'success');
+              await this.carregarDadosCompleto(null, false);
+          } else {
+              throw new Error(data.error || 'Erro na limpeza');
+          }
+      } catch (error) {
+          console.error('❌ Erro:', error);
+          this.showToastMessage('❌ ' + error.message, 'error');
+      }
   }
   
   async abrirModalLimpezaRegistros() {

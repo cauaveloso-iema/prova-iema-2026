@@ -1870,7 +1870,7 @@ async function confirmarFinalizacao(atendimentoId, resultado) {
     const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizar'));
     if (modal) modal.hide();
     if (resultado === 'em_acompanhamento') {
-        const querRemarcar = confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
+        const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
         if (querRemarcar) {
             await finalizarAtendimento(atendimentoId, resultado, true);
             setTimeout(() => abrirRemarcar(atendimentoId), 500);
@@ -1995,7 +1995,12 @@ function abrirFinalizacaoRemarcacao(remarcacaoId) {
 async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
     const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizarRemarcacao'));
     if (modal) modal.hide();
-    if (acao === 'cancelado' && !confirm('Tem certeza que deseja CANCELAR?')) return;
+    
+    if (acao === 'cancelado') {
+        const confirmar = await confirm('Tem certeza que deseja CANCELAR?');
+        if (!confirmar) return;
+    }
+    
     try {
         const response = await fetch('/api/assistente-social/remarcacoes/finalizar', {
             method: 'POST',
@@ -2004,11 +2009,19 @@ async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
         });
         const data = await response.json();
         if (data.success) {
-            alert(`✅ ${data.message}`);
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido(`✅ ${data.message}`, 'success');
+            } else {
+                console.log(`✅ ${data.message}`);
+            }
             carregarAtendimentosAtivos();
             carregarLembretes();
-        } else alert('❌ ' + (data.error || 'Erro'));
-    } catch (error) { alert('Erro ao finalizar remarcação'); }
+        } else {
+            console.error('❌ ' + (data.error || 'Erro'));
+        }
+    } catch (error) {
+        console.error('Erro ao finalizar remarcação:', error);
+    }
 }
 
 function abrirRemarcarPorRemarcacao(remarcacaoId) {
@@ -2025,8 +2038,13 @@ function abrirRemarcarPorRemarcacao(remarcacaoId) {
 
 async function excluirAtendimento(atendimentoId) {
     if (!atendimentoId) return;
-    if (!confirm('⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nEsta ação não pode ser desfeita!')) return;
-    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.')) return;
+    
+    const confirmar1 = await confirm('⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nEsta ação não pode ser desfeita!');
+    if (!confirmar1) return;
+    
+    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.');
+    if (!confirmar2) return;
+    
     try {
         const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
             method: 'DELETE',
@@ -2034,13 +2052,21 @@ async function excluirAtendimento(atendimentoId) {
         });
         const data = await response.json();
         if (data.success) {
-            alert('✅ Atendimento excluído!');
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido('✅ Atendimento excluído!', 'success');
+            } else {
+                console.log('✅ Atendimento excluído!');
+            }
             carregarAtendimentosAtivos();
             carregarDashboard();
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
-        } else alert('❌ ' + (data.error || 'Erro'));
-    } catch (error) { alert('Erro ao excluir'); }
+        } else {
+            console.error('❌ ' + (data.error || 'Erro'));
+        }
+    } catch (error) {
+        console.error('Erro ao excluir:', error);
+    }
 }
 
 // ============================================
@@ -2208,8 +2234,12 @@ function renderizarPaginacaoConcluidos(totalPaginas) {
 
 async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
     if (!atendimentoId) return;
-    if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`)) return;
-    if (!confirm(`⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.`)) return;
+    
+    const confirmar1 = await confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`);
+    if (!confirmar1) return;
+    
+    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.');
+    if (!confirmar2) return;
     
     try {
         const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
@@ -2231,14 +2261,20 @@ async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
                         contador.textContent = Math.max(0, atual - 1);
                     }
                     const tabela = document.querySelector('#listaConcluidos tbody');
-                    if (tabela && tabela.children.length === 0) carregarAtendimentosConcluidos(__concluidosPaginaAtual);
+                    if (tabela && tabela.children.length === 0) {
+                        carregarAtendimentosConcluidos(__concluidosPaginaAtual);
+                    }
                 }, 300);
             }
             mostrarToastConcluido('✅ Atendimento excluído com sucesso!', 'success');
             carregarDashboard();
             carregarLembretes();
-        } else alert('❌ ' + (data.error || 'Erro'));
-    } catch (error) { alert('Erro ao excluir atendimento'); }
+        } else {
+            console.error('❌ ' + (data.error || 'Erro'));
+        }
+    } catch (error) {
+        console.error('Erro ao excluir atendimento:', error);
+    }
 }
 
 // ============================================
@@ -2692,8 +2728,9 @@ function exportarCSV() {
     URL.revokeObjectURL(link.href);
 }
 
-function logout() {
-    if (confirm('Tem certeza que deseja sair?')) {
+async function logout() {
+    const confirmar = await confirm('Tem certeza que deseja sair?');
+    if (confirmar) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         window.location.href = '/login.html';

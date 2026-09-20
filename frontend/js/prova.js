@@ -80,23 +80,6 @@ class ProvaSegura extends ProvaManager {
             btnFinalizar.click();
         }
     }
-    
-    async finalizarProva() {
-        // Verificar autenticação antes de finalizar
-        const guestMode = localStorage.getItem('guest_mode') === 'true';
-        
-        if (!guestMode) {
-            const verificado = await window.authService.verifyToken();
-            if (!verificado.success) {
-                alert('Sessão expirada. Por favor, faça login novamente.');
-                window.location.href = 'login.html';
-                return;
-            }
-        }
-        
-        // Chamar método original
-        super.finalizarProva();
-    }
 }
 
 // Substituir a inicialização original
@@ -419,18 +402,27 @@ class ProvaManager {
         }, 1000);
     }
     
-    handleKeyDown(e) {
+    async handleKeyDown(e) {
         // Prevenir F5
         if (e.key === 'F5') {
             e.preventDefault();
-            alert('Recarregar a página cancelará sua prova!');
+            // Trocar alert por toast
+            if (typeof this.showToast === 'function') {
+                this.showToast('Recarregar a página cancelará sua prova!', 'warning');
+            } else {
+                console.warn('Recarregar a página cancelará sua prova!');
+            }
             return;
         }
         
         // Prevenir Ctrl+R
         if (e.ctrlKey && e.key === 'r') {
             e.preventDefault();
-            alert('Recarregar a página cancelará sua prova!');
+            if (typeof this.showToast === 'function') {
+                this.showToast('Recarregar a página cancelará sua prova!', 'warning');
+            } else {
+                console.warn('Recarregar a página cancelará sua prova!');
+            }
             return;
         }
         
@@ -464,7 +456,8 @@ class ProvaManager {
         // Atalho para finalizar (Esc)
         if (e.key === 'Escape') {
             e.preventDefault();
-            if (confirm('Deseja finalizar a prova?')) {
+            const confirmar = await confirm('Deseja finalizar a prova?');
+            if (confirmar) {
                 this.finalizarProva();
             }
             return;
@@ -523,7 +516,7 @@ class ProvaManager {
         const total = this.questoes.length;
         
         if (respondidas < total) {
-            const confirmar = confirm(`Você respondeu apenas ${respondidas} de ${total} questões. Deseja finalizar mesmo assim?`);
+            const confirmar = await confirm(`Você respondeu apenas ${respondidas} de ${total} questões. Deseja finalizar mesmo assim?`);
             if (!confirmar) return;
         }
         
@@ -592,7 +585,7 @@ class ProvaManager {
                 btnFinalizar.innerHTML = '<i class="fas fa-paper-plane"></i> Finalizar Prova';
             }
             
-            const tentarOffline = confirm(`❌ Erro ao enviar prova: ${error.message}\n\nDeseja calcular o resultado localmente?`);
+            const tentarOffline = await confirm(`❌ Erro ao enviar prova: ${error.message}\n\nDeseja calcular o resultado localmente?`);
             
             if (tentarOffline) {
                 // Modo offline - calcular resultado localmente

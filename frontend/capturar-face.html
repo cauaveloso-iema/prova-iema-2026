@@ -20,6 +20,7 @@
 
     <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/capturar-face.css">
+    <script src="js/dialog-helper.js"></script>
 
 </head>
 <body>
@@ -508,7 +509,9 @@
         btnSkip.addEventListener('click', async function(e) {
             e.preventDefault();
             
-            if (confirm('Deseja pular o cadastro facial? Você poderá fazer depois.')) {
+            const confirmar = await confirm('Deseja pular o cadastro facial? Você poderá fazer depois.');
+            
+            if (confirmar) {
                 this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
                 this.disabled = true;
                 

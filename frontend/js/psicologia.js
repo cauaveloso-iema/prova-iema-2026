@@ -2094,7 +2094,7 @@ async function confirmarFinalizacao(atendimentoId, resultado) {
     if (modal) modal.hide();
     
     if (resultado === 'em_acompanhamento') {
-        const querRemarcar = confirm(
+        const querRemarcar = await confirm(
             '✅ Atendimento marcado como "Em Acompanhamento".\n\n' +
             '🔄 Deseja REMARCAR este atendimento para uma nova data?\n\n' +
             '• Sim → Abre formulário de remarcação\n' +
@@ -2295,7 +2295,8 @@ async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
     if (modal) modal.hide();
     
     if (acao === 'cancelado') {
-        if (!confirm('Tem certeza que deseja CANCELAR esta remarcação?')) return;
+        const confirmar = await confirm('Tem certeza que deseja CANCELAR esta remarcação?');
+        if (!confirmar) return;
     }
     
     try {
@@ -2308,15 +2309,27 @@ async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ ${data.message}`);
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido(`✅ ${data.message}`, 'success');
+            } else {
+                console.log(`✅ ${data.message}`);
+            }
             carregarAtendimentosAtivos();
             carregarLembretes();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao finalizar remarcação'));
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao finalizar remarcação'), 'error');
+            } else {
+                console.error('❌ ' + (data.error || 'Erro'));
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao finalizar remarcação');
+        if (typeof mostrarToastConcluido === 'function') {
+            mostrarToastConcluido('Erro ao finalizar remarcação', 'error');
+        } else {
+            console.error('Erro ao finalizar remarcação');
+        }
     }
 }
 
@@ -2343,8 +2356,12 @@ function abrirRemarcarPorRemarcacao(remarcacaoId) {
 
 async function excluirAtendimento(atendimentoId) {
     if (!atendimentoId) return;
-    if (!confirm('⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nEsta ação não pode ser desfeita!')) return;
-    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?')) return;
+    
+    const confirmar1 = await confirm('⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nEsta ação não pode ser desfeita!');
+    if (!confirmar1) return;
+    
+    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?');
+    if (!confirmar2) return;
     
     try {
         const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
@@ -2355,17 +2372,29 @@ async function excluirAtendimento(atendimentoId) {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Atendimento excluído com sucesso!');
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido('✅ Atendimento excluído com sucesso!', 'success');
+            } else {
+                console.log('✅ Atendimento excluído com sucesso!');
+            }
             carregarAtendimentosAtivos();
             carregarDashboard();
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            alert('❌ ' + (data.error || 'Erro ao excluir'));
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao excluir'), 'error');
+            } else {
+                console.error('❌ ' + (data.error || 'Erro ao excluir'));
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir atendimento');
+        if (typeof mostrarToastConcluido === 'function') {
+            mostrarToastConcluido('Erro ao excluir atendimento', 'error');
+        } else {
+            console.error('Erro ao excluir atendimento');
+        }
     }
 }
 
@@ -2587,11 +2616,13 @@ function renderizarPaginacaoConcluidos(totalPaginas) {
 async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
     if (!atendimentoId) return;
 
-    if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`)) {
+    const confirmar1 = await confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`);
+    if (!confirmar1) {
         return;
     }
 
-    if (!confirm(`⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?`)) {
+    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?');
+    if (!confirmar2) {
         return;
     }
 
@@ -2623,15 +2654,27 @@ async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
                 }, 300);
             }
 
-            mostrarToastConcluido('✅ Atendimento excluído com sucesso!', 'success');
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido('✅ Atendimento excluído com sucesso!', 'success');
+            } else {
+                console.log('✅ Atendimento excluído com sucesso!');
+            }
             carregarDashboard();
             carregarLembretes();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao excluir'));
+            if (typeof mostrarToastConcluido === 'function') {
+                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao excluir'), 'error');
+            } else {
+                console.error('❌ ' + (data.error || 'Erro ao excluir'));
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir atendimento');
+        if (typeof mostrarToastConcluido === 'function') {
+            mostrarToastConcluido('Erro ao excluir atendimento', 'error');
+        } else {
+            console.error('Erro ao excluir atendimento');
+        }
     }
 }
 
@@ -3615,8 +3658,9 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
     </html>`;
 }
 
-function logout() {
-    if (confirm('Tem certeza que deseja sair do sistema?')) {
+async function logout() {
+    const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
+    if (confirmar) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         window.location.href = '/login.html';

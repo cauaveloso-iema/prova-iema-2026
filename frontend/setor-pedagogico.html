@@ -22,6 +22,7 @@
 
     <link rel="stylesheet" href="css/setor-pedagogico.css">
     <link rel="stylesheet" href="css/substituicao-professores.css">
+    <script src="js/dialog-helper.js"></script> 
 </head>
 <body>
     <button class="mobile-menu-btn" id="mobileMenuBtn">
@@ -1321,7 +1322,8 @@
                 
                 const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
                 if (nenhumaOpcao) {
-                    if (confirm('Nenhuma opção selecionada. Imprimir normalmente?')) {
+                    const confirmar = await confirm('Nenhuma opção selecionada. Imprimir normalmente?');
+                    if (confirmar) {
                         this.fecharModalAdaptacao('modalOpcoesAdaptacao');
                         await this.gerarImpressaoNormal();
                     }
@@ -2435,19 +2437,34 @@
             async registrarSegundaChamada() {
                 const est = this.estadoSegundaChamada;
                 
-                if (!est.motivoSelecionado) { alert('Selecione o motivo'); return; }
+                if (!est.motivoSelecionado) { 
+                    this.showToast('Selecione o motivo', 'error'); 
+                    return; 
+                }
+                
                 const data = document.getElementById('segundaChamadaData')?.value;
-                if (!data) { alert('Preencha a data'); return; }
+                if (!data) { 
+                    this.showToast('Preencha a data', 'error'); 
+                    return; 
+                }
                 
                 if (est.motivoSelecionado === 'outros') {
                     const motivoOutros = document.getElementById('segundaChamadaMotivoOutros')?.value.trim();
-                    if (!motivoOutros) { alert('Especifique o motivo'); return; }
+                    if (!motivoOutros) { 
+                        this.showToast('Especifique o motivo', 'error'); 
+                        return; 
+                    }
                 }
-                if (!est.currentAluno) { alert('Nenhum aluno selecionado'); return; }
+                
+                if (!est.currentAluno) { 
+                    this.showToast('Nenhum aluno selecionado', 'error'); 
+                    return; 
+                }
                 
                 const assinaturaBase64 = this.obterAssinaturaBase64();
                 if (!assinaturaBase64) {
-                    if (!confirm('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?')) return;
+                    const confirmar = await confirm('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?');
+                    if (!confirmar) return;
                 }
                 
                 const btn = document.querySelector('#formSegundaChamada .btn-primary-custom');
@@ -2471,13 +2488,16 @@
                     
                     const r = await fetch('/api/gestao-geral/autorizacao/registrar', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'Authorization': `Bearer ${this.token}` 
+                        },
                         body: JSON.stringify(body)
                     });
                     const d = await r.json();
                     
                     if (!d.success) {
-                        alert('❌ ' + (d.error || 'Erro'));
+                        this.showToast('❌ ' + (d.error || 'Erro'), 'error');
                         return;
                     }
                     
@@ -2509,7 +2529,10 @@
                         
                         const justR = await fetch('/api/gestao-geral/autorizacao/registrar', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
+                            headers: { 
+                                'Content-Type': 'application/json', 
+                                'Authorization': `Bearer ${this.token}` 
+                            },
                             body: JSON.stringify(justBody)
                         });
                         const justD = await justR.json();
@@ -2521,10 +2544,11 @@
                     }
                     
                     let msg = `✅ ${d.message}`;
-                    if (justificativaCriada) msg += `\n\n✅ Justificativa de Falta criada automaticamente!`;
-                    alert(msg);
+                    if (justificativaCriada) msg += ' — Justificativa criada automaticamente!';
+                    this.showToast(msg, 'success');
                     
-                    if (confirm('Deseja IMPRIMIR agora?')) {
+                    const imprimir = await confirm('Deseja IMPRIMIR agora?');
+                    if (imprimir) {
                         this.imprimirSegundaChamada(d.autorizacao.id);
                     }
                     
@@ -2532,10 +2556,13 @@
                     await this.carregarListaSegundaChamada();
                     
                     if (est.modoAtual === 'automatico') this.reiniciarScannerSegundaChamada();
+                    
                 } catch (e) {
                     console.error(e);
-                    alert('Erro ao registrar');
-                } finally { if (btn) btn.disabled = false; }
+                    this.showToast('Erro ao registrar', 'error');
+                } finally { 
+                    if (btn) btn.disabled = false; 
+                }
             }
             
             limparTelaSegundaChamada() {
@@ -3356,7 +3383,8 @@
             }
             
             async excluirSegundaChamada(id) {
-                if (!confirm('Tem certeza que deseja EXCLUIR este registro de 2ª Chamada?\n\nEsta ação não pode ser desfeita.')) return;
+                const confirmar = await confirm('Tem certeza que deseja EXCLUIR este registro de 2ª Chamada?\n\nEsta ação não pode ser desfeita.');
+                if (!confirmar) return;
                 
                 try {
                     const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
@@ -3365,12 +3393,14 @@
                     });
                     const d = await r.json();
                     if (d.success) {
-                        alert('✅ Excluído com sucesso!');
+                        this.showToast('✅ Excluído com sucesso!', 'success');
                         this.carregarListaSegundaChamada();
-                    } else alert('❌ ' + (d.error || 'Erro'));
+                    } else {
+                        this.showToast('❌ ' + (d.error || 'Erro'), 'error');
+                    }
                 } catch (e) {
                     console.error(e);
-                    alert('Erro ao excluir');
+                    this.showToast('Erro ao excluir', 'error');
                 }
             }
 
@@ -4732,7 +4762,8 @@
             }
             
             async excluirSubstituicao(id) {
-                if (!confirm('⚠️ Tem certeza que deseja excluir?\n\nEsta ação não pode ser desfeita.')) return;
+                const confirmar = await confirm('⚠️ Tem certeza que deseja excluir?\n\nEsta ação não pode ser desfeita.');
+                if (!confirmar) return;
                 
                 try {
                     const response = await fetch(`/api/substituicao-professor/${id}`, {
@@ -5613,7 +5644,8 @@
                                     opcoes.tamanho_fonte === 12;
                 
                 if (nenhumaOpcao) {
-                    if (!confirm('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?')) return;
+                    const confirmar = await confirm('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
+                    if (!confirmar) return;
                 }
                 
                 const processandoDiv = document.getElementById('processandoMsgSetor');

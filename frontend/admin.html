@@ -765,8 +765,8 @@
                             // Fechar dropdown
                             document.getElementById('notificacoesDropdown')?.classList.remove('show');
                             
-                            // Perguntar se quer gerar códigos
-                            const confirmar = confirm(`🔐 Gerar 10 novos códigos de backup para o professor ${usuarioNome || dados.solicitanteNome}?`);
+                            // Perguntar se quer gerar códigos (usa window.confirm sobrescrito pelo dialog-helper)
+                            const confirmar = await confirm(`🔐 Gerar 10 novos códigos de backup para o professor ${usuarioNome || dados.solicitanteNome}?`);
                             
                             if (confirmar) {
                                 await gerarCodigosBackupParaProfessor(
@@ -805,7 +805,7 @@
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                const confirmacao = confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+                const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
                 if (!confirmacao) return;
                 
                 // Mostrar loading
@@ -1116,7 +1116,8 @@
         async function excluirNotificacao(id, event) {
             event.stopPropagation();
             
-            if (!confirm('🗑️ Deseja excluir esta notificação?')) return;
+            const confirmar = await confirm('🗑️ Deseja excluir esta notificação?');
+            if (!confirmar) return;
             
             try {
                 const token = localStorage.getItem('auth_token');
@@ -1463,6 +1464,7 @@
 
         <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
+    <script src="js/dialog-helper.js"></script>
 
     <script>
     // ============================================
@@ -2298,7 +2300,8 @@ window.testarNotificacao = function() {
                 );
                 
                 // Perguntar se quer sair agora
-                if (confirm('Deseja sair agora para testar como será a experiência do usuário?')) {
+                const querSair = await confirm('Deseja sair agora para testar como será a experiência do usuário?');
+                if (querSair) {
                     localStorage.removeItem('auth_token');
                     localStorage.removeItem('user_data');
                     window.location.href = 'login.html';

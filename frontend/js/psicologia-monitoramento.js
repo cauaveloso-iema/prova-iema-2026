@@ -803,7 +803,8 @@ class MonitoramentoPsicologia {
     }
 
     async excluirAtendimento(atendimentoId, alunoNome) {
-        if (!confirm(`Excluir a ocorrência de ${alunoNome}?\n\nEsta ação não pode ser desfeita!`)) return;
+        const confirmar = await confirm(`Excluir a ocorrência de ${alunoNome}?\n\nEsta ação não pode ser desfeita!`);
+        if (!confirmar) return;
         
         try {
             const response = await fetch(`${this.apiBase}/atendimento/${atendimentoId}`, {

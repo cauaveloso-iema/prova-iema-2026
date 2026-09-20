@@ -25,6 +25,7 @@
 
     <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/corrigir-prova.css">
+    <script src="js/dialog-helper.js"></script> 
 
 </head>
 <body>
@@ -1362,12 +1363,21 @@
         
         async function salvarNota() {
             if (!alunoSelecionado) { mostrarAlerta('Selecione um aluno!', 'error'); return; }
-            if (!confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${alunoSelecionado.nome}?`)) return;
+            
+            const confirmar = await confirm(`Salvar nota ${notaCalculada.toFixed(1)} para ${alunoSelecionado.nome}?`);
+            if (!confirmar) return;
+            
             try {
-                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { method: 'POST', body: JSON.stringify({ alunoId: alunoSelecionado.id, nota: notaCalculada, observacao: `Corrigido em ${new Date().toLocaleString()}` }) });
+                const response = await fazerRequisicao(`/api/professor/provas/${provaId}/nota-manual`, { 
+                    method: 'POST', 
+                    body: JSON.stringify({ 
+                        alunoId: alunoSelecionado.id, 
+                        nota: notaCalculada, 
+                        observacao: `Corrigido em ${new Date().toLocaleString()}` 
+                    }) 
+                });
                 const data = await response.json();
                 if (data.success) { 
-                    // Marcar que este aluno já foi corrigido
                     resultadosSalvos.set(alunoSelecionado.id, true);
                     qrSelecionadoDiv.classList.add('ja-corrigido');
                     mostrarAlerta(`✅ Nota salva!`, 'success'); 
@@ -1375,7 +1385,9 @@
                 } else { 
                     throw new Error(data.error || 'Erro'); 
                 }
-            } catch (error) { mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); }
+            } catch (error) { 
+                mostrarAlerta(`❌ Erro: ${error.message}`, 'error'); 
+            }
         }
         
         function mostrarAlerta(msg, tipo) { const cores = { success: '#10b981', error: '#ef4444', info: '#3b82f6', warning: '#f59e0b' }; const alertDiv = document.createElement('div'); alertDiv.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;background:${cores[tipo]};color:white;padding:12px;border-radius:16px;text-align:center;z-index:10000;font-weight:bold;font-size:12px;`; alertDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${msg}`; document.body.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 3000); }

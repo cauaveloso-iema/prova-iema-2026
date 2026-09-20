@@ -1354,7 +1354,7 @@
                     return;
                 }
                 
-                const confirmacao = confirm(`Liberar TODAS as ${pendentes} notas?\n\n✅ Notas serão visíveis para todos os alunos\n⚠️ Esta ação não pode ser desfeita`);
+                const confirmacao = await confirm(`Liberar TODAS as ${pendentes} notas?\n\n✅ Notas serão visíveis para todos os alunos\n⚠️ Esta ação não pode ser desfeita`);
                 
                 if (!confirmacao) return;
                 
@@ -1391,7 +1391,7 @@
                 
                 if (!provaId) return;
                 
-                const confirmacao = confirm(`Liberar nota para ${alunoNome}?\nNota: ${nota.toFixed(1)}`);
+                const confirmacao =await confirm(`Liberar nota para ${alunoNome}?\nNota: ${nota.toFixed(1)}`);
                 
                 if (!confirmacao) return;
                 
@@ -1494,6 +1494,7 @@
 
         <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
+    <script src="js/dialog-helper.js"></script> 
 
         <script>
 
@@ -1927,7 +1928,7 @@ async function salvarNotaManualAluno(alunoId, alunoNome) {
             return;
         }
         
-        const confirmacao = confirm(`Definir NOTA MANUAL ${novaNota.toFixed(1)} para ${alunoNome}?`);
+        const confirmacao = await confirm(`Definir NOTA MANUAL ${novaNota.toFixed(1)} para ${alunoNome}?`);
         
         if (!confirmacao) return;
         

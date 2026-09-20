@@ -528,7 +528,8 @@ async function salvarClube() {
 }
 
 async function excluirClube(id, nome) {
-    if (!confirm(`Excluir o clube "${nome}"?\n\nEsta ação não pode ser desfeita.`)) return;
+    const confirmar = await confirm(`Excluir o clube "${nome}"?\n\nEsta ação não pode ser desfeita.`);
+    if (!confirmar) return;
     
     try {
         const response = await fetch(`/api/protagonismo/clubes/${id}`, {
@@ -542,11 +543,19 @@ async function excluirClube(id, nome) {
             await carregarClubes();
             await carregarEstatisticas();
         } else {
-            alert('Erro: ' + data.error);
+            if (typeof mostrarToast === 'function') {
+                mostrarToast('Erro: ' + data.error, 'error');
+            } else {
+                console.error('Erro: ' + data.error);
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir clube');
+        if (typeof mostrarToast === 'function') {
+            mostrarToast('Erro ao excluir clube', 'error');
+        } else {
+            console.error('Erro ao excluir clube');
+        }
     }
 }
 
@@ -617,7 +626,8 @@ async function carregarInscricoes() {
 }
 
 async function excluirInscricao(id, nome) {
-    if (!confirm(`Excluir a inscrição de "${nome}"?\n\nA vaga será liberada no clube.`)) return;
+    const confirmar = await confirm(`Excluir a inscrição de "${nome}"?\n\nA vaga será liberada no clube.`);
+    if (!confirmar) return;
     
     try {
         const response = await fetch(`/api/protagonismo/inscricoes/${id}`, {
@@ -632,11 +642,19 @@ async function excluirInscricao(id, nome) {
             await carregarClubes();
             await carregarEstatisticas();
         } else {
-            alert('Erro: ' + data.error);
+            if (typeof mostrarToast === 'function') {
+                mostrarToast('Erro: ' + data.error, 'error');
+            } else {
+                console.error('Erro: ' + data.error);
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir');
+        if (typeof mostrarToast === 'function') {
+            mostrarToast('Erro ao excluir', 'error');
+        } else {
+            console.error('Erro ao excluir');
+        }
     }
 }
 
@@ -807,7 +825,8 @@ async function salvarTutor() {
 }
 
 async function excluirTutor(id, nome) {
-    if (!confirm(`Excluir o tutor "${nome}"?`)) return;
+    const confirmar = await confirm(`Excluir o tutor "${nome}"?`);
+    if (!confirmar) return;
     
     try {
         const response = await fetch(`/api/protagonismo/tutores/${id}`, {
@@ -821,7 +840,11 @@ async function excluirTutor(id, nome) {
             await carregarTutores();
             await carregarEstatisticas();
         } else {
-            alert('Erro: ' + data.error);
+            if (typeof mostrarToast === 'function') {
+                mostrarToast('Erro: ' + data.error, 'error');
+            } else {
+                console.error('Erro: ' + data.error);
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
@@ -1013,7 +1036,8 @@ async function salvarCandidato() {
 }
 
 async function excluirCandidato(id, nome) {
-    if (!confirm(`Excluir o candidato "${nome}"?`)) return;
+    const confirmar = await confirm(`Excluir o candidato "${nome}"?`);
+    if (!confirmar) return;
     
     try {
         const response = await fetch(`/api/protagonismo/candidatos/${id}`, {
@@ -1027,7 +1051,11 @@ async function excluirCandidato(id, nome) {
             await carregarCandidatos();
             await carregarEstatisticas();
         } else {
-            alert('Erro: ' + data.error);
+            if (typeof mostrarToast === 'function') {
+                mostrarToast('Erro: ' + data.error, 'error');
+            } else {
+                console.error('Erro: ' + data.error);
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
@@ -1175,8 +1203,9 @@ function mostrarToast(mensagem, tipo = 'info') {
     setTimeout(() => toast.remove(), 3000);
 }
 
-function logout() {
-    if (confirm('Tem certeza que deseja sair do sistema?')) {
+async function logout() {
+    const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
+    if (confirmar) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         window.location.href = '/login.html';

@@ -19206,11 +19206,12 @@ class AdminPanel {
     }
 
     // Excluir questão
-    excluirQuestao(questaoIndex) {
+    async excluirQuestao(questaoIndex) {
         if (this.provaGeradaAdmin && this.provaGeradaAdmin.questoes.length > 1) {
-            if (confirm('Tem certeza que deseja excluir esta questão?')) {
+            const confirmar = await confirm('Tem certeza que deseja excluir esta questão?');
+            if (confirmar) {
                 this.provaGeradaAdmin.questoes.splice(questaoIndex, 1);
-                this.abrirEdicaoQuestoesPreview(); // Recarregar o modal
+                this.abrirEdicaoQuestoesPreview();
                 this.mostrarAlertaAdmin('✅ Questão excluída!', 'success');
             }
         } else {
@@ -21567,11 +21568,12 @@ class AdminPanel {
         this.mostrarToast('📅 Solução agendada', 'info');
     }
 
-    ignorarAnomalia(anomaliaId) {
+    async ignorarAnomalia(anomaliaId) {
         const anomaliaCard = document.getElementById(`anomalia-${anomaliaId}`);
         if (!anomaliaCard) return;
         
-        if (confirm('Ignorar esta anomalia?')) {
+        const confirmar = await confirm('Ignorar esta anomalia?');
+        if (confirmar) {
             anomaliaCard.remove();
             this.adicionarLogServidor({
                 type: 'warn',
@@ -33045,7 +33047,7 @@ class AdminPanel {
         const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
         
         if (nenhumaOpcao) {
-            const confirmar = confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
+            const confirmar = await confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
             if (confirmar) {
                 this.fecharModalOpcoesAdaptacao();
                 await this.gerarImpressaoNormal();

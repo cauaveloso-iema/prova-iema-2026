@@ -603,7 +603,7 @@ async function confirmarVoto() {
         return;
     }
     
-    const confirmado = confirm(
+    const confirmado = await confirm(
         '📊 Confirme seu voto:\n\n' +
         `Líder: ${candidatoLiderSelecionado?.nome || 'Não votou'}\n` +
         `Vice-Líder: ${candidatoViceSelecionado?.nome || 'Não votou'}\n\n` +

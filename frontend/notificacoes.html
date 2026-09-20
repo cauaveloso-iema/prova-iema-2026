@@ -438,7 +438,8 @@
         }
         
         async function excluirNotificacaoPage(id) {
-            if (!confirm('Excluir esta notificação?')) return;
+            const confirmar = await confirm('Excluir esta notificação?');
+            if (!confirmar) return;
             
             try {
                 const token = localStorage.getItem('auth_token');
@@ -458,12 +459,18 @@
                 
             } catch (error) {
                 console.error('Erro ao excluir:', error);
-                alert('Erro ao excluir notificação');
+                // Trocar alert por toast (evita travar)
+                if (typeof showToast === 'function') {
+                    showToast('Erro ao excluir notificação', 'error');
+                } else {
+                    console.error('Erro ao excluir notificação');
+                }
             }
         }
         
         async function marcarTodasLidasPage() {
-            if (!confirm('Marcar todas as notificações como lidas?')) return;
+            const confirmar = await confirm('Marcar todas as notificações como lidas?');
+            if (!confirmar) return;
             
             try {
                 const token = localStorage.getItem('auth_token');
@@ -481,12 +488,17 @@
                 
             } catch (error) {
                 console.error('Erro:', error);
-                alert('Erro ao marcar todas como lidas');
+                if (typeof showToast === 'function') {
+                    showToast('Erro ao marcar todas como lidas', 'error');
+                } else {
+                    console.error('Erro ao marcar todas como lidas');
+                }
             }
         }
         
         async function limparTodasNotificacoesPage() {
-            if (!confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.')) return;
+            const confirmar = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+            if (!confirmar) return;
             
             try {
                 const token = localStorage.getItem('auth_token');
@@ -499,7 +511,12 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert(`✅ ${data.message}`);
+                    // Trocar alert por toast
+                    if (typeof showToast === 'function') {
+                        showToast(`✅ ${data.message}`, 'success');
+                    } else {
+                        console.log(`✅ ${data.message}`);
+                    }
                     carregarTodasNotificacoes();
                 } else {
                     throw new Error(data.error || 'Erro ao limpar');
@@ -507,7 +524,11 @@
                 
             } catch (error) {
                 console.error('Erro:', error);
-                alert('❌ ' + error.message);
+                if (typeof showToast === 'function') {
+                    showToast('❌ ' + error.message, 'error');
+                } else {
+                    console.error('❌ ' + error.message);
+                }
             }
         }
     </script>
@@ -528,6 +549,7 @@
 
         <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
+    <script src="js/dialog-helper.js"></script> 
 
         <script>
 

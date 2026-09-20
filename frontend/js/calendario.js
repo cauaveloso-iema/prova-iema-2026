@@ -798,7 +798,8 @@ class CalendarioAcademico {
 
     // ============ EXCLUIR EVENTO ============
     async excluirEvento(eventoId) {
-        if (!confirm('Tem certeza que deseja excluir este evento?')) {
+        const confirmar = await confirm('Tem certeza que deseja excluir este evento?');
+        if (!confirmar) {
             return;
         }
         
@@ -827,7 +828,14 @@ class CalendarioAcademico {
             }
             
             if (data.success) {
-                alert('✅ Evento excluído com sucesso!');
+                // ✅ Trocar alert por toast
+                if (typeof this.mostrarAlerta === 'function') {
+                    this.mostrarAlerta('✅ Evento excluído com sucesso!', 'success');
+                } else if (typeof showToast === 'function') {
+                    showToast('✅ Evento excluído com sucesso!', 'success');
+                } else {
+                    console.log('✅ Evento excluído com sucesso!');
+                }
                 this.fecharModal();
                 await this.carregarEventos();
                 this.renderizarCalendario();
@@ -837,7 +845,14 @@ class CalendarioAcademico {
             
         } catch (error) {
             console.error('❌ Erro:', error);
-            alert('❌ ' + error.message);
+            // ✅ Trocar alert por toast
+            if (typeof this.mostrarAlerta === 'function') {
+                this.mostrarAlerta('❌ ' + error.message, 'error');
+            } else if (typeof showToast === 'function') {
+                showToast('❌ ' + error.message, 'error');
+            } else {
+                console.error('❌ ' + error.message);
+            }
         }
     }
 

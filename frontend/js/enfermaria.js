@@ -932,11 +932,11 @@ async function salvarEdicaoAtendimento() {
 async function excluirAtendimento(atendimentoId, alunoNome) {
     if (!atendimentoId) return;
     
-    if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação NÃO pode ser desfeita!`)) {
+    if (!(await confirmar(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação NÃO pode ser desfeita!`))) {
         return;
     }
     
-    if (!confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?')) {
+    if (!(await confirmar('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?'))) {
         return;
     }
     
@@ -1352,8 +1352,8 @@ async function exportarPDF() {
     alert('Função de PDF será implementada em breve');
 }
 
-function logout() {
-    if (confirm('Tem certeza que deseja sair do sistema?')) {
+async function logout() {
+    if (await confirmar('Tem certeza que deseja sair do sistema?')) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         window.location.href = '/login.html';

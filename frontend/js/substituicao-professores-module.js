@@ -795,7 +795,8 @@ window.SubstituicaoProfessoresModule = {
     // EXCLUIR
     // ============================================
     async excluirSubstituicao(id) {
-        if (!confirm('⚠️ Tem certeza que deseja excluir?\n\nEsta ação não pode ser desfeita.')) return;
+        const confirmar = await confirm('⚠️ Tem certeza que deseja excluir?\n\nEsta ação não pode ser desfeita.');
+        if (!confirmar) return;
         
         try {
             const response = await fetch(`/api/substituicao-professor/${id}`, {
