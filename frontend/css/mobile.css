@@ -1784,11 +1784,6 @@
         z-index: 10 !important;
     }
 }
-
-/* ==================================================
-   CORREÇÃO CRÍTICA: BOTÃO DE SENHA (MOSTRAR/OCULTAR)
-   Sobrescreve a regra global "button { width: 100% }"
-   ================================================== */
 @media screen and (max-width: 768px) {
     .toggle-password,
     button.toggle-password,
