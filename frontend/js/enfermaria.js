@@ -1353,13 +1353,13 @@ async function exportarPDF() {
 }
 
 async function logout() {
-    if (await confirmar('Tem certeza que deseja sair do sistema?')) {
+    const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
+    if (confirmar) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         window.location.href = '/login.html';
     }
 }
-
 // ============================================
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================

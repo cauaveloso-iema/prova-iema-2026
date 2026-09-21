@@ -220,18 +220,19 @@ class OneSignalService {
                 app_id: this.appId,
                 headings: { en: titulo, pt: titulo },
                 contents: { en: mensagem, pt: mensagem },
-                include_player_ids: playerIds,
-                data: {
-                    ...dados,
-                    timestamp: Date.now(),
-                    lote: true
-                },
+                include_player_ids: [user.onesignalPlayerId],
+                data: dadosCompletos,
+                
+                // 🔥 FAZ O APP ABRIR QUANDO O USUÁRIO TOCA NA NOTIFICAÇÃO
+                android_intent: 'com.iema.provas.Screen1',
+                
                 android_sound: 'notification',
+                android_led_color: 'FF0D6EFD',
+                android_accent_color: 'FF0D6EFD',
                 small_icon: 'ic_notification',
                 large_icon: 'ic_notification',
-                android_accent_color: 'FF0D6EFD',
                 priority: 10,
-                ttl: 86400
+                ttl: 86400,
             };
 
             const response = await axios.post('https://onesignal.com/api/v1/notifications', payload, {

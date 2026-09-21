@@ -164,6 +164,10 @@ class OneSignalAdminService {
                     admin: adminNome,
                     origem: 'sistema_provas'
                 },
+                
+                // 🔥 FAZ O APP ABRIR QUANDO O USUÁRIO TOCA NA NOTIFICAÇÃO
+                android_intent: 'com.iema.provas.Screen1',
+                
                 android_sound: 'notification',
                 android_accent_color: 'FFE54B4B',
                 small_icon: 'ic_notification',
