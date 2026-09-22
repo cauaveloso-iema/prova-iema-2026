@@ -16,6 +16,11 @@ const SubstituicaoProfessorSchema = new mongoose.Schema({
     professorSubstitutoTelefone: { type: String, default: '' },
     professorSubstitutoEixo: { type: String, default: '' },
     
+    // ⭐ NOVO: Ausência do Substituto
+    substitutoAusente: { type: Boolean, default: false },
+    substitutoAusenteMotivo: { type: String, default: '' },
+    substitutoAusenteObservacoes: { type: String, default: '' },
+    
     // Aula
     turma: { type: String, required: true },
     horario: { type: Number, required: true, min: 1, max: 9 },
@@ -51,5 +56,6 @@ const SubstituicaoProfessorSchema = new mongoose.Schema({
 SubstituicaoProfessorSchema.index({ mesReferencia: 1, data: -1 });
 SubstituicaoProfessorSchema.index({ professorAusenteId: 1 });
 SubstituicaoProfessorSchema.index({ turma: 1, data: 1 });
+SubstituicaoProfessorSchema.index({ substitutoAusente: 1 });
 
 module.exports = mongoose.model('SubstituicaoProfessor', SubstituicaoProfessorSchema);

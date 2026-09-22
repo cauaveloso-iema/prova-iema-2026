@@ -22,21 +22,19 @@ const urlsToCache = [
 
 // INSTALAÇÃO - FORÇAR CACHE IMEDIATO
 self.addEventListener('install', event => {
-    console.log('📦 Instalando Service Worker e criando cache...');
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => {
-                console.log(`✅ Adicionando ${urlsToCache.length} arquivos ao cache...`);
-                return cache.addAll(urlsToCache);
-            })
-            .then(() => {
-                console.log('✅ Cache criado com sucesso!');
-                return self.skipWaiting();
-            })
-            .catch(error => {
-                console.error('❌ Erro ao criar cache:', error);
-            })
+        caches.open(CACHE_NAME).then(async cache => {
+            for (const url of urlsToCache) {
+                try {
+                    await cache.add(url);
+                } catch (err) {
+                    console.warn(`⚠️ Falha ao cachear ${url}:`, err.message);
+                    // Continua mesmo assim
+                }
+            }
+        })
     );
+    self.skipWaiting();
 });
 
 // ATIVAÇÃO - LIMPAR CACHES ANTIGOS
@@ -57,36 +55,33 @@ self.addEventListener('activate', event => {
 
 // INTERCEPTAÇÃO - SERVIR DO CACHE
 self.addEventListener('fetch', event => {
-    if (event.request.url.includes('/api/')) {
+    const url = new URL(event.request.url);
+
+    // 🔥 NÃO cachear APIs
+    if (url.pathname.startsWith('/api/')) {
+        event.respondWith(fetch(event.request));
         return;
     }
 
+    // 🔥 NÃO cachear requisições não-GET
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
+    // Assets: cache-first
     event.respondWith(
-        caches.match(event.request)
-            .then(response => {
-                if (response) {
-                    console.log('📦 Cache hit:', event.request.url);
-                    return response;
+        caches.match(event.request).then(cached => {
+            return cached || fetch(event.request).then(response => {
+                // Só cachear respostas válidas
+                if (response.ok && response.type === 'basic') {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                 }
-
-                console.log('🌐 Buscando da rede:', event.request.url);
-                return fetch(event.request)
-                    .then(response => {
-                        if (!response || response.status !== 200) {
-                            return response;
-                        }
-
-                        const responseToCache = response.clone();
-                        caches.open(CACHE_NAME)
-                            .then(cache => cache.put(event.request, responseToCache));
-
-                        return response;
-                    })
-                    .catch(() => {
-                        if (event.request.mode === 'navigate') {
-                            return caches.match('/offline.html');
-                        }
-                    });
-            })
+                return response;
+            });
+        }).catch(() => {
+            // Fallback para página offline se existir
+            return caches.match('/offline.html');
+        })
     );
 });

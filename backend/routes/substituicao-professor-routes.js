@@ -66,7 +66,6 @@ const verificarPermissaoModulo = async (req, res, next) => {
 // ROTAS
 // ============================================
 
-// Verificar permissão
 router.get('/verificar-permissao', authenticateToken, async (req, res) => {
     try {
         if (req.userRole === 'admin' || req.userRole === 'super_admin') {
@@ -89,7 +88,6 @@ router.get('/verificar-permissao', authenticateToken, async (req, res) => {
     }
 });
 
-// Listar professores
 router.get('/professores', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const User = getUserModel();
@@ -124,7 +122,6 @@ router.get('/professores', authenticateToken, verificarPermissaoModulo, async (r
     }
 });
 
-// Listar turmas
 router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const User = getUserModel();
@@ -142,13 +139,17 @@ router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
-// Registrar substituição
+// Registrar substituição (COM SUBSTITUTO AUSENTE)
 router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
         const User = getUserModel();
         
-        const { professorAusenteId, professorSubstitutoId, turma, horario, data, motivo, motivoDetalhes, observacoes } = req.body;
+        const { 
+            professorAusenteId, professorSubstitutoId, turma, horario, data, 
+            motivo, motivoDetalhes, observacoes,
+            substitutoAusente, substitutoAusenteMotivo, substitutoAusenteObservacoes
+        } = req.body;
         
         if (!professorAusenteId || !professorSubstitutoId) return res.status(400).json({ success: false, error: 'Selecione os professores' });
         if (!turma) return res.status(400).json({ success: false, error: 'Selecione a turma' });
@@ -156,6 +157,10 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
         if (!data) return res.status(400).json({ success: false, error: 'Informe a data' });
         if (!motivo) return res.status(400).json({ success: false, error: 'Selecione o motivo' });
         if (professorAusenteId === professorSubstitutoId) return res.status(400).json({ success: false, error: 'Professores devem ser diferentes' });
+        
+        if (substitutoAusente && !substitutoAusenteMotivo) {
+            return res.status(400).json({ success: false, error: 'Informe o motivo da ausência do substituto' });
+        }
         
         const [profAusente, profSubstituto] = await Promise.all([
             User.findById(professorAusenteId).select('nome email telefone eixo').lean(),
@@ -182,6 +187,9 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
             professorSubstitutoEixo: profSubstituto.eixo || '',
             turma, horario: parseInt(horario), data, diaSemana,
             motivo, motivoDetalhes: motivoDetalhes || '', observacoes: observacoes || '',
+            substitutoAusente: substitutoAusente || false,
+            substitutoAusenteMotivo: substitutoAusente ? (substitutoAusenteMotivo || '') : '',
+            substitutoAusenteObservacoes: substitutoAusente ? (substitutoAusenteObservacoes || '') : '',
             mesReferencia,
             registradoPor: req.userId,
             registradoPorNome: req.userNome,
@@ -200,12 +208,15 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
 router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
-        const { mes, turma, motivo, busca, limit = 100, page = 1 } = req.query;
+        const { mes, turma, motivo, busca, substitutoAusente, limit = 100, page = 1 } = req.query;
         
         let filtro = { ativo: true };
         if (mes) filtro.mesReferencia = mes;
         if (turma) filtro.turma = turma;
         if (motivo) filtro.motivo = motivo;
+        if (substitutoAusente !== undefined && substitutoAusente !== '') {
+            filtro.substitutoAusente = substitutoAusente === 'true';
+        }
         if (busca) {
             const regex = { $regex: busca, $options: 'i' };
             filtro.$or = [
@@ -232,6 +243,9 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
                 dataFormatada: new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR'),
                 diaSemana: s.diaSemana, motivo: s.motivo, motivoDetalhes: s.motivoDetalhes,
                 observacoes: s.observacoes, mesReferencia: s.mesReferencia,
+                substitutoAusente: s.substitutoAusente || false,
+                substitutoAusenteMotivo: s.substitutoAusenteMotivo || '',
+                substitutoAusenteObservacoes: s.substitutoAusenteObservacoes || '',
                 registradoPor: s.registradoPorNome, registradoEm: s.registradoEm,
                 editadoPorNome: s.editadoPorNome, editadoEm: s.editadoEm
             })),
@@ -242,7 +256,6 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
-// Buscar uma substituição
 router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
@@ -258,8 +271,10 @@ router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
 router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
-        const User = getUserModel();
-        const { turma, horario, data, motivo, motivoDetalhes, observacoes } = req.body;
+        const { 
+            turma, horario, data, motivo, motivoDetalhes, observacoes,
+            substitutoAusente, substitutoAusenteMotivo, substitutoAusenteObservacoes
+        } = req.body;
         
         const substituicao = await Substituicao.findById(req.params.id);
         if (!substituicao) return res.status(404).json({ success: false, error: 'Não encontrada' });
@@ -277,6 +292,17 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
         if (motivoDetalhes !== undefined) substituicao.motivoDetalhes = motivoDetalhes;
         if (observacoes !== undefined) substituicao.observacoes = observacoes;
         
+        if (substitutoAusente !== undefined) {
+            substituicao.substitutoAusente = substitutoAusente;
+            if (substitutoAusente) {
+                substituicao.substitutoAusenteMotivo = substitutoAusenteMotivo || '';
+                substituicao.substitutoAusenteObservacoes = substitutoAusenteObservacoes || '';
+            } else {
+                substituicao.substitutoAusenteMotivo = '';
+                substituicao.substitutoAusenteObservacoes = '';
+            }
+        }
+        
         substituicao.editadoPor = req.userId;
         substituicao.editadoPorNome = req.userNome;
         substituicao.editadoEm = new Date();
@@ -288,7 +314,6 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
     }
 });
 
-// Excluir
 router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
@@ -306,7 +331,10 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
         const mes = req.query.mes || new Date().toISOString().substring(0, 7);
         const filtro = { mesReferencia: mes, ativo: true };
         
-        const [totalMes, porMotivo, porProfessorAusente, porProfessorSubstituto, porTurma, porHorario, ultimas, substituicoesPorDia] = await Promise.all([
+        const [
+            totalMes, porMotivo, porProfessorAusente, porProfessorSubstituto, 
+            porTurma, porHorario, ultimas, substituicoesPorDia, totalSubstitutosAusentes
+        ] = await Promise.all([
             Substituicao.countDocuments(filtro),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$motivo', count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$professorAusenteId', nome: { $first: '$professorAusenteNome' }, eixo: { $first: '$professorAusenteEixo' }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
@@ -314,7 +342,8 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$turma', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 15 }]),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$horario', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
             Substituicao.find(filtro).sort({ createdAt: -1 }).limit(10).lean(),
-            Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$data', count: { $sum: 1 } } }, { $sort: { _id: 1 } }])
+            Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$data', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
+            Substituicao.countDocuments({ ...filtro, substitutoAusente: true })
         ]);
         
         const motivosLabels = {
@@ -328,7 +357,8 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             success: true, mesReferencia: mes,
             resumo: {
                 totalMes,
-                mediaDiaria: substituicoesPorDia.length > 0 ? (totalMes / substituicoesPorDia.length).toFixed(1) : 0
+                mediaDiaria: substituicoesPorDia.length > 0 ? (totalMes / substituicoesPorDia.length).toFixed(1) : 0,
+                totalSubstitutosAusentes
             },
             porMotivo: porMotivo.map(m => ({ motivo: m._id, label: motivosLabels[m._id] || m._id, count: m.count })),
             professoresMaisAusentes: porProfessorAusente.map(p => ({ id: p._id, nome: p.nome, eixo: p.eixo, count: p.count })),
@@ -351,7 +381,7 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
 router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
-        const { mes, dataInicio, dataFim, turma, motivo } = req.query;
+        const { mes, dataInicio, dataFim, turma, motivo, substitutoAusente } = req.query;
         
         let filtro = { ativo: true };
         if (mes) filtro.mesReferencia = mes;
@@ -362,6 +392,9 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
         }
         if (turma) filtro.turma = turma;
         if (motivo) filtro.motivo = motivo;
+        if (substitutoAusente !== undefined && substitutoAusente !== '') {
+            filtro.substitutoAusente = substitutoAusente === 'true';
+        }
         
         const substituicoes = await Substituicao.find(filtro).sort({ data: -1, horario: 1 }).lean();
         
@@ -391,6 +424,9 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
                 diaSemana: s.diaSemana, motivo: s.motivo,
                 motivoLabel: motivosLabels[s.motivo] || s.motivo,
                 motivoDetalhes: s.motivoDetalhes, observacoes: s.observacoes,
+                substitutoAusente: s.substitutoAusente || false,
+                substitutoAusenteMotivo: s.substitutoAusenteMotivo || '',
+                substitutoAusenteObservacoes: s.substitutoAusenteObservacoes || '',
                 registradoPor: s.registradoPorNome, registradoEm: s.registradoEm
             }))
         });

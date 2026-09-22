@@ -1023,13 +1023,15 @@ class AdminPanel {
         this.atualizarPaginacaoOneSignal();
     }
 
-    // ============ 🔥 ABRIR MODAL DE VÍNCULO (CORRIGIDO) ============
+    // ============ 🔥 ABRIR MODAL DE VÍNCULO - TODOS OS PERFIS ============
     async abrirModalVincular(playerId) {
         try {
             const token = localStorage.getItem('auth_token');
             
-            // Buscar usuários disponíveis (apenas ativos)
-            const response = await fetch('/api/admin/usuarios?limit=100&status=ativo', {
+            console.log('📡 Buscando TODOS os usuários para vincular...');
+            
+            // 🔥 BUSCAR TODOS OS USUÁRIOS (SEM FILTRO DE STATUS)
+            const response = await fetch('/api/admin/usuarios?limit=2000', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -1037,15 +1039,38 @@ class AdminPanel {
             
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
             
+            // 🔥 USAR data.usuarios
             const usuarios = data.usuarios || [];
+            
+            console.log(`✅ ${usuarios.length} usuários carregados para vincular`);
+            
+            // Contagem por perfil
+            const contagemPorPerfil = {
+                aluno: usuarios.filter(u => u.role === 'aluno').length,
+                professor: usuarios.filter(u => u.role === 'professor').length,
+                admin: usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
+                setor_pedagogico: usuarios.filter(u => u.role === 'setor_pedagogico').length,
+                coordenacao_patio: usuarios.filter(u => u.role === 'coordenacao_patio').length,
+                cozinha: usuarios.filter(u => u.role === 'cozinha').length,
+                gestao_geral: usuarios.filter(u => u.role === 'gestao_geral').length,
+                enfermaria: usuarios.filter(u => u.role === 'enfermaria').length,
+                supervisao: usuarios.filter(u => u.role === 'supervisao').length,
+                psicologia: usuarios.filter(u => u.role === 'psicologia').length,
+                'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
+                protagonismo: usuarios.filter(u => u.role === 'protagonismo').length
+            };
             
             // Buscar dispositivo
             const dispositivo = this.onesignalDispositivos.find(d => d.playerId === playerId);
             
+            // Armazenar para filtro
+            this.usuariosParaVincular = usuarios;
+            this.roleFiltroVincular = 'todos';
+            
             const modalBody = document.getElementById('modalBody');
             modalBody.innerHTML = `
-                <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
-                    <!-- HEADER DO MODAL -->
+                <div style="padding: 0; max-height: 85vh; overflow-y: auto;">
+                    <!-- HEADER -->
                     <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 25px; color: white; position: sticky; top: 0; z-index: 10;">
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
@@ -1053,28 +1078,23 @@ class AdminPanel {
                             </div>
                             <div>
                                 <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Vincular Dispositivo</h2>
-                                <p style="margin: 5px 0 0; opacity: 0.9;">Link dispositivo a um usuário do sistema</p>
+                                <p style="margin: 5px 0 0; opacity: 0.9;">${usuarios.length} usuários disponíveis</p>
                             </div>
                         </div>
                     </div>
                     
                     <div style="padding: 25px;">
-                        <!-- INFORMAÇÕES DO DISPOSITIVO -->
-                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
-                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-info-circle" style="color: #10b981;"></i>
-                                Dispositivo
-                            </h3>
-                            
+                        <!-- INFO DO DISPOSITIVO -->
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                                 <div>
-                                    <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Player ID</div>
-                                    <div style="font-family: monospace; background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
-                                        ${playerId.substring(0, 20)}...
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 4px;">Player ID</div>
+                                    <div style="font-family: monospace; background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.8rem; word-break: break-all;">
+                                        ${playerId.substring(0, 30)}...
                                     </div>
                                 </div>
                                 <div>
-                                    <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">Tipo</div>
+                                    <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 4px;">Tipo</div>
                                     <div style="background: #f1f5f9; padding: 8px; border-radius: 6px; font-size: 0.85rem;">
                                         ${this.getTipoDispositivo(dispositivo?.deviceType)}
                                     </div>
@@ -1082,39 +1102,98 @@ class AdminPanel {
                             </div>
                         </div>
                         
-                        <!-- SELEÇÃO DE USUÁRIO -->
-                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
-                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-user" style="color: #10b981;"></i>
-                                Vincular a Usuário
-                            </h3>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Buscar usuário</label>
-                                <input type="text" id="buscaUsuarioVincular" class="form-control" 
-                                    placeholder="Digite nome ou email..."
-                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem;">
+                        <!-- GRID DE PERFIS -->
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 10px; font-weight: 600; font-size: 0.85rem; color: #374151;">
+                                <i class="fas fa-user-tag" style="color: #10b981;"></i> Filtrar por Perfil
+                            </label>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 200px; overflow-y: auto; padding: 5px;" id="gridPerfisVincular">
+                                <button type="button" class="perfil-vincular-btn active" data-role="todos" onclick="admin.filtrarVincularPorRole('todos')"
+                                    style="padding: 8px; border: 2px solid #10b981; border-radius: 8px; background: #ecfdf5; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #059669;">
+                                    📋 Todos (${usuarios.length})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="aluno" onclick="admin.filtrarVincularPorRole('aluno')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #1e40af;">
+                                    👨‍🎓 Alunos (${contagemPorPerfil.aluno})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="professor" onclick="admin.filtrarVincularPorRole('professor')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #92400e;">
+                                    👨‍🏫 Prof. (${contagemPorPerfil.professor})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="admin" onclick="admin.filtrarVincularPorRole('admin')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #991b1b;">
+                                    👑 Admins (${contagemPorPerfil.admin})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="setor_pedagogico" onclick="admin.filtrarVincularPorRole('setor_pedagogico')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #7c3aed;">
+                                    👩‍🏫 Pedagógico (${contagemPorPerfil.setor_pedagogico})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="coordenacao_patio" onclick="admin.filtrarVincularPorRole('coordenacao_patio')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #d97706;">
+                                    🏃 Pátio (${contagemPorPerfil.coordenacao_patio})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="cozinha" onclick="admin.filtrarVincularPorRole('cozinha')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #059669;">
+                                    🍽️ Cozinha (${contagemPorPerfil.cozinha})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="gestao_geral" onclick="admin.filtrarVincularPorRole('gestao_geral')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #1e3c72;">
+                                    📊 Gestão (${contagemPorPerfil.gestao_geral})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="enfermaria" onclick="admin.filtrarVincularPorRole('enfermaria')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #0891b2;">
+                                    🏥 Enfermaria (${contagemPorPerfil.enfermaria})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="supervisao" onclick="admin.filtrarVincularPorRole('supervisao')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #1e3a8a;">
+                                    🛡️ Supervisão (${contagemPorPerfil.supervisao})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="psicologia" onclick="admin.filtrarVincularPorRole('psicologia')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #0d9488;">
+                                    🧠 Psicologia (${contagemPorPerfil.psicologia})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="assistente-social" onclick="admin.filtrarVincularPorRole('assistente-social')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #7c3aed;">
+                                    🤝 Social (${contagemPorPerfil['assistente-social']})
+                                </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="protagonismo" onclick="admin.filtrarVincularPorRole('protagonismo')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #ea580c;">
+                                    ⭐ Protagonismo (${contagemPorPerfil.protagonismo})
+                                </button>
                             </div>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Selecione o usuário</label>
-                                <select id="selectUsuarioVinculo" class="form-control" size="5" 
-                                    style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem;">
-                                    <option value="">Selecione um usuário...</option>
-                                    ${usuarios.map(u => `
-                                        <option value="${u._id}">
-                                            ${u.nome} (${u.email}) - ${u.role}
-                                        </option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                            
-                            <div style="padding: 12px; background: #e6f7ff; border-left: 4px solid #10b981; border-radius: 8px;">
-                                <i class="fas fa-info-circle" style="color: #10b981; margin-right: 8px;"></i>
-                                <span style="font-size: 0.85rem; color: #334155;">
-                                    Ao vincular, o usuário receberá uma notificação no sistema.
-                                </span>
-                            </div>
+                        </div>
+                        
+                        <!-- BUSCA -->
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">
+                                <i class="fas fa-search"></i> Buscar usuário
+                            </label>
+                            <input type="text" id="buscaUsuarioVincular" class="form-control" 
+                                placeholder="Digite nome ou email..."
+                                style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; box-sizing: border-box;">
+                        </div>
+                        
+                        <!-- LISTA DE USUÁRIOS -->
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">
+                                Selecione o usuário (<span id="contadorUsuariosVincular">${usuarios.length}</span> disponíveis)
+                            </label>
+                            <select id="selectUsuarioVinculo" class="form-control" size="8" 
+                                style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.9rem;">
+                                <option value="">Selecione um usuário...</option>
+                                ${usuarios.map(u => `
+                                    <option value="${u._id}">
+                                        ${u.nome} (${u.email}) - ${this.getRoleLabelVincular(u.role)}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        
+                        <div style="padding: 12px; background: #e6f7ff; border-left: 4px solid #10b981; border-radius: 8px;">
+                            <i class="fas fa-info-circle" style="color: #10b981; margin-right: 8px;"></i>
+                            <span style="font-size: 0.85rem; color: #334155;">
+                                Ao vincular, o usuário receberá uma notificação no sistema.
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -1133,15 +1212,20 @@ class AdminPanel {
                         const termo = buscaInput.value.toLowerCase();
                         const select = document.getElementById('selectUsuarioVinculo');
                         const options = select.options;
+                        let visiveis = 0;
                         
                         for (let i = 0; i < options.length; i++) {
                             const texto = options[i].text.toLowerCase();
                             if (texto.includes(termo) || termo === '') {
                                 options[i].style.display = '';
+                                if (i > 0) visiveis++;
                             } else {
                                 options[i].style.display = 'none';
                             }
                         }
+                        
+                        const contador = document.getElementById('contadorUsuariosVincular');
+                        if (contador) contador.textContent = visiveis;
                     });
                 }
             }, 100);
@@ -1150,6 +1234,76 @@ class AdminPanel {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
+    }
+
+    // ============ HELPER: LABEL DO ROLE ============
+    getRoleLabelVincular(role) {
+        const labels = {
+            'aluno': 'Aluno',
+            'professor': 'Professor',
+            'admin': 'Admin',
+            'super_admin': 'Super Admin',
+            'setor_pedagogico': 'Setor Pedagógico',
+            'coordenacao_patio': 'Coord. Pátio',
+            'cozinha': 'Cozinha',
+            'gestao_geral': 'Gestão Geral',
+            'enfermaria': 'Enfermaria',
+            'supervisao': 'Supervisão',
+            'psicologia': 'Psicologia',
+            'assistente-social': 'Assist. Social',
+            'protagonismo': 'Protagonismo'
+        };
+        return labels[role] || role;
+    }
+
+    // ============ FILTRAR VINCULAR POR ROLE ============
+    filtrarVincularPorRole(role) {
+        this.roleFiltroVincular = role;
+        
+        // Atualizar visual dos botões
+        document.querySelectorAll('.perfil-vincular-btn').forEach(btn => {
+            const btnRole = btn.dataset.role;
+            if (btnRole === role) {
+                btn.style.borderColor = '#10b981';
+                btn.style.background = '#ecfdf5';
+            } else {
+                btn.style.borderColor = '#e5e7eb';
+                btn.style.background = 'white';
+            }
+        });
+        
+        // Filtrar usuários
+        let usuariosFiltrados = this.usuariosParaVincular || [];
+        
+        if (role !== 'todos') {
+            if (role === 'admin') {
+                usuariosFiltrados = usuariosFiltrados.filter(u => 
+                    u.role === 'admin' || u.role === 'super_admin'
+                );
+            } else {
+                usuariosFiltrados = usuariosFiltrados.filter(u => u.role === role);
+            }
+        }
+        
+        // Atualizar select
+        const select = document.getElementById('selectUsuarioVinculo');
+        if (select) {
+            let options = '<option value="">Selecione um usuário...</option>';
+            usuariosFiltrados.forEach(u => {
+                options += `<option value="${u._id}">
+                    ${u.nome} (${u.email}) - ${this.getRoleLabelVincular(u.role)}
+                </option>`;
+            });
+            select.innerHTML = options;
+        }
+        
+        // Atualizar contador
+        const contador = document.getElementById('contadorUsuariosVincular');
+        if (contador) contador.textContent = usuariosFiltrados.length;
+        
+        // Limpar busca
+        const buscaInput = document.getElementById('buscaUsuarioVincular');
+        if (buscaInput) buscaInput.value = '';
     }
 
     // ============ 🔥 VINCULAR DISPOSITIVO (CORRIGIDO) ============
@@ -2647,7 +2801,7 @@ class AdminPanel {
                 <div class="dashboard-welcome">
                     <div class="welcome-left">
                         <h1>${saudacao}, ${primeiroNome}! 👋</h1>
-                        <p>Aqui está um resumo do Sistema de Provas.</p>
+                        <p>Aqui está um resumo do EducaPleno.</p>
                     </div>
                     <div class="welcome-right">
                         <div class="welcome-date">${dataFormatada}</div>
@@ -5598,11 +5752,11 @@ class AdminPanel {
                 <body>
                     <div class="container">
                         <div class="header">
-                            <h1>🎉 Bem-vindo ao Sistema de Provas IEMA!</h1>
+                            <h1>🎉 Bem-vindo ao EducaPleno!</h1>
                         </div>
                         <div class="content">
                             <h2>Olá, ${nome}!</h2>
-                            <p>Seu cadastro foi realizado com sucesso no Sistema de Provas IEMA 2026.</p>
+                            <p>Seu cadastro foi realizado com sucesso no EducaPleno.</p>
                             
                             <div class="credenciais">
                                 <h3>🔐 Suas credenciais de acesso:</h3>
@@ -5618,7 +5772,7 @@ class AdminPanel {
                             <p>Em caso de dúvidas, entre em contato com a administração.</p>
                         </div>
                         <div class="footer">
-                            <p>Sistema de Provas IEMA 2026</p>
+                            <p>EducaPleno</p>
                         </div>
                     </div>
                 </body>
@@ -5633,7 +5787,7 @@ class AdminPanel {
                 },
                 body: JSON.stringify({
                     destinatario: email,
-                    assunto: '🎉 Bem-vindo ao Sistema de Provas IEMA',
+                    assunto: '🎉 Bem-vindo ao EducaPleno',
                     mensagem: mensagemHtml
                 })
             });
@@ -23182,6 +23336,595 @@ class AdminPanel {
             }, 2500);
         }
 
+        // ============ ABRIR MODAL DE ENVIO DE NOTIFICAÇÃO - TODOS OS PERFIS ============
+        // ============================================================================
+        async abrirModalEnvioNotificacao() {
+            console.log('📢 Abrindo modal de envio de notificação...');
+            
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalSaveBtn = document.getElementById('modalSaveBtn');
+            
+            if (!modalBody || !modalTitle || !modalSaveBtn) {
+                console.error('❌ Elementos do modal não encontrados');
+                return;
+            }
+            
+            // Loading
+            modalBody.innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #4f46e5; border-radius: 50%; margin: 0 auto 15px; animation: spin 1s linear infinite;"></div>
+                    <p style="color: #6b7280;">Carregando usuários...</p>
+                </div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            `;
+            
+            modalTitle.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Notificação';
+            modalSaveBtn.style.display = 'none';
+            
+            this.openModal();
+            
+            // ===== BUSCAR TODOS OS USUÁRIOS =====
+            let todosUsuarios = [];
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/admin/usuarios?limit=2000', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.usuarios) {
+                    todosUsuarios = data.usuarios;
+                    console.log(`✅ ${todosUsuarios.length} usuários carregados`);
+                    
+                    // Log de diagnóstico
+                    const contagem = {};
+                    todosUsuarios.forEach(u => {
+                        contagem[u.role] = (contagem[u.role] || 0) + 1;
+                    });
+                    console.log('📊 Distribuição por perfil:', contagem);
+                } else {
+                    throw new Error(data.error || 'Erro ao carregar usuários');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                modalBody.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 15px;"></i>
+                        <h3>Erro ao carregar usuários</h3>
+                        <p>${error.message}</p>
+                        <button onclick="admin.abrirModalEnvioNotificacao()" class="btn-primary" style="margin-top: 15px; padding: 10px 20px; background: #4f46e5; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                            <i class="fas fa-sync-alt"></i> Tentar novamente
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // ===== CONTAGEM POR TODOS OS PERFIS =====
+            const c = {
+                todos: todosUsuarios.length,
+                aluno: todosUsuarios.filter(u => u.role === 'aluno').length,
+                professor: todosUsuarios.filter(u => u.role === 'professor').length,
+                admin: todosUsuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
+                super_admin: todosUsuarios.filter(u => u.role === 'super_admin').length,
+                setor_pedagogico: todosUsuarios.filter(u => u.role === 'setor_pedagogico').length,
+                coordenacao_patio: todosUsuarios.filter(u => u.role === 'coordenacao_patio').length,
+                cozinha: todosUsuarios.filter(u => u.role === 'cozinha').length,
+                gestao_geral: todosUsuarios.filter(u => u.role === 'gestao_geral').length,
+                enfermaria: todosUsuarios.filter(u => u.role === 'enfermaria').length,
+                supervisao: todosUsuarios.filter(u => u.role === 'supervisao').length,
+                psicologia: todosUsuarios.filter(u => u.role === 'psicologia').length,
+                'assistente-social': todosUsuarios.filter(u => u.role === 'assistente-social').length,
+                protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length
+            };
+            
+            console.log('📊 Contagem por perfil:', c);
+            
+            // ===== ARMAZENAR ESTADO =====
+            this.usuariosParaNotificacao = todosUsuarios;
+            this.usuariosSelecionados = new Set();
+            this.tipoDestinatarioAtual = 'todos';
+            this.filtroAtualNotificacao = '';
+            this.roleFiltroNotificacao = 'todos';
+            
+            // ===== RENDERIZAR MODAL =====
+            modalBody.innerHTML = `
+                <div style="padding: 20px; max-width: 800px;">
+                    <!-- GRID DE PERFIS -->
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                            <i class="fas fa-user-tag" style="margin-right: 5px; color: #4f46e5;"></i> Filtrar por Perfil
+                        </label>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;" id="gridPerfisNotificacao">
+                            <button type="button" class="perfil-notif-btn active" data-role="todos" onclick="admin.filtrarNotificacaoPorRole('todos')"
+                                style="padding: 12px; border: 2px solid #4f46e5; border-radius: 10px; background: #eef2ff; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #4f46e5; font-size: 0.9rem;">📋 Todos</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.todos} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="aluno" onclick="admin.filtrarNotificacaoPorRole('aluno')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #1e40af; font-size: 0.9rem;">👨‍🎓 Alunos</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.aluno} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="professor" onclick="admin.filtrarNotificacaoPorRole('professor')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #92400e; font-size: 0.9rem;">👨‍🏫 Professores</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.professor} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="admin" onclick="admin.filtrarNotificacaoPorRole('admin')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #991b1b; font-size: 0.9rem;">👑 Admins</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.admin} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="setor_pedagogico" onclick="admin.filtrarNotificacaoPorRole('setor_pedagogico')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #7c3aed; font-size: 0.9rem;">👩‍🏫 Pedagógico</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.setor_pedagogico} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="coordenacao_patio" onclick="admin.filtrarNotificacaoPorRole('coordenacao_patio')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #d97706; font-size: 0.9rem;">🏃 Coord. Pátio</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.coordenacao_patio} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="cozinha" onclick="admin.filtrarNotificacaoPorRole('cozinha')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #059669; font-size: 0.9rem;">🍽️ Cozinha</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.cozinha} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="gestao_geral" onclick="admin.filtrarNotificacaoPorRole('gestao_geral')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #1e3c72; font-size: 0.9rem;">📊 Gestão Geral</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.gestao_geral} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="enfermaria" onclick="admin.filtrarNotificacaoPorRole('enfermaria')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #0891b2; font-size: 0.9rem;">🏥 Enfermaria</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.enfermaria} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="supervisao" onclick="admin.filtrarNotificacaoPorRole('supervisao')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #1e3a8a; font-size: 0.9rem;">🛡️ Supervisão</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.supervisao} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="psicologia" onclick="admin.filtrarNotificacaoPorRole('psicologia')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #0d9488; font-size: 0.9rem;">🧠 Psicologia</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.psicologia} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="assistente-social" onclick="admin.filtrarNotificacaoPorRole('assistente-social')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #7c3aed; font-size: 0.9rem;">🤝 Assist. Social</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c['assistente-social']} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="protagonismo" onclick="admin.filtrarNotificacaoPorRole('protagonismo')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #ea580c; font-size: 0.9rem;">⭐ Protagonismo</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.protagonismo} usuários</div>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- INFO DESTINATÁRIOS -->
+                    <div id="infoDestinatariosNotificacao" style="background: #eef2ff; border-left: 4px solid #4f46e5; padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-info-circle" style="font-size: 1.2rem; color: #4f46e5;"></i>
+                        <span style="font-size: 0.9rem; color: #1e40af;">
+                            <strong>${todosUsuarios.length}</strong> usuário(s) receberão esta notificação
+                        </span>
+                    </div>
+                    
+                    <!-- TEMPLATES -->
+                    <div style="margin-bottom: 20px; background: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e5e7eb;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                            <i class="fas fa-magic" style="margin-right: 5px; color: #4f46e5;"></i> Modelos Rápidos
+                        </label>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px;">
+                            <button type="button" onclick="admin.aplicarTemplateMensagem('informativo')" style="padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.85rem;">📢 Informativo</button>
+                            <button type="button" onclick="admin.aplicarTemplateMensagem('lembrete')" style="padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.85rem;">⏰ Lembrete</button>
+                            <button type="button" onclick="admin.aplicarTemplateMensagem('urgente')" style="padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.85rem;">⚠️ Urgente</button>
+                            <button type="button" onclick="admin.aplicarTemplateMensagem('manutencao')" style="padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.85rem;">🔧 Manutenção</button>
+                        </div>
+                    </div>
+                    
+                    <!-- FORMULÁRIO -->
+                    <div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                                <i class="fas fa-heading" style="margin-right: 5px; color: #4f46e5;"></i> Título
+                            </label>
+                            <input type="text" id="notificacaoTitulo" placeholder="Ex: Aviso importante" required
+                                style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                                <i class="fas fa-align-left" style="margin-right: 5px; color: #4f46e5;"></i> Mensagem
+                            </label>
+                            <textarea id="notificacaoMensagem" rows="4" placeholder="Digite sua mensagem..." required
+                                style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; resize: vertical; min-height: 100px; box-sizing: border-box;"></textarea>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                                    <i class="fas fa-palette" style="margin-right: 5px; color: #4f46e5;"></i> Cor
+                                </label>
+                                <input type="color" id="notificacaoCor" value="#4f46e5"
+                                    style="width: 100%; height: 42px; padding: 4px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
+                                    <i class="fas fa-star" style="margin-right: 5px; color: #4f46e5;"></i> Prioridade
+                                </label>
+                                <select id="notificacaoPrioridade" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; background: white;">
+                                    <option value="1">🔵 Baixa</option>
+                                    <option value="3" selected>🟡 Média</option>
+                                    <option value="5">🔴 Alta</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="notificacaoPush" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: #4f46e5;">
+                                <label for="notificacaoPush" style="font-weight: 500; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                    <i class="fas fa-mobile-alt"></i> Enviar também via Push (celular)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modalSaveBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Notificação';
+            modalSaveBtn.onclick = () => this.enviarNotificacaoEmMassa();
+            modalSaveBtn.style.display = 'inline-block';
+            
+            console.log('✅ Modal renderizado com sucesso!');
+            console.log(`📋 Grid de perfis: ${document.querySelectorAll('#gridPerfisNotificacao button').length} botões`);
+        }
+
+        // ============ FILTRAR NOTIFICAÇÃO POR ROLE ============
+        filtrarNotificacaoPorRole(role) {
+            this.roleFiltroNotificacao = role;
+            
+            // Atualizar visual
+            document.querySelectorAll('.perfil-notif-btn').forEach(btn => {
+                const btnRole = btn.dataset.role;
+                if (btnRole === role) {
+                    btn.style.borderColor = '#4f46e5';
+                    btn.style.background = '#eef2ff';
+                } else {
+                    btn.style.borderColor = '#e5e7eb';
+                    btn.style.background = 'white';
+                }
+            });
+            
+            // Filtrar
+            let usuariosFiltrados = this.usuariosParaNotificacao || [];
+            
+            if (role !== 'todos') {
+                if (role === 'admin') {
+                    usuariosFiltrados = usuariosFiltrados.filter(u => 
+                        u.role === 'admin' || u.role === 'super_admin'
+                    );
+                } else {
+                    usuariosFiltrados = usuariosFiltrados.filter(u => u.role === role);
+                }
+            }
+            
+            // Atualizar info
+            const roleLabels = {
+                'todos': '📋 Todos os usuários',
+                'aluno': '👨‍🎓 Alunos',
+                'professor': '👨‍🏫 Professores',
+                'admin': '👑 Administradores',
+                'setor_pedagogico': '👩‍🏫 Setor Pedagógico',
+                'coordenacao_patio': '🏃 Coordenação de Pátio',
+                'cozinha': '🍽️ Cozinha',
+                'gestao_geral': '📊 Gestão Geral',
+                'enfermaria': '🏥 Enfermaria',
+                'supervisao': '🛡️ Supervisão',
+                'psicologia': '🧠 Psicologia',
+                'assistente-social': '🤝 Assistente Social',
+                'protagonismo': '⭐ Protagonismo'
+            };
+            
+            const infoEl = document.getElementById('infoDestinatariosNotificacao');
+            if (infoEl) {
+                infoEl.innerHTML = `
+                    <i class="fas fa-info-circle" style="font-size: 1.2rem; color: #4f46e5;"></i>
+                    <span style="font-size: 0.9rem; color: #1e40af;">
+                        <strong>${roleLabels[role] || role}:</strong> 
+                        <strong>${usuariosFiltrados.length}</strong> usuário(s) receberão
+                    </span>
+                `;
+            }
+        }
+
+        // ============================================================================
+        // 📤 ENVIAR NOTIFICAÇÃO EM MASSA (VERSÃO DEFINITIVA)
+        // ============================================================================
+        async enviarNotificacaoEmMassa() {
+            console.log('📤 Iniciando envio de notificação em massa...');
+            
+            // ===== 1. COLETAR DADOS DO FORMULÁRIO =====
+            const titulo = document.getElementById('notificacaoTitulo')?.value?.trim();
+            const mensagem = document.getElementById('notificacaoMensagem')?.value?.trim();
+            const cor = document.getElementById('notificacaoCor')?.value || '#4f46e5';
+            const prioridade = parseInt(document.getElementById('notificacaoPrioridade')?.value) || 3;
+            const enviarPush = document.getElementById('notificacaoPush')?.checked || false;
+            const roleFiltro = this.roleFiltroNotificacao || 'todos';
+            
+            // ===== 2. VALIDAÇÕES =====
+            if (!titulo) {
+                this.showToast('❌ Digite um título para a notificação', 'error');
+                return;
+            }
+            
+            if (!mensagem) {
+                this.showToast('❌ Digite uma mensagem para a notificação', 'error');
+                return;
+            }
+            
+            if (!this.usuariosParaNotificacao || this.usuariosParaNotificacao.length === 0) {
+                this.showToast('❌ Nenhum usuário carregado', 'error');
+                return;
+            }
+            
+            // ===== 3. DETERMINAR DESTINATÁRIOS =====
+            let usuariosDestino = [];
+            let labelDestinatarios = '';
+            
+            if (roleFiltro === 'todos') {
+                usuariosDestino = this.usuariosParaNotificacao.map(u => ({
+                    id: u._id,
+                    nome: u.nome,
+                    email: u.email,
+                    role: u.role
+                }));
+                labelDestinatarios = 'Todos os usuários';
+            } 
+            else if (roleFiltro === 'admin') {
+                usuariosDestino = this.usuariosParaNotificacao
+                    .filter(u => u.role === 'admin' || u.role === 'super_admin')
+                    .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
+                labelDestinatarios = 'Administradores';
+            } 
+            else {
+                usuariosDestino = this.usuariosParaNotificacao
+                    .filter(u => u.role === roleFiltro)
+                    .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
+                labelDestinatarios = roleFiltro;
+            }
+            
+            // ===== 4. VERIFICAR SE TEM DESTINATÁRIOS =====
+            if (usuariosDestino.length === 0) {
+                this.showToast(`❌ Nenhum usuário encontrado para: ${labelDestinatarios}`, 'error');
+                return;
+            }
+            
+            console.log(`📤 Enviando para ${usuariosDestino.length} usuários (${labelDestinatarios})`);
+            
+            // ===== 5. CONFIRMAR ENVIO =====
+            const confirmar = await this.confirmar(
+                '📢 Confirmar Envio',
+                `
+                    Deseja enviar esta notificação?<br><br>
+                    <strong>📋 Destinatários:</strong> ${labelDestinatarios}<br>
+                    <strong>👥 Total:</strong> ${usuariosDestino.length} usuário(s)<br>
+                    <strong>📌 Título:</strong> ${titulo}<br>
+                    <strong>💬 Mensagem:</strong> ${mensagem.substring(0, 100)}${mensagem.length > 100 ? '...' : ''}<br>
+                    ${enviarPush ? '<br>📱 <strong>Push (celular) ativado</strong>' : '<br>💻 <strong>Apenas no sistema</strong>'}
+                `
+            );
+            
+            if (!confirmar) return;
+            
+            // ===== 6. FECHAR MODAL E MOSTRAR PROGRESSO =====
+            this.closeModal();
+            this.showToast(`📤 Enviando para ${usuariosDestino.length} usuários...`, 'info');
+            
+            // Criar barra de progresso flutuante
+            const progressId = 'progresso-notificacao-' + Date.now();
+            const progressHTML = `
+                <div id="${progressId}" style="
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    background: white;
+                    border-radius: 12px;
+                    padding: 20px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                    z-index: 10000;
+                    min-width: 320px;
+                    border: 1px solid #e5e7eb;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                        <div style="
+                            width: 40px;
+                            height: 40px;
+                            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                            border-radius: 10px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            color: white;
+                            font-size: 20px;
+                        ">
+                            <i class="fas fa-paper-plane"></i>
+                        </div>
+                        <div>
+                            <strong style="display: block; color: #1f2937;">Enviando Notificações</strong>
+                            <small style="color: #6b7280;">${labelDestinatarios}</small>
+                        </div>
+                    </div>
+                    
+                    <div style="
+                        background: #f3f4f6;
+                        border-radius: 20px;
+                        height: 8px;
+                        overflow: hidden;
+                        margin-bottom: 10px;
+                    ">
+                        <div id="${progressId}-bar" style="
+                            background: linear-gradient(90deg, #4f46e5, #7c3aed);
+                            height: 100%;
+                            width: 0%;
+                            transition: width 0.3s ease;
+                        "></div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #4b5563;">
+                        <span id="${progressId}-text">Iniciando...</span>
+                        <span id="${progressId}-percent">0%</span>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', progressHTML);
+            
+            // ===== 7. ENVIAR NOTIFICAÇÕES =====
+            let enviados = 0;
+            let erros = 0;
+            let pushEnviados = 0;
+            const token = localStorage.getItem('auth_token');
+            
+            for (let i = 0; i < usuariosDestino.length; i++) {
+                const usuario = usuariosDestino[i];
+                
+                try {
+                    // 7.1 - CRIAR NOTIFICAÇÃO NO SISTEMA
+                    const notificacaoResponse = await fetch('/api/notificacoes', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            usuarioId: usuario.id,
+                            tipo: 'sistema',
+                            titulo: titulo,
+                            mensagem: mensagem,
+                            icone: '📢',
+                            cor: cor,
+                            link: null,
+                            prioridade: prioridade,
+                            dados: {
+                                tipo: 'notificacao_massa',
+                                enviadoPor: 'Admin',
+                                role: usuario.role,
+                                filtro: roleFiltro,
+                                timestamp: Date.now()
+                            }
+                        })
+                    });
+                    
+                    const notificacaoData = await notificacaoResponse.json();
+                    
+                    if (notificacaoData.success) {
+                        enviados++;
+                    } else {
+                        console.warn(`⚠️ Erro ao notificar ${usuario.nome}:`, notificacaoData.error);
+                        erros++;
+                    }
+                    
+                    // 7.2 - ENVIAR PUSH (SE ATIVADO)
+                    if (enviarPush && typeof this.enviarPushParaUsuario === 'function') {
+                        try {
+                            const pushEnviado = await this.enviarPushParaUsuario(
+                                usuario.id,
+                                titulo,
+                                mensagem,
+                                {
+                                    tipo: 'notificacao_massa',
+                                    prioridade: prioridade,
+                                    filtro: roleFiltro
+                                }
+                            );
+                            
+                            if (pushEnviado) {
+                                pushEnviados++;
+                            }
+                        } catch (pushError) {
+                            console.warn(`⚠️ Erro ao enviar push para ${usuario.nome}:`, pushError);
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error(`❌ Erro ao processar ${usuario.nome}:`, error);
+                    erros++;
+                }
+                
+                // 7.3 - ATUALIZAR PROGRESSO
+                const percent = Math.round(((i + 1) / usuariosDestino.length) * 100);
+                const barElement = document.getElementById(`${progressId}-bar`);
+                const textElement = document.getElementById(`${progressId}-text`);
+                const percentElement = document.getElementById(`${progressId}-percent`);
+                
+                if (barElement) barElement.style.width = `${percent}%`;
+                if (percentElement) percentElement.textContent = `${percent}%`;
+                if (textElement) {
+                    textElement.textContent = `${i + 1} de ${usuariosDestino.length}...`;
+                }
+                
+                // Pequeno delay para não sobrecarregar a API
+                if (i < usuariosDestino.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+            
+            // ===== 8. FINALIZAR =====
+            const progressElement = document.getElementById(progressId);
+            
+            const barElement = document.getElementById(`${progressId}-bar`);
+            const textElement = document.getElementById(`${progressId}-text`);
+            const percentElement = document.getElementById(`${progressId}-percent`);
+            
+            if (barElement) barElement.style.width = '100%';
+            if (percentElement) percentElement.textContent = '100%';
+            if (textElement) textElement.textContent = 'Concluído!';
+            
+            // Trocar ícone para sucesso
+            if (progressElement) {
+                const iconeEl = progressElement.querySelector('div[style*="linear-gradient"]');
+                if (iconeEl) {
+                    iconeEl.innerHTML = '<i class="fas fa-check"></i>';
+                    iconeEl.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                }
+            }
+            
+            // Aguardar 2 segundos e remover
+            setTimeout(() => {
+                if (progressElement) {
+                    progressElement.style.transition = 'all 0.3s ease';
+                    progressElement.style.opacity = '0';
+                    progressElement.style.transform = 'translateY(20px)';
+                    setTimeout(() => progressElement.remove(), 300);
+                }
+            }, 2000);
+            
+            // ===== 9. MOSTRAR RESULTADO =====
+            console.log(`✅ Envio concluído: ${enviados} enviados, ${erros} erros, ${pushEnviados} push`);
+            
+            this.showToast(
+                `✅ ${enviados} notificações enviadas!${erros > 0 ? ` (${erros} erros)` : ''}`,
+                enviados > 0 ? 'success' : 'error'
+            );
+            
+            // Notificação de sistema detalhada (se a função existir)
+            if (typeof this.mostrarNotificacaoSistema === 'function') {
+                this.mostrarNotificacaoSistema(
+                    enviados > 0 ? 'success' : 'error',
+                    '📢 Envio Concluído',
+                    `<strong>${enviados}</strong> notificações enviadas!<br>
+                    ${pushEnviados > 0 ? `📱 <strong>${pushEnviados}</strong> push enviados<br>` : ''}
+                    ${erros > 0 ? `⚠️ <strong>${erros}</strong> falhas` : ''}`,
+                    6000
+                );
+            }
+        }
+
         // ============ CONFIGURAR FECHAMENTO DO MODAL (VERSÃO SIMPLES) ============
         configurarFechamentoModalSimples() {
             const closeBtn = document.querySelector('#modal .modal-close');
@@ -25739,7 +26482,7 @@ class AdminPanel {
             </table>
 
             <div class="footer">
-                <p>Relatório gerado automaticamente pelo Sistema de Provas IEMA 2026</p>
+                <p>Relatório gerado automaticamente pelo EducaPleno</p>
             </div>
         </body>
         </html>
@@ -28295,7 +29038,7 @@ class AdminPanel {
             // ===== SISTEMA =====
             if (config.sistema) {
                 const nomeSistema = document.getElementById('config_nome_sistema');
-                if (nomeSistema) nomeSistema.value = config.sistema.nome || 'Sistema de Provas IEMA 2026';
+                if (nomeSistema) nomeSistema.value = config.sistema.nome || 'EducaPleno';
                 
                 const ambiente = document.getElementById('config_ambiente');
                 if (ambiente) ambiente.value = config.sistema.ambiente || 'production';
@@ -28469,7 +29212,7 @@ class AdminPanel {
                 if (remetente) remetente.value = config.email.remetente || 'naoresponder@iemasaoluiscentro.net';
                 
                 const nome = document.getElementById('config_email_nome');
-                if (nome) nome.value = config.email.nomeRemetente || 'Sistema de Provas IEMA';
+                if (nome) nome.value = config.email.nomeRemetente || 'EducaPleno';
                 
                 const emailNotificacoes = document.getElementById('config_email_notificacoes');
                 if (emailNotificacoes) emailNotificacoes.checked = config.email.notificacoes !== false;
@@ -28646,7 +29389,7 @@ class AdminPanel {
                         <div class="form-group">
                             <label><i class="fas fa-font"></i> Nome do Sistema</label>
                             <input type="text" id="config_nome_sistema" class="form-control" 
-                                value="${config?.sistema?.nome || 'Sistema de Provas IEMA 2026'}" 
+                                value="${config?.sistema?.nome || 'EducaPleno'}" 
                                 placeholder="Nome do sistema">
                         </div>
                         
@@ -29008,215 +29751,6 @@ class AdminPanel {
         `;
     }
 
-    // ============ ABRIR MODAL DE ENVIO DE NOTIFICAÇÃO ============
-    abrirModalEnvioNotificacao() {
-        const modalBody = document.getElementById('modalBody');
-        const modalTitle = document.getElementById('modalTitle');
-        const modalSaveBtn = document.getElementById('modalSaveBtn');
-        
-        modalTitle.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Notificação';
-        
-        // Carregar usuários para o seletor
-        this.carregarUsuariosParaNotificacao();
-        
-        modalBody.innerHTML = `
-            <div style="padding: 20px; max-width: 600px;">
-                <!-- Abas para escolher o tipo de destinatário -->
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; flex-wrap: wrap;">
-                    <button class="tab-destinatario" data-tipo="todos" onclick="admin.mudarTabaDestinatario('todos')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #4f46e5; color: white; transition: all 0.2s;">
-                        <i class="fas fa-users"></i> Todos
-                    </button>
-                    <button class="tab-destinatario" data-tipo="alunos" onclick="admin.mudarTabaDestinatario('alunos')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
-                        <i class="fas fa-user-graduate"></i> Alunos
-                    </button>
-                    <button class="tab-destinatario" data-tipo="professores" onclick="admin.mudarTabaDestinatario('professores')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
-                        <i class="fas fa-chalkboard-teacher"></i> Professores
-                    </button>
-                    <button class="tab-destinatario" data-tipo="admins" onclick="admin.mudarTabaDestinatario('admins')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
-                        <i class="fas fa-user-tie"></i> Admins
-                    </button>
-                    <button class="tab-destinatario" data-tipo="selecionar" onclick="admin.mudarTabaDestinatario('selecionar')" style="padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: #e5e7eb; color: #4b5563; transition: all 0.2s;">
-                        <i class="fas fa-check-square"></i> Selecionar
-                    </button>
-                </div>
-                
-                <!-- Área de seleção de usuários (inicialmente oculta) -->
-                <div id="areaSelecaoUsuarios" style="display: none; margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                    <div style="margin-bottom: 10px;">
-                        <input type="text" id="buscaUsuarioNotificacao" placeholder="Buscar usuário por nome ou email..." 
-                            style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; margin-bottom: 10px; box-sizing: border-box;"
-                            onkeyup="admin.filtrarUsuariosNotificacao()">
-                    </div>
-                    <div id="listaUsuariosNotificacao" style="max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; background: #f9fafb;">
-                        <p style="text-align: center; color: #6b7280; padding: 20px;">Carregando usuários...</p>
-                    </div>
-                    <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: space-between; align-items: center; padding: 10px; background: #f3f4f6; border-radius: 6px;">
-                        <span id="usuariosSelecionadosCount" style="font-size: 0.85rem; color: #4b5563; font-weight: 500;">
-                            0 usuários selecionados
-                        </span>
-                        <button onclick="admin.selecionarTodosUsuarios()" style="background: none; border: none; color: #4f46e5; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 6px;">
-                            <i class="fas fa-check-double"></i> Selecionar todos
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- 🔥 NOVA SEÇÃO: TEMPLATES DE MENSAGEM -->
-                <div style="margin-bottom: 20px; background: #f8fafc; border-radius: 8px; padding: 15px; border: 1px solid #e5e7eb;">
-                    <label style="display: block; margin-bottom: 10px; font-weight: 600; font-size: 0.9rem; color: #374151;">
-                        <i class="fas fa-template" style="margin-right: 5px; color: #4f46e5;"></i> Modelos de Mensagem
-                    </label>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                        <button type="button" onclick="admin.aplicarTemplateMensagem('informativo')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
-                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">📢 Informativo</div>
-                            <div style="font-size: 0.8rem; color: #64748b;">Comunicado geral para todos</div>
-                        </button>
-                        
-                        <button type="button" onclick="admin.aplicarTemplateMensagem('lembrete')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
-                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">⏰ Lembrete</div>
-                            <div style="font-size: 0.8rem; color: #64748b;">Prazo de provas, tarefas</div>
-                        </button>
-                        
-                        <button type="button" onclick="admin.aplicarTemplateMensagem('urgente')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
-                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">⚠️ Urgente</div>
-                            <div style="font-size: 0.8rem; color: #64748b;">Avisos importantes e críticos</div>
-                        </button>
-                        
-                        <button type="button" onclick="admin.aplicarTemplateMensagem('manutencao')" style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s; text-align: left;" onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='translateY(-2px)';" onmouseout="this.style.borderColor='#e5e7eb'; this.style.transform='translateY(0)';">
-                            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">🔧 Manutenção</div>
-                            <div style="font-size: 0.8rem; color: #64748b;">Sistema em manutenção</div>
-                        </button>
-                    </div>
-                    <div style="margin-top: 10px; padding: 10px; background: #eef2ff; border-radius: 6px; font-size: 0.8rem; color: #1e40af; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-lightbulb"></i>
-                        <span>Clique em um modelo para preencher automaticamente. Você pode editar depois.</span>
-                    </div>
-                </div>
-                
-                <!-- Formulário da notificação -->
-                <div style="margin-top: 20px;">
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
-                            <i class="fas fa-heading" style="margin-right: 5px; color: #4f46e5;"></i> Título
-                        </label>
-                        <input type="text" id="notificacaoTitulo" placeholder="Ex: Aviso importante" required
-                            style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.3s; background: white; box-sizing: border-box;">
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
-                            <i class="fas fa-align-left" style="margin-right: 5px; color: #4f46e5;"></i> Mensagem
-                        </label>
-                        <textarea id="notificacaoMensagem" rows="4" placeholder="Digite sua mensagem..." required
-                            style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.3s; background: white; resize: vertical; min-height: 100px; box-sizing: border-box;"></textarea>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div>
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
-                                <i class="fas fa-palette" style="margin-right: 5px; color: #4f46e5;"></i> Cor
-                            </label>
-                            <input type="color" id="notificacaoCor" value="#4f46e5"
-                                style="width: 100%; height: 42px; padding: 4px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer;">
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">
-                                <i class="fas fa-star" style="margin-right: 5px; color: #4f46e5;"></i> Prioridade
-                            </label>
-                            <select id="notificacaoPrioridade" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; background: white;">
-                                <option value="1">🔵 Baixa</option>
-                                <option value="3" selected>🟡 Média</option>
-                                <option value="5">🔴 Alta</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="checkbox" id="notificacaoPush" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: #4f46e5;">
-                            <label for="notificacaoPush" style="font-weight: 500; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                                <i class="fas fa-mobile-alt"></i> Enviar também via Push (celular)
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="checkbox" id="notificacaoLink" style="width: 18px; height: 18px; cursor: pointer; accent-color: #4f46e5;">
-                            <label for="notificacaoLink" style="font-weight: 500; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                                <i class="fas fa-link"></i> Incluir link
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div id="areaLink" style="display: none; margin-bottom: 15px; animation: slideDown 0.3s ease;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #374151;">Link</label>
-                        <input type="text" id="notificacaoLinkUrl" class="form-control" placeholder="/aluno.html" style="width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box;">
-                    </div>
-                    
-                    <div style="background: #eef2ff; border-left: 4px solid #4f46e5; padding: 12px 15px; border-radius: 8px; margin: 15px 0; display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #1e40af;">
-                        <i class="fas fa-info-circle" style="font-size: 1.2rem; color: #4f46e5;"></i>
-                        <span>A notificação será enviada para todos os usuários selecionados.</span>
-                    </div>
-                </div>
-                
-                <style>
-                    @keyframes slideDown {
-                        from {
-                            opacity: 0;
-                            transform: translateY(-10px);
-                        }
-                        to {
-                            opacity: 1;
-                            transform: translateY(0);
-                        }
-                    }
-                    .tab-destinatario:hover {
-                        transform: translateY(-1px);
-                    }
-                    .tab-destinatario[data-tipo="todos"] {
-                        background: #4f46e5;
-                        color: white;
-                    }
-                    #buscaUsuarioNotificacao:focus {
-                        outline: none;
-                        border-color: #4f46e5;
-                        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-                    }
-                    #listaUsuariosNotificacao::-webkit-scrollbar {
-                        width: 6px;
-                    }
-                    #listaUsuariosNotificacao::-webkit-scrollbar-track {
-                        background: #f1f5f9;
-                        border-radius: 10px;
-                    }
-                    #listaUsuariosNotificacao::-webkit-scrollbar-thumb {
-                        background: #94a3b8;
-                        border-radius: 10px;
-                    }
-                    #listaUsuariosNotificacao::-webkit-scrollbar-thumb:hover {
-                        background: #64748b;
-                    }
-                </style>
-            </div>
-        `;
-        
-        modalSaveBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar Notificação';
-        modalSaveBtn.onclick = () => this.enviarNotificacaoEmMassa();
-        modalSaveBtn.style.display = 'inline-block';
-        
-        // Carregar usuários
-        setTimeout(() => {
-            this.carregarUsuariosParaNotificacao();
-        }, 100);
-        
-        // Evento para mostrar/esconder campo de link
-        document.getElementById('notificacaoLink').addEventListener('change', function(e) {
-            document.getElementById('areaLink').style.display = e.target.checked ? 'block' : 'none';
-        });
-        
-        this.openModal();
-    }
-
     // ============ APLICAR TEMPLATE DE MENSAGEM ============
     aplicarTemplateMensagem(tipo) {
         const tituloInput = document.getElementById('notificacaoTitulo');
@@ -29468,118 +30002,7 @@ class AdminPanel {
         this.renderizarListaUsuariosNotificacao();
     }
 
-    // ============ ENVIAR NOTIFICAÇÃO EM MASSA ============
-    async enviarNotificacaoEmMassa() {
-        const titulo = document.getElementById('notificacaoTitulo')?.value;
-        const mensagem = document.getElementById('notificacaoMensagem')?.value;
-        const cor = document.getElementById('notificacaoCor')?.value || '#4f46e5';
-        const prioridade = parseInt(document.getElementById('notificacaoPrioridade')?.value) || 3;
-        const enviarPush = document.getElementById('notificacaoPush')?.checked || false;
-        const temLink = document.getElementById('notificacaoLink')?.checked || false;
-        const link = temLink ? document.getElementById('notificacaoLinkUrl')?.value : null;
-        const tipoDestinatario = this.tipoDestinatarioAtual || 'todos';
-        
-        if (!titulo || !mensagem) {
-            this.showToast('❌ Título e mensagem são obrigatórios', 'error');
-            return;
-        }
-        
-        let usuariosDestino = [];
-        
-        // Determinar lista de usuários
-        if (tipoDestinatario === 'selecionar') {
-            if (!this.usuariosSelecionados || this.usuariosSelecionados.size === 0) {
-                this.showToast('❌ Selecione pelo menos um usuário', 'error');
-                return;
-            }
-            usuariosDestino = Array.from(this.usuariosSelecionados);
-        } else {
-            // Buscar usuários por role
-            const token = localStorage.getItem('auth_token');
-            let url = '/api/admin/usuarios?limit=1000';
-            
-            if (tipoDestinatario !== 'todos') {
-                url += `&role=${tipoDestinatario}`;
-            }
-            
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const data = await response.json();
-            usuariosDestino = (data.usuarios || []).map(u => u._id);
-        }
-        
-        if (usuariosDestino.length === 0) {
-            this.showToast('❌ Nenhum usuário encontrado para envio', 'error');
-            return;
-        }
-        
-        // Confirmar envio
-        const confirmar = await this.confirmar(
-            '📢 Confirmar Envio',
-            `Deseja enviar esta notificação para <strong>${usuariosDestino.length}</strong> usuário(s)?<br><br>
-            <strong>Título:</strong> ${titulo}<br>
-            <strong>Mensagem:</strong> ${mensagem.substring(0, 100)}${mensagem.length > 100 ? '...' : ''}<br>
-            ${enviarPush ? '<br>📱 <strong>Push ativado</strong>' : ''}`
-        );
-        
-        if (!confirmar) return;
-        
-        this.showToast(`📤 Enviando para ${usuariosDestino.length} usuários...`, 'info');
-        
-        let enviados = 0;
-        let erros = 0;
-        
-        for (const usuarioId of usuariosDestino) {
-            try {
-                // Notificação no sistema
-                await fetch('/api/notificacoes', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        usuarioId: usuarioId,
-                        tipo: 'sistema',
-                        titulo: titulo,
-                        mensagem: mensagem,
-                        icone: '📢',
-                        cor: cor,
-                        link: link,
-                        prioridade: prioridade,
-                        dados: {
-                            tipo: 'notificacao_massa',
-                            enviadoPor: this.usuario?.nome || 'Administrador'
-                        }
-                    })
-                });
-                
-                // Push se ativado
-                if (enviarPush) {
-                    await this.enviarPushParaUsuario(
-                        usuarioId,
-                        titulo,
-                        mensagem,
-                        {
-                            tipo: 'notificacao_massa',
-                            prioridade: prioridade
-                        }
-                    );
-                }
-                
-                enviados++;
-                
-            } catch (error) {
-                console.error(`❌ Erro ao enviar para ${usuarioId}:`, error);
-                erros++;
-            }
-        }
-        
-        this.showToast(`✅ ${enviados} notificações enviadas, ${erros} erros`, 'success');
-        this.closeModal();
-    }
+
 
     // ============ GET ROLE COLOR ============
     getRoleColor(role) {
@@ -29730,8 +30153,8 @@ class AdminPanel {
                         <div class="form-group">
                             <label>Nome do Remetente</label>
                             <input type="text" id="config_email_nome" class="form-control" 
-                                value="${config.email?.nomeRemetente || 'Sistema de Provas IEMA'}" 
-                                placeholder="Sistema de Provas">
+                                value="${config.email?.nomeRemetente || 'EducaPleno'}" 
+                                placeholder="EducaPleno">
                         </div>
                         
                         <div class="checkbox-group">
@@ -30065,7 +30488,7 @@ class AdminPanel {
                 faviconUrl: ''
             },
             sistema: {
-                nome: 'Sistema de Provas IEMA 2026',
+                nome: 'EducaPleno',
                 versao: '1.0.0',
                 ambiente: 'production',
                 urlBase: window.location.origin,
@@ -30123,7 +30546,7 @@ class AdminPanel {
                 usuario: '',
                 senha: '',
                 remetente: 'naoresponder@iemasaoluiscentro.net',
-                nomeRemetente: 'Sistema de Provas IEMA',
+                nomeRemetente: 'EducaPleno',
                 notificacoes: true,
                 lembretes: true,
                 resultados: true
@@ -30379,7 +30802,7 @@ class AdminPanel {
             usuarioField.value = 'resend';
             senhaField.value = 're_D3VHHpZd_MLCmsRGAWoRLxfYvT5xWxqCv'; // SUA API KEY
             remetenteField.value = 'onboarding@resend.dev';
-            nomeField.value = 'Sistema de Provas IEMA';
+            nomeField.value = 'EducaPleno';
             
             // Campos readonly (não devem ser alterados)
             hostField.readOnly = true;
@@ -30992,7 +31415,7 @@ class AdminPanel {
                     <div class="container">
                         <div class="header">
                             <h1>📧 Teste de Email</h1>
-                            <p>Sistema de Provas IEMA 2026</p>
+                            <p>EducaPleno</p>
                         </div>
                         <div class="content">
                             <h2>Olá, ${nomeUsuario}!</h2>
@@ -31006,7 +31429,7 @@ class AdminPanel {
                             <p>✅ Se você recebeu este email, as configurações estão funcionando perfeitamente!</p>
                         </div>
                         <div class="footer">
-                            <p>Sistema de Provas IEMA 2026</p>
+                            <p>EducaPleno</p>
                         </div>
                     </div>
                 </body>
@@ -31021,7 +31444,7 @@ class AdminPanel {
                 },
                 body: JSON.stringify({
                     destinatario: destinatario,
-                    assunto: '📧 Teste do Sistema de Provas IEMA',
+                    assunto: '📧 Teste do EducaPleno',
                     mensagem: mensagemHtml
                 })
             });
@@ -31058,11 +31481,11 @@ class AdminPanel {
                 </head>
                 <body>
                     <div class="welcome-box">
-                        <h1>Bem-vindo ao Sistema de Provas IEMA! 🎉</h1>
+                        <h1>Bem-vindo ao EducaPleno! 🎉</h1>
                     </div>
                     <div class="content">
                         <h2>Olá, ${nome}!</h2>
-                        <p>Seu cadastro foi realizado com sucesso no Sistema de Provas IEMA 2026.</p>
+                        <p>Seu cadastro foi realizado com sucesso no EducaPleno.</p>
                         <p>Agora você pode acessar o sistema e começar a usar todas as funcionalidades.</p>
                         <p><strong>Link de acesso:</strong> <a href="${window.location.origin}">${window.location.origin}</a></p>
                         <p>Em caso de dúvidas, entre em contato com a administração.</p>
@@ -31081,7 +31504,7 @@ class AdminPanel {
                 },
                 body: JSON.stringify({
                     destinatario: destinatario,
-                    assunto: '🎉 Bem-vindo ao Sistema de Provas IEMA',
+                    assunto: '🎉 Bem-vindo ao EducaPleno',
                     mensagem: mensagemHtml
                 })
             });
@@ -33708,7 +34131,7 @@ class AdminPanel {
                 </div>
                 
                 <div class="print-footer">
-                    <p>Sistema de Provas IEMA - ${dataFormatada}</p>
+                    <p>EducaPleno - ${dataFormatada}</p>
                     <p>📱 Escaneie o QR Code para correção automática</p>
                     <p style="font-size: 6pt;">Aluno: ${alunoNome || '_________________'} | Turma: ${turmaNome} | Código: ${prova.codigo || 'N/A'}</p>
                 </div>
@@ -35887,7 +36310,7 @@ class AdminPanel {
                                         <img src="/icons/favicon.ico" alt="Logo" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' font-size=\\'40\\' fill=\\'white\\'%3E🎓%3C/text%3E%3C/svg%3E'">
                                     </div>
                                     <div>
-                                        <h2>SISTEMA DE PROVAS</h2>
+                                        <h2>EDUCAPLENO</h2>
                                         <span>2026</span>
                                     </div>
                                 </div>
@@ -36090,7 +36513,7 @@ class AdminPanel {
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>QR Codes - Sistema de Provas</title>
+            <title>QR Codes - EducaPleno</title>
             <style>
                 @media print {
                     @page { size: landscape; margin: 0.5cm; }
@@ -36193,7 +36616,7 @@ class AdminPanel {
             <html>
             <head>
                 <meta charset="UTF-8">
-                <title>Cartões QR Code - Sistema de Provas</title>
+                <title>Cartões QR Code - EducaPleno</title>
                 <style>
                     /* Estilos dos cartões */
                     ${cssEstilos}
@@ -36329,7 +36752,7 @@ class AdminPanel {
             <body>
                 <div class="info-header no-print">
                     <div>
-                        <h2>📄 Cartões QR Code - Sistema de Provas IEMA</h2>
+                        <h2>📄 Cartões QR Code - EducaPleno</h2>
                         <p>${this.qrCodesFiltrados.length} cartões | ${cartoesPorLinha}×${cartoesPorColuna} por página | ${totalPaginas} página(s)</p>
                     </div>
                     <div>
@@ -36398,7 +36821,7 @@ class AdminPanel {
         
         printWindow.document.write(`
                 <div class="footer-info no-print">
-                    <p>Documento gerado em ${new Date().toLocaleString('pt-BR')} - Sistema de Provas IEMA 2026</p>
+                    <p>Documento gerado em ${new Date().toLocaleString('pt-BR')} - EducaPleno</p>
                     <p>Para salvar como PDF, clique no botão acima e escolha "Salvar como PDF" na janela de impressão.</p>
                 </div>
             </body>
@@ -36929,7 +37352,7 @@ class AdminPanel {
             <html>
             <head>
                 <meta charset="UTF-8">
-                <title>Cartões QR Code - Sistema de Provas</title>
+                <title>Cartões QR Code - EducaPleno</title>
                 <style>
                     /* Estilos dos cartões */
                     ${cssEstilos}

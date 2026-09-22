@@ -1,5 +1,5 @@
 // ============================================================================
-// SERVIÇO DE CONFIGURAÇÕES - SISTEMA DE PROVAS IEMA 2026
+// SERVIÇO DE CONFIGURAÇÕES - SEDUCAPLENO
 // ============================================================================
 // Gerencia as configurações do sistema e sincroniza com outros serviços
 // ============================================================================
@@ -214,7 +214,7 @@ class ConfigService {
                     faviconUrl: ''
                 },
                 sistema: {
-                    nome: 'Sistema de Provas IEMA 2026',
+                    nome: 'EducaPleno',
                     versao: '1.0.0',
                     ambiente: process.env.NODE_ENV || 'development',
                     urlBase: process.env.BASE_URL || 'http://localhost:3000',
@@ -270,7 +270,7 @@ class ConfigService {
                     usuario: process.env.EMAIL_USER || '',
                     senha: process.env.EMAIL_PASS ? '********' : '',
                     remetente: process.env.EMAIL_FROM || 'naoresponder@iemasaoluiscentro.net',
-                    nomeRemetente: process.env.EMAIL_FROM_NAME || 'Sistema de Provas',
+                    nomeRemetente: process.env.EMAIL_FROM_NAME || 'EducaPleno',
                     notificacoes: true,
                     lembretes: true,
                     resultados: true

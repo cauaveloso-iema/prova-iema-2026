@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+    <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
     <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
@@ -29,7 +29,7 @@
 
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
-    <title>Cadastro - Sistema de Provas</title>
+    <title>Cadastro - EducaPleno</title>
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
@@ -78,7 +78,7 @@
         ============================================================ -->
         <div class="step-content active" data-step="1">
             <h2 class="step-title">Escolha o tipo de conta</h2>
-            <p class="step-subtitle">Como você vai usar o Sistema de Provas?</p>
+            <p class="step-subtitle">Como você vai usar o EducaPleno?</p>
 
             <div class="role-selection">
                 <div class="role-option active" data-role="aluno" onclick="selecionarRole('aluno')">
@@ -118,7 +118,6 @@
                     placeholder="000.000.000-00" 
                     maxlength="14"
                     oninput="formatarCPF(this)">
-                <small>Digite apenas números. O formato será aplicado automaticamente.</small>
             </div>
 
             <div class="form-group">
@@ -127,7 +126,6 @@
                     placeholder="(11) 99999-9999" 
                     maxlength="15"
                     oninput="formatarTelefone(this)">
-                <small>Digite seu telefone com DDD. Formato: (11) 99999-9999</small>
             </div>
 
             <div class="form-group">
@@ -140,7 +138,6 @@
                     placeholder="seu.nome@iemasaoluiscentro.net"
                     pattern=".+@iemasaoluiscentro\.net$"
                     title="Somente emails institucionais (@iemasaoluiscentro.net)">
-                <small>Use seu email institucional: nome.sobrenome@iemasaoluiscentro.net</small>
             </div>
 
             <div class="step-buttons">

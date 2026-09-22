@@ -1385,7 +1385,7 @@ function imprimirQRCode() {
                 </p>
                 
                 <div class="rodape">
-                    <i class="fas fa-graduation-cap"></i> Sistema de Provas • 2026
+                    <i class="fas fa-graduation-cap"></i> EducaPleno • 2026
                 </div>
             </div>
             

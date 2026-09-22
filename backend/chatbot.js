@@ -19,7 +19,7 @@ const MODELOS_GROQ = {
 // INFORMAÇÕES COMPLETAS DO SISTEMA
 // ============================================
 const SISTEMA_INFO = {
-  nome: 'Sistema de Provas Online',
+  nome: 'EducaPleno',
   emailSuporte: 'caua.veloso@iemasaoluiscentro.net',
   telefoneSuporte: '(98) 98308-6504',
   site: 'sistemadeprovas.com',

@@ -1,7 +1,7 @@
 // ============================================================================
-// SERVIDOR PROVA IEMA 2026
+// SERVIDOR EDUCAPLENO 2026
 // ============================================================================
-// Descrição: Backend do sistema de provas online do IEMA
+// Descrição: Backend do sistema de provas online do EducaPleno
 // Ambiente: Desenvolvimento/Produção
 // Versão: 1.0.0
 // Autor: Equipe de Desenvolvimento
@@ -187,6 +187,43 @@ module.exports = {
     getModelStatus,
     modelsLoaded: () => modelsLoaded
 };
+
+// ============================================================
+// 🔥 FUNÇÃO AUXILIAR: Sanitizar expiresIn do JWT
+// ============================================================
+function sanitizarJwtExpiracao(valor) {
+    const padrao = '24h';
+    
+    if (valor === undefined || valor === null || valor === '') {
+        return padrao;
+    }
+    
+    // Se for número puro (ex: 24), assume HORAS
+    if (typeof valor === 'number') {
+        if (valor <= 0 || valor > 8760) return padrao;
+        return `${valor}h`;
+    }
+    
+    // Se for string
+    if (typeof valor === 'string') {
+        const trimmed = valor.trim();
+        
+        // Só número ("24" → "24h")
+        if (/^\d+$/.test(trimmed)) {
+            const num = parseInt(trimmed);
+            if (num <= 0 || num > 8760) return padrao;
+            return `${num}h`;
+        }
+        
+        // Já tem unidade válida
+        if (/^\d+(\.\d+)?(ms|s|m|h|d|w|y)$/i.test(trimmed)) {
+            return trimmed;
+        }
+    }
+    
+    console.warn(`⚠️ jwtExpiracao inválido: "${valor}". Usando padrão "${padrao}"`);
+    return padrao;
+}
 
 // ============================================================================
 // INICIALIZAÇÃO DO EXPRESS E SERVIDOR
@@ -1252,8 +1289,17 @@ const authenticateToken = (req, res, next) => {
         error: 'Token inválido ou expirado.' 
       });
     }
-    
-    // 🔥 VERIFICAR SE O TOKEN FOI INVALIDADO POR RESET
+
+    // 🔥 CORREÇÃO CRÍTICA: Token temporário de 2FA não tem tokenVersion
+    if (decoded.temp === true && decoded.purpose === '2fa') {
+      req.userId = decoded.id;
+      req.userRole = decoded.role;
+      req.userNome = decoded.nome;
+      req.tokenTemp = true;
+      return next();
+    }
+
+    // 🔥 Token normal: verificar tokenVersion
     try {
       const user = await User.findById(decoded.id).select('tokenVersion');
       
@@ -1265,7 +1311,7 @@ const authenticateToken = (req, res, next) => {
       }
       
       // Se a versão do token não corresponde, foi resetado
-      if (user.tokenVersion !== decoded.tokenVersion) {
+      if ((user.tokenVersion || 0) !== (decoded.tokenVersion || 0)) {
         return res.status(401).json({
           success: false,
           error: '🔐 Sua sessão foi encerrada pelo administrador. Faça login novamente.',
@@ -1276,17 +1322,14 @@ const authenticateToken = (req, res, next) => {
     } catch (dbError) {
       console.error('❌ Erro ao verificar tokenVersion:', dbError);
     }
-    
-    // Extrair dados do token
+
     req.userId = decoded.id;
     req.userRole = decoded.role;
     req.userNome = decoded.nome;
     req.userTwoFactorEnabled = decoded.twoFactorEnabled || false;
     req.tokenVersion = decoded.tokenVersion;
-    
-    // Marcar se é token temporário (para 2FA)
-    req.tokenTemp = decoded.temp || false;
- 
+    req.tokenTemp = false;
+
     next();
   });
 };
@@ -1916,8 +1959,10 @@ app.post('/api/auth/login', async (req, res) => {
           }
           
           // Buscar configuração de expiração do JWT
+          // Buscar configuração de expiração do JWT
           const configJwt = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
-          const jwtExpiracao = configJwt ? configJwt.valor : '24h';
+          const jwtExpiracaoBruto = configJwt ? configJwt.valor : '24h';
+          const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto); // 🔥 SANITIZA
           
           // Gerar token PRINCIPAL
           const authToken = jwt.sign(
@@ -2006,7 +2051,8 @@ app.post('/api/auth/login', async (req, res) => {
     
     const maxTentativas = configTentativas ? configTentativas.valor : 5;
     const tempoBloqueio = configBloqueio ? configBloqueio.valor : 15;
-    const jwtExpiracao = configJwt ? configJwt.valor : '24h';
+    const jwtExpiracaoBruto = configJwt ? configJwt.valor : '24h';
+    const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto); // 🔥 SANITIZA
     const exigir2FA = config2FA ? config2FA.valor : false;
     
     console.log(`🔐 Configuração 2FA: ${exigir2FA ? 'ATIVADO' : 'DESATIVADO'}`);
@@ -2244,7 +2290,7 @@ app.post('/api/auth/2fa/enable', authenticateToken, async (req, res) => {
     await user.save();
 
     const telefoneLimpo = user.telefone.replace(/\D/g, '');
-    const mensagem = `🔐 ${user.nome}, seu código de verificação do IEMA é: ${codigo}. Válido por 5 minutos.`;
+    const mensagem = `🔐 ${user.nome}, seu código de verificação do EducaPleno é: ${codigo}. Válido por 5 minutos.`;
 
     console.log('📱 Tentando enviar SMS...');
     console.log(`   Para: ${telefoneLimpo}`);
@@ -2636,10 +2682,11 @@ app.post('/api/auth/2fa/verify', authenticateToken, async (req, res) => {
 // ============ ROTA PARA BUSCAR CÓDIGOS DE BACKUP (VERSÃO COM SALVAMENTO GARANTIDO) ============
 app.get('/api/auth/2fa/backup-codes', authenticateToken, async (req, res) => {
     try {
-        console.log('🔍 Buscando códigos de backup para:', req.userId);
+        console.log('🔍 Buscando códigos de backup para:', req.userId, 'temp:', req.tokenTemp);
         
+        // Buscar usuário COM o campo (+twoFactorBackupCodes)
         const user = await User.findById(req.userId).select(
-            '+twoFactorEnabled +twoFactorBackupCodes'
+            '+twoFactorEnabled +twoFactorBackupCodes +twoFactorBackupCodesShown'
         );
         
         if (!user) {
@@ -2649,105 +2696,83 @@ app.get('/api/auth/2fa/backup-codes', authenticateToken, async (req, res) => {
             });
         }
 
-        // 🔥 CORREÇÃO: Sempre verificar e criar o campo twoFactorBackupCodesShown
-        // Buscar o usuário NOVAMENTE com o campo (ou criar na hora)
-        const userCompleto = await User.findById(req.userId).select(
-            '+twoFactorEnabled +twoFactorBackupCodes +twoFactorBackupCodesShown'
-        );
-        
-        // Se o campo não existir, criar agora
-        if (userCompleto.twoFactorBackupCodesShown === undefined) {
-            console.log('⚠️ Campo twoFactorBackupCodesShown não existe - criando com false');
-            userCompleto.twoFactorBackupCodesShown = false;
-            await userCompleto.save();
-            console.log('✅ Campo criado com sucesso');
-        }
-
-        // CASO 1: Token temporário (durante 2FA)
-        if (req.tokenTemp) {
-            console.log('⚠️ Token temporário detectado');
+        // 🔥 CORREÇÃO: Se for token TEMPORÁRIO (2FA), sempre retornar
+        // os códigos, independente do twoFactorBackupCodesShown
+        if (req.tokenTemp === true) {
+            console.log('🔑 Token temporário 2FA - retornando códigos');
             
-            // Se já mostrou os códigos antes
-            if (userCompleto.twoFactorBackupCodesShown === true) {
-                return res.json({
-                    success: true,
-                    backupCodes: [],
-                    alreadyShown: true,
-                    total: userCompleto.twoFactorBackupCodes ? userCompleto.twoFactorBackupCodes.length : 0,
-                    remaining: userCompleto.twoFactorBackupCodes ? userCompleto.twoFactorBackupCodes.length : 0,
-                    message: 'Códigos já foram exibidos anteriormente'
+            if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Você não tem códigos de backup. Contate o administrador.',
+                    needsAdmin: true
                 });
             }
             
-            // Se tem códigos e NUNCA mostrou
-            if (userCompleto.twoFactorBackupCodes && userCompleto.twoFactorBackupCodes.length > 0) {
-                console.log('🎉 Primeira vez - mostrando códigos');
-                
-                // 🔥 MARCAR COMO MOSTRADO AGORA E SALVAR NO BANCO
-                userCompleto.twoFactorBackupCodesShown = true;
-                await userCompleto.save();
-                console.log('✅ Campo twoFactorBackupCodesShown atualizado para true no banco');
+            // Marcar como mostrado (só na primeira vez)
+            if (user.twoFactorBackupCodesShown !== true) {
+                user.twoFactorBackupCodesShown = true;
+                await user.save();
+                console.log('✅ twoFactorBackupCodesShown marcado como true');
                 
                 return res.json({
                     success: true,
-                    backupCodes: userCompleto.twoFactorBackupCodes,
+                    backupCodes: user.twoFactorBackupCodes,
                     firstTime: true,
-                    total: userCompleto.twoFactorBackupCodes.length,
-                    remaining: userCompleto.twoFactorBackupCodes.length,
-                    message: '🔐 PRIMEIRA ATIVAÇÃO! Guarde estes códigos!'
+                    total: user.twoFactorBackupCodes.length,
+                    message: '🔐 Primeira ativação! Guarde estes códigos!'
                 });
             }
             
-            // Não tem códigos
-            return res.status(400).json({
-                success: false,
-                error: 'Você não tem códigos de backup. Contate o administrador.',
-                needsAdmin: true
+            // Já mostrado antes
+            return res.json({
+                success: true,
+                backupCodes: [],
+                alreadyShown: true,
+                total: user.twoFactorBackupCodes.length,
+                message: 'Códigos já foram exibidos anteriormente'
             });
         }
-        
-        // CASO 2: Token normal (já autenticado)
-        if (!userCompleto.twoFactorEnabled) {
+
+        // Token normal (já autenticado)
+        if (!user.twoFactorEnabled) {
             return res.status(400).json({
                 success: false,
                 error: '2FA não está ativado para esta conta'
             });
         }
 
-        if (userCompleto.twoFactorBackupCodes && userCompleto.twoFactorBackupCodes.length > 0) {
-            if (userCompleto.twoFactorBackupCodesShown === true) {
-                return res.json({
-                    success: true,
-                    backupCodes: [],
-                    alreadyShown: true,
-                    total: userCompleto.twoFactorBackupCodes.length,
-                    remaining: userCompleto.twoFactorBackupCodes.length,
-                    message: 'Códigos já foram exibidos anteriormente'
-                });
-            } else {
-                // 🔥 MARCAR COMO MOSTRADO AGORA E SALVAR NO BANCO
-                console.log('🎉 Primeira vez - mostrando códigos');
-                userCompleto.twoFactorBackupCodesShown = true;
-                await userCompleto.save();
-                console.log('✅ Campo twoFactorBackupCodesShown atualizado para true no banco');
-                
-                return res.json({
-                    success: true,
-                    backupCodes: userCompleto.twoFactorBackupCodes,
-                    firstTime: true,
-                    total: userCompleto.twoFactorBackupCodes.length,
-                    remaining: userCompleto.twoFactorBackupCodes.length,
-                    message: '🔐 PRIMEIRA ATIVAÇÃO! Guarde estes códigos!'
-                });
-            }
-        } else {
+        if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
             return res.status(400).json({
                 success: false,
                 error: 'Você não tem códigos de backup. Contate o administrador.',
                 needsAdmin: true
             });
         }
-        
+
+        // Retornar códigos apenas na primeira exibição
+        if (user.twoFactorBackupCodesShown === true) {
+            return res.json({
+                success: true,
+                backupCodes: [],
+                alreadyShown: true,
+                total: user.twoFactorBackupCodes.length,
+                message: 'Códigos já foram exibidos anteriormente'
+            });
+        }
+
+        // Primeira exibição
+        user.twoFactorBackupCodesShown = true;
+        await user.save();
+
+        return res.json({
+            success: true,
+            backupCodes: user.twoFactorBackupCodes,
+            firstTime: true,
+            total: user.twoFactorBackupCodes.length,
+            message: '🔐 Primeira ativação! Guarde estes códigos!'
+        });
+
     } catch (error) {
         console.error('❌ Erro ao buscar códigos de backup:', error);
         res.status(500).json({
@@ -2862,8 +2887,8 @@ app.post('/api/auth/2fa/generate-qr', authenticateToken, async (req, res) => {
     // 🔴 GERAR NOVO SEGREDO (ÚNICO PARA ESTA SESSÃO)
     const speakeasy = require('speakeasy');
     const generated = speakeasy.generateSecret({
-      name: `IEMA:${user.email}`,
-      issuer: 'Sistema de Provas IEMA'
+      name: `EducaPleno:${user.email}`,
+      issuer: 'EducaPleno'
     });
     
     const novoSegredo = generated.base32;
@@ -2878,7 +2903,7 @@ app.post('/api/auth/2fa/generate-qr', authenticateToken, async (req, res) => {
     const otpauth = speakeasy.otpauthURL({
       secret: novoSegredo,
       label: user.email,
-      issuer: 'IEMA',
+      issuer: 'EducaPleno',
       encoding: 'base32'
     });
 
@@ -3011,7 +3036,8 @@ app.post('/api/auth/2fa/validate-totp', authenticateToken, async (req, res) => {
 
         // Buscar configuração de expiração do JWT
         const configJwt = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
-        const jwtExpiracao = configJwt ? configJwt.valor : '24h';
+        const jwtExpiracaoBruto = configJwt ? configJwt.valor : '24h';
+        const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto); // 🔥 SANITIZA
 
         // Gerar token PRINCIPAL
         const authToken = jwt.sign(
@@ -15191,7 +15217,7 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
         faviconUrl: ''
       },
       sistema: {
-        nome: 'Sistema de Provas IEMA 2026',
+        nome: 'EducaPleno',
         versao: '1.0.0',
         ambiente: process.env.NODE_ENV || 'development',
         urlBase: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
@@ -15249,7 +15275,7 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
         usuario: process.env.EMAIL_USER || '',
         senha: process.env.EMAIL_PASS ? '********' : '',
         remetente: process.env.EMAIL_FROM || 'naoresponder@iemasaoluiscentro.net',
-        nomeRemetente: process.env.EMAIL_FROM_NAME || 'Sistema de Provas',
+        nomeRemetente: process.env.EMAIL_FROM_NAME || 'EducaPleno',
         notificacoes: true,
         lembretes: true,
         resultados: true
@@ -15762,7 +15788,7 @@ app.post('/api/admin/testar-email-enviar', authenticateToken, isSuperAdmin, asyn
                 </div>
                 <div class="content">
                     <h2>Olá!</h2>
-                    <p>Este é um email de teste do Sistema de Provas IEMA.</p>
+                    <p>Este é um email de teste do EducaPleno.</p>
                     <p><strong>Data:</strong> ${new Date().toLocaleString('pt-BR')}</p>
                     <p>✅ Se você recebeu este email, as configurações estão funcionando!</p>
                 </div>
@@ -15772,7 +15798,7 @@ app.post('/api/admin/testar-email-enviar', authenticateToken, isSuperAdmin, asyn
 
         const resultado = await emailService.sendEmail({
             to: destinatario,
-            subject: assunto || '📧 Teste do Sistema de Provas IEMA',
+            subject: assunto || '📧 Teste do EducaPleno',
             html: html
         });
 
@@ -15863,7 +15889,7 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
         // Enviar um email de teste simples
         const resultado = await emailService.sendEmail({
             to: destinatario,
-            subject: '🔧 Teste de Configuração - Sistema de Provas',
+            subject: '🔧 Teste de Configuração - EducaPleno',
             html: `
                 <h2>Teste de Configuração</h2>
                 <p>Se você recebeu este email, as configurações de email estão corretas!</p>
@@ -20115,7 +20141,7 @@ app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
                 break;
             default:
                 paginaExibicao = 'login.html';
-                tituloExibicao = 'Sistema de Provas';
+                tituloExibicao = 'EducaPleno';
         }
         
         res.json({

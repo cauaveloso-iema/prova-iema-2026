@@ -1462,7 +1462,7 @@ function gerarHTMLImpressaoAtraso(a) {
             </div>
             <div class="footer">
                 <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.registradoPor || 'Gestão Geral'}</p>
-                <p>Sistema de Provas IEMA</p>
+                <p>EducaPleno</p>
             </div>
         </div>
     </body>
@@ -3681,7 +3681,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                 </div>` : ''}
             <div class="footer">
                 <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.registradoPorNome || 'Gestão Geral'}</p>
-                <p>Sistema de Provas IEMA</p>
+                <p>EducaPleno</p>
             </div>
         </div>
     </body>

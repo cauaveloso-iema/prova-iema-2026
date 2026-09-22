@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Sistema de Provas">
+    <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
     <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
@@ -85,7 +85,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Professor | Sistema de Provas</title>
+    <title>Dashboard Professor | EducaPleno</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Ícones para PWA -->
@@ -3911,7 +3911,7 @@ window.addEventListener('scroll', function() {
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Prova Corrigida - Sistema de Provas</title>
+                    <title>Prova Corrigida - EducaPleno</title>
                     <style>
                         @media print {
                             body { 
@@ -3977,13 +3977,13 @@ window.addEventListener('scroll', function() {
                     <div class="header-print">
                         <h1>PROVA CORRIGIDA</h1>
                         <h2>${gabaritoProva?.titulo || 'Prova'}</h2>
-                        <p>Sistema de Provas Online - ${new Date().toLocaleDateString('pt-BR')}</p>
+                        <p>EducaPleno - ${new Date().toLocaleDateString('pt-BR')}</p>
                     </div>
                     
                     ${printContent}
                     
                     <div style="text-align: center; margin-top: 30px; font-size: 10px; color: #666;">
-                        Sistema de Provas - Corrigido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+                        EducaPleno - Corrigido em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
                     </div>
                 </body>
                 </html>
@@ -7853,7 +7853,7 @@ window.addEventListener('scroll', function() {
                     </div>
                     
                     <div class="print-footer">
-                        <p>Sistema de Provas IEMA - ${dataFormatada}</p>
+                        <p>EducaPleno - ${dataFormatada}</p>
                         <p>📱 Escaneie o QR Code para correção automática</p>
                         <p style="font-size: 6pt;">Aluno: ${window.alunoSelecionadoNome || '_________________'} | Turma: ${turmaNome} | Código: ${prova.codigo || 'N/A'}</p>
                     </div>
@@ -10750,7 +10750,7 @@ window.addEventListener('scroll', function() {
                         </table>
 
                         <div class="footer">
-                            <p>Relatório gerado automaticamente pelo Sistema de Provas</p>
+                            <p>Relatório gerado automaticamente pelo EducaPleno</p>
                             <p>Total de ${provasOriginais.length} provas • ${provasOriginais.reduce((acc, p) => acc + (p.quantidadeQuestoes || 0), 0)} questões</p>
                         </div>
                     </body>

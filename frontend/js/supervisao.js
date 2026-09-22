@@ -1204,7 +1204,7 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
             
             <div class="footer">
                 <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.entrada?.registradoPor || 'Supervisão'}</p>
-                <p>Sistema de Provas IEMA</p>
+                <p>EducaPleno</p>
             </div>
         </div>
     </body>

@@ -306,13 +306,13 @@ class SistemaProvasChatbot {
     // ============================================
     obterMensagemBoasVindas(perfil) {
         const mensagens = {
-            'aluno': 'Olá! 👋 Sou seu assistente virtual do Sistema de Provas.\n\n📌 No painel do aluno você pode:\n• 📝 Ver provas pendentes e concluídas\n• 📊 Acompanhar seus resultados\n• 📅 Visualizar o calendário de provas\n• 🔔 Receber notificações\n• 👤 Editar seu perfil\n\nComo posso ajudá-lo hoje? 😊',
+            'aluno': 'Olá! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel do aluno você pode:\n• 📝 Ver provas pendentes e concluídas\n• 📊 Acompanhar seus resultados\n• 📅 Visualizar o calendário de provas\n• 🔔 Receber notificações\n• 👤 Editar seu perfil\n\nComo posso ajudá-lo hoje? 😊',
             
-            'professor': 'Olá Professor(a)! 👋 Sou seu assistente virtual do Sistema de Provas.\n\n📌 No painel do professor você pode:\n• 📝 Criar novas provas com IA\n• 🏫 Gerenciar turmas e alunos\n• 📚 Acompanhar minhas provas\n• 📊 Visualizar resultados\n• ♿ Adaptar documentos para acessibilidade\n• 📅 Ver meu calendário\n\nComo posso ajudá-lo hoje? 😊',
+            'professor': 'Olá Professor(a)! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel do professor você pode:\n• 📝 Criar novas provas com IA\n• 🏫 Gerenciar turmas e alunos\n• 📚 Acompanhar minhas provas\n• 📊 Visualizar resultados\n• ♿ Adaptar documentos para acessibilidade\n• 📅 Ver meu calendário\n\nComo posso ajudá-lo hoje? 😊',
             
-            'adminSimples': 'Olá Administrador(a)! 👋 Sou seu assistente virtual do Sistema de Provas.\n\n📌 No painel administrativo você pode:\n• 📊 Acompanhar o dashboard\n• 👥 Gerenciar usuários\n• 🏫 Gerenciar turmas\n• 📝 Gerenciar provas\n• 📚 Gerenciar eixos\n• 🎓 Gerenciar cursos\n• 📊 Visualizar resultados\n• ♿ Adaptar documentos\n\nComo posso ajudá-lo hoje? 😊',
+            'adminSimples': 'Olá Administrador(a)! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel administrativo você pode:\n• 📊 Acompanhar o dashboard\n• 👥 Gerenciar usuários\n• 🏫 Gerenciar turmas\n• 📝 Gerenciar provas\n• 📚 Gerenciar eixos\n• 🎓 Gerenciar cursos\n• 📊 Visualizar resultados\n• ♿ Adaptar documentos\n\nComo posso ajudá-lo hoje? 😊',
             
-            'superAdmin': 'Olá Super Administrador(a)! 👑 Sou seu assistente virtual do Sistema de Provas.\n\n📌 No painel completo você pode:\n• 📊 Dashboard completo\n• 👥 Gerenciar todos os usuários\n• 🏫 Gerenciar turmas\n• 📝 Gerenciar provas\n• 🖥️ Monitorar violações\n• 📊 Resultados gerais\n• 📚 Gerenciar eixos\n• 🎓 Gerenciar cursos\n• 💾 Gerenciar backups\n• ⚙️ Configurações do sistema\n\nComo posso ajudá-lo hoje? 😊',
+            'superAdmin': 'Olá Super Administrador(a)! 👑 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel completo você pode:\n• 📊 Dashboard completo\n• 👥 Gerenciar todos os usuários\n• 🏫 Gerenciar turmas\n• 📝 Gerenciar provas\n• 🖥️ Monitorar violações\n• 📊 Resultados gerais\n• 📚 Gerenciar eixos\n• 🎓 Gerenciar cursos\n• 💾 Gerenciar backups\n• ⚙️ Configurações do sistema\n\nComo posso ajudá-lo hoje? 😊',
             
             'setorPedagogico': 'Olá! 👋 Sou seu assistente virtual do Setor Pedagógico.\n\n📌 No painel do Setor Pedagógico você pode:\n• 📊 Dashboard com visão geral\n• 👥 Gerenciar alunos com acessibilidade\n• 📝 Gerenciar provas adaptadas\n• 📊 Gerar relatórios\n• ♿ Adaptar documentos\n\nComo posso ajudá-lo hoje? 😊',
             
@@ -324,9 +324,9 @@ class SistemaProvasChatbot {
             
             'enfermaria': 'Olá! 👋 Sou seu assistente virtual da Enfermaria.\n\n📌 No painel da Enfermaria você pode:\n• 📊 Dashboard com estatísticas\n• 📋 Registrar atendimentos\n• 👥 Visualizar alunos e histórico\n• 📊 Gerar relatórios\n\nComo posso ajudá-lo hoje? 😊',
             
-            'login': 'Olá! 👋 Sou seu assistente virtual do Sistema de Provas.\n\n📌 Na página de login você pode:\n• 🔐 Fazer login com email e senha\n• 📝 Criar uma nova conta\n• 🔑 Recuperar sua senha\n\nComo posso ajudá-lo hoje? 😊',
+            'login': 'Olá! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 Na página de login você pode:\n• 🔐 Fazer login com email e senha\n• 📝 Criar uma nova conta\n• 🔑 Recuperar sua senha\n\nComo posso ajudá-lo hoje? 😊',
             
-            'padrao': 'Olá! 👋 Sou seu assistente virtual do Sistema de Provas.\n\nComo posso ajudá-lo hoje? 😊'
+            'padrao': 'Olá! 👋 Sou seu assistente virtual do EducaPleno.\n\nComo posso ajudá-lo hoje? 😊'
         };
 
         return mensagens[perfil] || mensagens['padrao'];
@@ -486,7 +486,7 @@ class SistemaProvasChatbot {
                                 </div>
                                 <div class="header-info">
                                     <h3>Assistente</h3>
-                                    <p class="chatbot-subtitle">Sistema de Provas</p>
+                                    <p class="chatbot-subtitle">EducaPleno</p>
                                 </div>
                             </div>
                             <div class="chatbot-status">

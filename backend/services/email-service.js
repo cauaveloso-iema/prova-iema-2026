@@ -120,7 +120,7 @@ class EmailService {
 
             const config = await this.getConfig();
             let from = config.remetente || process.env.EMAIL_FROM || 'onboarding@resend.dev';
-            let fromName = config.nomeRemetente || process.env.EMAIL_FROM_NAME || 'Sistema de Provas IEMA';
+            let fromName = config.nomeRemetente || process.env.EMAIL_FROM_NAME || 'EducaPleno';
 
             console.log('\n📧 ===== ENVIANDO EMAIL =====');
             console.log('📨 Para:', to);
@@ -222,7 +222,7 @@ class EmailService {
 
     // MÉTODOS ESPECÍFICOS
     async sendPasswordResetEmail(to, nome, codigo) {
-        const subject = '🔐 Recuperação de Senha - Sistema de Provas';
+        const subject = '🔐 Recuperação de Senha - EducaPleno';
         const html = this.getTemplateRecuperacao(nome, codigo);
         return this.sendEmail({ to, subject, html });
     }
@@ -246,7 +246,7 @@ class EmailService {
     }
 
     async sendWelcomeEmail(to, nome) {
-        const subject = '🎉 Bem-vindo ao Sistema de Provas IEMA!';
+        const subject = '🎉 Bem-vindo ao EducaPleno';
         const html = this.getTemplateBoasVindas(nome, to);
         return this.sendEmail({ to, subject, html });
     }
@@ -312,7 +312,7 @@ class EmailService {
                 <h1>🎉 Bem-vindo!</h1>
             </div>
             <h2>Olá, ${nome}!</h2>
-            <p>Seu cadastro foi realizado com sucesso no Sistema de Provas IEMA 2026.</p>
+            <p>Seu cadastro foi realizado com sucesso no EducaPleno.</p>
             <p><strong>Email cadastrado:</strong> ${email}</p>
             <p style="text-align: center;">
                 <a href="${process.env.APP_URL || 'http://localhost:3000'}" class="button">Acessar o Sistema</a>

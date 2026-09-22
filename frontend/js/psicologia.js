@@ -3651,7 +3651,7 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
             
             <div class="footer">
                 <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.entrada?.registradoPor || 'Psicólogo'}</p>
-                <p>Sistema de Provas IEMA</p>
+                <p>EducaPleno</p>
             </div>
         </div>
     </body>

@@ -926,7 +926,7 @@ window.SubstituicaoProfessoresModule = {
                 </div>
                 
                 <div class="footer">
-                    <p>Documento gerado automaticamente pelo Sistema de Provas IEMA</p>
+                    <p>Documento gerado automaticamente pelo EducaPleno</p>
                 </div>
             </body>
             </html>
