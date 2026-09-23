@@ -3461,6 +3461,49 @@ class SetorPedagogico {
                                 <div class="professor-list mt-3" id="listaProfessoresSubstitutos">
                                     <div class="text-center py-3"><div class="loading"></div><p>Carregando professores...</p></div>
                                 </div>
+
+                                <!-- ⭐ Checkbox "Não há substituto" ABAIXO da lista -->
+                                <div class="mt-3">
+                                    <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 15px;">
+                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                            <input type="checkbox" id="checkSemSubstituto" 
+                                                onchange="setorPedagogico.toggleSemSubstituto()" 
+                                                style="width: 22px; height: 22px; accent-color: #dc2626; cursor: pointer;">
+                                            <div>
+                                                <strong style="font-size: 1rem; color: #dc2626;">
+                                                    <i class="fas fa-user-slash"></i> Não há substituto disponível
+                                                </strong>
+                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #991b1b;">
+                                                    Marque esta opção quando ninguém puder substituir o professor ausente
+                                                </p>
+                                            </div>
+                                        </label>
+                                        
+                                        <div id="camposSemSubstituto" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #fecaca;">
+                                            <div class="mb-3">
+                                                <label class="form-label" style="color: #991b1b; font-weight: 600;">
+                                                    <i class="fas fa-exclamation-circle"></i> Motivo da Ausência do Substituto
+                                                </label>
+                                                <select id="selectMotivoSemSubstituto" class="form-select" style="border-color: #fecaca;">
+                                                    <option value="">Selecione o motivo...</option>
+                                                    <option value="falta_substituto">Falta do Substituto</option>
+                                                    <option value="atestado_substituto">Atestado Médico</option>
+                                                    <option value="emergencia">Emergência</option>
+                                                    <option value="conflito_horario">Conflito de Horário</option>
+                                                    <option value="outros">Outros</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-0">
+                                                <label class="form-label" style="color: #991b1b; font-weight: 600;">
+                                                    <i class="fas fa-comment"></i> Observações
+                                                </label>
+                                                <textarea id="inputObservacoesSemSubstituto" class="form-control" rows="2" 
+                                                        placeholder="Informações adicionais sobre a ausência do substituto..." 
+                                                        style="border-color: #fecaca;"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -3512,66 +3555,25 @@ class SetorPedagogico {
                                     <input type="hidden" id="inputHorarioSubstituicao" value="">
                                 </div>
 
-                                <div class="mt-3">
-                                    <label class="form-label">Motivo <span class="text-danger">*</span></label>
-                                    <select id="selectMotivoSubstituicao" class="form-select" onchange="setorPedagogico.atualizarMotivoDetalhesSubstituicao()">
-                                        <option value="">Selecione o motivo...</option>
-                                        <option value="falta_professor">Falta do Professor</option>
-                                        <option value="licenca_medica">Licença Médica</option>
-                                        <option value="licenca_maternidade_paternidade">Licença Maternidade/Paternidade</option>
-                                        <option value="capacitacao_formacao">Capacitação/Formação</option>
-                                        <option value="reuniao_externa">Reunião Externa</option>
-                                        <option value="problema_pessoal">Problema Pessoal</option>
-                                        <option value="atestado">Atestado</option>
-                                        <option value="outros">Outros</option>
-                                    </select>
-                                </div>
+                                <div id="blocoMotivoSubstituicao">
+                                    <div class="mt-3">
+                                        <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                                        <select id="selectMotivoSubstituicao" class="form-select" onchange="setorPedagogico.atualizarMotivoDetalhesSubstituicao()">
+                                            <option value="">Selecione o motivo...</option>
+                                            <option value="falta_professor">Falta do Professor</option>
+                                            <option value="licenca_medica">Licença Médica</option>
+                                            <option value="licenca_maternidade_paternidade">Licença Maternidade/Paternidade</option>
+                                            <option value="capacitacao_formacao">Capacitação/Formação</option>
+                                            <option value="reuniao_externa">Reunião Externa</option>
+                                            <option value="problema_pessoal">Problema Pessoal</option>
+                                            <option value="atestado">Atestado</option>
+                                            <option value="outros">Outros</option>
+                                        </select>
+                                    </div>
 
-                                <div class="mt-3" id="grupoMotivoDetalhesSubstituicao" style="display: none;">
-                                    <label class="form-label">Especifique o Motivo</label>
-                                    <input type="text" id="inputMotivoDetalhesSubstituicao" class="form-control" placeholder="Descreva o motivo...">
-                                </div>
-
-                                <!-- ⭐ NOVO: Checkbox de ausência do substituto -->
-                                <div class="mt-3">
-                                    <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 15px;">
-                                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                            <input type="checkbox" id="checkSubstitutoAusente" 
-                                                   onchange="setorPedagogico.toggleSubstitutoAusente()" 
-                                                   style="width: 22px; height: 22px; accent-color: #dc2626; cursor: pointer;">
-                                            <div>
-                                                <strong style="font-size: 1rem; color: #dc2626;">
-                                                    <i class="fas fa-user-slash"></i> O professor substituto também estará ausente?
-                                                </strong>
-                                                <p style="margin: 5px 0 0; font-size: 0.85rem; color: #991b1b;">
-                                                    Marque esta opção se o substituto também não poderá comparecer
-                                                </p>
-                                            </div>
-                                        </label>
-                                        
-                                        <div id="camposSubstitutoAusente" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #fecaca;">
-                                            <div class="mb-3">
-                                                <label class="form-label" style="color: #991b1b; font-weight: 600;">
-                                                    <i class="fas fa-exclamation-circle"></i> Motivo da Ausência do Substituto
-                                                </label>
-                                                <select id="selectMotivoSubstitutoAusente" class="form-select" style="border-color: #fecaca;">
-                                                    <option value="">Selecione o motivo...</option>
-                                                    <option value="falta_substituto">Falta do Substituto</option>
-                                                    <option value="atestado_substituto">Atestado Médico</option>
-                                                    <option value="emergencia">Emergência</option>
-                                                    <option value="conflito_horario">Conflito de Horário</option>
-                                                    <option value="outros">Outros</option>
-                                                </select>
-                                            </div>
-                                            <div class="mb-0">
-                                                <label class="form-label" style="color: #991b1b; font-weight: 600;">
-                                                    <i class="fas fa-comment"></i> Observações
-                                                </label>
-                                                <textarea id="inputObservacoesSubstitutoAusente" class="form-control" rows="2" 
-                                                          placeholder="Informações adicionais sobre a ausência do substituto..." 
-                                                          style="border-color: #fecaca;"></textarea>
-                                            </div>
-                                        </div>
+                                    <div class="mt-3" id="grupoMotivoDetalhesSubstituicao" style="display: none;">
+                                        <label class="form-label">Especifique o Motivo</label>
+                                        <input type="text" id="inputMotivoDetalhesSubstituicao" class="form-control" placeholder="Descreva o motivo...">
                                     </div>
                                 </div>
 
@@ -3962,43 +3964,114 @@ class SetorPedagogico {
         
         this.renderizarListaProfessoresSubstituicao(filtrados, containerId, tipo);
     }
+
+    toggleSemSubstituto() {
+        const check = document.getElementById('checkSemSubstituto');
+        const campos = document.getElementById('camposSemSubstituto');
+        const blocoMotivo = document.getElementById('blocoMotivoSubstituicao');
+        
+        if (check && campos) {
+            if (check.checked) {
+                campos.style.display = 'block';
+                campos.style.opacity = '0';
+                setTimeout(() => { 
+                    campos.style.transition = 'opacity 0.3s'; 
+                    campos.style.opacity = '1'; 
+                }, 10);
+                
+                // ⭐ Esconder o bloco de motivo (não houve substituição)
+                if (blocoMotivo) blocoMotivo.style.display = 'none';
+                const selectMotivo = document.getElementById('selectMotivoSubstituicao');
+                if (selectMotivo) selectMotivo.value = '';
+                const grupoDet = document.getElementById('grupoMotivoDetalhesSubstituicao');
+                if (grupoDet) grupoDet.style.display = 'none';
+                const inputDet = document.getElementById('inputMotivoDetalhesSubstituicao');
+                if (inputDet) inputDet.value = '';
+                
+                // Limpar substituto selecionado
+                this.substituicaoState.formData.professorSubstituto = null;
+                document.querySelectorAll('#listaProfessoresSubstitutos .professor-item')
+                    .forEach(el => el.classList.remove('selected'));
+                
+                document.getElementById('cardDetalhes').style.display = 'block';
+                this.atualizarResumoSubstituicao();
+                
+                setTimeout(() => {
+                    document.getElementById('cardDetalhes').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            } else {
+                campos.style.display = 'none';
+                const selectMotivoSemSub = document.getElementById('selectMotivoSemSubstituto');
+                const inputObsSemSub = document.getElementById('inputObservacoesSemSubstituto');
+                if (selectMotivoSemSub) selectMotivoSemSub.value = '';
+                if (inputObsSemSub) inputObsSemSub.value = '';
+                
+                // ⭐ Reexibir o bloco de motivo
+                if (blocoMotivo) blocoMotivo.style.display = 'block';
+                
+                if (!this.substituicaoState.formData.professorSubstituto) {
+                    document.getElementById('cardDetalhes').style.display = 'none';
+                }
+                
+                this.atualizarResumoSubstituicao();
+            }
+        }
+    }
     
     selecionarProfessorSubstituicao(id, tipo) {
         const professor = this.substituicaoState.professores.find(p => p.id === id);
         if (!professor) return;
         
         if (tipo === 'ausente') {
-            if (this.substituicaoState.formData.professorSubstituto && this.substituicaoState.formData.professorSubstituto.id === id) {
-                this.substituicaoState.formData.professorSubstituto = null;
-            }
+            // ... (mesma lógica de antes)
             this.substituicaoState.formData.professorAusente = professor;
-            
             document.querySelectorAll('#listaProfessoresAusentes .professor-item').forEach(el => {
                 el.classList.toggle('selected', el.dataset.id === id);
             });
             
+            // Resetar substituto e checkbox
+            this.substituicaoState.formData.professorSubstituto = null;
+            const checkSemSub = document.getElementById('checkSemSubstituto');
+            if (checkSemSub) checkSemSub.checked = false;
+            const camposSemSub = document.getElementById('camposSemSubstituto');
+            if (camposSemSub) camposSemSub.style.display = 'none';
+            
+            document.querySelectorAll('#listaProfessoresSubstitutos .professor-item').forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            document.getElementById('cardDetalhes').style.display = 'none';
             document.getElementById('cardProfessorSubstituto').style.display = 'block';
             this.atualizarResumoSubstituicao();
             
             const busca = document.getElementById('buscaProfessorSubstituto')?.value || '';
             this.filtrarProfessoresSubstituicao(busca, 'listaProfessoresSubstitutos', 'substituto');
-            
             document.getElementById('cardProfessorSubstituto').scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
+            // ⭐ Se selecionar um substituto, desmarcar "sem substituto"
+            const checkSemSub = document.getElementById('checkSemSubstituto');
+            if (checkSemSub && checkSemSub.checked) {
+                checkSemSub.checked = false;
+                const camposSemSub = document.getElementById('camposSemSubstituto');
+                if (camposSemSub) camposSemSub.style.display = 'none';
+                const selectMotivo = document.getElementById('selectMotivoSemSubstituto');
+                if (selectMotivo) selectMotivo.value = '';
+                const inputObs = document.getElementById('inputObservacoesSemSubstituto');
+                if (inputObs) inputObs.value = '';
+            }
+            
             if (this.substituicaoState.formData.professorAusente && this.substituicaoState.formData.professorAusente.id === id) {
                 this.showToast('O substituto deve ser diferente do ausente', 'warning');
                 return;
             }
             
             this.substituicaoState.formData.professorSubstituto = professor;
-            
             document.querySelectorAll('#listaProfessoresSubstitutos .professor-item').forEach(el => {
                 el.classList.toggle('selected', el.dataset.id === id);
             });
             
             document.getElementById('cardDetalhes').style.display = 'block';
             this.atualizarResumoSubstituicao();
-            
             document.getElementById('cardDetalhes').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
@@ -4111,13 +4184,12 @@ class SetorPedagogico {
         const inputObs = document.getElementById('inputObservacoesSubstituicao');
         const valorObs = inputObs?.value || formData.observacoes || '';
         
-        // ⭐ NOVO: Capturar dados do substituto ausente
-        const substitutoAusente = document.getElementById('checkSubstitutoAusente')?.checked || false;
-        const substitutoAusenteMotivo = substitutoAusente 
-            ? (document.getElementById('selectMotivoSubstitutoAusente')?.value || '') 
+        const semSubstituto = document.getElementById('checkSemSubstituto')?.checked || false;
+        const substitutoAusenteMotivo = semSubstituto 
+            ? (document.getElementById('selectMotivoSemSubstituto')?.value || '') 
             : '';
-        const substitutoAusenteObservacoes = substitutoAusente 
-            ? (document.getElementById('inputObservacoesSubstitutoAusente')?.value || '') 
+        const substitutoAusenteObservacoes = semSubstituto 
+            ? (document.getElementById('inputObservacoesSemSubstituto')?.value || '') 
             : '';
         
         this.substituicaoState.formData.data = valorData;
@@ -4127,23 +4199,30 @@ class SetorPedagogico {
         this.substituicaoState.formData.motivoDetalhes = valorDetalhes;
         this.substituicaoState.formData.observacoes = valorObs;
         
-        // Validações
+        // Validações básicas
         if (!formData.professorAusente) { this.showToast('⚠️ Selecione o professor ausente', 'warning'); return; }
-        if (!formData.professorSubstituto) { this.showToast('⚠️ Selecione o professor substituto', 'warning'); return; }
-        if (!valorTurma) { this.showToast('⚠️ Selecione a turma', 'warning'); return; }
-        if (!valorData) { this.showToast('⚠️ Informe a data', 'warning'); return; }
-        if (!valorHorario) { this.showToast('⚠️ Selecione o horário', 'warning'); return; }
-        if (!valorMotivo) { this.showToast('⚠️ Selecione o motivo', 'warning'); return; }
         
-        if (valorMotivo === 'outros' && !valorDetalhes) {
-            this.showToast('⚠️ Especifique o motivo', 'warning');
+        if (!semSubstituto && !formData.professorSubstituto) { 
+            this.showToast('⚠️ Selecione o professor substituto ou marque "Não há substituto disponível"', 'warning'); 
+            return; 
+        }
+        
+        if (semSubstituto && !substitutoAusenteMotivo) {
+            this.showToast('⚠️ Selecione o motivo da ausência do substituto', 'warning');
             return;
         }
         
-        // ⭐ NOVO: Validar ausência do substituto
-        if (substitutoAusente && !substitutoAusenteMotivo) {
-            this.showToast('⚠️ Selecione o motivo da ausência do substituto', 'warning');
-            return;
+        if (!valorTurma) { this.showToast('⚠️ Selecione a turma', 'warning'); return; }
+        if (!valorData) { this.showToast('⚠️ Informe a data', 'warning'); return; }
+        if (!valorHorario) { this.showToast('⚠️ Selecione o horário', 'warning'); return; }
+        
+        // ⭐ Só valida motivo se NÃO for sem substituto
+        if (!semSubstituto) {
+            if (!valorMotivo) { this.showToast('⚠️ Selecione o motivo', 'warning'); return; }
+            if (valorMotivo === 'outros' && !valorDetalhes) {
+                this.showToast('⚠️ Especifique o motivo', 'warning');
+                return;
+            }
         }
         
         const btn = document.getElementById('btnRegistrarSubstituicao');
@@ -4161,14 +4240,14 @@ class SetorPedagogico {
                 },
                 body: JSON.stringify({
                     professorAusenteId: formData.professorAusente.id,
-                    professorSubstitutoId: formData.professorSubstituto.id,
+                    professorSubstitutoId: semSubstituto ? null : formData.professorSubstituto.id,
                     turma: valorTurma,
                     horario: valorHorario,
                     data: valorData,
-                    motivo: valorMotivo,
-                    motivoDetalhes: valorDetalhes,
+                    motivo: semSubstituto ? 'sem_substituto' : valorMotivo,
+                    motivoDetalhes: semSubstituto ? '' : valorDetalhes,
                     observacoes: valorObs,
-                    substitutoAusente,
+                    substitutoAusente: semSubstituto,
                     substitutoAusenteMotivo,
                     substitutoAusenteObservacoes
                 })
@@ -4232,25 +4311,34 @@ class SetorPedagogico {
         const inputHorario = document.getElementById('inputHorarioSubstituicao');
         if (inputHorario) inputHorario.value = '';
         
-        // ⭐ NOVO: Resetar checkbox de substituto ausente
-        const checkSubstituto = document.getElementById('checkSubstitutoAusente');
-        if (checkSubstituto) checkSubstituto.checked = false;
+        // Resetar "sem substituto"
+        const checkSemSub = document.getElementById('checkSemSubstituto');
+        if (checkSemSub) checkSemSub.checked = false;
         
-        const camposSubstituto = document.getElementById('camposSubstitutoAusente');
-        if (camposSubstituto) camposSubstituto.style.display = 'none';
+        const camposSemSub = document.getElementById('camposSemSubstituto');
+        if (camposSemSub) camposSemSub.style.display = 'none';
         
-        const selectMotivoSub = document.getElementById('selectMotivoSubstitutoAusente');
-        if (selectMotivoSub) selectMotivoSub.value = '';
+        const selectMotivoSemSub = document.getElementById('selectMotivoSemSubstituto');
+        if (selectMotivoSemSub) selectMotivoSemSub.value = '';
         
-        const inputObsSub = document.getElementById('inputObservacoesSubstitutoAusente');
-        if (inputObsSub) inputObsSub.value = '';
+        const inputObsSemSub = document.getElementById('inputObservacoesSemSubstituto');
+        if (inputObsSemSub) inputObsSemSub.value = '';
+        
+        // ⭐ Reexibir bloco de motivo
+        const blocoMotivo = document.getElementById('blocoMotivoSubstituicao');
+        if (blocoMotivo) blocoMotivo.style.display = 'block';
+        
+        const grupoDet = document.getElementById('grupoMotivoDetalhesSubstituicao');
+        if (grupoDet) grupoDet.style.display = 'none';
         
         document.querySelectorAll('.professor-item').forEach(el => el.classList.remove('selected'));
         document.querySelectorAll('.horario-card').forEach(el => el.classList.remove('selected'));
         
-        document.getElementById('cardProfessorSubstituto').style.display = 'none';
-        document.getElementById('cardDetalhes').style.display = 'none';
-        document.getElementById('grupoMotivoDetalhesSubstituicao').style.display = 'none';
+        const cardSub = document.getElementById('cardProfessorSubstituto');
+        if (cardSub) cardSub.style.display = 'none';
+        
+        const cardDet = document.getElementById('cardDetalhes');
+        if (cardDet) cardDet.style.display = 'none';
         
         const buscaAusente = document.getElementById('buscaProfessorAusente');
         if (buscaAusente) buscaAusente.value = '';

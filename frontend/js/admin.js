@@ -23337,7 +23337,6 @@ class AdminPanel {
         }
 
         // ============ ABRIR MODAL DE ENVIO DE NOTIFICAÇÃO - TODOS OS PERFIS ============
-        // ============================================================================
         async abrirModalEnvioNotificacao() {
             console.log('📢 Abrindo modal de envio de notificação...');
             
@@ -23377,13 +23376,6 @@ class AdminPanel {
                 if (data.success && data.usuarios) {
                     todosUsuarios = data.usuarios;
                     console.log(`✅ ${todosUsuarios.length} usuários carregados`);
-                    
-                    // Log de diagnóstico
-                    const contagem = {};
-                    todosUsuarios.forEach(u => {
-                        contagem[u.role] = (contagem[u.role] || 0) + 1;
-                    });
-                    console.log('📊 Distribuição por perfil:', contagem);
                 } else {
                     throw new Error(data.error || 'Erro ao carregar usuários');
                 }
@@ -23420,20 +23412,71 @@ class AdminPanel {
                 protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length
             };
             
-            console.log('📊 Contagem por perfil:', c);
-            
             // ===== ARMAZENAR ESTADO =====
             this.usuariosParaNotificacao = todosUsuarios;
             this.usuariosSelecionados = new Set();
             this.tipoDestinatarioAtual = 'todos';
             this.filtroAtualNotificacao = '';
             this.roleFiltroNotificacao = 'todos';
+            this.modoSelecaoIndividual = false; // 🔥 NOVO: Modo de seleção individual
+            this.usuarioIndividualSelecionado = null; // 🔥 NOVO: Usuário selecionado individualmente
             
             // ===== RENDERIZAR MODAL =====
             modalBody.innerHTML = `
                 <div style="padding: 20px; max-width: 800px;">
-                    <!-- GRID DE PERFIS -->
-                    <div style="margin-bottom: 20px;">
+                    <!-- 🔥 NOVO: MODO DE ENVIO (TODOS OU INDIVIDUAL) -->
+                    <div style="margin-bottom: 20px; background: #f8fafc; border-radius: 12px; padding: 5px; display: flex; gap: 5px;">
+                        <button type="button" id="modoTodosBtn" onclick="admin.mudarModoNotificacao('todos')" 
+                            style="flex: 1; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.3s; background: #4f46e5; color: white; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-users"></i> Enviar para Muitos
+                        </button>
+                        <button type="button" id="modoIndividualBtn" onclick="admin.mudarModoNotificacao('individual')" 
+                            style="flex: 1; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.3s; background: transparent; color: #6b7280; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-user"></i> Enviar para Um
+                        </button>
+                    </div>
+                    
+                    <!-- 🔥 NOVO: CAMPO DE BUSCA INDIVIDUAL (inicialmente oculto) -->
+                    <div id="secaoSelecaoIndividual" style="display: none; margin-bottom: 20px;">
+                        <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 12px; padding: 20px; color: white;">
+                            <label style="display: block; margin-bottom: 10px; font-weight: 600; font-size: 0.95rem;">
+                                <i class="fas fa-search"></i> Buscar Usuário
+                            </label>
+                            <div style="position: relative;">
+                                <input type="text" id="buscaUsuarioIndividual" 
+                                    placeholder="Digite o nome, email ou matrícula do usuário..."
+                                    style="width: 100%; padding: 14px 45px 14px 16px; border: none; border-radius: 10px; font-size: 14px; outline: none; box-sizing: border-box;"
+                                    oninput="admin.buscarUsuarioIndividual(this.value)"
+                                    autocomplete="off">
+                                <i class="fas fa-search" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 16px;"></i>
+                            </div>
+                            
+                            <!-- Lista de resultados da busca -->
+                            <div id="resultadosBuscaIndividual" style="display: none; margin-top: 10px; background: white; border-radius: 10px; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                            </div>
+                            
+                            <!-- Usuário selecionado -->
+                            <div id="usuarioIndividualSelecionado" style="display: none; margin-top: 15px; background: rgba(255,255,255,0.2); border-radius: 10px; padding: 15px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div id="avatarUsuarioSelecionado" style="width: 50px; height: 50px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #4f46e5; font-size: 18px; flex-shrink: 0;">?</div>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div id="nomeUsuarioSelecionado" style="font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                                        <div id="emailUsuarioSelecionado" style="font-size: 12px; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                                        <div id="roleUsuarioSelecionado" style="font-size: 11px; opacity: 0.8; margin-top: 2px;"></div>
+                                    </div>
+                                    <button type="button" onclick="admin.limparSelecaoIndividual()" 
+                                        style="background: rgba(255,255,255,0.3); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                                        onmouseover="this.style.background='rgba(255,255,255,0.5)'"
+                                        onmouseout="this.style.background='rgba(255,255,255,0.3)'">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- GRID DE PERFIS (mantido para envio em massa) -->
+                    <div id="secaoPerfisMassa" style="margin-bottom: 20px;">
                         <label style="display: block; margin-bottom: 10px; font-weight: 600; font-size: 0.9rem; color: #374151;">
                             <i class="fas fa-user-tag" style="margin-right: 5px; color: #4f46e5;"></i> Filtrar por Perfil
                         </label>
@@ -23582,7 +23625,231 @@ class AdminPanel {
             modalSaveBtn.style.display = 'inline-block';
             
             console.log('✅ Modal renderizado com sucesso!');
-            console.log(`📋 Grid de perfis: ${document.querySelectorAll('#gridPerfisNotificacao button').length} botões`);
+        }
+
+        // 🔥 NOVO MÉTODO: MUDAR MODO DE NOTIFICAÇÃO (TODOS OU INDIVIDUAL)
+        mudarModoNotificacao(modo) {
+            this.modoSelecaoIndividual = modo === 'individual';
+            
+            const btnTodos = document.getElementById('modoTodosBtn');
+            const btnIndividual = document.getElementById('modoIndividualBtn');
+            const secaoIndividual = document.getElementById('secaoSelecaoIndividual');
+            const secaoPerfis = document.getElementById('secaoPerfisMassa');
+            const infoDestinatarios = document.getElementById('infoDestinatariosNotificacao');
+            
+            if (modo === 'individual') {
+                // Estilo do botão individual ativo
+                btnIndividual.style.background = '#4f46e5';
+                btnIndividual.style.color = 'white';
+                btnTodos.style.background = 'transparent';
+                btnTodos.style.color = '#6b7280';
+                
+                // Mostrar seção de seleção individual, ocultar perfis
+                secaoIndividual.style.display = 'block';
+                secaoPerfis.style.display = 'none';
+                
+                // Atualizar info
+                infoDestinatarios.innerHTML = `
+                    <i class="fas fa-info-circle" style="font-size: 1.2rem; color: #4f46e5;"></i>
+                    <span style="font-size: 0.9rem; color: #1e40af;">
+                        Busque e selecione <strong>1 usuário</strong> para enviar a notificação
+                    </span>
+                `;
+                
+                // Focar no campo de busca
+                setTimeout(() => {
+                    document.getElementById('buscaUsuarioIndividual')?.focus();
+                }, 100);
+                
+            } else {
+                // Estilo do botão todos ativo
+                btnTodos.style.background = '#4f46e5';
+                btnTodos.style.color = 'white';
+                btnIndividual.style.background = 'transparent';
+                btnIndividual.style.color = '#6b7280';
+                
+                // Mostrar perfis, ocultar seleção individual
+                secaoIndividual.style.display = 'none';
+                secaoPerfis.style.display = 'block';
+                
+                // Limpar seleção individual
+                this.limparSelecaoIndividual();
+                
+                // Atualizar info
+                const roleFiltro = this.roleFiltroNotificacao || 'todos';
+                let count = this.usuariosParaNotificacao?.length || 0;
+                
+                if (roleFiltro !== 'todos') {
+                    if (roleFiltro === 'admin') {
+                        count = this.usuariosParaNotificacao?.filter(u => u.role === 'admin' || u.role === 'super_admin').length || 0;
+                    } else {
+                        count = this.usuariosParaNotificacao?.filter(u => u.role === roleFiltro).length || 0;
+                    }
+                }
+                
+                infoDestinatarios.innerHTML = `
+                    <i class="fas fa-info-circle" style="font-size: 1.2rem; color: #4f46e5;"></i>
+                    <span style="font-size: 0.9rem; color: #1e40af;">
+                        <strong>${count}</strong> usuário(s) receberão esta notificação
+                    </span>
+                `;
+            }
+        }
+
+        // 🔥 NOVO MÉTODO: BUSCAR USUÁRIO INDIVIDUAL
+        buscarUsuarioIndividual(termo) {
+            const container = document.getElementById('resultadosBuscaIndividual');
+            if (!container) return;
+            
+            if (!termo || termo.length < 2) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            const termoLower = termo.toLowerCase();
+            const resultados = (this.usuariosParaNotificacao || []).filter(u => 
+                (u.nome && u.nome.toLowerCase().includes(termoLower)) ||
+                (u.email && u.email.toLowerCase().includes(termoLower)) ||
+                (u.matricula && u.matricula.includes(termo))
+            ).slice(0, 10); // Limitar a 10 resultados
+            
+            if (resultados.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: #6b7280;">
+                        <i class="fas fa-search" style="font-size: 24px; margin-bottom: 10px; display: block; opacity: 0.5;"></i>
+                        Nenhum usuário encontrado
+                    </div>
+                `;
+                container.style.display = 'block';
+                return;
+            }
+            
+            let html = '';
+            resultados.forEach(usuario => {
+                const iniciais = (usuario.nome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                const roleLabel = this.getRoleLabelVincular(usuario.role);
+                const roleIcon = this.getRoleIconNotificacao(usuario.role);
+                
+                html += `
+                    <div onclick="admin.selecionarUsuarioIndividual('${usuario._id}')" 
+                        style="padding: 12px 15px; display: flex; align-items: center; gap: 12px; cursor: pointer; border-bottom: 1px solid #f3f4f6; transition: all 0.2s;"
+                        onmouseover="this.style.background='#f3f4f6'"
+                        onmouseout="this.style.background='white'">
+                        <div style="width: 42px; height: 42px; background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px; flex-shrink: 0;">
+                            ${iniciais}
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; color: #1f2937; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${usuario.nome || 'Sem nome'}
+                            </div>
+                            <div style="font-size: 12px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${usuario.email || 'Sem email'}
+                            </div>
+                        </div>
+                        <span style="background: #e0e7ff; color: #4f46e5; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; white-space: nowrap;">
+                            ${roleIcon} ${roleLabel}
+                        </span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            container.style.display = 'block';
+        }
+
+        // 🔥 NOVO MÉTODO: SELECIONAR USUÁRIO INDIVIDUAL
+        selecionarUsuarioIndividual(usuarioId) {
+            const usuario = this.usuariosParaNotificacao?.find(u => u._id === usuarioId);
+            if (!usuario) {
+                this.showToast('❌ Usuário não encontrado', 'error');
+                return;
+            }
+            
+            this.usuarioIndividualSelecionado = usuario;
+            
+            // Ocultar resultados da busca
+            const resultadosContainer = document.getElementById('resultadosBuscaIndividual');
+            if (resultadosContainer) resultadosContainer.style.display = 'none';
+            
+            // Limpar campo de busca
+            const buscaInput = document.getElementById('buscaUsuarioIndividual');
+            if (buscaInput) buscaInput.value = '';
+            
+            // Mostrar usuário selecionado
+            const selecionadoDiv = document.getElementById('usuarioIndividualSelecionado');
+            if (selecionadoDiv) selecionadoDiv.style.display = 'block';
+            
+            // Preencher dados do usuário
+            const iniciais = (usuario.nome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const roleLabel = this.getRoleLabelVincular(usuario.role);
+            const roleIcon = this.getRoleIconNotificacao(usuario.role);
+            
+            const avatarEl = document.getElementById('avatarUsuarioSelecionado');
+            if (avatarEl) avatarEl.textContent = iniciais;
+            
+            const nomeEl = document.getElementById('nomeUsuarioSelecionado');
+            if (nomeEl) nomeEl.textContent = usuario.nome || 'Sem nome';
+            
+            const emailEl = document.getElementById('emailUsuarioSelecionado');
+            if (emailEl) emailEl.textContent = usuario.email || 'Sem email';
+            
+            const roleEl = document.getElementById('roleUsuarioSelecionado');
+            if (roleEl) roleEl.textContent = `${roleIcon} ${roleLabel}`;
+            
+            // Atualizar info de destinatários
+            const infoDestinatarios = document.getElementById('infoDestinatariosNotificacao');
+            if (infoDestinatarios) {
+                infoDestinatarios.innerHTML = `
+                    <i class="fas fa-check-circle" style="font-size: 1.2rem; color: #10b981;"></i>
+                    <span style="font-size: 0.9rem; color: #065f46;">
+                        <strong>1 usuário selecionado:</strong> ${usuario.nome}
+                    </span>
+                `;
+            }
+            
+            console.log('✅ Usuário individual selecionado:', usuario.nome);
+        }
+
+        // 🔥 NOVO MÉTODO: LIMPAR SELEÇÃO INDIVIDUAL
+        limparSelecaoIndividual() {
+            this.usuarioIndividualSelecionado = null;
+            
+            const selecionadoDiv = document.getElementById('usuarioIndividualSelecionado');
+            if (selecionadoDiv) selecionadoDiv.style.display = 'none';
+            
+            const resultadosContainer = document.getElementById('resultadosBuscaIndividual');
+            if (resultadosContainer) resultadosContainer.style.display = 'none';
+            
+            // Restaurar info padrão
+            const infoDestinatarios = document.getElementById('infoDestinatariosNotificacao');
+            if (infoDestinatarios) {
+                infoDestinatarios.innerHTML = `
+                    <i class="fas fa-info-circle" style="font-size: 1.2rem; color: #4f46e5;"></i>
+                    <span style="font-size: 0.9rem; color: #1e40af;">
+                        Busque e selecione <strong>1 usuário</strong> para enviar a notificação
+                    </span>
+                `;
+            }
+        }
+
+        // 🔥 NOVO MÉTODO: OBTER ÍCONE DO ROLE
+        getRoleIconNotificacao(role) {
+            const icons = {
+                'aluno': '👨‍🎓',
+                'professor': '👨‍🏫',
+                'admin': '👑',
+                'super_admin': '⭐',
+                'setor_pedagogico': '👩‍🏫',
+                'coordenacao_patio': '🏃',
+                'cozinha': '🍽️',
+                'gestao_geral': '📊',
+                'enfermaria': '🏥',
+                'supervisao': '🛡️',
+                'psicologia': '🧠',
+                'assistente-social': '🤝',
+                'protagonismo': '⭐'
+            };
+            return icons[role] || '👤';
         }
 
         // ============ FILTRAR NOTIFICAÇÃO POR ROLE ============
@@ -23644,10 +23911,10 @@ class AdminPanel {
         }
 
         // ============================================================================
-        // 📤 ENVIAR NOTIFICAÇÃO EM MASSA (VERSÃO DEFINITIVA)
+        // 📤 ENVIAR NOTIFICAÇÃO EM MASSA (VERSÃO ATUALIZADA COM MODO INDIVIDUAL)
         // ============================================================================
         async enviarNotificacaoEmMassa() {
-            console.log('📤 Iniciando envio de notificação em massa...');
+            console.log('📤 Iniciando envio de notificação...');
             
             // ===== 1. COLETAR DADOS DO FORMULÁRIO =====
             const titulo = document.getElementById('notificacaoTitulo')?.value?.trim();
@@ -23655,7 +23922,6 @@ class AdminPanel {
             const cor = document.getElementById('notificacaoCor')?.value || '#4f46e5';
             const prioridade = parseInt(document.getElementById('notificacaoPrioridade')?.value) || 3;
             const enviarPush = document.getElementById('notificacaoPush')?.checked || false;
-            const roleFiltro = this.roleFiltroNotificacao || 'todos';
             
             // ===== 2. VALIDAÇÕES =====
             if (!titulo) {
@@ -23668,35 +23934,55 @@ class AdminPanel {
                 return;
             }
             
-            if (!this.usuariosParaNotificacao || this.usuariosParaNotificacao.length === 0) {
-                this.showToast('❌ Nenhum usuário carregado', 'error');
-                return;
-            }
-            
             // ===== 3. DETERMINAR DESTINATÁRIOS =====
             let usuariosDestino = [];
             let labelDestinatarios = '';
             
-            if (roleFiltro === 'todos') {
-                usuariosDestino = this.usuariosParaNotificacao.map(u => ({
-                    id: u._id,
-                    nome: u.nome,
-                    email: u.email,
-                    role: u.role
-                }));
-                labelDestinatarios = 'Todos os usuários';
-            } 
-            else if (roleFiltro === 'admin') {
-                usuariosDestino = this.usuariosParaNotificacao
-                    .filter(u => u.role === 'admin' || u.role === 'super_admin')
-                    .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
-                labelDestinatarios = 'Administradores';
-            } 
-            else {
-                usuariosDestino = this.usuariosParaNotificacao
-                    .filter(u => u.role === roleFiltro)
-                    .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
-                labelDestinatarios = roleFiltro;
+            if (this.modoSelecaoIndividual) {
+                // 🔥 MODO INDIVIDUAL: Apenas o usuário selecionado
+                if (!this.usuarioIndividualSelecionado) {
+                    this.showToast('❌ Selecione um usuário para enviar a notificação', 'error');
+                    return;
+                }
+                
+                usuariosDestino = [{
+                    id: this.usuarioIndividualSelecionado._id,
+                    nome: this.usuarioIndividualSelecionado.nome,
+                    email: this.usuarioIndividualSelecionado.email,
+                    role: this.usuarioIndividualSelecionado.role
+                }];
+                labelDestinatarios = this.usuarioIndividualSelecionado.nome;
+                
+            } else {
+                // MODO MASSA: Usar filtro por role
+                const roleFiltro = this.roleFiltroNotificacao || 'todos';
+                
+                if (!this.usuariosParaNotificacao || this.usuariosParaNotificacao.length === 0) {
+                    this.showToast('❌ Nenhum usuário carregado', 'error');
+                    return;
+                }
+                
+                if (roleFiltro === 'todos') {
+                    usuariosDestino = this.usuariosParaNotificacao.map(u => ({
+                        id: u._id,
+                        nome: u.nome,
+                        email: u.email,
+                        role: u.role
+                    }));
+                    labelDestinatarios = 'Todos os usuários';
+                } 
+                else if (roleFiltro === 'admin') {
+                    usuariosDestino = this.usuariosParaNotificacao
+                        .filter(u => u.role === 'admin' || u.role === 'super_admin')
+                        .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
+                    labelDestinatarios = 'Administradores';
+                } 
+                else {
+                    usuariosDestino = this.usuariosParaNotificacao
+                        .filter(u => u.role === roleFiltro)
+                        .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
+                    labelDestinatarios = roleFiltro;
+                }
             }
             
             // ===== 4. VERIFICAR SE TEM DESTINATÁRIOS =====
@@ -23814,7 +24100,7 @@ class AdminPanel {
                                 tipo: 'notificacao_massa',
                                 enviadoPor: 'Admin',
                                 role: usuario.role,
-                                filtro: roleFiltro,
+                                individual: this.modoSelecaoIndividual,
                                 timestamp: Date.now()
                             }
                         })
@@ -23839,7 +24125,7 @@ class AdminPanel {
                                 {
                                     tipo: 'notificacao_massa',
                                     prioridade: prioridade,
-                                    filtro: roleFiltro
+                                    individual: this.modoSelecaoIndividual
                                 }
                             );
                             
@@ -23912,7 +24198,7 @@ class AdminPanel {
                 enviados > 0 ? 'success' : 'error'
             );
             
-            // Notificação de sistema detalhada (se a função existir)
+            // Notificação de sistema detalhada
             if (typeof this.mostrarNotificacaoSistema === 'function') {
                 this.mostrarNotificacaoSistema(
                     enviados > 0 ? 'success' : 'error',

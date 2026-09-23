@@ -62,6 +62,31 @@
             <a href="editar-perfil.html" class="btn-editar-perfil">
                 <i class="fas fa-user-edit"></i> Editar Perfil
             </a>
+
+            <!-- Botão de Download do App - Estilo destacado -->
+            <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" 
+            target="_blank" 
+            class="nav-link btn-download-app"
+            style="
+                background: linear-gradient(135deg, #10b981, #059669);
+                color: white;
+                margin: 10px 16px;
+                border-radius: 12px;
+                padding: 12px 20px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                font-weight: 600;
+                font-size: 0.9rem;
+                text-decoration: none;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            "
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(16,185,129,0.4)'"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'">
+                <i class="fas fa-download" style="font-size: 1.1rem;"></i>
+                <span>Baixar Aplicativo</span>
+            </a>
             
             <a href="#" class="nav-link" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i> Sair
