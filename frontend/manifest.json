@@ -1,7 +1,7 @@
 {
-  "name": "Sistema de Provas IEMA",
-  "short_name": "IEMA Provas",
-  "description": "Sistema de provas online do IEMA - Acesse suas provas, resultados e notificações",
+  "name": "EducaPleno",
+  "short_name": "EducaPleno",
+  "description": "Sistema EducaPleno - Acesse suas provas, resultados e notificações",
   "theme_color": "#0d6efd",
   "background_color": "#ffffff",
   "display": "standalone",
