@@ -17638,6 +17638,421 @@ app.get('/api/admin/onesignal/estatisticas', authenticateToken, isSuperAdmin, as
     }
 });
 
+// ============================================================================
+// ROTA: Vincular dispositivo via link (usuário clicou na notificação)
+// ============================================================================
+app.post('/api/onesignal/vincular-por-link', async (req, res) => {
+    try {
+        const { playerId, token } = req.body;
+        
+        console.log(`\n🔗 [LINK] Vínculo por clique na notificação`);
+        console.log(`   📱 PlayerId: ${playerId?.substring(0, 20)}...`);
+        console.log(`   🔑 Token: ${token ? '✅ Presente' : '❌ Ausente'}`);
+        
+        if (!playerId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Player ID é obrigatório'
+            });
+        }
+        
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                error: 'Você precisa estar logado para vincular'
+            });
+        }
+        
+        // Verificar token JWT
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(401).json({
+                success: false,
+                error: 'Token inválido ou expirado'
+            });
+        }
+        
+        const userId = decoded.id;
+        
+        // Buscar usuário
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Desvincular de outro usuário se necessário
+        const outroUsuario = await User.findOne({
+            onesignalPlayerId: playerId,
+            _id: { $ne: userId }
+        });
+        
+        if (outroUsuario) {
+            console.log(`   🔄 Desvinculando de ${outroUsuario.nome}`);
+            await User.findByIdAndUpdate(outroUsuario._id, {
+                $unset: { onesignalPlayerId: 1, ultimaValidacaoPush: 1 }
+            });
+        }
+        
+        // Vincular
+        user.onesignalPlayerId = playerId;
+        user.ultimaValidacaoPush = new Date();
+        await user.save();
+        
+        console.log(`   ✅ VÍNCULO REALIZADO: ${user.nome} (${user.email})`);
+        
+        // Criar notificação interna
+        try {
+            const Notificacao = mongoose.model('Notificacao');
+            const notificacao = new Notificacao({
+                usuarioId: user._id,
+                tipo: 'sistema',
+                titulo: '📱 Dispositivo Vinculado!',
+                mensagem: 'Este dispositivo foi vinculado com sucesso à sua conta. Agora você receberá notificações!',
+                icone: '📱',
+                cor: '#10b981',
+                link: '/perfil',
+                prioridade: 2
+            });
+            await notificacao.save();
+        } catch (notifErr) {
+            console.warn('   ⚠️ Erro ao criar notificação:', notifErr.message);
+        }
+        
+        res.json({
+            success: true,
+            message: 'Dispositivo vinculado com sucesso!',
+            usuario: {
+                nome: user.nome,
+                email: user.email,
+                role: user.role
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTA: Enviar push em massa para múltiplos playerIds
+// ============================================================================
+app.post('/api/admin/onesignal/enviar-massa', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        const { playerIds, titulo, mensagem, dados = {} } = req.body;
+        
+        if (!playerIds || !Array.isArray(playerIds) || playerIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Lista de playerIds é obrigatória'
+            });
+        }
+        
+        console.log(`📤 Enviando push em massa para ${playerIds.length} dispositivos`);
+        
+        const LOTE = 2000;
+        let enviados = 0;
+        let erros = 0;
+        
+        for (let i = 0; i < playerIds.length; i += LOTE) {
+            const lote = playerIds.slice(i, i + LOTE);
+            
+            try {
+                const payload = {
+                    app_id: process.env.ONESIGNAL_APP_ID,
+                    include_player_ids: lote,
+                    headings: { en: titulo, pt: titulo },
+                    contents: { en: mensagem, pt: mensagem },
+                    data: {
+                        ...dados,
+                        timestamp: Date.now()
+                    },
+                    android_sound: 'notification',
+                    android_led_color: 'FF0D6EFD',
+                    android_accent_color: 'FF0D6EFD',
+                    small_icon: 'ic_notification',
+                    priority: 10,
+                    ttl: 86400
+                };
+                
+                const response = await axios.post(
+                    'https://onesignal.com/api/v1/notifications',
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': `Basic ${process.env.ONESIGNAL_REST_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+                
+                if (response.data && response.data.id) {
+                    enviados += lote.length;
+                } else {
+                    erros += lote.length;
+                }
+                
+                if (i + LOTE < playerIds.length) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+            } catch (error) {
+                console.error(`❌ Erro no lote ${i}-${i + LOTE}:`, error.message);
+                erros += lote.length;
+            }
+        }
+        
+        res.json({
+            success: true,
+            enviados,
+            erros,
+            total: playerIds.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTA: Solicitar auto-vínculo em massa (envia push com link)
+// ============================================================================
+app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log('='.repeat(60));
+        console.log(`📨 Admin ${req.userId} solicitando vínculo em massa...`);
+        
+        // 1. Buscar dispositivos
+        const dispositivosResp = await oneSignalAdmin.listarDispositivos(300, 0);
+        
+        if (!dispositivosResp.success) {
+            throw new Error('Erro ao buscar dispositivos');
+        }
+        
+        const todosDispositivos = dispositivosResp.players || dispositivosResp.dispositivos || [];
+        console.log(`📱 ${todosDispositivos.length} dispositivos no OneSignal`);
+        
+        // 2. Filtrar órfãos
+        const usuariosVinculados = await User.find({
+            onesignalPlayerId: { $exists: true, $ne: null, $ne: '' }
+        }).select('onesignalPlayerId');
+        
+        const playerIdsVinculados = new Set(usuariosVinculados.map(u => u.onesignalPlayerId));
+        
+        const dispositivosOrfaos = todosDispositivos.filter(d => {
+            const pid = d.id || d.playerId;
+            return pid && !playerIdsVinculados.has(pid);
+        });
+        
+        console.log(`📱 ${dispositivosOrfaos.length} órfãos encontrados`);
+        
+        if (dispositivosOrfaos.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Todos os dispositivos já estão vinculados',
+                enviados: 0,
+                erros: 0,
+                total: 0
+            });
+        }
+        
+        // 3. Enviar usando o SERVICE (mesma lógica que funciona)
+        const BASE_URL = process.env.NODE_ENV === 'development' 
+            ? 'http://localhost:3000' 
+            : 'https://www.sistemadeprovas.com';
+        
+        let enviados = 0;
+        let erros = 0;
+        const errosDetalhes = [];
+        
+        for (const dispositivo of dispositivosOrfaos) {
+            const playerId = dispositivo.id || dispositivo.playerId;
+            
+            if (!playerId) {
+                erros++;
+                continue;
+            }
+            
+            try {
+                const linkVinculo = `${BASE_URL}/vincular-dispositivo.html?playerId=${playerId}`;
+                
+                // 🔥 USAR O SERVICE (mesma lógica da rota de teste!)
+                const resultado = await oneSignalAdmin.enviarNotificacaoTeste(
+                    playerId,
+                    '🔐 Vincular Dispositivo',
+                    'Toque para vincular este celular à sua conta',
+                    'EducaPleno',
+                    {
+                        url: linkVinculo,
+                        data: {
+                            tipo: 'vinculo_dispositivo',
+                            playerId: playerId,
+                            acao: 'abrir_link',
+                            link: linkVinculo,
+                            timestamp: Date.now()
+                        }
+                    }
+                );
+                
+                if (resultado && resultado.success) {
+                    enviados++;
+                    console.log(`   ✅ ${playerId.substring(0, 20)}...`);
+                } else {
+                    erros++;
+                    errosDetalhes.push({
+                        playerId: playerId.substring(0, 20) + '...',
+                        motivo: resultado?.error || 'Falha no envio'
+                    });
+                    console.log(`   ❌ ${playerId.substring(0, 20)}...: ${resultado?.error}`);
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 150));
+                
+            } catch (error) {
+                erros++;
+                errosDetalhes.push({
+                    playerId: playerId.substring(0, 20) + '...',
+                    motivo: error.message
+                });
+                console.error(`   ❌ Erro:`, error.message);
+            }
+        }
+        
+        console.log(`📊 Resultado: ${enviados} enviadas, ${erros} erros`);
+        
+        res.json({
+            success: true,
+            message: `Solicitação enviada para ${enviados} dispositivo(s)`,
+            enviados,
+            erros,
+            total: dispositivosOrfaos.length
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTA: Vincular dispositivo via link (usuário clicou na notificação)
+// ============================================================================
+app.post('/api/onesignal/vincular-por-link', async (req, res) => {
+    try {
+        const { playerId, token } = req.body;
+        
+        console.log(`\n🔗 [LINK] Vínculo por clique na notificação`);
+        console.log(`   📱 PlayerId: ${playerId?.substring(0, 20)}...`);
+        console.log(`   🔑 Token: ${token ? '✅ Presente' : '❌ Ausente'}`);
+        
+        if (!playerId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Player ID é obrigatório'
+            });
+        }
+        
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                error: 'Você precisa estar logado para vincular'
+            });
+        }
+        
+        // Verificar token JWT
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(401).json({
+                success: false,
+                error: 'Token inválido ou expirado'
+            });
+        }
+        
+        const userId = decoded.id;
+        
+        // Buscar usuário
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+        
+        // Desvincular de outro usuário se necessário
+        const outroUsuario = await User.findOne({
+            onesignalPlayerId: playerId,
+            _id: { $ne: userId }
+        });
+        
+        if (outroUsuario) {
+            console.log(`   🔄 Desvinculando de ${outroUsuario.nome}`);
+            await User.findByIdAndUpdate(outroUsuario._id, {
+                $unset: { onesignalPlayerId: 1, ultimaValidacaoPush: 1 }
+            });
+        }
+        
+        // Vincular
+        user.onesignalPlayerId = playerId;
+        user.ultimaValidacaoPush = new Date();
+        await user.save();
+        
+        console.log(`   ✅ VÍNCULO REALIZADO: ${user.nome} (${user.email})`);
+        
+        // Criar notificação interna
+        try {
+            const Notificacao = mongoose.model('Notificacao');
+            const notificacao = new Notificacao({
+                usuarioId: user._id,
+                tipo: 'sistema',
+                titulo: '📱 Dispositivo Vinculado!',
+                mensagem: 'Este dispositivo foi vinculado com sucesso à sua conta. Agora você receberá notificações!',
+                icone: '📱',
+                cor: '#10b981',
+                link: '/perfil',
+                prioridade: 2
+            });
+            await notificacao.save();
+        } catch (notifErr) {
+            console.warn('   ⚠️ Erro ao criar notificação:', notifErr.message);
+        }
+        
+        res.json({
+            success: true,
+            message: 'Dispositivo vinculado com sucesso!',
+            usuario: {
+                nome: user.nome,
+                email: user.email,
+                role: user.role
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // ============ ROTA ADMIN PARA OBTER RESULTADOS DE UMA PROVA ============
 app.get('/api/admin/provas/:provaId/resultados', authenticateToken, async (req, res) => {
   try {

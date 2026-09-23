@@ -1009,6 +1009,62 @@ async function finalizarAtendimentoAtivo(alunoId) {
 }
 
 // ============================================
+// MODAL DE CONFIRMAÇÃO CUSTOMIZADO
+// ============================================
+function confirmar(mensagem) {
+    return new Promise((resolve) => {
+        // Remove modal anterior se existir
+        const oldModal = document.getElementById('modalConfirmacao');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalConfirmacao" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmação</h5>
+                        </div>
+                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">
+                            ${escapeHTML(mensagem)}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmacao">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmacao">
+                                <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modalEl = document.getElementById('modalConfirmacao');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        
+        const finalizar = (resultado) => {
+            modal.hide();
+            setTimeout(() => modalEl.remove(), 300);
+            resolve(resultado);
+        };
+        
+        document.getElementById('btnConfirmarConfirmacao').addEventListener('click', () => finalizar(true));
+        document.getElementById('btnCancelarConfirmacao').addEventListener('click', () => finalizar(false));
+        
+        // Fechar com ESC = cancelar
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            if (!modalEl.dataset.resolvido) {
+                resolve(false);
+            }
+        });
+    });
+}
+
+// ============================================
 // DASHBOARD
 // ============================================
 async function carregarDashboard() {

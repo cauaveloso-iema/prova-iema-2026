@@ -1,5 +1,5 @@
 // ============================================================================
-// SERVIÇO DE NOTIFICAÇÕES - SISTEMA DE PROVAS IEMA 2026
+// SERVIÇO DE NOTIFICAÇÕES - EDUCAPLENO
 // ============================================================================
 // Gerencia todas as notificações do sistema respeitando as configurações
 // do painel admin (Canais: Email, Sistema, Push, WhatsApp)

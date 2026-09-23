@@ -1887,7 +1887,196 @@ class AdminPanel {
         }
     }
 
-    // ============ 🔥 ENVIO EM MASSA (MODAL APRIMORADO) ============
+    // ============ ATUALIZAR RESUMO DO ENVIO ============
+    atualizarResumoEnvio() {
+        const resumoEl = document.getElementById('resumoEnvio');
+        if (!resumoEl) return;
+        
+        const segmento = document.querySelector('input[name="segmento"]:checked')?.value;
+        let quantidade = 0;
+        
+        if (segmento === 'todos') {
+            quantidade = this.onesignalEstatisticas?.total || 0;
+        } else if (segmento === 'ativos') {
+            quantidade = this.onesignalEstatisticas?.ativos7dias || 0;
+        } else if (segmento === 'vinculados') {
+            quantidade = this.onesignalEstatisticas?.vinculados || 0;
+        }
+        
+        resumoEl.innerHTML = `<strong>${quantidade}</strong> dispositivo(s) serão notificados`;
+    }
+
+    // ============ APLICAR TEMPLATE DE MENSAGEM ============
+    aplicarTemplate(tipo) {
+        const tituloInput = document.getElementById('massaTitulo');
+        const mensagemInput = document.getElementById('massaMensagem');
+        
+        const templates = {
+            'manutencao': {
+                titulo: '🔧 Manutenção Programada',
+                mensagem: 'Informamos que o sistema passará por manutenção programada no dia XX/XX/XXXX das HH:MM às HH:MM. O sistema poderá ficar indisponível durante este período.'
+            },
+            'atualizacao': {
+                titulo: '🚀 Nova Atualização',
+                mensagem: 'O sistema foi atualizado com novas funcionalidades! Acesse para conferir as novidades.'
+            },
+            'lembrete': {
+                titulo: '⏰ Lembrete Importante',
+                mensagem: 'Lembramos que o prazo para entrega das atividades está se aproximando. Não deixe para última hora!'
+            },
+            'urgente': {
+                titulo: '⚠️ AVISO URGENTE',
+                mensagem: 'Comunicado importante a todos os usuários. Por favor, verifiquem suas pendências com urgência.'
+            }
+        };
+        
+        const template = templates[tipo];
+        if (template) {
+            tituloInput.value = template.titulo;
+            mensagemInput.value = template.mensagem;
+            this.showToast(`✅ Template "${template.titulo}" aplicado!`, 'success');
+        }
+    }
+
+    // ============ 🔥 DESVINCULAR DISPOSITIVO ============
+    async desvincularDispositivo(playerId, nomeUsuario) {
+        const confirmar = await this.confirmar(
+            '🔓 Desvincular Dispositivo',
+            `Deseja desvincular o dispositivo de <strong>${nomeUsuario}</strong>?<br><br>
+            O dispositivo continuará no OneSignal mas não terá mais vínculo com o usuário.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🔄 Desvinculando dispositivo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            
+            const dispositivo = this.onesignalDispositivos.find(d => d.playerId === playerId);
+            const usuarioId = dispositivo?.usuario?.id;
+            
+            const response = await fetch(`/api/admin/onesignal/desvincular/${playerId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Dispositivo desvinculado!', 'success');
+                
+                // Notificar usuário
+                if (usuarioId) {
+                    await this.criarNotificacaoDesvinculo(usuarioId, playerId);
+                }
+                
+                await this.atualizarOneSignal();
+            } else {
+                throw new Error(data.error || 'Erro ao desvincular');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 APAGAR DISPOSITIVO ============
+    async apagarDispositivo(playerId) {
+        const confirmar = await this.confirmar(
+            '🗑️ Apagar Dispositivo',
+            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
+            Deseja apagar permanentemente este dispositivo do OneSignal?<br><br>
+            Esta ação não pode ser desfeita.`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🗑️ Apagando dispositivo...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`/api/admin/onesignal/dispositivo/${playerId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Dispositivo apagado!', 'success');
+                await this.atualizarOneSignal();
+            } else {
+                throw new Error(data.error || 'Erro ao apagar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ 🔥 NOTIFICAÇÕES DO SISTEMA ============
+    async criarNotificacaoVinculo(usuarioId, playerId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            await fetch('/api/notificacoes', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    usuarioId: usuarioId,
+                    tipo: 'sistema',
+                    titulo: '📱 Dispositivo Vinculado',
+                    mensagem: 'Seu dispositivo foi vinculado ao sistema com sucesso.',
+                    icone: '📱',
+                    cor: '#10b981',
+                    link: '/perfil',
+                    prioridade: 2,
+                    dados: {
+                        provaId: null,
+                        tipo: 'vinculo_onesignal'
+                    }
+                })
+            });
+        } catch (error) {
+            console.error('❌ Erro ao notificar vínculo:', error);
+        }
+    }
+
+    async criarNotificacaoDesvinculo(usuarioId, playerId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            await fetch('/api/notificacoes', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    usuarioId: usuarioId,
+                    tipo: 'sistema',
+                    titulo: '📱 Dispositivo Desvinculado',
+                    mensagem: 'Seu dispositivo foi desvinculado do sistema.',
+                    icone: '📱',
+                    cor: '#ef4444',
+                    link: '/perfil',
+                    prioridade: 2,
+                    dados: {
+                        provaId: null,
+                        tipo: 'desvinculo_onesignal'
+                    }
+                })
+            });
+        } catch (error) {
+            console.error('❌ Erro ao notificar desvínculo:', error);
+        }
+    }
+
+    // ============ 🔥 ENVIO EM MASSA (MODAL COMPLETO + AUTO-VÍNCULO) ============
     async abrirModalEnvioMassa() {
         try {
             const token = localStorage.getItem('auth_token');
@@ -1897,6 +2086,9 @@ class AdminPanel {
             
             const data = await response.json();
             const stats = data.success ? data.oneSignal : null;
+            
+            // Contar dispositivos não vinculados
+            const naoVinculados = this.onesignalDispositivos?.filter(d => d.status === 'nao_vinculado') || [];
             
             const modalBody = document.getElementById('modalBody');
             modalBody.innerHTML = `
@@ -1909,7 +2101,7 @@ class AdminPanel {
                             </div>
                             <div>
                                 <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Envio em Massa</h2>
-                                <p style="margin: 5px 0 0; opacity: 0.9;">Envie notificações para múltiplos dispositivos</p>
+                                <p style="margin: 5px 0 0; opacity: 0.9;">Envie notificações ou solicite vínculos</p>
                             </div>
                         </div>
                     </div>
@@ -1932,6 +2124,114 @@ class AdminPanel {
                                 <div style="font-size: 12px; color: #64748b;">Ativos (30 dias)</div>
                             </div>
                         </div>
+                        
+                        <!-- ============================================ -->
+                        <!-- 🔥 SEÇÃO 1: VÍNCULO AUTOMÁTICO (NOVA)        -->
+                        <!-- ============================================ -->
+                        <div style="
+                            margin-bottom: 25px;
+                            padding: 20px;
+                            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+                            border-radius: 12px;
+                            border: 2px solid #10b981;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                                <div style="
+                                    width: 45px;
+                                    height: 45px;
+                                    background: linear-gradient(135deg, #10b981, #059669);
+                                    border-radius: 12px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 20px;
+                                    color: white;
+                                    flex-shrink: 0;
+                                ">
+                                    <i class="fas fa-link"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h3 style="margin: 0; color: #065f46; font-size: 16px; font-weight: 700;">
+                                        🔗 Auto-Vínculo de Dispositivos
+                                    </h3>
+                                    <p style="margin: 3px 0 0; color: #047857; font-size: 13px;">
+                                        Envie push com link para que usuários vinculem seus próprios dispositivos
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div style="
+                                background: white;
+                                border-radius: 10px;
+                                padding: 15px;
+                                margin-bottom: 15px;
+                                font-size: 13px;
+                                color: #4b5563;
+                                line-height: 1.6;
+                            ">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #065f46; font-weight: 600;">
+                                    <i class="fas fa-info-circle"></i>
+                                    Como funciona
+                                </div>
+                                <div style="padding-left: 24px;">
+                                    1. Cada dispositivo <strong>não vinculado</strong> recebe uma notificação push<br>
+                                    2. Usuário clica na notificação<br>
+                                    3. Faz login (se não estiver)<br>
+                                    4. O dispositivo é vinculado <strong>automaticamente</strong><br>
+                                    5. Você verá "Vinculado" na tabela ✅
+                                </div>
+                            </div>
+                            
+                            <div style="
+                                background: #fef3c7;
+                                border-left: 4px solid #f59e0b;
+                                padding: 12px;
+                                border-radius: 8px;
+                                margin-bottom: 15px;
+                                font-size: 12px;
+                                color: #92400e;
+                            ">
+                                <strong>⚠️ Atenção:</strong> ${naoVinculados.length} dispositivo(s) NÃO vinculado(s) serão notificados.
+                            </div>
+                            
+                            <button type="button" 
+                                    onclick="admin.executarSolicitacaoVinculoMassa()" 
+                                    style="
+                                        width: 100%;
+                                        padding: 14px;
+                                        background: linear-gradient(135deg, #10b981, #059669);
+                                        color: white;
+                                        border: none;
+                                        border-radius: 10px;
+                                        font-weight: 700;
+                                        font-size: 14px;
+                                        cursor: pointer;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        gap: 8px;
+                                        transition: all 0.3s;
+                                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                                    " 
+                                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 24px rgba(16,185,129,0.4)';"
+                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)';">
+                                <i class="fas fa-paper-plane"></i>
+                                📨 Solicitar Auto-Vínculo Agora (${naoVinculados.length})
+                            </button>
+                        </div>
+                        
+                        <!-- ============================================ -->
+                        <!-- 🔻 SEPARADOR                                 -->
+                        <!-- ============================================ -->
+                        <div style="display: flex; align-items: center; gap: 15px; margin: 30px 0; color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">
+                            <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+                            <span>OU envie uma notificação normal</span>
+                            <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+                        </div>
+                        
+                        <!-- ============================================ -->
+                        <!-- 🔥 SEÇÃO 2: ENVIO DE NOTIFICAÇÃO NORMAL      -->
+                        <!-- ============================================ -->
                         
                         <!-- SEGMENTOS -->
                         <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
@@ -2127,7 +2427,8 @@ class AdminPanel {
             }, 100);
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-paper-plane"></i> Envio em Massa';
-            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoMassa();
+            // 🔥 CORREÇÃO: usar `enviarNotificacaoEmMassa` (com "Em")
+            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoEmMassa();
             document.getElementById('modalSaveBtn').textContent = '📤 Enviar Notificações';
             this.openModal();
             
@@ -2137,448 +2438,78 @@ class AdminPanel {
         }
     }
 
-    // ============ ATUALIZAR RESUMO DO ENVIO ============
-    atualizarResumoEnvio() {
-        const resumoEl = document.getElementById('resumoEnvio');
-        if (!resumoEl) return;
+    async executarSolicitacaoVinculoMassa() {
+        // Contar dispositivos não vinculados
+        const naoVinculados = this.onesignalDispositivos?.filter(d => d.status === 'nao_vinculado') || [];
         
-        const segmento = document.querySelector('input[name="segmento"]:checked')?.value;
-        let quantidade = 0;
-        
-        if (segmento === 'todos') {
-            quantidade = this.onesignalEstatisticas?.total || 0;
-        } else if (segmento === 'ativos') {
-            quantidade = this.onesignalEstatisticas?.ativos7dias || 0;
-        } else if (segmento === 'vinculados') {
-            quantidade = this.onesignalEstatisticas?.vinculados || 0;
+        if (naoVinculados.length === 0) {
+            this.showToast('✅ Todos os dispositivos já estão vinculados!', 'success');
+            return;
         }
         
-        resumoEl.innerHTML = `<strong>${quantidade}</strong> dispositivo(s) serão notificados`;
-    }
-
-    // ============ APLICAR TEMPLATE DE MENSAGEM ============
-    aplicarTemplate(tipo) {
-        const tituloInput = document.getElementById('massaTitulo');
-        const mensagemInput = document.getElementById('massaMensagem');
-        
-        const templates = {
-            'manutencao': {
-                titulo: '🔧 Manutenção Programada',
-                mensagem: 'Informamos que o sistema passará por manutenção programada no dia XX/XX/XXXX das HH:MM às HH:MM. O sistema poderá ficar indisponível durante este período.'
-            },
-            'atualizacao': {
-                titulo: '🚀 Nova Atualização',
-                mensagem: 'O sistema foi atualizado com novas funcionalidades! Acesse para conferir as novidades.'
-            },
-            'lembrete': {
-                titulo: '⏰ Lembrete Importante',
-                mensagem: 'Lembramos que o prazo para entrega das atividades está se aproximando. Não deixe para última hora!'
-            },
-            'urgente': {
-                titulo: '⚠️ AVISO URGENTE',
-                mensagem: 'Comunicado importante a todos os usuários. Por favor, verifiquem suas pendências com urgência.'
-            }
-        };
-        
-        const template = templates[tipo];
-        if (template) {
-            tituloInput.value = template.titulo;
-            mensagemInput.value = template.mensagem;
-            this.showToast(`✅ Template "${template.titulo}" aplicado!`, 'success');
-        }
-    }
-
-    // ============ 🔥 DESVINCULAR DISPOSITIVO ============
-    async desvincularDispositivo(playerId, nomeUsuario) {
+        // Confirmar
         const confirmar = await this.confirmar(
-            '🔓 Desvincular Dispositivo',
-            `Deseja desvincular o dispositivo de <strong>${nomeUsuario}</strong>?<br><br>
-            O dispositivo continuará no OneSignal mas não terá mais vínculo com o usuário.`
+            '📨 Solicitar Auto-Vínculo',
+            `
+                Você vai enviar uma <strong>notificação push com link de vínculo</strong> 
+                para <strong>${naoVinculados.length} dispositivo(s) não vinculado(s)</strong>.<br><br>
+                
+                <div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 12px; border-radius: 6px; margin: 10px 0; font-size: 13px; text-align: left;">
+                    <strong>📋 Como vai funcionar:</strong><br>
+                    1. Cada usuário recebe uma notificação no celular<br>
+                    2. Ao clicar, é levado a uma página de confirmação<br>
+                    3. Faz login (se não estiver logado)<br>
+                    4. O dispositivo é vinculado automaticamente<br>
+                    5. Você verá "Vinculado" na tabela ✅
+                </div>
+                
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; border-radius: 6px; font-size: 12px; text-align: left;">
+                    ⚠️ <strong>Importante:</strong> Os usuários precisam ter o app instalado 
+                    e com permissão de notificação ativa.
+                </div>
+            `
         );
         
         if (!confirmar) return;
         
         try {
-            this.showToast('🔄 Desvinculando dispositivo...', 'info');
+            this.showToast(`📨 Enviando ${naoVinculados.length} notificações...`, 'info');
             
             const token = localStorage.getItem('auth_token');
-            
-            const dispositivo = this.onesignalDispositivos.find(d => d.playerId === playerId);
-            const usuarioId = dispositivo?.usuario?.id;
-            
-            const response = await fetch(`/api/admin/onesignal/desvincular/${playerId}`, {
+            const response = await fetch('/api/admin/onesignal/solicitar-vinculo-massa', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.showToast('✅ Dispositivo desvinculado!', 'success');
-                
-                // Notificar usuário
-                if (usuarioId) {
-                    await this.criarNotificacaoDesvinculo(usuarioId, playerId);
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 }
-                
-                await this.atualizarOneSignal();
-            } else {
-                throw new Error(data.error || 'Erro ao desvincular');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
-    }
-
-    // ============ 🔥 APAGAR DISPOSITIVO ============
-    async apagarDispositivo(playerId) {
-        const confirmar = await this.confirmar(
-            '🗑️ Apagar Dispositivo',
-            `<strong style="color: #dc3545;">ATENÇÃO!</strong><br><br>
-            Deseja apagar permanentemente este dispositivo do OneSignal?<br><br>
-            Esta ação não pode ser desfeita.`
-        );
-        
-        if (!confirmar) return;
-        
-        try {
-            this.showToast('🗑️ Apagando dispositivo...', 'info');
-            
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/admin/onesignal/dispositivo/${playerId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
             });
             
             const data = await response.json();
             
             if (data.success) {
-                this.showToast('✅ Dispositivo apagado!', 'success');
-                await this.atualizarOneSignal();
+                this.showToast(
+                    `✅ ${data.enviados} notificações enviadas!${data.erros > 0 ? ` (${data.erros} erros)` : ''}`,
+                    'success'
+                );
+                
+                // Fechar modal
+                this.closeModal();
+                
+                // Notificação detalhada
+                this.mostrarNotificacaoSistema(
+                    'success',
+                    '📨 Solicitação Enviada',
+                    `${data.enviados} usuário(s) notificados. Aguarde os cliques para ver os vínculos.`,
+                    5000
+                );
             } else {
-                throw new Error(data.error || 'Erro ao apagar');
+                throw new Error(data.error || 'Erro ao enviar');
             }
             
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
-    }
-
-    // ============ 🔥 NOTIFICAÇÕES DO SISTEMA ============
-    async criarNotificacaoVinculo(usuarioId, playerId) {
-        try {
-            const token = localStorage.getItem('auth_token');
-            await fetch('/api/notificacoes', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    usuarioId: usuarioId,
-                    tipo: 'sistema',
-                    titulo: '📱 Dispositivo Vinculado',
-                    mensagem: 'Seu dispositivo foi vinculado ao sistema com sucesso.',
-                    icone: '📱',
-                    cor: '#10b981',
-                    link: '/perfil',
-                    prioridade: 2,
-                    dados: {
-                        provaId: null,
-                        tipo: 'vinculo_onesignal'
-                    }
-                })
-            });
-        } catch (error) {
-            console.error('❌ Erro ao notificar vínculo:', error);
-        }
-    }
-
-    async criarNotificacaoDesvinculo(usuarioId, playerId) {
-        try {
-            const token = localStorage.getItem('auth_token');
-            await fetch('/api/notificacoes', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    usuarioId: usuarioId,
-                    tipo: 'sistema',
-                    titulo: '📱 Dispositivo Desvinculado',
-                    mensagem: 'Seu dispositivo foi desvinculado do sistema.',
-                    icone: '📱',
-                    cor: '#ef4444',
-                    link: '/perfil',
-                    prioridade: 2,
-                    dados: {
-                        provaId: null,
-                        tipo: 'desvinculo_onesignal'
-                    }
-                })
-            });
-        } catch (error) {
-            console.error('❌ Erro ao notificar desvínculo:', error);
-        }
-    }
-
-    // ============ 🔥 NOTIFICAÇÕES EM MASSA ============
-    async abrirModalEnvioMassa() {
-        try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/admin/onesignal/estatisticas', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const data = await response.json();
-            const stats = data.success ? data.oneSignal : null;
-            
-            const modalBody = document.getElementById('modalBody');
-            modalBody.innerHTML = `
-                <div style="padding: 20px;">
-                    <h3 style="margin-bottom: 15px;">Envio em Massa</h3>
-                    
-                    <div style="background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 20px;">
-                        <p><strong>Total de dispositivos:</strong> ${stats?.total || 0}</p>
-                        <p><strong>Ativos (7 dias):</strong> ${stats?.ativos7dias || 0}</p>
-                        <p><strong>Ativos (30 dias):</strong> ${stats?.ativos30dias || 0}</p>
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Título</label>
-                        <input type="text" id="massaTitulo" class="form-control" placeholder="Título da notificação" value="📢 Comunicado Geral">
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mensagem</label>
-                        <textarea id="massaMensagem" class="form-control" rows="4" placeholder="Digite sua mensagem..."></textarea>
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Segmento</label>
-                        <select id="massaSegmento" class="form-control">
-                            <option value="todos">Todos os dispositivos</option>
-                            <option value="ativos">Apenas ativos (últimos 7 dias)</option>
-                            <option value="vinculados">Apenas vinculados</option>
-                        </select>
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-paper-plane"></i> Envio em Massa';
-            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoMassa();
-            document.getElementById('modalSaveBtn').textContent = 'Enviar';
-            this.openModal();
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
-    }
-
-    // ============ 🔥 ENVIO EM MASSA (MODAL APRIMORADO - MESMO PADRÃO) ============
-    async abrirModalEnvioMassa() {
-        try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/admin/onesignal/estatisticas', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            const data = await response.json();
-            const stats = data.success ? data.oneSignal : null;
-            
-            const modalBody = document.getElementById('modalBody');
-            modalBody.innerHTML = `
-                <div style="padding: 0; max-height: 80vh; overflow-y: auto;">
-                    <!-- HEADER DO MODAL (MESMO PADRÃO DO EDITAR) -->
-                    <div style="background: linear-gradient(135deg, #e54b4b, #c13b3b); padding: 25px; color: white; position: sticky; top: 0; z-index: 10;">
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
-                                <i class="fas fa-paper-plane"></i>
-                            </div>
-                            <div>
-                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">Envio em Massa</h2>
-                                <p style="margin: 5px 0 0; opacity: 0.9;">Envie notificações para múltiplos dispositivos</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="padding: 25px;">
-                        <!-- CARDS DE ESTATÍSTICAS (MESMO ESTILO) -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
-                            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
-                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 8px;">Total de Dispositivos</div>
-                                <div style="font-size: 32px; font-weight: 700; color: #e54b4b;">${stats?.total || 0}</div>
-                            </div>
-                            
-                            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
-                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 8px;">Ativos (7 dias)</div>
-                                <div style="font-size: 32px; font-weight: 700; color: #10b981;">${stats?.ativos7dias || 0}</div>
-                            </div>
-                            
-                            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0;">
-                                <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 8px;">Ativos (30 dias)</div>
-                                <div style="font-size: 32px; font-weight: 700; color: #f59e0b;">${stats?.ativos30dias || 0}</div>
-                            </div>
-                        </div>
-                        
-                        <!-- SEGMENTAÇÃO -->
-                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
-                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-chart-pie" style="color: #e54b4b;"></i>
-                                Segmentação
-                            </h3>
-                            
-                            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                                <label style="flex: 1; min-width: 150px; cursor: pointer;">
-                                    <input type="radio" name="segmentoMassa" value="todos" checked style="display: none;">
-                                    <div style="
-                                        border: 2px solid #e2e8f0;
-                                        border-radius: 12px;
-                                        padding: 15px;
-                                        text-align: center;
-                                        transition: all 0.3s;
-                                        background: white;
-                                    " class="segmento-option">
-                                        <i class="fas fa-globe" style="font-size: 24px; color: #64748b; margin-bottom: 8px; display: block;"></i>
-                                        <strong style="display: block; color: #334155;">Todos</strong>
-                                        <span style="font-size: 11px; color: #64748b;">${stats?.total || 0} dispositivos</span>
-                                    </div>
-                                </label>
-                                
-                                <label style="flex: 1; min-width: 150px; cursor: pointer;">
-                                    <input type="radio" name="segmentoMassa" value="ativos" style="display: none;">
-                                    <div style="
-                                        border: 2px solid #e2e8f0;
-                                        border-radius: 12px;
-                                        padding: 15px;
-                                        text-align: center;
-                                        transition: all 0.3s;
-                                        background: white;
-                                    " class="segmento-option">
-                                        <i class="fas fa-check-circle" style="font-size: 24px; color: #10b981; margin-bottom: 8px; display: block;"></i>
-                                        <strong style="display: block; color: #334155;">Ativos (7 dias)</strong>
-                                        <span style="font-size: 11px; color: #64748b;">${stats?.ativos7dias || 0} dispositivos</span>
-                                    </div>
-                                </label>
-                                
-                                <label style="flex: 1; min-width: 150px; cursor: pointer;">
-                                    <input type="radio" name="segmentoMassa" value="vinculados" style="display: none;">
-                                    <div style="
-                                        border: 2px solid #e2e8f0;
-                                        border-radius: 12px;
-                                        padding: 15px;
-                                        text-align: center;
-                                        transition: all 0.3s;
-                                        background: white;
-                                    " class="segmento-option">
-                                        <i class="fas fa-link" style="font-size: 24px; color: #8b5cf6; margin-bottom: 8px; display: block;"></i>
-                                        <strong style="display: block; color: #334155;">Vinculados</strong>
-                                        <span style="font-size: 11px; color: #64748b;">${this.onesignalEstatisticas?.vinculados || 0} dispositivos</span>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- MENSAGEM -->
-                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
-                            <h3 style="margin: 0 0 15px; font-size: 1rem; color: #334155; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-envelope" style="color: #e54b4b;"></i>
-                                Mensagem
-                            </h3>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Título</label>
-                                <input type="text" id="massaTitulo" class="form-control" 
-                                    placeholder="Ex: Comunicado Importante"
-                                    value="📢 Comunicado do Sistema"
-                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem;">
-                            </div>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <label style="display: block; font-size: 0.85rem; color: #4b5563; margin-bottom: 5px;">Mensagem</label>
-                                <textarea id="massaMensagem" class="form-control" rows="4" 
-                                    placeholder="Digite sua mensagem..."
-                                    style="width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; resize: vertical;">Esta é uma notificação enviada pela administração do sistema.</textarea>
-                            </div>
-                        </div>
-                        
-                        <!-- RESUMO DO ENVIO -->
-                        <div style="background: #fef2f2; border-radius: 12px; padding: 20px; border: 1px solid #fecaca;">
-                            <div style="display: flex; align-items: center; gap: 15px;">
-                                <div style="width: 45px; height: 45px; background: #e54b4b; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
-                                    <i class="fas fa-calculator"></i>
-                                </div>
-                                <div>
-                                    <h4 style="margin: 0; font-size: 1rem; color: #991b1b;">Resumo do Envio</h4>
-                                    <p style="margin: 3px 0 0; font-size: 0.9rem; color: #b91c1c;" id="resumoEnvio">
-                                        Aguardando seleção...
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <style>
-                    .segmento-option {
-                        transition: all 0.3s;
-                    }
-                    .segmento-option:hover {
-                        border-color: #e54b4b !important;
-                        transform: translateY(-2px);
-                        box-shadow: 0 4px 12px rgba(229, 75, 75, 0.1);
-                    }
-                    input[type="radio"]:checked + .segmento-option {
-                        border-color: #e54b4b;
-                        background: #fff5f5;
-                    }
-                    input[type="radio"]:checked + .segmento-option i:first-of-type {
-                        color: #e54b4b !important;
-                    }
-                </style>
-            `;
-            
-            // Adicionar evento para atualizar resumo
-            setTimeout(() => {
-                document.querySelectorAll('input[name="segmentoMassa"]').forEach(radio => {
-                    radio.addEventListener('change', () => this.atualizarResumoEnvio());
-                });
-                this.atualizarResumoEnvio();
-            }, 100);
-            
-            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-paper-plane"></i> Envio em Massa';
-            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoMassa();
-            document.getElementById('modalSaveBtn').textContent = '📤 Enviar Notificações';
-            this.openModal();
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast('❌ ' + error.message, 'error');
-        }
-    }
-
-    // ============ ATUALIZAR RESUMO DO ENVIO ============
-    atualizarResumoEnvio() {
-        const resumoEl = document.getElementById('resumoEnvio');
-        if (!resumoEl) return;
-        
-        const segmento = document.querySelector('input[name="segmentoMassa"]:checked')?.value;
-        let quantidade = 0;
-        
-        if (segmento === 'todos') {
-            quantidade = this.onesignalEstatisticas?.total || 0;
-        } else if (segmento === 'ativos') {
-            quantidade = this.onesignalEstatisticas?.ativos7dias || 0;
-        } else if (segmento === 'vinculados') {
-            quantidade = this.onesignalEstatisticas?.vinculados || 0;
-        }
-        
-        resumoEl.innerHTML = `<strong>${quantidade}</strong> dispositivo(s) serão notificados`;
     }
 
     // ============ VER DETALHES DO USUÁRIO ============
@@ -23916,14 +23847,50 @@ class AdminPanel {
         async enviarNotificacaoEmMassa() {
             console.log('📤 Iniciando envio de notificação...');
             
-            // ===== 1. COLETAR DADOS DO FORMULÁRIO =====
-            const titulo = document.getElementById('notificacaoTitulo')?.value?.trim();
-            const mensagem = document.getElementById('notificacaoMensagem')?.value?.trim();
-            const cor = document.getElementById('notificacaoCor')?.value || '#4f46e5';
-            const prioridade = parseInt(document.getElementById('notificacaoPrioridade')?.value) || 3;
-            const enviarPush = document.getElementById('notificacaoPush')?.checked || false;
+            // ===== 1. DETECTAR QUAL MODAL ESTÁ ABERTO =====
+            const isModalEnvioMassa = document.getElementById('massaTitulo') !== null;
+            const isModalNotificacao = document.getElementById('notificacaoTitulo') !== null;
             
-            // ===== 2. VALIDAÇÕES =====
+            console.log('🔍 Modais detectados:', {
+                envioMassa: isModalEnvioMassa,
+                notificacao: isModalNotificacao
+            });
+            
+            // ===== 2. COLETAR DADOS DO FORMULÁRIO (aceita os dois formatos) =====
+            let titulo, mensagem, cor, prioridade, enviarPush;
+            
+            if (isModalEnvioMassa) {
+                // Modal "Envio em Massa" da aba OneSignal
+                titulo = document.getElementById('massaTitulo')?.value?.trim();
+                mensagem = document.getElementById('massaMensagem')?.value?.trim();
+                cor = '#e54b4b'; // cor padrão da aba OneSignal
+                prioridade = 3;
+                enviarPush = document.getElementById('massaIncluirDados')?.checked ?? true;
+                
+                console.log('📋 Modal: ENVIO EM MASSA');
+            } else if (isModalNotificacao) {
+                // Modal "Envio de Notificação" (com modo individual/massa)
+                titulo = document.getElementById('notificacaoTitulo')?.value?.trim();
+                mensagem = document.getElementById('notificacaoMensagem')?.value?.trim();
+                cor = document.getElementById('notificacaoCor')?.value || '#4f46e5';
+                prioridade = parseInt(document.getElementById('notificacaoPrioridade')?.value) || 3;
+                enviarPush = document.getElementById('notificacaoPush')?.checked || false;
+                
+                console.log('📋 Modal: ENVIO DE NOTIFICAÇÃO');
+            } else {
+                this.showToast('❌ Nenhum modal de envio detectado', 'error');
+                return;
+            }
+            
+            console.log('📋 Dados coletados:', {
+                titulo,
+                mensagem: mensagem?.substring(0, 50),
+                cor,
+                prioridade,
+                enviarPush
+            });
+            
+            // ===== 3. VALIDAÇÕES =====
             if (!titulo) {
                 this.showToast('❌ Digite um título para a notificação', 'error');
                 return;
@@ -23934,58 +23901,135 @@ class AdminPanel {
                 return;
             }
             
-            // ===== 3. DETERMINAR DESTINATÁRIOS =====
+            // ===== 4. DETERMINAR DESTINATÁRIOS =====
             let usuariosDestino = [];
             let labelDestinatarios = '';
+            let segmentoSelecionado = null;
             
-            if (this.modoSelecaoIndividual) {
-                // 🔥 MODO INDIVIDUAL: Apenas o usuário selecionado
-                if (!this.usuarioIndividualSelecionado) {
-                    this.showToast('❌ Selecione um usuário para enviar a notificação', 'error');
+            // 🔥 CASO A: Modal de "Envio em Massa" (aba OneSignal)
+            if (isModalEnvioMassa) {
+                // Pega o segmento selecionado (todos, ativos, vinculados)
+                segmentoSelecionado = document.querySelector('input[name="segmento"]:checked')?.value || 'todos';
+                
+                console.log(`📱 Segmento selecionado: ${segmentoSelecionado}`);
+                
+                // Verificar se temos os dispositivos carregados
+                if (!this.onesignalDispositivos || this.onesignalDispositivos.length === 0) {
+                    this.showToast('❌ Nenhum dispositivo carregado. Atualize a lista.', 'error');
                     return;
                 }
                 
-                usuariosDestino = [{
-                    id: this.usuarioIndividualSelecionado._id,
-                    nome: this.usuarioIndividualSelecionado.nome,
-                    email: this.usuarioIndividualSelecionado.email,
-                    role: this.usuarioIndividualSelecionado.role
-                }];
-                labelDestinatarios = this.usuarioIndividualSelecionado.nome;
+                // Filtrar dispositivos baseado no segmento
+                let dispositivosFiltrados = [...this.onesignalDispositivos];
                 
-            } else {
-                // MODO MASSA: Usar filtro por role
-                const roleFiltro = this.roleFiltroNotificacao || 'todos';
-                
-                if (!this.usuariosParaNotificacao || this.usuariosParaNotificacao.length === 0) {
-                    this.showToast('❌ Nenhum usuário carregado', 'error');
-                    return;
+                if (segmentoSelecionado === 'vinculados') {
+                    dispositivosFiltrados = dispositivosFiltrados.filter(d => d.status === 'vinculado');
+                    labelDestinatarios = `Dispositivos vinculados`;
+                } else if (segmentoSelecionado === 'ativos') {
+                    const seteDiasAtras = Date.now() - (7 * 24 * 60 * 60 * 1000);
+                    dispositivosFiltrados = dispositivosFiltrados.filter(d => {
+                        const ultimaAtividade = d.lastActive * 1000;
+                        return ultimaAtividade > seteDiasAtras;
+                    });
+                    labelDestinatarios = `Dispositivos ativos (7 dias)`;
+                } else {
+                    labelDestinatarios = `Todos os dispositivos`;
                 }
                 
-                if (roleFiltro === 'todos') {
-                    usuariosDestino = this.usuariosParaNotificacao.map(u => ({
-                        id: u._id,
-                        nome: u.nome,
-                        email: u.email,
-                        role: u.role
+                // Se tem usuários vinculados nesses dispositivos, converter para usuários
+                const usuariosComPlayerId = dispositivosFiltrados
+                    .filter(d => d.usuario && d.usuario.id)
+                    .map(d => ({
+                        id: d.usuario.id,
+                        nome: d.usuario.nome,
+                        email: d.usuario.email,
+                        role: d.usuario.role,
+                        playerId: d.playerId
                     }));
-                    labelDestinatarios = 'Todos os usuários';
-                } 
-                else if (roleFiltro === 'admin') {
-                    usuariosDestino = this.usuariosParaNotificacao
-                        .filter(u => u.role === 'admin' || u.role === 'super_admin')
-                        .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
-                    labelDestinatarios = 'Administradores';
-                } 
-                else {
-                    usuariosDestino = this.usuariosParaNotificacao
-                        .filter(u => u.role === roleFiltro)
-                        .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
-                    labelDestinatarios = roleFiltro;
+                
+                // 🔥 Se NÃO tem usuários vinculados, enviar direto para os playerIds
+                if (usuariosComPlayerId.length === 0) {
+                    console.log('⚠️ Nenhum usuário vinculado. Enviando push direto para playerIds...');
+                    
+                    const playerIds = dispositivosFiltrados.map(d => d.playerId);
+                    
+                    const confirmar = await this.confirmar(
+                        '📢 Confirmar Envio',
+                        `
+                            Deseja enviar esta notificação?<br><br>
+                            <strong>📋 Destinatários:</strong> ${labelDestinatarios}<br>
+                            <strong>📱 Total:</strong> ${playerIds.length} dispositivo(s)<br>
+                            <strong>📌 Título:</strong> ${titulo}<br>
+                            <strong>💬 Mensagem:</strong> ${mensagem.substring(0, 100)}${mensagem.length > 100 ? '...' : ''}<br><br>
+                            <span style="color: #f59e0b;">⚠️ Estes dispositivos NÃO estão vinculados a usuários. 
+                            A notificação será enviada apenas via push.</span>
+                        `
+                    );
+                    
+                    if (!confirmar) return;
+                    
+                    this.closeModal();
+                    return await this.enviarPushDiretoParaPlayerIds(playerIds, titulo, mensagem, {
+                        segmento: segmentoSelecionado,
+                        origem: 'envio_massa_direto'
+                    });
+                }
+                
+                usuariosDestino = usuariosComPlayerId;
+                console.log(`✅ ${usuariosDestino.length} usuários vinculados no segmento "${segmentoSelecionado}"`);
+                
+            } 
+            // 🔥 CASO B: Modal de "Envio de Notificação" (com modo individual/massa)
+            else if (isModalNotificacao) {
+                if (this.modoSelecaoIndividual) {
+                    // Modo individual
+                    if (!this.usuarioIndividualSelecionado) {
+                        this.showToast('❌ Selecione um usuário para enviar a notificação', 'error');
+                        return;
+                    }
+                    
+                    usuariosDestino = [{
+                        id: this.usuarioIndividualSelecionado._id,
+                        nome: this.usuarioIndividualSelecionado.nome,
+                        email: this.usuarioIndividualSelecionado.email,
+                        role: this.usuarioIndividualSelecionado.role
+                    }];
+                    labelDestinatarios = this.usuarioIndividualSelecionado.nome;
+                    
+                } else {
+                    // Modo massa por role
+                    const roleFiltro = this.roleFiltroNotificacao || 'todos';
+                    
+                    if (!this.usuariosParaNotificacao || this.usuariosParaNotificacao.length === 0) {
+                        this.showToast('❌ Nenhum usuário carregado', 'error');
+                        return;
+                    }
+                    
+                    if (roleFiltro === 'todos') {
+                        usuariosDestino = this.usuariosParaNotificacao.map(u => ({
+                            id: u._id,
+                            nome: u.nome,
+                            email: u.email,
+                            role: u.role
+                        }));
+                        labelDestinatarios = 'Todos os usuários';
+                    } 
+                    else if (roleFiltro === 'admin') {
+                        usuariosDestino = this.usuariosParaNotificacao
+                            .filter(u => u.role === 'admin' || u.role === 'super_admin')
+                            .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
+                        labelDestinatarios = 'Administradores';
+                    } 
+                    else {
+                        usuariosDestino = this.usuariosParaNotificacao
+                            .filter(u => u.role === roleFiltro)
+                            .map(u => ({ id: u._id, nome: u.nome, email: u.email, role: u.role }));
+                        labelDestinatarios = roleFiltro;
+                    }
                 }
             }
             
-            // ===== 4. VERIFICAR SE TEM DESTINATÁRIOS =====
+            // ===== 5. VERIFICAR SE TEM DESTINATÁRIOS =====
             if (usuariosDestino.length === 0) {
                 this.showToast(`❌ Nenhum usuário encontrado para: ${labelDestinatarios}`, 'error');
                 return;
@@ -23993,7 +24037,7 @@ class AdminPanel {
             
             console.log(`📤 Enviando para ${usuariosDestino.length} usuários (${labelDestinatarios})`);
             
-            // ===== 5. CONFIRMAR ENVIO =====
+            // ===== 6. CONFIRMAR ENVIO =====
             const confirmar = await this.confirmar(
                 '📢 Confirmar Envio',
                 `
@@ -24008,7 +24052,7 @@ class AdminPanel {
             
             if (!confirmar) return;
             
-            // ===== 6. FECHAR MODAL E MOSTRAR PROGRESSO =====
+            // ===== 7. FECHAR MODAL E MOSTRAR PROGRESSO =====
             this.closeModal();
             this.showToast(`📤 Enviando para ${usuariosDestino.length} usuários...`, 'info');
             
@@ -24070,7 +24114,7 @@ class AdminPanel {
             `;
             document.body.insertAdjacentHTML('beforeend', progressHTML);
             
-            // ===== 7. ENVIAR NOTIFICAÇÕES =====
+            // ===== 8. ENVIAR NOTIFICAÇÕES =====
             let enviados = 0;
             let erros = 0;
             let pushEnviados = 0;
@@ -24080,7 +24124,7 @@ class AdminPanel {
                 const usuario = usuariosDestino[i];
                 
                 try {
-                    // 7.1 - CRIAR NOTIFICAÇÃO NO SISTEMA
+                    // 8.1 - CRIAR NOTIFICAÇÃO NO SISTEMA
                     const notificacaoResponse = await fetch('/api/notificacoes', {
                         method: 'POST',
                         headers: {
@@ -24100,7 +24144,8 @@ class AdminPanel {
                                 tipo: 'notificacao_massa',
                                 enviadoPor: 'Admin',
                                 role: usuario.role,
-                                individual: this.modoSelecaoIndividual,
+                                individual: this.modoSelecaoIndividual || false,
+                                segmento: segmentoSelecionado,
                                 timestamp: Date.now()
                             }
                         })
@@ -24115,7 +24160,7 @@ class AdminPanel {
                         erros++;
                     }
                     
-                    // 7.2 - ENVIAR PUSH (SE ATIVADO)
+                    // 8.2 - ENVIAR PUSH (SE ATIVADO)
                     if (enviarPush && typeof this.enviarPushParaUsuario === 'function') {
                         try {
                             const pushEnviado = await this.enviarPushParaUsuario(
@@ -24125,7 +24170,7 @@ class AdminPanel {
                                 {
                                     tipo: 'notificacao_massa',
                                     prioridade: prioridade,
-                                    individual: this.modoSelecaoIndividual
+                                    individual: this.modoSelecaoIndividual || false
                                 }
                             );
                             
@@ -24142,7 +24187,7 @@ class AdminPanel {
                     erros++;
                 }
                 
-                // 7.3 - ATUALIZAR PROGRESSO
+                // 8.3 - ATUALIZAR PROGRESSO
                 const percent = Math.round(((i + 1) / usuariosDestino.length) * 100);
                 const barElement = document.getElementById(`${progressId}-bar`);
                 const textElement = document.getElementById(`${progressId}-text`);
@@ -24160,7 +24205,7 @@ class AdminPanel {
                 }
             }
             
-            // ===== 8. FINALIZAR =====
+            // ===== 9. FINALIZAR =====
             const progressElement = document.getElementById(progressId);
             
             const barElement = document.getElementById(`${progressId}-bar`);
@@ -24190,7 +24235,7 @@ class AdminPanel {
                 }
             }, 2000);
             
-            // ===== 9. MOSTRAR RESULTADO =====
+            // ===== 10. MOSTRAR RESULTADO =====
             console.log(`✅ Envio concluído: ${enviados} enviados, ${erros} erros, ${pushEnviados} push`);
             
             this.showToast(
@@ -24208,6 +24253,58 @@ class AdminPanel {
                     ${erros > 0 ? `⚠️ <strong>${erros}</strong> falhas` : ''}`,
                     6000
                 );
+            }
+        }
+
+        /**
+         * Envia push diretamente para uma lista de playerIds (sem usuário vinculado).
+         * Usa a rota /api/admin/onesignal/enviar-massa
+         */
+        async enviarPushDiretoParaPlayerIds(playerIds, titulo, mensagem, dados = {}) {
+            try {
+                console.log(`📤 Enviando push direto para ${playerIds.length} playerIds...`);
+                
+                this.showToast(`📤 Enviando push para ${playerIds.length} dispositivo(s)...`, 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/admin/onesignal/enviar-massa', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        playerIds,
+                        titulo,
+                        mensagem,
+                        dados
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast(
+                        `✅ Push enviado para ${data.enviados} dispositivo(s)!${data.erros > 0 ? ` (${data.erros} erros)` : ''}`,
+                        'success'
+                    );
+                    
+                    if (typeof this.mostrarNotificacaoSistema === 'function') {
+                        this.mostrarNotificacaoSistema(
+                            'success',
+                            '📢 Push Enviado',
+                            `<strong>${data.enviados}</strong> dispositivo(s) notificado(s)!<br>
+                            ${data.erros > 0 ? `⚠️ <strong>${data.erros}</strong> falhas` : ''}`,
+                            6000
+                        );
+                    }
+                } else {
+                    throw new Error(data.error || 'Erro ao enviar');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
             }
         }
 
