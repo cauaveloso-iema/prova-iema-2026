@@ -63,6 +63,25 @@ const verificarPermissaoModulo = async (req, res, next) => {
 };
 
 // ============================================
+// HELPERS
+// ============================================
+function normalizarHorarios(horarios, horario) {
+    let lista = [];
+    if (Array.isArray(horarios) && horarios.length > 0) {
+        lista = horarios.map(h => parseInt(h)).filter(h => h >= 1 && h <= 9);
+    } else if (horario) {
+        lista = [parseInt(horario)];
+    }
+    return [...new Set(lista)].sort((a, b) => a - b);
+}
+
+function getHorariosDe(s) {
+    if (s.horarios && s.horarios.length > 0) return s.horarios;
+    if (s.horario) return [s.horario];
+    return [];
+}
+
+// ============================================
 // ROTAS
 // ============================================
 
@@ -139,36 +158,76 @@ router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
-// Registrar substituição (COM SUBSTITUTO AUSENTE)
+// ============================================
+// REGISTRAR (com suporte a "sem substituto" + múltiplos horários)
+// ============================================
 router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
         const User = getUserModel();
         
         const { 
-            professorAusenteId, professorSubstitutoId, turma, horario, data, 
+            professorAusenteId, professorSubstitutoId, turma, data, 
+            horarios, horario,
             motivo, motivoDetalhes, observacoes,
             substitutoAusente, substitutoAusenteMotivo, substitutoAusenteObservacoes
         } = req.body;
         
-        if (!professorAusenteId || !professorSubstitutoId) return res.status(400).json({ success: false, error: 'Selecione os professores' });
-        if (!turma) return res.status(400).json({ success: false, error: 'Selecione a turma' });
-        if (!horario || horario < 1 || horario > 9) return res.status(400).json({ success: false, error: 'Horário inválido' });
-        if (!data) return res.status(400).json({ success: false, error: 'Informe a data' });
-        if (!motivo) return res.status(400).json({ success: false, error: 'Selecione o motivo' });
-        if (professorAusenteId === professorSubstitutoId) return res.status(400).json({ success: false, error: 'Professores devem ser diferentes' });
+        const semSubstituto = substitutoAusente === true;
+        const listaHorarios = normalizarHorarios(horarios, horario);
         
-        if (substitutoAusente && !substitutoAusenteMotivo) {
+        // ============ VALIDAÇÕES ============
+        if (!professorAusenteId) {
+            return res.status(400).json({ success: false, error: 'Selecione o professor ausente' });
+        }
+        
+        if (!semSubstituto && !professorSubstitutoId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Selecione o professor substituto ou marque "Não há substituto disponível"' 
+            });
+        }
+        
+        if (!turma) return res.status(400).json({ success: false, error: 'Selecione a turma' });
+        if (listaHorarios.length === 0) {
+            return res.status(400).json({ success: false, error: 'Selecione pelo menos um horário' });
+        }
+        if (!data) return res.status(400).json({ success: false, error: 'Informe a data' });
+        
+        if (!semSubstituto) {
+            if (!motivo) return res.status(400).json({ success: false, error: 'Selecione o motivo' });
+            if (motivo === 'outros' && !motivoDetalhes) {
+                return res.status(400).json({ success: false, error: 'Especifique o motivo' });
+            }
+        }
+        
+        if (semSubstituto && !substitutoAusenteMotivo) {
             return res.status(400).json({ success: false, error: 'Informe o motivo da ausência do substituto' });
         }
         
-        const [profAusente, profSubstituto] = await Promise.all([
-            User.findById(professorAusenteId).select('nome email telefone eixo').lean(),
-            User.findById(professorSubstitutoId).select('nome email telefone eixo').lean()
-        ]);
+        if (!semSubstituto && professorAusenteId === professorSubstitutoId) {
+            return res.status(400).json({ success: false, error: 'Professores devem ser diferentes' });
+        }
         
-        if (!profAusente || !profSubstituto) return res.status(404).json({ success: false, error: 'Professor não encontrado' });
+        // ============ BUSCAR PROFESSORES ============
+        const profAusente = await User.findById(professorAusenteId)
+            .select('nome email telefone eixo').lean();
         
+        if (!profAusente) {
+            return res.status(404).json({ success: false, error: 'Professor ausente não encontrado' });
+        }
+        
+        let profSubstituto = null;
+        if (!semSubstituto) {
+            profSubstituto = await User.findById(professorSubstitutoId)
+                .select('nome email telefone eixo').lean();
+            
+            if (!profSubstituto) {
+                return res.status(404).json({ success: false, error: 'Professor substituto não encontrado' });
+            }
+        }
+        
+        // ============ MONTAR DADOS ============
         const dataObj = new Date(data + 'T12:00:00');
         const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
         const diaSemana = diasSemana[dataObj.getDay()];
@@ -180,16 +239,27 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
             professorAusenteEmail: profAusente.email || '',
             professorAusenteTelefone: profAusente.telefone || '',
             professorAusenteEixo: profAusente.eixo || '',
-            professorSubstitutoId: profSubstituto._id,
-            professorSubstitutoNome: profSubstituto.nome,
-            professorSubstitutoEmail: profSubstituto.email || '',
-            professorSubstitutoTelefone: profSubstituto.telefone || '',
-            professorSubstitutoEixo: profSubstituto.eixo || '',
-            turma, horario: parseInt(horario), data, diaSemana,
-            motivo, motivoDetalhes: motivoDetalhes || '', observacoes: observacoes || '',
-            substitutoAusente: substitutoAusente || false,
-            substitutoAusenteMotivo: substitutoAusente ? (substitutoAusenteMotivo || '') : '',
-            substitutoAusenteObservacoes: substitutoAusente ? (substitutoAusenteObservacoes || '') : '',
+            
+            professorSubstitutoId: profSubstituto ? profSubstituto._id : null,
+            professorSubstitutoNome: profSubstituto ? profSubstituto.nome : 'SEM SUBSTITUTO',
+            professorSubstitutoEmail: profSubstituto ? (profSubstituto.email || '') : '',
+            professorSubstitutoTelefone: profSubstituto ? (profSubstituto.telefone || '') : '',
+            professorSubstitutoEixo: profSubstituto ? (profSubstituto.eixo || '') : '',
+            
+            turma,
+            horarios: listaHorarios,
+            horario: listaHorarios[0],
+            data,
+            diaSemana,
+            
+            motivo: semSubstituto ? 'sem_substituto' : motivo,
+            motivoDetalhes: semSubstituto ? '' : (motivoDetalhes || ''),
+            observacoes: observacoes || '',
+            
+            substitutoAusente: semSubstituto,
+            substitutoAusenteMotivo: semSubstituto ? (substitutoAusenteMotivo || '') : '',
+            substitutoAusenteObservacoes: semSubstituto ? (substitutoAusenteObservacoes || '') : '',
+            
             mesReferencia,
             registradoPor: req.userId,
             registradoPorNome: req.userNome,
@@ -198,13 +268,22 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
         
         await novaSubstituicao.save();
         
-        res.json({ success: true, message: 'Substituição registrada', substituicao: novaSubstituicao });
+        res.json({ 
+            success: true, 
+            message: semSubstituto 
+                ? 'Substituição registrada (sem substituto disponível)' 
+                : 'Substituição registrada', 
+            substituicao: novaSubstituicao 
+        });
     } catch (error) {
+        console.error('❌ Erro ao registrar substituição:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// Listar substituições
+// ============================================
+// LISTAR
+// ============================================
 router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
@@ -239,7 +318,10 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
                 id: s._id,
                 professorAusente: { id: s.professorAusenteId, nome: s.professorAusenteNome, email: s.professorAusenteEmail, telefone: s.professorAusenteTelefone, eixo: s.professorAusenteEixo },
                 professorSubstituto: { id: s.professorSubstitutoId, nome: s.professorSubstitutoNome, email: s.professorSubstitutoEmail, telefone: s.professorSubstitutoTelefone, eixo: s.professorSubstitutoEixo },
-                turma: s.turma, horario: s.horario, data: s.data,
+                turma: s.turma,
+                horarios: getHorariosDe(s),
+                horario: s.horario,
+                data: s.data,
                 dataFormatada: new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR'),
                 diaSemana: s.diaSemana, motivo: s.motivo, motivoDetalhes: s.motivoDetalhes,
                 observacoes: s.observacoes, mesReferencia: s.mesReferencia,
@@ -256,23 +338,32 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
+// ============================================
+// BUSCAR POR ID
+// ============================================
 router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
         const substituicao = await Substituicao.findById(req.params.id).lean();
         if (!substituicao) return res.status(404).json({ success: false, error: 'Não encontrada' });
+        
+        // Garantir que horarios sempre esteja presente
+        substituicao.horarios = getHorariosDe(substituicao);
+        
         res.json({ success: true, substituicao });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// Editar
+// ============================================
+// EDITAR
+// ============================================
 router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
         const { 
-            turma, horario, data, motivo, motivoDetalhes, observacoes,
+            turma, horarios, horario, data, motivo, motivoDetalhes, observacoes,
             substitutoAusente, substitutoAusenteMotivo, substitutoAusenteObservacoes
         } = req.body;
         
@@ -280,7 +371,18 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
         if (!substituicao) return res.status(404).json({ success: false, error: 'Não encontrada' });
         
         if (turma) substituicao.turma = turma;
-        if (horario) substituicao.horario = parseInt(horario);
+        
+        // Atualizar horários (array ou singular)
+        if (horarios !== undefined) {
+            const lista = normalizarHorarios(horarios, null);
+            substituicao.horarios = lista;
+            substituicao.horario = lista[0] || null;
+        } else if (horario) {
+            const lista = normalizarHorarios(null, horario);
+            substituicao.horarios = lista;
+            substituicao.horario = lista[0] || null;
+        }
+        
         if (data) {
             substituicao.data = data;
             substituicao.mesReferencia = data.substring(0, 7);
@@ -314,6 +416,9 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
     }
 });
 
+// ============================================
+// EXCLUIR
+// ============================================
 router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
@@ -324,7 +429,9 @@ router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, r
     }
 });
 
-// Dashboard
+// ============================================
+// DASHBOARD
+// ============================================
 router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
@@ -340,7 +447,22 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$professorAusenteId', nome: { $first: '$professorAusenteNome' }, eixo: { $first: '$professorAusenteEixo' }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$professorSubstitutoId', nome: { $first: '$professorSubstitutoNome' }, eixo: { $first: '$professorSubstitutoEixo' }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$turma', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 15 }]),
-            Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$horario', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
+            // ⭐ Agregação por horário usando $unwind
+            Substituicao.aggregate([
+                { $match: filtro },
+                { $addFields: { 
+                    horariosFinal: { 
+                        $cond: [
+                            { $gt: [{ $size: { $ifNull: ['$horarios', []] } }, 0] },
+                            '$horarios',
+                            { $cond: [{ $ne: ['$horario', null] }, ['$horario'], []] }
+                        ]
+                    }
+                }},
+                { $unwind: '$horariosFinal' },
+                { $group: { _id: '$horariosFinal', count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ]),
             Substituicao.find(filtro).sort({ createdAt: -1 }).limit(10).lean(),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$data', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
             Substituicao.countDocuments({ ...filtro, substitutoAusente: true })
@@ -350,7 +472,7 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             'falta_professor': 'Falta do Professor', 'licenca_medica': 'Licença Médica',
             'licenca_maternidade_paternidade': 'Licença Mat/Pater', 'capacitacao_formacao': 'Capacitação',
             'reuniao_externa': 'Reunião Externa', 'problema_pessoal': 'Problema Pessoal',
-            'atestado': 'Atestado', 'outros': 'Outros'
+            'atestado': 'Atestado', 'outros': 'Outros', 'sem_substituto': 'Sem Substituto'
         };
         
         res.json({
@@ -369,7 +491,10 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             ultimasSubstituicoes: ultimas.map(s => ({
                 id: s._id, professorAusenteNome: s.professorAusenteNome,
                 professorSubstitutoNome: s.professorSubstitutoNome,
-                turma: s.turma, horario: s.horario, data: s.data, motivo: s.motivo, registradoEm: s.registradoEm
+                turma: s.turma, 
+                horarios: getHorariosDe(s),
+                horario: s.horario, 
+                data: s.data, motivo: s.motivo, registradoEm: s.registradoEm
             }))
         });
     } catch (error) {
@@ -377,7 +502,9 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
     }
 });
 
-// Relatório
+// ============================================
+// RELATÓRIO
+// ============================================
 router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const Substituicao = getSubstituicaoModel();
@@ -402,12 +529,13 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
             'falta_professor': 'Falta do Professor', 'licenca_medica': 'Licença Médica',
             'licenca_maternidade_paternidade': 'Licença Mat/Pater', 'capacitacao_formacao': 'Capacitação',
             'reuniao_externa': 'Reunião Externa', 'problema_pessoal': 'Problema Pessoal',
-            'atestado': 'Atestado', 'outros': 'Outros'
+            'atestado': 'Atestado', 'outros': 'Outros', 'sem_substituto': 'Sem Substituto'
         };
         
         const porMotivo = {}, porTurma = {}, porProfessor = {};
         substituicoes.forEach(s => {
-            porMotivo[motivosLabels[s.motivo] || s.motivo] = (porMotivo[motivosLabels[s.motivo] || s.motivo] || 0) + 1;
+            const label = motivosLabels[s.motivo] || s.motivo;
+            porMotivo[label] = (porMotivo[label] || 0) + 1;
             porTurma[s.turma] = (porTurma[s.turma] || 0) + 1;
             porProfessor[s.professorAusenteNome] = (porProfessor[s.professorAusenteNome] || 0) + 1;
         });
@@ -419,7 +547,10 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
                 id: s._id,
                 professorAusenteNome: s.professorAusenteNome,
                 professorSubstitutoNome: s.professorSubstitutoNome,
-                turma: s.turma, horario: s.horario, data: s.data,
+                turma: s.turma,
+                horarios: getHorariosDe(s),
+                horario: s.horario,
+                data: s.data,
                 dataFormatada: new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR'),
                 diaSemana: s.diaSemana, motivo: s.motivo,
                 motivoLabel: motivosLabels[s.motivo] || s.motivo,

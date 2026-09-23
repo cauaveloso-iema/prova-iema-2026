@@ -983,3 +983,26 @@ body {
 .segunda-chamada-container .nav-tabs .nav-link i {
     color: inherit !important;
 }
+
+.horario-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.horario-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.horario-card.selected {
+    background: linear-gradient(135deg, #1e3c72, #2a5298) !important;
+    color: white !important;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
+}
+
+.horario-card.selected .horario-numero,
+.horario-card.selected .horario-label {
+    color: white !important;
+}

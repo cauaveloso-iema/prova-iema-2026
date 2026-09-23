@@ -2,37 +2,59 @@
 const mongoose = require('mongoose');
 
 const SubstituicaoProfessorSchema = new mongoose.Schema({
-    // Professor Ausente
+    // Professor Ausente (SEMPRE obrigatório)
     professorAusenteId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     professorAusenteNome: { type: String, required: true },
     professorAusenteEmail: { type: String, default: '' },
     professorAusenteTelefone: { type: String, default: '' },
     professorAusenteEixo: { type: String, default: '' },
     
-    // Professor Substituto
-    professorSubstitutoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    professorSubstitutoNome: { type: String, required: true },
+    // Professor Substituto (OPCIONAL — pode ser null quando não há substituto)
+    professorSubstitutoId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false, default: null },
+    professorSubstitutoNome: { type: String, default: '' },
     professorSubstitutoEmail: { type: String, default: '' },
     professorSubstitutoTelefone: { type: String, default: '' },
     professorSubstitutoEixo: { type: String, default: '' },
     
-    // ⭐ NOVO: Ausência do Substituto
+    // Ausência do Substituto
     substitutoAusente: { type: Boolean, default: false },
     substitutoAusenteMotivo: { type: String, default: '' },
     substitutoAusenteObservacoes: { type: String, default: '' },
     
     // Aula
     turma: { type: String, required: true },
-    horario: { type: Number, required: true, min: 1, max: 9 },
+    
+    // ⭐ NOVO: array de horários (1 a 9) — suporta múltiplos horários consecutivos
+    horarios: { 
+        type: [Number], 
+        default: [],
+        validate: {
+            validator: arr => arr.every(h => h >= 1 && h <= 9),
+            message: 'Horário deve ser entre 1 e 9'
+        }
+    },
+    
+    // 🔁 MANTIDO para compatibilidade com registros antigos
+    horario: { type: Number, required: false, min: 1, max: 9, default: null },
+    
     data: { type: String, required: true },
     diaSemana: { type: String, default: '' },
     
-    // Motivo
+    // Motivo — inclui 'sem_substituto'
     motivo: {
         type: String,
         required: true,
-        enum: ['falta_professor', 'licenca_medica', 'licenca_maternidade_paternidade',
-               'capacitacao_formacao', 'reuniao_externa', 'problema_pessoal', 'atestado', 'outros']
+        enum: [
+            'falta_professor',
+            'licenca_medica',
+            'licenca_maternidade_paternidade',
+            'capacitacao_formacao',
+            'reuniao_externa',
+            'problema_pessoal',
+            'atestado',
+            'outros',
+            'sem_substituto'
+        ]
     },
     motivoDetalhes: { type: String, default: '' },
     observacoes: { type: String, default: '' },

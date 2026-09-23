@@ -3543,16 +3543,19 @@ class SetorPedagogico {
                                 </div>
 
                                 <div class="mt-3">
-                                    <label class="form-label">Horário da Aula <span class="text-danger">*</span></label>
+                                    <label class="form-label">Horário(s) da Aula <span class="text-danger">*</span></label>
                                     <div class="horarios-grid" id="horariosGridSubstituicao">
                                         ${[1,2,3,4,5,6,7,8,9].map(n => `
-                                            <div class="horario-card" data-horario="${n}" onclick="setorPedagogico.selecionarHorarioSubstituicao(${n})">
+                                            <div class="horario-card" data-horario="${n}" onclick="setorPedagogico.toggleHorarioSubstituicao(${n})">
                                                 <div class="horario-numero">${n}º</div>
                                                 <div class="horario-label">Horário</div>
                                             </div>
                                         `).join('')}
                                     </div>
-                                    <input type="hidden" id="inputHorarioSubstituicao" value="">
+                                    <input type="hidden" id="inputHorariosSubstituicao" value="">
+                                    <small class="text-muted d-block mt-2">
+                                        <i class="fas fa-info-circle"></i> Clique em vários para selecionar horários consecutivos (ex: 1º e 2º).
+                                    </small>
                                 </div>
 
                                 <div id="blocoMotivoSubstituicao">
@@ -3630,6 +3633,7 @@ class SetorPedagogico {
                                             <option value="reuniao_externa">Reunião</option>
                                             <option value="problema_pessoal">Pessoal</option>
                                             <option value="atestado">Atestado</option>
+                                            <option value="sem_substituto">Sem Substituto</option>
                                             <option value="outros">Outros</option>
                                         </select>
                                     </div>
@@ -3781,6 +3785,7 @@ class SetorPedagogico {
                                             <option value="reuniao_externa">Reunião</option>
                                             <option value="problema_pessoal">Pessoal</option>
                                             <option value="atestado">Atestado</option>
+                                            <option value="sem_substituto">Sem Substituto</option>
                                             <option value="outros">Outros</option>
                                         </select>
                                     </div>
@@ -4108,14 +4113,31 @@ class SetorPedagogico {
         }
     }
     
-    selecionarHorarioSubstituicao(horario) {
-        this.substituicaoState.formData.horario = horario;
-        const input = document.getElementById('inputHorarioSubstituicao');
-        if (input) input.value = horario;
+    toggleHorarioSubstituicao(horario) {
+        if (!Array.isArray(this.substituicaoState.formData.horarios)) {
+            this.substituicaoState.formData.horarios = [];
+        }
+        
+        const lista = this.substituicaoState.formData.horarios;
+        const idx = lista.indexOf(horario);
+        
+        if (idx >= 0) {
+            lista.splice(idx, 1);
+        } else {
+            lista.push(horario);
+        }
+        
+        lista.sort((a, b) => a - b);
+        
+        const input = document.getElementById('inputHorariosSubstituicao');
+        if (input) input.value = lista.join(',');
         
         document.querySelectorAll('#horariosGridSubstituicao .horario-card').forEach(card => {
-            card.classList.toggle('selected', parseInt(card.dataset.horario) === horario);
+            const n = parseInt(card.dataset.horario);
+            card.classList.toggle('selected', lista.includes(n));
         });
+        
+        this.substituicaoState.formData.horario = lista[0] || null;
     }
     
     atualizarMotivoDetalhesSubstituicao() {
@@ -4172,8 +4194,7 @@ class SetorPedagogico {
         const selectTurma = document.getElementById('selectTurmaSubstituicao');
         const valorTurma = selectTurma?.value || formData.turma || '';
         
-        const inputHorario = document.getElementById('inputHorarioSubstituicao');
-        const valorHorario = inputHorario?.value ? parseInt(inputHorario.value) : formData.horario;
+        const listaHorarios = Array.isArray(formData.horarios) ? formData.horarios : [];
         
         const selectMotivo = document.getElementById('selectMotivoSubstituicao');
         const valorMotivo = selectMotivo?.value || formData.motivo || '';
@@ -4194,13 +4215,16 @@ class SetorPedagogico {
         
         this.substituicaoState.formData.data = valorData;
         this.substituicaoState.formData.turma = valorTurma;
-        this.substituicaoState.formData.horario = valorHorario;
+        this.substituicaoState.formData.horarios = listaHorarios;
         this.substituicaoState.formData.motivo = valorMotivo;
         this.substituicaoState.formData.motivoDetalhes = valorDetalhes;
         this.substituicaoState.formData.observacoes = valorObs;
         
-        // Validações básicas
-        if (!formData.professorAusente) { this.showToast('⚠️ Selecione o professor ausente', 'warning'); return; }
+        // VALIDAÇÕES
+        if (!formData.professorAusente) { 
+            this.showToast('⚠️ Selecione o professor ausente', 'warning'); 
+            return; 
+        }
         
         if (!semSubstituto && !formData.professorSubstituto) { 
             this.showToast('⚠️ Selecione o professor substituto ou marque "Não há substituto disponível"', 'warning'); 
@@ -4212,13 +4236,26 @@ class SetorPedagogico {
             return;
         }
         
-        if (!valorTurma) { this.showToast('⚠️ Selecione a turma', 'warning'); return; }
-        if (!valorData) { this.showToast('⚠️ Informe a data', 'warning'); return; }
-        if (!valorHorario) { this.showToast('⚠️ Selecione o horário', 'warning'); return; }
+        if (!valorTurma) { 
+            this.showToast('⚠️ Selecione a turma', 'warning'); 
+            return; 
+        }
         
-        // ⭐ Só valida motivo se NÃO for sem substituto
+        if (!valorData) { 
+            this.showToast('⚠️ Informe a data', 'warning'); 
+            return; 
+        }
+        
+        if (listaHorarios.length === 0) { 
+            this.showToast('⚠️ Selecione pelo menos um horário', 'warning'); 
+            return; 
+        }
+        
         if (!semSubstituto) {
-            if (!valorMotivo) { this.showToast('⚠️ Selecione o motivo', 'warning'); return; }
+            if (!valorMotivo) { 
+                this.showToast('⚠️ Selecione o motivo', 'warning'); 
+                return; 
+            }
             if (valorMotivo === 'outros' && !valorDetalhes) {
                 this.showToast('⚠️ Especifique o motivo', 'warning');
                 return;
@@ -4232,25 +4269,30 @@ class SetorPedagogico {
         }
         
         try {
+            const payload = {
+                professorAusenteId: formData.professorAusente.id,
+                turma: valorTurma,
+                horarios: listaHorarios,
+                data: valorData,
+                observacoes: valorObs,
+                substitutoAusente: semSubstituto,
+                substitutoAusenteMotivo: semSubstituto ? substitutoAusenteMotivo : '',
+                substitutoAusenteObservacoes: semSubstituto ? substitutoAusenteObservacoes : ''
+            };
+            
+            if (!semSubstituto) {
+                payload.professorSubstitutoId = formData.professorSubstituto.id;
+                payload.motivo = valorMotivo;
+                payload.motivoDetalhes = valorDetalhes;
+            }
+            
             const response = await fetch('/api/substituicao-professor/registrar', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    professorAusenteId: formData.professorAusente.id,
-                    professorSubstitutoId: semSubstituto ? null : formData.professorSubstituto.id,
-                    turma: valorTurma,
-                    horario: valorHorario,
-                    data: valorData,
-                    motivo: semSubstituto ? 'sem_substituto' : valorMotivo,
-                    motivoDetalhes: semSubstituto ? '' : valorDetalhes,
-                    observacoes: valorObs,
-                    substitutoAusente: semSubstituto,
-                    substitutoAusenteMotivo,
-                    substitutoAusenteObservacoes
-                })
+                body: JSON.stringify(payload)
             });
             
             const data = await response.json();
@@ -4284,6 +4326,7 @@ class SetorPedagogico {
             professorSubstituto: null,
             turma: '',
             data: hoje,
+            horarios: [],
             horario: null,
             motivo: '',
             motivoDetalhes: '',
@@ -4308,10 +4351,10 @@ class SetorPedagogico {
         const inputObs = document.getElementById('inputObservacoesSubstituicao');
         if (inputObs) inputObs.value = '';
         
-        const inputHorario = document.getElementById('inputHorarioSubstituicao');
-        if (inputHorario) inputHorario.value = '';
+        const inputHorarios = document.getElementById('inputHorariosSubstituicao');
+        if (inputHorarios) inputHorarios.value = '';
         
-        // Resetar "sem substituto"
+        // Reset "sem substituto"
         const checkSemSub = document.getElementById('checkSemSubstituto');
         if (checkSemSub) checkSemSub.checked = false;
         
@@ -4324,7 +4367,6 @@ class SetorPedagogico {
         const inputObsSemSub = document.getElementById('inputObservacoesSemSubstituto');
         if (inputObsSemSub) inputObsSemSub.value = '';
         
-        // ⭐ Reexibir bloco de motivo
         const blocoMotivo = document.getElementById('blocoMotivoSubstituicao');
         if (blocoMotivo) blocoMotivo.style.display = 'block';
         
@@ -4414,7 +4456,8 @@ class SetorPedagogico {
             'reuniao_externa': 'Reunião Externa',
             'problema_pessoal': 'Problema Pessoal',
             'atestado': 'Atestado',
-            'outros': 'Outros'
+            'outros': 'Outros',
+            'sem_substituto': 'Sem Substituto'
         };
         
         const MOTIVOS_CORES = {
@@ -4425,7 +4468,9 @@ class SetorPedagogico {
             'reuniao_externa': '#10b981',
             'problema_pessoal': '#f97316',
             'atestado': '#6b7280',
-            'outros': '#64748b'
+            'sem_substituto': '#dc2626',
+            'outros': '#64748b',
+            'sem_substituto': '#dc2626'
         };
         
         container.innerHTML = `
@@ -4434,7 +4479,7 @@ class SetorPedagogico {
                     <thead>
                         <tr>
                             <th>Data</th>
-                            <th>Horário</th>
+                            <th>Horário(s)</th>
                             <th>Professor Ausente</th>
                             <th>Professor Substituto</th>
                             <th>Turma</th>
@@ -4444,12 +4489,19 @@ class SetorPedagogico {
                     </thead>
                     <tbody>
                         ${lista.map(s => {
-                            // ⭐ NOVO: Badge de substituto ausente
                             const badgeSubstitutoAusente = s.substitutoAusente 
                                 ? `<span class="badge-custom" style="background: #fee2e2; color: #dc2626; margin-left: 5px;">
-                                      <i class="fas fa-user-slash"></i> Substituto Ausente
-                                   </span>` 
+                                    <i class="fas fa-user-slash"></i> Substituto Ausente
+                                </span>` 
                                 : '';
+                            
+                            const horariosList = (s.horarios && s.horarios.length > 0) 
+                                ? s.horarios 
+                                : (s.horario ? [s.horario] : []);
+                            
+                            const horariosHTML = horariosList.length > 0
+                                ? horariosList.map(h => `<span class="badge-custom badge-primary" style="margin-right:3px;">${h}º</span>`).join('')
+                                : '<span class="text-muted">-</span>';
                             
                             return `
                             <tr ${s.substitutoAusente ? 'style="background: #fef2f2;"' : ''}>
@@ -4457,7 +4509,7 @@ class SetorPedagogico {
                                     <strong>${s.dataFormatada}</strong>
                                     <br><small style="color:#6b7280;">${s.diaSemana}</small>
                                 </td>
-                                <td><span class="badge-custom badge-primary">${s.horario}º</span></td>
+                                <td>${horariosHTML}</td>
                                 <td>
                                     <strong>${this.escapeHtml(s.professorAusente.nome)}</strong>
                                     <br><small style="color:#6b7280;">${this.escapeHtml(s.professorAusente.eixo || '')}</small>
@@ -4469,7 +4521,7 @@ class SetorPedagogico {
                                 </td>
                                 <td><span class="badge-custom badge-gray">${this.escapeHtml(s.turma)}</span></td>
                                 <td>
-                                    <span class="badge-custom" style="background:${MOTIVOS_CORES[s.motivo]}20; color:${MOTIVOS_CORES[s.motivo]};">
+                                    <span class="badge-custom" style="background:${(MOTIVOS_CORES[s.motivo] || '#64748b')}20; color:${MOTIVOS_CORES[s.motivo] || '#64748b'};">
                                         ${MOTIVOS_LABELS[s.motivo] || s.motivo}
                                     </span>
                                 </td>
@@ -4580,7 +4632,7 @@ class SetorPedagogico {
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
                                     <div><strong>Turma:</strong> ${this.escapeHtml(s.turma)}</div>
-                                    <div><strong>Horário:</strong> ${s.horario}º Horário</div>
+                                    <div><strong>Horário(s):</strong> ${(s.horarios && s.horarios.length > 0 ? s.horarios : (s.horario ? [s.horario] : [])).map(h => `${h}º`).join(', ') || '-'}</div>
                                     <div><strong>Data:</strong> ${new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR')} (${s.diaSemana})</div>
                                     <div><strong>Motivo:</strong> ${MOTIVOS_LABELS[s.motivo] || s.motivo}</div>
                                 </div>
@@ -4637,18 +4689,26 @@ class SetorPedagogico {
                 'reuniao_externa': 'Reunião Externa',
                 'problema_pessoal': 'Problema Pessoal',
                 'atestado': 'Atestado',
-                'outros': 'Outros'
+                'outros': 'Outros',
+                'sem_substituto': 'Sem Substituto'
             };
             
             const motivosOptions = Object.entries(MOTIVOS_LABELS).map(([key, label]) =>
                 `<option value="${key}" ${s.motivo === key ? 'selected' : ''}>${label}</option>`
             ).join('');
             
+            // ⭐ Lista de horários atuais
+            const horariosAtuais = (s.horarios && s.horarios.length > 0) 
+                ? s.horarios 
+                : (s.horario ? [s.horario] : []);
+            
             let horariosHTML = '';
             for (let i = 1; i <= 9; i++) {
+                const selected = horariosAtuais.includes(i);
                 horariosHTML += `
-                    <div class="horario-card ${s.horario === i ? 'selected' : ''}" 
-                         data-horario="${i}" onclick="setorPedagogico.selecionarHorarioEdicaoSubstituicao(${i})">
+                    <div class="horario-card ${selected ? 'selected' : ''}" 
+                        data-horario="${i}" 
+                        onclick="setorPedagogico.toggleHorarioEdicaoSubstituicao(${i})">
                         <div class="horario-numero">${i}º</div>
                         <div class="horario-label">Horário</div>
                     </div>
@@ -4687,9 +4747,12 @@ class SetorPedagogico {
                                     </div>
                                 </div>
                                 <div class="mt-3">
-                                    <label class="form-label">Horário</label>
-                                    <div class="horarios-grid" id="editHorariosSp">${horariosHTML}</div>
-                                    <input type="hidden" id="editHorarioSp" value="${s.horario}">
+                                    <label class="form-label">Horário(s)</label>
+                                    <div class="horarios-grid" id="editHorariosGrid">${horariosHTML}</div>
+                                    <input type="hidden" id="editHorariosSp" value="${horariosAtuais.join(',')}">
+                                    <small class="text-muted d-block mt-2">
+                                        <i class="fas fa-info-circle"></i> Clique em vários para selecionar horários consecutivos.
+                                    </small>
                                 </div>
                                 <div class="row g-3 mt-3">
                                     <div class="col-md-6">
@@ -4702,14 +4765,13 @@ class SetorPedagogico {
                                     </div>
                                 </div>
                                 
-                                <!-- ⭐ NOVO: Checkbox de substituto ausente na edição -->
                                 <div class="mt-3">
                                     <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 15px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                             <input type="checkbox" id="editSubstitutoAusente" 
-                                                   ${s.substitutoAusente ? 'checked' : ''}
-                                                   onchange="document.getElementById('editCamposSubstitutoAusente').style.display = this.checked ? 'block' : 'none'"
-                                                   style="width: 22px; height: 22px; accent-color: #dc2626;">
+                                                ${s.substitutoAusente ? 'checked' : ''}
+                                                onchange="document.getElementById('editCamposSubstitutoAusente').style.display = this.checked ? 'block' : 'none'"
+                                                style="width: 22px; height: 22px; accent-color: #dc2626;">
                                             <div>
                                                 <strong style="color: #dc2626;">
                                                     <i class="fas fa-user-slash"></i> Professor substituto ausente
@@ -4761,11 +4823,27 @@ class SetorPedagogico {
         }
     }
     
-    selecionarHorarioEdicaoSubstituicao(horario) {
-        const input = document.getElementById('editHorarioSp');
-        if (input) input.value = horario;
-        document.querySelectorAll('#editHorariosSp .horario-card').forEach(card => {
-            card.classList.toggle('selected', parseInt(card.dataset.horario) === horario);
+    toggleHorarioEdicaoSubstituicao(horario) {
+        const input = document.getElementById('editHorariosSp');
+        if (!input) return;
+        
+        let lista = input.value 
+            ? input.value.split(',').map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 9) 
+            : [];
+        
+        const idx = lista.indexOf(horario);
+        if (idx >= 0) {
+            lista.splice(idx, 1);
+        } else {
+            lista.push(horario);
+        }
+        
+        lista.sort((a, b) => a - b);
+        input.value = lista.join(',');
+        
+        document.querySelectorAll('#editHorariosGrid .horario-card').forEach(card => {
+            const n = parseInt(card.dataset.horario);
+            card.classList.toggle('selected', lista.includes(n));
         });
     }
     
@@ -4785,10 +4863,20 @@ class SetorPedagogico {
             return;
         }
         
+        const inputHorarios = document.getElementById('editHorariosSp');
+        const horarios = inputHorarios?.value 
+            ? inputHorarios.value.split(',').map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 9)
+            : [];
+        
+        if (horarios.length === 0) {
+            this.showToast('⚠️ Selecione pelo menos um horário', 'warning');
+            return;
+        }
+        
         const dados = {
             turma: document.getElementById('editTurmaSp').value,
             data: document.getElementById('editDataSp').value,
-            horario: parseInt(document.getElementById('editHorarioSp').value),
+            horarios: horarios,
             motivo: document.getElementById('editMotivoSp').value,
             motivoDetalhes: document.getElementById('editMotivoDetalhesSp').value,
             observacoes: document.getElementById('editObservacoesSp').value,
@@ -4955,7 +5043,12 @@ class SetorPedagogico {
                 <div class="section-title">📚 Informações da Aula</div>
                 <div class="info-grid">
                     <div class="info-item"><div class="info-label">Turma:</div><div class="info-value">${s.turma}</div></div>
-                    <div class="info-item"><div class="info-label">Horário:</div><div class="info-value">${s.horario}º Horário</div></div>
+                    <div class="info-item">
+                        <div class="info-label">Horário(s):</div>
+                        <div class="info-value">
+                            ${(s.horarios && s.horarios.length > 0 ? s.horarios : (s.horario ? [s.horario] : [])).map(h => `${h}º`).join(', ') || '-'}
+                        </div>
+                    </div>
                     <div class="info-item"><div class="info-label">Data:</div><div class="info-value">${dataExt}</div></div>
                     <div class="info-item"><div class="info-label">Dia da Semana:</div><div class="info-value">${s.diaSemana}</div></div>
                 </div>
@@ -5145,7 +5238,7 @@ class SetorPedagogico {
                         ${lista.map(s => `
                             <tr>
                                 <td>${new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                <td>${s.horario}º</td>
+                                <td>${(s.horarios && s.horarios.length > 0 ? s.horarios : (s.horario ? [s.horario] : [])).map(h => `${h}º`).join(', ') || '-'}</td>
                                 <td>${this.escapeHtml(s.professorAusenteNome)}</td>
                                 <td>${this.escapeHtml(s.professorSubstitutoNome)}</td>
                                 <td>${this.escapeHtml(s.turma)}</td>
@@ -5234,7 +5327,7 @@ class SetorPedagogico {
                                 ${data.substituicoes.map(s => `
                                     <tr ${s.substitutoAusente ? 'style="background: #fef2f2;"' : ''}>
                                         <td>${s.dataFormatada}</td>
-                                        <td>${s.horario}º</td>
+                                        <td>${(s.horarios && s.horarios.length > 0 ? s.horarios : (s.horario ? [s.horario] : [])).map(h => `${h}º`).join(', ') || '-'}</td>
                                         <td>${this.escapeHtml(s.professorAusenteNome)}</td>
                                         <td>
                                             ${this.escapeHtml(s.professorSubstitutoNome)}
@@ -5348,7 +5441,7 @@ class SetorPedagogico {
                         ${data.substituicoes.map(s => `
                             <tr>
                                 <td>${s.dataFormatada}</td>
-                                <td>${s.horario}º</td>
+                                <td>${(s.horarios && s.horarios.length > 0 ? s.horarios : (s.horario ? [s.horario] : [])).map(h => `${h}º`).join(', ') || '-'}</td>
                                 <td>${this.escapeHtml(s.professorAusenteNome)}</td>
                                 <td>
                                     ${this.escapeHtml(s.professorSubstitutoNome)}
