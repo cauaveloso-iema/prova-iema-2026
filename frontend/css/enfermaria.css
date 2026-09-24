@@ -489,3 +489,152 @@ body {
         right: -16px !important;
     }
 }
+
+/* ============================================================
+   SINO DE NOTIFICAÇÕES - AJUSTES PARA WEBVIEW/KODULAR
+   ============================================================ */
+
+/* Container do sino */
+.notificacoes-container {
+    position: relative;
+    display: inline-block;
+}
+
+/* Dropdown padrão (desktop) */
+.notificacoes-dropdown {
+    position: absolute;
+    top: 60px;
+    right: 0;
+    width: 380px;
+    max-width: calc(100vw - 20px); /* 🔥 NUNCA MAIOR QUE A TELA */
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    display: none;
+    z-index: 99999; /* 🔥 Z-INDEX MUITO ALTO */
+    overflow: hidden;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.notificacoes-dropdown.show {
+    display: block !important;
+    animation: slideDown 0.3s ease;
+}
+
+/* ============================================================
+   🔥 AJUSTES PARA WEBVIEW (KODULAR, APP ANDROID)
+   ============================================================ */
+
+/* Telas pequenas (até 480px) - mobile e WebView do app */
+@media (max-width: 480px) {
+    .notificacoes-dropdown {
+        position: fixed !important;      /* 🔥 FIXO NA TELA */
+        top: 70px !important;
+        left: 10px !important;            /* 🔥 ALINHADO À ESQUERDA */
+        right: 10px !important;           /* 🔥 ALINHADO À DIREITA */
+        width: auto !important;           /* 🔥 LARGURA AUTOMÁTICA */
+        max-width: calc(100vw - 20px) !important;
+        max-height: 70vh !important;      /* 🔥 70% DA ALTURA DA TELA */
+    }
+    
+    .notificacoes-header {
+        padding: 12px 15px !important;
+    }
+    
+    .notificacoes-header h3 {
+        font-size: 0.9rem !important;
+    }
+    
+    .notificacao-item {
+        padding: 10px 12px !important;
+    }
+    
+    .notificacao-icone {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 0.9rem !important;
+    }
+    
+    .notificacao-titulo {
+        font-size: 0.85rem !important;
+    }
+    
+    .notificacao-mensagem {
+        font-size: 0.75rem !important;
+    }
+}
+
+/* Telas muito pequenas (até 360px) */
+@media (max-width: 360px) {
+    .notificacoes-dropdown {
+        top: 65px !important;
+        left: 5px !important;
+        right: 5px !important;
+        max-width: calc(100vw - 10px) !important;
+        max-height: 65vh !important;
+    }
+    
+    .notificacoes-header {
+        padding: 10px 12px !important;
+    }
+    
+    .notificacoes-header h3 {
+        font-size: 0.85rem !important;
+    }
+    
+    .notificacao-titulo {
+        font-size: 0.8rem !important;
+    }
+    
+    .notificacao-mensagem {
+        font-size: 0.7rem !important;
+    }
+}
+
+/* 🔥 DETECÇÃO DE WEBVIEW VIA USER AGENT (para casos específicos) */
+@media (max-width: 500px) {
+    .notificacoes-container {
+        position: static !important;
+    }
+    
+    .notificacoes-dropdown {
+        position: fixed !important;
+        top: 60px !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: calc(100vw - 16px) !important;
+        max-height: 75vh !important;
+        z-index: 99999 !important;
+    }
+}
+
+/* 🔥 GARANTIR QUE APARECE EM CIMA DE TUDO */
+.notificacoes-dropdown.show {
+    z-index: 99999 !important;
+    position: fixed !important;
+    top: 70px !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+}
+
+/* ============================================================
+   BACKGROUND ESCURO ATRÁS DO DROPDOWN (para mobile)
+   ============================================================ */
+@media (max-width: 500px) {
+    .notificacoes-dropdown.show::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: -1;
+    }
+}
