@@ -443,97 +443,169 @@ app.use((req, res, next) => {
 });
 
 // ============================================================================
-// ROTA ESPECIAL DO ONESIGNAL - DEVE VIR ANTES DE QUALQUER MIDDLEWARE
+// ROTA ONESIGNAL - VÍNCULO KODULAR (VERSÃO DEFINITIVA)
+// ⚠️ DEVE VIR DEPOIS DE express.json() !!!
 // ============================================================================
-app.post('/api/onesignal/vincular-kodular', (req, res) => {
-    let rawBody = '';
-    
-    req.on('data', chunk => {
-        rawBody += chunk.toString();
-    });
-    
-    req.on('end', async () => {
-        try {
-            console.log('='.repeat(60));
-            console.log('📱 Vínculo Kodular - Recebido');
-            
-            // Extrair dados com regex
-            let playerId = null;
-            let token = null;
-            
-            // Limpar o body
-            let cleaned = rawBody.replace(/\\"/g, '"');
-            cleaned = cleaned.replace(/^"|"$/g, '');
-            
-            // Extrair playerId
-            const playerIdMatch = cleaned.match(/"playerId":"([^"]+)"/i);
-            if (playerIdMatch) {
-                playerId = playerIdMatch[1];
-            }
-            
-            // Extrair token
-            const tokenMatch = cleaned.match(/"token":"([^"]+)"/i);
-            if (tokenMatch) {
-                token = tokenMatch[1];
-            }
-            
-            if (!playerId || !token) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'Não foi possível extrair os dados' 
-                });
-            }
-            
-            // Verificar token JWT
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            const userId = decoded.id;
-            
-            // Buscar usuário
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({ 
-                    success: false, 
-                    error: 'Usuário não encontrado' 
-                });
-            }
-            
-            // 🔥 NOVA VERIFICAÇÃO: Se já tem o MESMO playerId, não atualiza
-            if (user.onesignalPlayerId === playerId) {
-                console.log(`⚠️ Usuário ${user.nome} já está vinculado ao dispositivo ${playerId}`);
-                return res.json({ 
-                    success: true, 
-                    message: 'Dispositivo já vinculado',
-                    alreadyLinked: true
-                });
-            }
-            
-            // 🔥 Se já tem OUTRO playerId, atualiza (troca de dispositivo)
-            if (user.onesignalPlayerId && user.onesignalPlayerId !== playerId) {
-                console.log(`🔄 Usuário ${user.nome} trocando de dispositivo: ${user.onesignalPlayerId} → ${playerId}`);
-            }
-            
-            // Atualizar banco
-            user.onesignalPlayerId = playerId;
-            user.ultimaValidacaoPush = new Date();
-            await user.save();
-            
-            console.log(`✅ Banco atualizado para ${user.nome}`);
-            
-            res.json({ 
-                success: true,
-                message: 'Dispositivo vinculado com sucesso',
-                alreadyLinked: false
-            });
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            res.status(500).json({ 
-                success: false, 
-                error: error.message 
+app.post('/api/onesignal/vincular-kodular', async (req, res) => {
+    try {
+        console.log('='.repeat(60));
+        console.log('📱 [KODULAR] Requisição de vínculo recebida');
+        console.log('   Body completo:', JSON.stringify(req.body));
+
+        const { playerId, token } = req.body;
+
+        if (!playerId) {
+            console.error('❌ playerId não informado');
+            return res.status(400).json({
+                success: false,
+                error: 'playerId é obrigatório'
             });
         }
-    });
+
+        if (!token) {
+            console.error('❌ token não informado');
+            return res.status(400).json({
+                success: false,
+                error: 'token é obrigatório'
+            });
+        }
+
+        console.log(`   📱 playerId: ${playerId.substring(0, 20)}...`);
+        console.log(`   🔑 token: ${token.substring(0, 30)}...`);
+
+        // Verificar JWT
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (jwtError) {
+            console.error('❌ Token inválido:', jwtError.message);
+            return res.status(401).json({
+                success: false,
+                error: 'Token inválido ou expirado',
+                motivo: jwtError.name
+            });
+        }
+
+        const userId = decoded.id;
+        console.log(`   ✅ Token válido para userId: ${userId}`);
+
+        // Buscar usuário
+        const user = await User.findById(userId);
+        if (!user) {
+            console.error(`❌ Usuário ${userId} não encontrado`);
+            return res.status(404).json({
+                success: false,
+                error: 'Usuário não encontrado'
+            });
+        }
+
+        console.log(`   👤 Usuário: ${user.nome} (${user.email}) - ${user.role}`);
+
+        // Verificar se o playerId já está com outro usuário
+        const outroUsuario = await User.findOne({
+            onesignalPlayerId: playerId,
+            _id: { $ne: userId }
+        });
+
+        if (outroUsuario) {
+            console.log(`   ⚠️ PlayerId já estava com ${outroUsuario.nome}. Desvinculando...`);
+            await User.findByIdAndUpdate(outroUsuario._id, {
+                $unset: { onesignalPlayerId: 1 }
+            });
+        }
+
+        // Verificar se já está vinculado ao mesmo usuário
+        if (user.onesignalPlayerId === playerId) {
+            console.log(`   ℹ️ Já estava vinculado ao mesmo playerId`);
+            return res.json({
+                success: true,
+                message: 'Dispositivo já estava vinculado',
+                alreadyLinked: true,
+                playerId: playerId,
+                usuario: {
+                    id: user._id,
+                    nome: user.nome,
+                    email: user.email,
+                    role: user.role
+                }
+            });
+        }
+
+        // 🔥 VINCULAR
+        user.onesignalPlayerId = playerId;
+        user.ultimaValidacaoPush = new Date();
+        await user.save();
+
+        console.log(`   ✅ VÍNCULO REALIZADO COM SUCESSO!`);
+        console.log('='.repeat(60));
+
+        res.json({
+            success: true,
+            message: 'Dispositivo vinculado com sucesso!',
+            alreadyLinked: false,
+            playerId: playerId,
+            usuario: {
+                id: user._id,
+                nome: user.nome,
+                email: user.email,
+                role: user.role
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Erro geral no vínculo Kodular:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
 });
+
+// ============================================================================
+// ROTA PARA VERIFICAR SE O PLAYERID ESTÁ VINCULADO
+// ============================================================================
+app.post('/api/onesignal/verificar-vinculo', async (req, res) => {
+    try {
+        const { playerId } = req.body;
+
+        if (!playerId) {
+            return res.status(400).json({
+                success: false,
+                error: 'playerId é obrigatório'
+            });
+        }
+
+        const usuario = await User.findOne({ onesignalPlayerId: playerId })
+            .select('nome email role matricula');
+
+        if (usuario) {
+            return res.json({
+                success: true,
+                vinculado: true,
+                usuario: {
+                    id: usuario._id,
+                    nome: usuario.nome,
+                    email: usuario.email,
+                    role: usuario.role
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            vinculado: false,
+            mensagem: 'Dispositivo ainda não está vinculado a nenhum usuário'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao verificar vínculo:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 
 // ============ MIDDLEWARE DE AUTENTICAÇÃO GLOBAL ============
 // Middleware de autenticação JWT (global)

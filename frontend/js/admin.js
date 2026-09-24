@@ -63,6 +63,7 @@ class AdminPanel {
         
         setTimeout(() => this.verificarConexaoWebSocket(), 2000);
         setTimeout(() => this.mostrarStatusConexao(), 3000);
+        setTimeout(() => this.verificarVinculoPlayerId(), 2000);
         
         // ===== 🔥 ADICIONAR ESTA LINHA - GARANTIR QUE A FOTO CARREGUE =====
         setTimeout(() => this.carregarFotoPerfilAdmin(), 1000);
@@ -1746,6 +1747,66 @@ class AdminPanel {
         }, 100);
         
         this.openModal();
+    }
+
+    /**
+     * Verifica se o playerId salvo no localStorage (pelo Kodular)
+     * já está vinculado. Se não estiver, vincula automaticamente.
+     */
+    async verificarVinculoPlayerId() {
+        try {
+            const playerId = localStorage.getItem('onesignal_player_id');
+            
+            if (!playerId) {
+                console.log('ℹ️ Nenhum playerId no localStorage');
+                return;
+            }
+            
+            console.log('🔍 PlayerId encontrado:', playerId.substring(0, 20) + '...');
+            
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                console.log('ℹ️ Sem token, não é possível vincular');
+                return;
+            }
+            
+            // Verificar se já está vinculado
+            const response = await fetch('/api/onesignal/verificar-vinculo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.vinculado) {
+                console.log(`✅ PlayerId já vinculado a ${data.usuario.nome}`);
+                return;
+            }
+            
+            // Vincular automaticamente
+            console.log('🔄 Vinculando playerId automaticamente...');
+            
+            const vinculoResponse = await fetch('/api/onesignal/vincular-kodular', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId, token })
+            });
+            
+            const vinculoData = await vinculoResponse.json();
+            
+            if (vinculoData.success) {
+                console.log('✅ Dispositivo vinculado automaticamente!');
+                if (typeof this.showToast === 'function') {
+                    this.showToast('📱 Dispositivo vinculado para notificações!', 'success');
+                }
+            } else {
+                console.warn('⚠️ Falha no vínculo:', vinculoData.error);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao verificar vínculo:', error);
+        }
     }
 
     // ============ INICIALIZAR TAGS NO MODAL ============
