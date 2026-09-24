@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const allowedRoles = ['gestao_geral', 'super_admin', 'admin'];
     
     if (!allowedRoles.includes(userData.role)) {
-        alert('Acesso negado.');
+        notificar('Acesso negado.');
         window.location.href = '/login.html';
         return;
     }
@@ -448,7 +448,7 @@ async function pararScannerAutomatico() {
 
 async function onScanSuccessAuto(decodedText) {
     const alunoId = extrairAlunoId(decodedText);
-    if (!alunoId) { alert('QR Code inválido'); return; }
+    if (!alunoId) { notificar('QR Code inválido'); return; }
     await pararScannerAutomatico();
     await buscarAluno(alunoId);
 }
@@ -598,14 +598,14 @@ async function buscarAluno(alunoId) {
             exibirAluno(data);
             mostrarFormRegistro();
         } else {
-            alert(data.error || 'Aluno não encontrado');
+            notificar(data.error || 'Aluno não encontrado');
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
             else carregarAlunosPorTurma();
         }
     } catch (error) {
         console.error('Erro:', error);
-        if (error.name === 'AbortError') alert('Tempo esgotado. Tente novamente.');
-        else alert('Erro ao buscar aluno');
+        if (error.name === 'AbortError') notificar('Tempo esgotado. Tente novamente.');
+        else notificar('Erro ao buscar aluno');
         if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         else carregarAlunosPorTurma();
     }
@@ -694,16 +694,14 @@ function selecionarMotivo(motivo) {
 
 async function registrarAtraso() {
     if (!motivoSelecionado) { 
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Selecione o motivo do atraso', 'error');
-        else console.error('Selecione o motivo do atraso');
+        notificar('Selecione o motivo do atraso', 'error');
         return; 
     }
     
     // 🔥 NOVO: Valida data
     const dataAtraso = safeGet('atrasoData')?.value;
     if (!dataAtraso) { 
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Selecione a data do atraso', 'error');
-        else console.error('Selecione a data do atraso');
+        notificar('Selecione a data do atraso', 'error');
         return; 
     }
     
@@ -720,20 +718,17 @@ async function registrarAtraso() {
     
     const descricao = (safeGet('descricao')?.value || '').trim();
     if (!descricao) { 
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Descreva o ocorrido', 'error');
-        else console.error('Descreva o ocorrido');
+        notificar('Descreva o ocorrido', 'error');
         return; 
     }
     if (!currentAluno || !currentAluno.id) { 
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Nenhum aluno selecionado', 'error');
-        else console.error('Nenhum aluno selecionado');
+        notificar('Nenhum aluno selecionado', 'error');
         return; 
     }
     if (motivoSelecionado === 'outros') {
         const motivoOutros = (safeGet('motivoOutrosTexto')?.value || '').trim();
         if (!motivoOutros) { 
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Especifique o motivo', 'error');
-            else console.error('Especifique o motivo');
+            notificar('Especifique o motivo', 'error');
             return; 
         }
     }
@@ -771,19 +766,16 @@ async function registrarAtraso() {
         });
         const data = await response.json();
         if (data.success) {
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido(`✅ ${data.message}`, 'success');
-            else console.log(`✅ ${data.message}`);
+            notificar(`✅ ${data.message}`, 'success');
             limparTela();
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
             else carregarAlunosPorTurma();
         } else {
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
-            else console.error('❌ ' + (data.error || 'Erro'));
+            notificar('❌ ' + (data.error || 'Erro'), 'error');
         }
     } catch (error) {
         console.error('Erro:', error);
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao registrar', 'error');
-        else console.error('Erro ao registrar');
+        notificar('Erro ao registrar', 'error');
     } finally { 
         if (btn) btn.disabled = false; 
     }
@@ -1038,7 +1030,7 @@ async function verAtraso(atrasoId) {
         const data = await response.json();
         
         if (!data.success || !data.atraso) {
-            alert('Erro ao carregar atraso');
+            notificar('Erro ao carregar atraso');
             return;
         }
         
@@ -1114,7 +1106,7 @@ async function verAtraso(atrasoId) {
         new bootstrap.Modal(safeGet('modalVerAtraso')).show();
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar detalhes');
+        notificar('Erro ao carregar detalhes');
     }
 }
 
@@ -1131,7 +1123,7 @@ async function editarAtraso(atrasoId) {
         const data = await response.json();
         
         if (!data.success || !data.atraso) {
-            alert('Erro ao carregar atraso');
+            notificar('Erro ao carregar atraso');
             return;
         }
         
@@ -1202,7 +1194,7 @@ async function editarAtraso(atrasoId) {
         new bootstrap.Modal(safeGet('modalEditarAtraso')).show();
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar para edição');
+        notificar('Erro ao carregar para edição');
     }
 }
 
@@ -1214,7 +1206,7 @@ async function salvarEdicaoAtraso() {
     const observacoes = safeGet('editAtrasoObservacoes')?.value || '';
     
     if (!motivo || !dataHora || !descricao) {
-        alert('Preencha todos os campos obrigatórios');
+        notificar('Preencha todos os campos obrigatórios');
         return;
     }
     
@@ -1239,17 +1231,17 @@ async function salvarEdicaoAtraso() {
             if (modal) modal.hide();
             
             // Toast de sucesso
-            mostrarToastConcluido('✅ Atraso atualizado com sucesso!', 'success');
+            notificar('✅ Atraso atualizado com sucesso!', 'success');
             
             // Recarrega a lista
             carregarAtrasosRecentes();
             carregarDashboardAtrasos();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao salvar'));
+            notificar('❌ ' + (data.error || 'Erro ao salvar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar alterações');
+        notificar('Erro ao salvar alterações');
     }
 }
 
@@ -1266,7 +1258,7 @@ async function imprimirAtraso(atrasoId) {
         const data = await response.json();
         
         if (!data.success || !data.atraso) {
-            alert('Erro ao carregar atraso');
+            notificar('Erro ao carregar atraso');
             return;
         }
         
@@ -1277,7 +1269,7 @@ async function imprimirAtraso(atrasoId) {
         win.onload = () => setTimeout(() => win.print(), 500);
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao imprimir');
+        notificar('Erro ao imprimir');
     }
 }
 
@@ -1296,107 +1288,135 @@ function gerarHTMLImpressaoAtraso(a) {
             <img src="${carimboGestao}" alt="Carimbo Gestão Geral">
         </div>`;
 
+    // 🔥 NOVO: Mostra horários apenas se preenchidos
+    const horarioPrevisto = a.detalhes?.horarioPrevisto || '';
+    const horarioChegada = a.detalhes?.horarioChegada || '';
+    const mostrarHorarios = horarioPrevisto || horarioChegada;
+    
+    let horariosHTML = '';
+    if (mostrarHorarios) {
+        horariosHTML = `
+            <div class="info-row">
+                ${horarioPrevisto ? `
+                    <div class="info-item">
+                        <span class="label">Horário Previsto:</span>
+                        <span class="underline">${horarioPrevisto}</span>
+                    </div>` : ''}
+                ${horarioChegada ? `
+                    <div class="info-item">
+                        <span class="label">Horário de Chegada:</span>
+                        <span class="underline">${horarioChegada}</span>
+                    </div>` : ''}
+            </div>`;
+    }
+
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
         <title>Atraso - ${a.alunoNome}</title>
         <style>
-            @page { size: A4 landscape; margin: 0; }
+            @page { size: A4 portrait; margin: 15mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             html, body {
-                width: 297mm;
-                height: 210mm;
+                width: 210mm;
+                min-height: 297mm;
                 font-family: 'Times New Roman', Times, serif;
                 background: #f0f0f0;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
             }
-            .folha-metade {
-                width: 148.5mm;
-                height: 210mm;
-                padding: 8mm 10mm;
+            .folha {
+                width: 180mm;
+                min-height: 267mm;
+                padding: 10mm;
                 background: white;
-                position: relative;
-                margin: 0;
-                page-break-after: always;
-                overflow: hidden;
-                font-size: 9pt;
-                line-height: 1.3;
+                margin: 0 auto;
+                font-size: 10pt;
+                line-height: 1.4;
+                display: flex;
+                flex-direction: column;
             }
             @media print {
-                html, body { width: 297mm; height: 210mm; background: white; }
-                .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; }
+                html, body { 
+                    width: 210mm; 
+                    height: 297mm; 
+                    background: white;
+                    display: block;
+                }
+                .folha { 
+                    width: 100%; 
+                    min-height: auto;
+                    padding: 0;
+                    margin: 0 auto;
+                }
                 .btn-print { display: none !important; }
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 5px; margin-bottom: 6px; }
-            .header img { max-width: 100%; height: auto; max-height: 22mm; object-fit: contain; }
-            .header h1 { font-size: 9pt; margin: 3px 0 0 0; text-transform: uppercase; font-weight: bold; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
+            .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
+            .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
             .titulo {
-                text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase;
-                margin: 6px 0; background: #eef2ff; padding: 5px; border: 1.5px solid #000; letter-spacing: 1px;
+                text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase;
+                margin: 10px 0; background: #eef2ff; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px;
             }
-            .info-section { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; }
-            .info-row { display: flex; margin-bottom: 4px; gap: 10px; align-items: baseline; }
+            .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
+            .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
             .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
-            .label { font-weight: bold; font-size: 8pt; white-space: nowrap; }
+            .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+            .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
             .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 14px; min-height: 14px;
-                font-size: 9pt; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px;
+                font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
             }
-            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
-            .motivo-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
-            .motivo-box p { margin: 0; font-size: 9pt; font-weight: bold; }
-            .observacoes { border: 1px solid #000; padding: 6px 8px; min-height: 18mm; margin: 6px 0; font-size: 8.5pt; }
-            .observacoes strong { display: block; margin-bottom: 3px; font-size: 9pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 8pt; position: relative; }
+            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
+            .motivo-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
+            .motivo-box p { margin: 0; font-size: 10pt; font-weight: bold; }
+            .observacoes { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
+            .observacoes strong { display: block; margin-bottom: 5px; font-size: 10pt; }
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
+            .assinatura { text-align: center; flex: 1; font-size: 9pt; position: relative; }
             .assinatura-vazia {
                 border-bottom: 1px solid #000;
-                min-height: 15mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
                 color: #999;
-                font-size: 8pt;
-                padding-bottom: 2px;
+                font-size: 9pt;
+                padding-bottom: 3px;
             }
-            .assinatura-linha { padding-top: 3px; font-size: 8pt; }
+            .assinatura-linha { padding-top: 5px; font-size: 9pt; }
             .carimbo-gestao {
                 border-bottom: 1px solid #000;
-                min-height: 15mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 2px;
+                padding-bottom: 3px;
             }
             .carimbo-gestao img {
-                max-height: 14mm;
+                max-height: 16mm;
                 max-width: 100%;
                 object-fit: contain;
                 opacity: 0.9;
             }
             .footer {
-                text-align: center; margin-top: 5px; padding-top: 4px;
-                border-top: 1px solid #000; font-size: 7pt; color: #444;
+                text-align: center; margin-top: auto; padding-top: 8px;
+                border-top: 1px solid #000; font-size: 8pt; color: #444;
             }
-            .footer p { margin: 1px 0; }
+            .footer p { margin: 2px 0; }
             .btn-print {
                 display: block; margin: 15px auto; padding: 10px 30px;
                 background: #1e3c72; color: white; border: none; border-radius: 8px;
                 font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #2a5298; }
-            .linha-corte {
-                position: fixed; left: 148.5mm; top: 0; width: 0; height: 210mm;
-                border-left: 1px dashed #999; pointer-events: none;
-            }
-            @media print { .linha-corte { display: none; } }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="linha-corte"></div>
-        <div class="folha-metade">
+        <div class="folha">
             <div class="header">
                 <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
                 <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
@@ -1435,6 +1455,7 @@ function gerarHTMLImpressaoAtraso(a) {
                         <span class="underline">${horaExt}</span>
                     </div>
                 </div>
+                ${horariosHTML}
             </div>
             <div class="motivo-box">
                 <h3>📌 Motivo:</h3>
@@ -1445,7 +1466,7 @@ function gerarHTMLImpressaoAtraso(a) {
                 ${a.descricao || '___________________________________________________________________'}
             </div>
             ${a.observacoes ? `
-                <div class="observacoes" style="min-height: 12mm;">
+                <div class="observacoes" style="min-height: 18mm;">
                     <strong>💬 Observações:</strong>
                     ${a.observacoes}
                 </div>
@@ -1513,17 +1534,14 @@ async function excluirAtraso(atrasoId, alunoNome) {
                 }, 300);
             }
             
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('✅ Atraso excluído com sucesso!', 'success');
-            else console.log('✅ Atraso excluído com sucesso!');
+            notificar('✅ Atraso excluído com sucesso!', 'success');
             carregarDashboardAtrasos();
         } else {
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (data.error || 'Erro ao excluir'), 'error');
-            else console.error('❌ ' + (data.error || 'Erro ao excluir'));
+            notificar('❌ ' + (data.error || 'Erro ao excluir'), 'error');
         }
     } catch (error) {
         console.error('Erro:', error);
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao excluir atraso', 'error');
-        else console.error('Erro ao excluir atraso');
+        notificar('Erro ao excluir atraso', 'error');
     }
 }
 
@@ -1743,13 +1761,13 @@ async function carregarRelatorio() {
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'turma') {
         const turma = safeGet('filtroTurma')?.value;
-        if (!turma) { alert('Selecione uma turma'); return; }
+        if (!turma) { notificar('Selecione uma turma'); return; }
         url = `/api/gestao-geral/atraso/relatorio/turma/${encodeURIComponent(turma)}?`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'aluno') {
         const alunoId = safeGet('filtroAluno')?.value;
-        if (!alunoId) { alert('Selecione um aluno'); return; }
+        if (!alunoId) { notificar('Selecione um aluno'); return; }
         url = `/api/gestao-geral/atraso/relatorio/aluno/${alunoId}?`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
@@ -1758,8 +1776,8 @@ async function carregarRelatorio() {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
         if (data.success) { relatorioData = data; exibirRelatorio(data, tipo); }
-        else alert('Erro ao carregar relatório');
-    } catch (error) { console.error('Erro:', error); alert('Erro ao carregar relatório'); }
+        else notificar('Erro ao carregar relatório');
+    } catch (error) { console.error('Erro:', error); notificar('Erro ao carregar relatório'); }
 }
 
 function exibirRelatorio(data, tipo) {
@@ -1827,9 +1845,9 @@ function exibirRelatorio(data, tipo) {
 }
 
 function exportarCSV() {
-    if (!relatorioData) { alert('Nenhum relatório carregado'); return; }
+    if (!relatorioData) { notificar('Nenhum relatório carregado'); return; }
     const dados = relatorioData.atrasos || [];
-    if (dados.length === 0) { alert('Nenhum dado'); return; }
+    if (dados.length === 0) { notificar('Nenhum dado'); return; }
     
     let csv = "Data,Aluno,Turma,Motivo,Descrição\n";
     dados.forEach(a => {
@@ -1922,7 +1940,7 @@ async function pararScannerModulo(modulo) {
 
 async function onScanSuccessModulo(modulo, text) {
     const id = extrairAlunoId(text);
-    if (!id) { alert('QR Code inválido'); return; }
+    if (!id) { notificar('QR Code inválido'); return; }
     await pararScannerModulo(modulo);
     await buscarAlunoModulo(modulo, id);
 }
@@ -2067,13 +2085,13 @@ async function buscarAlunoModulo(modulo, alunoId) {
             exibirAlunoModulo(modulo, d);
             mostrarFormModulo(modulo);
         } else {
-            alert(d.error || 'Aluno não encontrado');
+            notificar(d.error || 'Aluno não encontrado');
             if (est.modoAtual === 'automatico') reiniciarScannerModulo(modulo);
             else carregarAlunosTurmaModulo(modulo);
         }
     } catch (e) {
         console.error(e);
-        alert('Erro ao buscar aluno');
+        notificar('Erro ao buscar aluno');
     }
 }
 
@@ -2203,22 +2221,19 @@ async function registrarModulo(modulo) {
     const P = getPrefixo(modulo);
     
     if (!est.motivoSelecionado) { 
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Selecione o motivo', 'error');
-        else console.error('Selecione o motivo');
+        notificar('Selecione o motivo', 'error');
         return; 
     }
     const data = safeGet(`${cfg.tipo}Data`)?.value;
     if (!data) { 
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Preencha a data', 'error');
-        else console.error('Preencha a data');
+        notificar('Preencha a data', 'error');
         return; 
     }
     
     if (est.motivoSelecionado === 'outros') {
         const motivoOutros = safeGet(`${cfg.tipo}MotivoOutros`)?.value.trim();
         if (!motivoOutros) { 
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Especifique o motivo', 'error');
-            else console.error('Especifique o motivo');
+            notificar('Especifique o motivo', 'error');
             return; 
         }
     }
@@ -2226,14 +2241,12 @@ async function registrarModulo(modulo) {
         const ha = safeGet(`${cfg.tipo}HorarioAusencia`)?.value;
         const hr = safeGet(`${cfg.tipo}HorarioRetorno`)?.value;
         if (!ha || !hr) { 
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Informe os horários de ausência e retorno', 'error');
-            else console.error('Informe os horários');
+            notificar('Informe os horários de ausência e retorno', 'error');
             return; 
         }
     }
     if (!est.currentAluno) { 
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Nenhum aluno selecionado', 'error');
-        else console.error('Nenhum aluno selecionado');
+        notificar('Nenhum aluno selecionado', 'error');
         return; 
     }
     
@@ -2254,8 +2267,8 @@ async function registrarModulo(modulo) {
             tipo: cfg.tipo,
             alunoId: est.currentAluno.id,
             data,
-            horarioEntrada: safeGet(`${cfg.tipo}HorarioEntrada`)?.value || '08:00',
-            horarioSaida: safeGet(`${cfg.tipo}HorarioSaida`)?.value || '08:00',
+            horarioEntrada: safeGet(`${cfg.tipo}HorarioEntrada`)?.value || '',
+            horarioSaida: safeGet(`${cfg.tipo}HorarioSaida`)?.value || '',
             responsavelNome: safeGet(`${cfg.tipo}ResponsavelNome`)?.value || '',
             responsavelCPF: safeGet(`${cfg.tipo}ResponsavelCPF`)?.value || '',
             responsavelTelefone: safeGet(`${cfg.tipo}ResponsavelTelefone`)?.value || '',
@@ -2276,8 +2289,7 @@ async function registrarModulo(modulo) {
         const d = await r.json();
         
         if (!d.success) {
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (d.error || 'Erro'), 'error');
-            else console.error('❌ ' + (d.error || 'Erro'));
+            notificar('❌ ' + (d.error || 'Erro'), 'error');
             return;
         }
         
@@ -2331,8 +2343,7 @@ async function registrarModulo(modulo) {
         if (justificativaCriada) {
             msg += ' — Justificativa de Falta criada automaticamente!';
         }
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido(msg, 'success');
-        else console.log(msg);
+        notificar(msg, 'success');
         
         // ========== IMPRESSÃO ==========
         const imprimir = await confirm('Deseja IMPRIMIR agora?');
@@ -2352,8 +2363,7 @@ async function registrarModulo(modulo) {
         if (est.modoAtual === 'automatico') reiniciarScannerModulo(modulo);
     } catch (e) {
         console.error(e);
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao registrar', 'error');
-        else console.error('Erro ao registrar');
+        notificar('Erro ao registrar', 'error');
     } finally { 
         if (btn) btn.disabled = false; 
     }
@@ -2721,7 +2731,7 @@ async function abrirEditarModulo(modulo, id) {
         const d = await r.json();
 
         if (!d.success || !d.autorizacao) {
-            alert('Erro ao carregar registro');
+            notificar('Erro ao carregar registro');
             return;
         }
 
@@ -2861,7 +2871,7 @@ async function abrirEditarModulo(modulo, id) {
         new bootstrap.Modal(safeGet('modalEditarModulo')).show();
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar registro para edição');
+        notificar('Erro ao carregar registro para edição');
     }
 }
 
@@ -2891,12 +2901,12 @@ async function salvarEdicaoModulo() {
     const horarioSaida = safeGet('editModuloHorarioSaida')?.value || '';
 
     if (!data || !motivo) {
-        alert('Preencha os campos obrigatórios');
+        notificar('Preencha os campos obrigatórios');
         return;
     }
 
     if (motivo === 'outros' && !motivoOutros.trim()) {
-        alert('Especifique o motivo "Outros"');
+        notificar('Especifique o motivo "Outros"');
         return;
     }
 
@@ -2931,19 +2941,19 @@ async function salvarEdicaoModulo() {
 
             // Toast
             if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido('✅ Registro atualizado com sucesso!', 'success');
+                notificar('✅ Registro atualizado com sucesso!', 'success');
             } else {
-                alert('✅ Registro atualizado com sucesso!');
+                notificar('✅ Registro atualizado com sucesso!');
             }
 
             // Recarrega
             carregarListaModulo(modulo);
         } else {
-            alert('❌ ' + (result.error || 'Erro ao salvar'));
+            notificar('❌ ' + (result.error || 'Erro ao salvar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar alterações');
+        notificar('Erro ao salvar alterações');
     }
 }
 
@@ -3227,13 +3237,13 @@ async function carregarRelatorioModulo(modulo) {
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'turma') {
         const turma = safeGet(`${P}FiltroTurma`)?.value;
-        if (!turma) { alert('Selecione uma turma'); return; }
+        if (!turma) { notificar('Selecione uma turma'); return; }
         url = `/api/gestao-geral/autorizacao/relatorio/turma/${encodeURIComponent(turma)}?tipo=${cfg.tipo}&`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'aluno') {
         const alunoId = safeGet(`${P}FiltroAluno`)?.value;
-        if (!alunoId) { alert('Selecione um aluno'); return; }
+        if (!alunoId) { notificar('Selecione um aluno'); return; }
         url = `/api/gestao-geral/autorizacao/relatorio/aluno/${alunoId}?tipo=${cfg.tipo}&`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
@@ -3252,14 +3262,14 @@ async function carregarRelatorioModulo(modulo) {
             // 🔥 NOVO: Avisa se não encontrou nada
             const total = data.totalRegistros || 0;
             if (total === 0) {
-                alert('⚠️ Nenhum registro encontrado.\n\nVerifique:\n• Se as datas estão corretas\n• Se o motivo está preenchido\n• Se existem registros neste período');
+                notificar('⚠️ Nenhum registro encontrado.\n\nVerifique:\n• Se as datas estão corretas\n• Se o motivo está preenchido\n• Se existem registros neste período');
             }
         } else {
-            alert('Erro ao carregar relatório: ' + (data.error || ''));
+            notificar('Erro ao carregar relatório: ' + (data.error || ''));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar relatório');
+        notificar('Erro ao carregar relatório');
     }
 }
 
@@ -3351,7 +3361,7 @@ function exportarCSVModulo(modulo) {
     const data = relatoriosModulo[modulo];
     
     if (!data) {
-        alert('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.');
+        notificar('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.');
         return;
     }
 
@@ -3359,7 +3369,7 @@ function exportarCSVModulo(modulo) {
     const registros = data.registros || data.autorizacoes || data.atendimentos || [];
     
     if (registros.length === 0) {
-        alert('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.');
+        notificar('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.');
         return;
     }
 
@@ -3429,7 +3439,7 @@ async function imprimirModulo(modulo, id) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const d = await r.json();
-        if (!d.success) { alert('Erro ao carregar'); return; }
+        if (!d.success) { notificar('Erro ao carregar'); return; }
         
         const a = d.autorizacao;
         let qr = '';
@@ -3447,7 +3457,7 @@ async function imprimirModulo(modulo, id) {
         win.onload = () => setTimeout(() => win.print(), 500);
     } catch (e) {
         console.error(e);
-        alert('Erro ao imprimir');
+        notificar('Erro ao imprimir');
     }
 }
 
@@ -3455,7 +3465,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
     const cfg = getCfg(modulo);
     const titulo = cfg.nomeAmigavel.toUpperCase();
     const logo = '/uploads/logo-iema.png';
-    const carimboGestao = '/icons/assinatura_gestao.ico'; // 🔥 NOVO: Caminho do carimbo
+    const carimboGestao = '/icons/assinatura_gestao.ico';
     const dataExt = new Date(a.data).toLocaleDateString('pt-BR', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
@@ -3468,12 +3478,30 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
         detalheMotivo = ` <strong>(Ausência: ${a.horarioAusencia} | Retorno: ${a.horarioRetorno})</strong>`;
     }
     
-    const mostrarHorariosEntradaSaida = cfg.tipo === 'autorizacao';
+    // 🔥 NOVO: Mostra horários de entrada/saída APENAS se preenchidos
+    const mostrarHorariosEntradaSaida = cfg.tipo === 'autorizacao' && (a.horarioEntrada || a.horarioSaida);
+    
+    let horariosHTML = '';
+    if (mostrarHorariosEntradaSaida) {
+        horariosHTML = `
+            <div class="info-row">
+                ${a.horarioEntrada ? `
+                    <div class="info-item">
+                        <span class="label">Entrada:</span>
+                        <span class="underline">${a.horarioEntrada}</span>
+                    </div>` : ''}
+                ${a.horarioSaida ? `
+                    <div class="info-item">
+                        <span class="label">Saída:</span>
+                        <span class="underline">${a.horarioSaida}</span>
+                    </div>` : ''}
+            </div>`;
+    }
+    
     const assinaturaHTML = a.assinaturaBase64 
         ? `<div class="assinatura-digital"><img src="${a.assinaturaBase64}" alt="Assinatura"></div>`
         : '<div class="assinatura-vazia">_____________________________________</div>';
     
-    // 🔥 NOVO: Carimbo da Gestão Geral (aparece na 2ª assinatura - Coordenação)
     const carimboGestaoHTML = `
         <div class="carimbo-gestao">
             <img src="${carimboGestao}" alt="Carimbo Gestão Geral">
@@ -3485,124 +3513,129 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
         <meta charset="UTF-8">
         <title>${titulo} - ${a.alunoNome}</title>
         <style>
-            @page { size: A4 landscape; margin: 0; }
+            @page { size: A4 portrait; margin: 15mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             html, body {
-                width: 297mm;
-                height: 210mm;
+                width: 210mm;
+                min-height: 297mm;
                 font-family: 'Times New Roman', Times, serif;
                 background: #f0f0f0;
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
             }
-            .folha-metade {
-                width: 148.5mm;
-                height: 210mm;
-                padding: 8mm 10mm;
+            .folha {
+                width: 180mm;
+                min-height: 267mm;
+                padding: 10mm;
                 background: white;
-                position: relative;
-                margin: 0;
-                page-break-after: always;
-                overflow: hidden;
-                font-size: 9pt;
-                line-height: 1.3;
+                margin: 0 auto;
+                font-size: 10pt;
+                line-height: 1.4;
+                display: flex;
+                flex-direction: column;
             }
             @media print {
-                html, body { width: 297mm; height: 210mm; background: white; }
-                .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; }
+                html, body { 
+                    width: 210mm; 
+                    height: 297mm; 
+                    background: white;
+                    display: block;
+                }
+                .folha { 
+                    width: 100%; 
+                    min-height: auto;
+                    padding: 0;
+                    margin: 0 auto;
+                }
                 .btn-print { display: none !important; }
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 5px; margin-bottom: 6px; }
-            .header img { max-width: 100%; height: auto; max-height: 22mm; object-fit: contain; }
-            .header h1 { font-size: 9pt; margin: 3px 0 0 0; text-transform: uppercase; font-weight: bold; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
+            .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
+            .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
             .titulo {
-                text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase;
-                margin: 6px 0; background: #e8e8e8; padding: 5px; border: 1.5px solid #000; letter-spacing: 1px;
+                text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase;
+                margin: 10px 0; background: #e8e8e8; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px;
             }
-            .info-section { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; }
-            .info-row { display: flex; margin-bottom: 4px; gap: 10px; align-items: baseline; }
+            .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
+            .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
             .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
-            .label { font-weight: bold; font-size: 8pt; white-space: nowrap; }
+            .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+            .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
             .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 14px; min-height: 14px;
-                font-size: 9pt; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px;
+                font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
             }
-            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
-            .motivo-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
-            .motivo-box p { margin: 0; font-size: 9pt; font-weight: bold; }
-            .responsavel-box { background: #eef3fb; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; font-size: 8.5pt; }
-            .responsavel-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
-            .responsavel-box p { margin: 2px 0; font-size: 8.5pt; }
-            .observacoes { border: 1px solid #000; padding: 6px 8px; min-height: 18mm; margin: 6px 0; font-size: 8.5pt; }
-            .observacoes strong { display: block; margin-bottom: 3px; font-size: 9pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 8pt; position: relative; }
+            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
+            .motivo-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
+            .motivo-box p { margin: 0; font-size: 10pt; font-weight: bold; }
+            .responsavel-box { background: #eef3fb; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; font-size: 9.5pt; }
+            .responsavel-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
+            .responsavel-box p { margin: 3px 0; font-size: 9.5pt; }
+            .observacoes { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
+            .observacoes strong { display: block; margin-bottom: 5px; font-size: 10pt; }
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
+            .assinatura { text-align: center; flex: 1; font-size: 9pt; position: relative; }
             .assinatura-digital { 
                 border-bottom: 1px solid #000;
-                min-height: 15mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 2px;
+                padding-bottom: 3px;
             }
             .assinatura-digital img {
-                max-height: 14mm;
+                max-height: 16mm;
                 max-width: 100%;
                 object-fit: contain;
             }
             .assinatura-vazia {
                 border-bottom: 1px solid #000;
-                min-height: 15mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
                 color: #999;
-                font-size: 8pt;
-                padding-bottom: 2px;
+                font-size: 9pt;
+                padding-bottom: 3px;
             }
             .assinatura-linha {
-                padding-top: 3px;
-                font-size: 8pt;
+                padding-top: 5px;
+                font-size: 9pt;
             }
-            /* 🔥 NOVO: Carimbo da Gestão */
             .carimbo-gestao {
                 border-bottom: 1px solid #000;
-                min-height: 15mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 2px;
+                padding-bottom: 3px;
             }
             .carimbo-gestao img {
-                max-height: 14mm;
+                max-height: 16mm;
                 max-width: 100%;
                 object-fit: contain;
                 opacity: 0.9;
             }
-            .qr-code { text-align: center; margin-top: 4px; }
-            .qr-code img { width: 18mm; height: 18mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 7pt; margin: 2px 0 0 0; }
+            .qr-code { text-align: center; margin-top: 8px; }
+            .qr-code img { width: 22mm; height: 22mm; border: 1px solid #000; padding: 1px; }
+            .qr-code p { font-size: 8pt; margin: 3px 0 0 0; }
             .footer {
-                text-align: center; margin-top: 5px; padding-top: 4px;
-                border-top: 1px solid #000; font-size: 7pt; color: #444;
+                text-align: center; margin-top: auto; padding-top: 8px;
+                border-top: 1px solid #000; font-size: 8pt; color: #444;
             }
-            .footer p { margin: 1px 0; }
+            .footer p { margin: 2px 0; }
             .btn-print {
                 display: block; margin: 15px auto; padding: 10px 30px;
                 background: #4f46e5; color: white; border: none; border-radius: 8px;
                 font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #4338ca; }
-            .linha-corte {
-                position: fixed; left: 148.5mm; top: 0; width: 0; height: 210mm;
-                border-left: 1px dashed #999; pointer-events: none;
-            }
-            @media print { .linha-corte { display: none; } }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="linha-corte"></div>
-        <div class="folha-metade">
+        <div class="folha">
             <div class="header">
                 <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
                 <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
@@ -3637,17 +3670,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                         <span class="underline">${dataExt}</span>
                     </div>
                 </div>
-                ${mostrarHorariosEntradaSaida ? `
-                    <div class="info-row">
-                        <div class="info-item">
-                            <span class="label">Entrada:</span>
-                            <span class="underline">${a.horarioEntrada || ''}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Saída:</span>
-                            <span class="underline">${a.horarioSaida || ''}</span>
-                        </div>
-                    </div>` : ''}
+                ${horariosHTML}
             </div>
             <div class="motivo-box">
                 <h3>📌 Motivo:</h3>
@@ -3660,7 +3683,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                     ${a.responsavelCPF ? `<p><strong>CPF:</strong> ${a.responsavelCPF}</p>` : ''}
                     ${a.responsavelTelefone ? `<p><strong>Telefone:</strong> ${a.responsavelTelefone}</p>` : ''}
                 </div>` : ''}
-            <div class="observacoes">
+            <div class="observacoes">;
                 <strong>📝 Observações:</strong>
                 ${a.observacoes || '___________________________________________________________________'}
             </div>
@@ -3700,18 +3723,85 @@ async function excluirModulo(modulo, id) {
         });
         const d = await r.json();
         if (d.success) {
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('✅ Excluído com sucesso!', 'success');
-            else console.log('✅ Excluído com sucesso!');
+            notificar('✅ Excluído com sucesso!', 'success');
             carregarListaModulo(modulo);
         } else {
-            if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('❌ ' + (d.error || 'Erro'), 'error');
-            else console.error('❌ ' + (d.error || 'Erro'));
+            notificar('❌ ' + (d.error || 'Erro'), 'error');
         }
     } catch (e) {
         console.error(e);
-        if (typeof mostrarToastConcluido === 'function') mostrarToastConcluido('Erro ao excluir', 'error');
-        else console.error('Erro ao excluir');
+        notificar('Erro ao excluir', 'error');
     }
+}
+
+// ============================================
+// 🔔 TOAST NATIVO (substitui alert() e mostrarToastConcluido)
+// ============================================
+function notificar(mensagem, tipo = 'success', duracao = 3500) {
+    // Se já existe um toast do sistema, usa ele
+    if (typeof window.mostrarToastConcluido === 'function') {
+        window.mostrarToastConcluido(mensagem, tipo);
+        return;
+    }
+
+    // Fallback: toast nativo (não trava no Kodular)
+    let container = document.getElementById('__toastContainerGG');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = '__toastContainerGG';
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        `;
+        document.body.appendChild(container);
+    }
+
+    const cores = {
+        success: { bg: '#10b981', icon: '✅' },
+        error:   { bg: '#ef4444', icon: '❌' },
+        warning: { bg: '#f59e0b', icon: '⚠️' },
+        info:    { bg: '#3b82f6', icon: 'ℹ️' }
+    };
+    const c = cores[tipo] || cores.info;
+
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        background: ${c.bg};
+        color: white;
+        padding: 14px 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 14px;
+        max-width: 380px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        pointer-events: auto;
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+    `;
+    toast.innerHTML = `<span style="font-size:18px;">${c.icon}</span><span>${mensagem}</span>`;
+
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(0)';
+    });
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+    }, duracao);
 }
 
 // ============================================
@@ -3740,6 +3830,406 @@ function imprimirSegundaChamada(id) { imprimirModulo('segundaChamada', id); }
 function excluirAutorizacao(id) { excluirModulo('autorizacao', id); }
 function excluirJustificativa(id) { excluirModulo('justificativa', id); }
 function excluirSegundaChamada(id) { excluirModulo('segundaChamada', id); }
+
+// ============================================
+// 🔔 SISTEMA DE NOTIFICAÇÕES UNIFICADO
+// (Notificações do sistema + Lembretes de remarcação)
+// ============================================
+
+let notificacoesInterval = null;
+let __notificacoesCache = [];
+let __lembretesCache = [];
+
+function isWebViewNotif() {
+    return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+           (typeof window.AppInventor !== 'undefined');
+}
+
+function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
+    if (!isWebViewNotif()) { alert(mensagem); return; }
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
+        z-index: 999999; padding: 20px; box-sizing: border-box;`;
+    const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#1e3c72' };
+    
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div>
+            <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
+                ${mensagem}</p>
+            <button onclick="this.closest('div').parentElement.remove()"
+                    style="width: 100%; padding: 12px; background: ${cores[tipo] || cores.info};
+                           color: white; border: none; border-radius: 10px; font-size: 14px;
+                           font-weight: 600; cursor: pointer;">OK</button>
+        </div>`;
+    document.body.appendChild(modal);
+}
+
+function confirmarInternoNotif(mensagem) {
+    return new Promise((resolve) => {
+        const old = document.getElementById('confirmInternoModalNotif');
+        if (old) old.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="confirmInternoModalNotif" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-question-circle"></i> Confirmação</h5>
+                        </div>
+                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">${escapeHTML(mensagem)}</div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmInternoNotif">
+                                <i class="fas fa-times"></i> Cancelar</button>
+                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmInternoNotif">
+                                <i class="fas fa-check"></i> Confirmar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modalEl = document.getElementById('confirmInternoModalNotif');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        
+        const finalizar = (resultado) => {
+            modal.hide();
+            setTimeout(() => modalEl.remove(), 300);
+            resolve(resultado);
+        };
+        document.getElementById('btnConfirmarConfirmInternoNotif').addEventListener('click', () => finalizar(true));
+        document.getElementById('btnCancelarConfirmInternoNotif').addEventListener('click', () => finalizar(false));
+    });
+}
+
+function iniciarSistemaNotificacoesUnificado() {
+    if (!document.getElementById('notificacoesBtn')) return;
+    
+    carregarTudo();
+    if (notificacoesInterval) clearInterval(notificacoesInterval);
+    notificacoesInterval = setInterval(carregarTudo, 30000);
+    
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('notificacoesDropdown');
+        const btn = document.getElementById('notificacoesBtn');
+        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+}
+
+async function carregarTudo() {
+    await Promise.all([
+        carregarNotificacoesSistema(),
+        carregarLembretesRemarcacao()
+    ]);
+    renderizarSinoUnificado();
+    atualizarBadgeUnificado();
+}
+
+async function carregarNotificacoesSistema() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success) {
+            __notificacoesCache = data.notificacoes || [];
+        }
+    } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
+    }
+}
+
+async function carregarLembretesRemarcacao() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/gestao-geral/remarcacoes/pendentes', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || !contentType.includes('application/json')) {
+            __lembretesCache = [];
+            return;
+        }
+        const data = await response.json();
+        if (data.success && Array.isArray(data.remarcacoes)) {
+            __lembretesCache = data.remarcacoes;
+        } else {
+            __lembretesCache = [];
+        }
+    } catch (error) {
+        __lembretesCache = [];
+    }
+}
+
+function calcularNivelAlertaNotif(r) {
+    const agora = new Date();
+    const horario = r.horarioRemarcacao || '00:00';
+    const dataRem = new Date(r.dataRemarcacao + 'T' + horario + ':00');
+    const diffMin = Math.floor((dataRem - agora) / 60000);
+    const diffHoras = Math.floor(diffMin / 60);
+
+    if (diffMin < 0) {
+        const p = Math.abs(diffMin);
+        if (p < 60) return { nivel: 'atrasado', label: `Atrasado ${p}min`, urgente: true };
+        if (p < 1440) return { nivel: 'atrasado', label: `Atrasado ${Math.floor(p / 60)}h`, urgente: true };
+        return { nivel: 'atrasado', label: `Atrasado ${Math.floor(p / 1440)}d`, urgente: true };
+    }
+    if (diffMin <= 30) return { nivel: 'iminente', label: `Em ${diffMin}min`, urgente: true };
+    if (diffMin <= 120) return { nivel: 'proximo', label: `Em ${diffHoras}h ${diffMin % 60}min`, urgente: false };
+    if (diffHoras < 24) return { nivel: 'hoje', label: `Hoje ${horario}`, urgente: false };
+    if (diffHoras < 48) return { nivel: 'amanha', label: `Amanhã ${horario}`, urgente: false };
+    return { nivel: 'futuro', label: `Em ${Math.floor(diffHoras / 24)} dias`, urgente: false };
+}
+
+function formatarDataBRNotif(dataStr) {
+    if (!dataStr) return '-';
+    try {
+        const d = new Date(dataStr + 'T00:00:00');
+        return d.toLocaleDateString('pt-BR');
+    } catch (e) {
+        return dataStr;
+    }
+}
+
+function renderizarSinoUnificado() {
+    const lista = document.getElementById('notificacoesLista');
+    if (!lista) return;
+    
+    const temNotificacoes = __notificacoesCache.length > 0;
+    const temLembretes = __lembretesCache.length > 0;
+    
+    if (!temNotificacoes && !temLembretes) {
+        lista.innerHTML = `
+            <div class="notificacoes-vazio">
+                <i class="fas fa-bell-slash"></i>
+                <p>Nenhuma notificação</p>
+            </div>`;
+        return;
+    }
+    
+    let html = '';
+    
+    // SEÇÃO 1: LEMBRETES DE REMARCAÇÃO
+    if (temLembretes) {
+        html += `
+            <div class="notificacoes-secao">
+                <div class="notificacoes-secao-titulo">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Lembretes de Remarcação</span>
+                    <span class="badge-count">${__lembretesCache.length}</span>
+                </div>`;
+        
+        const ordem = { atrasado: 0, iminente: 1, proximo: 2, hoje: 3, amanha: 4, futuro: 5 };
+        const lembretesOrdenados = [...__lembretesCache].sort((a, b) => {
+            return ordem[calcularNivelAlertaNotif(a).nivel] - ordem[calcularNivelAlertaNotif(b).nivel];
+        });
+        
+        lembretesOrdenados.forEach(r => {
+            const nivel = calcularNivelAlertaNotif(r);
+            let itemClass = '';
+            let badgeClass = 'futuro';
+            let badgeText = nivel.label;
+            
+            if (nivel.nivel === 'atrasado') { itemClass = 'atrasado'; badgeClass = 'atrasado'; badgeText = `⚠️ ${nivel.label}`; }
+            else if (nivel.nivel === 'iminente') { itemClass = 'urgente'; badgeClass = 'urgente'; badgeText = `🔴 ${nivel.label}`; }
+            else if (nivel.nivel === 'proximo') { itemClass = 'proximo'; badgeClass = 'proximo'; badgeText = `🟠 ${nivel.label}`; }
+            else if (nivel.nivel === 'hoje') { itemClass = 'hoje'; badgeClass = 'hoje'; badgeText = `🟡 Hoje ${r.horarioRemarcacao}`; }
+            else if (nivel.nivel === 'amanha') { itemClass = 'amanha'; badgeClass = 'amanha'; badgeText = `🔵 Amanhã ${r.horarioRemarcacao}`; }
+            
+            html += `
+                <div class="lembrete-item ${itemClass}">
+                    <div class="lembrete-header">
+                        <span class="lembrete-nome">${escapeHTML(r.alunoNome || '')}</span>
+                        <span class="lembrete-badge ${badgeClass}">${badgeText}</span>
+                    </div>
+                    <div class="lembrete-turma">
+                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(r.alunoTurma || '-')}
+                    </div>
+                    <div class="lembrete-data">
+                        <span><i class="fas fa-calendar"></i> ${formatarDataBRNotif(r.dataRemarcacao)}</span>
+                        <span><i class="fas fa-clock"></i> ${r.horarioRemarcacao || '-'}</span>
+                    </div>
+                    <span class="lembrete-tipo">${escapeHTML(r.tipoTarefaLabel || '')}</span>
+                </div>`;
+        });
+        
+        html += `</div>`;
+    }
+    
+    // SEÇÃO 2: NOTIFICAÇÕES DO SISTEMA
+    if (temNotificacoes) {
+        html += `
+            <div class="notificacoes-secao">
+                <div class="notificacoes-secao-titulo">
+                    <i class="fas fa-bell"></i>
+                    <span>Notificações do Sistema</span>
+                    <span class="badge-count">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
+                </div>`;
+        
+        __notificacoesCache.forEach(notif => {
+            const data = new Date(notif.createdAt);
+            const agora = new Date();
+            const diffMs = agora - data;
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHr = Math.floor(diffMs / 3600000);
+            const diffDia = Math.floor(diffMs / 86400000);
+            
+            let tempoTexto;
+            if (diffMin < 1) tempoTexto = 'agora mesmo';
+            else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+            else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
+            else tempoTexto = `há ${diffDia} d`;
+            
+            const classeLida = notif.lida ? '' : 'nao-lida';
+            
+            html += `
+                <div class="notificacao-item ${classeLida}"
+                     data-notif-id="${notif._id}"
+                     data-notif-link="${escapeHTML(notif.link || '#')}"
+                     style="cursor: pointer;">
+                    <div class="notificacao-icone" style="background: ${notif.cor || '#1e3c72'};">
+                        ${notif.icone || '📋'}
+                    </div>
+                    <div class="notificacao-conteudo">
+                        <div class="notificacao-titulo">${escapeHTML(notif.titulo || '')}</div>
+                        <div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div>
+                        <div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div>
+                    </div>
+                </div>`;
+        });
+        
+        html += `</div>`;
+    }
+    
+    lista.innerHTML = html;
+    
+    lista.querySelectorAll('.notificacao-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const id = item.getAttribute('data-notif-id');
+            const link = item.getAttribute('data-notif-link');
+            abrirNotificacao(id, link);
+        });
+    });
+}
+
+function atualizarBadgeUnificado() {
+    const badge = document.getElementById('notificacoesBadge');
+    const btn = document.getElementById('notificacoesBtn');
+    if (!badge || !btn) return;
+    
+    const total = __notificacoesCache.filter(n => !n.lida).length + __lembretesCache.length;
+    
+    if (total > 0) {
+        badge.textContent = total > 99 ? '99+' : total;
+        badge.style.display = 'inline-flex';
+        
+        const temUrgente = __lembretesCache.some(r => calcularNivelAlertaNotif(r).urgente);
+        if (temUrgente) {
+            btn.classList.add('tem-notificacao');
+            badge.style.background = '#dc2626';
+        } else {
+            btn.classList.remove('tem-notificacao');
+            badge.style.background = '#ef4444';
+        }
+    } else {
+        badge.style.display = 'none';
+        btn.classList.remove('tem-notificacao');
+    }
+}
+
+function abrirNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (!dropdown) return;
+    dropdown.classList.toggle('show');
+    if (dropdown.classList.contains('show')) {
+        carregarTudo();
+    }
+}
+
+function fecharNotificacoes() {
+    document.getElementById('notificacoesDropdown')?.classList.remove('show');
+}
+
+async function abrirNotificacao(id, link) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        await fetch(`/api/notificacoes/${id}/lida`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        fecharNotificacoes();
+        if (link && link !== '#') window.location.href = link;
+        carregarTudo();
+    } catch (error) {
+        console.error('Erro ao abrir notificação:', error);
+    }
+}
+
+async function marcarTodasLidas() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success) {
+            await carregarTudo();
+            mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success');
+        }
+    } catch (error) {
+        console.error('Erro ao marcar todas como lidas:', error);
+    }
+}
+
+async function limparMinhasNotificacoes(event) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const confirmacao = await confirmarInternoNotif('🗑️ Deseja excluir TODAS as suas notificações do sistema?\n\n⚠️ Os lembretes de remarcação NÃO serão afetados.\n\nEsta ação não pode ser desfeita.');
+        if (!confirmacao) return;
+        
+        const response = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            __notificacoesCache = [];
+            await carregarTudo();
+            mostrarNotificacaoInterna('Notificações excluídas com sucesso!', 'success');
+        } else {
+            throw new Error(data.error || 'Erro ao excluir');
+        }
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        mostrarNotificacaoInterna(error.message, 'error');
+    }
+}
+
+// Iniciar quando o DOM carregar
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
+});
+
+window.addEventListener('beforeunload', () => {
+    if (notificacoesInterval) clearInterval(notificacoesInterval);
+});
 
 // ============================================
 // LOGOUT
@@ -3801,3 +4291,17 @@ window.toggleEditMotivoOutros = toggleEditMotivoOutros;
 window.limparAssinatura = limparAssinatura;
 window.inicializarAssinatura = inicializarAssinatura;
 window.obterAssinaturaBase64 = obterAssinaturaBase64;
+
+// Expõe globalmente
+window.notificar = notificar;
+
+// ============================================
+// EXPORTAR GLOBAIS
+// ============================================
+window.abrirNotificacoes = abrirNotificacoes;
+window.abrirNotificacao = abrirNotificacao;
+window.marcarTodasLidas = marcarTodasLidas;
+window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+window.fecharNotificacoes = fecharNotificacoes;
+window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
+window.confirmarInternoNotif = confirmarInternoNotif;

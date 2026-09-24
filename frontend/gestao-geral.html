@@ -38,6 +38,48 @@
                 </div>
             </div>
             <div class="btn-actions">
+                <!-- 🔔 SINO ÚNICO (NOTIFICAÇÕES + LEMBRETES) -->
+                <div class="notificacoes-container">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações e Lembretes">
+                        <i class="fas fa-bell"></i>
+                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
+                    </button>
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                        <div class="notificacoes-header">
+                            <h3>
+                                <i class="fas fa-bell"></i>
+                                Notificações
+                            </h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                                    <i class="fas fa-check-double"></i> Ler todas
+                                </button>
+                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                    <i class="fas fa-trash"></i> Limpar
+                                </button>
+                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="notificacoesLista" style="max-height: 500px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                                <p>Carregando...</p>
+                            </div>
+                        </div>
+
+                        <div class="notificacao-footer">
+                            <a href="/notificacoes.html">
+                                <i class="fas fa-eye"></i> Ver todas as notificações
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <!-- FIM DO SINO -->
+
                 <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" 
                    target="_blank" class="btn-icon" 
                    style="background: linear-gradient(135deg, #10b981, #059669); color: white;" 

@@ -19,6 +19,55 @@ let modalCandidato = null;
 let chartTopClubes = null;
 
 // ============================================
+// 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
+// Sobrescreve window.alert para usar toast customizado
+// ============================================
+(function protegerContraAlertNativo() {
+    const alertOriginal = window.alert;
+    
+    window.alert = function(mensagem) {
+        // Detecta WebView do Kodular (ou qualquer Android WebView)
+        const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                          (typeof window.AppInventor !== 'undefined');
+        
+        // No desktop, mantém comportamento nativo (ou troque por mostrarToast se preferir)
+        if (!isWebView) {
+            // Para ver no console sem travar:
+            console.log('%c[ALERT] ' + mensagem, 'background:#f59e0b;color:white;padding:4px 8px;border-radius:4px;');
+            return;
+        }
+        
+        // No WebView: usa modal customizado (não trava)
+        try {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.6); display: flex; align-items: center;
+                justify-content: center; z-index: 999999; padding: 20px;
+                box-sizing: border-box;
+            `;
+            modal.innerHTML = `
+                <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                            width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                    <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                    <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                              line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                    <button onclick="this.closest('div').parentElement.remove()"
+                            style="width:100%;padding:12px;background:#f97316;color:white;
+                                   border:none;border-radius:10px;font-size:14px;
+                                   font-weight:600;cursor:pointer;">OK</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } catch (e) {
+            console.log('[ALERT-FALLBACK]', mensagem);
+        }
+    };
+    
+    console.log('🛡️ [Proteção] window.alert foi sobrescrito para não travar no Kodular');
+})();
+
+// ============================================
 // INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -28,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const allowedRoles = ['protagonismo', 'super_admin', 'admin'];
     
     if (!allowedRoles.includes(userData.role)) {
-        alert('Acesso negado.');
+        mostrarToast('Acesso negado.');
         window.location.href = '/login.html';
         return;
     }
@@ -446,7 +495,7 @@ async function editarClube(id) {
         const data = await response.json();
         
         if (!data.success) {
-            alert('Erro ao carregar clube');
+            mostrarToast('Erro ao carregar clube');
             return;
         }
         
@@ -469,7 +518,7 @@ async function editarClube(id) {
         modalClube.show();
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar clube');
+        mostrarToast('Erro ao carregar clube');
     }
 }
 
@@ -478,7 +527,7 @@ async function salvarClube() {
     const descricao = safeGet('clubeDescricao').value.trim();
     
     if (!nome || !descricao) {
-        alert('Nome e descrição são obrigatórios');
+        mostrarToast('Nome e descrição são obrigatórios');
         return;
     }
     
@@ -519,11 +568,11 @@ async function salvarClube() {
             await carregarClubes();
             await carregarEstatisticas();
         } else {
-            alert('Erro: ' + data.error);
+            mostrarToast('Erro: ' + data.error);
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar clube');
+        mostrarToast('Erro ao salvar clube');
     }
 }
 
@@ -762,7 +811,7 @@ async function editarTutor(id) {
         if (!data.success) return;
         
         const tutor = data.tutores.find(t => t._id === id);
-        if (!tutor) { alert('Tutor não encontrado'); return; }
+        if (!tutor) { mostrarToast('Tutor não encontrado'); return; }
         
         tutorEditandoId = id;
         safeGet('modalTutorTitulo').textContent = 'Editar Tutor';
@@ -789,7 +838,7 @@ async function salvarTutor() {
     };
     
     if (!dados.nomeProfessor || !dados.area || !dados.curso || !dados.turma) {
-        alert('Preencha todos os campos obrigatórios');
+        mostrarToast('Preencha todos os campos obrigatórios');
         return;
     }
     
@@ -816,11 +865,11 @@ async function salvarTutor() {
             await carregarTutores();
             await carregarEstatisticas();
         } else {
-            alert('Erro: ' + data.error);
+            mostrarToast('Erro: ' + data.error);
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar tutor');
+        mostrarToast('Erro ao salvar tutor');
     }
 }
 
@@ -998,7 +1047,7 @@ async function salvarCandidato() {
     const cargo = safeGet('candidatoCargo').value;
     
     if (!alunoId || !cargo) {
-        alert('Aluno e cargo são obrigatórios');
+        mostrarToast('Aluno e cargo são obrigatórios');
         return;
     }
     
@@ -1027,11 +1076,11 @@ async function salvarCandidato() {
             await carregarCandidatos();
             await carregarEstatisticas();
         } else {
-            alert('Erro: ' + data.error);
+            mostrarToast('Erro: ' + data.error);
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar candidato');
+        mostrarToast('Erro ao salvar candidato');
     }
 }
 
@@ -1402,6 +1451,378 @@ function imprimirQRCode() {
     janelaImpressao.document.close();
 }
 
+// ============================================
+// 🔔 SISTEMA DE NOTIFICAÇÕES INTERNAS
+// ============================================
+
+let notificacoesInterval;
+
+// Detectar WebView (Kodular)
+function isWebView() {
+    return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+           (typeof window.AppInventor !== 'undefined');
+}
+
+// Mostrar notificação customizada (não trava o WebView)
+function mostrarNotificacao(mensagem, tipo = 'info') {
+    if (!isWebView()) {
+        mostrarToast(mensagem);
+        return;
+    }
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999999;
+        padding: 20px;
+        box-sizing: border-box;
+    `;
+    
+    const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#3b82f6' };
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            max-width: 380px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        ">
+            <div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div>
+            <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
+                ${mensagem}
+            </p>
+            <button onclick="this.closest('div').parentElement.remove()" style="
+                width: 100%;
+                padding: 12px;
+                background: ${cores[tipo] || cores.info};
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+            ">OK</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// Modal de confirmação customizado (não trava o WebView)
+function confirmar(mensagem) {
+    return new Promise((resolve) => {
+        const oldModal = document.getElementById('modalConfirmacao');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalConfirmacao" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #f97316, #ea580c); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmação</h5>
+                        </div>
+                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">
+                            ${escapeHTML(mensagem)}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmacao">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmacao">
+                                <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modalEl = document.getElementById('modalConfirmacao');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        
+        const finalizar = (resultado) => {
+            modal.hide();
+            setTimeout(() => modalEl.remove(), 300);
+            resolve(resultado);
+        };
+        
+        document.getElementById('btnConfirmarConfirmacao').addEventListener('click', () => finalizar(true));
+        document.getElementById('btnCancelarConfirmacao').addEventListener('click', () => finalizar(false));
+        
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            if (!modalEl.dataset.resolvido) {
+                resolve(false);
+            }
+        });
+    });
+}
+
+// Inicializar sistema de notificações
+function iniciarNotificacoes() {
+    carregarNotificacoes();
+    notificacoesInterval = setInterval(carregarNotificacoes, 30000);
+    
+    // Fechar dropdown ao clicar fora
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('notificacoesDropdown');
+        const btn = document.getElementById('notificacoesBtn');
+        
+        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+}
+
+async function carregarNotificacoes() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const countData = await countResponse.json();
+        
+        if (countData.success) {
+            const badge = document.getElementById('notificacoesBadge');
+            if (badge) {
+                if (countData.count > 0) {
+                    badge.textContent = countData.count > 99 ? '99+' : countData.count;
+                    badge.style.display = 'inline';
+                    document.getElementById('notificacoesBtn')?.classList.add('tem-notificacao');
+                } else {
+                    badge.style.display = 'none';
+                    document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+                }
+            }
+        }
+        
+        const dropdown = document.getElementById('notificacoesDropdown');
+        if (dropdown && dropdown.classList.contains('show')) {
+            await carregarListaNotificacoes();
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
+    }
+}
+
+async function carregarListaNotificacoes() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            renderizarNotificacoes(data.notificacoes);
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar lista:', error);
+    }
+}
+
+function renderizarNotificacoes(notificacoes) {
+    const lista = document.getElementById('notificacoesLista');
+    if (!lista) return;
+    
+    if (notificacoes.length === 0) {
+        lista.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                <p style="font-size: 1rem;">Nenhuma notificação</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    notificacoes.forEach(notif => {
+        const data = new Date(notif.createdAt);
+        const agora = new Date();
+        const diffMs = agora - data;
+        const diffMin = Math.floor(diffMs / 60000);
+        const diffHr = Math.floor(diffMs / 3600000);
+        const diffDia = Math.floor(diffMs / 86400000);
+        
+        let tempoTexto;
+        if (diffMin < 1) tempoTexto = 'agora mesmo';
+        else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+        else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
+        else tempoTexto = `há ${diffDia} d`;
+        
+        const classeLida = notif.lida ? '' : 'nao-lida';
+        
+        // 🔥 CORREÇÃO: data-attributes para evitar problemas com aspas
+        html += `
+            <div class="notificacao-item ${classeLida}" 
+                 data-notif-id="${notif._id}" 
+                 data-notif-link="${escapeHTML(notif.link || '#')}">
+                <div class="notificacao-icone" style="background: ${notif.cor || '#f97316'};">
+                    ${notif.icone || '📋'}
+                </div>
+                <div class="notificacao-conteudo">
+                    <div class="notificacao-titulo">${escapeHTML(notif.titulo || '')}</div>
+                    <div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div>
+                    <div class="notificacao-tempo">
+                        <i class="far fa-clock"></i> ${tempoTexto}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    lista.innerHTML = html;
+    
+    // 🔥 CORREÇÃO: Adicionar listeners após renderizar
+    lista.querySelectorAll('.notificacao-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const id = item.getAttribute('data-notif-id');
+            const link = item.getAttribute('data-notif-link');
+            abrirNotificacao(id, link);
+        });
+    });
+}
+
+function abrirNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (!dropdown) return;
+    
+    dropdown.classList.toggle('show');
+    
+    if (dropdown.classList.contains('show')) {
+        carregarListaNotificacoes();
+    }
+}
+
+async function abrirNotificacao(id, link) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        await fetch(`/api/notificacoes/${id}/lida`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        document.getElementById('notificacoesDropdown').classList.remove('show');
+        
+        if (link && link !== '#') {
+            window.location.href = link;
+        }
+        
+        carregarNotificacoes();
+        
+    } catch (error) {
+        console.error('Erro ao abrir notificação:', error);
+    }
+}
+
+async function marcarTodasLidas() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await carregarListaNotificacoes();
+            document.getElementById('notificacoesBadge').style.display = 'none';
+            document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao marcar todas como lidas:', error);
+    }
+}
+
+async function limparMinhasNotificacoes(event) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        // 🔥 USA confirmar() em vez de confirm() nativo
+        const confirmacao = await confirmar('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+        
+        if (!confirmacao) return;
+        
+        const btn = event?.currentTarget;
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+            btn.disabled = true;
+        }
+        
+        const response = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await carregarListaNotificacoes();
+            document.getElementById('notificacoesBadge').style.display = 'none';
+            document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+            // 🔥 USA mostrarNotificacao() em vez de mostrarToast() nativo
+            mostrarNotificacao(data.message || 'Notificações excluídas com sucesso!', 'success');
+        } else {
+            throw new Error(data.error || 'Erro ao excluir notificações');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        mostrarNotificacao(error.message, 'error');
+    } finally {
+        const btn = document.querySelector('.notificacao-footer button');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-trash"></i> Limpar todas';
+            btn.disabled = false;
+        }
+    }
+}
+
+function fecharNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+}
+
+// Iniciar quando o DOM carregar
+document.addEventListener('DOMContentLoaded', function() {
+    // Só inicia se o sino existir
+    if (document.getElementById('notificacoesBtn')) {
+        iniciarNotificacoes();
+    }
+});
+
+// Limpar interval ao sair
+window.addEventListener('beforeunload', function() {
+    if (notificacoesInterval) {
+        clearInterval(notificacoesInterval);
+    }
+});
+
 async function copiarLinkDoQR() {
     const linkPublico = window.location.origin + '/protagonismo-publico.html';
     
@@ -1438,6 +1859,13 @@ window.abrirModalCandidato = abrirModalCandidato;
 window.carregarAlunosTurma = carregarAlunosTurma;
 window.excluirCandidato = excluirCandidato;
 window.salvarCandidato = salvarCandidato;
+
+// Exportar funções de notificações
+window.abrirNotificacoes = abrirNotificacoes;
+window.abrirNotificacao = abrirNotificacao;
+window.marcarTodasLidas = marcarTodasLidas;
+window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+window.fecharNotificacoes = fecharNotificacoes;
 
 window.excluirInscricao = excluirInscricao;
 window.carregarInscricoes = carregarInscricoes;

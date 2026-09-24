@@ -644,12 +644,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             return res.status(400).json({ success: false, error: `Motivo inválido para o tipo "${tipo}"` });
         }
 
-        if (tipo === 'autorizacao') {
-            if (!horarioEntrada || !horarioSaida) {
-                return res.status(400).json({ success: false, error: 'Horários de entrada e saída são obrigatórios' });
-            }
-        }
-
         if (motivo === 'outros' && (!motivoOutros || motivoOutros.trim() === '')) {
             return res.status(400).json({ success: false, error: 'Especifique o motivo quando selecionar "Outros"' });
         }

@@ -475,6 +475,10 @@ class AdminPanel {
         const contentArea = document.getElementById('contentArea');
         if (!contentArea) return;
 
+        if (typeof this.verificarVinculoPlayerId === 'function') {
+        setTimeout(() => this.verificarVinculoPlayerId(), 500);
+        }
+
         contentArea.innerHTML = `
             <div class="loading-spinner">
                 <div class="spinner"></div>
@@ -1750,44 +1754,38 @@ class AdminPanel {
     }
 
     /**
+    /**
      * Verifica se o playerId está no localStorage (injetado pelo Kodular)
      * e vincula automaticamente ao usuário logado.
      * 
      * Faz RETRY automático se o playerId ainda não estiver disponível.
      */
     async verificarVinculoPlayerId(tentativa = 1) {
-        const MAX_TENTATIVAS = 10;
-        const INTERVALO_MS = 2000; // 2 segundos entre tentativas
+        const MAX_TENTATIVAS = 15;
+        const INTERVALO_MS = 2000;
         
         try {
             const playerId = localStorage.getItem('onesignal_player_id');
             
-            // Se não tem playerId, tenta de novo
+            // Se não tem playerId, tenta de novo (silenciosamente)
             if (!playerId) {
                 if (tentativa < MAX_TENTATIVAS) {
-                    console.log(`⏳ [Vínculo] PlayerId ainda não está no localStorage. Tentativa ${tentativa}/${MAX_TENTATIVAS}. Nova tentativa em ${INTERVALO_MS/1000}s...`);
                     setTimeout(() => this.verificarVinculoPlayerId(tentativa + 1), INTERVALO_MS);
                     return;
                 }
                 
-                console.log(`❌ [Vínculo] PlayerId não apareceu após ${MAX_TENTATIVAS} tentativas (${MAX_TENTATIVAS * INTERVALO_MS / 1000}s).`);
-                console.log('💡 Verifique se o Kodular está injetando o playerId no localStorage.');
+                // Só avisa uma vez, no final
+                console.log(`⚠️ [Vínculo] PlayerId não apareceu após ${MAX_TENTATIVAS} tentativas.`);
                 return;
             }
             
-            // 🔥 ACHOU O PLAYERID!
-            console.log(`✅ [Vínculo] PlayerId encontrado na tentativa ${tentativa}:`, playerId);
+            // Achou o playerId
+            console.log(`✅ [Vínculo] PlayerId encontrado:`, playerId);
             
             const token = localStorage.getItem('auth_token');
+            if (!token) return;
             
-            if (!token) {
-                console.log('⚠️ [Vínculo] Sem token, não é possível vincular');
-                return;
-            }
-            
-            // Verificar se já está vinculado (evita requisição desnecessária)
-            console.log('🔍 [Vínculo] Verificando se já está vinculado...');
-            
+            // Verificar se já está vinculado
             try {
                 const respVerificar = await fetch('/api/onesignal/verificar-vinculo', {
                     method: 'POST',
@@ -1798,16 +1796,14 @@ class AdminPanel {
                 const dataVerificar = await respVerificar.json();
                 
                 if (dataVerificar.success && dataVerificar.vinculado) {
-                    console.log(`✅ [Vínculo] Já está vinculado a ${dataVerificar.usuario.nome}`);
+                    console.log(`✅ [Vínculo] Já vinculado a ${dataVerificar.usuario.nome}`);
                     return;
                 }
             } catch (err) {
-                console.warn('⚠️ [Vínculo] Erro ao verificar, tentando vincular mesmo assim...');
+                // Silencioso — tenta vincular mesmo assim
             }
             
             // Vincular
-            console.log('🔄 [Vínculo] Enviando para o backend...');
-            
             const response = await fetch('/api/onesignal/vincular-kodular', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1817,26 +1813,20 @@ class AdminPanel {
             const data = await response.json();
             
             if (data.success) {
-                console.log('✅ [Vínculo] Dispositivo vinculado com sucesso!');
-                console.log('   👤 Usuário:', data.usuario.nome);
-                console.log('   📱 PlayerId:', data.playerId);
+                console.log(`✅ [Vínculo] Dispositivo vinculado a ${data.usuario.nome}`);
                 
-                // Notificação visual
                 if (typeof this.showToast === 'function') {
                     this.showToast('📱 Dispositivo vinculado para notificações!', 'success');
                 }
                 
-                // Salvar flag para não tentar de novo nesta sessão
                 sessionStorage.setItem('vinculo_realizado', 'true');
-                
             } else {
                 console.warn('⚠️ [Vínculo] Falha:', data.error);
             }
             
         } catch (error) {
-            console.error('❌ [Vínculo] Erro:', error);
+            console.error('❌ [Vínculo] Erro:', error.message);
             
-            // Se deu erro, tenta de novo (a menos que seja erro de token)
             if (tentativa < MAX_TENTATIVAS && !error.message?.includes('401')) {
                 setTimeout(() => this.verificarVinculoPlayerId(tentativa + 1), INTERVALO_MS);
             }

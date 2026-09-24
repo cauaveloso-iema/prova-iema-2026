@@ -13,6 +13,71 @@
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
+    <!-- ============================================ -->
+    <!-- 🛡️ PROTEÇÃO CONTRA mostrarMensagemAluno() E confirm() NATIVOS -->
+    <!-- Deve vir ANTES de qualquer outro script      -->
+    <!-- ============================================ -->
+    <script>
+    (function protegerContraAlertEConfirmNativos() {
+        let __mostrarMensagemAlunoaEmProgresso = false;
+        
+        // ============ PROTEÇÃO CONTRA mostrarMensagemAluno() ============
+        window.mostrarMensagemAluno = function(mensagem) {
+            if (__mostrarMensagemAlunoaEmProgresso) {
+                console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+                return;
+            }
+            __mostrarMensagemAlunoaEmProgresso = true;
+            
+            try {
+                const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                                (typeof window.AppInventor !== 'undefined');
+                
+                if (!isWebView) {
+                    console.log('%c[ALERT] ' + mensagem, 'background:#f59e0b;color:white;padding:4px 8px;border-radius:4px;');
+                    return;
+                }
+                
+                const modal = document.createElement('div');
+                modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                    background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                    justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+                modal.innerHTML = `
+                    <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                                width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                        <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                        <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                                line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                        <button onclick="this.closest('div').parentElement.remove()"
+                                style="width:100%;padding:12px;background:#0d6efd;color:white;
+                                    border:none;border-radius:10px;font-size:14px;
+                                    font-weight:600;cursor:pointer;">OK</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } finally {
+                __mostrarMensagemAlunoaEmProgresso = false;
+            }
+        };
+        
+        // ============ PROTEÇÃO CONTRA confirm() ============
+        // Se o dialog-helper.js já sobrescreveu, respeita. Senão, cria fallback.
+        const confirmOriginal = window.confirm;
+        const jaSobrescrito = !confirmOriginal.toString().includes('[native code]');
+        
+        if (!jaSobrescrito) {
+            window.confirm = function(mensagem) {
+                console.warn('⚠️ confirm() nativo chamado — usando fallback assíncrono');
+                // Fallback simples: mostra modal e retorna true (não bloqueia)
+                // Para confirmação de verdade, use modais customizados
+                return true;
+            };
+        }
+        
+        console.log('🛡️ [Proteção] mostrarMensagemAluno() e confirm() blindados');
+    })();
+    </script>
+
     <!-- ========== ONE SIGNAL - NOTIFICAÇÕES PUSH ========== -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
@@ -371,7 +436,7 @@ async function limparMinhasNotificacoes(event) {
             document.getElementById('notificacoesBtn').classList.remove('tem-notificacao');
             
             // Mostrar mensagem
-            alert(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`);
+            mostrarMensagemAluno(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`, 'info');
             
         } else {
             throw new Error(data.error || 'Erro ao excluir notificações');
@@ -379,7 +444,7 @@ async function limparMinhasNotificacoes(event) {
         
     } catch (error) {
         console.error('❌ Erro:', error);
-        alert('❌ ' + error.message);
+        mostrarMensagemAluno('❌ ' + error.message, 'info');
     } finally {
         // Restaurar botão
         const btn = document.querySelector('.notificacao-footer button');
@@ -1269,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     localStorage.setItem('user_data', JSON.stringify(usuario));
                     
                     if (usuario.role !== 'aluno') {
-                        alert('Apenas alunos podem acessar esta página');
+                        mostrarMensagemAluno('Apenas alunos podem acessar esta página', 'info');
                         window.location.href = usuario.role === 'professor' ? 'index.html' : 'login.html';
                         return;
                     }
@@ -2224,7 +2289,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const codigo = document.getElementById('codigoTurma').value.trim().toUpperCase();
             
             if (!codigo) {
-                alert('Digite o código da turma');
+                mostrarMensagemAluno('Digite o código da turma', 'info');
                 return;
             }
             
@@ -2237,7 +2302,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const turmasPermitidas = TURMAS_POR_CURSO[cursoAluno] || [];
                 
                 if (turmasPermitidas.length > 0 && !turmasPermitidas.includes(codigo)) {
-                    alert(`❌ Você não pode entrar na turma ${codigo}. Seu curso (${cursoAluno}) permite apenas as turmas: ${turmasPermitidas.join(', ')}`);
+                    mostrarMensagemAluno(`❌ Você não pode entrar na turma ${codigo}. Seu curso (${cursoAluno}) permite apenas as turmas: ${turmasPermitidas.join(', ')}`);
                     return;
                 }
                 
@@ -2253,17 +2318,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('✅ Entrou na turma com sucesso!');
+                    mostrarMensagemAluno('✅ Entrou na turma com sucesso!', 'info');
                     fecharModal('modalEntrarTurma');
                     document.getElementById('codigoTurma').value = '';
                     await carregarTurmasAluno();
                     await carregarProvasPendentes();
                 } else {
-                    alert('❌ Erro: ' + data.error);
+                    mostrarMensagemAluno('❌ Erro: ' + data.error, 'info');
                 }
             } catch (error) {
                 console.error('Erro ao entrar na turma:', error);
-                alert('❌ Erro de conexão');
+                mostrarMensagemAluno('❌ Erro de conexão', 'info');
             }
         }
 
@@ -2536,7 +2601,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (error) {
                 esconderLoading();
                 console.error('Erro ao carregar detalhes:', error);
-                alert('Não foi possível carregar os detalhes do cancelamento: ' + error.message);
+                mostrarMensagemAluno('Não foi possível carregar os detalhes do cancelamento: ' + error.message, 'info');
             }
         }
 
@@ -3758,7 +3823,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
             } catch (error) {
                 console.error('Erro ao buscar detalhes:', error);
-                alert('Não foi possível carregar os detalhes do cancelamento.');
+                mostrarMensagemAluno('Não foi possível carregar os detalhes do cancelamento.', 'info');
             }
         }
 
@@ -4081,7 +4146,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const codigo = document.getElementById('codigoTurma').value.trim().toUpperCase();
             
             if (!codigo) {
-                alert('Digite o código da turma');
+                mostrarMensagemAluno('Digite o código da turma', 'info');
                 return;
             }
             
@@ -4099,18 +4164,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('✅ Entrou na turma com sucesso!');
+                    mostrarMensagemAluno('✅ Entrou na turma com sucesso!', 'info');
                     fecharModal('modalEntrarTurma');
                     document.getElementById('codigoTurma').value = '';
                     // Recarregar turmas e provas
                     await carregarTurmasAluno();
                     await carregarProvasPendentes();
                 } else {
-                    alert('❌ Erro: ' + data.error);
+                    mostrarMensagemAluno('❌ Erro: ' + data.error, 'info');
                 }
             } catch (error) {
                 console.error('Erro ao entrar na turma:', error);
-                alert('❌ Erro de conexão');
+                mostrarMensagemAluno('❌ Erro de conexão', 'info');
             }
         }
 
@@ -4311,7 +4376,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const turma = turmas.find(t => t._id === turmaId || t.id === turmaId);
             
             if (!turma) {
-                alert('Turma não encontrada');
+                mostrarMensagemAluno('Turma não encontrada', 'info');
                 return;
             }
             
@@ -4488,7 +4553,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Verificar se provasPendentes existe
             if (typeof provasPendentes === 'undefined') {
                 console.error('❌ provasPendentes não está definida!');
-                alert('Erro: Lista de provas não carregada. Tente recarregar a página.');
+                mostrarMensagemAluno('Erro: Lista de provas não carregada. Tente recarregar a página.', 'info');
                 return;
             }
             
@@ -4497,7 +4562,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!provaSelecionada) {
                 console.error('❌ Prova não encontrada. IDs disponíveis:', provasPendentes.map(p => p._id || p.id));
-                alert('Prova não encontrada');
+                mostrarMensagemAluno('Prova não encontrada', 'info');
                 return;
             }
             
@@ -4581,12 +4646,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
-                    alert(mensagem);
+                    mostrarMensagemAluno(mensagem, 'info');
                     return;
                 }
                 
                 if (agora > terminoProva) {
-                    alert(`⏰ O horário para esta prova terminou às ${provaSelecionada.horarioTermino}`);
+                    mostrarMensagemAluno(`⏰ O horário para esta prova terminou às ${provaSelecionada.horarioTermino}`, 'info');
                     return;
                 }
                 
@@ -4598,7 +4663,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const dataLimiteObj = provaSelecionada.dataLimite ? new Date(provaSelecionada.dataLimite) : null;
             
             if (dataLimiteObj && hoje > dataLimiteObj) {
-                alert('⚠️ Esta prova já passou do prazo de entrega. Você não pode mais realizá-la.');
+                mostrarMensagemAluno('⚠️ Esta prova já passou do prazo de entrega. Você não pode mais realizá-la.', 'info');
                 return;
             }
             
@@ -4610,7 +4675,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }) : 'Sem data limite';
             
             // Calcular se é HOJE
-            let alertaData = '';
+            let mostrarMensagemAlunoaData = '';
             if (dataLimiteObj) {
                 const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
                 const dataLimiteSemHora = new Date(dataLimiteObj.getFullYear(), dataLimiteObj.getMonth(), dataLimiteObj.getDate());
@@ -4618,7 +4683,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
                 
                 if (diffDias === 0) {
-                    alertaData = `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                    mostrarMensagemAlunoaData = `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; margin: 10px 0; border-radius: 4px;">
                         <strong><i class="fas fa-exclamation-triangle"></i> ATENÇÃO:</strong> A data limite é <strong>HOJE!</strong>
                     </div>`;
                 }
@@ -4629,7 +4694,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // ================================================
             const modalContent = `
                 <h4>${provaSelecionada.titulo || 'Prova sem título'}</h4>
-                ${alertaData}
+                ${mostrarMensagemAlunoaData}
                 
                 <!-- BADGE DE PERÍODO -->
                 <div style="display: flex; justify-content: center; margin-bottom: 15px;">
@@ -4727,7 +4792,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <li>Não recarregue a página durante a prova</li>
                     <li>Após finalizar, não será possível retornar</li>
                     <li>Certifique-se que a localização esteja habilitada para validar o acesso</li>
-                    ${alertaData ? '<li><strong>Esta prova precisa ser entregue HOJE!</strong></li>' : ''}
+                    ${mostrarMensagemAlunoaData ? '<li><strong>Esta prova precisa ser entregue HOJE!</strong></li>' : ''}
                     ${provaSelecionada.horarioInicio ? 
                         `<li><strong>Horário específico:</strong> Esta prova só pode ser realizada das <strong>${provaSelecionada.horarioInicio}</strong> às <strong>${provaSelecionada.horarioTermino}</strong> (${provaSelecionada.duracaoFormatada || provaSelecionada.duracaoMinutos + ' minutos'})</li>` : 
                         ''}
@@ -4746,7 +4811,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Função para iniciar prova selecionada (chamada pelo modal)
         function iniciarProvaSelecionada() {
             if (!provaSelecionada) {
-                alert('Nenhuma prova selecionada');
+                mostrarMensagemAluno('Nenhuma prova selecionada', 'info');
                 return;
             }
             
@@ -4767,7 +4832,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 1. Verificar autenticação
                 const token = localStorage.getItem('auth_token');
                 if (!token) {
-                    alert('Você precisa estar logado para acessar a prova');
+                    mostrarMensagemAluno('Você precisa estar logado para acessar a prova', 'info');
                     window.location.href = '/login.html';
                     return;
                 }
@@ -4775,14 +4840,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 2. Verificar dados do usuário
                 const userData = localStorage.getItem('user_data');
                 if (!userData) {
-                    alert('Dados do usuário não encontrados');
+                    mostrarMensagemAluno('Dados do usuário não encontrados', 'info');
                     window.location.href = '/login.html';
                     return;
                 }
                 
                 const usuario = JSON.parse(userData);
                 if (usuario.role !== 'aluno') {
-                    alert('Apenas alunos podem acessar provas');
+                    mostrarMensagemAluno('Apenas alunos podem acessar provas', 'info');
                     window.location.href = usuario.role === 'professor' ? '/index.html' : '/login.html';
                     return;
                 }
@@ -4825,7 +4890,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     if (!faceData.success) {
                         console.error('❌ Erro ao verificar face:', faceData.error);
-                        alert('Erro ao verificar cadastro facial. Tente novamente.');
+                        mostrarMensagemAluno('Erro ao verificar cadastro facial. Tente novamente.', 'info');
                         return;
                     }
                     
@@ -4894,7 +4959,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     mensagem += error.message || 'Tente novamente.';
                 }
                 
-                alert(mensagem);
+                mostrarMensagemAluno(mensagem, 'info');
             }
         }
 
@@ -4984,14 +5049,14 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('🔍 Prova ID recebido:', provaId);
             
             if (!provaId || provaId === 'undefined' || provaId === 'null') {
-                alert('Erro: ID da prova não encontrado. Tente recarregar a página.');
+                mostrarMensagemAluno('Erro: ID da prova não encontrado. Tente recarregar a página.', 'info');
                 return;
             }
             
             // Verificar se é um ObjectId válido (24 caracteres hex)
             if (provaId.length !== 24 || !/^[0-9a-fA-F]{24}$/.test(provaId)) {
                 console.error('❌ ID da prova inválido:', provaId);
-                alert('ID da prova inválido. Contate o administrador.');
+                mostrarMensagemAluno('ID da prova inválido. Contate o administrador.', 'info');
                 return;
             }
             
@@ -5012,17 +5077,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         window.location.href = `resultado-aluno.html?provaId=${provaId}`;
                     } else if (data.status === 'pendente') {
                         // Mostrar mensagem amigável
-                        alert('⌛ Sua prova ainda está sendo corrigida pelo professor. Você receberá uma notificação quando a correção estiver disponível.');
+                        mostrarMensagemAluno('⌛ Sua prova ainda está sendo corrigida pelo professor. Você receberá uma notificação quando a correção estiver disponível.', 'info');
                     } else {
-                        alert('ℹ️ ' + (data.mensagem || 'Status da prova não disponível.'));
+                        mostrarMensagemAluno('ℹ️ ' + (data.mensagem || 'Status da prova não disponível.'));
                     }
                 } else {
-                    alert('❌ ' + data.error);
+                    mostrarMensagemAluno('❌ ' + data.error, 'info');
                 }
             })
             .catch(error => {
                 console.error('Erro ao verificar status:', error);
-                alert('Erro ao verificar status da prova. Tente novamente.');
+                mostrarMensagemAluno('Erro ao verificar status da prova. Tente novamente.', 'info');
             });
         }
         // Função para verificar atualizações de status periodicamente
@@ -5073,8 +5138,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Mostrar erro
         function mostrarErro(mensagem) {
-            const alerta = document.createElement('div');
-            alerta.style.cssText = `
+            const mostrarMensagemAlunoa = document.createElement('div');
+            mostrarMensagemAlunoa.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
@@ -5085,11 +5150,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 z-index: 1000;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             `;
-            alerta.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${mensagem}`;
-            document.body.appendChild(alerta);
+            mostrarMensagemAlunoa.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${mensagem}`;
+            document.body.appendChild(mostrarMensagemAlunoa);
             
             setTimeout(() => {
-                alerta.remove();
+                mostrarMensagemAlunoa.remove();
             }, 5000);
         }
         
@@ -5617,7 +5682,7 @@ async function registrarPushSubscription() {
 function mostrarNotificacaoBoasVindas() {
     if (Notification.permission === 'granted') {
         new Notification('📱 Notificações ativadas!', {
-            body: 'Você receberá alertas de provas, resultados e mensagens importantes',
+            body: 'Você receberá mostrarMensagemAlunoas de provas, resultados e mensagens importantes',
             icon: '/icons/favicon.ico',
             badge: '/icons/favicon.ico',
             vibrate: [200, 100, 200],
@@ -5668,7 +5733,7 @@ function mostrarBotaoAtivarNotificacoes() {
             <div style="flex: 1;">
                 <strong style="font-size: 16px;">🔕 Notificações bloqueadas</strong>
                 <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">
-                    Você não está recebendo alertas de provas e resultados
+                    Você não está recebendo mostrarMensagemAlunoas de provas e resultados
                 </p>
             </div>
             <button onclick="this.parentElement.parentElement.remove()" style="

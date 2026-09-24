@@ -67,99 +67,6 @@
             border-top: 2px solid #14b8a6; border-radius: 50%; animation: spin 0.8s linear infinite;
         }
 
-        /* 🔔 SINO */
-        .sino-wrapper { position: relative; display: inline-block; }
-        .sino-btn {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            border-radius: 50%; width: 40px; height: 40px;
-            display: inline-flex; align-items: center; justify-content: center;
-            text-decoration: none; color: white; transition: all 0.3s;
-            border: none; cursor: pointer; position: relative;
-        }
-        .sino-btn:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
-        .sino-btn.tem-novidade {
-            animation: sino-pulse 1.5s infinite;
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-        }
-        .sino-btn.tem-novidade i { animation: sino-shake 1s infinite; }
-        @keyframes sino-pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
-        }
-        @keyframes sino-shake {
-            0%, 100% { transform: rotate(0deg); }
-            15% { transform: rotate(15deg); }
-            30% { transform: rotate(-15deg); }
-            45% { transform: rotate(10deg); }
-            60% { transform: rotate(-10deg); }
-            75% { transform: rotate(5deg); }
-        }
-        .sino-badge {
-            position: absolute; top: -4px; right: -4px;
-            background: #ef4444; color: white; font-size: 11px; font-weight: bold;
-            min-width: 20px; height: 20px; border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            padding: 0 5px; border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        .sino-dropdown {
-            position: absolute; top: 100%; right: 0; margin-top: 10px;
-            width: 400px; max-width: 90vw; background: white; border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2); z-index: 2000;
-            max-height: 550px; overflow: hidden; display: none; border: 1px solid #e5e7eb;
-        }
-        .sino-dropdown.aberto { display: block; animation: dropdown-fade 0.2s ease-out; }
-        @keyframes dropdown-fade {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .sino-dropdown-header {
-            padding: 12px 16px; background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white; display: flex; justify-content: space-between; align-items: center; font-weight: 600;
-        }
-        .sino-dropdown-body { max-height: 420px; overflow-y: auto; }
-        .sino-dropdown-body::-webkit-scrollbar { width: 6px; }
-        .sino-dropdown-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .lembrete-item { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; transition: background 0.15s; cursor: pointer; }
-        .lembrete-item:hover { background: #f9fafb; }
-        .lembrete-item:last-child { border-bottom: none; }
-        .lembrete-item.atrasado { background: #fef2f2; border-left: 4px solid #dc2626; }
-        .lembrete-item.urgente { background: #fef2f2; border-left: 4px solid #ef4444; animation: urgente-pulse 2s infinite; }
-        @keyframes urgente-pulse { 0%, 100% { background: #fef2f2; } 50% { background: #fee2e2; } }
-        .lembrete-item.proximo { background: #fff7ed; border-left: 4px solid #f97316; }
-        .lembrete-item.hoje { background: #fffbeb; border-left: 4px solid #f59e0b; }
-        .lembrete-item.amanha { background: #eff6ff; border-left: 4px solid #3b82f6; }
-        .lembrete-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; }
-        .lembrete-nome { font-weight: 600; color: #1f2937; font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .lembrete-badge {
-            font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 700;
-            white-space: nowrap; text-transform: uppercase;
-        }
-        .lembrete-badge.atrasado { background: #dc2626; color: white; }
-        .lembrete-badge.urgente { background: #ef4444; color: white; }
-        .lembrete-badge.proximo { background: #f97316; color: white; }
-        .lembrete-badge.hoje { background: #f59e0b; color: white; }
-        .lembrete-badge.amanha { background: #3b82f6; color: white; }
-        .lembrete-badge.futuro { background: #64748b; color: white; }
-        .lembrete-turma { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-        .lembrete-data { font-size: 12px; color: #6b7280; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-        .lembrete-tipo {
-            display: inline-block; background: #ccfbf1; color: #115e59;
-            font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-bottom: 8px;
-        }
-        .lembrete-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
-        .lembrete-acoes .btn { font-size: 11px; padding: 4px 10px; border-radius: 6px; }
-        .sino-dropdown-footer {
-            padding: 10px 16px; background: #f9fafb; text-align: center;
-            font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .sino-notif-status { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-        .sino-notif-status.ativo { color: #10b981; }
-        .sino-notif-status.inativo { color: #6b7280; }
-        .sino-vazio { padding: 40px 20px; text-align: center; color: #9ca3af; }
-        .sino-vazio i { font-size: 40px; color: #d1d5db; margin-bottom: 12px; display: block; }
-
         /* ASSINATURA */
         .assinatura-wrapper { margin-top: 15px; }
         .assinatura-container {
@@ -202,9 +109,7 @@
         }
         .assinatura-preview img { max-height: 80px; max-width: 100%; }
 
-        /* ═══════════════════════════════════════════
-           🎯 FILTROS DA ABA EM ANDAMENTO
-           ═══════════════════════════════════════════ */
+        /* FILTROS DA ABA EM ANDAMENTO */
         .filtros-andamento {
             background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
             border-radius: 12px;
@@ -212,7 +117,6 @@
             margin-bottom: 16px;
             border: 1px solid #99f6e4;
         }
-
         .filtros-andamento .filtro-titulo {
             display: flex;
             justify-content: space-between;
@@ -221,14 +125,12 @@
             flex-wrap: wrap;
             gap: 8px;
         }
-
         .filtros-andamento .filtro-titulo h6 {
             margin: 0;
             color: #0d9488;
             font-weight: 700;
             font-size: 14px;
         }
-
         .filtros-andamento .filtro-titulo .contador-resultados {
             background: #0d9488;
             color: white;
@@ -237,18 +139,15 @@
             border-radius: 20px;
             font-weight: 700;
         }
-
         .filtros-andamento .filtro-titulo .contador-resultados.zero {
             background: #9ca3af;
         }
-
         .filtros-andamento .form-label {
             font-size: 12px;
             font-weight: 600;
             color: #115e59;
             margin-bottom: 4px;
         }
-
         .filtros-andamento .form-control,
         .filtros-andamento .form-select {
             font-size: 13px;
@@ -256,13 +155,11 @@
             border-radius: 8px;
             background: white;
         }
-
         .filtros-andamento .form-control:focus,
         .filtros-andamento .form-select:focus {
             border-color: #14b8a6;
             box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
         }
-
         .filtros-andamento .btn-limpar-filtros {
             background: white;
             border: 1px solid #14b8a6;
@@ -273,18 +170,14 @@
             transition: all 0.2s;
             font-weight: 600;
         }
-
         .filtros-andamento .btn-limpar-filtros:hover {
             background: #14b8a6;
             color: white;
         }
-
         .filtros-andamento .btn-limpar-filtros:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
-
-        /* Botão de toggle para filtros avançados (mobile) */
         .filtro-avancado-toggle {
             background: transparent;
             border: 1px dashed #14b8a6;
@@ -297,19 +190,15 @@
             transition: all 0.2s;
             font-weight: 600;
         }
-
         .filtro-avancado-toggle:hover {
             background: #ccfbf1;
         }
-
-        /* Chips de filtros ativos */
         .chips-filtros-ativos {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
             margin-top: 10px;
         }
-
         .chip-filtro {
             background: #0d9488;
             color: white;
@@ -321,18 +210,14 @@
             gap: 6px;
             font-weight: 600;
         }
-
         .chip-filtro i.fa-times {
             cursor: pointer;
             opacity: 0.8;
             font-size: 10px;
         }
-
         .chip-filtro i.fa-times:hover {
             opacity: 1;
         }
-
-        /* Contador de badges por tipo */
         .badge-count-tipo {
             background: #0d9488;
             color: white;
@@ -342,51 +227,38 @@
             margin-left: 4px;
             font-weight: 700;
         }
-
-        /* Animação ao filtrar */
         .list-group-item.filtrado {
             animation: fadeInItem 0.3s ease-out;
         }
-
         @keyframes fadeInItem {
             from { opacity: 0; transform: translateY(-5px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        /* Estado vazio */
         .estado-vazio-filtro {
             text-align: center;
             padding: 40px 20px;
             color: #9ca3af;
         }
-
         .estado-vazio-filtro i {
             font-size: 48px;
             color: #cbd5e1;
             margin-bottom: 12px;
             display: block;
         }
-
         .estado-vazio-filtro p {
             margin: 0;
             font-size: 14px;
         }
-
         .estado-vazio-filtro .btn {
             margin-top: 12px;
         }
 
-        /* Mobile */
         @media (max-width: 768px) {
             .filtros-andamento {
                 padding: 12px;
             }
             .filtros-andamento .row {
                 gap: 8px;
-            }
-            .sino-dropdown {
-                width: calc(100vw - 30px);
-                right: -50px;
             }
         }
     </style>
@@ -405,39 +277,52 @@
                 </div>
             </div>
             <div class="btn-actions">
-                <!-- 🔔 SINO -->
-                <div class="sino-wrapper">
-                    <button class="sino-btn" id="sinoBtn" title="Lembretes de Remarcação">
+                <!-- 🔔 SINO ÚNICO (NOTIFICAÇÕES + LEMBRETES) -->
+                <div class="notificacoes-container">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações e Lembretes">
                         <i class="fas fa-bell"></i>
-                        <span class="sino-badge" id="sinoBadge" style="display: none;">0</span>
+                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
-                    <div class="sino-dropdown" id="sinoDropdown">
-                        <div class="sino-dropdown-header">
-                            <span><i class="fas fa-bell"></i> Lembretes de Remarcação</span>
-                            <button onclick="carregarLembretes()" 
-                                    style="background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 6px; padding: 4px 8px; cursor: pointer;">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
-                        <div class="sino-dropdown-body" id="sinoDropdownBody">
-                            <div class="sino-vazio">
-                                <i class="fas fa-bell-slash"></i>
-                                <p>Nenhum lembrete pendente</p>
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                        <div class="notificacoes-header">
+                            <h3>
+                                <i class="fas fa-bell" style="color: #14b8a6;"></i>
+                                Notificações
+                            </h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                                    <i class="fas fa-check-double"></i> Ler todas
+                                </button>
+                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                    <i class="fas fa-trash"></i> Limpar
+                                </button>
+                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         </div>
-                        <div class="sino-dropdown-footer">
-                            <div class="sino-notif-status" id="sinoNotifStatus">
-                                <i class="fas fa-bell-slash"></i> Notificações desativadas
+
+                        <div id="notificacoesLista" style="max-height: 500px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                                <p>Carregando...</p>
                             </div>
-                            <small>Atualiza a cada 30s</small>
+                        </div>
+
+                        <div class="notificacao-footer">
+                            <a href="/notificacoes.html">
+                                <i class="fas fa-eye"></i> Ver todas as notificações
+                            </a>
                         </div>
                     </div>
                 </div>
+                <!-- FIM DO SINO -->
 
                 <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" 
                    target="_blank" class="btn-icon" style="
                     background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 50%; width: 40px; height: 40px;
+                    border-radius: 50%; width: 45px; height: 45px;
                     display: inline-flex; align-items: center; justify-content: center;
                     text-decoration: none; color: white; transition: all 0.3s;
                     border: none; cursor: pointer;

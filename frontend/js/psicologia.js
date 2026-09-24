@@ -29,7 +29,6 @@ let __alunosCarregados = false;
 
 // Estado do sino
 let __lembretesAtuais = [];
-let __sinoAberto = false;
 
 // Estado dos filtros de atendimentos ativos
 let __atendimentosAtivosBrutos = [];
@@ -40,6 +39,53 @@ let __concluidosPaginaAtual = 1;
 let __concluidosPorPagina = 10;
 let __concluidosTotal = 0;
 let __concluidosDados = [];
+
+// ============================================
+// 🛡️ PROTEÇÃO CONTRA mostrarToastConcluido() NATIVO (Kodular)
+// ============================================
+(function protegerContraAlertNativo() {
+    let __mostrarToastConcluidoaEmProgresso = false; // guard contra recursão
+    
+    window.mostrarToastConcluido = function(mensagem) {
+        if (__mostrarToastConcluidoaEmProgresso) {
+            console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+            return;
+        }
+        __mostrarToastConcluidoaEmProgresso = true;
+        
+        try {
+            const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                              (typeof window.AppInventor !== 'undefined');
+            
+            if (!isWebView) {
+                console.log('%c[ALERT] ' + mensagem, 'background:#14b8a6;color:white;padding:4px 8px;border-radius:4px;');
+                return;
+            }
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+            modal.innerHTML = `
+                <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                            width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                    <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                    <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                              line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                    <button onclick="this.closest('div').parentElement.remove()"
+                            style="width:100%;padding:12px;background:#14b8a6;color:white;
+                                   border:none;border-radius:10px;font-size:14px;
+                                   font-weight:600;cursor:pointer;">OK</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } finally {
+            __mostrarToastConcluidoaEmProgresso = false;
+        }
+    };
+    
+    console.log('🛡️ [Proteção] window.mostrarToastConcluido sobrescrito (sem recursão)');
+})();
 
 // ============================================
 // ESTADO DA ASSINATURA DIGITAL
@@ -237,7 +283,7 @@ async function verificarLembretesNotificar() {
                 '⚠️ Atendimento ATRASADO',
                 `${r.alunoNome} - ${r.tipoTarefaLabel}\nEra ${formatarDataBR(r.dataRemarcacao)} às ${r.horarioRemarcacao}`,
                 true,
-                () => abrirSino()
+                () => abrirNotificacoes()
             );
             marcarComoNotificado(r.id, 'atrasado');
             return;
@@ -248,7 +294,7 @@ async function verificarLembretesNotificar() {
                 '🔔 Atendimento em 30 min!',
                 `${r.alunoNome} - ${r.tipoTarefaLabel}\n${r.horarioRemarcacao} • ${r.alunoTurma}`,
                 true,
-                () => abrirSino()
+                () => abrirNotificacoes()
             );
             marcarComoNotificado(r.id, 'iminente');
             return;
@@ -259,7 +305,7 @@ async function verificarLembretesNotificar() {
                 '⏰ Atendimento próximo',
                 `${r.alunoNome} - ${r.tipoTarefaLabel}\nEm ${Math.floor(diffMin / 60)}h ${diffMin % 60}min`,
                 false,
-                () => abrirSino()
+                () => abrirNotificacoes()
             );
             marcarComoNotificado(r.id, 'proximo');
             return;
@@ -270,7 +316,7 @@ async function verificarLembretesNotificar() {
                 '📅 Atendimento HOJE',
                 `${r.alunoNome} - ${r.tipoTarefaLabel}\nHoje às ${r.horarioRemarcacao}`,
                 false,
-                () => abrirSino()
+                () => abrirNotificacoes()
             );
             marcarComoNotificado(r.id, 'hoje');
             return;
@@ -281,7 +327,7 @@ async function verificarLembretesNotificar() {
                 '📅 Atendimento AMANHÃ',
                 `${r.alunoNome} - ${r.tipoTarefaLabel}\nAmanhã às ${r.horarioRemarcacao}`,
                 false,
-                () => abrirSino()
+                () => abrirNotificacoes()
             );
             marcarComoNotificado(r.id, 'amanha');
         }
@@ -289,8 +335,8 @@ async function verificarLembretesNotificar() {
 }
 
 function atualizarBadgeComUrgencia() {
-    const badge = safeGet('sinoBadge');
-    const btn = safeGet('sinoBtn');
+    const badge = safeGet('notificacoesBadge');
+    const btn = safeGet('notificacoesBtn');
     if (!badge || !btn) return;
     if (!__lembretesAtuais || __lembretesAtuais.length === 0) return;
     
@@ -315,7 +361,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const allowedRoles = ['psicologia', 'super_admin', 'admin'];
     
     if (!allowedRoles.includes(userData.role)) {
-        alert('Acesso negado.');
+        mostrarToastConcluido('Acesso negado.', 'error');
         window.location.href = '/login.html';
         return;
     }
@@ -342,7 +388,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     setTimeout(() => inicializarAssinatura(), 800);
     
-    configurarSino();
     configurarFiltrosAndamento();
     configurarFiltrosConcluidos();
     
@@ -386,7 +431,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (__sinoAberto) { fecharSino(); return; }
             if (currentAluno) {
                 limparTela();
                 if (modoAtual === 'automatico') reiniciarScannerAutomatico();
@@ -631,50 +675,6 @@ function limparFiltrosConcluidos() {
 }
 
 // ============================================
-// 🔔 SINO DE LEMBRETES
-// ============================================
-function configurarSino() {
-    const sinoBtn = safeGet('sinoBtn');
-    if (!sinoBtn) return;
-    
-    sinoBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleSino();
-    });
-    
-    document.addEventListener('click', (e) => {
-        const dropdown = safeGet('sinoDropdown');
-        const btn = safeGet('sinoBtn');
-        if (!dropdown || !btn) return;
-        if (dropdown.contains(e.target) || btn.contains(e.target)) return;
-        if (__sinoAberto) fecharSino();
-    });
-    
-    console.log('🔔 Sino configurado');
-}
-
-function toggleSino() {
-    if (__sinoAberto) fecharSino();
-    else abrirSino();
-}
-
-function abrirSino() {
-    const dropdown = safeGet('sinoDropdown');
-    if (dropdown) {
-        dropdown.classList.add('aberto');
-        __sinoAberto = true;
-        atualizarStatusNotificacao();
-    }
-}
-
-function fecharSino() {
-    const dropdown = safeGet('sinoDropdown');
-    if (dropdown) {
-        dropdown.classList.remove('aberto');
-        __sinoAberto = false;
-    }
-}
-// ============================================
 // LEMBRETES / REMARCAÇÕES
 // ============================================
 async function carregarLembretes() {
@@ -685,7 +685,7 @@ async function carregarLembretes() {
         
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || !contentType.includes('application/json')) {
-            atualizarSino(0, []);
+            __lembretesAtuais = [];
             return;
         }
         
@@ -693,126 +693,15 @@ async function carregarLembretes() {
         
         if (data.success && Array.isArray(data.remarcacoes)) {
             __lembretesAtuais = data.remarcacoes;
-            atualizarSino(data.remarcacoes.length, data.remarcacoes);
-            
             verificarLembretesNotificar();
             atualizarBadgeComUrgencia();
             limparNotificacoesAntigas();
         } else {
-            atualizarSino(0, []);
+            __lembretesAtuais = [];
         }
     } catch (error) {
-        console.debug('ℹ️ Lembretes: rota ainda não disponível');
-        atualizarSino(0, []);
+        __lembretesAtuais = [];
     }
-}
-
-function atualizarSino(total, lembretes) {
-    const badge = safeGet('sinoBadge');
-    const btn = safeGet('sinoBtn');
-    const body = safeGet('sinoDropdownBody');
-    
-    if (badge) {
-        if (total > 0) {
-            badge.textContent = total > 99 ? '99+' : total;
-            badge.style.display = 'flex';
-            
-            const temUrgente = lembretes.some(r => calcularNivelAlerta(r).urgente);
-            if (temUrgente) {
-                btn.classList.add('tem-novidade');
-                badge.style.background = '#dc2626';
-            } else {
-                btn.classList.remove('tem-novidade');
-                badge.style.background = '#ef4444';
-            }
-        } else {
-            badge.style.display = 'none';
-            btn.classList.remove('tem-novidade');
-        }
-    }
-    
-    if (!body) return;
-    
-    if (total === 0) {
-        body.innerHTML = `
-            <div class="sino-vazio">
-                <i class="fas fa-bell-slash"></i>
-                <p>Nenhum lembrete pendente</p>
-            </div>
-        `;
-        return;
-    }
-    
-    const ordem = { atrasado: 0, iminente: 1, proximo: 2, hoje: 3, amanha: 4, futuro: 5 };
-    const lembretesOrdenados = [...lembretes].sort((a, b) => {
-        const na = calcularNivelAlerta(a);
-        const nb = calcularNivelAlerta(b);
-        return ordem[na.nivel] - ordem[nb.nivel];
-    });
-    
-    body.innerHTML = lembretesOrdenados.map(r => {
-        const nivel = calcularNivelAlerta(r);
-        const dataFormatada = formatarDataBR(r.dataRemarcacao);
-        
-        let itemClass = '';
-        let badgeClass = 'futuro';
-        let badgeText = nivel.label;
-        
-        if (nivel.nivel === 'atrasado') {
-            itemClass = 'atrasado';
-            badgeClass = 'atrasado';
-            badgeText = `⚠️ ${nivel.label}`;
-        } else if (nivel.nivel === 'iminente') {
-            itemClass = 'urgente';
-            badgeClass = 'urgente';
-            badgeText = `🔴 ${nivel.label}`;
-        } else if (nivel.nivel === 'proximo') {
-            itemClass = 'proximo';
-            badgeClass = 'proximo';
-            badgeText = `🟠 ${nivel.label}`;
-        } else if (nivel.nivel === 'hoje') {
-            itemClass = 'hoje';
-            badgeClass = 'hoje';
-            badgeText = `🟡 Hoje ${r.horarioRemarcacao}`;
-        } else if (nivel.nivel === 'amanha') {
-            itemClass = 'amanha';
-            badgeClass = 'amanha';
-            badgeText = `🔵 Amanhã ${r.horarioRemarcacao}`;
-        }
-        
-        return `
-            <div class="lembrete-item ${itemClass}">
-                <div class="lembrete-header">
-                    <span class="lembrete-nome">${escapeHTML(r.alunoNome || '')}</span>
-                    <span class="lembrete-badge ${badgeClass}">${badgeText}</span>
-                </div>
-                <div class="lembrete-turma">
-                    <i class="fas fa-graduation-cap"></i> ${escapeHTML(r.alunoTurma || '-')}
-                </div>
-                <div class="lembrete-data">
-                    <span><i class="fas fa-calendar"></i> ${dataFormatada}</span>
-                    <span><i class="fas fa-clock"></i> ${r.horarioRemarcacao || '-'}</span>
-                </div>
-                <span class="lembrete-tipo">${escapeHTML(r.tipoTarefaLabel || '')}</span>
-                <div class="lembrete-acoes">
-                    <button class="btn btn-primary btn-sm" onclick="verAtendimento('${r.atendimentoId}')" title="Ver Atendimento">
-                        <i class="fas fa-eye"></i> Ver
-                    </button>
-                    <button class="btn btn-warning btn-sm" onclick="abrirRemarcar('${r.atendimentoId}')" title="Remarcar">
-                        <i class="fas fa-calendar-plus"></i> Remarcar
-                    </button>
-                    <button class="btn btn-success btn-sm" onclick="abrirFinalizacaoRemarcacao('${r.id}')" title="Finalizar">
-                        <i class="fas fa-check"></i> Finalizar
-                    </button>
-                </div>
-                ${r.motivoRemarcacao ? `
-                    <div style="margin-top: 6px; font-size: 11px; color: #6b7280; font-style: italic;">
-                        <i class="fas fa-info-circle"></i> ${escapeHTML(r.motivoRemarcacao)}
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }).join('');
 }
 
 // ============================================
@@ -820,7 +709,7 @@ function atualizarSino(total, lembretes) {
 // ============================================
 async function verAtendimento(atendimentoId) {
     if (!atendimentoId) return;
-    fecharSino();
+    fecharNotificacoes();
     
     try {
         const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
@@ -830,7 +719,7 @@ async function verAtendimento(atendimentoId) {
         const data = await response.json();
         
         if (!data.success || !data.atendimento) {
-            alert('Erro ao carregar atendimento');
+            mostrarToastConcluido('Erro ao carregar atendimento', 'error');
             return;
         }
         
@@ -1019,7 +908,7 @@ async function verAtendimento(atendimentoId) {
         
     } catch (error) {
         console.error('Erro ao ver atendimento:', error);
-        alert('Erro ao carregar detalhes do atendimento');
+        mostrarToastConcluido('Erro ao carregar detalhes do atendimento', 'error');
     }
 }
 
@@ -1045,7 +934,7 @@ async function abrirEditarAtendimento(atendimentoId) {
         const data = await response.json();
         
         if (!data.success || !data.atendimento) {
-            alert('Erro ao carregar atendimento');
+            mostrarToastConcluido('Erro ao carregar atendimento', 'error');
             return;
         }
         
@@ -1136,7 +1025,7 @@ async function abrirEditarAtendimento(atendimentoId) {
         new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar para edição');
+        mostrarToastConcluido('Erro ao carregar para edição', 'error');
     }
 }
 
@@ -1149,7 +1038,7 @@ async function salvarEdicaoAtendimento() {
     const observacoes = safeGet('editObservacoes')?.value || '';
     
     if (!tipoTarefa || !descricao) {
-        alert('Preencha todos os campos obrigatórios');
+        mostrarToastConcluido('Preencha todos os campos obrigatórios', 'error');
         return;
     }
     
@@ -1183,11 +1072,11 @@ async function salvarEdicaoAtendimento() {
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            alert('❌ ' + (data.error || 'Erro ao salvar'));
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao salvar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar alterações');
+        mostrarToastConcluido('Erro ao salvar alterações', 'error');
     }
 }
 
@@ -1346,7 +1235,7 @@ async function iniciarScannerAutomatico() {
         console.log('✅ Scanner Automático iniciado');
     } catch (err) {
         console.error('Erro ao iniciar scanner automático:', err);
-        qrContainer.innerHTML = `<div class="alert alert-warning m-3">Não foi possível acessar a câmera.</div>`;
+        qrContainer.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-warning m-3">Não foi possível acessar a câmera.</div>`;
         scannerAutoAtivo = false;
     }
 }
@@ -1361,7 +1250,7 @@ async function pararScannerAutomatico() {
 
 async function onScanSuccessAuto(decodedText) {
     const alunoId = extrairAlunoId(decodedText);
-    if (!alunoId) { alert('QR Code inválido'); return; }
+    if (!alunoId) { mostrarToastConcluido('QR Code inválido', 'error'); return; }
     await pararScannerAutomatico();
     await buscarAluno(alunoId);
 }
@@ -1459,12 +1348,12 @@ async function carregarAlunosPorTurma() {
             filtrarAlunosManual();
         } else {
             safeGet('listaAlunosManual').innerHTML = 
-                '<div class="alert alert-warning">Nenhum aluno encontrado nesta turma</div>';
+                '<div class="mostrarToastConcluido mostrarToastConcluido-warning">Nenhum aluno encontrado nesta turma</div>';
         }
     } catch (error) {
         console.error('Erro:', error);
         safeGet('listaAlunosManual').innerHTML = 
-            '<div class="alert alert-danger">Erro ao carregar alunos</div>';
+            '<div class="mostrarToastConcluido mostrarToastConcluido-danger">Erro ao carregar alunos</div>';
     }
 }
 
@@ -1545,14 +1434,14 @@ async function buscarAluno(alunoId) {
             exibirAluno(data);
             mostrarFormRegistro();
         } else {
-            alert(data.error || 'Aluno não encontrado');
+            mostrarToastConcluido(data.error || 'Aluno não encontrado', 'error');
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
             else carregarAlunosPorTurma();
         }
     } catch (error) {
         console.error('Erro:', error);
-        if (error.name === 'AbortError') alert('Tempo esgotado ao buscar aluno.');
-        else alert('Erro ao buscar aluno');
+        if (error.name === 'AbortError') mostrarToastConcluido('Tempo esgotado ao buscar aluno.', 'error');
+        else mostrarToastConcluido('Erro ao buscar aluno', 'error');
         
         if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         else carregarAlunosPorTurma();
@@ -1582,7 +1471,7 @@ function exibirAluno(data) {
     if (statusDiv) {
         if (data.atendimentosAtivos && data.atendimentosAtivos.length > 0) {
             statusDiv.innerHTML = `
-                <div class="alert alert-warning">
+                <div class="mostrarToastConcluido mostrarToastConcluido-warning">
                     <i class="fas fa-clock"></i> 
                     <strong>${data.atendimentosAtivos.length} atendimento(s) em andamento</strong>
                     ${data.atendimentosAtivos.map(a => `
@@ -1599,7 +1488,7 @@ function exibirAluno(data) {
             `;
         } else {
             statusDiv.innerHTML = `
-                <div class="alert alert-info">
+                <div class="mostrarToastConcluido mostrarToastConcluido-info">
                     <i class="fas fa-info-circle"></i> Nenhum atendimento em andamento
                 </div>
             `;
@@ -1864,10 +1753,10 @@ function coletarDetalhes() {
 // REGISTRAR
 // ============================================
 async function registrarOcorrencia() {
-    if (!tipoTarefaSelecionado) { alert('Selecione o tipo de tarefa'); return; }
+    if (!tipoTarefaSelecionado) { mostrarToastConcluido('Selecione o tipo de tarefa', 'error'); return; }
     const descricao = (safeGet('descricao')?.value || '').trim();
-    if (!descricao) { alert('Descreva o ocorrido'); return; }
-    if (!currentAluno || !currentAluno.id) { alert('Nenhum aluno selecionado'); return; }
+    if (!descricao) { mostrarToastConcluido('Descreva o ocorrido', 'error'); return; }
+    if (!currentAluno || !currentAluno.id) { mostrarToastConcluido('Nenhum aluno selecionado', 'error'); return; }
     
     const btn = document.querySelector('#formRegistro .btn-primary-custom');
     if (btn) btn.disabled = true;
@@ -1896,14 +1785,14 @@ async function registrarOcorrencia() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ ${data.message}`);
+            mostrarToastConcluido(`✅ ${data.message}`, 'error');
             finalizarAposSucesso();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao registrar'));
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao registrar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao registrar: ' + error.message);
+        mostrarToastConcluido('Erro ao registrar: ' + error.message, 'error');
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -1953,7 +1842,7 @@ async function carregarAtendimentosAtivos() {
         atualizarBadgeTabAtivos(__atendimentosAtivosBrutos.length);
     } catch (error) {
         console.error('Erro:', error);
-        container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
+        container.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
     }
 }
 
@@ -2122,22 +2011,22 @@ async function finalizarAtendimento(atendimentoId, resultado, pularAlerta) {
         const data = await response.json();
         
         if (data.success) {
-            if (!pularAlerta) alert(`✅ ${data.message}`);
+            if (!pularAlerta) mostrarToastConcluido(`✅ ${data.message}`, 'error');
             carregarAtendimentosAtivos();
             carregarDashboard();
             carregarLembretes();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao finalizar'));
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao finalizar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao finalizar');
+        mostrarToastConcluido('Erro ao finalizar', 'error');
     }
 }
 
 function abrirRemarcar(atendimentoId) {
     if (!atendimentoId) return;
-    fecharSino();
+    fecharNotificacoes();
     
     const hoje = new Date();
     const amanha = new Date(hoje);
@@ -2211,9 +2100,9 @@ async function confirmarRemarcacao() {
     const motivoRemarcacao = safeGet('remarcarMotivo')?.value;
     const observacoesRemarcacao = safeGet('remarcarObservacoes')?.value || '';
     
-    if (!dataRemarcacao) { alert('Selecione a nova data'); return; }
-    if (!horarioRemarcacao) { alert('Selecione o horário'); return; }
-    if (!motivoRemarcacao) { alert('Selecione o motivo da remarcação'); return; }
+    if (!dataRemarcacao) { mostrarToastConcluido('Selecione a nova data', 'error'); return; }
+    if (!horarioRemarcacao) { mostrarToastConcluido('Selecione o horário', 'error'); return; }
+    if (!motivoRemarcacao) { mostrarToastConcluido('Selecione o motivo da remarcação', 'error'); return; }
     
     try {
         const response = await fetch('/api/psicologia/remarcar', {
@@ -2226,31 +2115,31 @@ async function confirmarRemarcacao() {
         
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
-            alert('⚠️ Esta funcionalidade ainda não está disponível no servidor.');
+            mostrarToastConcluido('⚠️ Esta funcionalidade ainda não está disponível no servidor.', 'error');
             return;
         }
         
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ ${data.message}`);
+            mostrarToastConcluido(`✅ ${data.message}`, 'error');
             const modal = bootstrap.Modal.getInstance(safeGet('modalRemarcar'));
             if (modal) modal.hide();
             
             carregarAtendimentosAtivos();
             carregarLembretes();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao remarcar'));
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao remarcar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('⚠️ Erro ao remarcar. Verifique se o backend está atualizado.');
+        mostrarToastConcluido('⚠️ Erro ao remarcar. Verifique se o backend está atualizado.', 'error');
     }
 }
 
 function abrirFinalizacaoRemarcacao(remarcacaoId) {
     if (!remarcacaoId) return;
-    fecharSino();
+    fecharNotificacoes();
     
     const modalHtml = `
         <div class="modal fade" id="modalFinalizarRemarcacao" tabindex="-1">
@@ -2345,12 +2234,12 @@ function abrirRemarcarPorRemarcacao(remarcacaoId) {
         if (data.success && data.remarcacao?.atendimentoId) {
             abrirRemarcar(data.remarcacao.atendimentoId);
         } else {
-            alert('Erro ao carregar dados da remarcação');
+            mostrarToastConcluido('Erro ao carregar dados da remarcação', 'error');
         }
     })
     .catch(e => {
         console.error(e);
-        alert('Erro ao carregar dados');
+        mostrarToastConcluido('Erro ao carregar dados', 'error');
     });
 }
 
@@ -2430,7 +2319,7 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
         const data = await response.json();
 
         if (!data.success || !Array.isArray(data.atendimentos)) {
-            container.innerHTML = `<div class="alert alert-warning">Nenhum atendimento concluído encontrado</div>`;
+            container.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-warning">Nenhum atendimento concluído encontrado</div>`;
             return;
         }
 
@@ -2457,7 +2346,7 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
     } catch (error) {
         console.error('Erro ao carregar concluídos:', error);
         container.innerHTML = `
-            <div class="alert alert-danger">
+            <div class="mostrarToastConcluido mostrarToastConcluido-danger">
                 <i class="fas fa-exclamation-triangle"></i> Erro ao carregar atendimentos
             </div>`;
     }
@@ -2757,7 +2646,7 @@ function abrirExclusaoEmMassa() {
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="alert alert-danger">
+                        <div class="mostrarToastConcluido mostrarToastConcluido-danger">
                             <strong>⚠️ ATENÇÃO!</strong><br>
                             Esta ação é <strong>IRREVERSÍVEL</strong>. Todos os atendimentos 
                             que corresponderem aos filtros serão <strong>PERMANENTEMENTE EXCLUÍDOS</strong>.
@@ -2800,12 +2689,12 @@ async function confirmarExclusaoMassa() {
     const confirmacao = (safeGet('massaConfirmacao')?.value || '').trim().toUpperCase();
 
     if (confirmacao !== 'CONFIRMAR') {
-        alert('⚠️ Digite "CONFIRMAR" para prosseguir');
+        mostrarToastConcluido('⚠️ Digite "CONFIRMAR" para prosseguir', 'error');
         return;
     }
 
     if (!dataCorte) {
-        alert('⚠️ Selecione uma data de corte');
+        mostrarToastConcluido('⚠️ Selecione uma data de corte', 'error');
         return;
     }
 
@@ -2828,7 +2717,7 @@ async function confirmarExclusaoMassa() {
 
         const contentType = response.headers.get('content-type') || '';
         if (!contentType.includes('application/json')) {
-            alert('⚠️ Esta funcionalidade ainda não está disponível no servidor.');
+            mostrarToastConcluido('⚠️ Esta funcionalidade ainda não está disponível no servidor.', 'error');
             return;
         }
 
@@ -2839,11 +2728,11 @@ async function confirmarExclusaoMassa() {
             carregarAtendimentosConcluidos(1);
             carregarDashboard();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao excluir em massa'));
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao excluir em massa'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir em massa');
+        mostrarToastConcluido('Erro ao excluir em massa', 'error');
     }
 }
 
@@ -3215,13 +3104,13 @@ async function carregarRelatorio() {
             if (dataFim) url += `dataFim=${dataFim}&`;
         } else if (tipo === 'turma') {
             const turma = safeGet('filtroTurma')?.value;
-            if (!turma) { alert('Selecione uma turma'); return; }
+            if (!turma) { mostrarToastConcluido('Selecione uma turma', 'error'); return; }
             url = `/api/psicologia/relatorio/turma/${encodeURIComponent(turma)}?`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
         } else if (tipo === 'aluno') {
             const alunoId = safeGet('filtroAluno')?.value;
-            if (!alunoId) { alert('Selecione um aluno na lista'); return; }
+            if (!alunoId) { mostrarToastConcluido('Selecione um aluno na lista', 'error'); return; }
             url = `/api/psicologia/relatorio/aluno/${alunoId}?`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
@@ -3234,11 +3123,11 @@ async function carregarRelatorio() {
             relatorioData = data;
             exibirRelatorio(data, tipo);
         } else {
-            alert('Erro ao carregar relatório: ' + (data.error || ''));
+            mostrarToastConcluido('Erro ao carregar relatório: ' + (data.error || ''));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar relatório');
+        mostrarToastConcluido('Erro ao carregar relatório', 'error');
     }
 }
 
@@ -3393,13 +3282,13 @@ function exibirRelatorio(data, tipo) {
         }
     } catch (error) {
         console.error('Erro ao exibir relatório:', error);
-        container.innerHTML = `<div class="alert alert-danger">Erro ao exibir relatório.</div>`;
+        container.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-danger">Erro ao exibir relatório.</div>`;
     }
 }
 
 function exportarCSV() {
     if (!relatorioData) {
-        alert('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.');
+        mostrarToastConcluido('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'error');
         return;
     }
     
@@ -3407,7 +3296,7 @@ function exportarCSV() {
     const dados = relatorioData.registros || relatorioData.atendimentos || [];
     
     if (dados.length === 0) {
-        alert('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.');
+        mostrarToastConcluido('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'error');
         return;
     }
     
@@ -3448,7 +3337,7 @@ async function imprimirAtendimento(atendimentoId) {
         const data = await response.json();
         
         if (!data.success || !data.atendimento) {
-            alert('Erro ao carregar atendimento');
+            mostrarToastConcluido('Erro ao carregar atendimento', 'error');
             return;
         }
         
@@ -3469,7 +3358,7 @@ async function imprimirAtendimento(atendimentoId) {
         win.onload = () => setTimeout(() => win.print(), 500);
     } catch (e) {
         console.error(e);
-        alert('Erro ao imprimir atendimento');
+        mostrarToastConcluido('Erro ao imprimir atendimento', 'error');
     }
 }
 
@@ -3478,6 +3367,9 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
     const carimbo = '/icons/assinatura_psicologia.ico';
     const dataExt = new Date(a.entrada.dataHora).toLocaleDateString('pt-BR', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const horaExt = new Date(a.entrada.dataHora).toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit'
     });
     
     const assinaturaHTML = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64
@@ -3489,89 +3381,137 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
             <img src="${carimbo}" alt="Carimbo Psicologia">
         </div>`;
     
+    // 🔥 NOVO: Detalhes dinâmicos
+    let detalhesHTML = '';
+    if (a.detalhes && Object.keys(a.detalhes).length > 0) {
+        const mapaDetalhes = {
+            tipoEscuta: 'Tipo de Escuta',
+            duracaoEscuta: 'Duração (min)',
+            tipoCrise: 'Tipo de Crise',
+            acoesTomadas: 'Ações Tomadas',
+            encaminhamentoEmergencial: 'Encaminhamento',
+            nomeAtividade: 'Nome da Atividade',
+            participantesAtividade: 'Participantes',
+            localAtividade: 'Local',
+            duracaoAtividade: 'Duração (min)',
+            temaAcao: 'Tema',
+            publicoAlvo: 'Público Alvo',
+            localAcao: 'Local',
+            temaSocioemocional: 'Tema Socioemocional',
+            tipoAtividadeCultural: 'Tipo Cultural',
+            parceria: 'Parcerias',
+            tipoTarefaOutros: 'Especificação',
+            providenciasTomadas: 'Providências',
+            proximosPassos: 'Próximos Passos',
+            contextoFamiliar: 'Contexto Familiar',
+            historicoAnterior: 'Histórico Anterior'
+        };
+        
+        const linhas = [];
+        Object.entries(a.detalhes).forEach(([key, value]) => {
+            if (!value || (Array.isArray(value) && value.length === 0)) return;
+            const label = mapaDetalhes[key] || key;
+            let valor = value;
+            if (Array.isArray(value)) valor = value.join(', ');
+            if (typeof value === 'boolean') valor = value ? 'Sim' : 'Não';
+            if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
+                try { valor = new Date(value).toLocaleDateString('pt-BR'); } catch(e){}
+            }
+            linhas.push(`<p><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</p>`);
+        });
+        
+        if (linhas.length > 0) {
+            detalhesHTML = `
+                <div class="section-box">
+                    <h3>📋 Detalhes</h3>
+                    ${linhas.join('')}
+                </div>`;
+        }
+    }
+    
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
         <title>Atendimento Psicologia - ${a.alunoNome}</title>
         <style>
-            @page { size: A4 landscape; margin: 0; }
+            @page { size: A4 portrait; margin: 15mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body { width: 297mm; height: 210mm; font-family: 'Times New Roman', Times, serif; background: #f0f0f0; }
-            .folha-metade {
-                width: 148.5mm; height: 210mm; padding: 8mm 10mm;
-                background: white; position: relative; margin: 0;
-                page-break-after: always; overflow: hidden;
-                font-size: 9pt; line-height: 1.3;
+            html, body {
+                width: 210mm; min-height: 297mm;
+                font-family: 'Times New Roman', Times, serif;
+                background: #f0f0f0;
+                display: flex; justify-content: center; align-items: flex-start;
+            }
+            .folha {
+                width: 180mm; min-height: 267mm; padding: 10mm;
+                background: white; margin: 0 auto;
+                font-size: 10pt; line-height: 1.4;
+                display: flex; flex-direction: column;
             }
             @media print {
-                html, body { width: 297mm; height: 210mm; background: white; }
-                .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; }
+                html, body { width: 210mm; height: 297mm; background: white; display: block; }
+                .folha { width: 100%; min-height: auto; padding: 0; margin: 0 auto; }
                 .btn-print { display: none !important; }
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 5px; margin-bottom: 6px; }
-            .header img { max-width: 100%; height: auto; max-height: 22mm; object-fit: contain; }
-            .header h1 { font-size: 9pt; margin: 3px 0 0 0; text-transform: uppercase; font-weight: bold; }
-            .titulo { text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 6px 0; background: #e0f2fe; padding: 5px; border: 1.5px solid #000; letter-spacing: 1px; }
-            .info-section { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; }
-            .info-row { display: flex; margin-bottom: 4px; gap: 10px; align-items: baseline; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
+            .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
+            .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
+            .titulo {
+                text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase;
+                margin: 10px 0; background: #e0f2fe; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px;
+            }
+            .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
+            .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
             .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
-            .label { font-weight: bold; font-size: 8pt; white-space: nowrap; }
+            .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+            .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
             .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 14px; min-height: 14px;
-                font-size: 9pt; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px;
+                font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
             }
-            .section-box { background: #f5f5f5; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
-            .section-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
-            .section-box p { margin: 0; font-size: 9pt; }
-            .descricao-box { border: 1px solid #000; padding: 6px 8px; min-height: 20mm; margin: 6px 0; font-size: 8.5pt; }
-            .descricao-box strong { display: block; margin-bottom: 3px; font-size: 9pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 8pt; }
+            .section-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
+            .section-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
+            .section-box p { margin: 3px 0; font-size: 9.5pt; }
+            .descricao-box { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
+            .descricao-box strong { display: block; margin-bottom: 5px; font-size: 10pt; }
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
+            .assinatura { text-align: center; flex: 1; font-size: 9pt; }
             .assinatura-digital {
-                border-bottom: 1px solid #000; min-height: 15mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
+                border-bottom: 1px solid #000; min-height: 18mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
             }
-            .assinatura-digital img { max-height: 14mm; max-width: 100%; object-fit: contain; }
+            .assinatura-digital img { max-height: 16mm; max-width: 100%; object-fit: contain; }
             .assinatura-vazia {
-                border-bottom: 1px solid #000; min-height: 15mm;
+                border-bottom: 1px solid #000; min-height: 18mm;
                 display: flex; align-items: flex-end; justify-content: center;
-                color: #999; font-size: 8pt; padding-bottom: 2px;
+                color: #999; font-size: 9pt; padding-bottom: 3px;
             }
-            .assinatura-linha { padding-top: 3px; font-size: 8pt; }
+            .assinatura-linha { padding-top: 5px; font-size: 9pt; }
             .carimbo-psicologia {
-                border-bottom: 1px solid #000; min-height: 15mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
+                border-bottom: 1px solid #000; min-height: 18mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
             }
-            .carimbo-psicologia img {
-                max-height: 14mm; max-width: 100%; object-fit: contain; opacity: 0.9;
-            }
-            .qr-code { text-align: center; margin-top: 4px; }
-            .qr-code img { width: 18mm; height: 18mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 7pt; margin: 2px 0 0 0; }
+            .carimbo-psicologia img { max-height: 16mm; max-width: 100%; object-fit: contain; opacity: 0.9; }
+            .qr-code { text-align: center; margin-top: 8px; }
+            .qr-code img { width: 22mm; height: 22mm; border: 1px solid #000; padding: 1px; }
+            .qr-code p { font-size: 8pt; margin: 3px 0 0 0; }
             .footer {
-                text-align: center; margin-top: 5px; padding-top: 4px;
-                border-top: 1px solid #000; font-size: 7pt; color: #444;
+                text-align: center; margin-top: auto; padding-top: 8px;
+                border-top: 1px solid #000; font-size: 8pt; color: #444;
             }
-            .footer p { margin: 1px 0; }
+            .footer p { margin: 2px 0; }
             .btn-print {
                 display: block; margin: 15px auto; padding: 10px 30px;
                 background: #14b8a6; color: white; border: none; border-radius: 8px;
                 font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #0d9488; }
-            .linha-corte {
-                position: fixed; left: 148.5mm; top: 0; width: 0; height: 210mm;
-                border-left: 1px dashed #999; pointer-events: none;
-            }
-            @media print { .linha-corte { display: none; } }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="linha-corte"></div>
-        <div class="folha-metade">
+        <div class="folha">
             <div class="header">
                 <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
                 <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
@@ -3606,6 +3546,10 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
                         <span class="label">Data:</span>
                         <span class="underline">${dataExt}</span>
                     </div>
+                    <div class="info-item">
+                        <span class="label">Horário:</span>
+                        <span class="underline">${horaExt}</span>
+                    </div>
                 </div>
             </div>
             
@@ -3622,15 +3566,17 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
             
             <div class="descricao-box">
                 <strong>📝 Descrição do Ocorrido:</strong>
-                ${a.entrada?.descricao || '_______________________________________________________________'}
+                ${(a.entrada?.descricao || '_______________________________________________________________').replace(/\n/g, '<br>')}
             </div>
             
             ${a.entrada?.observacoes ? `
-                <div class="descricao-box" style="min-height: 12mm;">
+                <div class="descricao-box" style="min-height: 18mm;">
                     <strong>💬 Observações:</strong>
-                    ${a.entrada.observacoes}
+                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
                 </div>
             ` : ''}
+            
+            ${detalhesHTML}
             
             <div class="assinaturas">
                 <div class="assinatura">
@@ -3657,6 +3603,384 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
     </body>
     </html>`;
 }
+
+// ============================================
+// 🔔 SISTEMA DE NOTIFICAÇÕES UNIFICADO
+// (Notificações do sistema + Lembretes de remarcação)
+// ============================================
+
+let notificacoesInterval = null;
+let __notificacoesCache = [];
+let __lembretesCache = [];
+
+function isWebView() {
+    return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+           (typeof window.AppInventor !== 'undefined');
+}
+
+function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
+    if (!isWebView()) { mostrarToastConcluido(mensagem); return; }
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
+        z-index: 999999; padding: 20px; box-sizing: border-box;`;
+    const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#14b8a6' };
+    
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div>
+            <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
+                ${mensagem}</p>
+            <button onclick="this.closest('div').parentElement.remove()"
+                    style="width: 100%; padding: 12px; background: ${cores[tipo] || cores.info};
+                           color: white; border: none; border-radius: 10px; font-size: 14px;
+                           font-weight: 600; cursor: pointer;">OK</button>
+        </div>`;
+    document.body.appendChild(modal);
+}
+
+function confirmarInterno(mensagem) {
+    return new Promise((resolve) => {
+        const old = document.getElementById('confirmInternoModal');
+        if (old) old.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="confirmInternoModal" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-question-circle"></i> Confirmação</h5>
+                        </div>
+                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">${escapeHTML(mensagem)}</div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmInterno">
+                                <i class="fas fa-times"></i> Cancelar</button>
+                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmInterno">
+                                <i class="fas fa-check"></i> Confirmar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modalEl = document.getElementById('confirmInternoModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        
+        const finalizar = (resultado) => {
+            modal.hide();
+            setTimeout(() => modalEl.remove(), 300);
+            resolve(resultado);
+        };
+        document.getElementById('btnConfirmarConfirmInterno').addEventListener('click', () => finalizar(true));
+        document.getElementById('btnCancelarConfirmInterno').addEventListener('click', () => finalizar(false));
+    });
+}
+
+function iniciarSistemaNotificacoesUnificado() {
+    if (!document.getElementById('notificacoesBtn')) return;
+    
+    carregarTudo();
+    if (notificacoesInterval) clearInterval(notificacoesInterval);
+    notificacoesInterval = setInterval(carregarTudo, 30000);
+    
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('notificacoesDropdown');
+        const btn = document.getElementById('notificacoesBtn');
+        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+}
+
+async function carregarTudo() {
+    await Promise.all([
+        carregarNotificacoesSistema(),
+        carregarLembretesRemarcacao()
+    ]);
+    renderizarSinoUnificado();
+    atualizarBadgeUnificado();
+}
+
+async function carregarNotificacoesSistema() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success) {
+            __notificacoesCache = data.notificacoes || [];
+        }
+    } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
+    }
+}
+
+async function carregarLembretesRemarcacao() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/psicologia/remarcacoes/pendentes', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || !contentType.includes('application/json')) {
+            __lembretesCache = [];
+            return;
+        }
+        const data = await response.json();
+        if (data.success && Array.isArray(data.remarcacoes)) {
+            __lembretesCache = data.remarcacoes;
+        } else {
+            __lembretesCache = [];
+        }
+    } catch (error) {
+        __lembretesCache = [];
+    }
+}
+
+function renderizarSinoUnificado() {
+    const lista = document.getElementById('notificacoesLista');
+    if (!lista) return;
+    
+    const temNotificacoes = __notificacoesCache.length > 0;
+    const temLembretes = __lembretesCache.length > 0;
+    
+    if (!temNotificacoes && !temLembretes) {
+        lista.innerHTML = `
+            <div class="notificacoes-vazio">
+                <i class="fas fa-bell-slash"></i>
+                <p>Nenhuma notificação</p>
+            </div>`;
+        return;
+    }
+    
+    let html = '';
+    
+    if (temLembretes) {
+        html += `
+            <div class="notificacoes-secao">
+                <div class="notificacoes-secao-titulo">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Lembretes de Remarcação</span>
+                    <span class="badge-count">${__lembretesCache.length}</span>
+                </div>`;
+        
+        const ordem = { atrasado: 0, iminente: 1, proximo: 2, hoje: 3, amanha: 4, futuro: 5 };
+        const lembretesOrdenados = [...__lembretesCache].sort((a, b) => {
+            return ordem[calcularNivelAlerta(a).nivel] - ordem[calcularNivelAlerta(b).nivel];
+        });
+        
+        lembretesOrdenados.forEach(r => {
+            const nivel = calcularNivelAlerta(r);
+            let itemClass = '';
+            let badgeClass = 'futuro';
+            let badgeText = nivel.label;
+            
+            if (nivel.nivel === 'atrasado') { itemClass = 'atrasado'; badgeClass = 'atrasado'; badgeText = `⚠️ ${nivel.label}`; }
+            else if (nivel.nivel === 'iminente') { itemClass = 'urgente'; badgeClass = 'urgente'; badgeText = `🔴 ${nivel.label}`; }
+            else if (nivel.nivel === 'proximo') { itemClass = 'proximo'; badgeClass = 'proximo'; badgeText = `🟠 ${nivel.label}`; }
+            else if (nivel.nivel === 'hoje') { itemClass = 'hoje'; badgeClass = 'hoje'; badgeText = `🟡 Hoje ${r.horarioRemarcacao}`; }
+            else if (nivel.nivel === 'amanha') { itemClass = 'amanha'; badgeClass = 'amanha'; badgeText = `🔵 Amanhã ${r.horarioRemarcacao}`; }
+            
+            html += `
+                <div class="lembrete-item ${itemClass}">
+                    <div class="lembrete-header">
+                        <span class="lembrete-nome">${escapeHTML(r.alunoNome || '')}</span>
+                        <span class="lembrete-badge ${badgeClass}">${badgeText}</span>
+                    </div>
+                    <div class="lembrete-turma">
+                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(r.alunoTurma || '-')}
+                    </div>
+                    <div class="lembrete-data">
+                        <span><i class="fas fa-calendar"></i> ${formatarDataBR(r.dataRemarcacao)}</span>
+                        <span><i class="fas fa-clock"></i> ${r.horarioRemarcacao || '-'}</span>
+                    </div>
+                    <span class="lembrete-tipo">${escapeHTML(r.tipoTarefaLabel || '')}</span>
+                    <div class="lembrete-acoes">
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); verAtendimento('${r.atendimentoId}')">
+                            <i class="fas fa-eye"></i> Ver
+                        </button>
+                        <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); abrirRemarcar('${r.atendimentoId}')">
+                            <i class="fas fa-calendar-plus"></i> Remarcar
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); abrirFinalizacaoRemarcacao('${r.id}')">
+                            <i class="fas fa-check"></i> Finalizar
+                        </button>
+                    </div>
+                </div>`;
+        });
+        
+        html += `</div>`;
+    }
+    
+    if (temNotificacoes) {
+        html += `
+            <div class="notificacoes-secao">
+                <div class="notificacoes-secao-titulo" style="background: #f0fdfa; color: #115e59;">
+                    <i class="fas fa-bell" style="color: #14b8a6;"></i>
+                    <span>Notificações do Sistema</span>
+                    <span class="badge-count" style="background: #14b8a6;">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
+                </div>`;
+        
+        __notificacoesCache.forEach(notif => {
+            const data = new Date(notif.createdAt);
+            const agora = new Date();
+            const diffMs = agora - data;
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHr = Math.floor(diffMs / 3600000);
+            const diffDia = Math.floor(diffMs / 86400000);
+            
+            let tempoTexto;
+            if (diffMin < 1) tempoTexto = 'agora mesmo';
+            else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+            else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
+            else tempoTexto = `há ${diffDia} d`;
+            
+            const classeLida = notif.lida ? '' : 'nao-lida';
+            
+            html += `
+                <div class="notificacao-item ${classeLida}"
+                     data-notif-id="${notif._id}"
+                     data-notif-link="${escapeHTML(notif.link || '#')}"
+                     style="cursor: pointer;">
+                    <div class="notificacao-icone" style="background: ${notif.cor || '#14b8a6'};">
+                        ${notif.icone || '📋'}
+                    </div>
+                    <div class="notificacao-conteudo">
+                        <div class="notificacao-titulo">${escapeHTML(notif.titulo || '')}</div>
+                        <div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div>
+                        <div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div>
+                    </div>
+                </div>`;
+        });
+        
+        html += `</div>`;
+    }
+    
+    lista.innerHTML = html;
+    
+    lista.querySelectorAll('.notificacao-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const id = item.getAttribute('data-notif-id');
+            const link = item.getAttribute('data-notif-link');
+            abrirNotificacao(id, link);
+        });
+    });
+}
+
+function atualizarBadgeUnificado() {
+    const badge = document.getElementById('notificacoesBadge');
+    const btn = document.getElementById('notificacoesBtn');
+    if (!badge || !btn) return;
+    
+    const total = __notificacoesCache.filter(n => !n.lida).length + __lembretesCache.length;
+    
+    if (total > 0) {
+        badge.textContent = total > 99 ? '99+' : total;
+        badge.style.display = 'inline-flex';
+        
+        const temUrgente = __lembretesCache.some(r => calcularNivelAlerta(r).urgente);
+        if (temUrgente) {
+            btn.classList.add('tem-notificacao');
+            badge.style.background = '#dc2626';
+        } else {
+            btn.classList.remove('tem-notificacao');
+            badge.style.background = '#ef4444';
+        }
+    } else {
+        badge.style.display = 'none';
+        btn.classList.remove('tem-notificacao');
+    }
+}
+
+function abrirNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (!dropdown) return;
+    dropdown.classList.toggle('show');
+    if (dropdown.classList.contains('show')) {
+        carregarTudo();
+    }
+}
+
+function fecharNotificacoes() {
+    document.getElementById('notificacoesDropdown')?.classList.remove('show');
+}
+
+async function abrirNotificacao(id, link) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        await fetch(`/api/notificacoes/${id}/lida`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        fecharNotificacoes();
+        if (link && link !== '#') window.location.href = link;
+        carregarTudo();
+    } catch (error) {
+        console.error('Erro ao abrir notificação:', error);
+    }
+}
+
+async function marcarTodasLidas() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success) {
+            await carregarTudo();
+            mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success');
+        }
+    } catch (error) {
+        console.error('Erro ao marcar todas como lidas:', error);
+    }
+}
+
+async function limparMinhasNotificacoes(event) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const confirmacao = await confirmarInterno('🗑️ Deseja excluir TODAS as suas notificações do sistema?\n\n⚠️ Os lembretes de remarcação NÃO serão afetados.\n\nEsta ação não pode ser desfeita.');
+        if (!confirmacao) return;
+        
+        const response = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            __notificacoesCache = [];
+            await carregarTudo();
+            mostrarNotificacaoInterna('Notificações excluídas com sucesso!', 'success');
+        } else {
+            throw new Error(data.error || 'Erro ao excluir');
+        }
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        mostrarNotificacaoInterna(error.message, 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
+});
+
+window.addEventListener('beforeunload', () => {
+    if (notificacoesInterval) clearInterval(notificacoesInterval);
+});
 
 async function logout() {
     const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
@@ -3706,3 +4030,11 @@ window.abrirExclusaoEmMassa = abrirExclusaoEmMassa;
 window.confirmarExclusaoMassa = confirmarExclusaoMassa;
 window.mostrarToastConcluido = mostrarToastConcluido;
 window.imprimirAtendimento = imprimirAtendimento;
+
+window.abrirNotificacoes = abrirNotificacoes;
+window.abrirNotificacao = abrirNotificacao;
+window.marcarTodasLidas = marcarTodasLidas;
+window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+window.fecharNotificacoes = fecharNotificacoes;
+window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
+window.confirmarInterno = confirmarInterno;

@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#667eea">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -19,7 +18,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
-    <!-- Acessibilidade -->
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
@@ -28,7 +26,6 @@
     <script src="js/push-client.js"></script>
     <script src="js/dialog-helper.js"></script> 
 
-    <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/coordenacao-patio.css">
 </head>
 <body>
@@ -45,6 +42,48 @@
                 </div>
             </div>
             <div class="btn-actions">
+                <!-- 🔔 SINO DE NOTIFICAÇÕES -->
+                <div class="notificacoes-container">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações">
+                        <i class="fas fa-bell"></i>
+                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
+                    </button>
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                        <div class="notificacoes-header">
+                            <h3>
+                                <i class="fas fa-bell"></i>
+                                Notificações
+                            </h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                                    <i class="fas fa-check-double"></i> Ler todas
+                                </button>
+                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                    <i class="fas fa-trash"></i> Limpar
+                                </button>
+                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="notificacoesLista" style="max-height: 500px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                                <p>Carregando...</p>
+                            </div>
+                        </div>
+
+                        <div class="notificacao-footer">
+                            <a href="/notificacoes.html">
+                                <i class="fas fa-eye"></i> Ver todas as notificações
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <!-- FIM DO SINO -->
+
                 <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" target="_blank" class="btn-icon" style="
                     background: linear-gradient(135deg, #10b981, #059669);
                     border-radius: 50%;
@@ -124,7 +163,6 @@
                         Selecione uma turma e clique no aluno para registrar a refeição diretamente.
                     </p>
                     
-                    <!-- Filtro de Turma -->
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Turma</label>
@@ -138,7 +176,6 @@
                         </div>
                     </div>
                     
-                    <!-- Lista de Alunos -->
                     <div id="listaAlunosManual" class="mt-3">
                         <div class="text-center py-3">
                             <div class="loading"></div>
@@ -228,6 +265,7 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
     <script>
         // ============================================
         // COORDENAÇÃO DE PÁTIO - MODO AUTOMÁTICO E MANUAL
@@ -241,9 +279,6 @@
         let turmasDisponiveis = [];
         let alunosPorTurma = [];
         
-        // ============================================
-        // GERAR AVATAR SVG LOCAL
-        // ============================================
         function gerarAvatarSVG(nome) {
             const inicial = (nome || '?').charAt(0).toUpperCase();
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#667eea"/><stop offset="100%" stop-color="#764ba2"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="50" font-family="Arial,sans-serif" font-size="45" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
@@ -256,7 +291,6 @@
                       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
         
-        // Inicialização
         document.addEventListener('DOMContentLoaded', async () => {
             if (!token) { window.location.href = '/login.html'; return; }
             
@@ -274,7 +308,6 @@
             await carregarContadores();
             await carregarTurmasParaManual();
             
-            // Iniciar o modo automático (câmera sempre ativa)
             iniciarScannerAutomatico();
             
             setInterval(carregarContadores, 30000);
@@ -304,9 +337,6 @@
             }
         }
         
-        // ============================================
-        // SCANNER DO MODO AUTOMÁTICO
-        // ============================================
         async function iniciarScannerAutomatico() {
             const qrContainer = document.getElementById('qr-reader-auto');
             qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
@@ -361,9 +391,6 @@
             await buscarAluno(alunoId);
         }
         
-        // ============================================
-        // GERENCIAMENTO DE MODOS
-        // ============================================
         async function setModo(modo) {
             modoAtual = modo;
             
@@ -394,9 +421,6 @@
             }
         }
         
-        // ============================================
-        // MODO MANUAL - CARREGAR ALUNOS
-        // ============================================
         async function carregarTurmasParaManual() {
             try {
                 const response = await fetch('/api/coordenacao-patio/alunos', {
@@ -484,7 +508,6 @@
             
             container.innerHTML = html;
             
-            // Adicionar listeners
             container.querySelectorAll('.list-group-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const id = item.getAttribute('data-aluno-id');
@@ -494,9 +517,6 @@
             });
         }
         
-        // ============================================
-        // CLICAR NO ALUNO PROCESSA DIRETO (SEM QR CODE)
-        // ============================================
         async function selecionarAluno(alunoId, alunoNome, itemEl) {
             console.log(`🎯 Aluno selecionado: ${alunoNome} (${alunoId})`);
             
@@ -521,14 +541,10 @@
             }
         }
         
-        // ============================================
-        // BUSCAR ALUNO (com timeout)
-        // ============================================
         async function buscarAluno(alunoId) {
             try {
                 await pararScannerAutomatico();
                 
-                // Timeout de 10 segundos
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
@@ -545,8 +561,6 @@
                 if (data.success) {
                     currentAluno = data.aluno;
                     exibirAluno(data);
-                    
-                    // Registrar automaticamente após exibir
                     await registrarRefeicaoAutomatico();
                 } else {
                     alert('Usuário não encontrado');
@@ -764,10 +778,301 @@
         window.logout = logout;
     </script>
 
+    <!-- ============================================ -->
+    <!-- 🔔 SISTEMA DE NOTIFICAÇÕES (Simples)        -->
+    <!-- ============================================ -->
     <script>
-        // ============================================
-        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-        // ============================================
+    (function() {
+        let notificacoesInterval = null;
+        let __notificacoesCache = [];
+
+        function isWebViewNotif() {
+            return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                   (typeof window.AppInventor !== 'undefined');
+        }
+
+        function escapeHTMLNotif(str) {
+            if (typeof str !== 'string') return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
+            if (!isWebViewNotif()) { alert(mensagem); return; }
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
+                z-index: 999999; padding: 20px; box-sizing: border-box;`;
+            const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+            const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#667eea' };
+            
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%;
+                            box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div>
+                    <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
+                        ${mensagem}</p>
+                    <button onclick="this.closest('div').parentElement.remove()"
+                            style="width: 100%; padding: 12px; background: ${cores[tipo] || cores.info};
+                                   color: white; border: none; border-radius: 10px; font-size: 14px;
+                                   font-weight: 600; cursor: pointer;">OK</button>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        function confirmarInternoNotif(mensagem) {
+            return new Promise((resolve) => {
+                const old = document.getElementById('confirmInternoModalNotif');
+                if (old) old.remove();
+                
+                const modalHtml = `
+                    <div class="modal fade" id="confirmInternoModalNotif" tabindex="-1" data-bs-backdrop="static">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+                                    <h5 class="modal-title"><i class="fas fa-question-circle"></i> Confirmação</h5>
+                                </div>
+                                <div class="modal-body" style="white-space: pre-line; font-size: 15px;">${escapeHTMLNotif(mensagem)}</div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" id="btnCancelarConfirmInternoNotif">
+                                        <i class="fas fa-times"></i> Cancelar</button>
+                                    <button type="button" class="btn btn-danger" id="btnConfirmarConfirmInternoNotif">
+                                        <i class="fas fa-check"></i> Confirmar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                const modalEl = document.getElementById('confirmInternoModalNotif');
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+                
+                const finalizar = (resultado) => {
+                    modal.hide();
+                    setTimeout(() => modalEl.remove(), 300);
+                    resolve(resultado);
+                };
+                document.getElementById('btnConfirmarConfirmInternoNotif').addEventListener('click', () => finalizar(true));
+                document.getElementById('btnCancelarConfirmInternoNotif').addEventListener('click', () => finalizar(false));
+            });
+        }
+
+        function iniciarSistemaNotificacoes() {
+            if (!document.getElementById('notificacoesBtn')) return;
+            
+            carregarTudo();
+            if (notificacoesInterval) clearInterval(notificacoesInterval);
+            notificacoesInterval = setInterval(carregarTudo, 30000);
+            
+            document.addEventListener('click', function(event) {
+                const dropdown = document.getElementById('notificacoesDropdown');
+                const btn = document.getElementById('notificacoesBtn');
+                if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+        }
+
+        async function carregarTudo() {
+            await carregarNotificacoesSistema();
+            renderizarSino();
+            atualizarBadge();
+        }
+
+        async function carregarNotificacoesSistema() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+                
+                const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    __notificacoesCache = data.notificacoes || [];
+                }
+            } catch (error) {
+                console.error('Erro ao carregar notificações:', error);
+            }
+        }
+
+        function renderizarSino() {
+            const lista = document.getElementById('notificacoesLista');
+            if (!lista) return;
+            
+            if (__notificacoesCache.length === 0) {
+                lista.innerHTML = `
+                    <div class="notificacoes-vazio">
+                        <i class="fas fa-bell-slash"></i>
+                        <p>Nenhuma notificação</p>
+                    </div>`;
+                return;
+            }
+            
+            let html = `
+                <div class="notificacoes-secao">
+                    <div class="notificacoes-secao-titulo">
+                        <i class="fas fa-bell"></i>
+                        <span>Notificações</span>
+                        <span class="badge-count">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
+                    </div>`;
+            
+            __notificacoesCache.forEach(notif => {
+                const data = new Date(notif.createdAt);
+                const agora = new Date();
+                const diffMs = agora - data;
+                const diffMin = Math.floor(diffMs / 60000);
+                const diffHr = Math.floor(diffMs / 3600000);
+                const diffDia = Math.floor(diffMs / 86400000);
+                
+                let tempoTexto;
+                if (diffMin < 1) tempoTexto = 'agora mesmo';
+                else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+                else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
+                else tempoTexto = `há ${diffDia} d`;
+                
+                const classeLida = notif.lida ? '' : 'nao-lida';
+                
+                html += `
+                    <div class="notificacao-item ${classeLida}"
+                         data-notif-id="${notif._id}"
+                         data-notif-link="${escapeHTMLNotif(notif.link || '#')}"
+                         style="cursor: pointer;">
+                        <div class="notificacao-icone" style="background: ${notif.cor || '#667eea'};">
+                            ${notif.icone || '📋'}
+                        </div>
+                        <div class="notificacao-conteudo">
+                            <div class="notificacao-titulo">${escapeHTMLNotif(notif.titulo || '')}</div>
+                            <div class="notificacao-mensagem">${escapeHTMLNotif(notif.mensagem || '')}</div>
+                            <div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div>
+                        </div>
+                    </div>`;
+            });
+            
+            html += `</div>`;
+            lista.innerHTML = html;
+            
+            lista.querySelectorAll('.notificacao-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = item.getAttribute('data-notif-id');
+                    const link = item.getAttribute('data-notif-link');
+                    abrirNotificacao(id, link);
+                });
+            });
+        }
+
+        function atualizarBadge() {
+            const badge = document.getElementById('notificacoesBadge');
+            const btn = document.getElementById('notificacoesBtn');
+            if (!badge || !btn) return;
+            
+            const total = __notificacoesCache.filter(n => !n.lida).length;
+            
+            if (total > 0) {
+                badge.textContent = total > 99 ? '99+' : total;
+                badge.style.display = 'inline-flex';
+                btn.classList.remove('tem-notificacao');
+                badge.style.background = '#ef4444';
+            } else {
+                badge.style.display = 'none';
+                btn.classList.remove('tem-notificacao');
+            }
+        }
+
+        function abrirNotificacoes() {
+            const dropdown = document.getElementById('notificacoesDropdown');
+            if (!dropdown) return;
+            dropdown.classList.toggle('show');
+            if (dropdown.classList.contains('show')) {
+                carregarTudo();
+            }
+        }
+
+        function fecharNotificacoes() {
+            document.getElementById('notificacoesDropdown')?.classList.remove('show');
+        }
+
+        async function abrirNotificacao(id, link) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                await fetch(`/api/notificacoes/${id}/lida`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                fecharNotificacoes();
+                if (link && link !== '#') window.location.href = link;
+                carregarTudo();
+            } catch (error) {
+                console.error('Erro ao abrir notificação:', error);
+            }
+        }
+
+        async function marcarTodasLidas() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    await carregarTudo();
+                    mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success');
+                }
+            } catch (error) {
+                console.error('Erro ao marcar todas como lidas:', error);
+            }
+        }
+
+        async function limparMinhasNotificacoes(event) {
+            try {
+                const token = localStorage.getItem('auth_token');
+                const confirmacao = await confirmarInternoNotif('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+                if (!confirmacao) return;
+                
+                const response = await fetch('/api/notificacoes/limpar-minhas', {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    __notificacoesCache = [];
+                    await carregarTudo();
+                    mostrarNotificacaoInterna('Notificações excluídas com sucesso!', 'success');
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                mostrarNotificacaoInterna(error.message, 'error');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => iniciarSistemaNotificacoes(), 500);
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (notificacoesInterval) clearInterval(notificacoesInterval);
+        });
+
+        window.abrirNotificacoes = abrirNotificacoes;
+        window.abrirNotificacao = abrirNotificacao;
+        window.marcarTodasLidas = marcarTodasLidas;
+        window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+        window.fecharNotificacoes = fecharNotificacoes;
+        window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
+        window.confirmarInternoNotif = confirmarInternoNotif;
+    })();
+    </script>
+
+    <script>
         (function() {
             if (window.innerWidth > 768) return;
             
@@ -798,7 +1103,6 @@
 
     <script>
         if ('serviceWorker' in navigator) {
-            // Desregistra service workers antigos
             navigator.serviceWorker.getRegistrations().then(registrations => {
                 registrations.forEach(reg => reg.unregister());
             });

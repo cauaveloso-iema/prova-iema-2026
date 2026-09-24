@@ -3,6 +3,60 @@
 // CLASSE PRINCIPAL - SETOR PEDAGÓGICO
 // ============================================================================
 
+// ============================================
+// 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
+// ============================================
+(function protegerContraAlertNativo() {
+    let __alertaEmProgresso = false;
+    
+    window.alert = function(mensagem) {
+        if (__alertaEmProgresso) {
+            console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+            return;
+        }
+        __alertaEmProgresso = true;
+        
+        try {
+            const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                              (typeof window.AppInventor !== 'undefined');
+            
+            // Se existe a instância global, usa o toast dela
+            if (typeof window.setorPedagogico !== 'undefined' && 
+                typeof window.setorPedagogico.showToast === 'function') {
+                window.setorPedagogico.showToast(String(mensagem), 'info');
+                return;
+            }
+            
+            if (!isWebView) {
+                console.log('%c[ALERT] ' + mensagem, 'background:#f59e0b;color:white;padding:4px 8px;border-radius:4px;');
+                return;
+            }
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+            modal.innerHTML = `
+                <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                            width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                    <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                    <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                              line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                    <button onclick="this.closest('div').parentElement.remove()"
+                            style="width:100%;padding:12px;background:#f59e0b;color:white;
+                                   border:none;border-radius:10px;font-size:14px;
+                                   font-weight:600;cursor:pointer;">OK</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } finally {
+            __alertaEmProgresso = false;
+        }
+    };
+    
+    console.log('🛡️ [Proteção] window.alert sobrescrito (setor pedagógico)');
+})();
+
 class SetorPedagogico {
     constructor() {
         this.token = localStorage.getItem('auth_token');
@@ -190,6 +244,56 @@ class SetorPedagogico {
         `;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    }
+
+    mostrarNotificacao(mensagem, tipo = 'info') {
+        // Usa o toast da própria classe
+        if (typeof this.showToast === 'function') {
+            this.showToast(mensagem, tipo);
+        } else {
+            console.log(`[${tipo}] ${mensagem}`);
+        }
+    }
+
+    confirmarAcao(mensagem) {
+        return new Promise((resolve) => {
+            const old = document.getElementById('confirmSetorModal');
+            if (old) old.remove();
+            
+            const modalHtml = `
+                <div class="modal fade" id="confirmSetorModal" tabindex="-1" data-bs-backdrop="static">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                                <h5 class="modal-title"><i class="fas fa-question-circle"></i> Confirmação</h5>
+                            </div>
+                            <div class="modal-body" style="white-space: pre-line; font-size: 15px;">${this.escapeHtml(mensagem)}</div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" id="btnCancelarSetor">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </button>
+                                <button type="button" class="btn btn-warning" id="btnConfirmarSetor">
+                                    <i class="fas fa-check"></i> Confirmar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            const modalEl = document.getElementById('confirmSetorModal');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+            
+            const finalizar = (resultado) => {
+                modal.hide();
+                setTimeout(() => modalEl.remove(), 300);
+                resolve(resultado);
+            };
+            
+            document.getElementById('btnConfirmarSetor').addEventListener('click', () => finalizar(true));
+            document.getElementById('btnCancelarSetor').addEventListener('click', () => finalizar(false));
+        });
     }
     
     escapeHtml(text) {
@@ -551,7 +655,7 @@ class SetorPedagogico {
             }
         } catch (error) {
             console.error('Erro ao carregar detalhes:', error);
-            alert('Erro ao carregar detalhes do aluno');
+            this.mostrarNotificacao('Erro ao carregar detalhes do aluno', 'error');
         }
     }
     
@@ -1108,7 +1212,7 @@ class SetorPedagogico {
         
         const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
         if (nenhumaOpcao) {
-            const confirmar = await confirm('Nenhuma opção selecionada. Imprimir normalmente?');
+            const confirmar = await this.confirmarAcao('Nenhuma opção selecionada. Imprimir normalmente?');
             if (confirmar) {
                 this.fecharModalAdaptacao('modalOpcoesAdaptacao');
                 await this.gerarImpressaoNormal();
@@ -1882,7 +1986,7 @@ class SetorPedagogico {
     
     async onScanSuccessSegundaChamada(text) {
         const id = this.extrairAlunoId(text);
-        if (!id) { alert('QR Code inválido'); return; }
+        if (!id) { this.mostrarNotificacao('QR Code inválido', 'error'); return; }
         await this.pararScannerSegundaChamada();
         await this.buscarAlunoSegundaChamada(id);
     }
@@ -2001,7 +2105,7 @@ class SetorPedagogico {
             }
         } catch (e) {
             console.error(e);
-            alert('Erro ao buscar aluno');
+            this.mostrarNotificacao('Erro ao buscar aluno', 'error');
         }
     }
     
@@ -2248,7 +2352,7 @@ class SetorPedagogico {
         
         const assinaturaBase64 = this.obterAssinaturaBase64();
         if (!assinaturaBase64) {
-            const confirmar = await confirm('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?');
+            const confirmar = await this.confirmarAcao('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?');
             if (!confirmar) return;
         }
         
@@ -2332,7 +2436,7 @@ class SetorPedagogico {
             if (justificativaCriada) msg += ' — Justificativa criada automaticamente!';
             this.showToast(msg, 'success');
             
-            const imprimir = await confirm('Deseja IMPRIMIR agora?');
+            const imprimir = await this.confirmarAcao('Deseja IMPRIMIR agora?');
             if (imprimir) {
                 this.imprimirSegundaChamada(d.autorizacao.id);
             }
@@ -2850,13 +2954,13 @@ class SetorPedagogico {
             if (dataFim) url += `dataFim=${dataFim}&`;
         } else if (tipo === 'turma') {
             const turma = document.getElementById('SegundaChamadaFiltroTurma')?.value;
-            if (!turma) { alert('Selecione uma turma'); return; }
+            if (!turma) { this.mostrarNotificacao('Selecione uma turma', 'error'); return; }
             url = `/api/gestao-geral/autorizacao/relatorio/turma/${encodeURIComponent(turma)}?tipo=segunda_chamada&`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
         } else if (tipo === 'aluno') {
             const alunoId = document.getElementById('SegundaChamadaFiltroAluno')?.value;
-            if (!alunoId) { alert('Selecione um aluno'); return; }
+            if (!alunoId) { this.mostrarNotificacao('Selecione um aluno', 'error'); return; }
             url = `/api/gestao-geral/autorizacao/relatorio/aluno/${alunoId}?tipo=segunda_chamada&`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
@@ -2875,7 +2979,7 @@ class SetorPedagogico {
             }
         } catch (error) {
             console.error('Erro:', error);
-            alert('Erro ao carregar relatório');
+            this.mostrarNotificacao('Erro ao carregar relatório', 'error');
         }
     }
     
@@ -2949,10 +3053,10 @@ class SetorPedagogico {
     
     exportarCSVSegundaChamada() {
         const data = this.relatorio2Chamada;
-        if (!data) { alert('Nenhum relatório carregado'); return; }
+        if (!data) { this.mostrarNotificacao('Nenhum relatório carregado', 'error'); return; }
         
         const registros = data.registros || [];
-        if (registros.length === 0) { alert('Nenhum dado para exportar'); return; }
+        if (registros.length === 0) { this.mostrarNotificacao('Nenhum dado para exportar', 'error'); return; }
         
         let csv = "Data,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
         registros.forEach(a => {
@@ -2981,7 +3085,7 @@ class SetorPedagogico {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const d = await r.json();
-            if (!d.success) { alert('Erro ao carregar'); return; }
+            if (!d.success) { this.mostrarNotificacao('Erro ao carregar', 'error'); return; }
             
             const a = d.autorizacao;
             let qr = '';
@@ -2999,7 +3103,7 @@ class SetorPedagogico {
             win.onload = () => setTimeout(() => win.print(), 500);
         } catch (e) {
             console.error(e);
-            alert('Erro ao imprimir');
+            this.mostrarNotificacao('Erro ao imprimir', 'error');
         }
     }
     
@@ -3008,6 +3112,9 @@ class SetorPedagogico {
         const carimbo = '/icons/assinatura_gestao.ico';
         const dataExt = new Date(a.data).toLocaleDateString('pt-BR', {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+        const horaExt = new Date(a.data).toLocaleTimeString('pt-BR', {
+            hour: '2-digit', minute: '2-digit'
         });
         
         let detalheMotivo = '';
@@ -3030,58 +3137,67 @@ class SetorPedagogico {
             <meta charset="UTF-8">
             <title>2ª Chamada - ${a.alunoNome}</title>
             <style>
-                @page { size: A4 landscape; margin: 0; }
+                @page { size: A4 portrait; margin: 15mm; }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
-                html, body { width: 297mm; height: 210mm; font-family: 'Times New Roman', Times, serif; background: #f0f0f0; }
-                .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; background: white; position: relative; margin: 0; page-break-after: always; overflow: hidden; font-size: 9pt; line-height: 1.3; }
-                @media print { html, body { width: 297mm; height: 210mm; background: white; } .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; } .btn-print { display: none !important; } }
-                .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 5px; margin-bottom: 6px; }
-                .header img { max-width: 100%; height: auto; max-height: 22mm; object-fit: contain; }
-                .header h1 { font-size: 9pt; margin: 3px 0 0 0; text-transform: uppercase; font-weight: bold; }
-                .titulo { text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 6px 0; background: #e8e8e8; padding: 5px; border: 1.5px solid #000; letter-spacing: 1px; }
-                .info-section { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; }
-                .info-row { display: flex; margin-bottom: 4px; gap: 10px; align-items: baseline; }
+                html, body {
+                    width: 210mm; min-height: 297mm;
+                    font-family: 'Times New Roman', Times, serif;
+                    background: #f0f0f0;
+                    display: flex; justify-content: center; align-items: flex-start;
+                }
+                .folha {
+                    width: 180mm; min-height: 267mm; padding: 10mm;
+                    background: white; margin: 0 auto;
+                    font-size: 10pt; line-height: 1.4;
+                    display: flex; flex-direction: column;
+                }
+                @media print {
+                    html, body { width: 210mm; height: 297mm; background: white; display: block; }
+                    .folha { width: 100%; min-height: auto; padding: 0; margin: 0 auto; }
+                    .btn-print { display: none !important; }
+                }
+                .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
+                .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
+                .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
+                .titulo { text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase; margin: 10px 0; background: #e8e8e8; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px; }
+                .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
+                .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
                 .info-row:last-child { margin-bottom: 0; }
-                .info-item { flex: 1; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
-                .label { font-weight: bold; font-size: 8pt; white-space: nowrap; }
-                .underline { border-bottom: 1px dotted #000; flex: 1; height: 14px; min-height: 14px; font-size: 9pt; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
-                .motivo-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
-                .motivo-box p { margin: 0; font-size: 9pt; font-weight: bold; }
-                .responsavel-box { background: #eef3fb; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; font-size: 8.5pt; }
-                .responsavel-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
-                .responsavel-box p { margin: 2px 0; font-size: 8.5pt; }
-                .observacoes { border: 1px solid #000; padding: 6px 8px; min-height: 18mm; margin: 6px 0; font-size: 8.5pt; }
-                .observacoes strong { display: block; margin-bottom: 3px; font-size: 9pt; }
-                .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
-                .assinatura { text-align: center; flex: 1; font-size: 8pt; }
-                .assinatura-digital { border-bottom: 1px solid #000; min-height: 15mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
-                .assinatura-digital img { max-height: 14mm; max-width: 100%; object-fit: contain; }
-                .assinatura-vazia { border-bottom: 1px solid #000; min-height: 15mm; display: flex; align-items: flex-end; justify-content: center; color: #999; font-size: 8pt; padding-bottom: 2px; }
-                .assinatura-linha { padding-top: 3px; font-size: 8pt; }
+                .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+                .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
+                .underline { border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px; font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
+                .motivo-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
+                .motivo-box p { margin: 0; font-size: 10pt; font-weight: bold; }
+                .responsavel-box { background: #eef3fb; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; font-size: 9.5pt; }
+                .responsavel-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
+                .responsavel-box p { margin: 3px 0; font-size: 9.5pt; }
+                .observacoes { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
+                .observacoes strong { display: block; margin-bottom: 5px; font-size: 10pt; }
+                .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
+                .assinatura { text-align: center; flex: 1; font-size: 9pt; }
+                .assinatura-digital { border-bottom: 1px solid #000; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; }
+                .assinatura-digital img { max-height: 16mm; max-width: 100%; object-fit: contain; }
+                .assinatura-vazia { border-bottom: 1px solid #000; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; color: #999; font-size: 9pt; padding-bottom: 3px; }
+                .assinatura-linha { padding-top: 5px; font-size: 9pt; }
                 .carimbo-gestao {
-                    border-bottom: 1px solid #000; min-height: 15mm;
+                    border-bottom: 1px solid #000; min-height: 18mm;
                     display: flex; align-items: flex-end; justify-content: center;
-                    padding-bottom: 2px;
+                    padding-bottom: 3px;
                 }
-                .carimbo-gestao img {
-                    max-height: 14mm; max-width: 100%; object-fit: contain; opacity: 0.9;
-                }
-                .qr-code { text-align: center; margin-top: 4px; }
-                .qr-code img { width: 18mm; height: 18mm; border: 1px solid #000; padding: 1px; }
-                .qr-code p { font-size: 7pt; margin: 2px 0 0 0; }
-                .footer { text-align: center; margin-top: 5px; padding-top: 4px; border-top: 1px solid #000; font-size: 7pt; color: #444; }
-                .footer p { margin: 1px 0; }
+                .carimbo-gestao img { max-height: 16mm; max-width: 100%; object-fit: contain; opacity: 0.9; }
+                .qr-code { text-align: center; margin-top: 8px; }
+                .qr-code img { width: 22mm; height: 22mm; border: 1px solid #000; padding: 1px; }
+                .qr-code p { font-size: 8pt; margin: 3px 0 0 0; }
+                .footer { text-align: center; margin-top: auto; padding-top: 8px; border-top: 1px solid #000; font-size: 8pt; color: #444; }
+                .footer p { margin: 2px 0; }
                 .btn-print { display: block; margin: 15px auto; padding: 10px 30px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif; }
                 .btn-print:hover { background: #4338ca; }
-                .linha-corte { position: fixed; left: 148.5mm; top: 0; width: 0; height: 210mm; border-left: 1px dashed #999; pointer-events: none; }
-                @media print { .linha-corte { display: none; } }
             </style>
         </head>
         <body>
             <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-            <div class="linha-corte"></div>
-            <div class="folha-metade">
+            <div class="folha">
                 <div class="header">
                     <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
                     <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
@@ -3115,11 +3231,15 @@ class SetorPedagogico {
                             <span class="label">Data:</span>
                             <span class="underline">${dataExt}</span>
                         </div>
+                        <div class="info-item">
+                            <span class="label">Horário:</span>
+                            <span class="underline">${horaExt}</span>
+                        </div>
                     </div>
                     ${a.horarioEntrada ? `
                         <div class="info-row">
                             <div class="info-item">
-                                <span class="label">Horário:</span>
+                                <span class="label">Entrada:</span>
                                 <span class="underline">${a.horarioEntrada}</span>
                             </div>
                         </div>` : ''}
@@ -3137,7 +3257,7 @@ class SetorPedagogico {
                     </div>` : ''}
                 <div class="observacoes">
                     <strong>📝 Observações:</strong>
-                    ${a.observacoes || '___________________________________________________________________'}
+                    ${(a.observacoes || '___________________________________________________________________').replace(/\n/g, '<br>')}
                 </div>
                 <div class="assinaturas">
                     <div class="assinatura">
@@ -3164,7 +3284,7 @@ class SetorPedagogico {
     }
     
     async excluirSegundaChamada(id) {
-        const confirmar = await confirm('Tem certeza que deseja EXCLUIR este registro de 2ª Chamada?\n\nEsta ação não pode ser desfeita.');
+        const confirmar = await this.confirmarAcao('Tem certeza que deseja EXCLUIR este registro de 2ª Chamada?\n\nEsta ação não pode ser desfeita.');
         if (!confirmar) return;
         
         try {
@@ -4909,7 +5029,7 @@ class SetorPedagogico {
     }
     
     async excluirSubstituicao(id) {
-        const confirmar = await confirm('⚠️ Tem certeza que deseja excluir?\n\nEsta ação não pode ser desfeita.');
+        const confirmar = await this.confirmarAcao('⚠️ Tem certeza que deseja excluir?\n\nEsta ação não pode ser desfeita.');
         if (!confirmar) return;
         
         try {
@@ -5827,7 +5947,7 @@ class SetorPedagogico {
                             opcoes.tamanho_fonte === 12;
         
         if (nenhumaOpcao) {
-            const confirmar = await confirm('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
+            const confirmar = await this.confirmarAcao('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
             if (!confirmar) return;
         }
         
@@ -5999,17 +6119,17 @@ class SetorPedagogico {
             const data = await this.apiRequest(url);
             if (data.success) {
                 window.relatorioData = data.relatorio;
-                alert(`✅ Relatório gerado com ${data.relatorio.totalAlunos} alunos`);
+                this.mostrarNotificacao(`✅ Relatório gerado com ${data.relatorio.totalAlunos} alunos`, 'error');
                 this.loadRelatorios();
             }
         } catch (error) {
             console.error('Erro:', error);
-            alert('Erro ao gerar relatório filtrado');
+            this.mostrarNotificacao('Erro ao gerar relatório filtrado', 'error');
         }
     }
     
     imprimirRelatorioAtual() {
-        if (!window.relatorioData) { alert('Nenhum relatório carregado'); return; }
+        if (!window.relatorioData) { this.mostrarNotificacao('Nenhum relatório carregado', 'error'); return; }
         const printWindow = window.open('', '_blank');
         printWindow.document.write(`<!DOCTYPE html><html><head><title>Relatório Acessibilidade - EducaPleno</title><style>body{font-family:Arial,sans-serif;padding:40px}h1{color:#4f46e5}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#f3f4f6}.header{text-align:center;margin-bottom:30px}@media print{body{padding:20px}}</style></head><body><div class="header"><h1>Relatório de Alunos com Necessidades Especiais</h1><p>Setor Pedagógico - EducaPleno</p><p>Data: ${new Date().toLocaleString('pt-BR')}</p></div><h3>Resumo Geral</h3><p><strong>Total de alunos:</strong> ${window.relatorioData.totalAlunos}</p><p><strong>Distribuição por condição:</strong></p><ul>${window.relatorioData.porCondicao.map(c => `<li>${c.condicao}: ${c.total}</li>`).join('')}</ul><h3>Alunos por Turma</h3>${window.relatorioData.porTurma.map(turma => `<h4>${turma.turma} (${turma.total} alunos)</h4><table><thead><tr><th>Nome</th><th>Matrícula</th><th>Condição</th><th>Detalhes</th></tr></thead><tbody>${turma.alunos.map(a => `<tr><td>${a.nome}</td><td>${a.matricula || '-'}</td><td>${a.condicao}</td><td>${a.detalhes || '-'}</td></tr>`).join('')}</tbody></table>`).join('')}<div class="footer"><p><small>Documento gerado pelo EducaPleno</small></p></div></body></html>`);
         printWindow.document.close();
@@ -6017,7 +6137,7 @@ class SetorPedagogico {
     }
     
     exportarRelatorioCSV() {
-        if (!window.relatorioData) { alert('Nenhum relatório carregado'); return; }
+        if (!window.relatorioData) { this.mostrarNotificacao('Nenhum relatório carregado', 'error'); return; }
         let csv = "Turma,Nome,Matrícula,Condição,Detalhes\n";
         window.relatorioData.porTurma.forEach(turma => {
             turma.alunos.forEach(aluno => {

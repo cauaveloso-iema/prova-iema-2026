@@ -6,6 +6,83 @@ let tokenRodizio = localStorage.getItem('auth_token');
 let modalRodizio = null;
 let rodizioEditando = null;
 
+// ============================================
+// 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
+// ============================================
+(function protegerContraAlertNativo() {
+    let __alertaEmProgresso = false;
+    
+    window.alert = function(mensagem) {
+        if (__alertaEmProgresso) {
+            console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+            return;
+        }
+        __alertaEmProgresso = true;
+        
+        try {
+            const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                              (typeof window.AppInventor !== 'undefined');
+            
+            if (!isWebView) {
+                console.log('%c[ALERT] ' + mensagem, 'background:#f59e0b;color:white;padding:4px 8px;border-radius:4px;');
+                return;
+            }
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+            modal.innerHTML = `
+                <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                            width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                    <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                    <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                              line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                    <button onclick="this.closest('div').parentElement.remove()"
+                            style="width:100%;padding:12px;background:#f59e0b;color:white;
+                                   border:none;border-radius:10px;font-size:14px;
+                                   font-weight:600;cursor:pointer;">OK</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } finally {
+            __alertaEmProgresso = false;
+        }
+    };
+})();
+
+// ============================================
+// 🍞 TOAST LOCAL
+// ============================================
+function mostrarNotificacaoRodizio(mensagem, tipo = 'info') {
+    // Tenta usar toast global primeiro
+    if (typeof window.showToast === 'function') {
+        window.showToast(mensagem, tipo);
+        return;
+    }
+    if (typeof window.mostrarToastConcluido === 'function') {
+        window.mostrarToastConcluido(mensagem, tipo);
+        return;
+    }
+    
+    // Fallback: toast próprio
+    const cores = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px;
+        background: ${cores[tipo] || cores.info}; color: white;
+        padding: 12px 20px; border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 99999;
+        font-size: 14px; font-weight: 600;
+        display: flex; align-items: center; gap: 10px;
+        max-width: 400px;`;
+    toast.innerHTML = `<i class="fas ${icons[tipo] || icons.info}"></i> ${mensagem}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (window.__rodizioInitDone) return;
     window.__rodizioInitDone = true;
@@ -19,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const allowedRoles = ['gestao_geral', 'super_admin', 'admin'];
     
     if (!allowedRoles.includes(userData.role)) {
-        alert('Acesso negado.');
+        mostrarNotificacaoRodizio('Acesso negado.', 'error');
         window.location.href = '/login.html';
         return;
     }
@@ -218,7 +295,10 @@ function toggleTipoRodizio() {
 
 async function salvarRodizio() {
     const turma = document.getElementById('rodizioTurma').value;
-    if (!turma) { alert('Selecione uma turma'); return; }
+    if (!turma) { 
+        mostrarNotificacaoRodizio('Selecione uma turma', 'warning'); 
+        return; 
+    }
     
     const tipoRodizio = document.getElementById('rodizioTipo').value;
     
@@ -259,15 +339,15 @@ async function salvarRodizio() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Rodízio salvo com sucesso!');
+            mostrarNotificacaoRodizio('✅ Rodízio salvo com sucesso!', 'success');
             modalRodizio.hide();
             await carregarRodizios();
         } else {
-            alert('❌ Erro: ' + data.error);
+            mostrarNotificacaoRodizio('❌ Erro: ' + data.error, 'error');
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar rodízio');
+        mostrarNotificacaoRodizio('Erro ao salvar rodízio', 'error');
     }
 }
 
@@ -285,27 +365,14 @@ async function excluirRodizio(turma) {
         const data = await response.json();
         
         if (data.success) {
-            // ✅ Trocar alert por toast
-            if (typeof showToast === 'function') {
-                showToast('✅ Rodízio excluído!', 'success');
-            } else {
-                console.log('✅ Rodízio excluído!');
-            }
+            mostrarNotificacaoRodizio('✅ Rodízio excluído!', 'success');
             await carregarRodizios();
         } else {
-            if (typeof showToast === 'function') {
-                showToast('❌ Erro: ' + data.error, 'error');
-            } else {
-                console.error('❌ Erro:', data.error);
-            }
+            mostrarNotificacaoRodizio('❌ Erro: ' + data.error, 'error');
         }
     } catch (error) {
         console.error('Erro:', error);
-        if (typeof showToast === 'function') {
-            showToast('Erro ao excluir rodízio', 'error');
-        } else {
-            console.error('Erro ao excluir rodízio');
-        }
+        mostrarNotificacaoRodizio('Erro ao excluir rodízio', 'error');
     }
 }
 
@@ -323,9 +390,12 @@ function mostrarTurmasSemRodizio() {
     const turmasSem = window.todasTurmas.filter(t => !turmasComRodizio.has(t));
     
     if (turmasSem.length === 0) {
-        alert('✅ Todas as turmas já possuem rodízio configurado!');
+        mostrarNotificacaoRodizio('✅ Todas as turmas já possuem rodízio configurado!', 'success');
     } else {
-        alert(`📋 Turmas sem rodízio:\n\n${turmasSem.join('\n')}\n\nTotal: ${turmasSem.length} turmas`);
+        mostrarNotificacaoRodizio(
+            `📋 Turmas sem rodízio:\n\n${turmasSem.join('\n')}\n\nTotal: ${turmasSem.length} turmas`,
+            'info'
+        );
     }
 }
 
@@ -337,3 +407,4 @@ window.mostrarTurmasSemRodizio = mostrarTurmasSemRodizio;
 window.carregarRodizios = carregarRodizios;
 window.salvarRodizio = salvarRodizio;
 window.toggleTipoRodizio = toggleTipoRodizio;
+window.mostrarNotificacaoRodizio = mostrarNotificacaoRodizio;
