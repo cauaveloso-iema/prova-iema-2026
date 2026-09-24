@@ -238,8 +238,8 @@
                 </div>
                 <!-- FIM DO SINO -->
 
-                <!-- 🔍 BOTÃO DE DEBUG - REMOVER DEPOIS -->
-                <button id="btnDebugPlayerId" onclick="debugPlayerId()" style="
+                <!-- 🔍 BOTÃO DE DEBUG - VERSÃO SEM ALERT -->
+                <button id="btnDebugPlayerId" onclick="debugPlayerIdV2()" style="
                     position: fixed;
                     top: 10px;
                     right: 10px;
@@ -257,30 +257,84 @@
                     🔍 DEBUG
                 </button>
 
+                <!-- Painel de debug (invisível até clicar) -->
+                <div id="debugPanel" style="
+                    display: none;
+                    position: fixed;
+                    top: 60px;
+                    right: 10px;
+                    z-index: 99999;
+                    background: white;
+                    color: #000;
+                    padding: 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                    max-width: 400px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    font-family: monospace;
+                    font-size: 12px;
+                    line-height: 1.6;
+                ">
+                    <div style="font-weight:bold;font-size:14px;margin-bottom:10px;border-bottom:1px solid #ccc;padding-bottom:8px;">
+                        🔍 DIAGNÓSTICO
+                        <button onclick="document.getElementById('debugPanel').style.display='none'" 
+                                style="float:right;background:none;border:none;font-size:20px;cursor:pointer;">×</button>
+                    </div>
+                    <div id="debugContent"></div>
+                </div>
+
                 <script>
-                function debugPlayerId() {
+                function debugPlayerIdV2() {
                     const playerId = localStorage.getItem('onesignal_player_id');
                     const authToken = localStorage.getItem('auth_token');
                     const userData = localStorage.getItem('user_data');
                     
-                    let msg = '=== DEBUG PLAYER ID ===\n\n';
-                    msg += '📱 onesignal_player_id:\n' + (playerId || '❌ VAZIO') + '\n\n';
-                    msg += '🎫 auth_token:\n' + (authToken ? '✅ Presente' : '❌ VAZIO') + '\n\n';
-                    msg += '👤 user_data:\n' + (userData ? '✅ Presente' : '❌ VAZIO') + '\n\n';
-                    msg += '📦 TODOS OS ITENS DO LOCALSTORAGE:\n';
+                    // Montar HTML do painel
+                    let html = '';
+                    
+                    // Função para adicionar linha
+                    const addLine = (label, value, isOk) => {
+                        const icon = isOk ? '✅' : '❌';
+                        const color = isOk ? '#10b981' : '#ef4444';
+                        html += `<div style="margin:8px 0;padding:8px;background:#f9f9f9;border-radius:6px;border-left:4px solid ${color};">`;
+                        html += `<strong>${icon} ${label}</strong><br>`;
+                        html += `<span style="word-break:break-all;color:#666;">${value || 'VAZIO'}</span>`;
+                        html += `</div>`;
+                    };
+                    
+                    // Adicionar itens
+                    addLine('onesignal_player_id', playerId, !!playerId);
+                    addLine('auth_token', authToken ? authToken.substring(0, 40) + '...' : 'VAZIO', !!authToken);
+                    addLine('user_data', userData ? 'Presente (' + userData.length + ' chars)' : 'VAZIO', !!userData);
+                    
+                    // Listar TODOS os itens do localStorage
+                    html += '<div style="margin-top:15px;padding:10px;background:#e0f2fe;border-radius:6px;">';
+                    html += '<strong>📦 TODOS OS ITENS DO LOCALSTORAGE:</strong><br>';
+                    html += `<em>Total: ${localStorage.length} itens</em><br><br>`;
                     for (let i = 0; i < localStorage.length; i++) {
                         const key = localStorage.key(i);
                         const value = localStorage.getItem(key);
-                        const preview = value && value.length > 40 ? value.substring(0, 40) + '...' : value;
-                        msg += '  [' + i + '] ' + key + ' = ' + preview + '\n';
+                        const preview = value && value.length > 50 ? value.substring(0, 50) + '...' : value;
+                        html += `<div style="margin:4px 0;padding:4px;background:white;border-radius:4px;">`;
+                        html += `<strong>[${i}] "${key}"</strong><br>`;
+                        html += `<span style="color:#666;word-break:break-all;">${preview}</span>`;
+                        html += `</div>`;
                     }
+                    html += '</div>';
                     
-                    // Mostrar na tela
-                    alert(msg);
-                    console.log(msg);
+                    // Mostrar o painel
+                    document.getElementById('debugContent').innerHTML = html;
+                    document.getElementById('debugPanel').style.display = 'block';
                     
-                    // Se tiver playerId, tentar vincular automaticamente
+                    // Tentar vincular se tiver playerId
                     if (playerId && authToken) {
+                        const statusDiv = document.createElement('div');
+                        statusDiv.id = 'debugStatus';
+                        statusDiv.style.cssText = 'margin-top:15px;padding:10px;background:#fef3c7;border-radius:6px;';
+                        statusDiv.innerHTML = '🔄 Tentando vincular...';
+                        document.getElementById('debugContent').appendChild(statusDiv);
+                        
                         fetch('/api/onesignal/vincular-kodular', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -288,11 +342,22 @@
                         })
                         .then(r => r.json())
                         .then(d => {
-                            alert('RESULTADO DO VÍNCULO:\n\n' + JSON.stringify(d, null, 2));
+                            statusDiv.style.background = d.success ? '#d1fae5' : '#fee2e2';
+                            statusDiv.innerHTML = '<strong>Resultado do vínculo:</strong><br>' + 
+                                '<pre style="white-space:pre-wrap;word-break:break-all;margin-top:8px;">' + 
+                                JSON.stringify(d, null, 2) + '</pre>';
                         })
                         .catch(e => {
-                            alert('ERRO NO VÍNCULO: ' + e.message);
+                            statusDiv.style.background = '#fee2e2';
+                            statusDiv.innerHTML = '❌ Erro: ' + e.message;
                         });
+                    } else {
+                        const warnDiv = document.createElement('div');
+                        warnDiv.style.cssText = 'margin-top:15px;padding:10px;background:#fee2e2;border-radius:6px;';
+                        warnDiv.innerHTML = '⚠️ <strong>Não é possível vincular:</strong><br>' + 
+                            (playerId ? '' : '• playerId VAZIO<br>') +
+                            (authToken ? '' : '• auth_token VAZIO<br>');
+                        document.getElementById('debugContent').appendChild(warnDiv);
                     }
                 }
                 </script>
