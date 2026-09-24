@@ -237,6 +237,65 @@
                     </div>
                 </div>
                 <!-- FIM DO SINO -->
+
+                <!-- 🔍 BOTÃO DE DEBUG - REMOVER DEPOIS -->
+                <button id="btnDebugPlayerId" onclick="debugPlayerId()" style="
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    z-index: 99999;
+                    padding: 12px 18px;
+                    background: #dc2626;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                ">
+                    🔍 DEBUG
+                </button>
+
+                <script>
+                function debugPlayerId() {
+                    const playerId = localStorage.getItem('onesignal_player_id');
+                    const authToken = localStorage.getItem('auth_token');
+                    const userData = localStorage.getItem('user_data');
+                    
+                    let msg = '=== DEBUG PLAYER ID ===\n\n';
+                    msg += '📱 onesignal_player_id:\n' + (playerId || '❌ VAZIO') + '\n\n';
+                    msg += '🎫 auth_token:\n' + (authToken ? '✅ Presente' : '❌ VAZIO') + '\n\n';
+                    msg += '👤 user_data:\n' + (userData ? '✅ Presente' : '❌ VAZIO') + '\n\n';
+                    msg += '📦 TODOS OS ITENS DO LOCALSTORAGE:\n';
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        const value = localStorage.getItem(key);
+                        const preview = value && value.length > 40 ? value.substring(0, 40) + '...' : value;
+                        msg += '  [' + i + '] ' + key + ' = ' + preview + '\n';
+                    }
+                    
+                    // Mostrar na tela
+                    alert(msg);
+                    console.log(msg);
+                    
+                    // Se tiver playerId, tentar vincular automaticamente
+                    if (playerId && authToken) {
+                        fetch('/api/onesignal/vincular-kodular', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ playerId, token: authToken })
+                        })
+                        .then(r => r.json())
+                        .then(d => {
+                            alert('RESULTADO DO VÍNCULO:\n\n' + JSON.stringify(d, null, 2));
+                        })
+                        .catch(e => {
+                            alert('ERRO NO VÍNCULO: ' + e.message);
+                        });
+                    }
+                }
+                </script>
                 
                 <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" 
                 target="_blank" class="btn-icon" style="
