@@ -295,3 +295,197 @@ body {
     .metric-value { font-size: 1.8rem; }
     .modo-selector { flex-direction: column; }
 }
+
+/* ============================================
+   🔔 SISTEMA DE NOTIFICAÇÕES (SINO)
+   ============================================ */
+
+.notificacoes-container {
+    position: relative;
+    display: inline-block;
+}
+
+.notificacoes-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    color: white;
+    font-size: 1.2rem;
+    position: relative;
+    backdrop-filter: blur(5px);
+}
+
+.notificacoes-btn:hover {
+    background: rgba(255, 255, 255, 0.25) !important;
+    transform: scale(1.05);
+}
+
+.notificacoes-btn.tem-notificacao {
+    animation: pulse-notification 2s infinite;
+}
+
+@keyframes pulse-notification {
+    0%   { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+    70%  { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+.notificacoes-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #dc3545;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 3px 6px;
+    border-radius: 20px;
+    min-width: 22px;
+    text-align: center;
+    border: 2px solid white;
+    display: none;
+}
+
+.notificacoes-dropdown {
+    position: absolute;
+    top: 60px;
+    right: 0;
+    width: 380px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    display: none;
+    z-index: 1000;
+    overflow: hidden;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.notificacoes-dropdown.show {
+    display: block !important;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.notificacoes-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.notificacoes-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notificacao-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    gap: 12px;
+    background: white;
+}
+
+.notificacao-item.nao-lida {
+    background: #eff6ff;
+    border-left: 3px solid #10b981;
+}
+
+.notificacao-item:hover {
+    background: #f1f5f9 !important;
+    transform: translateX(5px);
+}
+
+.notificacao-icone {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.notificacao-conteudo { flex: 1; }
+
+.notificacao-titulo {
+    font-weight: 600;
+    margin-bottom: 3px;
+    font-size: 0.9rem;
+    color: #1f2937;
+}
+
+.notificacao-mensagem {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.notificacao-tempo {
+    font-size: 0.65rem;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.notificacao-footer {
+    padding: 12px 20px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+    background: #f9fafb;
+}
+
+.notificacao-footer a {
+    color: #10b981;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.notificacao-footer button:hover {
+    color: #b91c1c !important;
+    text-decoration: underline;
+}
+
+.notificacao-footer button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Responsivo */
+@media (max-width: 480px) {
+    .notificacoes-dropdown {
+        width: calc(100vw - 32px) !important;
+        right: -16px !important;
+    }
+}

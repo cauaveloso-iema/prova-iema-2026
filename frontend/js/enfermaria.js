@@ -1408,6 +1408,246 @@ async function exportarPDF() {
     alert('Função de PDF será implementada em breve');
 }
 
+// ============================================
+// 🔔 SISTEMA DE NOTIFICAÇÕES INTERNAS
+// ============================================
+
+let notificacoesInterval;
+
+document.addEventListener('DOMContentLoaded', function() {
+    iniciarNotificacoes();
+    
+    // Fechar dropdown ao clicar fora
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('notificacoesDropdown');
+        const btn = document.getElementById('notificacoesBtn');
+        
+        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+});
+
+function iniciarNotificacoes() {
+    carregarNotificacoes();
+    notificacoesInterval = setInterval(carregarNotificacoes, 30000);
+}
+
+async function carregarNotificacoes() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        
+        const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const countData = await countResponse.json();
+        
+        if (countData.success) {
+            const badge = document.getElementById('notificacoesBadge');
+            if (badge) {
+                if (countData.count > 0) {
+                    badge.textContent = countData.count > 99 ? '99+' : countData.count;
+                    badge.style.display = 'inline';
+                    document.getElementById('notificacoesBtn')?.classList.add('tem-notificacao');
+                } else {
+                    badge.style.display = 'none';
+                    document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+                }
+            }
+        }
+        
+        const dropdown = document.getElementById('notificacoesDropdown');
+        if (dropdown && dropdown.classList.contains('show')) {
+            await carregarListaNotificacoes();
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
+    }
+}
+
+async function carregarListaNotificacoes() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            renderizarNotificacoes(data.notificacoes);
+        }
+        
+    } catch (error) {
+        console.error('Erro ao carregar lista:', error);
+    }
+}
+
+function renderizarNotificacoes(notificacoes) {
+    const lista = document.getElementById('notificacoesLista');
+    if (!lista) return;
+    
+    if (notificacoes.length === 0) {
+        lista.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
+                <p style="font-size: 1rem;">Nenhuma notificação</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    notificacoes.forEach(notif => {
+        const data = new Date(notif.createdAt);
+        const agora = new Date();
+        const diffMs = agora - data;
+        const diffMin = Math.floor(diffMs / 60000);
+        const diffHr = Math.floor(diffMs / 3600000);
+        const diffDia = Math.floor(diffMs / 86400000);
+        
+        let tempoTexto;
+        if (diffMin < 1) tempoTexto = 'agora mesmo';
+        else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+        else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
+        else tempoTexto = `há ${diffDia} d`;
+        
+        const classeLida = notif.lida ? '' : 'nao-lida';
+        
+        html += `
+            <div class="notificacao-item ${classeLida}" onclick="abrirNotificacao('${notif._id}', '${notif.link || '#'}')">
+                <div class="notificacao-icone" style="background: ${notif.cor || '#10b981'};">
+                    ${notif.icone || '📋'}
+                </div>
+                <div class="notificacao-conteudo">
+                    <div class="notificacao-titulo">${notif.titulo}</div>
+                    <div class="notificacao-mensagem">${notif.mensagem}</div>
+                    <div class="notificacao-tempo">
+                        <i class="far fa-clock"></i> ${tempoTexto}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    lista.innerHTML = html;
+}
+
+function abrirNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (!dropdown) return;
+    
+    dropdown.classList.toggle('show');
+    
+    if (dropdown.classList.contains('show')) {
+        carregarListaNotificacoes();
+    }
+}
+
+async function abrirNotificacao(id, link) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        await fetch(`/api/notificacoes/${id}/lida`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        document.getElementById('notificacoesDropdown').classList.remove('show');
+        
+        if (link && link !== '#') {
+            window.location.href = link;
+        }
+        
+        carregarNotificacoes();
+        
+    } catch (error) {
+        console.error('Erro ao abrir notificação:', error);
+    }
+}
+
+async function marcarTodasLidas() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await carregarListaNotificacoes();
+            document.getElementById('notificacoesBadge').style.display = 'none';
+            document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao marcar todas como lidas:', error);
+    }
+}
+
+async function limparMinhasNotificacoes(event) {
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+        
+        if (!confirmacao) return;
+        
+        const btn = event?.currentTarget;
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+            btn.disabled = true;
+        }
+        
+        const response = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await carregarListaNotificacoes();
+            document.getElementById('notificacoesBadge').style.display = 'none';
+            document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+            alert(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`);
+        } else {
+            throw new Error(data.error || 'Erro ao excluir notificações');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        alert('❌ ' + error.message);
+    } finally {
+        const btn = document.querySelector('.notificacao-footer button');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-trash"></i> Limpar todas';
+            btn.disabled = false;
+        }
+    }
+}
+
+function fecharNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+}
+
+window.addEventListener('beforeunload', function() {
+    if (notificacoesInterval) {
+        clearInterval(notificacoesInterval);
+    }
+});
+
 async function logout() {
     const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
     if (confirmar) {
