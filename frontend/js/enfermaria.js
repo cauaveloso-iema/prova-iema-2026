@@ -1422,6 +1422,238 @@ async function exportarPDF() {
     alert('Função de PDF será implementada em breve');
 }
 
+// ============================================
+// 🔔 SISTEMA DE NOTIFICAÇÕES
+// ============================================
+
+let notificacoesAbertas = false;
+
+/**
+ * Abre/fecha o dropdown de notificações
+ */
+function abrirNotificacoes() {
+    const dropdown = safeGet('notificacoesDropdown');
+    if (!dropdown) return;
+    
+    if (dropdown.style.display === 'block') {
+        fecharNotificacoes();
+    } else {
+        dropdown.style.display = 'block';
+        notificacoesAbertas = true;
+        carregarNotificacoes(); // Carrega ao abrir
+    }
+}
+
+/**
+ * Fecha o dropdown
+ */
+function fecharNotificacoes() {
+    const dropdown = safeGet('notificacoesDropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+        notificacoesAbertas = false;
+    }
+}
+
+/**
+ * Carrega notificações do backend
+ */
+async function carregarNotificacoes() {
+    try {
+        // Buscar contador de não lidas
+        const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (countRes.ok) {
+            const countData = await countRes.json();
+            atualizarBadgeNotificacoes(countData.count || 0);
+        }
+        
+        // Buscar lista de notificações
+        const res = await fetch('/api/notificacoes?limite=20', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            renderizarNotificacoes(data.notificacoes || []);
+        }
+    } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
+    }
+}
+
+/**
+ * Atualiza o badge com o número de não lidas
+ */
+function atualizarBadgeNotificacoes(total) {
+    const badge = safeGet('notificacoesBadge');
+    const btn = safeGet('notificacoesBtn');
+    
+    if (badge) {
+        if (total > 0) {
+            badge.textContent = total > 99 ? '99+' : total;
+            badge.style.display = 'block';
+            if (btn) btn.classList.add('tem-notificacao');
+        } else {
+            badge.style.display = 'none';
+            if (btn) btn.classList.remove('tem-notificacao');
+        }
+    }
+}
+
+/**
+ * Renderiza a lista de notificações no dropdown
+ */
+function renderizarNotificacoes(lista) {
+    const container = safeGet('notificacoesLista');
+    if (!container) return;
+    
+    if (!lista || lista.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                <i class="fas fa-bell-slash" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i>
+                <p style="margin: 0;">Nenhuma notificação</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = lista.map(n => {
+        const data = new Date(n.createdAt);
+        const agora = new Date();
+        const diffMin = Math.floor((agora - data) / 60000);
+        
+        let tempoTexto = 'agora';
+        if (diffMin >= 1 && diffMin < 60) tempoTexto = `há ${diffMin} min`;
+        else if (diffMin >= 60 && diffMin < 1440) tempoTexto = `há ${Math.floor(diffMin / 60)} h`;
+        else if (diffMin >= 1440) tempoTexto = `há ${Math.floor(diffMin / 1440)} d`;
+        
+        const naoLida = !n.lida ? 'background: #f0fdf4; border-left: 3px solid #10b981;' : '';
+        
+        return `
+            <div style="
+                padding: 12px 16px;
+                border-bottom: 1px solid #f3f4f6;
+                display: flex;
+                gap: 12px;
+                align-items: flex-start;
+                cursor: pointer;
+                transition: background 0.15s;
+                ${naoLida}
+            " onclick="marcarNotificacaoLida('${n._id}')">
+                <div style="
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    background: ${n.cor || '#10b981'};
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 16px;
+                    flex-shrink: 0;
+                ">
+                    <i class="fas ${n.icone || 'fa-bell'}"></i>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 700; font-size: 14px; color: #1f2937; margin-bottom: 3px;">
+                        ${escapeHTML(n.titulo || 'Notificação')}
+                    </div>
+                    <div style="font-size: 13px; color: #4b5563; line-height: 1.4; margin-bottom: 5px;">
+                        ${escapeHTML(n.mensagem || '')}
+                    </div>
+                    <div style="font-size: 11px; color: #9ca3af;">
+                        <i class="far fa-clock"></i> ${tempoTexto}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Marca uma notificação como lida
+ */
+async function marcarNotificacaoLida(id) {
+    try {
+        await fetch(`/api/notificacoes/${id}/lida`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        carregarNotificacoes();
+    } catch (error) {
+        console.error('Erro ao marcar como lida:', error);
+    }
+}
+
+/**
+ * Marca todas as notificações como lidas
+ */
+async function marcarTodasLidas() {
+    try {
+        await fetch('/api/notificacoes/marcar-todas-lidas', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        carregarNotificacoes();
+    } catch (error) {
+        console.error('Erro ao marcar todas como lidas:', error);
+    }
+}
+
+/**
+ * Limpa todas as notificações do usuário
+ */
+async function limparMinhasNotificacoes(event) {
+    if (event) event.stopPropagation();
+    
+    if (!confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            fecharNotificacoes();
+            atualizarBadgeNotificacoes(0);
+            alert('✅ Notificações excluídas!');
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao limpar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('❌ Erro ao limpar notificações');
+    }
+}
+
+// ===== FECHAR AO CLICAR FORA =====
+document.addEventListener('click', (e) => {
+    const dropdown = safeGet('notificacoesDropdown');
+    const btn = safeGet('notificacoesBtn');
+    
+    if (dropdown && btn && 
+        !dropdown.contains(e.target) && 
+        !btn.contains(e.target) &&
+        notificacoesAbertas) {
+        fecharNotificacoes();
+    }
+});
+
+// ===== CARREGAR AO INICIAR + A CADA 30s =====
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => carregarNotificacoes(), 1500);
+    setInterval(carregarNotificacoes, 30000);
+});
+
 async function logout() {
     const confirmar = await confirm('Tem certeza que deseja sair do sistema?');
     if (confirmar) {
@@ -1447,3 +1679,11 @@ window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
 window.excluirAtendimento = excluirAtendimento;
 window.finalizarAtendimentoAtivo = finalizarAtendimentoAtivo;
 window.logout = logout;
+// ============================================
+// EXPORTAR FUNÇÕES GLOBAIS
+// ============================================
+window.abrirNotificacoes = abrirNotificacoes;
+window.fecharNotificacoes = fecharNotificacoes;
+window.marcarNotificacaoLida = marcarNotificacaoLida;
+window.marcarTodasLidas = marcarTodasLidas;
+window.limparMinhasNotificacoes = limparMinhasNotificacoes;
