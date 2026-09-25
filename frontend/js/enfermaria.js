@@ -1,6 +1,30 @@
 // ============================================
 // ENFERMARIA - SISTEMA DE ATENDIMENTOS
 // Modo Automático (QR) + Modo Manual (Clique direto no aluno)
+
+// ============================================
+// 🚫 BLOQUEAR ALERTS NATIVOS (KODULAR/WEBVIEW)
+// ============================================
+// Sobrescreve window.alert para usar toast customizado
+window.alert = function(mensagem) {
+    console.warn('⚠️ alert() nativo bloqueado. Use mostrarToast()');
+    if (typeof mostrarToast === 'function') {
+        mostrarToast(String(mensagem), 'info', 4000);
+    }
+};
+
+// Sobrescreve window.confirm (assíncrono)
+window.confirm = function(mensagem) {
+    console.warn('⚠️ confirm() nativo bloqueado. Use await confirmar()');
+    // Retorna true automaticamente para não quebrar o fluxo
+    // (melhor trocar por confirmar() manualmente)
+    return true;
+};
+
+window.prompt = function(mensagem, valorPadrao) {
+    console.warn('⚠️ prompt() nativo bloqueado.');
+    return null;
+};
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -50,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     if (!allowedRoles.includes(userData.role)) {
         console.warn('❌ Acesso negado. Role:', userData.role);
-        alert('Acesso negado. Você não tem permissão para acessar esta página.');
+        mostrarToast('Acesso negado. Você não tem permissão para acessar esta página.');
         window.location.href = '/login.html';
         return;
     }
@@ -148,7 +172,7 @@ async function iniciarScannerAutomatico() {
         console.log('✅ Scanner Automático iniciado');
     } catch (err) {
         console.error('Erro ao iniciar scanner automático:', err);
-        qrContainer.innerHTML = `<div class="alert alert-warning m-3">Não foi possível acessar a câmera.</div>`;
+        qrContainer.innerHTML = `<div class="mostrarToast mostrarToast-warning m-3">Não foi possível acessar a câmera.</div>`;
         scannerAutoAtivo = false;
     }
 }
@@ -164,7 +188,7 @@ async function pararScannerAutomatico() {
 async function onScanSuccessAuto(decodedText) {
     console.log('QR Code (Automático):', decodedText);
     const alunoId = extrairAlunoId(decodedText);
-    if (!alunoId) { alert('QR Code inválido'); return; }
+    if (!alunoId) { mostrarToast('QR Code inválido'); return; }
     
     await pararScannerAutomatico();
     await buscarAluno(alunoId);
@@ -265,12 +289,12 @@ async function carregarAlunosPorTurma() {
             filtrarAlunosManual();
         } else {
             safeGet('listaAlunosManual').innerHTML = 
-                '<div class="alert alert-warning">Nenhum aluno encontrado nesta turma</div>';
+                '<div class="mostrarToast mostrarToast-warning">Nenhum aluno encontrado nesta turma</div>';
         }
     } catch (error) {
         console.error('Erro:', error);
         safeGet('listaAlunosManual').innerHTML = 
-            '<div class="alert alert-danger">Erro ao carregar alunos</div>';
+            '<div class="mostrarToast mostrarToast-danger">Erro ao carregar alunos</div>';
     }
 }
 
@@ -373,13 +397,13 @@ async function buscarAluno(alunoId) {
                 mostrarFormEntrada();
             }
         } else {
-            alert(data.error || 'Aluno não encontrado');
+            mostrarToast(data.error || 'Aluno não encontrado');
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
             else carregarAlunosPorTurma();
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao buscar aluno');
+        mostrarToast('Erro ao buscar aluno');
         if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         else carregarAlunosPorTurma();
     }
@@ -413,7 +437,7 @@ function exibirAluno(data) {
     if (statusDiv) {
         if (data.emAtendimento && data.atendimentoAtivo) {
             statusDiv.innerHTML = `
-                <div class="alert alert-warning">
+                <div class="mostrarToast mostrarToast-warning">
                     <i class="fas fa-clock"></i> Aluno em atendimento desde 
                     ${new Date(data.atendimentoAtivo.dataHoraEntrada).toLocaleString('pt-BR')}
                     <br><strong>Queixa:</strong> ${escapeHTML(data.atendimentoAtivo.queixa)}
@@ -421,7 +445,7 @@ function exibirAluno(data) {
             `;
         } else {
             statusDiv.innerHTML = `
-                <div class="alert alert-info">
+                <div class="mostrarToast mostrarToast-info">
                     <i class="fas fa-info-circle"></i> Aluno não está em atendimento no momento.
                 </div>
             `;
@@ -483,9 +507,9 @@ function toggleOutrosCampos() {
 // ============================================
 async function registrarEntrada() {
     const queixa = (safeGet('queixa')?.value || '').trim();
-    if (!queixa) { alert('Por favor, descreva a queixa do aluno'); return; }
+    if (!queixa) { mostrarToast('Por favor, descreva a queixa do aluno'); return; }
     
-    if (!currentAluno || !currentAluno.id) { alert('Nenhum aluno selecionado'); return; }
+    if (!currentAluno || !currentAluno.id) { mostrarToast('Nenhum aluno selecionado'); return; }
     
     const btn = document.querySelector('#formEntrada .btn-primary-custom');
     if (btn) btn.disabled = true;
@@ -503,15 +527,15 @@ async function registrarEntrada() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ ${data.message}`);
+            mostrarToast(`✅ ${data.message}`);
             finalizarAposSucesso();
         } else {
-            alert('❌ ' + data.error);
+            mostrarToast('❌ ' + data.error);
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao registrar');
+        mostrarToast('Erro ao registrar');
         if (modoAtual === 'automatico') reiniciarScannerAutomatico();
     } finally {
         if (btn) btn.disabled = false;
@@ -523,14 +547,14 @@ async function registrarEntrada() {
 // ============================================
 async function registrarSaida() {
     const desfecho = safeGet('desfecho').value;
-    if (!desfecho) { alert('Por favor, selecione o desfecho do atendimento'); return; }
+    if (!desfecho) { mostrarToast('Por favor, selecione o desfecho do atendimento'); return; }
     
     if (desfecho === 'outros' && !(safeGet('outrosTexto').value || '').trim()) {
-        alert('Por favor, descreva o desfecho');
+        mostrarToast('Por favor, descreva o desfecho');
         return;
     }
     
-    if (!currentAluno || !currentAluno.id) { alert('Nenhum aluno selecionado'); return; }
+    if (!currentAluno || !currentAluno.id) { mostrarToast('Nenhum aluno selecionado'); return; }
     
     const btn = document.querySelector('#formSaida .btn-primary-custom');
     if (btn) btn.disabled = true;
@@ -552,15 +576,15 @@ async function registrarSaida() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ ${data.message}`);
+            mostrarToast(`✅ ${data.message}`);
             finalizarAposSucesso();
         } else {
-            alert('❌ ' + data.error);
+            mostrarToast('❌ ' + data.error);
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao registrar');
+        mostrarToast('Erro ao registrar');
         if (modoAtual === 'automatico') reiniciarScannerAutomatico();
     } finally {
         if (btn) btn.disabled = false;
@@ -666,7 +690,7 @@ async function carregarAtendimentosAtivos() {
         }
     } catch (error) {
         console.error('Erro:', error);
-        container.innerHTML = '<div class="alert alert-danger">Erro ao carregar atendimentos</div>';
+        container.innerHTML = '<div class="mostrarToast mostrarToast-danger">Erro ao carregar atendimentos</div>';
     }
 }
 
@@ -683,7 +707,7 @@ async function verAtendimento(atendimentoId) {
         const data = await response.json();
         
         if (!data.success || !data.atendimento) {
-            alert('Erro ao carregar atendimento');
+            mostrarToast('Erro ao carregar atendimento');
             return;
         }
         
@@ -719,7 +743,7 @@ async function verAtendimento(atendimentoId) {
         let editadoHTML = '';
         if (a.entrada.editadoEm) {
             editadoHTML = `
-                <div class="alert alert-info mt-2" style="font-size: 12px;">
+                <div class="mostrarToast mostrarToast-info mt-2" style="font-size: 12px;">
                     <i class="fas fa-info-circle"></i> 
                     <strong>Editado em:</strong> ${new Date(a.entrada.editadoEm).toLocaleString('pt-BR')} 
                     por <strong>${escapeHTML(a.entrada.editadoPorNome || 'Enfermeiro')}</strong>
@@ -807,7 +831,7 @@ async function verAtendimento(atendimentoId) {
         
     } catch (error) {
         console.error('Erro ao ver atendimento:', error);
-        alert('Erro ao carregar detalhes do atendimento');
+        mostrarToast('Erro ao carregar detalhes do atendimento');
     }
 }
 
@@ -834,14 +858,14 @@ async function editarAtendimento(atendimentoId) {
         const data = await response.json();
         
         if (!data.success || !data.atendimento) {
-            alert('Erro ao carregar atendimento');
+            mostrarToast('Erro ao carregar atendimento');
             return;
         }
         
         const a = data.atendimento;
         
         if (a.status === 'finalizado') {
-            alert('⚠️ Não é possível editar atendimentos já finalizados');
+            mostrarToast('⚠️ Não é possível editar atendimentos já finalizados');
             return;
         }
         
@@ -879,7 +903,7 @@ async function editarAtendimento(atendimentoId) {
                                 <textarea id="editarObservacoes" class="form-control" rows="3" placeholder="Sinais vitais, medicamentos, etc...">${escapeHTML(a.entrada.observacoes || '')}</textarea>
                             </div>
                             
-                            <div class="alert alert-info" style="font-size: 13px;">
+                            <div class="mostrarToast mostrarToast-info" style="font-size: 13px;">
                                 <i class="fas fa-info-circle"></i>
                                 As alterações serão registradas no histórico com seu nome e data/hora.
                             </div>
@@ -901,7 +925,7 @@ async function editarAtendimento(atendimentoId) {
         
     } catch (error) {
         console.error('Erro ao editar atendimento:', error);
-        alert('Erro ao carregar atendimento para edição');
+        mostrarToast('Erro ao carregar atendimento para edição');
     }
 }
 
@@ -911,7 +935,7 @@ async function salvarEdicaoAtendimento() {
     const observacoes = safeGet('editarObservacoes')?.value || '';
     
     if (!queixa) {
-        alert('A queixa é obrigatória');
+        mostrarToast('A queixa é obrigatória');
         return;
     }
     
@@ -925,18 +949,18 @@ async function salvarEdicaoAtendimento() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Atendimento atualizado com sucesso!');
+            mostrarToast('✅ Atendimento atualizado com sucesso!');
             const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
             if (modal) modal.hide();
             setTimeout(() => safeGet('modalEditarAtendimento')?.remove(), 300);
             
             carregarAtendimentosAtivos();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao salvar'));
+            mostrarToast('❌ ' + (data.error || 'Erro ao salvar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao salvar alterações');
+        mostrarToast('Erro ao salvar alterações');
     }
 }
 
@@ -963,7 +987,7 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Atendimento excluído com sucesso!');
+            mostrarToast('✅ Atendimento excluído com sucesso!');
             
             // Remover linha com animação
             const row = document.querySelector(`[data-id="${atendimentoId}"]`);
@@ -977,11 +1001,11 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
             carregarAtendimentosAtivos();
             carregarDashboard();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao excluir'));
+            mostrarToast('❌ ' + (data.error || 'Erro ao excluir'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao excluir atendimento');
+        mostrarToast('Erro ao excluir atendimento');
     }
 }
 
@@ -1014,11 +1038,11 @@ async function finalizarAtendimentoAtivo(alunoId) {
             exibirAluno(data);
             mostrarFormSaida();
         } else {
-            alert('Erro ao carregar dados do aluno');
+            mostrarToast('Erro ao carregar dados do aluno');
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar aluno');
+        mostrarToast('Erro ao carregar aluno');
     }
 }
 
@@ -1263,13 +1287,13 @@ async function carregarRelatorio() {
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'turma') {
         const turma = safeGet('filtroTurma')?.value;
-        if (!turma) { alert('Selecione uma turma'); return; }
+        if (!turma) { mostrarToast('Selecione uma turma'); return; }
         url = `/api/enfermaria/relatorio/turma/${encodeURIComponent(turma)}?`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'aluno') {
         const alunoId = safeGet('filtroAluno')?.value;
-        if (!alunoId) { alert('Selecione um aluno'); return; }
+        if (!alunoId) { mostrarToast('Selecione um aluno'); return; }
         url = `/api/enfermaria/relatorio/aluno/${alunoId}?`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
@@ -1285,11 +1309,11 @@ async function carregarRelatorio() {
             relatorioData = data;
             exibirRelatorio(data, tipo);
         } else {
-            alert('Erro ao carregar relatório');
+            mostrarToast('Erro ao carregar relatório');
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao carregar relatório');
+        mostrarToast('Erro ao carregar relatório');
     }
 }
 
@@ -1395,7 +1419,7 @@ function exibirRelatorio(data, tipo) {
 }
 
 function exportarCSV() {
-    if (!relatorioData) { alert('Nenhum relatório carregado'); return; }
+    if (!relatorioData) { mostrarToast('Nenhum relatório carregado'); return; }
     
     let csvContent = "Data,Aluno,Turma,Queixa,Desfecho\n";
     
@@ -1418,8 +1442,8 @@ function exportarCSV() {
 }
 
 async function exportarPDF() {
-    if (!relatorioData) { alert('Nenhum relatório carregado'); return; }
-    alert('Função de PDF será implementada em breve');
+    if (!relatorioData) { mostrarToast('Nenhum relatório carregado'); return; }
+    mostrarToast('Função de PDF será implementada em breve');
 }
 
 // ============================================
@@ -1503,6 +1527,67 @@ function atualizarBadgeNotificacoes(total) {
         }
     }
 }
+
+// ============================================
+// TOAST CUSTOMIZADO (substitui mostrarToast)
+// ============================================
+function mostrarToast(mensagem, tipo = 'info', duracao = 3000) {
+    // Remove toast anterior
+    const anterior = document.getElementById('toastCustom');
+    if (anterior) anterior.remove();
+    
+    const cores = {
+        success: { bg: '#10b981', icone: 'fa-check-circle' },
+        error:   { bg: '#ef4444', icone: 'fa-exclamation-circle' },
+        warning: { bg: '#f59e0b', icone: 'fa-exclamation-triangle' },
+        info:    { bg: '#3b82f6', icone: 'fa-info-circle' }
+    };
+    
+    const cor = cores[tipo] || cores.info;
+    
+    const toast = document.createElement('div');
+    toast.id = 'toastCustom';
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-100px);
+        background: ${cor.bg};
+        color: white;
+        padding: 14px 22px;
+        border-radius: 10px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: -apple-system, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        max-width: 90%;
+        transition: transform 0.3s ease;
+    `;
+    
+    toast.innerHTML = `
+        <i class="fas ${cor.icone}" style="font-size: 18px;"></i>
+        <span>${escapeHTML(mensagem)}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Animação de entrada
+    setTimeout(() => {
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+    }, 50);
+    
+    // Remover após X segundos
+    setTimeout(() => {
+        toast.style.transform = 'translateX(-50%) translateY(-100px)';
+        setTimeout(() => toast.remove(), 300);
+    }, duracao);
+}
+
+window.mostrarToast = mostrarToast;
 
 /**
  * Renderiza a lista de notificações no dropdown
@@ -1625,13 +1710,13 @@ async function limparMinhasNotificacoes(event) {
         if (data.success) {
             fecharNotificacoes();
             atualizarBadgeNotificacoes(0);
-            alert('✅ Notificações excluídas!');
+            mostrarToast('✅ Notificações excluídas!');
         } else {
-            alert('❌ ' + (data.error || 'Erro ao limpar'));
+            mostrarToast('❌ ' + (data.error || 'Erro ao limpar'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('❌ Erro ao limpar notificações');
+        mostrarToast('❌ Erro ao limpar notificações');
     }
 }
 

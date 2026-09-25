@@ -2554,6 +2554,11 @@ class AdminPanel {
                     4. O dispositivo é vinculado automaticamente<br>
                     5. Você verá "Vinculado" na tabela ✅
                 </div>
+                
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; border-radius: 6px; font-size: 12px; text-align: left;">
+                    ⚠️ <strong>Importante:</strong> Os usuários precisam ter o app instalado 
+                    e com permissão de notificação ativa.
+                </div>
             `
         );
         
@@ -2563,123 +2568,35 @@ class AdminPanel {
             this.showToast(`📨 Enviando ${naoVinculados.length} notificações...`, 'info');
             
             const token = localStorage.getItem('auth_token');
-            const BASE_URL = window.location.origin;
-            
-            let pushEnviados = 0;
-            let pushErros = 0;
-            let notifInternas = 0;
-            
-            for (const disp of naoVinculados) {
-                const linkVinculo = `${BASE_URL}/confirmar-vinculo.html?playerId=${disp.playerId}`;
-                
-                console.log(`📤 Processando dispositivo: ${disp.playerId.substring(0, 30)}...`);
-                
-                // ═══════════════════════════════════════════
-                // 1️⃣ ENVIAR PUSH (com URL para abrir a página)
-                // ═══════════════════════════════════════════
-                try {
-                    const pushRes = await fetch('/api/admin/onesignal/enviar-massa', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            playerIds: [disp.playerId],
-                            titulo: '🔔 Vincule seu dispositivo',
-                            mensagem: 'Toque aqui para vincular seu celular!',
-                            url: linkVinculo,                          // ✅ ESSENCIAL
-                            dados: {
-                                tipo: 'solicitacao_vinculo',
-                                link: linkVinculo,
-                                playerId: disp.playerId,
-                                timestamp: Date.now()
-                            }
-                        })
-                    });
-                    
-                    const pushData = await pushRes.json();
-                    
-                    if (pushData.success) {
-                        pushEnviados++;
-                        console.log(`   ✅ Push enviado`);
-                    } else {
-                        pushErros++;
-                        console.warn(`   ❌ Push falhou:`, pushData.error);
-                    }
-                } catch (err) {
-                    pushErros++;
-                    console.warn(`   ❌ Push erro de rede:`, err.message);
+            const response = await fetch('/api/admin/onesignal/solicitar-vinculo-massa', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(
+                    `✅ ${data.enviados} notificações enviadas!${data.erros > 0 ? ` (${data.erros} erros)` : ''}`,
+                    'success'
+                );
                 
-                // ═══════════════════════════════════════════
-                // 2️⃣ CRIAR NOTIFICAÇÃO INTERNA (no sino do sistema)
-                // ═══════════════════════════════════════════
-                if (disp.usuario?.id) {
-                    try {
-                        const notifRes = await fetch('/api/notificacoes', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                usuarioId: disp.usuario.id,
-                                tipo: 'sistema',
-                                titulo: '🔔 Vincule seu dispositivo',
-                                mensagem: 'Clique aqui para vincular seu celular e receber notificações!',
-                                icone: '📱',
-                                cor: '#10b981',
-                                link: linkVinculo,                       // ✅ Link pra onde vai ao clicar
-                                prioridade: 5,
-                                dados: {
-                                    tipo: 'solicitacao_vinculo',
-                                    link: linkVinculo,
-                                    playerId: disp.playerId
-                                }
-                            })
-                        });
-                        
-                        const notifData = await notifRes.json();
-                        
-                        if (notifData.success) {
-                            notifInternas++;
-                            console.log(`   ✅ Notificação interna criada`);
-                        } else {
-                            console.warn(`   ⚠️ Notificação interna falhou:`, notifData.error);
-                        }
-                    } catch (err) {
-                        console.warn(`   ⚠️ Notificação interna erro:`, err.message);
-                    }
-                }
+                // Fechar modal
+                this.closeModal();
                 
-                // Delay entre envios
-                await new Promise(r => setTimeout(r, 300));
+                // Notificação detalhada
+                this.mostrarNotificacaoSistema(
+                    'success',
+                    '📨 Solicitação Enviada',
+                    `${data.enviados} usuário(s) notificados. Aguarde os cliques para ver os vínculos.`,
+                    5000
+                );
+            } else {
+                throw new Error(data.error || 'Erro ao enviar');
             }
-            
-            // ═══════════════════════════════════════════
-            // RESUMO
-            // ═══════════════════════════════════════════
-            this.showToast(
-                `✅ ${pushEnviados} push + ${notifInternas} notificações internas enviadas!`,
-                'success'
-            );
-            
-            // Fechar modal
-            this.closeModal();
-            
-            // Notificação detalhada
-            this.mostrarNotificacaoSistema(
-                'success',
-                '📨 Solicitação Enviada',
-                `<strong>${pushEnviados}</strong> push enviados<br>
-                <strong>${notifInternas}</strong> notificações internas criadas<br>
-                ${pushErros > 0 ? `⚠️ <strong>${pushErros}</strong> erros` : ''}`,
-                6000
-            );
-            
-            // Atualizar a lista após 3 segundos
-            setTimeout(() => this.atualizarOneSignal(), 3000);
             
         } catch (error) {
             console.error('❌ Erro:', error);

@@ -23,6 +23,55 @@ let __alunosFiltrados = [];
 let __indiceSelecionado = -1;
 let __alunosCarregados = false;
 
+(function protegerContraAlertNativo() {
+    // ⚠️ IMPORTANTE: guardar a referência original UMA VEZ
+    const alertOriginal = window.alert.bind(window);
+    let __alertaEmProgresso = false; // 🔥 Guard contra recursão
+    
+    window.alert = function(mensagem) {
+        // 🔥 Se já está processando um alerta, evita loop
+        if (__alertaEmProgresso) {
+            console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+            return;
+        }
+        __alertaEmProgresso = true;
+        
+        try {
+            const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                              (typeof window.AppInventor !== 'undefined');
+            
+            if (!isWebView) {
+                // Desktop: log no console, NUNCA chama toast (evita loop)
+                console.log('%c[ALERT] ' + mensagem, 'background:#8b5cf6;color:white;padding:4px 8px;border-radius:4px;');
+                return;
+            }
+            
+            // WebView: modal customizado direto (sem chamar toast)
+            const modal = document.createElement('div');
+            modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+            modal.innerHTML = `
+                <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                            width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                    <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                    <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                              line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                    <button onclick="this.closest('div').parentElement.remove()"
+                            style="width:100%;padding:12px;background:#8b5cf6;color:white;
+                                   border:none;border-radius:10px;font-size:14px;
+                                   font-weight:600;cursor:pointer;">OK</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        } finally {
+            __alertaEmProgresso = false;
+        }
+    };
+    
+    console.log('🛡️ [Proteção] window.alert sobrescrito (sem recursão)');
+})();
+
 // ============================================
 // CONFIGURAÇÃO DOS MÓDULOS
 // ============================================
