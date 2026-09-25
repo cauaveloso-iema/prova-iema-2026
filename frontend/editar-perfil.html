@@ -358,6 +358,61 @@
         let leitorAtivo = false;
         let synth = window.speechSynthesis;
         let qrCodeImageData = ''; // Armazenar a imagem do QR Code
+
+        // ============================================
+        // 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
+        // ============================================
+        (function protegerContraAlertNativo() {
+            let __emProgresso = false;
+            
+            window.alert = function(mensagem) {
+                if (__emProgresso) {
+                    console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+                    return;
+                }
+                __emProgresso = true;
+                
+                try {
+                    const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                                    (typeof window.AppInventor !== 'undefined');
+                    
+                    // Usa o mostrarAlerta() do próprio arquivo (já existe)
+                    if (typeof window.mostrarAlerta === 'function') {
+                        window.mostrarAlerta(String(mensagem), 'info');
+                        return;
+                    }
+                    
+                    // Desktop: só log
+                    if (!isWebView) {
+                        console.log('%c[ALERT] ' + mensagem, 'background:#667eea;color:white;padding:4px 8px;border-radius:4px;');
+                        return;
+                    }
+                    
+                    // WebView sem mostrarAlerta: modal simples
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                        background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                        justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+                    modal.innerHTML = `
+                        <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                                    width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                            <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                            <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                                    line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                            <button onclick="this.closest('div').parentElement.remove()"
+                                    style="width:100%;padding:12px;background:#667eea;color:white;
+                                        border:none;border-radius:10px;font-size:14px;
+                                        font-weight:600;cursor:pointer;">OK</button>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                } finally {
+                    __emProgresso = false;
+                }
+            };
+            
+            console.log('🛡️ [Proteção] window.alert sobrescrito (editar-perfil)');
+        })();
         
         // ============================================
         // CARREGAR DADOS DO PERFIL

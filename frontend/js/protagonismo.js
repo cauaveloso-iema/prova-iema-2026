@@ -1841,6 +1841,803 @@ async function copiarLinkDoQR() {
     }
 }
 
+// ============================================================================
+// 📄 EXPORTAÇÃO PDF - TODAS AS ABAS
+// ============================================================================
+
+// ============================================
+// 🎨 TEMPLATE COMUM DE RELATÓRIO
+// ============================================
+function montarHTMLRelatorioProtagonismo({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, dataGeracao }) {
+    const logo = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_protagonismo.ico';
+    
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo}</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
+            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
+            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            .titulo {
+                text-align: center; font-size: 14pt; font-weight: bold;
+                background: #fed7aa; padding: 10px; border: 2px solid #000;
+                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+            }
+            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+            .stats {
+                display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
+                background: #fff7ed; border-radius: 8px; border: 1px solid #fdba74;
+            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #fdba74; }
+            .stat:last-child { border-right: none; }
+            .stat-value { font-size: 22pt; font-weight: bold; color: #ea580c; line-height: 1; }
+            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+            .section-title {
+                font-size: 11pt; font-weight: bold; background: #e8e8e8;
+                padding: 6px 10px; border-left: 4px solid #f97316; margin: 20px 0 10px;
+            }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
+            th { background: #f97316; color: white; padding: 8px 6px; text-align: left; border: 1px solid #ea580c; font-size: 9pt; }
+            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
+            tr:nth-child(even) { background: #fff7ed; }
+            .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            .assinatura-container-relatorio {
+                position: relative; border-bottom: 1px solid #000; min-height: 22mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+            }
+            .assinatura-img { max-height: 18mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            .carimbo-overlay {
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                max-height: 20mm; max-width: 60%; object-fit: contain;
+                opacity: 0.85; pointer-events: none; z-index: 2;
+            }
+            .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
+            .footer p { margin: 2px 0; }
+            .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
+            .btn-print {
+                display: block; margin: 20px auto; padding: 12px 30px;
+                background: #f97316; color: white; border: none; border-radius: 8px;
+                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #ea580c; }
+            .badge {
+                display: inline-block; padding: 2px 8px; border-radius: 10px;
+                font-size: 8.5pt; font-weight: bold;
+            }
+            .badge-ativo { background: #d1fae5; color: #065f46; }
+            .badge-inativo { background: #fee2e2; color: #991b1b; }
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Gestão — Protagonismo Estudantil</p>
+        </div>
+        
+        <div class="titulo">⭐ ${titulo}</div>
+        ${subtitulo ? `<div class="subtitulo">${subtitulo}</div>` : ''}
+        
+        ${statsHTML}
+        ${tabelaHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Coordenação do Protagonismo</div>
+            </div>
+        </div>
+        
+        <div class="registro-info">
+            Relatório gerado em <strong>${dataGeracao}</strong>
+        </div>
+        
+        <div class="footer">
+            <p>Documento gerado automaticamente pelo EducaPleno</p>
+            <p>Setor: Protagonismo Estudantil</p>
+        </div>
+    </body>
+    </html>`;
+}
+
+// ============================================
+// 1️⃣ PDF - DASHBOARD
+// ============================================
+async function exportarPDFDashboard() {
+    try {
+        mostrarToast('Gerando PDF...', 'info');
+        
+        const response = await fetch('/api/protagonismo/estatisticas', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            mostrarToast('Erro ao carregar dados', 'error');
+            return;
+        }
+        
+        const e = data.estatisticas;
+        const topClubes = data.topClubes || [];
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        
+        const statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${e.totalClubes || 0}</div>
+                    <div class="stat-label">Clubes Ativos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${e.totalInscricoes || 0}</div>
+                    <div class="stat-label">Inscrições</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${e.totalTutores || 0}</div>
+                    <div class="stat-label">Tutores</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${e.totalCandidatos || 0}</div>
+                    <div class="stat-label">Candidatos</div>
+                </div>
+            </div>
+        `;
+        
+        const tabelaHTML = `
+            <div class="section-title">📊 Top 5 Clubes Mais Procurados</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:60px;text-align:center;">#</th>
+                        <th>Clube</th>
+                        <th style="width:150px;text-align:center;">Inscrições</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${topClubes.length > 0 ? topClubes.map((c, i) => `
+                        <tr>
+                            <td style="text-align:center;"><strong>${i + 1}º</strong></td>
+                            <td><strong>${escapeHTML(c.clubeNome || 'Sem nome')}</strong></td>
+                            <td style="text-align:center;">${c.total || 0}</td>
+                        </tr>
+                    `).join('') : '<tr><td colspan="3" style="text-align:center;">Nenhum clube com inscrições</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">🔧 Status das Funcionalidades</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Funcionalidade</th>
+                        <th style="width:150px;text-align:center;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Inscrições em Clubes</strong></td>
+                        <td style="text-align:center;">
+                            <span class="badge ${e.inscricoesAbertas ? 'badge-ativo' : 'badge-inativo'}">
+                                ${e.inscricoesAbertas ? '✅ Ativas' : '❌ Fechadas'}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Eleição de Líder/Vice</strong></td>
+                        <td style="text-align:center;">
+                            <span class="badge ${e.eleicaoAberta ? 'badge-ativo' : 'badge-inativo'}">
+                                ${e.eleicaoAberta ? '✅ Aberta' : '❌ Fechada'}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tutoria Visível ao Público</strong></td>
+                        <td style="text-align:center;">
+                            <span class="badge ${e.tutoriaVisivel !== false ? 'badge-ativo' : 'badge-inativo'}">
+                                ${e.tutoriaVisivel !== false ? '👁️ Visível' : '🚫 Oculta'}
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+        
+        const html = montarHTMLRelatorioProtagonismo({
+            titulo: 'Dashboard - Protagonismo Estudantil',
+            subtitulo: `Visão Geral • ${new Date().toLocaleDateString('pt-BR')}`,
+            statsHTML,
+            tabelaHTML,
+            assinaturaDigital: null,
+            dataGeracao
+        });
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
+// ============================================
+// 2️⃣ PDF - CLUBES
+// ============================================
+async function exportarPDFClubes() {
+    try {
+        mostrarToast('Gerando PDF...', 'info');
+        
+        if (!clubesData || clubesData.length === 0) {
+            await carregarClubes();
+        }
+        
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        
+        const totalInscritos = clubesData.reduce((acc, c) => acc + (c.inscricoesAtivas || 0), 0);
+        const totalVagas = clubesData.reduce((acc, c) => acc + (c.vagas || 0), 0);
+        
+        const statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${clubesData.length}</div>
+                    <div class="stat-label">Total de Clubes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${clubesData.filter(c => c.ativo).length}</div>
+                    <div class="stat-label">Clubes Ativos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${totalInscritos}</div>
+                    <div class="stat-label">Inscritos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${totalVagas}</div>
+                    <div class="stat-label">Vagas Totais</div>
+                </div>
+            </div>
+        `;
+        
+        const tabelaHTML = `
+            <div class="section-title">📋 Lista de Clubes</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Clube</th>
+                        <th>Líder / Vice</th>
+                        <th style="width:100px;text-align:center;">Vagas</th>
+                        <th style="width:100px;text-align:center;">Inscritos</th>
+                        <th style="width:80px;text-align:center;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${clubesData.length > 0 ? clubesData.map(c => `
+                        <tr>
+                            <td>
+                                <strong>${escapeHTML(c.nome)}</strong><br>
+                                <small style="color:#666;">${escapeHTML((c.descricao || '').substring(0, 80))}${(c.descricao || '').length > 80 ? '...' : ''}</small>
+                                ${c.local || c.diaSemana ? `
+                                    <br><small style="color:#888;">📍 ${escapeHTML(c.local || '-')} • ${escapeHTML(c.diaSemana || '-')} ${c.horario ? 'às ' + c.horario : ''}</small>
+                                ` : ''}
+                            </td>
+                            <td>
+                                <small>
+                                    👑 <strong>${escapeHTML(c.lider?.nome || '-')}</strong><br>
+                                    🎖️ ${escapeHTML(c.viceLider?.nome || '-')}
+                                </small>
+                            </td>
+                            <td style="text-align:center;">${c.vagas || 0}</td>
+                            <td style="text-align:center;">
+                                <strong>${c.inscricoesAtivas || 0}</strong><br>
+                                <small style="color:#888;">${c.vagasRestantes || 0} restantes</small>
+                            </td>
+                            <td style="text-align:center;">
+                                <span class="badge ${c.ativo ? (c.inscricoesAbertas ? 'badge-ativo' : 'badge-inativo') : 'badge-inativo'}">
+                                    ${c.ativo ? (c.inscricoesAbertas ? '🟢 Aberto' : '🟡 Pausado') : '⚫ Inativo'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('') : '<tr><td colspan="5" style="text-align:center;">Nenhum clube cadastrado</td></tr>'}
+                </tbody>
+            </table>
+        `;
+        
+        const html = montarHTMLRelatorioProtagonismo({
+            titulo: 'Relatório de Clubes',
+            subtitulo: `${clubesData.length} clube(s) cadastrado(s)`,
+            statsHTML,
+            tabelaHTML,
+            assinaturaDigital: null,
+            dataGeracao
+        });
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
+// ============================================
+// 3️⃣ PDF - INSCRIÇÕES
+// ============================================
+async function exportarPDFInscricoes() {
+    try {
+        mostrarToast('Gerando PDF...', 'info');
+        
+        const clubeId = safeGet('filtroClubeInscricoes')?.value || '';
+        const turma = safeGet('filtroTurmaInscricoes')?.value || '';
+        const status = safeGet('filtroStatusInscricoes')?.value || '';
+        
+        let url = '/api/protagonismo/inscricoes?';
+        if (clubeId) url += `clubeId=${clubeId}&`;
+        if (turma) url += `turma=${encodeURIComponent(turma)}&`;
+        if (status) url += `status=${status}&`;
+        
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            mostrarToast('Erro ao carregar inscrições', 'error');
+            return;
+        }
+        
+        const inscricoes = data.inscricoes || [];
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        
+        // Verifica se tem assinatura digital em alguma inscrição
+        let assinaturaDigital = null;
+        const comAssinatura = inscricoes.find(i => i.assinaturaBase64);
+        if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+        
+        // Subtítulo com filtros aplicados
+        let subtitulo = `${inscricoes.length} inscrição(ões)`;
+        const filtrosAtivos = [];
+        if (clubeId) {
+            const clube = clubesData.find(c => c._id === clubeId);
+            if (clube) filtrosAtivos.push(`Clube: ${clube.nome}`);
+        }
+        if (turma) filtrosAtivos.push(`Turma: ${turma}`);
+        if (status) filtrosAtivos.push(`Status: ${status}`);
+        if (filtrosAtivos.length > 0) subtitulo += ` • ${filtrosAtivos.join(' • ')}`;
+        
+        const statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${inscricoes.length}</div>
+                    <div class="stat-label">Total de Inscrições</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${new Set(inscricoes.map(i => i.turma)).size}</div>
+                    <div class="stat-label">Turmas Envolvidas</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${new Set(inscricoes.map(i => i.clubeNome)).size}</div>
+                    <div class="stat-label">Clubes Procurados</div>
+                </div>
+            </div>
+        `;
+        
+        const tabelaHTML = `
+            <div class="section-title">📋 Lista de Inscrições</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th style="width:100px;">Nasc.</th>
+                        <th style="width:80px;">Turma</th>
+                        <th>Curso</th>
+                        <th>Clube</th>
+                        <th style="width:110px;">Data Inscrição</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${inscricoes.length > 0 ? inscricoes.map(i => `
+                        <tr>
+                            <td><strong>${escapeHTML(i.nomeCompleto || '')}</strong></td>
+                            <td>${i.dataNascimento ? new Date(i.dataNascimento).toLocaleDateString('pt-BR') : '-'}</td>
+                            <td>${escapeHTML(i.turma || '')}</td>
+                            <td>${escapeHTML((i.curso || '').substring(0, 30))}</td>
+                            <td>
+                                <span class="badge" style="background: ${i.clubeCor || '#f97316'}; color: white;">
+                                    ${escapeHTML(i.clubeNome || '')}
+                                </span>
+                            </td>
+                            <td>${i.createdAt ? new Date(i.createdAt).toLocaleDateString('pt-BR') : '-'}</td>
+                        </tr>
+                    `).join('') : '<tr><td colspan="6" style="text-align:center;">Nenhuma inscrição encontrada</td></tr>'}
+                </tbody>
+            </table>
+        `;
+        
+        const html = montarHTMLRelatorioProtagonismo({
+            titulo: 'Relatório de Inscrições',
+            subtitulo,
+            statsHTML,
+            tabelaHTML,
+            assinaturaDigital,
+            dataGeracao
+        });
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
+// ============================================
+// 4️⃣ PDF - TUTORES
+// ============================================
+async function exportarPDFTutores() {
+    try {
+        mostrarToast('Gerando PDF...', 'info');
+        
+        const turma = safeGet('filtroTurmaTutores')?.value || '';
+        let url = '/api/protagonismo/tutores';
+        if (turma) url += `?turma=${encodeURIComponent(turma)}`;
+        
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            mostrarToast('Erro ao carregar tutores', 'error');
+            return;
+        }
+        
+        const porTurma = data.porTurma || {};
+        const tutores = data.tutores || [];
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        
+        const turmas = Object.keys(porTurma);
+        
+        const statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${tutores.length}</div>
+                    <div class="stat-label">Total de Tutores</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${turmas.length}</div>
+                    <div class="stat-label">Turmas com Tutoria</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${new Set(tutores.map(t => t.area)).size}</div>
+                    <div class="stat-label">Áreas Diferentes</div>
+                </div>
+            </div>
+        `;
+        
+        let tabelaHTML = '';
+        if (turmas.length === 0) {
+            tabelaHTML = '<div class="section-title">📋 Tutores</div><p style="text-align:center;padding:20px;">Nenhum tutor cadastrado</p>';
+        } else {
+            tabelaHTML = turmas.map(t => {
+                const lista = porTurma[t] || [];
+                return `
+                    <div class="section-title">🏫 Turma: ${escapeHTML(t)} <span style="font-weight:normal;color:#666;">(${lista.length}/2 tutores)</span></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Professor</th>
+                                <th style="width:180px;">Área/Disciplina</th>
+                                <th style="width:180px;">Curso</th>
+                                <th>Observações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${lista.map(tt => `
+                                <tr>
+                                    <td><strong>${escapeHTML(tt.nomeProfessor || '')}</strong></td>
+                                    <td>${escapeHTML(tt.area || '')}</td>
+                                    <td>${escapeHTML(tt.curso || '')}</td>
+                                    <td>${escapeHTML(tt.observacoes || '-')}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }).join('');
+        }
+        
+        const html = montarHTMLRelatorioProtagonismo({
+            titulo: 'Relatório de Tutores',
+            subtitulo: `${tutores.length} tutor(es) em ${turmas.length} turma(s)`,
+            statsHTML,
+            tabelaHTML,
+            assinaturaDigital: null,
+            dataGeracao
+        });
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
+// ============================================
+// 5️⃣ PDF - CANDIDATOS
+// ============================================
+async function exportarPDFCandidatos() {
+    try {
+        mostrarToast('Gerando PDF...', 'info');
+        
+        const turma = safeGet('filtroTurmaCandidatos')?.value || '';
+        const cargo = safeGet('filtroCargoCandidatos')?.value || '';
+        
+        let url = '/api/protagonismo/candidatos?';
+        if (turma) url += `turma=${encodeURIComponent(turma)}&`;
+        if (cargo) url += `cargo=${cargo}`;
+        
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            mostrarToast('Erro ao carregar candidatos', 'error');
+            return;
+        }
+        
+        const porTurma = data.porTurma || {};
+        const candidatos = data.candidatos || [];
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        
+        const turmas = Object.keys(porTurma);
+        
+        const statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${candidatos.length}</div>
+                    <div class="stat-label">Total de Candidatos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${candidatos.filter(c => c.cargo === 'lider').length}</div>
+                    <div class="stat-label">Candidatos a Líder</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${candidatos.filter(c => c.cargo === 'vice_lider').length}</div>
+                    <div class="stat-label">Candidatos a Vice</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${turmas.length}</div>
+                    <div class="stat-label">Turmas com Candidatos</div>
+                </div>
+            </div>
+        `;
+        
+        let tabelaHTML = '';
+        if (turmas.length === 0) {
+            tabelaHTML = '<div class="section-title">📋 Candidatos</div><p style="text-align:center;padding:20px;">Nenhum candidato cadastrado</p>';
+        } else {
+            tabelaHTML = turmas.map(t => {
+                const { lider = [], vice_lider = [] } = porTurma[t] || {};
+                const todos = [...lider, ...vice_lider];
+                return `
+                    <div class="section-title">🏫 Turma: ${escapeHTML(t)} <span style="font-weight:normal;color:#666;">(${todos.length} candidato(s))</span></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th style="width:100px;text-align:center;">Cargo</th>
+                                <th>Slogan / Proposta</th>
+                                <th style="width:70px;text-align:center;">Votos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${todos.map(c => `
+                                <tr>
+                                    <td><strong>${escapeHTML(c.nome || '')}</strong></td>
+                                    <td style="text-align:center;">
+                                        <span class="badge ${c.cargo === 'lider' ? 'badge-ativo' : ''}" style="${c.cargo === 'vice_lider' ? 'background:#dbeafe;color:#1e40af;' : ''}">
+                                            ${c.cargo === 'lider' ? '👑 Líder' : '🎖️ Vice'}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        ${c.slogan ? `<em style="color:#ea580c;">"${escapeHTML(c.slogan)}"</em><br>` : ''}
+                                        ${c.proposta ? `<small>${escapeHTML(c.proposta.substring(0, 120))}${c.proposta.length > 120 ? '...' : ''}</small>` : ''}
+                                    </td>
+                                    <td style="text-align:center;"><strong>${c.votos || 0}</strong></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }).join('');
+        }
+        
+        const html = montarHTMLRelatorioProtagonismo({
+            titulo: 'Relatório de Candidatos',
+            subtitulo: `${candidatos.length} candidato(s) em ${turmas.length} turma(s)`,
+            statsHTML,
+            tabelaHTML,
+            assinaturaDigital: null,
+            dataGeracao
+        });
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
+// ============================================
+// 6️⃣ PDF - ELEIÇÃO (RESULTADOS)
+// ============================================
+async function exportarPDFEleicao() {
+    try {
+        mostrarToast('Gerando PDF...', 'info');
+        
+        const response = await fetch('/api/protagonismo/eleicao/resultados', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            mostrarToast('Erro ao carregar resultados', 'error');
+            return;
+        }
+        
+        const porTurma = data.porTurma || [];
+        const totalVotos = data.totalVotos || 0;
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        
+        const statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${totalVotos}</div>
+                    <div class="stat-label">Total de Votos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${porTurma.length}</div>
+                    <div class="stat-label">Turmas Votantes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${porTurma.filter(t => t.vencedorLider).length}</div>
+                    <div class="stat-label">Líderes Eleitos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${porTurma.filter(t => t.vencedorVice).length}</div>
+                    <div class="stat-label">Vices Eleitos</div>
+                </div>
+            </div>
+        `;
+        
+        let tabelaHTML = '';
+        if (porTurma.length === 0) {
+            tabelaHTML = '<div class="section-title">🏆 Resultados</div><p style="text-align:center;padding:20px;">Nenhum voto registrado ainda</p>';
+        } else {
+            tabelaHTML = porTurma.map(t => {
+                const liderRank = (t.lider || []).slice(0, 5);
+                const viceRank = (t.vice_lider || []).slice(0, 5);
+                
+                return `
+                    <div class="section-title">🏫 Turma: ${escapeHTML(t.turma)}</div>
+                    
+                    ${t.vencedorLider ? `
+                        <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                            <strong style="color: #92400e;">👑 Líder Eleito:</strong>
+                            <span style="font-size: 12pt; font-weight: bold; color: #78350f; margin-left: 8px;">
+                                ${escapeHTML(t.vencedorLider.nome)}
+                            </span>
+                            <span style="margin-left: 12px; background: #f59e0b; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10pt;">
+                                ${t.vencedorLider.votos} votos
+                            </span>
+                        </div>
+                    ` : ''}
+                    
+                    ${t.vencedorVice ? `
+                        <div style="background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+                            <strong style="color: #1e40af;">🎖️ Vice-Líder Eleito:</strong>
+                            <span style="font-size: 12pt; font-weight: bold; color: #1e3a8a; margin-left: 8px;">
+                                ${escapeHTML(t.vencedorVice.nome)}
+                            </span>
+                            <span style="margin-left: 12px; background: #3b82f6; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10pt;">
+                                ${t.vencedorVice.votos} votos
+                            </span>
+                        </div>
+                    ` : ''}
+                    
+                    ${liderRank.length > 1 ? `
+                        <table style="margin-top: 8px;">
+                            <thead>
+                                <tr>
+                                    <th style="width:50px;text-align:center;">#</th>
+                                    <th>Candidato a Líder</th>
+                                    <th style="width:100px;text-align:center;">Votos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${liderRank.map((c, i) => `
+                                    <tr>
+                                        <td style="text-align:center;"><strong>${i + 1}º</strong></td>
+                                        <td>${escapeHTML(c.nome)}</td>
+                                        <td style="text-align:center;"><strong>${c.votos}</strong></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : ''}
+                    
+                    ${viceRank.length > 1 ? `
+                        <table style="margin-top: 8px;">
+                            <thead>
+                                <tr>
+                                    <th style="width:50px;text-align:center;">#</th>
+                                    <th>Candidato a Vice-Líder</th>
+                                    <th style="width:100px;text-align:center;">Votos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${viceRank.map((c, i) => `
+                                    <tr>
+                                        <td style="text-align:center;"><strong>${i + 1}º</strong></td>
+                                        <td>${escapeHTML(c.nome)}</td>
+                                        <td style="text-align:center;"><strong>${c.votos}</strong></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : ''}
+                `;
+            }).join('');
+        }
+        
+        const html = montarHTMLRelatorioProtagonismo({
+            titulo: 'Resultados da Eleição',
+            subtitulo: `${totalVotos} voto(s) em ${porTurma.length} turma(s)`,
+            statsHTML,
+            tabelaHTML,
+            assinaturaDigital: null,
+            dataGeracao
+        });
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
 // ============================================
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================
@@ -1881,3 +2678,12 @@ window.copiarLinkPublico = copiarLinkPublico;
 window.logout = logout;
 window.copiarLinkPublico = copiarLinkPublico;
 window.logout = logout;
+// ============================================
+// EXPORTAR FUNÇÕES GLOBALMENTE
+// ============================================
+window.exportarPDFDashboard = exportarPDFDashboard;
+window.exportarPDFClubes = exportarPDFClubes;
+window.exportarPDFInscricoes = exportarPDFInscricoes;
+window.exportarPDFTutores = exportarPDFTutores;
+window.exportarPDFCandidatos = exportarPDFCandidatos;
+window.exportarPDFEleicao = exportarPDFEleicao;

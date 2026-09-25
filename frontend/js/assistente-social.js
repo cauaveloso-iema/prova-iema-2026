@@ -2484,6 +2484,14 @@ function toggleRelatorioFiltros() {
     const divA = safeGet('filtroAlunoDiv');
     if (divT) divT.style.display = tipo === 'turma' ? 'block' : 'none';
     if (divA) divA.style.display = tipo === 'aluno' ? 'block' : 'none';
+    
+    // ✅ RESETAR botões ao trocar tipo
+    const btnCSV = safeGet('btnExportarCSVAS');
+    const btnPDF = safeGet('btnExportarPDFAS');
+    if (btnCSV) btnCSV.disabled = true;
+    if (btnPDF) btnPDF.disabled = true;
+    relatorioData = null;
+    
     if (tipo === 'turma') {
         const s = safeGet('filtroTurma');
         if (s && s.options.length <= 1) carregarTurmasParaRelatorio();
@@ -2613,24 +2621,59 @@ async function carregarRelatorio() {
     const dI = safeGet('dataInicio')?.value || '';
     const dF = safeGet('dataFim')?.value || '';
     let url = '';
+    
     try {
-        if (tipo === 'geral') { url = `/api/assistente-social/relatorio/geral?`; if (dI) url += `dataInicio=${dI}&`; if (dF) url += `dataFim=${dF}&`; }
-        else if (tipo === 'turma') {
+        if (tipo === 'geral') {
+            url = `/api/assistente-social/relatorio/geral?`;
+            if (dI) url += `dataInicio=${dI}&`;
+            if (dF) url += `dataFim=${dF}&`;
+        } else if (tipo === 'turma') {
             const turma = safeGet('filtroTurma')?.value;
-            if (!turma) { mostrarToastConcluido('Selecione uma turma', 'error'); return; }
+            if (!turma) { 
+                mostrarToastConcluido('Selecione uma turma', 'error'); 
+                return; 
+            }
             url = `/api/assistente-social/relatorio/turma/${encodeURIComponent(turma)}?`;
-            if (dI) url += `dataInicio=${dI}&`; if (dF) url += `dataFim=${dF}&`;
+            if (dI) url += `dataInicio=${dI}&`;
+            if (dF) url += `dataFim=${dF}&`;
         } else if (tipo === 'aluno') {
             const alunoId = safeGet('filtroAluno')?.value;
-            if (!alunoId) { mostrarToastConcluido('Selecione um aluno', 'error'); return; }
+            if (!alunoId) { 
+                mostrarToastConcluido('Selecione um aluno', 'error'); 
+                return; 
+            }
             url = `/api/assistente-social/relatorio/aluno/${alunoId}?`;
-            if (dI) url += `dataInicio=${dI}&`; if (dF) url += `dataFim=${dF}&`;
+            if (dI) url += `dataInicio=${dI}&`;
+            if (dF) url += `dataFim=${dF}&`;
         }
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        
+        const response = await fetch(url, { 
+            headers: { 'Authorization': `Bearer ${token}` } 
+        });
         const data = await response.json();
-        if (data.success) { relatorioData = data; exibirRelatorio(data, tipo); }
-        else mostrarToastConcluido('Erro: ' + (data.error || ''));
-    } catch (error) { mostrarToastConcluido('Erro ao carregar relatório', 'error'); }
+        
+        if (data.success) {
+            relatorioData = data;
+            exibirRelatorio(data, tipo);
+            
+            // ✅ HABILITAR BOTÕES CSV E PDF
+            const btnCSV = safeGet('btnExportarCSVAS');
+            const btnPDF = safeGet('btnExportarPDFAS');
+            if (btnCSV) btnCSV.disabled = false;
+            if (btnPDF) btnPDF.disabled = false;
+            
+            // Aviso se não encontrou nada
+            const total = data.totalAtendimentos || data.estatisticas?.totalAtendimentos || 0;
+            if (total === 0) {
+                mostrarToastConcluido('⚠️ Nenhum registro encontrado. Verifique as datas e filtros.', 'error');
+            }
+        } else {
+            mostrarToastConcluido('Erro: ' + (data.error || 'Erro ao carregar relatório'), 'error');
+        }
+    } catch (error) {
+        console.error('Erro ao carregar relatório:', error);
+        mostrarToastConcluido('Erro ao carregar relatório', 'error');
+    }
 }
 
 function exibirRelatorio(data, tipo) {
@@ -3131,6 +3174,348 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
+// ============================================
+// 📄 EXPORTAR PDF (padrão unificado)
+// ============================================
+function exportarPDF() {
+    if (!relatorioData) {
+        mostrarToastConcluido('⚠️ Gere um relatório primeiro. Clique em BUSCAR.', 'error');
+        return;
+    }
+    
+    const html = gerarHTMLRelatorioAS(relatorioData);
+    
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
+}
+
+// ============================================
+// 🎯 HABILITAR BOTÕES APÓS CARREGAR RELATÓRIO
+// ============================================
+function habilitarBotoesRelatorioAS() {
+    const btnCSV = safeGet('btnExportarCSVAS');
+    const btnPDF = safeGet('btnExportarPDFAS');
+    if (btnCSV) btnCSV.disabled = false;
+    if (btnPDF) btnPDF.disabled = false;
+}
+
+// ============================================
+// 🎨 GERAR HTML DO RELATÓRIO
+// ============================================
+function gerarHTMLRelatorioAS(data) {
+    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
+    const logoIema = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_assistente_social.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    // ========== BUSCAR ASSINATURA DIGITAL ==========
+    let assinaturaDigital = null;
+    if (tipo === 'aluno' && Array.isArray(data.atendimentos)) {
+        const comAssinatura = data.atendimentos.find(a => a.temAssinatura && a.assinaturaBase64);
+        if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+    }
+    if (!assinaturaDigital) {
+        const lista = data.atendimentos || data.registros || [];
+        const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
+        if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+    }
+    
+    // ========== TÍTULO ==========
+    let titulo = 'Relatório de Atendimentos - Assistente Social';
+    let subtitulo = '';
+    if (tipo === 'turma') {
+        titulo = 'Relatório de Atendimentos';
+        subtitulo = `Turma: ${data.turma || ''}`;
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual do Aluno';
+        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
+    } else {
+        subtitulo = 'Relatório Geral';
+    }
+    
+    // ========== ESTATÍSTICAS ==========
+    let statsHTML = '';
+    if (tipo === 'geral') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTipo || []).length}</div>
+                    <div class="stat-label">Tipos Diferentes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTurma || []).length}</div>
+                    <div class="stat-label">Turmas Atendidas</div>
+                </div>
+            </div>
+        `;
+    } else if (tipo === 'turma') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAlunosAtendidos || (data.porAluno || []).length}</div>
+                    <div class="stat-label">Alunos Atendidos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porAluno || []).length}</div>
+                    <div class="stat-label">Alunos com Registro</div>
+                </div>
+            </div>
+        `;
+    } else if (tipo === 'aluno') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.estatisticas?.porTipo || []).length}</div>
+                    <div class="stat-label">Tipos Diferentes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${Object.keys(data.estatisticas?.porGravidade || {}).length}</div>
+                    <div class="stat-label">Níveis de Gravidade</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ========== TABELAS ==========
+    let tabelaHTML = '';
+    
+    if (tipo === 'geral') {
+        const porTipo = Array.isArray(data.porTipo) ? data.porTipo : [];
+        const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
+        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead><tr><th>Tipo de Tarefa</th><th style="width: 120px; text-align: center;">Quantidade</th></tr></thead>
+                <tbody>
+                    ${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align: center;">${t.count || 0}</td></tr>`).join('') 
+                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado disponível</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">🏫 Distribuição por Turma</div>
+            <table>
+                <thead><tr><th>Turma</th><th style="width: 120px; text-align: center;">Total</th><th style="width: 120px; text-align: center;">Alunos</th></tr></thead>
+                <tbody>
+                    ${porTurma.map(t => `<tr><td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td><td style="text-align: center;">${t.total || 0}</td><td style="text-align: center;">${t.totalAlunos || 0}</td></tr>`).join('') 
+                    || '<tr><td colspan="3" style="text-align:center;">Nenhum dado disponível</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">📋 Últimos Atendimentos</div>
+            <table>
+                <thead><tr><th>Data</th><th>Aluno</th><th>Turma</th><th>Tipo</th><th>Gravidade</th><th>Status</th></tr></thead>
+                <tbody>
+                    ${atendimentos.slice(0, 30).map(a => `
+                        <tr>
+                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td>${escapeHTML(a.alunoTurma || '')}</td>
+                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
+                            <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
+                            <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
+                        </tr>`).join('') 
+                    || '<tr><td colspan="6" style="text-align:center;">Nenhum atendimento registrado</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    } else if (tipo === 'turma') {
+        const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
+        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead><tr><th>Tipo de Tarefa</th><th style="width: 120px; text-align: center;">Quantidade</th></tr></thead>
+                <tbody>
+                    ${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align: center;">${t.count || 0}</td></tr>`).join('') 
+                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">👥 Atendimentos por Aluno</div>
+            <table>
+                <thead><tr><th>Aluno</th><th style="width: 100px; text-align: center;">Total</th><th>Tipos</th></tr></thead>
+                <tbody>
+                    ${porAluno.map(a => `
+                        <tr>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td style="text-align: center;">${a.total || 0}</td>
+                            <td>${Object.entries(a.tipos || {}).map(([t, c]) => `${escapeHTML(TIPO_LABELS[t] || t)}: ${c}`).join('<br>')}</td>
+                        </tr>`).join('') 
+                    || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    } else if (tipo === 'aluno') {
+        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
+        const porGrav = data.estatisticas?.porGravidade || {};
+        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead><tr><th>Tipo de Tarefa</th><th style="width: 120px; text-align: center;">Quantidade</th></tr></thead>
+                <tbody>
+                    ${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align: center;">${t.count || 0}</td></tr>`).join('') 
+                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">⚠️ Distribuição por Gravidade</div>
+            <table>
+                <thead><tr><th>Gravidade</th><th style="width: 120px; text-align: center;">Quantidade</th></tr></thead>
+                <tbody>
+                    ${Object.entries(porGrav).map(([g, c]) => `<tr><td><strong>${escapeHTML(g.toUpperCase())}</strong></td><td style="text-align: center;">${c}</td></tr>`).join('') 
+                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">📋 Histórico de Atendimentos</div>
+            <table>
+                <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Gravidade</th><th>Status</th></tr></thead>
+                <tbody>
+                    ${atendimentos.map(a => `
+                        <tr>
+                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
+                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
+                            <td>${escapeHTML((a.descricao || '').substring(0, 80))}${(a.descricao || '').length > 80 ? '...' : ''}</td>
+                            <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
+                            <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
+                        </tr>`).join('') 
+                    || '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    // ========== HTML FINAL ==========
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo}</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
+            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
+            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            .titulo {
+                text-align: center; font-size: 14pt; font-weight: bold;
+                background: #ede9fe; padding: 10px; border: 2px solid #000;
+                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+            }
+            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+            .stats {
+                display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
+                background: #f5f3ff; border-radius: 8px; border: 1px solid #ddd6fe;
+            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #ddd6fe; }
+            .stat:last-child { border-right: none; }
+            .stat-value { font-size: 22pt; font-weight: bold; color: #7c3aed; line-height: 1; }
+            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+            .section-title {
+                font-size: 11pt; font-weight: bold; background: #e8e8e8;
+                padding: 6px 10px; border-left: 4px solid #8b5cf6; margin: 20px 0 10px;
+            }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
+            th {
+                background: #8b5cf6; color: white; padding: 8px 6px; text-align: left;
+                border: 1px solid #7c3aed; font-size: 9pt;
+            }
+            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
+            tr:nth-child(even) { background: #f9fafb; }
+            .badge-status {
+                display: inline-block; padding: 2px 8px; border-radius: 10px;
+                font-size: 8.5pt; font-weight: bold;
+            }
+            .badge-status.finalizado { background: #d1fae5; color: #065f46; }
+            .badge-status.andamento { background: #fef3c7; color: #92400e; }
+            
+            .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            .assinatura-container-relatorio {
+                position: relative; border-bottom: 1px solid #000; min-height: 22mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+            }
+            .assinatura-img {
+                max-height: 18mm; max-width: 100%; object-fit: contain;
+                position: relative; z-index: 1;
+            }
+            .carimbo-overlay {
+                position: absolute; top: 50%; left: 50%;
+                transform: translate(-50%, -50%);
+                max-height: 20mm; max-width: 60%; object-fit: contain;
+                opacity: 0.85; pointer-events: none; z-index: 2;
+            }
+            .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
+            
+            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
+            .footer p { margin: 2px 0; }
+            .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
+            .btn-print {
+                display: block; margin: 20px auto; padding: 12px 30px;
+                background: #8b5cf6; color: white; border: none; border-radius: 8px;
+                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #7c3aed; }
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Assistente Social</p>
+        </div>
+        
+        <div class="titulo">🤝 ${titulo}</div>
+        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
+        
+        ${statsHTML}
+        ${tabelaHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável / Assistente Social</div>
+            </div>
+        </div>
+        
+        <div class="registro-info">
+            Relatório gerado em <strong>${dataGeracao}</strong>
+        </div>
+        
+        <div class="footer">
+            <p>Documento gerado automaticamente pelo EducaPleno</p>
+            <p>Setor: Assistente Social</p>
+        </div>
+    </body>
+    </html>`;
+}
+
 // Iniciar quando o DOM carregar
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
@@ -3191,3 +3576,6 @@ window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
 window.confirmarInterno = confirmarInterno;
+window.exportarPDF = exportarPDF;
+window.habilitarBotoesRelatorioAS = habilitarBotoesRelatorioAS;
+window.gerarHTMLRelatorioAS = gerarHTMLRelatorioAS;

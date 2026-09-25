@@ -117,9 +117,12 @@ router.get('/aluno/:id', authenticateToken, verificarEnfermaria, async (req, res
 // ============================================
 // 📝 REGISTRAR ENTRADA
 // ============================================
+// ============================================
+// 📝 REGISTRAR ENTRADA
+// ============================================
 router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
-    const { alunoId, queixa, observacoes } = req.body;
+    const { alunoId, queixa, observacoes, dataEntrada } = req.body; // 🆕 dataEntrada
     
     if (!queixa || queixa.trim() === '') {
       return res.status(400).json({ success: false, error: 'A queixa é obrigatória' });
@@ -137,6 +140,19 @@ router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res)
     
     const enfermeiro = await User.findById(req.userId).select('nome');
     
+    // 🆕 Definir data da entrada (usa a fornecida ou a data atual)
+    let dataHoraEntrada = new Date();
+    if (dataEntrada) {
+      const dataParsed = new Date(dataEntrada);
+      if (isNaN(dataParsed.getTime())) {
+        return res.status(400).json({ success: false, error: 'Data de entrada inválida' });
+      }
+      if (dataParsed > new Date()) {
+        return res.status(400).json({ success: false, error: 'Data de entrada não pode ser no futuro' });
+      }
+      dataHoraEntrada = dataParsed;
+    }
+    
     const atendimento = new AtendimentoEnfermaria({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -145,7 +161,7 @@ router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res)
       alunoCurso: aluno.curso || 'Não informado',
       alunoFoto: aluno.fotoPerfil,
       entrada: {
-        dataHora: new Date(),
+        dataHora: dataHoraEntrada, // 🆕 Data personalizada
         queixa: queixa.trim(),
         observacoes: observacoes || '',
         registradoPor: req.userId,
@@ -287,11 +303,11 @@ router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
-// 🆕 ✏️ EDITAR ATENDIMENTO (queixa, observações)
+// 🆕 ✏️ EDITAR ATENDIMENTO (queixa, observações, data)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
-    const { queixa, observacoes } = req.body;
+    const { queixa, observacoes, dataEntrada } = req.body; // 🆕 dataEntrada
     const atendimento = await AtendimentoEnfermaria.findById(req.params.id);
     
     if (!atendimento) {
@@ -307,6 +323,18 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
     }
     
     const enfermeiro = await User.findById(req.userId).select('nome');
+    
+    // 🆕 Validar e atualizar data se fornecida
+    if (dataEntrada) {
+      const dataParsed = new Date(dataEntrada);
+      if (isNaN(dataParsed.getTime())) {
+        return res.status(400).json({ success: false, error: 'Data de entrada inválida' });
+      }
+      if (dataParsed > new Date()) {
+        return res.status(400).json({ success: false, error: 'Data de entrada não pode ser no futuro' });
+      }
+      atendimento.entrada.dataHora = dataParsed;
+    }
     
     // Atualizar dados
     atendimento.entrada.queixa = queixa.trim();
@@ -325,6 +353,7 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
         id: atendimento._id,
         queixa: atendimento.entrada.queixa,
         observacoes: atendimento.entrada.observacoes,
+        dataHora: atendimento.entrada.dataHora, // 🆕
         editadoEm: atendimento.entrada.editadoEm
       }
     });

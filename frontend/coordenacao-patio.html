@@ -278,6 +278,127 @@
         let modoAtual = 'automatico';
         let turmasDisponiveis = [];
         let alunosPorTurma = [];
+
+        // ============================================
+        // 🛡️ PROTEÇÃO CONTRA mostrarToastPatio() NATIVO (Kodular)
+        // ============================================
+        (function protegerContraAlertNativo() {
+            let __emProgresso = false;
+            
+            window.mostrarToastPatio = function(mensagem) {
+                if (__emProgresso) {
+                    console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+                    return;
+                }
+                __emProgresso = true;
+                
+                try {
+                    const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                                    (typeof window.AppInventor !== 'undefined');
+                    
+                    // Se existe toast global, usa ele
+                    if (typeof window.mostrarToastPatio === 'function') {
+                        window.mostrarToastPatio(String(mensagem), 'info');
+                        return;
+                    }
+                    
+                    // Desktop: só log
+                    if (!isWebView) {
+                        console.log('%c[ALERT] ' + mensagem, 'background:#667eea;color:white;padding:4px 8px;border-radius:4px;');
+                        return;
+                    }
+                    
+                    // WebView sem toast: modal simples
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                        background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                        justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+                    modal.innerHTML = `
+                        <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                                    width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                            <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                            <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                                    line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                            <button onclick="this.closest('div').parentElement.remove()"
+                                    style="width:100%;padding:12px;background:#667eea;color:white;
+                                        border:none;border-radius:10px;font-size:14px;
+                                        font-weight:600;cursor:pointer;">OK</button>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                } finally {
+                    __emProgresso = false;
+                }
+            };
+            
+            console.log('🛡️ [Proteção] window.mostrarToastPatio sobrescrito (coordenação de pátio)');
+        })();
+
+        // ============================================
+        // 🍞 TOAST CUSTOMIZADO
+        // ============================================
+        function mostrarToastPatio(mensagem, tipo = 'info', duracao = 3500) {
+            // Remove toast anterior
+            const anterior = document.getElementById('toastPatio');
+            if (anterior) anterior.remove();
+            
+            const cores = {
+                success: { bg: '#10b981', icone: 'fa-check-circle' },
+                error:   { bg: '#ef4444', icone: 'fa-exclamation-circle' },
+                warning: { bg: '#f59e0b', icone: 'fa-exclamation-triangle' },
+                info:    { bg: '#667eea', icone: 'fa-info-circle' }
+            };
+            
+            const cor = cores[tipo] || cores.info;
+            
+            const toast = document.createElement('div');
+            toast.id = 'toastPatio';
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%) translateY(-100px);
+                background: ${cor.bg};
+                color: white;
+                padding: 14px 22px;
+                border-radius: 10px;
+                box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+                z-index: 99999;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                font-size: 14px;
+                font-weight: 500;
+                max-width: 90%;
+                transition: transform 0.3s ease;
+            `;
+            
+            const icone = document.createElement('i');
+            icone.className = `fas ${cor.icone}`;
+            icone.style.fontSize = '18px';
+            
+            const span = document.createElement('span');
+            span.textContent = mensagem;
+            
+            toast.appendChild(icone);
+            toast.appendChild(span);
+            document.body.appendChild(toast);
+            
+            // Animação de entrada
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(0)';
+            }, 50);
+            
+            // Animação de saída
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(-100px)';
+                setTimeout(() => toast.remove(), 300);
+            }, duracao);
+        }
+
+        // Expõe globalmente
+        window.mostrarToastPatio = mostrarToastPatio;
         
         function gerarAvatarSVG(nome) {
             const inicial = (nome || '?').charAt(0).toUpperCase();
@@ -296,7 +417,7 @@
             
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
             if (userData.role !== 'coordenacao_patio' && userData.role !== 'super_admin') {
-                alert('Acesso negado.');
+                mostrarToastPatio('Acesso negado.');
                 window.location.href = '/login.html';
                 return;
             }
@@ -351,7 +472,7 @@
                 console.log('✅ Scanner Automático iniciado');
             } catch (err) {
                 console.error('Erro ao iniciar scanner automático:', err);
-                qrContainer.innerHTML = `<div class="alert alert-warning m-3">Não foi possível acessar a câmera.</div>`;
+                qrContainer.innerHTML = `<div class="mostrarToastPatio mostrarToastPatio-warning m-3">Não foi possível acessar a câmera.</div>`;
                 scannerAutoAtivo = false;
             }
         }
@@ -383,7 +504,7 @@
             }
             
             if (!alunoId) { 
-                alert('QR Code inválido'); 
+                mostrarToastPatio('QR Code inválido'); 
                 return; 
             }
             
@@ -461,11 +582,11 @@
                     alunosPorTurma = data.alunos;
                     filtrarAlunosManual();
                 } else {
-                    document.getElementById('listaAlunosManual').innerHTML = '<div class="alert alert-warning">Nenhum aluno encontrado nesta turma</div>';
+                    document.getElementById('listaAlunosManual').innerHTML = '<div class="mostrarToastPatio mostrarToastPatio-warning">Nenhum aluno encontrado nesta turma</div>';
                 }
             } catch (error) {
                 console.error('Erro:', error);
-                document.getElementById('listaAlunosManual').innerHTML = '<div class="alert alert-danger">Erro ao carregar alunos</div>';
+                document.getElementById('listaAlunosManual').innerHTML = '<div class="mostrarToastPatio mostrarToastPatio-danger">Erro ao carregar alunos</div>';
             }
         }
         
@@ -563,7 +684,7 @@
                     exibirAluno(data);
                     await registrarRefeicaoAutomatico();
                 } else {
-                    alert('Usuário não encontrado');
+                    mostrarToastPatio('Usuário não encontrado');
                     if (modoAtual === 'automatico') {
                         await iniciarScannerAutomatico();
                     } else {
@@ -574,9 +695,9 @@
                 console.error('Erro:', error);
                 
                 if (error.name === 'AbortError') {
-                    alert('Tempo esgotado ao buscar aluno. Tente novamente.');
+                    mostrarToastPatio('Tempo esgotado ao buscar aluno. Tente novamente.');
                 } else {
-                    alert('Erro ao buscar usuário');
+                    mostrarToastPatio('Erro ao buscar usuário');
                 }
                 
                 if (modoAtual === 'automatico') {
@@ -653,7 +774,7 @@
             else if (hora >= 14 && hora <= 16) tipoRefeicao = 'tarde';
             
             if (!tipoRefeicao) {
-                alert('Fora do horário de refeição');
+                mostrarToastPatio('Fora do horário de refeição');
                 if (modoAtual === 'automatico') {
                     await iniciarScannerAutomatico();
                 }
@@ -669,7 +790,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert(`✅ ${data.message}`);
+                    mostrarToastPatio(`✅ ${data.message}`);
                     document.getElementById('alunoInfo').style.display = 'none';
                     currentAluno = null;
                     
@@ -682,7 +803,7 @@
                     }
                 } else {
                     if (data.rodizio && !data.rodizio.pode) {
-                        alert(`❌ ${data.error}\n\n📋 Motivo: ${data.rodizio.mensagem}`);
+                        mostrarToastPatio(`❌ ${data.error}\n\n📋 Motivo: ${data.rodizio.mensagem}`);
                         
                         const horarioDiv = document.getElementById('horarioInfo');
                         if (horarioDiv) {
@@ -700,7 +821,7 @@
                             `;
                         }
                     } else {
-                        alert(`❌ ${data.error}`);
+                        mostrarToastPatio(`❌ ${data.error}`);
                     }
                     
                     if (modoAtual === 'automatico') {
@@ -711,7 +832,7 @@
                 }
             } catch (error) {
                 console.error('Erro:', error);
-                alert('Erro ao registrar');
+                mostrarToastPatio('Erro ao registrar');
                 if (modoAtual === 'automatico') {
                     await iniciarScannerAutomatico();
                 } else {
@@ -798,7 +919,7 @@
         }
 
         function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
-            if (!isWebViewNotif()) { alert(mensagem); return; }
+            if (!isWebViewNotif()) { mostrarToastPatio(mensagem); return; }
             
             const modal = document.createElement('div');
             modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;

@@ -907,3 +907,48 @@ body {
         font-size: 12px !important;
     }
 }
+
+.assinaturas {
+    display: flex;
+    justify-content: center;
+    margin-top: 50px;
+    gap: 40px;
+}
+.assinatura {
+    flex: 0 0 60%;
+    text-align: center;
+}
+.assinatura-container-relatorio {
+    position: relative;
+    border-bottom: 1px solid #000;
+    min-height: 22mm;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 3px;
+}
+.assinatura-img {
+    max-height: 18mm;
+    max-width: 100%;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+}
+.carimbo-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-height: 20mm;
+    max-width: 60%;
+    object-fit: contain;
+    opacity: 0.85;
+    pointer-events: none;
+    z-index: 2;
+}
+.assinatura-linha {
+    border-top: none;
+    padding-top: 5px;
+    font-size: 10pt;
+    margin-top: 4px;
+}

@@ -253,7 +253,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="sugestaoPreparo" class="alert alert-info mt-3 mb-0">
+                        <div id="sugestaoPreparo" class="mostrarToastCozinha mostrarToastCozinha-info mt-3 mb-0">
                             <i class="fas fa-lightbulb me-2"></i> Carregando sugestão...
                         </div>
                     </div>
@@ -513,6 +513,127 @@
         let chartTurmas = null;
         let todosFeedbacks = [];
         let feedbacksFiltrados = [];
+
+        // ============================================
+        // 🛡️ PROTEÇÃO CONTRA mostrarToastCozinha() NATIVO (Kodular)
+        // ============================================
+        (function protegerContraAlertNativo() {
+            let __emProgresso = false;
+            
+            window.mostrarToastCozinha = function(mensagem) {
+                if (__emProgresso) {
+                    console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
+                    return;
+                }
+                __emProgresso = true;
+                
+                try {
+                    const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                                    (typeof window.AppInventor !== 'undefined');
+                    
+                    // Se tem a função global, usa ela
+                    if (typeof window.mostrarToastCozinha === 'function') {
+                        window.mostrarToastCozinha(String(mensagem), 'info');
+                        return;
+                    }
+                    
+                    // Desktop: log no console
+                    if (!isWebView) {
+                        console.log('%c[ALERT] ' + mensagem, 'background:#0d6efd;color:white;padding:4px 8px;border-radius:4px;');
+                        return;
+                    }
+                    
+                    // WebView sem toast: modal simples
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                        background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                        justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+                    modal.innerHTML = `
+                        <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                                    width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                            <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                            <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                                    line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                            <button onclick="this.closest('div').parentElement.remove()"
+                                    style="width:100%;padding:12px;background:#0d6efd;color:white;
+                                        border:none;border-radius:10px;font-size:14px;
+                                        font-weight:600;cursor:pointer;">OK</button>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                } finally {
+                    __emProgresso = false;
+                }
+            };
+            
+            console.log('🛡️ [Proteção] window.mostrarToastCozinha sobrescrito (cozinha)');
+        })();
+
+        // ============================================
+        // 🍞 TOAST CUSTOMIZADO (não trava no Kodular)
+        // ============================================
+        function mostrarToastCozinha(mensagem, tipo = 'info', duracao = 3500) {
+            // Remove toast anterior se existir
+            const anterior = document.getElementById('toastCozinha');
+            if (anterior) anterior.remove();
+            
+            const cores = {
+                success: { bg: '#10b981', icone: 'fa-check-circle' },
+                error:   { bg: '#ef4444', icone: 'fa-exclamation-circle' },
+                warning: { bg: '#f59e0b', icone: 'fa-exclamation-triangle' },
+                info:    { bg: '#0d6efd', icone: 'fa-info-circle' }
+            };
+            
+            const cor = cores[tipo] || cores.info;
+            
+            const toast = document.createElement('div');
+            toast.id = 'toastCozinha';
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%) translateY(-100px);
+                background: ${cor.bg};
+                color: white;
+                padding: 14px 22px;
+                border-radius: 10px;
+                box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+                z-index: 99999;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-family: -apple-system, sans-serif;
+                font-size: 14px;
+                font-weight: 500;
+                max-width: 90%;
+                transition: transform 0.3s ease;
+            `;
+            
+            const icone = document.createElement('i');
+            icone.className = `fas ${cor.icone}`;
+            icone.style.fontSize = '18px';
+            
+            const span = document.createElement('span');
+            span.textContent = mensagem;
+            
+            toast.appendChild(icone);
+            toast.appendChild(span);
+            document.body.appendChild(toast);
+            
+            // Animação de entrada
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(0)';
+            }, 50);
+            
+            // Animação de saída
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(-100px)';
+                setTimeout(() => toast.remove(), 300);
+            }, duracao);
+        }
+
+        // Expõe globalmente
+        window.mostrarToastCozinha = mostrarToastCozinha;
         
         document.addEventListener('DOMContentLoaded', async () => {
             if (!token) { window.location.href = '/login.html'; return; }
@@ -524,7 +645,7 @@
             document.getElementById('userRole').textContent = 'Cozinha';
             
             if (!['cozinha', 'super_admin', 'admin'].includes(userStorage.role)) {
-                alert('Acesso negado. Perfil não autorizado.');
+                mostrarToastCozinha('Acesso negado. Perfil não autorizado.');
                 window.location.href = '/login.html';
                 return;
             }
@@ -591,12 +712,12 @@
                     
                     if (data.sugestaoAtual) {
                         const sugestaoDiv = document.getElementById('sugestaoPreparo');
-                        let alertClass = 'alert-info';
-                        if (data.sugestaoAtual.mensagem.includes('⚠️')) alertClass = 'alert-warning';
-                        else if (data.sugestaoAtual.mensagem.includes('✅')) alertClass = 'alert-success';
-                        else if (data.sugestaoAtual.mensagem.includes('URGENTE')) alertClass = 'alert-danger';
+                        let mostrarToastCozinhaClass = 'mostrarToastCozinha-info';
+                        if (data.sugestaoAtual.mensagem.includes('⚠️')) mostrarToastCozinhaClass = 'mostrarToastCozinha-warning';
+                        else if (data.sugestaoAtual.mensagem.includes('✅')) mostrarToastCozinhaClass = 'mostrarToastCozinha-success';
+                        else if (data.sugestaoAtual.mensagem.includes('URGENTE')) mostrarToastCozinhaClass = 'mostrarToastCozinha-danger';
                         
-                        sugestaoDiv.className = `alert ${alertClass} mt-3 mb-0`;
+                        sugestaoDiv.className = `mostrarToastCozinha ${mostrarToastCozinhaClass} mt-3 mb-0`;
                         sugestaoDiv.innerHTML = `<i class="fas fa-lightbulb me-2"></i> ${data.sugestaoAtual.mensagem}<br><small>${data.sugestaoAtual.acao}</small>`;
                     }
                     
@@ -641,7 +762,7 @@
                 }
             } catch (error) {
                 console.error('Erro ao carregar dashboard:', error);
-                document.getElementById('insightsContainer').innerHTML = '<div class="alert alert-danger">Erro ao carregar dados. Tente novamente.</div>';
+                document.getElementById('insightsContainer').innerHTML = '<div class="mostrarToastCozinha mostrarToastCozinha-danger">Erro ao carregar dados. Tente novamente.</div>';
             }
         }
         
@@ -972,31 +1093,319 @@
             }
         }
         
+        // ============================================
+        // 📄 EXPORTAR PDF (padrão unificado)
+        // ============================================
         function gerarRelatorioPDF() {
-            alert('📄 Função de exportar PDF será implementada em breve.\n\nPor enquanto, você pode usar "Ctrl+P" para imprimir esta página.');
+            if (!dashboardData || !dashboardData.analisePorTurma || dashboardData.analisePorTurma.length === 0) {
+                if (typeof mostrarNotificacaoInterna === 'function') {
+                    mostrarNotificacaoInterna('⚠️ Nenhum dado carregado. Aguarde o dashboard carregar.', 'warning');
+                } else {
+                    mostrarToastCozinha('⚠️ Nenhum dado carregado. Aguarde o dashboard carregar.');
+                }
+                return;
+            }
+            
+            const html = gerarHTMLRelatorioCozinha(dashboardData);
+            
+            const win = window.open('', '_blank');
+            win.document.write(html);
+            win.document.close();
+            win.onload = () => setTimeout(() => win.print(), 500);
+        }
+
+        // ============================================
+        // 🎨 GERAR HTML DO RELATÓRIO
+        // ============================================
+        function gerarHTMLRelatorioCozinha(data) {
+            const logo = '/uploads/logo-iema.png';
+            const carimbo = '/icons/assinatura_cozinha.ico';
+            const dataGeracao = new Date().toLocaleString('pt-BR');
+            const dataRef = new Date().toLocaleDateString('pt-BR', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            });
+            
+            // ========== ESTATÍSTICAS ==========
+            const statsHTML = `
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value">${data.perfis?.total || 0}</div>
+                        <div class="stat-label">Total de Pessoas</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${data.registrosReais?.pessoasUnicas || 0}</div>
+                        <div class="stat-label">Comeram Hoje</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${data.analiseAdesao?.taxaAdesao || 0}%</div>
+                        <div class="stat-label">Taxa de Adesão</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${data.registrosReais?.total || 0}</div>
+                        <div class="stat-label">Refeições Servidas</div>
+                    </div>
+                </div>
+            `;
+            
+            // ========== CONTAGEM POR REFEIÇÃO ==========
+            const refeicoesHTML = `
+                <div class="section-title">🍽️ Contagem por Refeição</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Refeição</th>
+                            <th style="width:120px;text-align:center;">Previsto</th>
+                            <th style="width:120px;text-align:center;">Servido</th>
+                            <th style="width:120px;text-align:center;">Previsão (kg)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>🌅 Lanche da Manhã</strong></td>
+                            <td style="text-align:center;">${data.previsao?.manha?.pessoas || 0}</td>
+                            <td style="text-align:center;">${data.registrosReais?.manha || 0}</td>
+                            <td style="text-align:center;">${data.previsao?.manha?.kg || 0} kg</td>
+                        </tr>
+                        <tr>
+                            <td><strong>🍽️ Almoço</strong></td>
+                            <td style="text-align:center;">${data.previsao?.almoco?.pessoas || 0}</td>
+                            <td style="text-align:center;">${data.registrosReais?.almoco || 0}</td>
+                            <td style="text-align:center;">${data.previsao?.almoco?.kg || 0} kg</td>
+                        </tr>
+                        <tr>
+                            <td><strong>🌙 Lanche da Tarde</strong></td>
+                            <td style="text-align:center;">${data.previsao?.tarde?.pessoas || 0}</td>
+                            <td style="text-align:center;">${data.registrosReais?.tarde || 0}</td>
+                            <td style="text-align:center;">${data.previsao?.tarde?.kg || 0} kg</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+            
+            // ========== PERFIL ALIMENTAR ==========
+            const perfisHTML = `
+                <div class="section-title">📊 Perfil Alimentar dos Usuários</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Perfil</th>
+                            <th style="width:120px;text-align:center;">Quantidade</th>
+                            <th style="width:120px;text-align:center;">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>👍 Sempre come</strong></td>
+                            <td style="text-align:center;">${data.perfis?.sempre || 0}</td>
+                            <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.sempre || 0) / data.perfis.total) * 100) : 0}%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>⚠️ Às vezes come</strong></td>
+                            <td style="text-align:center;">${data.perfis?.as_vezes || 0}</td>
+                            <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.as_vezes || 0) / data.perfis.total) * 100) : 0}%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>❌ Nunca come</strong></td>
+                            <td style="text-align:center;">${data.perfis?.nunca || 0}</td>
+                            <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.nunca || 0) / data.perfis.total) * 100) : 0}%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>❔ Não informado</strong></td>
+                            <td style="text-align:center;">${data.perfis?.nao_informado || 0}</td>
+                            <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.nao_informado || 0) / data.perfis.total) * 100) : 0}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+            
+            // ========== ANÁLISE POR TURMA ==========
+            let turmasHTML = '';
+            if (data.analisePorTurma && data.analisePorTurma.length > 0) {
+                turmasHTML = `
+                    <div class="section-title">🏫 Análise Detalhada por Turma</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Turma</th>
+                                <th style="width:80px;text-align:center;">Total</th>
+                                <th style="width:100px;text-align:center;">Dizem que Comem</th>
+                                <th style="width:100px;text-align:center;">Comeram Hoje</th>
+                                <th style="width:80px;text-align:center;">Adesão</th>
+                                <th style="width:80px;text-align:center;">Faltantes</th>
+                                <th style="width:100px;text-align:center;">Situação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.analisePorTurma.map(t => {
+                                let situacao = '❌ Baixa';
+                                if (t.taxaAdesao >= 70) situacao = '✅ Boa';
+                                else if (t.taxaAdesao >= 40) situacao = '⚠️ Média';
+                                return `
+                                    <tr>
+                                        <td><strong>${escapeHTML(t.turma || '')}</strong></td>
+                                        <td style="text-align:center;">${t.totalAlunos || 0}</td>
+                                        <td style="text-align:center;">${t.dizemQueComem || 0}</td>
+                                        <td style="text-align:center;">${t.comeramHoje || 0}</td>
+                                        <td style="text-align:center;">${t.taxaAdesao || 0}%</td>
+                                        <td style="text-align:center;">${t.faltantes || 0}</td>
+                                        <td style="text-align:center;">${situacao}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+            
+            // ========== INSIGHTS ==========
+            let insightsHTML = '';
+            if (data.insights && data.insights.length > 0) {
+                insightsHTML = `
+                    <div class="section-title">💡 Insights e Recomendações</div>
+                    <div class="insights-block">
+                        ${data.insights.map(insight => `
+                            <div class="insight-item">
+                                <strong>${escapeHTML(insight.titulo || '')}</strong>
+                                <p>${escapeHTML(insight.mensagem || '')}</p>
+                                ${insight.acao ? `<p style="font-size:9pt;color:#666;"><em>Sugestão: ${escapeHTML(insight.acao)}</em></p>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            // ========== HTML FINAL ==========
+            return `<!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <title>Relatório Cozinha - ${dataRef}</title>
+                <style>
+                    @page { size: A4 portrait; margin: 12mm; }
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
+                    .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
+                    .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
+                    .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+                    .titulo {
+                        text-align: center; font-size: 14pt; font-weight: bold;
+                        background: #e0f2fe; padding: 10px; border: 2px solid #000;
+                        margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+                    }
+                    .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+                    .stats {
+                        display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
+                        background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;
+                    }
+                    .stat { text-align: center; flex: 1; border-right: 1px solid #bfdbfe; }
+                    .stat:last-child { border-right: none; }
+                    .stat-value { font-size: 22pt; font-weight: bold; color: #0d6efd; line-height: 1; }
+                    .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+                    .section-title {
+                        font-size: 11pt; font-weight: bold; background: #e8e8e8;
+                        padding: 6px 10px; border-left: 4px solid #0d6efd; margin: 20px 0 10px;
+                    }
+                    table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
+                    th { background: #0d6efd; color: white; padding: 8px 6px; text-align: left; border: 1px solid #0b5ed7; font-size: 9pt; }
+                    td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
+                    tr:nth-child(even) { background: #f9fafb; }
+                    .insights-block { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+                    .insight-item { padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+                    .insight-item:last-child { border-bottom: none; }
+                    .insight-item strong { display: block; margin-bottom: 4px; color: #0d6efd; }
+                    .insight-item p { font-size: 10pt; margin-bottom: 3px; }
+                    .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
+                    .assinatura { flex: 0 0 60%; text-align: center; }
+                    .assinatura-container-relatorio {
+                        position: relative; border-bottom: 1px solid #000; min-height: 22mm;
+                        display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+                    }
+                    .carimbo-overlay {
+                        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                        max-height: 20mm; max-width: 60%; object-fit: contain;
+                        opacity: 0.85; pointer-events: none; z-index: 2;
+                    }
+                    .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
+                    .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
+                    .footer p { margin: 2px 0; }
+                    .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
+                    .btn-print {
+                        display: block; margin: 20px auto; padding: 12px 30px;
+                        background: #0d6efd; color: white; border: none; border-radius: 8px;
+                        font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+                    }
+                    .btn-print:hover { background: #0b5ed7; }
+                    @media print { .no-print { display: none !important; } body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+                
+                <div class="header">
+                    <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+                    <h1>IEMA Pleno: São Luís - Centro</h1>
+                    <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Monitoramento — Cozinha Inteligente</p>
+                </div>
+                
+                <div class="titulo">🍽️ Relatório de Monitoramento de Refeições</div>
+                <div class="subtitulo">${dataRef}</div>
+                
+                ${statsHTML}
+                ${refeicoesHTML}
+                ${perfisHTML}
+                ${turmasHTML}
+                ${insightsHTML}
+                
+                <div class="assinaturas">
+                    <div class="assinatura">
+                        <div class="assinatura-container-relatorio">
+                            <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                        </div>
+                        <div class="assinatura-linha">Responsável pela Cozinha</div>
+                    </div>
+                </div>
+                
+                <div class="registro-info">
+                    Relatório gerado em <strong>${dataGeracao}</strong>
+                </div>
+                
+                <div class="footer">
+                    <p>Documento gerado automaticamente pelo EducaPleno</p>
+                    <p>Setor: Cozinha Inteligente</p>
+                </div>
+            </body>
+            </html>`;
         }
         
         function exportarCSV() {
             if (!dashboardData.analisePorTurma || dashboardData.analisePorTurma.length === 0) {
-                alert('Nenhum dado para exportar');
+                if (typeof mostrarNotificacaoInterna === 'function') {
+                    mostrarNotificacaoInterna('⚠️ Nenhum dado para exportar', 'warning');
+                } else {
+                    mostrarToastCozinha('⚠️ Nenhum dado para exportar');
+                }
                 return;
             }
             
             let csv = "Turma,Total Alunos,Dizem que Comem,Comeram Hoje,Taxa Adesão,Faltantes\n";
             dashboardData.analisePorTurma.forEach(t => {
-                csv += `"${t.turma}",${t.totalAlunos},${t.dizemQueComem},${t.comeramHoje},${t.taxaAdesao},${t.faltantes}\n`;
+                csv += `"${(t.turma || '').replace(/"/g, '""')}",${t.totalAlunos},${t.dizemQueComem},${t.comeramHoje},${t.taxaAdesao},${t.faltantes}\n`;
             });
             
             const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
             const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", `relatorio_cozinha_${new Date().toISOString().split('T')[0]}.csv`);
-            link.style.visibility = "hidden";
+            link.href = URL.createObjectURL(blob);
+            link.download = `relatorio_cozinha_${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            alert('✅ CSV exportado com sucesso!');
+            URL.revokeObjectURL(link.href);
+            
+            if (typeof mostrarNotificacaoInterna === 'function') {
+                mostrarNotificacaoInterna('✅ CSV exportado com sucesso!', 'success');
+            } else {
+                mostrarToastCozinha('✅ CSV exportado com sucesso!');
+            }
         }
         
         async function abrirModalFaltantes() {
@@ -1032,7 +1441,7 @@
                 }
             } catch (error) {
                 console.error('Erro ao carregar faltantes:', error);
-                listaDiv.innerHTML = '<div class="alert alert-danger">Erro ao carregar lista de faltantes</div>';
+                listaDiv.innerHTML = '<div class="mostrarToastCozinha mostrarToastCozinha-danger">Erro ao carregar lista de faltantes</div>';
             }
         }
         
@@ -1077,7 +1486,7 @@
         }
 
         function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
-            if (!isWebViewNotif()) { alert(mensagem); return; }
+            if (!isWebViewNotif()) { mostrarToastCozinha(mensagem); return; }
             
             const modal = document.createElement('div');
             modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;

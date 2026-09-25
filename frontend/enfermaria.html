@@ -398,6 +398,19 @@
                         <!-- Formulário de Entrada -->
                         <div id="formEntrada" class="form-container" style="display: none;">
                             <h5><i class="fas fa-notes-medical"></i> Registrar Atendimento</h5>
+                            
+                            <!-- 🆕 CAMPO DE DATA -->
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora do Atendimento <span class="text-danger">*</span>
+                                </label>
+                                <input type="datetime-local" id="dataEntrada" class="form-control" required>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Você pode alterar a data caso esteja registrando um atendimento retroativo.
+                                </small>
+                            </div>
+                            
                             <div class="mb-3">
                                 <label class="form-label">Queixa / Motivo <span class="text-danger">*</span></label>
                                 <textarea id="queixa" class="form-control" rows="3" placeholder="Descreva o que o aluno está sentindo..."></textarea>
@@ -449,6 +462,15 @@
                     
                     <!-- ABA ATENDIMENTOS ATIVOS -->
                     <div class="tab-pane fade" id="ativos" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">
+                                <i class="fas fa-clock text-warning me-2"></i> 
+                                Atendimentos em Andamento
+                            </h5>
+                            <button class="btn btn-sm btn-danger" onclick="imprimirAtendimentosAtivos()">
+                                <i class="fas fa-print me-1"></i> Imprimir Lista
+                            </button>
+                        </div>
                         <div id="listaAtendimentosAtivos" class="list-group">
                             <div class="text-center py-3">
                                 <div class="loading"></div>
@@ -579,11 +601,11 @@
                                 <div class="col-md-2">
                                     <label class="form-label">&nbsp;</label>
                                     <div class="btn-group w-100">
-                                        <button class="btn btn-success" onclick="exportarCSV()">
+                                        <button class="btn btn-success" onclick="exportarCSV()" id="btnExportarCSVPsicologia" disabled>
                                             <i class="fas fa-file-csv"></i> CSV
                                         </button>
-                                        <button class="btn btn-danger" onclick="exportarPDF()">
-                                            <i class="fas fa-file-pdf"></i> PDF
+                                        <button class="btn btn-danger" onclick="exportarPDF()" id="btnExportarPDFPsicologia" disabled>
+                                            <i class="fas fa-print"></i> PDF
                                         </button>
                                     </div>
                                 </div>

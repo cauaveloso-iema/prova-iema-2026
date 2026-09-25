@@ -2887,6 +2887,12 @@ function toggleRelatorioFiltros() {
     
     if (filtroTurmaDiv) filtroTurmaDiv.style.display = tipo === 'turma' ? 'block' : 'none';
     if (filtroAlunoDiv) filtroAlunoDiv.style.display = tipo === 'aluno' ? 'block' : 'none';
+
+    const btnCSV = safeGet('btnExportarCSVPsicologia');
+    const btnPDF = safeGet('btnExportarPDFPsicologia');
+    if (btnCSV) btnCSV.disabled = true;
+    if (btnPDF) btnPDF.disabled = true;
+    relatorioData = null;
     
     if (tipo === 'turma') {
         const selectTurma = safeGet('filtroTurma');
@@ -3122,6 +3128,7 @@ async function carregarRelatorio() {
         if (data.success) {
             relatorioData = data;
             exibirRelatorio(data, tipo);
+            habilitarBotoesRelatorio();
         } else {
             mostrarToastConcluido('Erro ao carregar relatório: ' + (data.error || ''));
         }
@@ -3362,28 +3369,35 @@ async function imprimirAtendimento(atendimentoId) {
     }
 }
 
+// ============================================
+// 🖨️ GERAR HTML DA IMPRESSÃO (padrão unificado)
+// ============================================
 function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
     const logo = '/uploads/logo-iema.png';
     const carimbo = '/icons/assinatura_psicologia.ico';
-    const dataExt = new Date(a.entrada.dataHora).toLocaleDateString('pt-BR', {
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    const entrada = new Date(a.entrada.dataHora);
+    const dataExt = entrada.toLocaleDateString('pt-BR', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
-    const horaExt = new Date(a.entrada.dataHora).toLocaleTimeString('pt-BR', {
-        hour: '2-digit', minute: '2-digit'
-    });
+    const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    const assinaturaHTML = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64
-        ? `<div class="assinatura-digital"><img src="${a.entrada.assinaturaBase64}" alt="Assinatura"></div>`
-        : '<div class="assinatura-vazia">_____________________________________</div>';
+    // ========== BADGE DE STATUS ==========
+    const badgeStatus = a.status === 'finalizado'
+        ? '<span class="badge-finalizado">✅ FINALIZADO</span>'
+        : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
     
-    const carimboHTML = `
-        <div class="carimbo-psicologia">
-            <img src="${carimbo}" alt="Carimbo Psicologia">
-        </div>`;
+    // ========== ASSINATURA DIGITAL (com carimbo sobreposto) ==========
+    const temAssinaturaDigital = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64;
     
-    // 🔥 NOVO: Detalhes dinâmicos
+    const assinaturaHTML = temAssinaturaDigital
+        ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
+        : '';
+    
+    // ========== DETALHES ADICIONAIS ==========
     let detalhesHTML = '';
-    if (a.detalhes && Object.keys(a.detalhes).length > 0) {
+    if (a.entrada?.detalhes && Object.keys(a.entrada.detalhes).length > 0) {
         const mapaDetalhes = {
             tipoEscuta: 'Tipo de Escuta',
             duracaoEscuta: 'Duração (min)',
@@ -3408,7 +3422,7 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
         };
         
         const linhas = [];
-        Object.entries(a.detalhes).forEach(([key, value]) => {
+        Object.entries(a.entrada.detalhes).forEach(([key, value]) => {
             if (!value || (Array.isArray(value) && value.length === 0)) return;
             const label = mapaDetalhes[key] || key;
             let valor = value;
@@ -3422,183 +3436,959 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
         
         if (linhas.length > 0) {
             detalhesHTML = `
-                <div class="section-box">
-                    <h3>📋 Detalhes</h3>
+                <div class="section-title">📋 Detalhes</div>
+                <div class="info-block">
                     ${linhas.join('')}
                 </div>`;
         }
     }
     
+    // ========== BLOCO DE SAÍDA (se finalizado) ==========
+    let saidaHTML = '';
+    if (a.saida) {
+        saidaHTML = `
+            <div class="section-title">✅ Resultado Final</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Resultado:</div>
+                    <div class="info-value"><strong>${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</strong></div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Data de Saída:</div>
+                    <div class="info-value">${a.saida.dataHoraFormatada || (a.saida.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : '-')}</div>
+                </div>
+                ${a.saida.observacoesFinais ? `
+                    <div class="info-item" style="grid-column: 1 / -1;">
+                        <div class="info-label">Observações finais:</div>
+                        <div class="info-value">${escapeHTML(a.saida.observacoesFinais)}</div>
+                    </div>
+                ` : ''}
+            </div>`;
+    }
+    
+    // ========== REMARCAÇÕES ==========
+    let remarcacoesHTML = '';
+    if (a.remarcacoes && a.remarcacoes.length > 0) {
+        remarcacoesHTML = `
+            <div class="section-title">📅 Histórico de Remarcações</div>
+            <table class="tabela-remarcacoes">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Data</th>
+                        <th>Horário</th>
+                        <th>Status</th>
+                        <th>Motivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${a.remarcacoes.map((r, i) => `
+                        <tr>
+                            <td><strong>${i + 1}</strong></td>
+                            <td>${formatarDataBR(r.dataRemarcacao)}</td>
+                            <td>${r.horarioRemarcacao || '-'}</td>
+                            <td>
+                                <span class="status-remarcacao status-${r.status}">
+                                    ${r.status === 'pendente' ? '⏳ Pendente' : r.status === 'realizado' ? '✅ Realizado' : '❌ Cancelado'}
+                                </span>
+                            </td>
+                            <td>${escapeHTML(r.motivoRemarcacao || '-')}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+    }
+    
+    // ========== HTML FINAL ==========
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Atendimento Psicologia - ${a.alunoNome}</title>
+        <title>Atendimento Psicologia - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { size: A4 portrait; margin: 15mm; }
+            @page { size: A4 portrait; margin: 12mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body {
-                width: 210mm; min-height: 297mm;
+            body {
                 font-family: 'Times New Roman', Times, serif;
-                background: #f0f0f0;
-                display: flex; justify-content: center; align-items: flex-start;
+                font-size: 11pt;
+                line-height: 1.5;
+                color: #000;
             }
-            .folha {
-                width: 180mm; min-height: 267mm; padding: 10mm;
-                background: white; margin: 0 auto;
-                font-size: 10pt; line-height: 1.4;
-                display: flex; flex-direction: column;
+            .header {
+                text-align: center;
+                border-bottom: 2px double #000;
+                padding-bottom: 10px;
+                margin-bottom: 15px;
             }
-            @media print {
-                html, body { width: 210mm; height: 297mm; background: white; display: block; }
-                .folha { width: 100%; min-height: auto; padding: 0; margin: 0 auto; }
-                .btn-print { display: none !important; }
+            .header img {
+                max-width: 100%;
+                max-height: 25mm;
+                object-fit: contain;
+                display: block;
+                margin: 0 auto 5px;
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
-            .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
-            .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
+            .header h1 {
+                font-size: 13pt;
+                text-transform: uppercase;
+                font-weight: bold;
+                margin: 5px 0 0;
+            }
             .titulo {
-                text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase;
-                margin: 10px 0; background: #e0f2fe; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px;
+                text-align: center;
+                font-size: 14pt;
+                font-weight: bold;
+                background: #ccfbf1;
+                padding: 10px;
+                border: 2px solid #000;
+                margin: 15px 0;
+                text-transform: uppercase;
+                letter-spacing: 1px;
             }
-            .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
-            .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
-            .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-            .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
-            .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px;
-                font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            .status-badge {
+                text-align: center;
+                margin: -10px 0 20px;
             }
-            .section-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
-            .section-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
-            .section-box p { margin: 3px 0; font-size: 9.5pt; }
-            .descricao-box { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
-            .descricao-box strong { display: block; margin-bottom: 5px; font-size: 10pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 9pt; }
-            .assinatura-digital {
-                border-bottom: 1px solid #000; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+            .badge-finalizado {
+                background: #d1fae5; color: #065f46;
+                padding: 4px 14px; border-radius: 20px;
+                font-size: 10pt; font-weight: bold;
+                border: 1px solid #10b981;
+                display: inline-block;
             }
-            .assinatura-digital img { max-height: 16mm; max-width: 100%; object-fit: contain; }
-            .assinatura-vazia {
-                border-bottom: 1px solid #000; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center;
-                color: #999; font-size: 9pt; padding-bottom: 3px;
+            .badge-andamento {
+                background: #fef3c7; color: #92400e;
+                padding: 4px 14px; border-radius: 20px;
+                font-size: 10pt; font-weight: bold;
+                border: 1px solid #f59e0b;
+                display: inline-block;
             }
-            .assinatura-linha { padding-top: 5px; font-size: 9pt; }
-            .carimbo-psicologia {
-                border-bottom: 1px solid #000; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+            
+            .aluno-box {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                padding: 15px;
+                background: #f0fdfa;
+                border: 1px solid #99f6e4;
+                border-radius: 10px;
+                margin-bottom: 20px;
             }
-            .carimbo-psicologia img { max-height: 16mm; max-width: 100%; object-fit: contain; opacity: 0.9; }
-            .qr-code { text-align: center; margin-top: 8px; }
-            .qr-code img { width: 22mm; height: 22mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 8pt; margin: 3px 0 0 0; }
+            .aluno-foto {
+                width: 70px; height: 70px;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 2px solid #14b8a6;
+            }
+            .aluno-info { flex: 1; }
+            .aluno-nome {
+                font-size: 14pt; font-weight: bold;
+                color: #115e59; margin-bottom: 4px;
+            }
+            .aluno-detalhes {
+                font-size: 10pt; color: #374151;
+            }
+            
+            .section-title {
+                font-size: 11pt;
+                font-weight: bold;
+                background: #e8e8e8;
+                padding: 6px 10px;
+                border-left: 4px solid #14b8a6;
+                margin: 20px 0 10px;
+            }
+            
+            .info-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px 20px;
+                margin: 10px 0 15px;
+            }
+            .info-item { display: flex; gap: 8px; font-size: 10pt; }
+            .info-label { font-weight: bold; min-width: 120px; }
+            .info-value { flex: 1; }
+            
+            .info-block {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 10.5pt;
+                line-height: 1.6;
+            }
+            .info-block p { margin: 4px 0; }
+            
+            .descricao-box {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 10.5pt;
+                line-height: 1.5;
+                min-height: 50px;
+            }
+            
+            .tabela-remarcacoes {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 9.5pt;
+                margin-top: 10px;
+            }
+            .tabela-remarcacoes th {
+                background: #14b8a6;
+                color: white;
+                padding: 8px 6px;
+                text-align: left;
+                border: 1px solid #0d9488;
+                font-size: 9pt;
+            }
+            .tabela-remarcacoes td {
+                padding: 6px;
+                border: 1px solid #ddd;
+            }
+            .tabela-remarcacoes tr:nth-child(even) { background: #f9fafb; }
+            .status-remarcacao {
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-size: 8.5pt;
+                font-weight: bold;
+            }
+            .status-pendente { background: #fef3c7; color: #92400e; }
+            .status-realizado { background: #d1fae5; color: #065f46; }
+            .status-cancelado { background: #fee2e2; color: #991b1b; }
+            
+            /* ===== ASSINATURA COM CARIMBO SOBREPOSTO ===== */
+            .assinaturas {
+                display: flex;
+                justify-content: center;
+                margin-top: 50px;
+                gap: 40px;
+            }
+            .assinatura {
+                flex: 0 0 60%;
+                text-align: center;
+            }
+            .assinatura-container-relatorio {
+                position: relative;
+                border-bottom: 1px solid #000;
+                min-height: 22mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 3px;
+            }
+            .assinatura-img {
+                max-height: 18mm;
+                max-width: 100%;
+                object-fit: contain;
+                position: relative;
+                z-index: 1;
+            }
+            .carimbo-overlay {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                max-height: 20mm;
+                max-width: 60%;
+                object-fit: contain;
+                opacity: 0.85;
+                pointer-events: none;
+                z-index: 2;
+            }
+            .assinatura-linha {
+                border-top: none;
+                padding-top: 5px;
+                font-size: 10pt;
+                margin-top: 4px;
+            }
+            
+            .qr-code {
+                text-align: center;
+                margin-top: 15px;
+            }
+            .qr-code img {
+                width: 22mm; height: 22mm;
+                border: 1px solid #000;
+                padding: 1px;
+            }
+            .qr-code p {
+                font-size: 8pt;
+                margin: 3px 0 0 0;
+                color: #444;
+            }
+            
             .footer {
-                text-align: center; margin-top: auto; padding-top: 8px;
-                border-top: 1px solid #000; font-size: 8pt; color: #444;
+                text-align: center;
+                margin-top: 30px;
+                padding-top: 10px;
+                border-top: 1px solid #ccc;
+                font-size: 8pt;
+                color: #666;
             }
             .footer p { margin: 2px 0; }
+            
             .btn-print {
-                display: block; margin: 15px auto; padding: 10px 30px;
-                background: #14b8a6; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+                display: block;
+                margin: 20px auto;
+                padding: 12px 30px;
+                background: #14b8a6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+                cursor: pointer;
+                font-size: 14px;
+                font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #0d9488; }
+            @media print {
+                .no-print { display: none !important; }
+                body { padding: 0; }
+            }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="folha">
-            <div class="header">
-                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
-                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
-            </div>
-            <div class="titulo">🧠 ATENDIMENTO PSICOLOGIA</div>
-            
-            <div class="info-section">
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Estudante:</span>
-                        <span class="underline">${a.alunoNome || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Matrícula:</span>
-                        <span class="underline">${a.alunoMatricula || ''}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Turma:</span>
-                        <span class="underline">${a.alunoTurma || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Curso:</span>
-                        <span class="underline">${a.alunoCurso || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Data:</span>
-                        <span class="underline">${dataExt}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Horário:</span>
-                        <span class="underline">${horaExt}</span>
-                    </div>
+        
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Psicologia</p>
+        </div>
+        
+        <div class="titulo">🧠 Atendimento Psicologia</div>
+        <div class="status-badge">${badgeStatus}</div>
+        
+        <div class="aluno-box">
+            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" 
+                 alt="${escapeHTML(a.alunoNome)}"
+                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+            <div class="aluno-info">
+                <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
+                <div class="aluno-detalhes">
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')}<br>
+                    <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
+                    ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
                 </div>
             </div>
-            
-            <div class="section-box">
-                <h3>📌 Tipo de Tarefa:</h3>
-                <p><strong>${a.tipoTarefaLabel || '-'}</strong></p>
+        </div>
+        
+        <div class="section-title">📌 Dados do Atendimento</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Tipo:</div>
+                <div class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></div>
             </div>
-            
-            <div class="section-box">
-                <h3>⚠️ Gravidade / Prioridade:</h3>
-                <p>Gravidade: <strong>${(a.entrada?.gravidade || 'media').toUpperCase()}</strong> | 
-                   Prioridade: <strong>${(a.prioridade || 'normal').toUpperCase()}</strong></p>
+            <div class="info-item">
+                <div class="info-label">Data:</div>
+                <div class="info-value">${dataExt}</div>
             </div>
-            
-            <div class="descricao-box">
-                <strong>📝 Descrição do Ocorrido:</strong>
-                ${(a.entrada?.descricao || '_______________________________________________________________').replace(/\n/g, '<br>')}
+            <div class="info-item">
+                <div class="info-label">Horário:</div>
+                <div class="info-value">${horaExt}</div>
             </div>
-            
-            ${a.entrada?.observacoes ? `
-                <div class="descricao-box" style="min-height: 18mm;">
-                    <strong>💬 Observações:</strong>
-                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
-                </div>
-            ` : ''}
-            
-            ${detalhesHTML}
-            
-            <div class="assinaturas">
-                <div class="assinatura">
+            <div class="info-item">
+                <div class="info-label">Gravidade:</div>
+                <div class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Prioridade:</div>
+                <div class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Registrado por:</div>
+                <div class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</div>
+            </div>
+        </div>
+        
+        <div class="section-title">📝 Descrição do Ocorrido</div>
+        <div class="descricao-box">
+            ${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}
+        </div>
+        
+        ${a.entrada?.observacoes ? `
+            <div class="section-title">💬 Observações</div>
+            <div class="descricao-box" style="min-height: 30px;">
+                ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
+            </div>
+        ` : ''}
+        
+        ${detalhesHTML}
+        ${saidaHTML}
+        ${remarcacoesHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
                     ${assinaturaHTML}
-                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
                 </div>
-                <div class="assinatura">
-                    ${carimboHTML}
-                    <div class="assinatura-linha">Coordenação / Psicologia</div>
+                <div class="assinatura-linha">Assinatura do Responsável / Psicologia</div>
+            </div>
+        </div>
+        
+        ${qrCodeUrl ? `
+            <div class="qr-code">
+                <img src="${qrCodeUrl}" alt="QR Code">
+                <p>Identificação do Aluno</p>
+            </div>
+        ` : ''}
+        
+        <div class="footer">
+            <p>Documento gerado em <strong>${dataGeracao}</strong></p>
+            <p>EducaPleno — Sistema de Psicologia</p>
+        </div>
+    </body>
+    </html>`;
+}
+
+// ============================================
+// 📄 EXPORTAR PDF (padrão Setor Pedagógico)
+// ============================================
+function exportarPDF() {
+    if (!relatorioData) {
+        mostrarToastConcluido('⚠️ Nenhum relatório carregado. Clique em BUSCAR primeiro.', 'error');
+        return;
+    }
+    
+    const html = gerarHTMLRelatorioPsicologia(relatorioData);
+    
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
+}
+
+// ============================================
+// 🎯 HABILITAR BOTÕES APÓS CARREGAR RELATÓRIO
+// ============================================
+function habilitarBotoesRelatorio() {
+    const btnCSV = safeGet('btnExportarCSVPsicologia');
+    const btnPDF = safeGet('btnExportarPDFPsicologia');
+    if (btnCSV) btnCSV.disabled = false;
+    if (btnPDF) btnPDF.disabled = false;
+}
+
+// ============================================
+// 🎨 GERAR HTML DO RELATÓRIO (padrão Setor Pedagógico)
+// ============================================
+function gerarHTMLRelatorioPsicologia(data) {
+    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
+    const logoIema = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_psicologia.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    // ========== BUSCAR ASSINATURA DIGITAL ==========
+    let assinaturaDigital = null;
+    
+    if (tipo === 'aluno' && Array.isArray(data.atendimentos)) {
+        const comAssinatura = data.atendimentos.find(a => a.temAssinatura && a.assinaturaBase64);
+        if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+    }
+    
+    if (!assinaturaDigital) {
+        const lista = data.atendimentos || data.registros || [];
+        const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
+        if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+    }
+    
+    // ========== TÍTULO E SUBTÍTULO ==========
+    let titulo = 'Relatório de Atendimentos - Psicologia';
+    let subtitulo = '';
+    if (tipo === 'turma') {
+        titulo = 'Relatório de Atendimentos';
+        subtitulo = `Turma: ${data.turma || ''}`;
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual do Aluno';
+        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
+    } else {
+        subtitulo = 'Relatório Geral';
+    }
+    
+    // ========== ESTATÍSTICAS ==========
+    let statsHTML = '';
+    if (tipo === 'geral') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTipo || []).length}</div>
+                    <div class="stat-label">Tipos Diferentes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTurma || []).length}</div>
+                    <div class="stat-label">Turmas Atendidas</div>
                 </div>
             </div>
-            
-            ${qrCodeUrl ? `
-                <div class="qr-code">
-                    <img src="${qrCodeUrl}" alt="QR Code">
-                    <p>Identificação do Aluno</p>
-                </div>` : ''}
-            
-            <div class="footer">
-                <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.entrada?.registradoPor || 'Psicólogo'}</p>
-                <p>EducaPleno</p>
+        `;
+    } else if (tipo === 'turma') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAlunosAtendidos || (data.porAluno || []).length}</div>
+                    <div class="stat-label">Alunos Atendidos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porAluno || []).length}</div>
+                    <div class="stat-label">Alunos com Registro</div>
+                </div>
             </div>
+        `;
+    } else if (tipo === 'aluno') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.estatisticas?.porTipo || []).length}</div>
+                    <div class="stat-label">Tipos Diferentes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${Object.keys(data.estatisticas?.porGravidade || {}).length}</div>
+                    <div class="stat-label">Níveis de Gravidade</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ========== TABELA DE DADOS ==========
+    let tabelaHTML = '';
+    
+    // ---- GERAL ----
+    if (tipo === 'geral') {
+        const porTipo = Array.isArray(data.porTipo) ? data.porTipo : [];
+        const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
+        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo de Tarefa</th>
+                        <th style="width: 120px; text-align: center;">Quantidade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${porTipo.map(t => `
+                        <tr>
+                            <td><strong>${escapeHTML(t.label || '')}</strong></td>
+                            <td style="text-align: center;">${t.count || 0}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado disponível</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">🏫 Distribuição por Turma</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Turma</th>
+                        <th style="width: 120px; text-align: center;">Total</th>
+                        <th style="width: 120px; text-align: center;">Alunos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${porTurma.map(t => `
+                        <tr>
+                            <td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td>
+                            <td style="text-align: center;">${t.total || 0}</td>
+                            <td style="text-align: center;">${t.totalAlunos || 0}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado disponível</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">📋 Últimos Atendimentos</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Aluno</th>
+                        <th>Turma</th>
+                        <th>Tipo</th>
+                        <th>Gravidade</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${atendimentos.slice(0, 30).map(a => `
+                        <tr>
+                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td>${escapeHTML(a.alunoTurma || '')}</td>
+                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
+                            <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
+                            <td>
+                                <span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">
+                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="6" style="text-align:center;">Nenhum atendimento registrado</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    // ---- TURMA ----
+    else if (tipo === 'turma') {
+        const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
+        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo de Tarefa</th>
+                        <th style="width: 120px; text-align: center;">Quantidade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${porTipo.map(t => `
+                        <tr>
+                            <td><strong>${escapeHTML(t.label || '')}</strong></td>
+                            <td style="text-align: center;">${t.count || 0}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">👥 Atendimentos por Aluno</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aluno</th>
+                        <th style="width: 100px; text-align: center;">Total</th>
+                        <th>Tipos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${porAluno.map(a => `
+                        <tr>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td style="text-align: center;">${a.total || 0}</td>
+                            <td>${Object.entries(a.tipos || {}).map(([t, c]) => `${escapeHTML(TIPO_LABELS[t] || t)}: ${c}`).join('<br>')}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    // ---- ALUNO ----
+    else if (tipo === 'aluno') {
+        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
+        const porGrav = data.estatisticas?.porGravidade || {};
+        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo de Tarefa</th>
+                        <th style="width: 120px; text-align: center;">Quantidade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${porTipo.map(t => `
+                        <tr>
+                            <td><strong>${escapeHTML(t.label || '')}</strong></td>
+                            <td style="text-align: center;">${t.count || 0}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">⚠️ Distribuição por Gravidade</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Gravidade</th>
+                        <th style="width: 120px; text-align: center;">Quantidade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${Object.entries(porGrav).map(([g, c]) => `
+                        <tr>
+                            <td><strong>${escapeHTML(g.toUpperCase())}</strong></td>
+                            <td style="text-align: center;">${c}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title">📋 Histórico de Atendimentos</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Tipo</th>
+                        <th>Descrição</th>
+                        <th>Gravidade</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${atendimentos.map(a => `
+                        <tr>
+                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
+                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
+                            <td>${escapeHTML((a.descricao || '').substring(0, 80))}${(a.descricao || '').length > 80 ? '...' : ''}</td>
+                            <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
+                            <td>
+                                <span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">
+                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    // ========== HTML FINAL ==========
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo}</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+                font-family: 'Times New Roman', Times, serif;
+                font-size: 11pt;
+                line-height: 1.4;
+                color: #000;
+            }
+            .header {
+                text-align: center;
+                border-bottom: 2px double #000;
+                padding-bottom: 10px;
+                margin-bottom: 15px;
+            }
+            .header img {
+                max-width: 100%;
+                max-height: 25mm;
+                object-fit: contain;
+                display: block;
+                margin: 0 auto 5px;
+            }
+            .header h1 {
+                font-size: 13pt;
+                text-transform: uppercase;
+                font-weight: bold;
+                margin: 5px 0 0;
+            }
+            .titulo {
+                text-align: center;
+                font-size: 14pt;
+                font-weight: bold;
+                background: #ccfbf1;
+                padding: 10px;
+                border: 2px solid #000;
+                margin: 15px 0;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .subtitulo {
+                text-align: center;
+                font-size: 12pt;
+                margin: -10px 0 15px;
+                font-style: italic;
+            }
+            .stats {
+                display: flex;
+                gap: 15px;
+                margin: 15px 0 20px;
+                padding: 15px;
+                background: #f0fdfa;
+                border-radius: 8px;
+                border: 1px solid #99f6e4;
+            }
+            .stat {
+                text-align: center;
+                flex: 1;
+                border-right: 1px solid #99f6e4;
+            }
+            .stat:last-child { border-right: none; }
+            .stat-value {
+                font-size: 22pt;
+                font-weight: bold;
+                color: #0d9488;
+                line-height: 1;
+            }
+            .stat-label {
+                font-size: 9pt;
+                color: #666;
+                margin-top: 5px;
+            }
+            .section-title {
+                font-size: 11pt;
+                font-weight: bold;
+                background: #e8e8e8;
+                padding: 6px 10px;
+                border-left: 4px solid #14b8a6;
+                margin: 20px 0 10px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 9.5pt;
+                margin-bottom: 15px;
+            }
+            th {
+                background: #14b8a6;
+                color: white;
+                padding: 8px 6px;
+                text-align: left;
+                border: 1px solid #0d9488;
+                font-size: 9pt;
+            }
+            td {
+                padding: 6px;
+                border: 1px solid #ddd;
+                vertical-align: top;
+            }
+            tr:nth-child(even) { background: #f9fafb; }
+            .badge-status {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-size: 8.5pt;
+                font-weight: bold;
+            }
+            .badge-status.finalizado { background: #d1fae5; color: #065f46; }
+            .badge-status.andamento { background: #fef3c7; color: #92400e; }
+            
+            /* ===== ASSINATURA COM CARIMBO SOBREPOSTO ===== */
+            .assinaturas {
+                display: flex;
+                justify-content: center;
+                margin-top: 50px;
+                gap: 40px;
+            }
+            .assinatura {
+                flex: 0 0 60%;
+                text-align: center;
+            }
+            .assinatura-container-relatorio {
+                position: relative;
+                border-bottom: 1px solid #000;
+                min-height: 22mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 3px;
+            }
+            .assinatura-img {
+                max-height: 18mm;
+                max-width: 100%;
+                object-fit: contain;
+                position: relative;
+                z-index: 1;
+            }
+            .carimbo-overlay {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                max-height: 20mm;
+                max-width: 60%;
+                object-fit: contain;
+                opacity: 0.85;
+                pointer-events: none;
+                z-index: 2;
+            }
+            .assinatura-linha {
+                border-top: none;
+                padding-top: 5px;
+                font-size: 10pt;
+                margin-top: 4px;
+            }
+            
+            .footer {
+                text-align: center;
+                margin-top: 30px;
+                padding-top: 10px;
+                border-top: 1px solid #ccc;
+                font-size: 8pt;
+                color: #666;
+            }
+            .footer p { margin: 2px 0; }
+            .registro-info {
+                font-size: 9pt;
+                color: #666;
+                margin-top: 20px;
+                text-align: center;
+            }
+            .btn-print {
+                display: block;
+                margin: 20px auto;
+                padding: 12px 30px;
+                background: #14b8a6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-weight: bold;
+                cursor: pointer;
+                font-size: 14px;
+                font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #0d9488; }
+            @media print {
+                .no-print { display: none !important; }
+                body { padding: 0; }
+            }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Psicologia</p>
+        </div>
+        
+        <div class="titulo">🧠 ${titulo}</div>
+        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
+        
+        ${statsHTML}
+        ${tabelaHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    ${assinaturaDigital 
+                        ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` 
+                        : ''}
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável / Psicologia</div>
+            </div>
+        </div>
+        
+        <div class="registro-info">
+            Relatório gerado em <strong>${dataGeracao}</strong>
+        </div>
+        
+        <div class="footer">
+            <p>Documento gerado automaticamente pelo EducaPleno</p>
+            <p>Setor: Psicologia</p>
         </div>
     </body>
     </html>`;
@@ -4038,3 +4828,6 @@ window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
 window.confirmarInterno = confirmarInterno;
+
+window.exportarPDF = exportarPDF;
+window.habilitarBotoesRelatorio = habilitarBotoesRelatorio;

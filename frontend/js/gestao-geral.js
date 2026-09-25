@@ -1649,6 +1649,14 @@ function toggleRelatorioFiltros() {
     const tipo = safeGet('tipoRelatorio')?.value;
     safeGet('filtroTurmaDiv').style.display = tipo === 'turma' ? 'block' : 'none';
     safeGet('filtroAlunoDiv').style.display = tipo === 'aluno' ? 'block' : 'none';
+    
+    // ✅ RESETAR BOTÕES
+    const btnCSV = safeGet('btnExportarCSVAtrasos');
+    const btnPDF = safeGet('btnExportarPDFAtrasos');
+    if (btnCSV) btnCSV.disabled = true;
+    if (btnPDF) btnPDF.disabled = true;
+    relatorioData = null;
+    
     if (tipo === 'turma') {
         const selectTurma = safeGet('filtroTurma');
         if (selectTurma && selectTurma.options.length <= 1) carregarTurmasParaRelatorio();
@@ -1804,29 +1812,50 @@ async function carregarRelatorio() {
     const dataInicio = safeGet('dataInicio')?.value || '';
     const dataFim = safeGet('dataFim')?.value || '';
     let url = '';
+    
     if (tipo === 'geral') {
         url = `/api/gestao-geral/atraso/relatorio/geral?`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'turma') {
         const turma = safeGet('filtroTurma')?.value;
-        if (!turma) { notificar('Selecione uma turma'); return; }
+        if (!turma) { notificar('Selecione uma turma', 'warning'); return; }
         url = `/api/gestao-geral/atraso/relatorio/turma/${encodeURIComponent(turma)}?`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'aluno') {
         const alunoId = safeGet('filtroAluno')?.value;
-        if (!alunoId) { notificar('Selecione um aluno'); return; }
+        if (!alunoId) { notificar('Selecione um aluno', 'warning'); return; }
         url = `/api/gestao-geral/atraso/relatorio/aluno/${alunoId}?`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     }
+    
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
-        if (data.success) { relatorioData = data; exibirRelatorio(data, tipo); }
-        else notificar('Erro ao carregar relatório');
-    } catch (error) { console.error('Erro:', error); notificar('Erro ao carregar relatório'); }
+        
+        if (data.success) {
+            relatorioData = data;
+            exibirRelatorio(data, tipo);
+            
+            // ✅ HABILITAR BOTÕES CSV E PDF
+            const btnCSV = safeGet('btnExportarCSVAtrasos');
+            const btnPDF = safeGet('btnExportarPDFAtrasos');
+            if (btnCSV) btnCSV.disabled = false;
+            if (btnPDF) btnPDF.disabled = false;
+            
+            const total = data.totalAtrasos || data.estatisticas?.totalAtrasos || 0;
+            if (total === 0) {
+                notificar('⚠️ Nenhum registro encontrado. Verifique as datas e filtros.', 'warning');
+            }
+        } else {
+            notificar('Erro ao carregar relatório: ' + (data.error || ''), 'error');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        notificar('Erro ao carregar relatório', 'error');
+    }
 }
 
 function exibirRelatorio(data, tipo) {
@@ -3020,6 +3049,13 @@ function toggleRelatorioFiltrosModulo(modulo) {
     if (divTurma) divTurma.style.display = tipo === 'turma' ? 'block' : 'none';
     if (divAluno) divAluno.style.display = tipo === 'aluno' ? 'block' : 'none';
 
+    // ✅ RESETAR BOTÕES
+    const btnCSV = safeGet(`btnExportarCSV${P}`);
+    const btnPDF = safeGet(`btnExportarPDF${P}`);
+    if (btnCSV) btnCSV.disabled = true;
+    if (btnPDF) btnPDF.disabled = true;
+    relatoriosModulo[modulo] = null;
+
     if (tipo === 'turma') {
         const sel = safeGet(`${P}FiltroTurma`);
         if (sel && sel.options.length <= 1) carregarTurmasFiltroModulo(modulo);
@@ -3286,40 +3322,316 @@ async function carregarRelatorioModulo(modulo) {
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'turma') {
         const turma = safeGet(`${P}FiltroTurma`)?.value;
-        if (!turma) { notificar('Selecione uma turma'); return; }
+        if (!turma) { notificar('Selecione uma turma', 'warning'); return; }
         url = `/api/gestao-geral/autorizacao/relatorio/turma/${encodeURIComponent(turma)}?tipo=${cfg.tipo}&`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     } else if (tipo === 'aluno') {
         const alunoId = safeGet(`${P}FiltroAluno`)?.value;
-        if (!alunoId) { notificar('Selecione um aluno'); return; }
+        if (!alunoId) { notificar('Selecione um aluno', 'warning'); return; }
         url = `/api/gestao-geral/autorizacao/relatorio/aluno/${alunoId}?tipo=${cfg.tipo}&`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
     }
 
     try {
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
         
         if (data.success) {
             relatoriosModulo[modulo] = data;
             exibirRelatorioModulo(modulo, data, tipo);
             
-            // 🔥 NOVO: Avisa se não encontrou nada
-            const total = data.totalRegistros || 0;
+            // ✅ HABILITAR BOTÕES CSV E PDF DO MÓDULO
+            const btnCSV = safeGet(`btnExportarCSV${P}`);
+            const btnPDF = safeGet(`btnExportarPDF${P}`);
+            if (btnCSV) btnCSV.disabled = false;
+            if (btnPDF) btnPDF.disabled = false;
+            
+            const total = data.totalRegistros || data.estatisticas?.totalRegistros || 0;
             if (total === 0) {
-                notificar('⚠️ Nenhum registro encontrado.\n\nVerifique:\n• Se as datas estão corretas\n• Se o motivo está preenchido\n• Se existem registros neste período');
+                notificar(`⚠️ Nenhum registro de ${cfg.nomeAmigavel} encontrado. Verifique as datas e filtros.`, 'warning');
             }
         } else {
-            notificar('Erro ao carregar relatório: ' + (data.error || ''));
+            notificar('Erro ao carregar relatório: ' + (data.error || ''), 'error');
         }
     } catch (error) {
         console.error('Erro:', error);
-        notificar('Erro ao carregar relatório');
+        notificar('Erro ao carregar relatório', 'error');
     }
+}
+
+// ============================================
+// 📄 EXPORTAR PDF - ATRASOS
+// ============================================
+function exportarPDFAtrasos() {
+    if (!relatorioData) {
+        notificar('⚠️ Gere um relatório primeiro', 'warning');
+        return;
+    }
+    const html = gerarHTMLRelatorioAtrasos(relatorioData);
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
+}
+
+function gerarHTMLRelatorioAtrasos(data) {
+    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
+    const logo = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_gestao.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    // Assinatura digital
+    let assinaturaDigital = null;
+    const lista = data.atrasos || data.registros || [];
+    const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
+    if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+    
+    // Título
+    let titulo = 'Relatório de Atrasos - Gestão Geral';
+    let subtitulo = '';
+    if (tipo === 'turma') { subtitulo = `Turma: ${data.turma || ''}`; }
+    else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual de Atrasos';
+        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
+    } else { subtitulo = 'Relatório Geral'; }
+    
+    // Stats
+    let statsHTML = '';
+    if (tipo === 'geral') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.totalAtrasos || 0}</div><div class="stat-label">Total de Atrasos</div></div>
+                <div class="stat"><div class="stat-value">${(data.porMotivo || []).length}</div><div class="stat-label">Motivos Diferentes</div></div>
+                <div class="stat"><div class="stat-value">${(data.porTurma || []).length}</div><div class="stat-label">Turmas com Registro</div></div>
+            </div>`;
+    } else if (tipo === 'turma') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAtrasos || 0}</div><div class="stat-label">Total de Atrasos</div></div>
+                <div class="stat"><div class="stat-value">${(data.porAluno || []).length}</div><div class="stat-label">Alunos com Registro</div></div>
+            </div>`;
+    } else {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAtrasos || 0}</div><div class="stat-label">Total de Atrasos</div></div>
+            </div>`;
+    }
+    
+    // Tabelas
+    let tabelaHTML = '';
+    if (tipo === 'geral') {
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Motivo</div>
+            <table>
+                <thead><tr><th>Motivo</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                <tbody>${(data.porMotivo || []).map(m => `<tr><td><strong>${escapeHTML(m.label || '')}</strong></td><td style="text-align:center;">${m.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>
+            <div class="section-title">🏫 Distribuição por Turma</div>
+            <table>
+                <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
+                <tbody>${(data.porTurma || []).map(t => `<tr><td><strong>${escapeHTML(t.turma || '')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>`;
+    } else if (tipo === 'turma') {
+        tabelaHTML = `
+            <div class="section-title">👥 Atrasos por Aluno</div>
+            <table>
+                <thead><tr><th>Aluno</th><th style="width:120px;text-align:center;">Total</th></tr></thead>
+                <tbody>${(data.porAluno || []).map(a => `<tr><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td style="text-align:center;">${a.total || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>`;
+    } else {
+        tabelaHTML = `
+            <div class="section-title">📋 Histórico de Atrasos</div>
+            <table>
+                <thead><tr><th>Data</th><th>Motivo</th><th>Descrição</th></tr></thead>
+                <tbody>${(data.atrasos || []).map(a => `<tr><td>${new Date(a.dataHora).toLocaleDateString('pt-BR')}</td><td>${escapeHTML(a.motivoLabel || '')}</td><td>${escapeHTML((a.descricao || '').substring(0, 80))}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum atraso</td></tr>'}</tbody>
+            </table>`;
+    }
+    
+    return montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor: 'Gestão Geral' });
+}
+
+// ============================================
+// 📄 EXPORTAR PDF - MÓDULOS
+// ============================================
+function exportarPDFModulo(modulo) {
+    const data = relatoriosModulo[modulo];
+    if (!data) {
+        notificar('⚠️ Gere um relatório primeiro', 'warning');
+        return;
+    }
+    const cfg = getCfg(modulo);
+    const html = gerarHTMLRelatorioModulo(modulo, data, cfg);
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
+}
+
+function gerarHTMLRelatorioModulo(modulo, data, cfg) {
+    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
+    const logo = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_gestao.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    let assinaturaDigital = null;
+    const lista = data.registros || data.autorizacoes || data.atendimentos || [];
+    const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
+    if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+    
+    let titulo = `Relatório de ${cfg.nomeAmigavel} - Gestão Geral`;
+    let subtitulo = '';
+    if (tipo === 'turma') { subtitulo = `Turma: ${data.turma || ''}`; }
+    else if (tipo === 'aluno') {
+        titulo = `Relatório Individual - ${cfg.nomeAmigavel}`;
+        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
+    } else { subtitulo = 'Relatório Geral'; }
+    
+    let statsHTML = '';
+    if (tipo === 'geral') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
+                <div class="stat"><div class="stat-value">${(data.porMotivo || []).length}</div><div class="stat-label">Motivos Diferentes</div></div>
+                <div class="stat"><div class="stat-value">${(data.porTurma || []).length}</div><div class="stat-label">Turmas com Registro</div></div>
+            </div>`;
+    } else if (tipo === 'turma') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAlunos || (data.porAluno || []).length}</div><div class="stat-label">Alunos Atendidos</div></div>
+            </div>`;
+    } else {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
+                <div class="stat"><div class="stat-value">${(data.porMotivo || []).length}</div><div class="stat-label">Motivos Diferentes</div></div>
+            </div>`;
+    }
+    
+    let tabelaHTML = '';
+    if (tipo === 'geral') {
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Motivo</div>
+            <table>
+                <thead><tr><th>Motivo</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                <tbody>${(data.porMotivo || []).map(m => `<tr><td><strong>${escapeHTML(m.label || '')}</strong></td><td style="text-align:center;">${m.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>
+            <div class="section-title">🏫 Distribuição por Turma</div>
+            <table>
+                <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
+                <tbody>${(data.porTurma || []).map(t => `<tr><td><strong>${escapeHTML(t.turma || '')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>`;
+    } else if (tipo === 'turma') {
+        tabelaHTML = `
+            <div class="section-title">👥 Registros por Aluno</div>
+            <table>
+                <thead><tr><th>Aluno</th><th>Matrícula</th><th style="width:120px;text-align:center;">Total</th></tr></thead>
+                <tbody>${(data.porAluno || []).map(a => `<tr><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td>${escapeHTML(a.alunoMatricula || '-')}</td><td style="text-align:center;">${a.total || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>`;
+    } else {
+        tabelaHTML = `
+            <div class="section-title">📋 Histórico de Registros</div>
+            <table>
+                <thead><tr><th>Data</th><th>Motivo</th><th>Observações</th></tr></thead>
+                <tbody>${(data.registros || []).map(a => `<tr><td>${a.dataFormatada || '-'}</td><td>${escapeHTML(a.motivoLabel || '')}</td><td>${escapeHTML((a.observacoes || '').substring(0, 80))}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum registro</td></tr>'}</tbody>
+            </table>`;
+    }
+    
+    return montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor: 'Gestão Geral' });
+}
+
+// ============================================
+// 🎨 TEMPLATE COMUM DE RELATÓRIO
+// ============================================
+function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor }) {
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo}</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
+            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
+            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            .titulo {
+                text-align: center; font-size: 14pt; font-weight: bold;
+                background: #dbeafe; padding: 10px; border: 2px solid #000;
+                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+            }
+            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+            .stats {
+                display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
+                background: #eef2ff; border-radius: 8px; border: 1px solid #c7d2fe;
+            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #c7d2fe; }
+            .stat:last-child { border-right: none; }
+            .stat-value { font-size: 22pt; font-weight: bold; color: #1e3c72; line-height: 1; }
+            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+            .section-title {
+                font-size: 11pt; font-weight: bold; background: #e8e8e8;
+                padding: 6px 10px; border-left: 4px solid #1e3c72; margin: 20px 0 10px;
+            }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
+            th { background: #1e3c72; color: white; padding: 8px 6px; text-align: left; border: 1px solid #152a52; font-size: 9pt; }
+            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
+            tr:nth-child(even) { background: #f9fafb; }
+            .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            .assinatura-container-relatorio {
+                position: relative; border-bottom: 1px solid #000; min-height: 22mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+            }
+            .assinatura-img { max-height: 18mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            .carimbo-overlay {
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                max-height: 20mm; max-width: 60%; object-fit: contain;
+                opacity: 0.85; pointer-events: none; z-index: 2;
+            }
+            .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
+            .footer p { margin: 2px 0; }
+            .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
+            .btn-print {
+                display: block; margin: 20px auto; padding: 12px 30px;
+                background: #1e3c72; color: white; border: none; border-radius: 8px;
+                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #2a5298; }
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — ${nomeSetor}</p>
+        </div>
+        <div class="titulo">📋 ${titulo}</div>
+        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
+        ${statsHTML}
+        ${tabelaHTML}
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável / ${nomeSetor}</div>
+            </div>
+        </div>
+        <div class="registro-info">Relatório gerado em <strong>${dataGeracao}</strong></div>
+        <div class="footer">
+            <p>Documento gerado automaticamente pelo EducaPleno</p>
+            <p>Setor: ${nomeSetor}</p>
+        </div>
+    </body>
+    </html>`;
 }
 
 function exibirRelatorioModulo(modulo, data, tipo) {
@@ -4354,3 +4666,6 @@ window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
 window.confirmarInternoNotif = confirmarInternoNotif;
+
+window.exportarPDFAtrasos = exportarPDFAtrasos;
+window.exportarPDFModulo = exportarPDFModulo;

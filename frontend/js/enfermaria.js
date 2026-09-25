@@ -483,6 +483,13 @@ function mostrarFormEntrada() {
     safeGet('formSaida').style.display = 'none';
     safeGet('queixa').value = '';
     safeGet('observacoesEntrada').value = '';
+    
+    // 🆕 Preencher data/hora atual no campo (formato datetime-local)
+    const agora = new Date();
+    // Ajustar para timezone local (datetime-local precisa formato YYYY-MM-DDTHH:MM)
+    const offset = agora.getTimezoneOffset() * 60000;
+    const dataLocal = new Date(agora.getTime() - offset);
+    safeGet('dataEntrada').value = dataLocal.toISOString().slice(0, 16);
 }
 
 function mostrarFormSaida() {
@@ -509,6 +516,22 @@ async function registrarEntrada() {
     const queixa = (safeGet('queixa')?.value || '').trim();
     if (!queixa) { mostrarToast('Por favor, descreva a queixa do aluno'); return; }
     
+    // 🆕 Validar e capturar a data escolhida
+    const dataEntradaInput = safeGet('dataEntrada')?.value;
+    if (!dataEntradaInput) {
+        mostrarToast('Por favor, informe a data/hora do atendimento');
+        return;
+    }
+    
+    // Converter para Date (datetime-local vem no formato YYYY-MM-DDTHH:MM)
+    const dataEntrada = new Date(dataEntradaInput);
+    
+    // Validação: não permitir data futura
+    if (dataEntrada > new Date()) {
+        mostrarToast('⚠️ A data do atendimento não pode ser no futuro');
+        return;
+    }
+    
     if (!currentAluno || !currentAluno.id) { mostrarToast('Nenhum aluno selecionado'); return; }
     
     const btn = document.querySelector('#formEntrada .btn-primary-custom');
@@ -521,7 +544,8 @@ async function registrarEntrada() {
             body: JSON.stringify({
                 alunoId: currentAluno.id,
                 queixa,
-                observacoes: safeGet('observacoesEntrada').value
+                observacoes: safeGet('observacoesEntrada').value,
+                dataEntrada: dataEntrada.toISOString() // 🆕 Enviar data
             })
         });
         const data = await response.json();
@@ -658,6 +682,11 @@ async function carregarAtendimentosAtivos() {
                                     title="Ver detalhes">
                                 <i class="fas fa-eye"></i> Ver
                             </button>
+                            <button class="btn btn-sm btn-secondary" 
+                                    onclick="imprimirAtendimentoIndividual('${a.id}')" 
+                                    title="Imprimir ficha do atendimento">
+                                <i class="fas fa-print"></i>
+                            </button>
                             <button class="btn btn-sm btn-warning" 
                                     onclick="editarAtendimento('${a.id}')" 
                                     title="Editar queixa/observações">
@@ -692,6 +721,160 @@ async function carregarAtendimentosAtivos() {
         console.error('Erro:', error);
         container.innerHTML = '<div class="mostrarToast mostrarToast-danger">Erro ao carregar atendimentos</div>';
     }
+}
+
+// ============================================
+// 📄 IMPRIMIR LISTA DE ATENDIMENTOS ATIVOS
+// ============================================
+async function imprimirAtendimentosAtivos() {
+    try {
+        const response = await fetch('/api/enfermaria/atendimentos-ativos', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
+            mostrarToast('⚠️ Nenhum atendimento ativo para imprimir', 'warning');
+            return;
+        }
+        
+        const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
+function gerarHTMLAtendimentosAtivos(atendimentos) {
+    const logoIema = '/uploads/logo-iema.png';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Atendimentos em Andamento</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
+            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
+            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            .titulo {
+                text-align: center; font-size: 14pt; font-weight: bold;
+                background: #fff3cd; padding: 10px; border: 2px solid #000;
+                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+            }
+            .subtitulo { text-align: center; font-size: 11pt; margin: -10px 0 15px; font-style: italic; }
+            .alerta {
+                background: #fef3c7; border-left: 4px solid #f59e0b;
+                padding: 10px 15px; margin-bottom: 15px; border-radius: 4px;
+                font-size: 10pt;
+            }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
+            th { background: #f59e0b; color: white; padding: 8px 6px; text-align: left; border: 1px solid #d97706; font-size: 9pt; }
+            td { padding: 8px 6px; border: 1px solid #ddd; vertical-align: top; }
+            tr:nth-child(even) { background: #fffbeb; }
+            .tempo {
+                display: inline-block; padding: 2px 8px; border-radius: 10px;
+                font-size: 8.5pt; font-weight: bold;
+                background: #fee2e2; color: #991b1b;
+            }
+            .tempo.ok { background: #d1fae5; color: #065f46; }
+            .tempo.medio { background: #fef3c7; color: #92400e; }
+            .queixa-cell { max-width: 280px; }
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 50px; gap: 40px; }
+            .assinatura { flex: 1; text-align: center; }
+            .assinatura-linha { border-top: 1px solid #000; padding-top: 5px; font-size: 10pt; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
+            .footer p { margin: 2px 0; }
+            .btn-print {
+                display: block; margin: 20px auto; padding: 12px 30px;
+                background: #059669; color: white; border: none;
+                border-radius: 8px; font-weight: bold; cursor: pointer;
+                font-size: 14px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #047857; }
+            @media print { .no-print { display: none !important; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Enfermaria</p>
+        </div>
+        
+        <div class="titulo">⏳ Atendimentos em Andamento</div>
+        <div class="subtitulo">Relatório de alunos que estão atualmente em atendimento</div>
+        
+        <div class="alerta">
+            <strong>⚠️ Atenção:</strong> Estes alunos estão aguardando finalização do atendimento.
+            Total de <strong>${atendimentos.length}</strong> aluno(s) em atendimento no momento.
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 35px;">#</th>
+                    <th>Aluno</th>
+                    <th>Turma</th>
+                    <th>Queixa</th>
+                    <th style="width: 100px;">Tempo</th>
+                    <th style="width: 110px;">Entrada</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${atendimentos.map((a, i) => {
+                    const tempo = a.tempoAtendimento || 0;
+                    let classeTempo = 'ok';
+                    if (tempo >= 60) classeTempo = 'medio';
+                    if (tempo >= 120) classeTempo = '';
+                    
+                    const horaEntrada = new Date(a.dataHoraEntrada).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                    
+                    return `
+                        <tr>
+                            <td><strong>${i + 1}</strong></td>
+                            <td>
+                                <strong>${escapeHTML(a.alunoNome || '')}</strong>
+                            </td>
+                            <td>${escapeHTML(a.alunoTurma || '-')}</td>
+                            <td class="queixa-cell">${escapeHTML((a.queixa || '').substring(0, 120))}${(a.queixa || '').length > 120 ? '...' : ''}</td>
+                            <td><span class="tempo ${classeTempo}">${tempo} min</span></td>
+                            <td>${horaEntrada}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-linha">Enfermaria</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-linha">Coordenação / Gestão</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Documento gerado em <strong>${dataGeracao}</strong></p>
+            <p>EducaPleno — Sistema de Atendimentos</p>
+        </div>
+    </body>
+    </html>`;
 }
 
 // ============================================
@@ -851,7 +1034,6 @@ async function editarAtendimento(atendimentoId) {
     if (!atendimentoId) return;
     
     try {
-        // Buscar dados atuais
         const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -868,6 +1050,12 @@ async function editarAtendimento(atendimentoId) {
             mostrarToast('⚠️ Não é possível editar atendimentos já finalizados');
             return;
         }
+        
+        // 🆕 Preparar valor do campo datetime-local
+        const dataEntradaObj = new Date(a.entrada.dataHora);
+        const offset = dataEntradaObj.getTimezoneOffset() * 60000;
+        const dataLocal = new Date(dataEntradaObj.getTime() - offset);
+        const dataEntradaValue = dataLocal.toISOString().slice(0, 16);
         
         const oldModal = safeGet('modalEditarAtendimento');
         if (oldModal) oldModal.remove();
@@ -891,6 +1079,18 @@ async function editarAtendimento(atendimentoId) {
                                     <strong>${escapeHTML(a.alunoNome)}</strong><br>
                                     <small class="text-muted">${escapeHTML(a.alunoMatricula || '-')} • ${escapeHTML(a.alunoTurma || '-')}</small>
                                 </div>
+                            </div>
+                            
+                            <!-- 🆕 CAMPO DE DATA EDITÁVEL -->
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora do Atendimento <span class="text-danger">*</span>
+                                </label>
+                                <input type="datetime-local" id="editarDataEntrada" class="form-control" value="${dataEntradaValue}" required>
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Altere a data caso necessário (correção de registro).
+                                </small>
                             </div>
                             
                             <div class="mb-3">
@@ -933,9 +1133,23 @@ async function salvarEdicaoAtendimento() {
     const atendimentoId = safeGet('editarAtendimentoId')?.value;
     const queixa = safeGet('editarQueixa')?.value.trim();
     const observacoes = safeGet('editarObservacoes')?.value || '';
+    const dataEntradaInput = safeGet('editarDataEntrada')?.value; // 🆕
     
     if (!queixa) {
         mostrarToast('A queixa é obrigatória');
+        return;
+    }
+    
+    if (!dataEntradaInput) {
+        mostrarToast('A data do atendimento é obrigatória');
+        return;
+    }
+    
+    const dataEntrada = new Date(dataEntradaInput);
+    
+    // Validação: não permitir data futura
+    if (dataEntrada > new Date()) {
+        mostrarToast('⚠️ A data do atendimento não pode ser no futuro');
         return;
     }
     
@@ -943,7 +1157,11 @@ async function salvarEdicaoAtendimento() {
         const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ queixa, observacoes })
+            body: JSON.stringify({ 
+                queixa, 
+                observacoes,
+                dataEntrada: dataEntrada.toISOString() // 🆕
+            })
         });
         
         const data = await response.json();
@@ -962,6 +1180,353 @@ async function salvarEdicaoAtendimento() {
         console.error('Erro:', error);
         mostrarToast('Erro ao salvar alterações');
     }
+}
+
+// ============================================
+// 📄 IMPRIMIR ATENDIMENTO INDIVIDUAL
+// ============================================
+async function imprimirAtendimentoIndividual(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            mostrarToast('Erro ao carregar atendimento', 'error');
+            return;
+        }
+        
+        const html = gerarHTMLAtendimentoIndividual(data.atendimento);
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
+function gerarHTMLAtendimentoIndividual(a) {
+    const logoIema = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_gestao.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    const entrada = new Date(a.entrada.dataHora);
+    const dataEntradaExt = entrada.toLocaleDateString('pt-BR', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const horaEntrada = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    // Bloco de saída (se houver)
+    let saidaHTML = '';
+    if (a.saida) {
+        const saida = new Date(a.saida.dataHora);
+        const dataSaidaExt = saida.toLocaleDateString('pt-BR');
+        const horaSaida = saida.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        saidaHTML = `
+            <div class="section-title">✅ Finalização do Atendimento</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Data da Saída:</div>
+                    <div class="info-value">${dataSaidaExt} às ${horaSaida}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Desfecho:</div>
+                    <div class="info-value"><strong>${escapeHTML(a.saida.desfechoTexto || '')}</strong></div>
+                </div>
+                ${a.saida.coordenadorPatioNome ? `
+                    <div class="info-item">
+                        <div class="info-label">Coordenador de Pátio:</div>
+                        <div class="info-value">${escapeHTML(a.saida.coordenadorPatioNome)}</div>
+                    </div>
+                ` : ''}
+                <div class="info-item">
+                    <div class="info-label">Registrado por:</div>
+                    <div class="info-value">${escapeHTML(a.saida.registradoPorNome || '-')}</div>
+                </div>
+            </div>
+            ${a.saida.observacoes ? `
+                <div class="section-title">💬 Observações Finais</div>
+                <div class="observacoes-box">${escapeHTML(a.saida.observacoes).replace(/\n/g, '<br>')}</div>
+            ` : ''}
+        `;
+    } else {
+        saidaHTML = `
+            <div class="section-title">⏳ Status</div>
+            <div class="alerta-andamento">
+                <strong>⚠️ Atendimento em andamento</strong><br>
+                Este aluno ainda não teve o atendimento finalizado.
+            </div>
+        `;
+    }
+    
+    // Auditoria de edição
+    let editadoHTML = '';
+    if (a.entrada.editadoEm) {
+        editadoHTML = `
+            <div class="editado-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>Editado em:</strong> ${new Date(a.entrada.editadoEm).toLocaleString('pt-BR')}
+                por <strong>${escapeHTML(a.entrada.editadoPorNome || 'Enfermeiro')}</strong>
+            </div>
+        `;
+    }
+    
+    const badgeStatus = a.status === 'finalizado' 
+        ? '<span class="badge-finalizado">✅ FINALIZADO</span>' 
+        : '<span class="badge-andamento">⏳ EM ATENDIMENTO</span>';
+    
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Ficha de Atendimento - ${escapeHTML(a.alunoNome)}</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { 
+                font-family: 'Times New Roman', Times, serif; 
+                font-size: 11pt; 
+                line-height: 1.5; 
+                color: #000;
+            }
+            .header { 
+                text-align: center; 
+                border-bottom: 2px double #000; 
+                padding-bottom: 10px; 
+                margin-bottom: 15px; 
+            }
+            .header img { 
+                max-width: 100%; 
+                max-height: 25mm; 
+                object-fit: contain;
+                display: block;
+                margin: 0 auto 5px;
+            }
+            .header h1 { 
+                font-size: 13pt; 
+                text-transform: uppercase; 
+                font-weight: bold;
+                margin: 5px 0 0;
+            }
+            .titulo { 
+                text-align: center; 
+                font-size: 14pt; 
+                font-weight: bold; 
+                background: #d1fae5; 
+                padding: 10px; 
+                border: 2px solid #000; 
+                margin: 15px 0;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .status-badge {
+                text-align: center;
+                margin: -10px 0 20px;
+            }
+            .badge-finalizado {
+                background: #d1fae5; color: #065f46;
+                padding: 4px 14px; border-radius: 20px;
+                font-size: 10pt; font-weight: bold;
+                border: 1px solid #10b981;
+            }
+            .badge-andamento {
+                background: #fef3c7; color: #92400e;
+                padding: 4px 14px; border-radius: 20px;
+                font-size: 10pt; font-weight: bold;
+                border: 1px solid #f59e0b;
+            }
+            
+            .aluno-box {
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                padding: 15px;
+                background: #f0fdf4;
+                border: 1px solid #86efac;
+                border-radius: 10px;
+                margin-bottom: 20px;
+            }
+            .aluno-foto {
+                width: 70px; height: 70px;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 2px solid #10b981;
+            }
+            .aluno-info { flex: 1; }
+            .aluno-nome {
+                font-size: 14pt; font-weight: bold;
+                color: #065f46; margin-bottom: 4px;
+            }
+            .aluno-detalhes {
+                font-size: 10pt; color: #374151;
+            }
+            
+            .section-title { 
+                font-size: 11pt; 
+                font-weight: bold; 
+                background: #e8e8e8; 
+                padding: 6px 10px; 
+                border-left: 4px solid #059669; 
+                margin: 20px 0 10px;
+            }
+            
+            .info-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px 20px;
+                margin: 10px 0 15px;
+            }
+            .info-item { display: flex; gap: 8px; font-size: 10pt; }
+            .info-label { font-weight: bold; min-width: 120px; }
+            .info-value { flex: 1; }
+            
+            .queixa-box, .observacoes-box {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 10.5pt;
+                line-height: 1.5;
+                min-height: 50px;
+            }
+            
+            .alerta-andamento {
+                background: #fef3c7;
+                border-left: 4px solid #f59e0b;
+                padding: 12px 15px;
+                border-radius: 4px;
+                font-size: 10pt;
+            }
+            
+            .editado-info {
+                background: #eff6ff;
+                border-left: 4px solid #3b82f6;
+                padding: 8px 12px;
+                border-radius: 4px;
+                font-size: 9pt;
+                margin-top: 10px;
+                color: #1e40af;
+            }
+            
+            .assinaturas { 
+                display: flex; 
+                justify-content: space-around; 
+                margin-top: 50px; 
+                gap: 40px; 
+            }
+            .assinatura { 
+                flex: 1; 
+                text-align: center; 
+            }
+            .assinatura-linha { 
+                border-top: 1px solid #000; 
+                padding-top: 5px; 
+                font-size: 10pt; 
+            }
+            
+            .footer { 
+                text-align: center; 
+                margin-top: 30px; 
+                padding-top: 10px; 
+                border-top: 1px solid #ccc; 
+                font-size: 8pt; 
+                color: #666; 
+            }
+            .footer p { margin: 2px 0; }
+            
+            .btn-print { 
+                display: block; 
+                margin: 20px auto; 
+                padding: 12px 30px; 
+                background: #059669; 
+                color: white; 
+                border: none; 
+                border-radius: 8px; 
+                font-weight: bold; 
+                cursor: pointer; 
+                font-size: 14px;
+                font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #047857; }
+            @media print { .no-print { display: none !important; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Enfermaria</p>
+        </div>
+        
+        <div class="titulo">🏥 Ficha de Atendimento</div>
+        <div class="status-badge">${badgeStatus}</div>
+        
+        <div class="aluno-box">
+            <img class="aluno-foto" src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                 alt="${escapeHTML(a.alunoNome)}"
+                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+            <div class="aluno-info">
+                <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
+                <div class="aluno-detalhes">
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')}<br>
+                    <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')} 
+                    ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
+                </div>
+            </div>
+        </div>
+        
+        <div class="section-title">📌 Dados da Entrada</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Data:</div>
+                <div class="info-value">${dataEntradaExt}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Horário:</div>
+                <div class="info-value">${horaEntrada}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Registrado por:</div>
+                <div class="info-value">${escapeHTML(a.entrada.registradoPorNome || '-')}</div>
+            </div>
+        </div>
+        
+        <div class="section-title">📝 Queixa / Motivo</div>
+        <div class="queixa-box">${escapeHTML(a.entrada.queixa || '-').replace(/\n/g, '<br>')}</div>
+        
+        ${a.entrada.observacoes ? `
+            <div class="section-title">💬 Observações</div>
+            <div class="observacoes-box">${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}</div>
+        ` : ''}
+        
+        ${editadoHTML}
+        ${saidaHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-linha">Enfermaria</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-linha">Coordenação / Gestão</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Ficha gerada em <strong>${dataGeracao}</strong></p>
+            <p>EducaPleno — Sistema de Atendimentos Enfermaria</p>
+        </div>
+    </body>
+    </html>`;
 }
 
 // ============================================
@@ -1441,9 +2006,431 @@ function exportarCSV() {
     URL.revokeObjectURL(link.href);
 }
 
-async function exportarPDF() {
-    if (!relatorioData) { mostrarToast('Nenhum relatório carregado'); return; }
-    mostrarToast('Função de PDF será implementada em breve');
+// ============================================
+// 📄 EXPORTAR PDF (padrão Setor Pedagógico)
+// ============================================
+function exportarPDF() {
+    if (!relatorioData) { 
+        mostrarToast('⚠️ Gere um relatório primeiro', 'warning'); 
+        return; 
+    }
+    
+    const html = gerarHTMLRelatorioEnfermaria(relatorioData);
+    
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
+}
+
+// ============================================
+// 🎨 GERAR HTML DO RELATÓRIO (padrão Setor Pedagógico)
+// ============================================
+function gerarHTMLRelatorioEnfermaria(data) {
+    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
+    const logoIema = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_gestao.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    // ========== TÍTULO DINÂMICO ==========
+    let titulo = 'Relatório de Atendimentos - Enfermaria';
+    let subtitulo = '';
+    if (tipo === 'turma') {
+        titulo = 'Relatório de Atendimentos';
+        subtitulo = `Turma: ${data.turma || ''}`;
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual do Aluno';
+        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
+    } else {
+        subtitulo = 'Relatório Geral';
+    }
+    
+    // ========== ESTATÍSTICAS ==========
+    let statsHTML = '';
+    if (tipo === 'geral') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTurma || []).length}</div>
+                    <div class="stat-label">Turmas com Registro</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.ultimosAtendimentos || []).length}</div>
+                    <div class="stat-label">Últimos Registros</div>
+                </div>
+            </div>
+        `;
+    } else if (tipo === 'turma') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAlunosAtendidos || 0}</div>
+                    <div class="stat-label">Alunos Atendidos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porAluno || []).length}</div>
+                    <div class="stat-label">Alunos com Registro</div>
+                </div>
+            </div>
+        `;
+    } else if (tipo === 'aluno') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${Object.keys(data.estatisticas?.desfechos || {}).length}</div>
+                    <div class="stat-label">Tipos de Desfecho</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ========== TABELA DE DADOS ==========
+    let tabelaHTML = '';
+    
+    // ---- GERAL ----
+    if (tipo === 'geral') {
+        tabelaHTML = `
+            <div class="section-title">📊 Resumo por Turma</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Turma</th>
+                        <th>Total de Atendimentos</th>
+                        <th>Alunos Atendidos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(data.porTurma || []).map(t => `
+                        <tr>
+                            <td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td>
+                            <td>${t.total || 0}</td>
+                            <td>${t.totalAlunos || 0}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado disponível</td></tr>'}
+                </tbody>
+            </table>
+            
+            <div class="section-title" style="margin-top: 25px;">📋 Últimos Atendimentos</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Aluno</th>
+                        <th>Turma</th>
+                        <th>Queixa</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(data.ultimosAtendimentos || []).map(a => `
+                        <tr>
+                            <td>${new Date(a.dataEntrada).toLocaleString('pt-BR')}</td>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td>${escapeHTML(a.alunoTurma || '')}</td>
+                            <td>${escapeHTML((a.queixa || '').substring(0, 80))}${(a.queixa || '').length > 80 ? '...' : ''}</td>
+                            <td>
+                                <span class="badge-status ${a.status === 'finalizado' ? 'aprovada' : 'pendente'}">
+                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Atendimento'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento registrado</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    // ---- TURMA ----
+    else if (tipo === 'turma') {
+        tabelaHTML = `
+            <div class="section-title">👥 Atendimentos por Aluno</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aluno</th>
+                        <th>Matrícula</th>
+                        <th>Total</th>
+                        <th>Desfechos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(data.porAluno || []).map(a => `
+                        <tr>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td>${escapeHTML(a.alunoMatricula || '-')}</td>
+                            <td>${a.total || 0}</td>
+                            <td>${Object.entries(a.desfechos || {}).map(([k, v]) => `${escapeHTML(k)}: ${v}`).join('<br>')}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            ${(data.ultimosAtendimentos && data.ultimosAtendimentos.length > 0) ? `
+                <div class="section-title" style="margin-top: 25px;">📋 Últimos Atendimentos</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Aluno</th>
+                            <th>Queixa</th>
+                            <th>Desfecho</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.ultimosAtendimentos.map(a => `
+                            <tr>
+                                <td>${new Date(a.dataEntrada).toLocaleString('pt-BR')}</td>
+                                <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                                <td>${escapeHTML((a.queixa || '').substring(0, 100))}</td>
+                                <td>${escapeHTML(a.desfecho || 'Em andamento')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            ` : ''}
+        `;
+    }
+    
+    // ---- ALUNO ----
+    else if (tipo === 'aluno') {
+        tabelaHTML = `
+            <div class="section-title">📋 Histórico de Atendimentos</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Queixa</th>
+                        <th>Observações</th>
+                        <th>Desfecho</th>
+                        <th>Registrado por</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(data.atendimentos || []).map(a => `
+                        <tr>
+                            <td>${new Date(a.dataEntrada).toLocaleString('pt-BR')}</td>
+                            <td>${escapeHTML((a.queixa || '').substring(0, 80))}${(a.queixa || '').length > 80 ? '...' : ''}</td>
+                            <td>${escapeHTML((a.observacoesEntrada || '').substring(0, 60))}</td>
+                            <td><strong>${escapeHTML(a.desfechoTexto || 'Em atendimento')}</strong></td>
+                            <td>${escapeHTML(a.registradoPor || '-')}</td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento</td></tr>'}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    // ========== HTML FINAL ==========
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo}</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { 
+                font-family: 'Times New Roman', Times, serif; 
+                font-size: 11pt; 
+                line-height: 1.4;
+                color: #000;
+            }
+            .header { 
+                text-align: center; 
+                border-bottom: 2px double #000; 
+                padding-bottom: 10px; 
+                margin-bottom: 15px; 
+            }
+            .header img { 
+                max-width: 100%; 
+                max-height: 25mm; 
+                object-fit: contain;
+                display: block;
+                margin: 0 auto 5px;
+            }
+            .header h1 { 
+                font-size: 13pt; 
+                text-transform: uppercase; 
+                font-weight: bold;
+                margin: 5px 0 0;
+            }
+            .titulo { 
+                text-align: center; 
+                font-size: 14pt; 
+                font-weight: bold; 
+                background: #e8e8e8; 
+                padding: 10px; 
+                border: 2px solid #000; 
+                margin: 15px 0;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .subtitulo {
+                text-align: center;
+                font-size: 12pt;
+                margin: -10px 0 15px;
+                font-style: italic;
+            }
+            .stats { 
+                display: flex; 
+                gap: 15px; 
+                margin: 15px 0 20px; 
+                padding: 15px; 
+                background: #f0f4ff; 
+                border-radius: 8px; 
+                border: 1px solid #cbd5e1;
+            }
+            .stat { 
+                text-align: center; 
+                flex: 1;
+                border-right: 1px solid #cbd5e1;
+            }
+            .stat:last-child { border-right: none; }
+            .stat-value { 
+                font-size: 22pt; 
+                font-weight: bold; 
+                color: #059669;
+                line-height: 1;
+            }
+            .stat-label { 
+                font-size: 9pt; 
+                color: #666; 
+                margin-top: 5px;
+            }
+            .section-title { 
+                font-size: 11pt; 
+                font-weight: bold; 
+                background: #e8e8e8; 
+                padding: 6px 10px; 
+                border-left: 4px solid #059669; 
+                margin: 20px 0 10px;
+            }
+            table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                font-size: 9.5pt; 
+                margin-bottom: 15px;
+            }
+            th { 
+                background: #059669; 
+                color: white; 
+                padding: 8px 6px; 
+                text-align: left; 
+                border: 1px solid #047857;
+                font-size: 9pt;
+            }
+            td { 
+                padding: 6px; 
+                border: 1px solid #ddd; 
+                vertical-align: top;
+            }
+            tr:nth-child(even) { background: #f9fafb; }
+            .badge-status {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-size: 8.5pt;
+                font-weight: bold;
+            }
+            .badge-status.aprovada { background: #d1fae5; color: #065f46; }
+            .badge-status.pendente { background: #fef3c7; color: #92400e; }
+            
+            .assinaturas { 
+                display: flex; 
+                justify-content: space-around; 
+                margin-top: 50px; 
+                gap: 40px; 
+            }
+            .assinatura { 
+                flex: 1; 
+                text-align: center; 
+            }
+            .assinatura-linha { 
+                border-top: 1px solid #000; 
+                padding-top: 5px; 
+                font-size: 10pt; 
+            }
+            .footer { 
+                text-align: center; 
+                margin-top: 30px; 
+                padding-top: 10px; 
+                border-top: 1px solid #ccc; 
+                font-size: 8pt; 
+                color: #666; 
+            }
+            .footer p { margin: 2px 0; }
+            .registro-info { 
+                font-size: 9pt; 
+                color: #666; 
+                margin-top: 20px; 
+                text-align: center; 
+            }
+            .btn-print { 
+                display: block; 
+                margin: 20px auto; 
+                padding: 12px 30px; 
+                background: #059669; 
+                color: white; 
+                border: none; 
+                border-radius: 8px; 
+                font-weight: bold; 
+                cursor: pointer; 
+                font-size: 14px;
+                font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #047857; }
+            @media print { 
+                .no-print { display: none !important; } 
+                body { padding: 0; }
+            }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Enfermaria</p>
+        </div>
+        
+        <div class="titulo">🏥 ${titulo}</div>
+        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
+        
+        ${statsHTML}
+        ${tabelaHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-linha">Enfermaria</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-linha">Coordenação / Gestão</div>
+            </div>
+        </div>
+        
+        <div class="registro-info">
+            Relatório gerado em <strong>${dataGeracao}</strong>
+        </div>
+        
+        <div class="footer">
+            <p>Documento gerado automaticamente pelo EducaPleno</p>
+            <p>Setor: Enfermaria</p>
+        </div>
+    </body>
+    </html>`;
 }
 
 // ============================================
@@ -1772,3 +2759,7 @@ window.fecharNotificacoes = fecharNotificacoes;
 window.marcarNotificacaoLida = marcarNotificacaoLida;
 window.marcarTodasLidas = marcarTodasLidas;
 window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+
+window.imprimirAtendimentosAtivos = imprimirAtendimentosAtivos;
+window.imprimirAtendimentoIndividual = imprimirAtendimentoIndividual;
+window.imprimirRelatorioEnfermaria = imprimirRelatorioEnfermaria;
