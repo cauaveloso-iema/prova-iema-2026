@@ -2131,7 +2131,7 @@ class AdminSimples {
             const isAdminNormal = userData.role === 'admin';
             const isSuperAdmin = userData.role === 'super_admin';
 
-            const response = await fetch('/api/admin/usuarios?limit=100', {
+            const response = await fetch('/api/admin/usuarios?limit=1000', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -11553,6 +11553,28 @@ class AdminSimples {
                 <strong>${quantidade}</strong> ${quantidade === 1 ? 'usuário' : 'usuários'} ${textoAdicional.toLowerCase()}
             </span>
         `;
+    }
+
+    // ============ LIMPAR FILTROS DE USUÁRIOS ============
+    limparFiltrosUsuarios() {
+        console.log('🧹 Limpando filtros de usuários...');
+
+        // Limpar input de busca
+        const buscaInput = document.getElementById('buscaUsuario');
+        if (buscaInput) buscaInput.value = '';
+
+        // Resetar select de role
+        const selectRole = document.getElementById('filtroRole');
+        if (selectRole) selectRole.value = 'todos';
+
+        // Resetar array filtrado
+        this.usuariosFiltrados = [...this.usuarios];
+        this.paginaAtualUsuario = 1;
+
+        // Re-renderizar tabela
+        this.atualizarTabelaUsuarios();
+
+        this.showToast('✅ Filtros limpos', 'success');
     }
 
     // ============================================================================

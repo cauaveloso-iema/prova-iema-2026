@@ -11141,6 +11141,7 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
             totalPsicologia: 0,
             totalAssistenteSocial: 0,
             totalProtagonismo: 0,
+            totalBiblioteca: 0,                    // 🔥 NOVO — ADICIONADO
             
             // Outras estatísticas
             totalTurmas: 0,
@@ -11196,7 +11197,7 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
                     stats.totalSupervisao = count; 
                     break;
                 case 'biblioteca': 
-                    stats.totalSupervisao = count; 
+                    stats.totalBiblioteca = count;              // 🔥 NOVO — CORRIGIDO (era totalSupervisao)
                     break;
                 case 'psicologia': 
                     stats.totalPsicologia = count; 
