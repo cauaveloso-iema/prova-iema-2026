@@ -2568,35 +2568,75 @@ class AdminPanel {
             this.showToast(`📨 Enviando ${naoVinculados.length} notificações...`, 'info');
             
             const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/admin/onesignal/solicitar-vinculo-massa', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+            const BASE_URL = window.location.origin;
+            
+            let enviados = 0;
+            let erros = 0;
+            
+            // 🔥 ENVIAR UMA NOTIFICAÇÃO POR DISPOSITIVO (com URL personalizada)
+            for (const disp of naoVinculados) {
+                const linkVinculo = `${BASE_URL}/confirmar-vinculo.html?playerId=${disp.playerId}`;
+                
+                console.log(`📤 Enviando para ${disp.playerId.substring(0, 30)}...`);
+                console.log(`   🔗 Link: ${linkVinculo}`);
+                
+                try {
+                    const response = await fetch('/api/admin/onesignal/enviar-massa', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            playerIds: [disp.playerId],
+                            titulo: '🔔 Vincule seu dispositivo',
+                            mensagem: 'Toque aqui para vincular seu celular e receber notificações!',
+                            url: linkVinculo,
+                            dados: {
+                                tipo: 'solicitacao_vinculo',
+                                link: linkVinculo,
+                                playerId: disp.playerId,
+                                timestamp: Date.now()
+                            }
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        enviados++;
+                        console.log(`   ✅ Enviado!`);
+                    } else {
+                        erros++;
+                        console.warn(`   ❌ Erro:`, data.error);
+                    }
+                } catch (err) {
+                    erros++;
+                    console.warn(`   ❌ Erro de rede:`, err.message);
                 }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.showToast(
-                    `✅ ${data.enviados} notificações enviadas!${data.erros > 0 ? ` (${data.erros} erros)` : ''}`,
-                    'success'
-                );
                 
-                // Fechar modal
-                this.closeModal();
-                
-                // Notificação detalhada
-                this.mostrarNotificacaoSistema(
-                    'success',
-                    '📨 Solicitação Enviada',
-                    `${data.enviados} usuário(s) notificados. Aguarde os cliques para ver os vínculos.`,
-                    5000
-                );
-            } else {
-                throw new Error(data.error || 'Erro ao enviar');
+                // Delay entre envios
+                await new Promise(r => setTimeout(r, 200));
             }
+            
+            this.showToast(
+                `✅ ${enviados} notificações enviadas!${erros > 0 ? ` (${erros} erros)` : ''}`,
+                'success'
+            );
+            
+            // Fechar modal
+            this.closeModal();
+            
+            // Notificação detalhada
+            this.mostrarNotificacaoSistema(
+                'success',
+                '📨 Solicitação Enviada',
+                `${enviados} usuário(s) notificados. Aguarde os cliques para ver os vínculos.`,
+                5000
+            );
+            
+            // Atualizar a lista após 3 segundos
+            setTimeout(() => this.atualizarOneSignal(), 3000);
             
         } catch (error) {
             console.error('❌ Erro:', error);
