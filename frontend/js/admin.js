@@ -247,6 +247,7 @@ class AdminPanel {
             'total-psicologia': stats.totalPsicologia,
             'total-assistente-social': stats.totalAssistenteSocial,
             'total-protagonismo': stats.totalProtagonismo,
+            'total-biblioteca': stats.totalBiblioteca,
             
             // Turmas
             'total-turmas': stats.totalTurmas,
@@ -468,6 +469,7 @@ class AdminPanel {
             psicologia: 'Painel de Psicologia',
             'assistente-social': 'Painel do Assistente Social',
             protagonismo: 'Painel de Protagonismo',
+            biblioteca: 'Painel de Biblioteca',
             'permissoes-especiais': 'Permissões Especiais',
             'qrcode-management': 'Gerenciamento de QR Codes'
         };
@@ -606,6 +608,9 @@ class AdminPanel {
                 break;
             case 'protagonismo':
                 await this.loadProtagonismo();
+                break;
+            case 'biblioteca':                     
+                await this.loadBiblioteca();       
                 break;
             case 'eixos':
                 await this.loadEixos();
@@ -1069,7 +1074,8 @@ class AdminPanel {
                 supervisao: usuarios.filter(u => u.role === 'supervisao').length,
                 psicologia: usuarios.filter(u => u.role === 'psicologia').length,
                 'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
-                protagonismo: usuarios.filter(u => u.role === 'protagonismo').length
+                protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
+                biblioteca: usuarios.filter(u => u.role === 'biblioteca').length
             };
             
             // Buscar dispositivo
@@ -1172,6 +1178,10 @@ class AdminPanel {
                                     style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #ea580c;">
                                     ⭐ Protagonismo (${contagemPorPerfil.protagonismo})
                                 </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="biblioteca" onclick="admin.filtrarVincularPorRole('biblioteca')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #0284c7;">
+                                    📚 Biblioteca (${contagemPorPerfil.biblioteca || 0})
+                                </button>
                             </div>
                         </div>
                         
@@ -1263,7 +1273,8 @@ class AdminPanel {
             'supervisao': 'Supervisão',
             'psicologia': 'Psicologia',
             'assistente-social': 'Assist. Social',
-            'protagonismo': 'Protagonismo'
+            'protagonismo': 'Protagonismo',
+            'biblioteca': 'Biblioteca'
         };
         return labels[role] || role;
     }
@@ -2816,7 +2827,8 @@ class AdminPanel {
                 { id: 'total-supervisao', label: 'Supervisão', valor: stats.totalSupervisao, icone: '🛡️', cor: '#1e3a8a' },
                 { id: 'total-psicologia', label: 'Psicologia', valor: stats.totalPsicologia, icone: '🧠', cor: '#0d9488' },
                 { id: 'total-assistente-social', label: 'Assistente Social', valor: stats.totalAssistenteSocial, icone: '🤝', cor: '#7c3aed' },
-                { id: 'total-protagonismo', label: 'Protagonismo', valor: stats.totalProtagonismo, icone: '⭐', cor: '#ea580c' }
+                { id: 'total-protagonismo', label: 'Protagonismo', valor: stats.totalProtagonismo, icone: '⭐', cor: '#ea580c' },
+                { id: 'total-biblioteca', label: 'Biblioteca', valor: stats.totalBiblioteca, icone: '📚', cor: '#0ea5e9' },
             ];
 
             contentArea.innerHTML = `
@@ -3710,6 +3722,7 @@ class AdminPanel {
                                 <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>🧠 Psicologia</option>
                                 <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>🤝 Assistente Social</option>
                                 <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>⭐ Protagonismo</option>
+                                <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>📚 Biblioteca</option>
                             </select>
                         </div>
                         
@@ -8848,6 +8861,8 @@ class AdminPanel {
                 roleBadge = '<span class="role-badge assistente-social"><i class="fas fa-hands-helping"></i> Assistente Social</span>';
             } else if (user.role === 'protagonismo') {
                 roleBadge = '<span class="role-badge protagonismo"><i class="fas fa-star"></i> Protagonismo</span>';
+            } else if (user.role === 'biblioteca') {
+                roleBadge = '<span class="role-badge biblioteca"><i class="fas fa-book-reader"></i> Biblioteca</span>'
             } else {
                 roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
             }
@@ -9308,6 +9323,11 @@ class AdminPanel {
                         roleColor = '#ea580c';
                         roleBg = '#ffedd5';
                         break;
+                    case 'biblioteca':
+                        roleIcon = '📚';
+                        roleColor = '#0ea5e9';
+                        roleBg = '#e0f2fe';
+                        break;
                 default:
                     roleIcon = '👤';
                     roleColor = '#6b7280';
@@ -9544,6 +9564,16 @@ class AdminPanel {
                                         </div>
                                     </div>
                                 ` : `
+                                ${user.role === 'biblioteca' ? `
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Departamento</div>
+                                        <div style="font-weight: 600; color: #0f172a;">${user.departamento || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Matrícula</div>
+                                        <div style="font-family: monospace;">${user.matricula || '—'}</div>
+                                    </div>
+                                ` : ''}
                                     <div>
                                         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Departamento</div>
                                         <div style="font-weight: 600; color: #0f172a;">${user.departamento || '—'}</div>
@@ -9843,6 +9873,7 @@ class AdminPanel {
                             <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>Psicologia</option>
                             <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>Assistente Social</option>
                             <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
+                            <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>Biblioteca</option>
                         </select>
                     </div>
                     
@@ -10074,6 +10105,24 @@ class AdminPanel {
                         <span>Protagonismo gerencia clubes, tutoria, candidatos e eleições de líderes.</span>
                     </div>
                 </div>
+
+                <!-- BIBLIOTECA -->
+                <div id="bibliotecaFields" class="role-specific" style="${role === 'biblioteca' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #e0f2fe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Biblioteca gerencia registros de frequência, atividades e empréstimos de livros.</span>
+                    </div>
+                </div>
                 
                 <!-- Campos específicos para Coordenação de Pátio -->
                 <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
@@ -10228,6 +10277,7 @@ class AdminPanel {
         const psicologiaFields = document.getElementById('psicologiaFields');
         const assistenteSocialFields = document.getElementById('assistenteSocialFields');
         const protagonismoFields = document.getElementById('protagonismoFields');
+        const bibliotecaFields = document.getElementById('bibliotecaFields');
         
         // Ocultar todos
         if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
@@ -10242,6 +10292,7 @@ class AdminPanel {
         if (psicologiaFields) psicologiaFields.style.display = role === 'psicologia' ? 'block' : 'none';
         if (assistenteSocialFields) assistenteSocialFields.style.display = role === 'assistente-social' ? 'block' : 'none';
         if (protagonismoFields) protagonismoFields.style.display = role === 'protagonismo' ? 'block' : 'none';
+        if (bibliotecaFields) bibliotecaFields.style.display = role === 'biblioteca' ? 'block' : 'none';
     }
 
     gerarSenha() {
@@ -10382,6 +10433,10 @@ class AdminPanel {
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
 
             } else if (role === 'protagonismo') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+            
+            } else if (role === 'biblioteca') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             
@@ -23432,7 +23487,8 @@ class AdminPanel {
                 supervisao: todosUsuarios.filter(u => u.role === 'supervisao').length,
                 psicologia: todosUsuarios.filter(u => u.role === 'psicologia').length,
                 'assistente-social': todosUsuarios.filter(u => u.role === 'assistente-social').length,
-                protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length
+                protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length,
+                biblioteca: todosUsuarios.filter(u => u.role === 'biblioteca').length
             };
             
             // ===== ARMAZENAR ESTADO =====
@@ -23568,6 +23624,11 @@ class AdminPanel {
                                 style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                                 <div style="font-weight: 700; color: #ea580c; font-size: 0.9rem;">⭐ Protagonismo</div>
                                 <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.protagonismo} usuários</div>
+                            </button>
+                            <button type="button" class="perfil-notif-btn" data-role="biblioteca" onclick="admin.filtrarNotificacaoPorRole('biblioteca')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #0284c7; font-size: 0.9rem;">📚 Biblioteca</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.biblioteca} usuários</div>
                             </button>
                         </div>
                     </div>
@@ -23870,7 +23931,8 @@ class AdminPanel {
                 'supervisao': '🛡️',
                 'psicologia': '🧠',
                 'assistente-social': '🤝',
-                'protagonismo': '⭐'
+                'protagonismo': '⭐',
+                'biblioteca': '📚'
             };
             return icons[role] || '👤';
         }
@@ -23918,7 +23980,8 @@ class AdminPanel {
                 'supervisao': '🛡️ Supervisão',
                 'psicologia': '🧠 Psicologia',
                 'assistente-social': '🤝 Assistente Social',
-                'protagonismo': '⭐ Protagonismo'
+                'protagonismo': '⭐ Protagonismo',
+                'biblioteca': '📚 Biblioteca'
             };
             
             const infoEl = document.getElementById('infoDestinatariosNotificacao');
@@ -30485,7 +30548,8 @@ class AdminPanel {
             'aluno': '#10b981',
             'professor': '#f59e0b',
             'admin': '#3b82f6',
-            'super_admin': '#8b5cf6'
+            'super_admin': '#8b5cf6',
+            'biblioteca': '#0ea5e9'
         };
         return cores[role] || '#6b7280';
     }
@@ -36267,6 +36331,7 @@ class AdminPanel {
                                 <option value="cozinha">🍽️ Cozinha</option>
                                 <option value="gestao_geral">📊 Gestão Geral</option>
                                 <option value="enfermaria">🏥 Enfermaria</option>
+                                <option value="biblioteca">📚 Biblioteca</option>
                             </select>
                         </div>
                         
@@ -38231,7 +38296,7 @@ class AdminPanel {
         const labels = {
             'aluno': 'Aluno', 'professor': 'Professor', 'admin': 'Admin', 'super_admin': 'Super Admin',
             'setor_pedagogico': 'Setor Pedagógico', 'coordenacao_patio': 'Coord. Pátio',
-            'cozinha': 'Cozinha', 'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria'
+            'cozinha': 'Cozinha', 'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria', 'biblioteca': 'Biblioteca'
         };
         return labels[role] || role;
     }
@@ -41557,6 +41622,199 @@ class AdminPanel {
     }
 
     // ============================================
+    // MÓDULO: BIBLIOTECA
+    // ============================================
+    async loadBiblioteca() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel de Biblioteca.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Renderizar o iframe com a página da biblioteca
+        contentArea.innerHTML = `
+            <div class="biblioteca-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header da Biblioteca -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-book-reader"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Biblioteca</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Gerencie registros, frequência e atividades da Biblioteca
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarBiblioteca()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel da biblioteca"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirBibliotecaNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #0284c7;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                        <button 
+                            onclick="admin.abrirBibliotecaPublico()" 
+                            style="
+                                background: #10b981;
+                                border: none;
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir página pública (alunos)"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Página Pública
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe da Biblioteca -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="bibliotecaIframe"
+                        src="/biblioteca.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel de Biblioteca"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel de Biblioteca carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA BIBLIOTECA
+    // ============================================
+    recarregarBiblioteca() {
+        const iframe = document.getElementById('bibliotecaIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel da biblioteca...', 'info');
+            }
+            console.log('🔄 Iframe da biblioteca recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR BIBLIOTECA EM NOVA ABA
+    // ============================================
+    abrirBibliotecaNovaAba() {
+        window.open('/biblioteca.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Biblioteca aberta em nova aba', 'success');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR PÁGINA PÚBLICA DA BIBLIOTECA
+    // ============================================
+    abrirBibliotecaPublico() {
+        window.open('/biblioteca-publico.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('📱 Página pública aberta em nova aba (para alunos)', 'success');
+        }
+    }
+
+    // ============================================
     // MÉTODO: CARREGAR PAINEL DO SETOR PEDAGÓGICO
     // ============================================
     async loadSetorPedagogico() {
@@ -42453,6 +42711,7 @@ class AdminPanel {
                     { icone: 'fa-brain', label: 'Psicologia', section: 'psicologia' },
                     { icone: 'fa-hands-helping', label: 'Assistente Social', section: 'assistente-social' },
                     { icone: 'fa-star', label: 'Protagonismo', section: 'protagonismo' },
+                    { icone: 'fa-book-reader', label: 'Biblioteca', section: 'biblioteca' },
                 ]
             },
             {

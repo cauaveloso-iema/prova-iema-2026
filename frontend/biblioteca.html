@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0ea5e9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Biblioteca - EducaPleno">
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Biblioteca - EducaPleno</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+    <script src="js/dialog-helper.js"></script>
+
+    <link rel="stylesheet" href="css/biblioteca.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header-top">
+            <div class="user-info-card">
+                <div class="user-avatar" id="userAvatar"><i class="fas fa-book-reader"></i></div>
+                <div class="user-details">
+                    <div class="user-name" id="userName">Carregando...</div>
+                    <div class="user-role" id="userRole">Biblioteca</div>
+                </div>
+            </div>
+            <div class="btn-actions">
+                <div class="notificacoes-container">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn">
+                        <i class="fas fa-bell"></i>
+                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
+                    </button>
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                        <div class="notificacoes-header">
+                            <h3><i class="fas fa-bell"></i> Notificações</h3>
+                            <button onclick="fecharNotificacoes()"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div id="notificacoesLista"></div>
+                    </div>
+                </div>
+                <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view" target="_blank" class="btn-icon" style="background: linear-gradient(135deg, #10b981, #059669);" title="Baixar App"><i class="fas fa-download"></i></a>
+                <button class="btn-icon" onclick="abrirModalQRCode()" title="QR Code Público"><i class="fas fa-qrcode"></i></button>
+                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil"><i class="fas fa-user-edit"></i></button>
+                <button class="btn-icon danger" onclick="logout()" title="Sair"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div><i class="fas fa-book-reader me-2"></i> Biblioteca — EducaPleno</div>
+                <span id="dataAtual" class="badge bg-light text-dark"></span>
+            </div>
+        </div>
+        
+        <!-- Abas -->
+        <div class="card">
+            <div class="card-body">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="registro-tab" data-bs-toggle="tab" data-bs-target="#tab-registro" type="button">
+                            <i class="fas fa-clipboard-check"></i> Registro
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="ativos-tab" data-bs-toggle="tab" data-bs-target="#tab-ativos" type="button">
+                            <i class="fas fa-users"></i> Em Visita
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#tab-dashboard" type="button">
+                            <i class="fas fa-chart-line"></i> Dashboard
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="relatorios-tab" data-bs-toggle="tab" data-bs-target="#tab-relatorios" type="button">
+                            <i class="fas fa-file-alt"></i> Relatórios
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content mt-3">
+                    
+                    <!-- ABA REGISTRO -->
+                    <div class="tab-pane fade show active" id="tab-registro">
+                        <!-- Toggle Modo -->
+                        <div class="mode-toggle mb-3">
+                            <button class="mode-btn active" id="modoAutomaticoBtn" onclick="setModo('automatico')">
+                                <i class="fas fa-qrcode"></i> Escanear QR
+                            </button>
+                            <button class="mode-btn" id="modoManualBtn" onclick="setModo('manual')">
+                                <i class="fas fa-users"></i> Buscar Manual
+                            </button>
+                        </div>
+                        
+                        <!-- Modo Automático (QR) -->
+                        <div id="modoAutomatico" class="modo-content">
+                            <div class="scanner-container">
+                                <div id="qr-reader-auto"></div>
+                            </div>
+                            <p class="text-center text-muted mt-2">
+                                <i class="fas fa-info-circle"></i> Aponte a câmera para o QR Code do aluno
+                            </p>
+                        </div>
+                        
+                        <!-- Modo Manual -->
+                        <div id="modoManual" class="modo-content" style="display: none;">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Turma</label>
+                                    <select id="filtroTurmaManual" class="form-select">
+                                        <option value="">Selecione a turma...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Buscar</label>
+                                    <input type="text" id="filtroBuscaManual" class="form-control" placeholder="Digite o nome...">
+                                </div>
+                            </div>
+                            <div id="listaAlunosManual">
+                                <div class="text-center py-3">Selecione uma turma para ver os alunos</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Info do Aluno -->
+                        <div id="alunoInfo" style="display: none;" class="aluno-info-card">
+                            <div class="aluno-header">
+                                <img id="alunoFoto" src="" alt="Foto" class="aluno-foto" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iIzBlYTUlZTkiLz48L3N2Zz4='">
+                                <div class="aluno-dados">
+                                    <h3 id="alunoNome">-</h3>
+                                    <p><strong>Matrícula:</strong> <span id="alunoMatricula">-</span></p>
+                                    <p><strong>Turma:</strong> <span id="alunoTurma">-</span></p>
+                                    <p><strong>Curso:</strong> <span id="alunoCurso">-</span></p>
+                                </div>
+                            </div>
+                            <div id="statusAtendimento"></div>
+                        </div>
+                        
+                        <!-- Formulário de Entrada -->
+                        <div id="formEntrada" style="display: none;" class="form-card">
+                            <h4><i class="fas fa-sign-in-alt"></i> Registrar Entrada</h4>
+                            
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-calendar-alt"></i> Data/Hora de Entrada *</label>
+                                <input type="datetime-local" id="dataEntrada" class="form-control" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-clipboard-list"></i> Motivo da Visita *</label>
+                                <div class="motivos-grid">
+                                    <div class="motivo-card" data-motivo="ler_livro" onclick="selecionarMotivo('ler_livro')">
+                                        <i class="fas fa-book-open"></i><span>Ler um Livro</span>
+                                    </div>
+                                    <div class="motivo-card" data-motivo="pegar_livro_emprestado" onclick="selecionarMotivo('pegar_livro_emprestado')">
+                                        <i class="fas fa-hand-holding"></i><span>Pegar Emprestado</span>
+                                    </div>
+                                    <div class="motivo-card" data-motivo="participar_atividade_leitura" onclick="selecionarMotivo('participar_atividade_leitura')">
+                                        <i class="fas fa-users"></i><span>Atividade de Leitura</span>
+                                    </div>
+                                    <div class="motivo-card" data-motivo="fazer_pesquisa" onclick="selecionarMotivo('fazer_pesquisa')">
+                                        <i class="fas fa-search"></i><span>Fazer Pesquisa</span>
+                                    </div>
+                                    <div class="motivo-card" data-motivo="outros" onclick="selecionarMotivo('outros')">
+                                        <i class="fas fa-ellipsis-h"></i><span>Outros</span>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="motivoSelecionado">
+                            </div>
+                            
+                            <div id="campoOutros" style="display: none;" class="mb-3">
+                                <label class="form-label">Especifique o motivo</label>
+                                <input type="text" id="motivoOutros" class="form-control">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label"><i class="fas fa-tasks"></i> Atividades (opcional)</label>
+                                <div class="atividades-grid">
+                                    <label><input type="checkbox" value="leitura_individual"> Leitura Individual</label>
+                                    <label><input type="checkbox" value="leitura_grupo"> Leitura em Grupo</label>
+                                    <label><input type="checkbox" value="pesquisa_internet"> Pesquisa Internet</label>
+                                    <label><input type="checkbox" value="pesquisa_livros"> Pesquisa Livros</label>
+                                    <label><input type="checkbox" value="estudo_dirigido"> Estudo Dirigido</label>
+                                    <label><input type="checkbox" value="emprestimo_livro"> Empréstimo</label>
+                                    <label><input type="checkbox" value="devolucao_livro"> Devolução</label>
+                                    <label><input type="checkbox" value="atividade_pedagogica"> Atividade Pedagógica</label>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="observacoesEntrada" class="form-control" rows="2"></textarea>
+                            </div>
+                            
+                            <button class="btn-primary-custom" onclick="registrarEntrada()">
+                                <i class="fas fa-check"></i> Confirmar Entrada
+                            </button>
+                            <button class="btn-secondary-custom" onclick="limparTela()">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                        
+                        <!-- Formulário de Saída -->
+                        <div id="formSaida" style="display: none;" class="form-card">
+                            <h4><i class="fas fa-sign-out-alt"></i> Registrar Saída</h4>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações finais</label>
+                                <textarea id="observacoesSaida" class="form-control" rows="2"></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Livros consultados (opcional)</label>
+                                <input type="text" id="livrosConsultados" class="form-control" placeholder="Separar por vírgula">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Computadores usados</label>
+                                <input type="number" id="computadoresUsados" class="form-control" value="0" min="0">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Satisfação</label>
+                                <select id="satisfacao" class="form-select">
+                                    <option value="">Não avaliar</option>
+                                    <option value="muito_bom">Muito Bom</option>
+                                    <option value="bom">Bom</option>
+                                    <option value="regular">Regular</option>
+                                    <option value="ruim">Ruim</option>
+                                </select>
+                            </div>
+                            
+                            <button class="btn-primary-custom" onclick="registrarSaida()">
+                                <i class="fas fa-check"></i> Confirmar Saída
+                            </button>
+                            <button class="btn-secondary-custom" onclick="limparTela()">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA ATIVOS -->
+                    <div class="tab-pane fade" id="tab-ativos">
+                        <div class="d-flex justify-content-between mb-3">
+                            <h5><i class="fas fa-users"></i> Alunos em Visita</h5>
+                            <button class="btn btn-danger btn-sm" onclick="imprimirAtendimentosAtivos()">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </button>
+                        </div>
+                        <div id="listaAtendimentosAtivos"></div>
+                    </div>
+                    
+                    <!-- ABA DASHBOARD -->
+                    <div class="tab-pane fade" id="tab-dashboard">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <i class="fas fa-calendar-day fa-2x"></i>
+                                <div class="stat-number" id="totalHoje">0</div>
+                                <div class="stat-label">Hoje</div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-calendar-week fa-2x"></i>
+                                <div class="stat-number" id="totalSemana">0</div>
+                                <div class="stat-label">Últimos 7 dias</div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-calendar-alt fa-2x"></i>
+                                <div class="stat-number" id="totalMes">0</div>
+                                <div class="stat-label">Este Mês</div>
+                            </div>
+                            <div class="stat-card">
+                                <i class="fas fa-chart-bar fa-2x"></i>
+                                <div class="stat-number" id="totalGeral">0</div>
+                                <div class="stat-label">Total</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-4">
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header"><i class="fas fa-chart-bar"></i> Visitas nos últimos 7 dias</div>
+                                    <div class="card-body"><canvas id="chartVisitas"></canvas></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header"><i class="fas fa-chart-pie"></i> Motivos de Visita</div>
+                                    <div class="card-body"><canvas id="chartMotivos"></canvas></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header"><i class="fas fa-chart-line"></i> Distribuição Horária</div>
+                                    <div class="card-body"><canvas id="chartHorario"></canvas></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card">
+                                    <div class="card-header"><i class="fas fa-users"></i> Alunos Mais Frequentes</div>
+                                    <div class="card-body" id="alunosFrequentes"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ABA RELATÓRIOS -->
+                    <div class="tab-pane fade" id="tab-relatorios">
+                        <h5><i class="fas fa-file-alt"></i> Relatórios</h5>
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Tipo</label>
+                                <select id="tipoRelatorio" class="form-select" onchange="toggleRelatorioFiltros()">
+                                    <option value="geral">Geral</option>
+                                    <option value="turma">Por Turma</option>
+                                    <option value="aluno">Por Aluno</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3" id="filtroTurmaDiv" style="display: none;">
+                                <label class="form-label">Turma</label>
+                                <select id="filtroTurma" class="form-select"></select>
+                            </div>
+                            <div class="col-md-3" id="filtroAlunoDiv" style="display: none;">
+                                <label class="form-label">Aluno</label>
+                                <select id="filtroAluno" class="form-select"></select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Data Início</label>
+                                <input type="date" id="dataInicio" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Data Fim</label>
+                                <input type="date" id="dataFim" class="form-control">
+                            </div>
+                            <div class="col-md-12">
+                                <button class="btn btn-primary" onclick="carregarRelatorio()">
+                                    <i class="fas fa-search"></i> Gerar Relatório
+                                </button>
+                                <button class="btn btn-success" onclick="exportarPDF()">
+                                    <i class="fas fa-file-pdf"></i> Exportar PDF
+                                </button>
+                                <button class="btn btn-info" onclick="exportarCSV()">
+                                    <i class="fas fa-file-csv"></i> Exportar CSV
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="resultadoRelatorio"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal QR Code -->
+    <div class="modal fade" id="modalQRCode" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white;">
+                    <h5 class="modal-title"><i class="fas fa-qrcode"></i> QR Code da Biblioteca</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="qrCodeImg" src="" alt="QR Code" style="width: 280px; height: 280px;">
+                    <p class="mt-3"><small id="qrCodeUrlTexto" class="text-muted"></small></p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="baixarQRCode()"><i class="fas fa-download"></i> Baixar</button>
+                    <button class="btn btn-secondary" onclick="imprimirQRCode()"><i class="fas fa-print"></i> Imprimir</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/biblioteca.js"></script>
+</body>
+</html>

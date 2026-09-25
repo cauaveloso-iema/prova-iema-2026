@@ -5822,3 +5822,8 @@ body {
     display: block;
     opacity: 1;
 }
+
+.role-badge.biblioteca { 
+    background: linear-gradient(135deg, #0ea5e9, #0284c7); 
+    color: white; 
+}

@@ -838,7 +838,8 @@ class AdminSimples {
             supervisao: todosUsuarios.filter(u => u.role === 'supervisao').length,
             psicologia: todosUsuarios.filter(u => u.role === 'psicologia').length,
             'assistente-social': todosUsuarios.filter(u => u.role === 'assistente-social').length,
-            protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length
+            protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length,
+            biblioteca: todosUsuarios.filter(u => u.role === 'biblioteca').length
         };
 
         // ===== ARMAZENAR ESTADO =====
@@ -972,6 +973,11 @@ class AdminSimples {
                             style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                             <div style="font-weight: 700; color: #ea580c; font-size: 0.9rem;">⭐ Protagonismo</div>
                             <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.protagonismo} usuários</div>
+                        </button>
+                        <button type="button" class="perfil-notif-btn" data-role="biblioteca" onclick="adminSimples.filtrarNotificacaoPorRole('biblioteca')"
+                            style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                            <div style="font-weight: 700; color: #0284c7; font-size: 0.9rem;">📚 Biblioteca</div>
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.biblioteca} usuários</div>
                         </button>
                     </div>
                 </div>
@@ -1259,7 +1265,8 @@ class AdminSimples {
             'supervisao': '🛡️',
             'psicologia': '🧠',
             'assistente-social': '🤝',
-            'protagonismo': '⭐'
+            'protagonismo': '⭐',
+            'biblioteca': '📚'  
         };
         return icons[role] || '👤';
     }
@@ -1304,7 +1311,8 @@ class AdminSimples {
             'supervisao': '🛡️ Supervisão',
             'psicologia': '🧠 Psicologia',
             'assistente-social': '🤝 Assistente Social',
-            'protagonismo': '⭐ Protagonismo'
+            'protagonismo': '⭐ Protagonismo',
+            'biblioteca': '📚 Biblioteca'
         };
 
         const infoEl = document.getElementById('infoDestinatariosNotificacao');
@@ -2176,6 +2184,7 @@ class AdminSimples {
                             <option value="psicologia">Psicologia</option>
                             <option value="assistente-social">Assistente Social</option>
                             <option value="protagonismo">Protagonismo</option>
+                            <option value="biblioteca">Biblioteca</option>
                             <option value="admin">Admins</option>
                         </select>
                     </div>
@@ -2278,6 +2287,8 @@ class AdminSimples {
                 roleBadge = '<span class="role-badge assistente-social"><i class="fas fa-hands-helping"></i> Assistente Social</span>';
             } else if (u.role === 'protagonismo') {
                 roleBadge = '<span class="role-badge protagonismo"><i class="fas fa-star"></i> Protagonismo</span>';
+            } else if (u.role === 'biblioteca') {  // 🔥 NOVO
+                roleBadge = '<span class="role-badge biblioteca"><i class="fas fa-book-reader"></i> Biblioteca</span>';
             } else {
                 roleBadge = `<span class="role-badge">${u.role || 'Desconhecido'}</span>`;
             }
@@ -2903,6 +2914,7 @@ class AdminSimples {
                             <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>Psicologia</option>
                             <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>Assistente Social</option>
                             <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
+                            <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>Biblioteca</option>
                         </select>
                     </div>
                     
@@ -3009,6 +3021,7 @@ class AdminSimples {
         const psicologiaFields = document.getElementById('psicologiaFields');
         const assistenteSocialFields = document.getElementById('assistenteSocialFields');
         const protagonismoFields = document.getElementById('protagonismoFields');
+        const bibliotecaFields = document.getElementById('bibliotecaFields');
 
         if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
         if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
@@ -3021,6 +3034,7 @@ class AdminSimples {
         if (psicologiaFields) psicologiaFields.style.display = role === 'psicologia' ? 'block' : 'none';
         if (assistenteSocialFields) assistenteSocialFields.style.display = role === 'assistente-social' ? 'block' : 'none';
         if (protagonismoFields) protagonismoFields.style.display = role === 'protagonismo' ? 'block' : 'none';
+        if (bibliotecaFields) bibliotecaFields.style.display = role === 'biblioteca' ? 'block' : 'none';
     }
 
     getRoleLabel(role) {
@@ -3037,7 +3051,8 @@ class AdminSimples {
             'supervisao': 'Supervisão',
             'psicologia': 'Psicologia',
             'assistente-social': 'Assistente Social',
-            'protagonismo': 'Protagonismo'
+            'protagonismo': 'Protagonismo',
+            'biblioteca': 'Biblioteca'
         };
         return labels[role] || role || 'Desconhecido';
     }
@@ -3056,7 +3071,8 @@ class AdminSimples {
             'supervisao': 'Supervisão',
             'psicologia': 'Psicologia',
             'assistente-social': 'Assist. Social',
-            'protagonismo': 'Protagonismo'
+            'protagonismo': 'Protagonismo',
+            'biblioteca': 'Biblioteca'
         };
         return labels[role] || role;
     }
@@ -3074,6 +3090,7 @@ class AdminSimples {
             'psicologia': '🧠 Psicologia - Escutas e Crises',
             'assistente-social': '🤝 Assistente Social - Evasão e Vulnerabilidades',
             'protagonismo': '⭐ Protagonismo - Clubes e Eleições',
+            'biblioteca': '📚 Área da Biblioteca',
             'admin': '👑 Área Administrativa',
             'super_admin': '⭐ Super Administrador'
         };
@@ -3105,6 +3122,9 @@ class AdminSimples {
         if (roleSelecionada === 'aluno') {
             dados.curso = document.getElementById('cursoUsuario')?.value;
             dados.turma = document.getElementById('turmaUsuario')?.value;
+        } else if (roleSelecionada === 'biblioteca') {
+            dados.departamento = document.getElementById('departamentoUsuario')?.value;
+            dados.matricula = document.getElementById('matriculaUsuario')?.value;
         } else if (roleSelecionada === 'professor') {
             dados.eixo = document.getElementById('eixoUsuario')?.value;
         }

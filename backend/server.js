@@ -1032,6 +1032,15 @@ const acompanhamentoCompartilhadoRoutes = require('./routes/acompanhamento-compa
 app.use('/api/acompanhamento-compartilhado', acompanhamentoCompartilhadoRoutes);
 
 
+// ============================================
+// BIBLIOTECA
+// ============================================
+const bibliotecaRoutes = require('./routes/biblioteca');
+const bibliotecaPublicaRoutes = require('./routes/biblioteca-publica');
+
+app.use('/api/biblioteca', bibliotecaRoutes);
+app.use('/api/biblioteca-publica', bibliotecaPublicaRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26
 // ============================================================================
@@ -2069,6 +2078,8 @@ app.post('/api/auth/login', async (req, res) => {
             redirectTo = '/enfermaria.html';
           } else if (user.role === 'supervisao') {
             redirectTo = '/supervisao.html';
+          } else if (user.role === 'biblioteca') {
+            redirectTo = '/biblioteca.html';
           } else if (user.role === 'psicologia') {
             redirectTo = '/psicologia.html';
           } else if (user.role === 'protagonismo') {
@@ -2208,7 +2219,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
     const perfisCom2FA = ['super_admin'];
     if (exigir2FA) {
-      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria', 'supervisao','psicologia','assistente-social','protagonismo');
+      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria', 'supervisao','psicologia','assistente-social','protagonismo', 'biblioteca');
     }
     
     if (perfisCom2FA.includes(user.role)) {
@@ -2294,6 +2305,8 @@ app.post('/api/auth/login', async (req, res) => {
       redirectTo = '/enfermaria.html';
     } else if (user.role === 'supervisao') {
       redirectTo = '/supervisao.html';
+    } else if (user.role === 'biblioteca') {
+      redirectTo = '/biblioteca.html';
     } else if (user.role === 'psicologia') {
       redirectTo = '/psicologia.html';
     } else if (user.role === 'assistente-social') {
@@ -11182,6 +11195,9 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
                 case 'supervisao': 
                     stats.totalSupervisao = count; 
                     break;
+                case 'biblioteca': 
+                    stats.totalSupervisao = count; 
+                    break;
                 case 'psicologia': 
                     stats.totalPsicologia = count; 
                     break;
@@ -19221,6 +19237,8 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
             dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'supervisao') {
             dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'biblioteca') {
+            dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'protagonismo') {
             dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'psicologia') {
@@ -19281,6 +19299,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (req.userRole === 'enfermaria') {
             camposPermitidos.push('departamento');
         } else if (req.userRole === 'supervisao') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'biblioteca') {
             camposPermitidos.push('departamento');
         } else if (req.userRole === 'protagonismo') {
             camposPermitidos.push('departamento');
@@ -19415,6 +19435,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (user.role === 'enfermaria') {
             perfilAtualizado.departamento = user.departamento;
         } else if (user.role === 'supervisao') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'biblioteca') {
             perfilAtualizado.departamento = user.departamento;
         } else if (user.role === 'protagonismo') {
             perfilAtualizado.departamento = user.departamento;

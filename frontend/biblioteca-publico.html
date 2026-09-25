@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0ea5e9">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Biblioteca - Registro de Visita</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+    <script src="js/dialog-helper.js"></script>
+    <link rel="stylesheet" href="css/biblioteca-publico.css">
+</head>
+<body>
+    <div class="animated-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container-public">
+        
+        <!-- HERO -->
+        <div class="hero-section">
+            <div class="hero-icon"><i class="fas fa-book-reader"></i></div>
+            <h1>Biblioteca Laura Rosa</h1>
+            <p>Registre sua entrada e saída na biblioteca</p>
+            
+            <div class="hero-status">
+                <span class="status-pill" id="statusInfo">
+                    <i class="fas fa-circle"></i> Carregando...
+                </span>
+            </div>
+        </div>
+
+        <!-- Menu de Ações -->
+        <div class="action-grid" id="actionGrid">
+            <button class="action-card" onclick="mostrarSecao('entrada')">
+                <div class="action-icon entrada"><i class="fas fa-sign-in-alt"></i></div>
+                <h3>Registrar Entrada</h3>
+                <p>Entrar na biblioteca</p>
+                <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
+            </button>
+
+            <button class="action-card" onclick="mostrarSecao('saida')">
+                <div class="action-icon saida"><i class="fas fa-sign-out-alt"></i></div>
+                <h3>Registrar Saída</h3>
+                <p>Sair da biblioteca</p>
+                <span class="action-arrow"><i class="fas fa-arrow-right"></i></span>
+            </button>
+        </div>
+
+        <!-- SEÇÃO: ENTRADA -->
+        <section class="section-content" id="secaoEntrada">
+            <div class="section-header">
+                <button class="btn-voltar" onclick="voltarHome()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2><i class="fas fa-sign-in-alt"></i> Registrar Entrada</h2>
+            </div>
+
+            <div class="mode-toggle mb-3">
+                <button class="mode-btn active" id="modoAutoEntradaBtn" onclick="setModoPublico('entrada', 'automatico')">
+                    <i class="fas fa-qrcode"></i> Escanear QR
+                </button>
+                <button class="mode-btn" id="modoManualEntradaBtn" onclick="setModoPublico('entrada', 'manual')">
+                    <i class="fas fa-users"></i> Buscar por Turma
+                </button>
+            </div>
+
+            <!-- Modo Automático -->
+            <div id="modoAutoEntrada" class="modo-content">
+                <div class="scanner-container">
+                    <div id="qr-reader-publico-entrada"></div>
+                </div>
+                <p class="text-center text-muted mt-2">
+                    <i class="fas fa-info-circle"></i> Aponte a câmera para o QR Code do seu crachá
+                </p>
+            </div>
+
+            <!-- Modo Manual -->
+            <div id="modoManualEntrada" class="modo-content" style="display: none;">
+                <div class="form-group">
+                    <label><i class="fas fa-graduation-cap"></i> Curso</label>
+                    <select id="entradaCurso" class="form-input" onchange="carregarTurmasPorCursoPublico()">
+                        <option value="">Selecione o curso...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-users-class"></i> Turma</label>
+                    <select id="entradaTurma" class="form-input" disabled onchange="carregarAlunosPublico()">
+                        <option value="">Selecione o curso primeiro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-search"></i> Buscar Aluno</label>
+                    <input type="text" id="entradaBusca" class="form-input" placeholder="Digite o nome..." oninput="filtrarAlunosPublico()">
+                </div>
+                <div id="listaAlunosPublico">
+                    <div class="text-center py-3 text-muted">Selecione uma turma</div>
+                </div>
+            </div>
+
+            <!-- Info Aluno -->
+            <div id="alunoInfoPublico" style="display: none;" class="aluno-info-card">
+                <div class="aluno-header">
+                    <img id="alunoFotoPublico" src="" class="aluno-foto">
+                    <div class="aluno-dados">
+                        <h3 id="alunoNomePublico">-</h3>
+                        <p><strong>Turma:</strong> <span id="alunoTurmaPublico">-</span></p>
+                        <p><strong>Matrícula:</strong> <span id="alunoMatriculaPublico">-</span></p>
+                    </div>
+                </div>
+                <div id="statusVisitaPublico"></div>
+            </div>
+
+            <!-- Formulário de Entrada -->
+            <div id="formEntradaPublico" style="display: none;" class="form-public">
+                <div class="form-header">
+                    <h3><i class="fas fa-clipboard-list"></i> Sobre sua visita</h3>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-clipboard-list"></i> Motivo da Visita *</label>
+                    <div class="motivos-grid">
+                        <div class="motivo-card" data-motivo="ler_livro" onclick="selecionarMotivoPublico('ler_livro')">
+                            <i class="fas fa-book-open"></i><span>Ler um Livro</span>
+                        </div>
+                        <div class="motivo-card" data-motivo="pegar_livro_emprestado" onclick="selecionarMotivoPublico('pegar_livro_emprestado')">
+                            <i class="fas fa-hand-holding"></i><span>Pegar Emprestado</span>
+                        </div>
+                        <div class="motivo-card" data-motivo="participar_atividade_leitura" onclick="selecionarMotivoPublico('participar_atividade_leitura')">
+                            <i class="fas fa-users"></i><span>Atividade de Leitura</span>
+                        </div>
+                        <div class="motivo-card" data-motivo="fazer_pesquisa" onclick="selecionarMotivoPublico('fazer_pesquisa')">
+                            <i class="fas fa-search"></i><span>Fazer Pesquisa</span>
+                        </div>
+                        <div class="motivo-card" data-motivo="outros" onclick="selecionarMotivoPublico('outros')">
+                            <i class="fas fa-ellipsis-h"></i><span>Outros</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="motivoPublicoSelecionado">
+                </div>
+
+                <div id="campoOutrosPublico" style="display: none;" class="form-group">
+                    <label>Especifique o motivo</label>
+                    <input type="text" id="motivoOutrosPublico" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-tasks"></i> Atividades (opcional)</label>
+                    <div class="atividades-grid">
+                        <label><input type="checkbox" value="leitura_individual"> Leitura Individual</label>
+                        <label><input type="checkbox" value="leitura_grupo"> Leitura em Grupo</label>
+                        <label><input type="checkbox" value="pesquisa_internet"> Pesquisa Internet</label>
+                        <label><input type="checkbox" value="pesquisa_livros"> Pesquisa Livros</label>
+                        <label><input type="checkbox" value="estudo_dirigido"> Estudo Dirigido</label>
+                        <label><input type="checkbox" value="emprestimo_livro"> Empréstimo</label>
+                        <label><input type="checkbox" value="devolucao_livro"> Devolução</label>
+                        <label><input type="checkbox" value="atividade_pedagogica"> Atividade Pedagógica</label>
+                    </div>
+                </div>
+
+                <button class="btn-submit" onclick="confirmarEntradaPublico()">
+                    <i class="fas fa-check"></i> Confirmar Entrada
+                </button>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: SAÍDA -->
+        <section class="section-content" id="secaoSaida">
+            <div class="section-header">
+                <button class="btn-voltar" onclick="voltarHome()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2><i class="fas fa-sign-out-alt"></i> Registrar Saída</h2>
+            </div>
+
+            <div class="mode-toggle mb-3">
+                <button class="mode-btn active" id="modoAutoSaidaBtn" onclick="setModoPublico('saida', 'automatico')">
+                    <i class="fas fa-qrcode"></i> Escanear QR
+                </button>
+                <button class="mode-btn" id="modoManualSaidaBtn" onclick="setModoPublico('saida', 'manual')">
+                    <i class="fas fa-users"></i> Buscar por Turma
+                </button>
+            </div>
+
+            <div id="modoAutoSaida" class="modo-content">
+                <div class="scanner-container">
+                    <div id="qr-reader-publico-saida"></div>
+                </div>
+                <p class="text-center text-muted mt-2">
+                    <i class="fas fa-info-circle"></i> Aponte a câmera para o QR Code do seu crachá
+                </p>
+            </div>
+
+            <div id="modoManualSaida" class="modo-content" style="display: none;">
+                <div class="form-group">
+                    <label><i class="fas fa-graduation-cap"></i> Curso</label>
+                    <select id="saidaCurso" class="form-input" onchange="carregarTurmasPorCursoPublicoSaida()">
+                        <option value="">Selecione o curso...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-users-class"></i> Turma</label>
+                    <select id="saidaTurma" class="form-input" disabled onchange="carregarAlunosPublicoSaida()">
+                        <option value="">Selecione o curso primeiro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-search"></i> Buscar Aluno</label>
+                    <input type="text" id="saidaBusca" class="form-input" placeholder="Digite o nome..." oninput="filtrarAlunosPublicoSaida()">
+                </div>
+                <div id="listaAlunosPublicoSaida">
+                    <div class="text-center py-3 text-muted">Selecione uma turma</div>
+                </div>
+            </div>
+
+            <div id="alunoInfoSaida" style="display: none;" class="aluno-info-card">
+                <div class="aluno-header">
+                    <img id="alunoFotoSaida" src="" class="aluno-foto">
+                    <div class="aluno-dados">
+                        <h3 id="alunoNomeSaida">-</h3>
+                        <p><strong>Turma:</strong> <span id="alunoTurmaSaida">-</span></p>
+                        <p><strong>Entrada:</strong> <span id="alunoEntradaSaida">-</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="formSaidaPublico" style="display: none;" class="form-public">
+                <div class="form-header">
+                    <h3><i class="fas fa-clipboard-check"></i> Finalizar visita</h3>
+                </div>
+                <div class="form-group">
+                    <label>Observações (opcional)</label>
+                    <textarea id="observacoesSaidaPublico" class="form-input" rows="2"></textarea>
+                </div>
+                <button class="btn-submit" onclick="confirmarSaidaPublico()">
+                    <i class="fas fa-check"></i> Confirmar Saída
+                </button>
+            </div>
+        </section>
+
+        <footer class="footer-public">
+            <p><i class="fas fa-book-reader"></i> Biblioteca Laura Rosa</p>
+            <p><i class="fas fa-graduation-cap"></i> EducaPleno — 2026</p>
+        </footer>
+    </div>
+
+    <!-- Modais -->
+    <div class="modal-public" id="modalSucesso">
+        <div class="modal-content-public">
+            <div class="modal-icon sucesso"><i class="fas fa-check-circle"></i></div>
+            <h2 id="modalTitulo">Sucesso!</h2>
+            <p id="modalMensagem"></p>
+            <button class="btn-submit" onclick="fecharModalSucesso()">
+                <i class="fas fa-check"></i> OK
+            </button>
+        </div>
+    </div>
+
+    <div class="modal-public" id="modalErro">
+        <div class="modal-content-public">
+            <div class="modal-icon erro"><i class="fas fa-times-circle"></i></div>
+            <h2 id="modalErroTitulo">Ops!</h2>
+            <p id="modalErroMensagem"></p>
+            <button class="btn-submit btn-erro" onclick="fecharModalErro()">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/biblioteca-publico.js"></script>
+</body>
+</html>
