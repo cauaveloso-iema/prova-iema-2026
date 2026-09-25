@@ -287,7 +287,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     
     const gestor = await User.findById(req.userId).select('nome');
     
-    // 🔥 NOVO: Usa a dataHora enviada ou a data atual
+    // 🔥 Usa a dataHora enviada ou a data atual
     let dataFinal = new Date();
     if (dataHora) {
       const dataParsed = new Date(dataHora);
@@ -296,7 +296,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       }
     }
     
-    // 🔥 NOVO: Valida se data não é muito futura (> 1 ano)
+    // 🔥 Valida se data não é muito futura (> 1 ano)
     const umAnoFuturo = new Date();
     umAnoFuturo.setFullYear(umAnoFuturo.getFullYear() + 1);
     if (dataFinal > umAnoFuturo) {
@@ -314,7 +314,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       alunoCurso: aluno.curso || 'Não informado',
       alunoFoto: aluno.fotoPerfil,
       motivo,
-      dataHora: dataFinal, // 🔥 NOVO: usa a data enviada
+      dataHora: dataFinal,
       descricao: descricao.trim(),
       observacoes: observacoes || '',
       detalhes: detalhes || {},
@@ -324,7 +324,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     
     await atraso.save();
     
-    // Formata a data para o retorno
     const dataFormatada = dataFinal.toLocaleString('pt-BR');
     
     res.json({
@@ -466,7 +465,8 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
         observacoes: a.observacoes,
         dataHora: a.dataHora,
         dataHoraFormatada: new Date(a.dataHora).toLocaleString('pt-BR'),
-        registradoPor: a.registradoPorNome
+        registradoPor: a.registradoPorNome,
+        createdAt: a.createdAt
       }))
     });
   } catch (error) {
@@ -530,7 +530,6 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
       return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
     }
 
-    // Valida motivo se foi enviado
     if (motivo) {
       const motivosValidos = ['onibus', 'transito', 'problemas_pessoais', 'fardamento', 'outros'];
       if (!motivosValidos.includes(motivo)) {
@@ -539,14 +538,12 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
       atraso.motivo = motivo;
     }
 
-    // Valida dataHora se foi enviada
     if (dataHora) {
       const dataParsed = new Date(dataHora);
       if (isNaN(dataParsed.getTime())) {
         return res.status(400).json({ success: false, error: 'Data/hora inválida' });
       }
 
-      // Não permitir mais de 1 ano no futuro
       const umAnoFuturo = new Date();
       umAnoFuturo.setFullYear(umAnoFuturo.getFullYear() + 1);
       if (dataParsed > umAnoFuturo) {
@@ -644,7 +641,8 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
         id: a._id, motivo: a.motivo,
         motivoLabel: Atraso.getMotivoLabel(a.motivo),
         dataHora: a.dataHora, descricao: a.descricao,
-        observacoes: a.observacoes, registradoPor: a.registradoPorNome
+        observacoes: a.observacoes, registradoPor: a.registradoPorNome,
+        createdAt: a.createdAt  // 🆕 Data de cadastro
       }))
     });
   } catch (error) {
@@ -691,7 +689,8 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
       atrasos: atrasos.slice(0, 100).map(a => ({
         id: a._id, alunoNome: a.alunoNome, motivo: a.motivo,
         motivoLabel: Atraso.getMotivoLabel(a.motivo),
-        dataHora: a.dataHora, descricao: a.descricao
+        dataHora: a.dataHora, descricao: a.descricao,
+        createdAt: a.createdAt  // 🆕 Data de cadastro
       }))
     });
   } catch (error) {
@@ -757,7 +756,8 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
         id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
         motivo: a.motivo, motivoLabel: Atraso.getMotivoLabel(a.motivo),
         dataHora: a.dataHora, descricao: a.descricao.substring(0, 100),
-        registradoPor: a.registradoPorNome
+        registradoPor: a.registradoPorNome,
+        createdAt: a.createdAt  // 🆕 Data de cadastro
       }))
     });
   } catch (error) {

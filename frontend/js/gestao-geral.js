@@ -3469,77 +3469,322 @@ function exportarPDFModulo(modulo) {
     win.onload = () => setTimeout(() => win.print(), 500);
 }
 
+// ============================================
+// 🎨 GERAR HTML DO RELATÓRIO - MÓDULOS
+// ============================================
 function gerarHTMLRelatorioModulo(modulo, data, cfg) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
-    const logo = '/uploads/logo-iema.png';
+    const logoIema = '/uploads/logo-iema.png';
     const carimbo = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
     
+    // ========== BUSCAR ASSINATURA DIGITAL ==========
     let assinaturaDigital = null;
-    const lista = data.registros || data.autorizacoes || data.atendimentos || [];
-    const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
+    const listaRegistros = data.registros || data.autorizacoes || data.atendimentos || [];
+    const comAssinatura = listaRegistros.find(a => a.temAssinatura && a.assinaturaBase64);
     if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
     
+    // ========== HELPER: FORMATAR DATA DE CADASTRO ==========
+    const formatarDataCadastro = (item) => {
+        if (!item.createdAt) return '-';
+        try {
+            return new Date(item.createdAt).toLocaleString('pt-BR');
+        } catch (e) {
+            return '-';
+        }
+    };
+    
+    // ========== TÍTULO ==========
     let titulo = `Relatório de ${cfg.nomeAmigavel} - Gestão Geral`;
     let subtitulo = '';
-    if (tipo === 'turma') { subtitulo = `Turma: ${data.turma || ''}`; }
-    else if (tipo === 'aluno') {
+    if (tipo === 'turma') {
+        subtitulo = `Turma: ${data.turma || ''}`;
+    } else if (tipo === 'aluno') {
         titulo = `Relatório Individual - ${cfg.nomeAmigavel}`;
         subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
-    } else { subtitulo = 'Relatório Geral'; }
+    } else {
+        subtitulo = 'Relatório Geral';
+    }
     
+    // ========== ESTATÍSTICAS ==========
     let statsHTML = '';
     if (tipo === 'geral') {
         statsHTML = `
             <div class="stats">
-                <div class="stat"><div class="stat-value">${data.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
-                <div class="stat"><div class="stat-value">${(data.porMotivo || []).length}</div><div class="stat-label">Motivos Diferentes</div></div>
-                <div class="stat"><div class="stat-value">${(data.porTurma || []).length}</div><div class="stat-label">Turmas com Registro</div></div>
-            </div>`;
+                <div class="stat">
+                    <div class="stat-value">${data.totalRegistros || 0}</div>
+                    <div class="stat-label">Total de Registros</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porMotivo || []).length}</div>
+                    <div class="stat-label">Motivos Diferentes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTurma || []).length}</div>
+                    <div class="stat-label">Turmas Envolvidas</div>
+                </div>
+            </div>
+        `;
     } else if (tipo === 'turma') {
         statsHTML = `
             <div class="stats">
-                <div class="stat"><div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
-                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAlunos || (data.porAluno || []).length}</div><div class="stat-label">Alunos Atendidos</div></div>
-            </div>`;
-    } else {
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div>
+                    <div class="stat-label">Total de Registros</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalAlunos || (data.porAluno || []).length}</div>
+                    <div class="stat-label">Alunos Atendidos</div>
+                </div>
+            </div>
+        `;
+    } else if (tipo === 'aluno') {
         statsHTML = `
             <div class="stats">
-                <div class="stat"><div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
-                <div class="stat"><div class="stat-value">${(data.porMotivo || []).length}</div><div class="stat-label">Motivos Diferentes</div></div>
-            </div>`;
+                <div class="stat">
+                    <div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div>
+                    <div class="stat-label">Total de Registros</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porMotivo || []).length}</div>
+                    <div class="stat-label">Motivos Diferentes</div>
+                </div>
+            </div>
+        `;
     }
     
+    // ========== TABELAS ==========
     let tabelaHTML = '';
+    
+    // ---- GERAL ----
     if (tipo === 'geral') {
+        const porMotivo = Array.isArray(data.porMotivo) ? data.porMotivo : [];
+        const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
+        const registros = data.registros || data.autorizacoes || [];
+        
         tabelaHTML = `
             <div class="section-title">📊 Distribuição por Motivo</div>
             <table>
                 <thead><tr><th>Motivo</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>${(data.porMotivo || []).map(m => `<tr><td><strong>${escapeHTML(m.label || '')}</strong></td><td style="text-align:center;">${m.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+                <tbody>
+                    ${porMotivo.map(m => `
+                        <tr>
+                            <td><strong>${escapeHTML(m.label || '')}</strong></td>
+                            <td style="text-align:center;">${m.count || 0}</td>
+                        </tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
             </table>
+            
             <div class="section-title">🏫 Distribuição por Turma</div>
             <table>
                 <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
-                <tbody>${(data.porTurma || []).map(t => `<tr><td><strong>${escapeHTML(t.turma || '')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
-            </table>`;
-    } else if (tipo === 'turma') {
+                <tbody>
+                    ${porTurma.map(t => `
+                        <tr>
+                            <td><strong>${escapeHTML(t.turma || '')}</strong></td>
+                            <td style="text-align:center;">${t.total || 0}</td>
+                            <td style="text-align:center;">${t.totalAlunos || 0}</td>
+                        </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            ${registros.length > 0 ? `
+                <div class="section-title">📋 Últimos Registros</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data do Registro</th>
+                            <th>Data de Cadastro</th>
+                            <th>Aluno</th>
+                            <th>Turma</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${registros.slice(0, 30).map(a => `
+                            <tr>
+                                <td>${a.dataFormatada || '-'}</td>
+                                <td><small>${formatarDataCadastro(a)}</small></td>
+                                <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                                <td>${escapeHTML(a.alunoTurma || '')}</td>
+                                <td>${escapeHTML(a.motivoLabel || '')}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>
+            ` : ''}
+        `;
+    }
+    
+    // ---- TURMA ----
+    else if (tipo === 'turma') {
+        const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
+        const registros = data.registros || data.autorizacoes || [];
+        
         tabelaHTML = `
             <div class="section-title">👥 Registros por Aluno</div>
             <table>
-                <thead><tr><th>Aluno</th><th>Matrícula</th><th style="width:120px;text-align:center;">Total</th></tr></thead>
-                <tbody>${(data.porAluno || []).map(a => `<tr><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td>${escapeHTML(a.alunoMatricula || '-')}</td><td style="text-align:center;">${a.total || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
-            </table>`;
-    } else {
+                <thead><tr><th>Aluno</th><th>Matrícula</th><th style="width:100px;text-align:center;">Total</th></tr></thead>
+                <tbody>
+                    ${porAluno.map(a => `
+                        <tr>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td>${escapeHTML(a.alunoMatricula || '-')}</td>
+                            <td style="text-align:center;">${a.total || 0}</td>
+                        </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>
+            
+            ${registros.length > 0 ? `
+                <div class="section-title">📋 Últimos Registros</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data do Registro</th>
+                            <th>Data de Cadastro</th>
+                            <th>Aluno</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${registros.slice(0, 30).map(a => `
+                            <tr>
+                                <td>${a.dataFormatada || '-'}</td>
+                                <td><small>${formatarDataCadastro(a)}</small></td>
+                                <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                                <td>${escapeHTML(a.motivoLabel || '')}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>
+            ` : ''}
+        `;
+    }
+    
+    // ---- ALUNO ----
+    else if (tipo === 'aluno') {
+        const registros = data.registros || data.autorizacoes || [];
+        
         tabelaHTML = `
             <div class="section-title">📋 Histórico de Registros</div>
             <table>
-                <thead><tr><th>Data</th><th>Motivo</th><th>Observações</th></tr></thead>
-                <tbody>${(data.registros || []).map(a => `<tr><td>${a.dataFormatada || '-'}</td><td>${escapeHTML(a.motivoLabel || '')}</td><td>${escapeHTML((a.observacoes || '').substring(0, 80))}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum registro</td></tr>'}</tbody>
-            </table>`;
+                <thead>
+                    <tr>
+                        <th>Data do Registro</th>
+                        <th>Data de Cadastro</th>
+                        <th>Motivo</th>
+                        <th>Observações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${registros.map(a => `
+                        <tr>
+                            <td>${a.dataFormatada || '-'}</td>
+                            <td><small>${formatarDataCadastro(a)}</small></td>
+                            <td>${escapeHTML(a.motivoLabel || '')}</td>
+                            <td>${escapeHTML((a.observacoes || '').substring(0, 80))}${(a.observacoes || '').length > 80 ? '...' : ''}</td>
+                        </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum registro</td></tr>'}
+                </tbody>
+            </table>
+        `;
     }
     
-    return montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor: 'Gestão Geral' });
+    // ========== HTML FINAL ==========
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo}</title>
+        <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
+            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
+            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
+            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            .titulo {
+                text-align: center; font-size: 14pt; font-weight: bold;
+                background: #dbeafe; padding: 10px; border: 2px solid #000;
+                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+            }
+            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+            .stats {
+                display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
+                background: #eef2ff; border-radius: 8px; border: 1px solid #c7d2fe;
+            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #c7d2fe; }
+            .stat:last-child { border-right: none; }
+            .stat-value { font-size: 22pt; font-weight: bold; color: #1e3c72; line-height: 1; }
+            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+            .section-title {
+                font-size: 11pt; font-weight: bold; background: #e8e8e8;
+                padding: 6px 10px; border-left: 4px solid #1e3c72; margin: 20px 0 10px;
+            }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
+            th {
+                background: #1e3c72; color: white; padding: 8px 6px; text-align: left;
+                border: 1px solid #152a52; font-size: 9pt;
+            }
+            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
+            tr:nth-child(even) { background: #f9fafb; }
+            .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            .assinatura-container-relatorio {
+                position: relative; border-bottom: 1px solid #000; min-height: 22mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+            }
+            .assinatura-img { max-height: 18mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            .carimbo-overlay {
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                max-height: 20mm; max-width: 60%; object-fit: contain;
+                opacity: 0.85; pointer-events: none; z-index: 2;
+            }
+            .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
+            .footer p { margin: 2px 0; }
+            .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
+            .btn-print {
+                display: block; margin: 20px auto; padding: 12px 30px;
+                background: #1e3c72; color: white; border: none; border-radius: 8px;
+                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #2a5298; }
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Gestão Geral</p>
+        </div>
+        
+        <div class="titulo">📋 ${titulo}</div>
+        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
+        
+        ${statsHTML}
+        ${tabelaHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável / Gestão Geral</div>
+            </div>
+        </div>
+        
+        <div class="registro-info">
+            Relatório gerado em <strong>${dataGeracao}</strong>
+        </div>
+        
+        <div class="footer">
+            <p>Documento gerado automaticamente pelo EducaPleno</p>
+            <p>Setor: Gestão Geral — ${cfg.nomeAmigavel}</p>
+        </div>
+    </body>
+    </html>`;
 }
 
 // ============================================
@@ -3726,7 +3971,6 @@ function exportarCSVModulo(modulo) {
         return;
     }
 
-    // 🔥 Aceita 'registros', 'autorizacoes' ou 'atendimentos'
     const registros = data.registros || data.autorizacoes || data.atendimentos || [];
     
     if (registros.length === 0) {
@@ -3735,11 +3979,22 @@ function exportarCSVModulo(modulo) {
     }
 
     const cfg = getCfg(modulo);
-    let csv = "Data,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
+    let csv = "Data do Registro,Data de Cadastro,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
 
     registros.forEach(a => {
+        // 🆕 Formatar data de cadastro
+        let dataCadastro = '';
+        if (a.createdAt) {
+            try {
+                dataCadastro = new Date(a.createdAt).toLocaleString('pt-BR');
+            } catch (e) {
+                dataCadastro = '';
+            }
+        }
+        
         csv += [
             a.dataFormatada || '',
+            `"${dataCadastro}"`,
             `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
             `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
             `"${(a.alunoTurma || data.turma || '').replace(/"/g, '""')}"`,

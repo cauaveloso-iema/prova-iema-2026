@@ -239,7 +239,7 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
 });
 
 // ============================================
-// 5. RELATÓRIO GERAL — 🔥 AGORA COM `registros`
+// 5. RELATÓRIO GERAL — 🔥 COM createdAt
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -273,7 +273,6 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
                 },
                 { $sort: { total: -1 } }
             ]),
-            // 🔥 NOVO: registros detalhados para CSV
             Autorizacao.find(matchStage)
                 .select('-assinaturaBase64')
                 .sort({ data: -1 })
@@ -295,7 +294,6 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
                 total: t.total,
                 totalAlunos: t.alunos.length
             })),
-            // 🔥 NOVO: array com todos os registros
             registros: registros.map(a => ({
                 id: a._id,
                 tipo: a.tipo,
@@ -317,7 +315,8 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
                 responsavelTelefone: a.responsavelTelefone,
                 observacoes: a.observacoes,
                 temAssinatura: a.temAssinatura,
-                registradoPorNome: a.registradoPorNome
+                registradoPorNome: a.registradoPorNome,
+                createdAt: a.createdAt  // 🆕 Data de cadastro
             }))
         });
     } catch (error) {
@@ -326,7 +325,7 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
 });
 
 // ============================================
-// 6. RELATÓRIO POR TURMA
+// 6. RELATÓRIO POR TURMA — 🔥 COM createdAt
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -398,7 +397,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
                 horarioSaida: a.horarioSaida,
                 responsavelNome: a.responsavelNome,
                 observacoes: a.observacoes,
-                temAssinatura: a.temAssinatura
+                temAssinatura: a.temAssinatura,
+                createdAt: a.createdAt  // 🆕 Data de cadastro
             }))
         });
     } catch (error) {
@@ -407,7 +407,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
 });
 
 // ============================================
-// 7. RELATÓRIO POR ALUNO
+// 7. RELATÓRIO POR ALUNO — 🔥 COM createdAt
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -473,7 +473,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
                 responsavelNome: a.responsavelNome,
                 observacoes: a.observacoes,
                 temAssinatura: a.temAssinatura,
-                registradoPorNome: a.registradoPorNome
+                registradoPorNome: a.registradoPorNome,
+                createdAt: a.createdAt  // 🆕 Data de cadastro
             }))
         });
     } catch (error) {
@@ -808,7 +809,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             observacoes
         } = req.body;
 
-        // Valida motivo se foi enviado
         if (motivo) {
             const motivosValidos = MOTIVOS_POR_TIPO[a.tipo] || MOTIVOS_POR_TIPO['autorizacao'];
             if (!motivosValidos.includes(motivo)) {
@@ -817,7 +817,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.motivo = motivo;
         }
 
-        // Valida data
         if (data) {
             let dataFinal;
             if (data.length === 10) {
@@ -831,7 +830,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.data = dataFinal;
         }
 
-        // Valida motivoOutros
         const motivoAtual = a.motivo;
         if (motivoAtual === 'outros') {
             const mOutros = (motivoOutros || a.motivoOutros || '').trim();
@@ -843,7 +841,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.motivoOutros = undefined;
         }
 
-        // Valida horários de ausência/retorno
         if (motivoAtual === 'necessita_ausentar_retornar') {
             const hA = horarioAusencia || a.horarioAusencia;
             const hR = horarioRetorno || a.horarioRetorno;
@@ -854,7 +851,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.horarioRetorno = hR;
         }
 
-        // Campos simples
         if (horarioEntrada !== undefined) a.horarioEntrada = horarioEntrada;
         if (horarioSaida !== undefined) a.horarioSaida = horarioSaida;
         if (responsavelNome !== undefined) a.responsavelNome = responsavelNome;
