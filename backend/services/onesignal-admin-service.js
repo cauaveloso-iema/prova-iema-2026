@@ -146,14 +146,15 @@ class OneSignalAdminService {
         }
     }
 
-    // ============ ENVIAR NOTIFICAÇÃO DE TESTE ============
-    async enviarNotificacaoTeste(playerId, titulo, mensagem, adminNome = 'Administrador') {
+    // ============ ENVIAR NOTIFICAÇÃO DE TESTE (COM SUPORTE A URL) ============
+    async enviarNotificacaoTeste(playerId, titulo, mensagem, adminNome = 'Administrador', extras = {}) {
         try {
             console.log(`📤 Enviando notificação de teste para ${playerId.substring(0, 8)}...`);
             
             const timestamp = Date.now();
             
-            const response = await axios.post(`${this.baseUrl}/notifications`, {
+            // 🔥 Montar payload base
+            const payload = {
                 app_id: this.appId,
                 include_player_ids: [playerId],
                 headings: { en: titulo, pt: titulo },
@@ -162,17 +163,26 @@ class OneSignalAdminService {
                     tipo: 'teste_admin',
                     timestamp: timestamp,
                     admin: adminNome,
-                    origem: 'sistema_provas'
+                    origem: 'sistema_provas',
+                    ...(extras.data || {})  // ✅ Mescla dados extras se existirem
                 },
                 
-                // 🔥 FAZ O APP ABRIR QUANDO O USUÁRIO TOCA NA NOTIFICAÇÃO
-                android_intent: 'com.iema.provas.Screen1',
+                // 🔥 URL para redirecionar quando clicar (SÓ ADICIONA SE FOR PASSADA)
+                ...(extras.url && { url: extras.url }),
                 
+                // 🔥 Configurações Android
+                android_intent: 'com.iema.provas.Screen1',
                 android_sound: 'notification',
                 android_accent_color: 'FFE54B4B',
                 small_icon: 'ic_notification',
-                priority: 10
-            }, {
+                priority: 10,
+                ttl: 86400  // ✅ Adicionado para garantir entrega
+            };
+            
+            // 🔍 Log de debug do payload (útil para verificar se a URL está sendo enviada)
+            console.log('📦 Payload OneSignal:', JSON.stringify(payload, null, 2));
+            
+            const response = await axios.post(`${this.baseUrl}/notifications`, payload, {
                 headers: {
                     'Authorization': `Basic ${this.apiKey}`,
                     'Content-Type': 'application/json'

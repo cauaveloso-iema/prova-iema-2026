@@ -17899,7 +17899,7 @@ app.post('/api/admin/onesignal/enviar-massa', authenticateToken, isSuperAdmin, a
 
 // ============================================================================
 // ROTA: Solicitar auto-vínculo em massa
-// - Push: usa oneSignalAdmin.enviarNotificacaoTeste()
+// - Push: usa oneSignalAdmin.enviarNotificacaoTeste() COM URL
 // - Notificação interna: LINK ESPECÍFICO se tiver playerId, SENÃO genérico
 // ============================================================================
 app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSuperAdmin, async (req, res) => {
@@ -17931,7 +17931,6 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
             return pid && !playerIdsVinculados.has(pid);
         });
         
-        console.log(`📱 ${dispositivosOrfaos.length} órfãos encontrados`);
         
         if (dispositivosOrfaos.length === 0) {
             return res.json({
@@ -17944,13 +17943,13 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
             });
         }
         
-        // 4. Base URL
+        // 4. Base URL para o link de vínculo
         const BASE_URL = process.env.NODE_ENV === 'development'
             ? 'http://localhost:3000'
             : 'https://www.sistemadeprovas.com';
         
         // ============================================================
-        // 5. ENVIAR PUSH usando o SERVICE
+        // 5. ENVIAR PUSH PARA CADA DISPOSITIVO ÓRFÃO (COM URL)
         // ============================================================
         let enviados = 0;
         let erros = 0;
@@ -17967,15 +17966,19 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
             }
             
             try {
+                // 🔥 URL completa com o playerId para vincular
                 const linkVinculo = `${BASE_URL}/vincular-dispositivo.html?playerId=${playerId}`;
                 
+                console.log(`   🔗 Link: ${linkVinculo}`);
+                
+                // 🔥 CORREÇÃO: Passar extras com URL e data
                 const resultado = await oneSignalAdmin.enviarNotificacaoTeste(
                     playerId,
                     '🔐 Vincular Dispositivo',
                     'Toque para vincular este celular à sua conta',
                     'EducaPleno',
                     {
-                        url: linkVinculo,
+                        url: linkVinculo,  // ✅ URL para abrir ao clicar
                         data: {
                             tipo: 'vinculo_dispositivo',
                             playerId: playerId,
@@ -17988,15 +17991,17 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
                 
                 if (resultado && resultado.success) {
                     enviados++;
-                    console.log(`   ✅ Push: ${playerId.substring(0, 20)}...`);
+                    console.log(`   ✅ Push enviado: ${playerId.substring(0, 20)}...`);
                 } else {
                     erros++;
                     errosDetalhes.push({
                         playerId: playerId.substring(0, 20) + '...',
                         motivo: resultado?.error || 'Falha no envio'
                     });
+                    console.log(`   ❌ Falha: ${resultado?.error || 'Erro desconhecido'}`);
                 }
                 
+                // Pequeno delay entre envios para não sobrecarregar a API
                 await new Promise(resolve => setTimeout(resolve, 150));
                 
             } catch (error) {
@@ -18005,6 +18010,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
                     playerId: playerId.substring(0, 20) + '...',
                     motivo: error.message
                 });
+                console.error(`   ❌ Erro: ${error.message}`);
             }
         }
         
@@ -18012,9 +18018,9 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
         
         // ============================================================
         // 6. CRIAR NOTIFICAÇÕES INTERNAS
-        //    OPÇÃO A + B: Verifica se o usuário JÁ tem playerId
+        //    - Se o usuário já tem playerId: link específico
+        //    - Se não tem: link genérico
         // ============================================================
-        console.log(`\n🔔 CRIANDO NOTIFICAÇÕES INTERNAS...`);
         
         let notificacoesInternasCriadas = 0;
         let notificacoesComLinkEspecifico = 0;
@@ -18031,17 +18037,17 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
             
             for (const u of usuariosParaNotificar) {
                 try {
-                    // 🔥 VERIFICAR SE O USUÁRIO JÁ TEM PLAYERID VINCULADO
-                    let linkEspecifico = null;
-                    let tipoLink = '';
+                    // 🔥 Determinar link baseado em ter ou não playerId
+                    let linkEspecifico;
+                    let tipoLink;
                     
                     if (u.onesignalPlayerId && u.onesignalPlayerId.length > 0) {
-                        // ✅ OPÇÃO A: Link específico
+                        // ✅ Usuário JÁ tem playerId - link específico
                         linkEspecifico = `/vincular-dispositivo.html?playerId=${u.onesignalPlayerId}`;
                         tipoLink = 'especifico';
                         notificacoesComLinkEspecifico++;
                     } else {
-                        // ✅ OPÇÃO B: Link genérico (a página detecta automaticamente)
+                        // ✅ Usuário NÃO tem playerId - link genérico
                         linkEspecifico = `/vincular-dispositivo.html`;
                         tipoLink = 'generico';
                         notificacoesComLinkGenerico++;
@@ -18076,7 +18082,6 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
                     console.warn(`   ⚠️ Erro ao notificar ${u.nome}:`, err.message);
                 }
             }
-          
             
         } catch (notifErr) {
             console.error('❌ Erro ao criar notificações internas:', notifErr);
