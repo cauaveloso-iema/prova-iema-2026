@@ -348,16 +348,31 @@ class SetorPedagogico {
             return;
         }
         
-        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-        document.querySelector(`[data-section="${section}"]`)?.classList.add('active');
+        // Atualizar nav ativo (sidebar)
+        document.querySelectorAll('.nav-link[data-section]').forEach(link => link.classList.remove('active'));
+        document.querySelector(`.nav-link[data-section="${section}"]`)?.classList.add('active');
+        
+        // 🔥 Atualizar bottom nav
+        const bottomNavSections = ['dashboard', 'alunos', 'provas', 'relatorios'];
+        if (bottomNavSections.includes(section)) {
+            this.updateBottomNav(section);
+        } else {
+            document.querySelectorAll('#bottomNavSp .nav-item-sp').forEach(item => item.classList.remove('active'));
+            document.querySelector('#bottomNavSp .nav-item-sp[data-section="menu"]')?.classList.add('active');
+        }
+        
+        // 🔥 Fechar menu mobile
+        if (window.innerWidth <= 768) {
+            setTimeout(() => this.fecharMenuLateral(), 100);
+        }
         
         const titles = {
-            dashboard: 'Dashboard - Setor Pedagógico',
+            dashboard: 'Dashboard',
             alunos: 'Alunos com Necessidades Especiais (AEE)',
             provas: 'Provas Publicadas',
             relatorios: 'Relatórios',
-            'segunda-chamada': '🔄 2ª Chamada',
-            'substituicao-professores': '🔄 Substituição de Professores'
+            'segunda-chamada': '2ª Chamada',
+            'substituicao-professores': 'Substituição de Professores'
         };
         const icons = {
             dashboard: 'fa-chart-line', alunos: 'fa-users',
@@ -368,7 +383,7 @@ class SetorPedagogico {
         
         const pageTitle = document.getElementById('pageTitle');
         if (pageTitle) {
-            pageTitle.innerHTML = `<i class="fas ${icons[section] || 'fa-chart-line'} me-2"></i> ${titles[section] || 'Dashboard'}`;
+            pageTitle.textContent = titles[section] || 'Dashboard';
         }
         
         if (section === 'dashboard') this.loadDashboard();
@@ -6182,6 +6197,60 @@ class SetorPedagogico {
         this.loadProvas();
     }
     carregarProvas() { this.loadProvas(); }
+
+    // ============================================================================
+    // 📱 MÉTODOS DO MENU MOBILE
+    // ============================================================================
+
+    /**
+     * Abre o menu lateral
+     */
+    abrirMenuLateral() {
+        console.log('🍔 Abrindo menu lateral...');
+        
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlaySp');
+        
+        if (!sidebar) {
+            console.error('❌ Sidebar não encontrada');
+            return;
+        }
+        
+        sidebar.classList.add('mobile-open');
+        
+        if (overlay) {
+            overlay.classList.add('active');
+        }
+        
+        document.body.style.overflow = 'hidden';
+    }
+
+    /**
+     * Fecha o menu lateral
+     */
+    fecharMenuLateral() {
+        console.log('🔚 Fechando menu lateral...');
+        
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlaySp');
+        
+        if (sidebar) sidebar.classList.remove('mobile-open');
+        if (overlay) overlay.classList.remove('active');
+        
+        document.body.style.overflow = '';
+    }
+
+    /**
+     * Atualiza o estado ativo da bottom navigation
+     */
+    updateBottomNav(section) {
+        document.querySelectorAll('#bottomNavSp .nav-item-sp').forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.section === section) {
+                item.classList.add('active');
+            }
+        });
+    }
 }
 
 // ============================================================================

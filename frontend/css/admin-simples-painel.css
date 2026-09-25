@@ -1695,5 +1695,520 @@ tr:hover td {
 }
 
 /* ============================================================================
+   📱 MENU LATERAL MOBILE - ADMIN SIMPLES (VERSÃO PROFISSIONAL)
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Esconder botão hambúrguer antigo */
+    #menuToggle,
+    .menu-toggle {
+        display: none !important;
+    }
+
+    /* ===== SIDEBAR/BOTTOM SHEET ===== */
+    .sidebar {
+        position: fixed !important;
+        top: auto !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: 88vh !important;
+        background: #ffffff !important;
+        border-radius: 24px 24px 0 0 !important;
+        transform: translateY(100%) !important;
+        transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+        z-index: 1001 !important;
+        box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.15) !important;
+        overflow-y: auto !important;
+        padding: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .sidebar.active {
+        transform: translateY(0) !important;
+    }
+
+    /* Alça de arrastar */
+    .sidebar::before {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: #d1d5db;
+        border-radius: 2px;
+        margin: 8px auto 0;
+        flex-shrink: 0;
+    }
+
+    /* ===== HEADER DA SIDEBAR ===== */
+    .sidebar-header {
+        background: #ffffff !important;
+        padding: 16px 20px !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border-bottom: 1px solid #f0f0f0 !important;
+        flex-shrink: 0;
+    }
+
+    .sidebar-header .menu-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .sidebar-header .logo-area {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #0891b2 !important;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+
+    .sidebar-header .logo-area i {
+        font-size: 22px;
+        color: #0891b2 !important;
+    }
+
+    .sidebar-header .logo-area span {
+        color: #111827 !important;
+    }
+
+    /* Botão voltar */
+    .btn-voltar-inicio {
+        background: #f3f4f6 !important;
+        color: #4b5563 !important;
+        border: none !important;
+        padding: 8px 14px !important;
+        border-radius: 30px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+    }
+
+    .btn-voltar-inicio:active {
+        background: #e5e7eb !important;
+        transform: scale(0.95);
+    }
+
+    /* ===== USER INFO ===== */
+    .user-info {
+        background: #f8fafc !important;
+        border-left: 4px solid #0891b2 !important;
+        padding: 14px 16px !important;
+        margin: 16px !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+
+    .user-info .user-avatar {
+        width: 44px !important;
+        height: 44px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .user-info .user-name {
+        color: #111827 !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+    }
+
+    .user-info .user-email {
+        color: #6b7280 !important;
+        font-size: 12px !important;
+    }
+
+    /* ===== NAVEGAÇÃO ===== */
+    .sidebar nav {
+        padding: 0 12px !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+    }
+
+    .nav-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 12px 14px !important;
+        margin-bottom: 4px !important;
+        border-radius: 12px !important;
+        background: transparent !important;
+        color: #374151 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+        border: none !important;
+        width: 100% !important;
+        text-align: left !important;
+        text-decoration: none !important;
+        position: relative !important;
+    }
+
+    .nav-item:hover,
+    .nav-item:active {
+        background: #f3f4f6 !important;
+    }
+
+    .nav-item i {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #f3f4f6 !important;
+        border-radius: 10px !important;
+        font-size: 15px !important;
+        color: #0891b2 !important;
+        transition: all 0.2s !important;
+    }
+
+    /* Item ATIVO */
+    .nav-item.active {
+        background: #ecfeff !important;
+        color: #0891b2 !important;
+        font-weight: 700 !important;
+    }
+
+    .nav-item.active i {
+        background: #0891b2 !important;
+        color: #ffffff !important;
+        box-shadow: 0 3px 8px rgba(8, 145, 178, 0.3) !important;
+    }
+
+    .nav-item span {
+        color: #374151 !important;
+        font-size: 14px !important;
+    }
+
+    .nav-item.active span {
+        color: #0891b2 !important;
+    }
+
+    /* Badges */
+    .nav-item .notificacao-badge {
+        margin-left: auto !important;
+        background: #ef4444 !important;
+        color: #ffffff !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        padding: 3px 8px !important;
+        border-radius: 10px !important;
+        min-width: 20px !important;
+        text-align: center !important;
+    }
+
+    /* ===== BOTÃO EDITAR PERFIL ===== */
+    .btn-editar-perfil {
+        margin: 16px !important;
+        margin-top: 8px !important;
+        padding: 12px 16px !important;
+        background: linear-gradient(135deg, #0891b2, #0e7490) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        box-shadow: 0 4px 12px rgba(8, 145, 178, 0.3) !important;
+        transition: all 0.2s !important;
+    }
+
+    .btn-editar-perfil:active {
+        transform: scale(0.97) !important;
+    }
+
+    /* ===== FOOTER (BOTÃO SAIR) ===== */
+    .sidebar-footer {
+        position: static !important;
+        background: transparent !important;
+        border-top: 1px solid #f0f0f0 !important;
+        padding: 12px 16px !important;
+        flex-shrink: 0 !important;
+        width: 100% !important;
+    }
+
+    .logout-btn {
+        width: 100% !important;
+        padding: 12px 16px !important;
+        background: #fef2f2 !important;
+        color: #dc2626 !important;
+        border: 1px solid #fecaca !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        transition: all 0.2s !important;
+    }
+
+    .logout-btn i {
+        font-size: 16px !important;
+    }
+
+    .logout-btn:active {
+        background: #fee2e2 !important;
+        transform: scale(0.97) !important;
+    }
+
+    /* ===== OVERLAY ===== */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        backdrop-filter: blur(2px);
+    }
+
+    .sidebar-overlay.active {
+        display: block;
+        opacity: 1;
+    }
+
+    /* ===== MAIN CONTENT (padding para bottom nav) ===== */
+    .main-content {
+        margin-left: 0 !important;
+        padding: 0 0 90px 0 !important;
+        width: 100% !important;
+    }
+}
+
+/* ============================================================================
+   📱 BOTTOM NAVIGATION - ADMIN SIMPLES
+   ============================================================================ */
+
+.bottom-nav-simples {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+    z-index: 999;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.04);
+}
+
+@media (max-width: 768px) {
+    .bottom-nav-simples {
+        display: flex;
+    }
+}
+
+.bottom-nav-simples .nav-item-bottom {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 4px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #9ca3af;
+    transition: all 0.2s ease;
+    min-width: 0;
+}
+
+.bottom-nav-simples .nav-item-bottom .icon-wrapper {
+    width: 40px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bottom-nav-simples .nav-item-bottom i {
+    font-size: 18px;
+}
+
+.bottom-nav-simples .nav-item-bottom .nav-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.bottom-nav-simples .nav-item-bottom.active {
+    color: #0891b2;
+}
+
+.bottom-nav-simples .nav-item-bottom.active .icon-wrapper {
+    background: #ecfeff;
+}
+
+.bottom-nav-simples .nav-item-bottom:active .icon-wrapper {
+    transform: scale(0.9);
+}
+
+/* ============================================================================
+   🔥 HEADER MOBILE SIMPLIFICADO - ADMIN SIMPLES
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* ===== TOP BAR LIMPO ===== */
+    .top-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 12px 16px !important;
+        background: #ffffff !important;
+        border-bottom: 1px solid #f0f0f0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
+        min-height: 60px !important;
+    }
+    
+    /* Logo/trigger esquerda */
+    .top-bar .mobile-menu-trigger {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: none !important;
+        border: none !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+        flex-shrink: 0 !important;
+    }
+    
+    .top-bar .mobile-menu-trigger .menu-logo {
+        width: 40px !important;
+        height: 40px !important;
+        background: linear-gradient(135deg, #0891b2, #0e7490) !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #ffffff !important;
+        font-size: 18px !important;
+        box-shadow: 0 4px 12px rgba(8, 145, 178, 0.25) !important;
+        transition: all 0.2s !important;
+    }
+    
+    .top-bar .mobile-menu-trigger:active .menu-logo {
+        transform: scale(0.92) !important;
+    }
+    
+    /* Título no centro */
+    .top-bar .page-title {
+        flex: 1 !important;
+        text-align: center !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #111827 !important;
+        margin: 0 12px !important;
+        letter-spacing: -0.02em !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    
+    /* Botão de notificações direita */
+    .top-bar .btn-notificacao-mobile {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 40px !important;
+        height: 40px !important;
+        background: #f3f4f6 !important;
+        border: none !important;
+        border-radius: 12px !important;
+        cursor: pointer !important;
+        position: relative !important;
+        color: #4b5563 !important;
+        font-size: 16px !important;
+        flex-shrink: 0 !important;
+        transition: all 0.2s !important;
+    }
+    
+    .top-bar .btn-notificacao-mobile:active {
+        background: #e5e7eb !important;
+        transform: scale(0.92) !important;
+    }
+    
+    .top-bar .btn-notificacao-mobile .badge {
+        position: absolute !important;
+        top: -4px !important;
+        right: -4px !important;
+        background: #ef4444 !important;
+        color: #ffffff !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        padding: 2px 5px !important;
+        border-radius: 10px !important;
+        min-width: 18px !important;
+        text-align: center !important;
+        border: 2px solid #ffffff !important;
+        line-height: 1 !important;
+    }
+    
+    /* Esconder TUDO do desktop-only no mobile */
+    .top-bar .desktop-only,
+    .top-bar .top-bar-actions {
+        display: none !important;
+    }
+    
+    /* Ações que saíram do header no menu */
+    .sidebar .nav-action {
+        margin-top: 4px !important;
+        border: 1px solid transparent !important;
+    }
+    
+    .sidebar .nav-action:hover {
+        border-color: currentColor !important;
+    }
+}
+
+/* Esconder botão de notificação mobile no desktop */
+@media (min-width: 769px) {
+    .top-bar .mobile-menu-trigger,
+    .top-bar .btn-notificacao-mobile {
+        display: none !important;
+    }
+    
+    .top-bar .desktop-only {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+}
+
+/* ============================================================================
    FIM DO CSS
    ============================================================================ */

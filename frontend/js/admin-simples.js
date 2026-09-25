@@ -542,26 +542,51 @@ class AdminSimples {
     }
 
     atualizarBadgesNotificacoes(total) {
-        const badges = [
-            'sidebarNotificacaoBadge',
-            'topNotificacaoBadge',
-            'menuNotificacaoBadge'
-        ];
-
-        badges.forEach(id => {
-            const badge = document.getElementById(id);
-            if (badge) {
-                if (total > 0) {
-                    badge.textContent = total > 99 ? '99+' : total;
-                    badge.style.display = 'inline';
-                } else {
-                    badge.style.display = 'none';
-                }
+        // Badge da sidebar
+        const sidebarBadge = document.getElementById('sidebarNotificacaoBadge');
+        if (sidebarBadge) {
+            if (total > 0) {
+                sidebarBadge.textContent = total > 99 ? '99+' : total;
+                sidebarBadge.style.display = 'inline';
+            } else {
+                sidebarBadge.style.display = 'none';
             }
-        });
+        }
+        
+        // Badge do header MOBILE
+        const topBadge = document.getElementById('topNotificacaoBadge');
+        if (topBadge) {
+            if (total > 0) {
+                topBadge.textContent = total > 99 ? '99+' : total;
+                topBadge.style.display = 'block';
+            } else {
+                topBadge.style.display = 'none';
+            }
+        }
+        
+        // Badge do header DESKTOP
+        const topBadgeDesktop = document.getElementById('topNotificacaoBadgeDesktop');
+        if (topBadgeDesktop) {
+            if (total > 0) {
+                topBadgeDesktop.textContent = total > 99 ? '99+' : total;
+                topBadgeDesktop.style.display = 'inline';
+            } else {
+                topBadgeDesktop.style.display = 'none';
+            }
+        }
+        
+        // Badge do menu (Usuários)
+        const menuBadge = document.getElementById('menuNotificacaoBadge');
+        if (menuBadge) {
+            if (total > 0) {
+                menuBadge.textContent = total > 99 ? '99+' : total;
+                menuBadge.style.display = 'inline';
+            } else {
+                menuBadge.style.display = 'none';
+            }
+        }
     }
-
-    renderizarNotificacoes() {
+        renderizarNotificacoes() {
         const list = document.getElementById('notificacoesList');
         if (!list) return;
 
@@ -1655,35 +1680,35 @@ class AdminSimples {
         }
     }
         // ============ MUDAR ABA ============
-    async mudarAba(aba) {
-        this.abaAtual = aba;
+        async mudarAba(aba) {
+            this.abaAtual = aba;
 
-        document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-        document.querySelectorAll('.nav-item[data-section="' + aba + '"]').forEach(item => item.classList.add('active'));
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('.nav-item[data-section="' + aba + '"]').forEach(item => item.classList.add('active'));
 
-        const titulos = {
-            dashboard: 'Dashboard',
-            usuarios: 'Gerenciar Usuários',
-            turmas: 'Gerenciar Turmas',
-            provas: 'Gerenciar Provas',
-            eixos: 'Gerenciar Eixos',
-            cursos: 'Gerenciar Cursos',
-            resultados: 'Resultados'
-        };
-        document.getElementById('pageTitle').textContent = titulos[aba] || 'Dashboard';
+            const titulos = {
+                dashboard: 'Dashboard',
+                usuarios: 'Gerenciar Usuários',
+                turmas: 'Gerenciar Turmas',
+                provas: 'Gerenciar Provas',
+                eixos: 'Gerenciar Eixos',
+                cursos: 'Gerenciar Cursos',
+                resultados: 'Resultados'
+            };
+            document.getElementById('pageTitle').textContent = titulos[aba] || 'Dashboard';
 
-        switch(aba) {
-            case 'dashboard': await this.carregarDashboard(); break;
-            case 'usuarios': await this.carregarUsuarios(); break;
-            case 'turmas': await this.carregarTurmas(); break;
-            case 'provas': await this.carregarProvas(); break;
-            case 'eixos': await this.carregarEixos(); break;
-            case 'cursos': await this.carregarCursos(); break;
-            case 'resultados': await this.carregarResultados(); break;
+            switch(aba) {
+                case 'dashboard': await this.carregarDashboard(); break;
+                case 'usuarios': await this.carregarUsuarios(); break;
+                case 'turmas': await this.carregarTurmas(); break;
+                case 'provas': await this.carregarProvas(); break;
+                case 'eixos': await this.carregarEixos(); break;
+                case 'cursos': await this.carregarCursos(); break;
+                case 'resultados': await this.carregarResultados(); break;
+            }
+
+            this.fecharPainelNotificacoes();
         }
-
-        this.fecharPainelNotificacoes();
-    }
 
     // ============ DASHBOARD ============
     async carregarDashboard() {
@@ -11508,6 +11533,55 @@ class AdminSimples {
                 <strong>${quantidade}</strong> ${quantidade === 1 ? 'usuário' : 'usuários'} ${textoAdicional.toLowerCase()}
             </span>
         `;
+    }
+
+    // ============================================================================
+    // 📱 MÉTODOS DO MENU MOBILE
+    // ============================================================================
+
+    /**
+     * Abre o menu lateral no mobile
+     */
+    abrirMenuLateral() {
+        console.log('🍔 Abrindo menu lateral...');
+        
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        
+        if (!sidebar || !overlay) {
+            console.warn('⚠️ Sidebar ou overlay não encontrados');
+            return;
+        }
+        
+        sidebar.classList.add('active');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    /**
+     * Fecha o menu lateral
+     */
+    fecharMenuLateral() {
+        console.log('🔚 Fechando menu lateral...');
+        
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        
+        if (sidebar) sidebar.classList.remove('active');
+        if (overlay) overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    /**
+     * Atualiza o estado ativo da bottom navigation
+     */
+    updateBottomNav(section) {
+        document.querySelectorAll('#bottomNavSimples .nav-item-bottom').forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.section === section) {
+                item.classList.add('active');
+            }
+        });
     }
 }
 

@@ -483,3 +483,99 @@ hr { margin: 8px 0; }
     .notificacao-item { padding: 10px 12px; }
     .notificacao-icone { width: 36px; height: 36px; font-size: 16px; }
 }
+
+/* ============================================================================
+   🔧 FIX: DROPDOWN DE NOTIFICAÇÕES NO MOBILE
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Container pai não deve mais ser relative no mobile
+       (para o dropdown poder escapar) */
+    .notificacoes-container {
+        position: static !important;
+    }
+    
+    /* Dropdown fixo na viewport */
+    .notificacoes-dropdown {
+        position: fixed !important;
+        top: 70px !important;           /* Logo abaixo do header */
+        left: 10px !important;          /* Margem esquerda */
+        right: 10px !important;         /* Margem direita */
+        width: auto !important;
+        max-width: none !important;
+        max-height: calc(100vh - 90px) !important;
+        margin-top: 0 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.3) !important;
+        z-index: 10000 !important;
+    }
+    
+    .notificacoes-dropdown.show {
+        animation: dropdown-slide-down 0.25s ease-out !important;
+    }
+    
+    @keyframes dropdown-slide-down {
+        from { 
+            opacity: 0; 
+            transform: translateY(-15px); 
+        }
+        to { 
+            opacity: 1; 
+            transform: translateY(0); 
+        }
+    }
+    
+    /* Header do dropdown */
+    .notificacoes-header {
+        padding: 12px 16px !important;
+        border-radius: 16px 16px 0 0 !important;
+    }
+    
+    .notificacoes-header h3 {
+        font-size: 15px !important;
+    }
+    
+    /* Lista interna */
+    #notificacoesLista {
+        max-height: calc(100vh - 200px) !important;
+    }
+    
+    /* Item de notificação */
+    .notificacao-item {
+        padding: 12px 14px !important;
+    }
+    
+    .notificacao-icone {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 15px !important;
+    }
+    
+    /* Footer */
+    .notificacao-footer {
+        padding: 12px 16px !important;
+        border-radius: 0 0 16px 16px !important;
+    }
+}
+
+/* Para telas MUITO pequenas */
+@media (max-width: 400px) {
+    .notificacoes-dropdown {
+        top: 65px !important;
+        left: 8px !important;
+        right: 8px !important;
+        max-height: calc(100vh - 80px) !important;
+    }
+    
+    .notificacoes-header h3 {
+        font-size: 14px !important;
+    }
+    
+    .notificacao-titulo {
+        font-size: 13px !important;
+    }
+    
+    .notificacao-mensagem {
+        font-size: 12px !important;
+    }
+}

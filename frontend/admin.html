@@ -340,9 +340,15 @@
         <!-- Main Content -->
         <main class="main-content" id="mainContent">
             <header class="top-bar">
-                <button class="menu-toggle" id="menuToggle">
-                    <i class="fas fa-bars"></i>
-                </button>
+                <div class="mobile-menu-logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-graduation-cap"></i>  <!-- ← TROCAR AQUI -->
+                    </div>
+                    <div class="logo-text">
+                        <strong>EducaPleno</strong>
+                        <small>Sistema de Avaliação</small>
+                    </div>
+                </div>
                 <h1 class="page-title" id="pageTitle">Dashboard</h1>
                 <div class="header-actions">
                     <!-- BOTÃO DE NOTIFICAÇÕES -->
@@ -2238,8 +2244,98 @@ window.testarNotificacao = function() {
     <script src="/js/admin-cozinha-monitoramento.js"></script>
     <script src="js/admin-enfermaria-monitoramento.js"></script>
 
+    <!-- ============================================ -->
+    <!-- 📱 BOTTOM NAVIGATION — NAVEGAÇÃO INFERIOR   -->
+    <!-- ============================================ -->
+    <nav class="bottom-nav" id="bottomNav">
+        <a href="#" class="bottom-nav-item active" data-section="dashboard" onclick="event.preventDefault(); admin.switchSection('dashboard'); admin.updateBottomNav('dashboard');">
+            <div class="nav-icon-wrapper">
+                <i class="fas fa-home"></i>
+            </div>
+            <span class="nav-label">Início</span>
+        </a>
+
+        <a href="#" class="bottom-nav-item" data-section="usuarios" onclick="event.preventDefault(); admin.switchSection('usuarios'); admin.updateBottomNav('usuarios');">
+            <div class="nav-icon-wrapper">
+                <i class="fas fa-users"></i>
+            </div>
+            <span class="nav-label">Usuários</span>
+        </a>
+
+        <a href="#" class="bottom-nav-item" data-section="provas" onclick="event.preventDefault(); admin.switchSection('provas'); admin.updateBottomNav('provas');">
+            <div class="nav-icon-wrapper">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <span class="nav-label">Provas</span>
+        </a>
+
+        <a href="#" class="bottom-nav-item" data-section="turmas" onclick="event.preventDefault(); admin.switchSection('turmas'); admin.updateBottomNav('turmas');">
+            <div class="nav-icon-wrapper">
+                <i class="fas fa-school"></i>
+            </div>
+            <span class="nav-label">Turmas</span>
+        </a>
+
+        <a href="#" class="bottom-nav-item" data-section="menu" onclick="event.preventDefault(); admin.abrirMenuCompleto();">
+            <div class="nav-icon-wrapper">
+                <i class="fas fa-bars"></i>
+            </div>
+            <span class="nav-label">Menu</span>
+        </a>
+    </nav>
+
+    <!-- ============================================ -->
+    <!-- 📱 MENU COMPLETO (Bottom Sheet Moderno)     -->
+    <!-- ============================================ -->
+     <div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="admin.fecharMenuCompleto()"></div>
+    <div class="mobile-menu-sheet" id="mobileMenuSheet">
+        <!-- Header com LOGO -->
+        <div class="mobile-menu-logo-header">
+            <div class="mobile-menu-logo">
+                <div class="logo-icon">
+                    <i class="fas fa-crown"></i>
+                </div>
+                <div class="logo-text">
+                    <strong>EducaPleno</strong>
+                    <small>Gestão Educacional</small>
+                </div>
+            </div>
+            <button class="mobile-menu-close" onclick="admin.fecharMenuCompleto()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <!-- Card do usuário com FOTO -->
+        <div class="mobile-menu-user-card">
+            <div class="mobile-menu-avatar" id="mobileMenuAvatar">
+                <i class="fas fa-user-shield"></i>
+            </div>
+            <div class="mobile-menu-user-details">
+                <strong id="mobileMenuNome">Admin</strong>
+                <small id="mobileMenuEmail">admin@iemasaoluiscentro.net</small>
+                <span class="mobile-menu-badge" id="mobileMenuRole">
+                    <i class="fas fa-crown"></i> Super Admin
+                </span>
+            </div>
+            <button class="mobile-menu-edit-profile" onclick="window.location.href='editar-perfil.html'" title="Editar perfil">
+                <i class="fas fa-pen"></i>
+            </button>
+        </div>
+        
+        <!-- Busca -->
+        <div class="mobile-menu-search">
+            <i class="fas fa-search"></i>
+            <input type="text" placeholder="Buscar funcionalidade..." id="mobileMenuSearch" oninput="admin.filtrarMenuMobile(this.value)">
+        </div>
+        
+        <!-- Lista -->
+        <div class="mobile-menu-list" id="mobileMenuList">
+            <!-- Preenchido via JS -->
+        </div>
+    </div>
+
     <script>
-        // ============================================
+// ============================================
 // RESET DE ACESSOS - VERSÃO COMPLETA
 // ============================================
 (function() {

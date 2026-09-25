@@ -428,6 +428,13 @@ class AdminPanel {
     async switchSection(section) {
         this.currentSection = section;
 
+        if (window.innerWidth <= 768) {
+            const bottomNavSections = ['dashboard', 'usuarios', 'provas', 'turmas'];
+            if (bottomNavSections.includes(section)) {
+                this.updateBottomNav(section);
+            }
+        }
+
         // Atualizar classe ativa no menu
         document.querySelectorAll('.nav-link[data-section]').forEach(item => {
             item.classList.remove('active');
@@ -42248,6 +42255,375 @@ class AdminPanel {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
+    }
+
+    // ============================================================================
+    // 📱 MÉTODOS DA BOTTOM NAVIGATION E MENU MOBILE
+    // ============================================================================
+
+    /**
+     * Atualiza o estado ativo da bottom navigation
+     */
+    updateBottomNav(section) {
+        // Remove ativo de todos
+        document.querySelectorAll('.bottom-nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        // Adiciona ativo ao item correspondente
+        const activeItem = document.querySelector(`.bottom-nav-item[data-section="${section}"]`);
+        if (activeItem) {
+            activeItem.classList.add('active');
+        }
+    }
+
+    /**
+     * Abre o menu completo (bottom sheet)
+     */
+    abrirMenuCompleto() {
+        const overlay = document.getElementById('mobileMenuOverlay');
+        const sheet = document.getElementById('mobileMenuSheet');
+        
+        if (!overlay || !sheet) return;
+        
+        // 🔥 Popular dados do usuário
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const nomeEl = document.getElementById('mobileMenuNome');
+        const emailEl = document.getElementById('mobileMenuEmail');
+        const avatarEl = document.getElementById('mobileMenuAvatar');
+        const roleEl = document.getElementById('mobileMenuRole');
+        
+        if (nomeEl) nomeEl.textContent = userData.nome || 'Administrador';
+        if (emailEl) emailEl.textContent = userData.email || 'admin@iemasaoluiscentro.net';
+        
+        // 🔥 Badge de role (Super Admin / Admin)
+        if (roleEl) {
+            if (userData.role === 'super_admin') {
+                roleEl.innerHTML = '<i class="fas fa-crown"></i> Super Admin';
+                roleEl.style.background = 'linear-gradient(135deg, #6366f1, #8b5cf6)';
+            } else if (userData.role === 'admin') {
+                roleEl.innerHTML = '<i class="fas fa-user-shield"></i> Admin';
+                roleEl.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+            } else {
+                roleEl.style.display = 'none';
+            }
+        }
+        
+        // 🔥 Avatar com FOTO DE PERFIL
+        if (avatarEl) {
+            // Tentar pegar foto do user_data primeiro
+            if (userData.fotoPerfil) {
+                avatarEl.innerHTML = `<img src="${userData.fotoPerfil}" alt="Avatar">`;
+            } else {
+                // Se não tiver, buscar da API
+                this.carregarFotoNoMenuMobile(avatarEl);
+            }
+        }
+        
+        // Construir lista
+        this.construirMenuMobile();
+        
+        // Mostrar
+        overlay.classList.add('active');
+        sheet.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    /**
+     * 🔥 Busca a foto de perfil e coloca no menu mobile
+     */
+    async carregarFotoNoMenuMobile(avatarEl) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/perfil/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                avatarEl.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Avatar">`;
+                
+                // Salvar no localStorage para não buscar toda vez
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                userData.fotoPerfil = data.perfil.fotoPerfil;
+                localStorage.setItem('user_data', JSON.stringify(userData));
+            } else {
+                // Se não tiver foto, mostrar iniciais
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const iniciais = (userData.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                avatarEl.innerHTML = `<span>${iniciais}</span>`;
+            }
+        } catch (error) {
+            console.error('Erro ao carregar foto:', error);
+            // Fallback: iniciais
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const iniciais = (userData.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            avatarEl.innerHTML = `<span>${iniciais}</span>`;
+        }
+    }
+
+    /**
+     * Fecha o menu completo
+     */
+    fecharMenuCompleto() {
+        const overlay = document.getElementById('mobileMenuOverlay');
+        const sheet = document.getElementById('mobileMenuSheet');
+        
+        if (overlay) overlay.classList.remove('active');
+        if (sheet) sheet.classList.remove('active');
+        document.body.style.overflow = '';
+        
+        // Limpar busca
+        const search = document.getElementById('mobileMenuSearch');
+        if (search) search.value = '';
+    }
+
+    /**
+     * Constrói dinamicamente a lista do menu mobile
+     */
+    construirMenuMobile() {
+        const list = document.getElementById('mobileMenuList');
+        if (!list) return;
+        
+        // ===== AÇÕES RÁPIDAS =====
+        let html = `
+            <div class="mobile-menu-category">⚡ Ações Rápidas</div>
+            <div class="mobile-menu-actions">
+                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => admin.abrirModalEnvioNotificacao(), 300);">
+                    <div class="action-icon orange">
+                        <i class="fas fa-bullhorn"></i>
+                    </div>
+                    <div class="action-text">
+                        <strong>Enviar Notificação</strong>
+                        <small>Para usuários</small>
+                    </div>
+                </button>
+                
+                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => document.getElementById('btnPushGlobal')?.click(), 300);">
+                    <div class="action-icon green">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="action-text">
+                        <strong>Push Global</strong>
+                        <small>Ativar/Desativar</small>
+                    </div>
+                </button>
+                
+                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => admin.confirmarResetAcessos(), 300);">
+                    <div class="action-icon red">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <div class="action-text">
+                        <strong>Resetar Acessos</strong>
+                        <small>Desconectar todos</small>
+                    </div>
+                </button>
+                
+                <button class="mobile-action-card" onclick="admin.fecharMenuCompleto(); setTimeout(() => window.open('https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing', '_blank'), 300);">
+                    <div class="action-icon blue">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <div class="action-text">
+                        <strong>Baixar App</strong>
+                        <small>Versão Android</small>
+                    </div>
+                </button>
+            </div>
+        `;
+        
+        // ===== CATEGORIAS DE NAVEGAÇÃO =====
+        const categorias = [
+            {
+                titulo: 'Principal',
+                itens: [
+                    { icone: 'fa-tachometer-alt', label: 'Dashboard', section: 'dashboard' },
+                    { icone: 'fa-users-cog', label: 'Usuários', section: 'usuarios' },
+                    { icone: 'fa-school', label: 'Turmas', section: 'turmas' },
+                    { icone: 'fa-file-alt', label: 'Provas', section: 'provas' },
+                    { icone: 'fa-chart-line', label: 'Resultados', section: 'resultados' },
+                    { icone: 'fa-terminal', label: 'Monitoramento', section: 'monitoramento' },
+                ]
+            },
+            {
+                titulo: 'Pedagógico',
+                itens: [
+                    { icone: 'fa-chalkboard-user', label: 'Setor Pedagógico', section: 'setor-pedagogico' },
+                    { icone: 'fa-user-shield', label: 'Supervisão', section: 'supervisao' },
+                    { icone: 'fa-brain', label: 'Psicologia', section: 'psicologia' },
+                    { icone: 'fa-hands-helping', label: 'Assistente Social', section: 'assistente-social' },
+                    { icone: 'fa-star', label: 'Protagonismo', section: 'protagonismo' },
+                ]
+            },
+            {
+                titulo: 'Gestão',
+                itens: [
+                    { icone: 'fa-user-tie', label: 'Gestão Geral', section: 'gestao-geral' },
+                    { icone: 'fa-hospital-user', label: 'Enfermaria', section: 'enfermaria-monitoramento' },
+                    { icone: 'fa-chart-line', label: 'Cozinha', section: 'cozinha-monitoramento' },
+                    { icone: 'fa-user-graduate', label: 'Matrículas', section: 'matriculas' },
+                ]
+            },
+            {
+                titulo: 'Sistema',
+                itens: [
+                    { icone: 'fa-id-card', label: 'Face ID', section: 'faceid' },
+                    { icone: 'fa-qrcode', label: 'QR Codes', section: 'qrcode-management' },
+                    { icone: 'fa-bell', label: 'OneSignal', section: 'onesignal' },
+                    { icone: 'fa-camera', label: 'OMR Debug', section: 'omr-debug' },
+                    { icone: 'fa-sitemap', label: 'Eixos', section: 'eixos' },
+                    { icone: 'fa-graduation-cap', label: 'Cursos', section: 'cursos' },
+                    { icone: 'fa-database', label: 'Backups', section: 'backups' },
+                    { icone: 'fa-user-lock', label: 'Permissões', section: 'permissoes-especiais' },
+                    { icone: 'fa-cog', label: 'Configurações', section: 'configuracoes' },
+                ]
+            }
+        ];
+        
+        categorias.forEach(cat => {
+            html += `<div class="mobile-menu-category">${cat.titulo}</div>`;
+            cat.itens.forEach(item => {
+                html += `
+                    <button class="mobile-menu-item" onclick="admin.selecionarMenuMobile('${item.section}', this)">
+                        <i class="fas ${item.icone}"></i>
+                        <span>${item.label}</span>
+                    </button>
+                `;
+            });
+        });
+        
+        // ===== CONTA =====
+        html += `<div class="mobile-menu-category">Conta</div>`;
+        html += `
+            <button class="mobile-menu-item" onclick="window.location.href='editar-perfil.html'">
+                <i class="fas fa-user-edit"></i>
+                <span>Editar Perfil</span>
+            </button>
+            <button class="mobile-menu-item" onclick="admin.toggleModoEscuro(); admin.fecharMenuCompleto();">
+                <i class="fas fa-moon"></i>
+                <span>Alternar Tema</span>
+            </button>
+            <button class="mobile-menu-item danger" onclick="admin.logout()">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Sair</span>
+            </button>
+        `;
+        
+        list.innerHTML = html;
+    }
+
+    /**
+     * Confirma e executa o reset de acessos (movido para o menu mobile)
+     */
+    async confirmarResetAcessos() {
+        const confirmar = await this.confirmar(
+            '⚠️ RESET DE ACESSOS',
+            `Você está prestes a <strong>resetar os acessos de TODOS os usuários</strong> (exceto Super Admins).<br><br>
+            <span style="color: #f59e0b;">Isso significa que:</span>
+            <ul style="text-align: left; margin-top: 10px;">
+                <li>✅ Todos receberão uma notificação</li>
+                <li>✅ Serão desconectados imediatamente</li>
+                <li>✅ Precisarão fazer login novamente</li>
+                <li>❌ Esta ação <strong>NÃO PODE SER DESFEITA</strong></li>
+            </ul>
+            <br>
+            <strong>Deseja continuar?</strong>`
+        );
+        
+        if (!confirmar) return;
+        
+        try {
+            this.showToast('🔄 Resetando acessos...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/reset-access', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ ${data.totalAfetados} usuários foram desconectados!`, 'success');
+                
+                // Mostrar detalhes
+                if (typeof this.mostrarNotificacaoSistema === 'function') {
+                    this.mostrarNotificacaoSistema(
+                        'success',
+                        '✅ Reset Concluído',
+                        `${data.totalAfetados} usuários foram afetados. Todos precisarão fazer login novamente.`,
+                        6000
+                    );
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao resetar');
+            }
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * Seleciona um item do menu mobile
+     */
+    selecionarMenuMobile(section, element) {
+        // Fecha o menu
+        this.fecharMenuCompleto();
+        
+        // Aguarda a animação
+        setTimeout(() => {
+            // Navega para a seção
+            this.switchSection(section);
+            
+            // Atualiza bottom nav
+            const bottomNavSections = ['dashboard', 'usuarios', 'provas', 'turmas'];
+            if (bottomNavSections.includes(section)) {
+                this.updateBottomNav(section);
+            } else {
+                // Marca "Menu" como ativo
+                document.querySelectorAll('.bottom-nav-item').forEach(item => item.classList.remove('active'));
+                document.querySelector('.bottom-nav-item[data-section="menu"]')?.classList.add('active');
+            }
+        }, 300);
+    }
+
+    /**
+     * Filtra o menu mobile pela busca
+     */
+    filtrarMenuMobile(termo) {
+        const list = document.getElementById('mobileMenuList');
+        if (!list) return;
+        
+        const termoLower = termo.toLowerCase().trim();
+        
+        // Se vazio, re-constroi tudo
+        if (!termoLower) {
+            this.construirMenuMobile();
+            return;
+        }
+        
+        // Filtra itens
+        const itens = list.querySelectorAll('.mobile-menu-item');
+        let temResultado = false;
+        
+        itens.forEach(item => {
+            const texto = item.querySelector('span')?.textContent.toLowerCase() || '';
+            if (texto.includes(termoLower)) {
+                item.style.display = 'flex';
+                temResultado = true;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        // Esconde categorias vazias (simplificado)
+        list.querySelectorAll('.mobile-menu-category').forEach(cat => {
+            cat.style.display = termoLower ? 'none' : 'block';
+        });
     }
 
 }

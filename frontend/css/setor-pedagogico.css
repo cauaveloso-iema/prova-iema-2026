@@ -1006,3 +1006,638 @@ body {
 .horario-card.selected .horario-label {
     color: white !important;
 }
+
+/* ============================================================================
+   🎨 SETOR PEDAGÓGICO - DESIGN PROFISSIONAL MOBILE
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* ===== ESCONDER MENU HAMBÚRGUER ANTIGO ===== */
+    #mobileMenuBtn,
+    .mobile-menu-btn {
+        display: none !important;
+    }
+    
+    /* ===== BODY ===== */
+    body {
+        background: #fafafa !important;
+        padding-bottom: 90px !important;
+    }
+    
+    /* ===== SIDEBAR VIRA BOTTOM SHEET ===== */
+    .sidebar {
+        position: fixed !important;
+        top: auto !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: 85vh !important;
+        background: #ffffff !important;
+        border-radius: 24px 24px 0 0 !important;
+        transform: translateY(100%) !important;
+        transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+        z-index: 1001 !important;
+        box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.15) !important;
+        overflow-y: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    .sidebar.mobile-open {
+        transform: translateY(0) !important;
+    }
+    
+    /* Alça de arrastar */
+    .sidebar::before {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: #d1d5db;
+        border-radius: 2px;
+        margin: 8px auto 0;
+        flex-shrink: 0;
+    }
+    
+    /* Header da sidebar */
+    .sidebar-header {
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+        padding: 16px 20px !important;
+        margin: 16px !important;
+        border-radius: 16px !important;
+        border-bottom: none !important;
+        text-align: left !important;
+    }
+    
+    .sidebar-header h3 {
+        font-size: 1.1rem !important;
+        color: white !important;
+        margin: 0 0 5px 0 !important;
+    }
+    
+    .sidebar-header p {
+        color: rgba(255,255,255,0.85) !important;
+        font-size: 0.8rem !important;
+        margin: 0 !important;
+    }
+    
+    /* Nav links */
+    .sidebar nav {
+        padding: 0 12px !important;
+        flex: 1 !important;
+    }
+    
+    .sidebar .nav-link {
+        color: #374151 !important;
+        background: transparent !important;
+        margin: 0 0 4px 0 !important;
+        padding: 12px 14px !important;
+        border-radius: 12px !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        transform: none !important;
+    }
+    
+    .sidebar .nav-link:hover,
+    .sidebar .nav-link:active {
+        background: #f3f4f6 !important;
+        transform: none !important;
+    }
+    
+    .sidebar .nav-link i {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #f3f4f6 !important;
+        border-radius: 10px !important;
+        font-size: 15px !important;
+        color: #8b5cf6 !important;
+    }
+    
+    .sidebar .nav-link.active {
+        background: #f3e8ff !important;
+        color: #7c3aed !important;
+        font-weight: 700 !important;
+    }
+    
+    .sidebar .nav-link.active i {
+        background: #8b5cf6 !important;
+        color: #ffffff !important;
+        box-shadow: 0 3px 8px rgba(139, 92, 246, 0.3) !important;
+    }
+    
+    /* Botão editar perfil */
+    .btn-editar-perfil {
+        margin: 12px 16px !important;
+        padding: 12px !important;
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+        color: white !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3) !important;
+    }
+    
+    /* Botão baixar app */
+    .btn-download-app {
+        margin: 8px 16px !important;
+        padding: 10px 16px !important;
+        background: linear-gradient(135deg, #10b981, #059669) !important;
+        color: white !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+    }
+    
+    /* Rodapé "EducaPleno" */
+    .sidebar > .position-absolute {
+        position: static !important;
+        padding: 12px !important;
+        border-top: 1px solid #f0f0f0 !important;
+        text-align: center !important;
+        color: #9ca3af !important;
+    }
+    
+    /* ===== MAIN CONTENT ===== */
+    .main-content {
+        margin-left: 0 !important;
+        padding: 0 16px 16px 16px !important;
+    }
+    
+    /* ===== PAGE HEADER (topo) ===== */
+    .page-header {
+        padding: 16px 0 !important;
+        margin-bottom: 16px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+    
+    .page-header > div:first-child {
+        width: 100% !important;
+    }
+    
+    .page-header h2 {
+        font-size: 24px !important;
+        font-weight: 800 !important;
+        margin: 0 !important;
+        line-height: 1.2 !important;
+    }
+    
+    .page-header p {
+        font-size: 13px !important;
+        color: #6b7280 !important;
+        margin: 4px 0 0 0 !important;
+        line-height: 1.4 !important;
+    }
+    
+    /* Ações do header (botões + user + notificação) */
+    .page-header > div:last-child {
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        justify-content: space-between !important;
+        flex-wrap: nowrap !important;
+    }
+    
+    /* Esconder botão "Adaptar Documento" no header (vai pra bottom nav) */
+    .page-header > div:last-child > button:first-child {
+        display: none !important;
+    }
+    
+    /* User info compacto */
+    .user-info {
+        padding: 6px 12px 6px 6px !important;
+        background: #ffffff !important;
+        border: 1px solid #f0f0f0 !important;
+        border-radius: 30px !important;
+        gap: 8px !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+    
+    .user-avatar {
+        width: 36px !important;
+        height: 36px !important;
+        margin-right: 0 !important;
+        border: 2px solid #f3e8ff !important;
+    }
+    
+    .user-avatar i {
+        font-size: 18px !important;
+    }
+    
+    .user-info > div:last-child {
+        min-width: 0 !important;
+        flex: 1 !important;
+    }
+    
+    .user-info #userName {
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
+    }
+    
+    .user-info small {
+        font-size: 10px !important;
+    }
+    
+    /* Notificação */
+    .notificacao-icone {
+        width: 42px !important;
+        height: 42px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #ffffff !important;
+        border: 1px solid #f0f0f0 !important;
+        border-radius: 50% !important;
+        margin-left: 0 !important;
+        flex-shrink: 0 !important;
+    }
+    
+    .notificacao-icone i {
+        font-size: 16px !important;
+        color: #8b5cf6 !important;
+    }
+    
+    /* ===== CARDS DE ESTATÍSTICAS ===== */
+    .row.g-4 > .col-md-6,
+    .row.g-4 > .col-xl-3 {
+        width: 50% !important;
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+    }
+    
+    .stat-card {
+        border-radius: 16px !important;
+    }
+    
+    .stat-card .card-body {
+        padding: 16px !important;
+    }
+    
+    .stat-card .stat-value {
+        font-size: 1.6rem !important;
+        font-weight: 800 !important;
+    }
+    
+    .stat-card small {
+        font-size: 11px !important;
+        opacity: 0.85 !important;
+    }
+    
+    .stat-card i {
+        font-size: 1.8rem !important;
+        opacity: 0.4 !important;
+    }
+    
+    /* ===== CARDS DIVERSOS ===== */
+    .card {
+        border-radius: 16px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+    }
+    
+    .card-header {
+        padding: 16px 16px 8px 16px !important;
+    }
+    
+    .card-header h5 {
+        font-size: 15px !important;
+    }
+    
+    .card-body {
+        padding: 16px !important;
+    }
+    
+    /* ===== TABS INTERNAS ===== */
+    .nav-tabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    .nav-tabs::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .nav-tabs .nav-link {
+        padding: 10px 16px !important;
+        font-size: 13px !important;
+        white-space: nowrap !important;
+    }
+    
+    /* ===== FORMULÁRIOS ===== */
+    .form-control,
+    .form-select {
+        padding: 10px 12px !important;
+        font-size: 14px !important;
+        border-radius: 10px !important;
+    }
+    
+    /* ===== TABELAS ===== */
+    .table-container {
+        border-radius: 16px !important;
+    }
+    
+    .table thead th {
+        padding: 12px !important;
+        font-size: 11px !important;
+    }
+    
+    .table tbody td {
+        padding: 12px !important;
+        font-size: 13px !important;
+    }
+}
+
+/* ============================================================================
+   📱 BOTTOM NAVIGATION - SETOR PEDAGÓGICO
+   ============================================================================ */
+
+.bottom-nav-sp {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+    z-index: 999;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.04);
+}
+
+@media (max-width: 768px) {
+    .bottom-nav-sp {
+        display: flex;
+    }
+    
+    /* Esconder o botão flutuante antigo */
+    .fab-menu {
+        display: none !important;
+    }
+}
+
+.bottom-nav-sp .nav-item-sp {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 4px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #9ca3af;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    min-width: 0;
+    font-family: inherit;
+}
+
+.bottom-nav-sp .nav-item-sp .icon-wrapper {
+    width: 40px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bottom-nav-sp .nav-item-sp i {
+    font-size: 18px;
+}
+
+.bottom-nav-sp .nav-item-sp .nav-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.bottom-nav-sp .nav-item-sp.active {
+    color: #8b5cf6;
+}
+
+.bottom-nav-sp .nav-item-sp.active .icon-wrapper {
+    background: #f3e8ff;
+}
+
+.bottom-nav-sp .nav-item-sp:active .icon-wrapper {
+    transform: scale(0.9);
+}
+
+/* ============================================================================
+   🎨 OVERLAY DO MENU
+   ============================================================================ */
+
+.sidebar-overlay-sp {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(2px);
+}
+
+.sidebar-overlay-sp.active {
+    display: block;
+    opacity: 1;
+}
+
+/* ============================================================================
+   🎨 LOGO E IDENTIDADE NO PAGE HEADER - SETOR PEDAGÓGICO
+   ============================================================================ */
+
+/* Logo circular com gradiente (roxo do setor pedagógico) */
+.page-header-logo {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 22px;
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
+    flex-shrink: 0;
+    transition: all 0.3s;
+}
+
+.page-header-logo:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 10px 24px rgba(139, 92, 246, 0.45);
+}
+
+/* Botão "Adaptar Documento" no header */
+.btn-adaptar-header {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    border: none;
+    border-radius: 40px;
+    padding: 10px 22px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    font-family: inherit;
+}
+
+.btn-adaptar-header:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.45);
+}
+
+.btn-adaptar-header:active {
+    transform: translateY(0) scale(0.97);
+}
+
+/* Ajustar o page-header para o novo layout */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    background: white;
+    border-radius: 24px;
+    padding: 20px 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+/* ============================================================================
+   📱 AJUSTES MOBILE
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Header em coluna no mobile */
+    .page-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 16px !important;
+        gap: 14px !important;
+        background: linear-gradient(135deg, #faf5ff, #ffffff) !important;
+        border: 1px solid #ede9fe !important;
+    }
+    
+    /* Logo menor no mobile */
+    .page-header-logo {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        font-size: 18px !important;
+        border-radius: 12px !important;
+    }
+    
+    /* Título e subtítulo */
+    .page-header h2 {
+        font-size: 20px !important;
+        font-weight: 800 !important;
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+        -webkit-background-clip: text !important;
+        -webkit-text-fill-color: transparent !important;
+        background-clip: text !important;
+        line-height: 1.2 !important;
+    }
+    
+    .page-header p {
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+        margin-top: 2px !important;
+    }
+    
+    /* Ações ocupam 100% da largura */
+    .page-header-actions {
+        width: 100% !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+    }
+    
+    /* Esconder botão "Adaptar Documento" no header (já está no menu) */
+    .btn-adaptar-header {
+        display: none !important;
+    }
+    
+    /* User info compacto */
+    .user-info {
+        padding: 6px 14px 6px 6px !important;
+        background: white !important;
+        border: 1px solid #ede9fe !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+    
+    .user-avatar {
+        width: 36px !important;
+        height: 36px !important;
+        border: 2px solid #ede9fe !important;
+    }
+    
+    .user-info #userName {
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    
+    /* Botão de notificação */
+    .notificacao-icone {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: white !important;
+        border: 1px solid #ede9fe !important;
+        border-radius: 50% !important;
+        margin-left: 0 !important;
+    }
+    
+    .notificacao-icone i {
+        color: #8b5cf6 !important;
+        font-size: 16px !important;
+    }
+}

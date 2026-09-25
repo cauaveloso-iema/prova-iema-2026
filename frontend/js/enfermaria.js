@@ -1,8 +1,6 @@
 // ============================================
-// PSICOLOGIA - SISTEMA DE ATENDIMENTOS
+// ENFERMARIA - SISTEMA DE ATENDIMENTOS
 // Modo Automático (QR) + Modo Manual (Clique direto no aluno)
-// Tema: Verde-Água / Teal
-// Com Autocomplete + Remarcação + Assinatura + Sino + Notificações + Filtros + Gerenciar Concluídos
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -10,7 +8,6 @@ let currentAluno = null;
 let currentAtendimento = null;
 let relatorioData = null;
 let dashboardCharts = {};
-let tipoTarefaSelecionado = null;
 
 // Scanner Auto
 let scannerAuto = null;
@@ -20,48 +17,6 @@ let scannerAutoAtivo = false;
 let modoAtual = 'automatico';
 let turmasDisponiveis = [];
 let alunosPorTurma = [];
-
-// Autocomplete de aluno
-let __alunosParaRelatorio = [];
-let __alunosFiltrados = [];
-let __indiceSelecionado = -1;
-let __alunosCarregados = false;
-
-// Estado do sino
-let __lembretesAtuais = [];
-
-// Estado dos filtros de atendimentos ativos
-let __atendimentosAtivosBrutos = [];
-let __atendimentosAtivosFiltrados = [];
-
-// 🆕 Estado dos atendimentos concluídos
-let __concluidosPaginaAtual = 1;
-let __concluidosPorPagina = 10;
-let __concluidosTotal = 0;
-let __concluidosDados = [];
-
-// ============================================
-// ESTADO DA ASSINATURA DIGITAL
-// ============================================
-const assinaturaState = {
-    canvas: null,
-    ctx: null,
-    desenhando: false,
-    temAssinatura: false,
-    lastX: 0,
-    lastY: 0,
-    larguraBase: 0,
-    alturaBase: 0
-};
-
-const TIPO_LABELS = {
-    'escuta_acolhimento': 'Escutas de Acolhimento',
-    'manejo_crises_emocionais': 'Manejo de Crises Emocionais',
-    'atividades_grupos': 'Atividades em Grupos',
-    'acoes_atividades_saude': 'Ações e Atividades em Saúde',
-    'acoes_socioemocionais_culturais': 'Ações e Atividades Socioemocionais e Culturais',
-    'outros': 'Outros'
-};
 
 // ============================================
 // UTILITÁRIOS
@@ -76,282 +31,53 @@ function escapeHTML(str) {
               .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function gerarAvatarSVG(nome) {
-    const inicial = (nome || '?').charAt(0).toUpperCase();
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#14b8a6"/><stop offset="100%" stop-color="#0d9488"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="50" font-family="Arial,sans-serif" font-size="45" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
-    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-}
-
-function formatarDataBR(dataStr) {
-    if (!dataStr) return '-';
-    const d = new Date(dataStr + 'T00:00:00');
-    return d.toLocaleDateString('pt-BR');
-}
-
 // ============================================
-// 🔔 SISTEMA DE NOTIFICAÇÕES DO NAVEGADOR
+// INICIALIZAÇÃO
 // ============================================
-async function solicitarPermissaoNotificacao() {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    if (Notification.permission === 'denied') return false;
-    
-    try {
-        const permission = await Notification.requestPermission();
-        atualizarStatusNotificacao();
-        return permission === 'granted';
-    } catch (e) {
-        console.warn('Erro ao pedir permissão:', e);
-        return false;
-    }
-}
-
-function atualizarStatusNotificacao() {
-    const el = safeGet('sinoNotifStatus');
-    if (!el) return;
-    
-    if (!('Notification' in window)) {
-        el.className = 'sino-notif-status inativo';
-        el.innerHTML = '<i class="fas fa-bell-slash"></i> Não suportado';
-        return;
-    }
-    
-    if (Notification.permission === 'granted') {
-        el.className = 'sino-notif-status ativo';
-        el.innerHTML = '<i class="fas fa-bell"></i> Notificações ativas';
-    } else if (Notification.permission === 'denied') {
-        el.className = 'sino-notif-status inativo';
-        el.innerHTML = '<i class="fas fa-bell-slash"></i> Notificações bloqueadas';
-    } else {
-        el.className = 'sino-notif-status inativo';
-        el.innerHTML = '<i class="fas fa-bell-slash"></i> Notificações desativadas';
-    }
-}
-
-function jaNotificou(remarcacaoId, tipo) {
-    const key = `notif_${tipo}_${remarcacaoId}`;
-    return localStorage.getItem(key) === 'true';
-}
-
-function marcarComoNotificado(remarcacaoId, tipo) {
-    const key = `notif_${tipo}_${remarcacaoId}`;
-    localStorage.setItem(key, 'true');
-}
-
-function limparNotificacoesAntigas() {
-    if (!__lembretesAtuais) return;
-    
-    const idsAtivos = new Set();
-    __lembretesAtuais.forEach(r => {
-        idsAtivos.add(r.id);
-    });
-    
-    Object.keys(localStorage).forEach(k => {
-        if (k.startsWith('notif_')) {
-            const parts = k.split('_');
-            const idRem = parts[parts.length - 1];
-            if (!idsAtivos.has(idRem)) {
-                localStorage.removeItem(k);
-            }
-        }
-    });
-}
-
-function calcularNivelAlerta(remarcacao) {
-    const agora = new Date();
-    const horario = remarcacao.horarioRemarcacao || '00:00';
-    const dataRem = new Date(remarcacao.dataRemarcacao + 'T' + horario + ':00');
-    const diffMs = dataRem - agora;
-    const diffMin = Math.floor(diffMs / 60000);
-    const diffHoras = Math.floor(diffMin / 60);
-    
-    if (diffMin < 0) {
-        const passouHa = Math.abs(diffMin);
-        if (passouHa < 60) return { nivel: 'atrasado', label: `Atrasado ${passouHa}min`, urgente: true };
-        if (passouHa < 1440) return { nivel: 'atrasado', label: `Atrasado ${Math.floor(passouHa / 60)}h`, urgente: true };
-        return { nivel: 'atrasado', label: `Atrasado ${Math.floor(passouHa / 1440)}d`, urgente: true };
-    }
-    
-    if (diffMin <= 30) return { nivel: 'iminente', label: `Em ${diffMin}min`, urgente: true };
-    if (diffMin <= 120) return { nivel: 'proximo', label: `Em ${diffHoras}h ${diffMin % 60}min`, urgente: false };
-    if (diffHoras < 24) return { nivel: 'hoje', label: `Hoje ${horario}`, urgente: false };
-    if (diffHoras < 48) return { nivel: 'amanha', label: `Amanhã ${horario}`, urgente: false };
-    
-    const dias = Math.floor(diffHoras / 24);
-    return { nivel: 'futuro', label: `Em ${dias} dias`, urgente: false };
-}
-
-function enviarNotificacao(titulo, corpo, urgente = false, onClick = null) {
-    if (!('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
-    
-    try {
-        const notif = new Notification(titulo, {
-            body: corpo,
-            icon: '/icons/favicon.ico',
-            badge: '/icons/favicon.ico',
-            tag: urgente ? 'psicologia-urgente' : 'psicologia-lembrete',
-            requireInteraction: urgente,
-            vibrate: urgente ? [200, 100, 200] : [100],
-            silent: false
-        });
-        
-        if (onClick) {
-            notif.onclick = () => {
-                window.focus();
-                onClick();
-                notif.close();
-            };
-        }
-        
-        if (!urgente) {
-            setTimeout(() => {
-                try { notif.close(); } catch(e) {}
-            }, 8000);
-        }
-    } catch (e) {
-        console.warn('Erro ao enviar notificação:', e);
-    }
-}
-
-async function verificarLembretesNotificar() {
-    if (!('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
-    if (!__lembretesAtuais || __lembretesAtuais.length === 0) return;
-    
-    const agora = new Date();
-    
-    __lembretesAtuais.forEach(r => {
-        const horario = r.horarioRemarcacao || '00:00';
-        const dataRem = new Date(r.dataRemarcacao + 'T' + horario + ':00');
-        const diffMs = dataRem - agora;
-        const diffMin = Math.floor(diffMs / 60000);
-        
-        if (diffMin < 0 && !jaNotificou(r.id, 'atrasado')) {
-            enviarNotificacao(
-                '⚠️ Atendimento ATRASADO',
-                `${r.alunoNome} - ${r.tipoTarefaLabel}\nEra ${formatarDataBR(r.dataRemarcacao)} às ${r.horarioRemarcacao}`,
-                true,
-                () => abrirNotificacoes()
-            );
-            marcarComoNotificado(r.id, 'atrasado');
-            return;
-        }
-        
-        if (diffMin > 0 && diffMin <= 30 && !jaNotificou(r.id, 'iminente')) {
-            enviarNotificacao(
-                '🔔 Atendimento em 30 min!',
-                `${r.alunoNome} - ${r.tipoTarefaLabel}\n${r.horarioRemarcacao} • ${r.alunoTurma}`,
-                true,
-                () => abrirNotificacoes()
-            );
-            marcarComoNotificado(r.id, 'iminente');
-            return;
-        }
-        
-        if (diffMin > 30 && diffMin <= 120 && !jaNotificou(r.id, 'proximo')) {
-            enviarNotificacao(
-                '⏰ Atendimento próximo',
-                `${r.alunoNome} - ${r.tipoTarefaLabel}\nEm ${Math.floor(diffMin / 60)}h ${diffMin % 60}min`,
-                false,
-                () => abrirNotificacoes()
-            );
-            marcarComoNotificado(r.id, 'proximo');
-            return;
-        }
-        
-        if (diffMin > 120 && diffMin <= 720 && !jaNotificou(r.id, 'hoje')) {
-            enviarNotificacao(
-                '📅 Atendimento HOJE',
-                `${r.alunoNome} - ${r.tipoTarefaLabel}\nHoje às ${r.horarioRemarcacao}`,
-                false,
-                () => abrirNotificacoes()
-            );
-            marcarComoNotificado(r.id, 'hoje');
-            return;
-        }
-        
-        if (diffMin > 720 && diffMin <= 1440 && !jaNotificou(r.id, 'amanha')) {
-            enviarNotificacao(
-                '📅 Atendimento AMANHÃ',
-                `${r.alunoNome} - ${r.tipoTarefaLabel}\nAmanhã às ${r.horarioRemarcacao}`,
-                false,
-                () => abrirNotificacoes()
-            );
-            marcarComoNotificado(r.id, 'amanha');
-        }
-    });
-}
-
-function atualizarBadgeComUrgencia() {
-    const badge = safeGet('notificacoesBadge');
-    const btn = safeGet('notificacoesBtn');
-    if (!badge || !btn) return;
-    if (!__lembretesAtuais || __lembretesAtuais.length === 0) return;
-    
-    const temUrgente = __lembretesAtuais.some(r => calcularNivelAlerta(r).urgente);
-    
-    if (temUrgente) {
-        btn.classList.add('tem-notificacao');
-        badge.style.background = '#dc2626';
-    } else {
-        btn.classList.remove('tem-notificacao');
-        badge.style.background = '#ef4444';
-    }
-}
-
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!token) { window.location.href = '/login.html'; return; }
+    // 1. Verificar se tem token
+    if (!token) { 
+        window.location.href = '/login.html'; 
+        return; 
+    }
     
+    // 2. Verificar se o usuário tem permissão
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-    const allowedRoles = ['psicologia', 'super_admin', 'admin'];
+    const allowedRoles = ['enfermaria', 'super_admin', 'admin'];
     
     if (!allowedRoles.includes(userData.role)) {
-        alert('Acesso negado.');
+        console.warn('❌ Acesso negado. Role:', userData.role);
+        alert('Acesso negado. Você não tem permissão para acessar esta página.');
         window.location.href = '/login.html';
         return;
     }
     
+    console.log('✅ Enfermaria autenticada:', userData.nome);
+    
+    // 3. Preencher dados do usuário na tela
     safeSetText('userName', userData.nome || 'Usuário');
     safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
     
-    atualizarStatusNotificacao();
-    
+    // 4. Carregar dados iniciais em paralelo
     try {
         await Promise.allSettled([
             carregarFotoPerfil(),
             carregarAtendimentosAtivos(),
             carregarTurmasParaRelatorio(),
             carregarTurmasParaManual(),
-            carregarDashboard(),
-            carregarLembretes()
+            carregarDashboard()
         ]);
     } catch (error) {
         console.error('Erro ao carregar dados iniciais:', error);
     }
     
+    // 5. Iniciar scanner automático (padrão)
     await iniciarScannerAutomatico();
     
-    setTimeout(() => inicializarAssinatura(), 800);
-    
-    configurarFiltrosAndamento();
-    configurarFiltrosConcluidos();
-    
-    setTimeout(async () => {
-        const permitido = await solicitarPermissaoNotificacao();
-        if (permitido) {
-            console.log('✅ Notificações ativadas!');
-            setTimeout(() => verificarLembretesNotificar(), 2000);
-        }
-    }, 3000);
-    
+    // 6. Atualização automática a cada 30 segundos
     setInterval(() => {
         if (safeGet('ativos')?.classList.contains('active')) {
             carregarAtendimentosAtivos();
@@ -359,29 +85,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (safeGet('dashboard')?.classList.contains('active')) {
             carregarDashboard();
         }
-        carregarLembretes();
     }, 30000);
     
-    setInterval(() => {
-        if (__lembretesAtuais && __lembretesAtuais.length > 0) {
-            atualizarBadgeComUrgencia();
-            verificarLembretesNotificar();
-        }
-    }, 60000);
-    
+    // 7. Eventos das tabs
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
-        carregarAtendimentosConcluidos(1);
     });
-    safeGet('relatorios-tab')?.addEventListener('shown.bs.tab', () => carregarTurmasParaRelatorio());
-    safeGet('ativos-tab')?.addEventListener('shown.bs.tab', () => carregarAtendimentosAtivos());
     
+    // 8. Eventos de mudança de modo
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
     safeGet('modoManualBtn')?.addEventListener('click', () => setModo('manual'));
     
+    // 9. Eventos do modo manual
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
     
+    // 10. Atalho ESC para fechar tela do aluno
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             if (currentAluno) {
@@ -408,765 +127,6 @@ async function carregarFotoPerfil() {
         }
     } catch (error) {
         console.error('Erro ao carregar foto:', error);
-    }
-}
-
-// ============================================
-// 🎯 FILTROS DA ABA EM ANDAMENTO
-// ============================================
-function configurarFiltrosAndamento() {
-    const ids = [
-        'filtroAndamentoBusca',
-        'filtroAndamentoTurma',
-        'filtroAndamentoTipo',
-        'filtroAndamentoOrdenar',
-        'filtroAndamentoPrioridade',
-        'filtroAndamentoGravidade',
-        'filtroAndamentoRemarcado',
-        'filtroAndamentoAssinatura'
-    ];
-    
-    ids.forEach(id => {
-        const el = safeGet(id);
-        if (!el) return;
-        
-        if (el.tagName === 'INPUT') {
-            let timeoutId;
-            el.addEventListener('input', () => {
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => aplicarFiltrosAndamento(), 250);
-            });
-        } else {
-            el.addEventListener('change', aplicarFiltrosAndamento);
-        }
-    });
-}
-
-function toggleFiltrosAvancados() {
-    const div = safeGet('filtrosAvancados');
-    const btn = safeGet('btnToggleAvancado');
-    if (!div || !btn) return;
-    
-    const aberto = div.style.display !== 'none';
-    
-    if (aberto) {
-        div.style.display = 'none';
-        btn.innerHTML = '<i class="fas fa-chevron-down"></i> Mais filtros';
-    } else {
-        div.style.display = 'block';
-        btn.innerHTML = '<i class="fas fa-chevron-up"></i> Menos filtros';
-    }
-}
-
-function obterFiltrosAndamento() {
-    return {
-        busca: (safeGet('filtroAndamentoBusca')?.value || '').trim().toLowerCase(),
-        turma: safeGet('filtroAndamentoTurma')?.value || '',
-        tipo: safeGet('filtroAndamentoTipo')?.value || '',
-        ordenar: safeGet('filtroAndamentoOrdenar')?.value || 'recente',
-        prioridade: safeGet('filtroAndamentoPrioridade')?.value || '',
-        gravidade: safeGet('filtroAndamentoGravidade')?.value || '',
-        remarcado: safeGet('filtroAndamentoRemarcado')?.value || '',
-        assinatura: safeGet('filtroAndamentoAssinatura')?.value || ''
-    };
-}
-
-function filtrosEstaoAtivos() {
-    const f = obterFiltrosAndamento();
-    return f.busca || f.turma || f.tipo || f.prioridade || f.gravidade || f.remarcado || f.assinatura;
-}
-
-function aplicarFiltrosAndamento() {
-    const f = obterFiltrosAndamento();
-    
-    let filtrados = [...__atendimentosAtivosBrutos];
-    
-    if (f.busca) {
-        filtrados = filtrados.filter(a =>
-            (a.alunoNome || '').toLowerCase().includes(f.busca) ||
-            (a.alunoMatricula || '').toLowerCase().includes(f.busca)
-        );
-    }
-    if (f.turma) filtrados = filtrados.filter(a => a.alunoTurma === f.turma);
-    if (f.tipo) filtrados = filtrados.filter(a => a.tipoTarefa === f.tipo);
-    if (f.prioridade) filtrados = filtrados.filter(a => a.prioridade === f.prioridade);
-    if (f.gravidade) filtrados = filtrados.filter(a => a.gravidade === f.gravidade);
-    if (f.remarcado === 'sim') filtrados = filtrados.filter(a => a.temRemarcacaoPendente);
-    else if (f.remarcado === 'nao') filtrados = filtrados.filter(a => !a.temRemarcacaoPendente);
-    if (f.assinatura === 'sim') filtrados = filtrados.filter(a => a.temAssinatura);
-    else if (f.assinatura === 'nao') filtrados = filtrados.filter(a => !a.temAssinatura);
-    
-    const prioridadeOrdem = { urgente: 4, alta: 3, normal: 2, baixa: 1 };
-    const gravidadeOrdem = { critica: 4, alta: 3, media: 2, baixa: 1 };
-    
-    filtrados.sort((a, b) => {
-        switch (f.ordenar) {
-            case 'antigo':
-                return new Date(a.dataHoraEntrada) - new Date(b.dataHoraEntrada);
-            case 'prioridade':
-                return (prioridadeOrdem[b.prioridade] || 0) - (prioridadeOrdem[a.prioridade] || 0);
-            case 'gravidade':
-                return (gravidadeOrdem[b.gravidade] || 0) - (gravidadeOrdem[a.gravidade] || 0);
-            case 'nome':
-                return (a.alunoNome || '').localeCompare(b.alunoNome || '');
-            default:
-                return new Date(b.dataHoraEntrada) - new Date(a.dataHoraEntrada);
-        }
-    });
-    
-    __atendimentosAtivosFiltrados = filtrados;
-    atualizarContadorResultados(filtrados.length, __atendimentosAtivosBrutos.length);
-    atualizarChipsFiltrosAtivos();
-    renderizarListaAtendimentosAtivos(filtrados);
-    atualizarBotaoLimparFiltros();
-}
-
-function atualizarContadorResultados(total, totalBruto) {
-    const el = safeGet('contadorResultados');
-    if (!el) return;
-    if (filtrosEstaoAtivos()) {
-        el.textContent = `${total} de ${totalBruto}`;
-    } else {
-        el.textContent = `${totalBruto}`;
-    }
-    el.className = 'contador-resultados' + (total === 0 ? ' zero' : '');
-}
-
-function atualizarBotaoLimparFiltros() {
-    const btn = safeGet('btnLimparFiltros');
-    if (btn) btn.disabled = !filtrosEstaoAtivos();
-}
-
-function atualizarChipsFiltrosAtivos() {
-    const container = safeGet('chipsFiltrosAtivos');
-    if (!container) return;
-    
-    const f = obterFiltrosAndamento();
-    const chips = [];
-    
-    if (f.busca) chips.push(`<span class="chip-filtro"><i class="fas fa-search"></i> "${escapeHTML(f.busca)}" <i class="fas fa-times" onclick="limparFiltroIndividual('busca')"></i></span>`);
-    if (f.turma) chips.push(`<span class="chip-filtro"><i class="fas fa-graduation-cap"></i> ${escapeHTML(f.turma)} <i class="fas fa-times" onclick="limparFiltroIndividual('turma')"></i></span>`);
-    if (f.tipo) chips.push(`<span class="chip-filtro"><i class="fas fa-clipboard-list"></i> ${escapeHTML(TIPO_LABELS[f.tipo] || f.tipo)} <i class="fas fa-times" onclick="limparFiltroIndividual('tipo')"></i></span>`);
-    if (f.prioridade) chips.push(`<span class="chip-filtro"><i class="fas fa-bolt"></i> ${escapeHTML(f.prioridade)} <i class="fas fa-times" onclick="limparFiltroIndividual('prioridade')"></i></span>`);
-    if (f.gravidade) chips.push(`<span class="chip-filtro"><i class="fas fa-exclamation-triangle"></i> ${escapeHTML(f.gravidade)} <i class="fas fa-times" onclick="limparFiltroIndividual('gravidade')"></i></span>`);
-    if (f.remarcado === 'sim') chips.push(`<span class="chip-filtro"><i class="fas fa-calendar-plus"></i> Remarcados <i class="fas fa-times" onclick="limparFiltroIndividual('remarcado')"></i></span>`);
-    if (f.remarcado === 'nao') chips.push(`<span class="chip-filtro"><i class="fas fa-calendar-times"></i> Sem remarcação <i class="fas fa-times" onclick="limparFiltroIndividual('remarcado')"></i></span>`);
-    if (f.assinatura === 'sim') chips.push(`<span class="chip-filtro"><i class="fas fa-signature"></i> Com assinatura <i class="fas fa-times" onclick="limparFiltroIndividual('assinatura')"></i></span>`);
-    if (f.assinatura === 'nao') chips.push(`<span class="chip-filtro"><i class="fas fa-signature"></i> Sem assinatura <i class="fas fa-times" onclick="limparFiltroIndividual('assinatura')"></i></span>`);
-    
-    container.innerHTML = chips.join('');
-}
-
-function limparFiltroIndividual(campo) {
-    const mapa = {
-        busca: 'filtroAndamentoBusca',
-        turma: 'filtroAndamentoTurma',
-        tipo: 'filtroAndamentoTipo',
-        prioridade: 'filtroAndamentoPrioridade',
-        gravidade: 'filtroAndamentoGravidade',
-        remarcado: 'filtroAndamentoRemarcado',
-        assinatura: 'filtroAndamentoAssinatura'
-    };
-    const el = safeGet(mapa[campo]);
-    if (el) el.value = '';
-    aplicarFiltrosAndamento();
-}
-
-function limparFiltrosAndamento() {
-    ['filtroAndamentoBusca', 'filtroAndamentoTurma', 'filtroAndamentoTipo',
-     'filtroAndamentoOrdenar', 'filtroAndamentoPrioridade', 'filtroAndamentoGravidade',
-     'filtroAndamentoRemarcado', 'filtroAndamentoAssinatura'].forEach(id => {
-        const el = safeGet(id);
-        if (el) el.value = id === 'filtroAndamentoOrdenar' ? 'recente' : '';
-    });
-    aplicarFiltrosAndamento();
-}
-
-function popularFiltroTurmasAndamento() {
-    const select = safeGet('filtroAndamentoTurma');
-    if (!select) return;
-    const valorAtual = select.value;
-    const turmas = [...new Set(__atendimentosAtivosBrutos.map(a => a.alunoTurma).filter(Boolean))].sort();
-    
-    select.innerHTML = '<option value="">Todas as turmas</option>';
-    turmas.forEach(t => {
-        select.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`;
-    });
-    if (valorAtual && turmas.includes(valorAtual)) select.value = valorAtual;
-}
-
-// ============================================
-// 🗑️ FILTROS DOS CONCLUÍDOS
-// ============================================
-function configurarFiltrosConcluidos() {
-    ['filtroConcluidosBusca', 'filtroConcluidosTipo', 'filtroConcluidosResultado'].forEach(id => {
-        const el = safeGet(id);
-        if (!el) return;
-        
-        if (el.tagName === 'INPUT') {
-            let timeoutId;
-            el.addEventListener('input', () => {
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => carregarAtendimentosConcluidos(1), 300);
-            });
-        } else {
-            el.addEventListener('change', () => carregarAtendimentosConcluidos(1));
-        }
-    });
-}
-
-function limparFiltrosConcluidos() {
-    const busca = safeGet('filtroConcluidosBusca');
-    const tipo = safeGet('filtroConcluidosTipo');
-    const resultado = safeGet('filtroConcluidosResultado');
-
-    if (busca) busca.value = '';
-    if (tipo) tipo.value = '';
-    if (resultado) resultado.value = '';
-
-    carregarAtendimentosConcluidos(1);
-}
-
-// ============================================
-// LEMBRETES / REMARCAÇÕES
-// (Versão enxuta — alimenta apenas as notificações do navegador.
-//  A renderização do sino é feita pelo sistema unificado no final do arquivo.)
-// ============================================
-async function carregarLembretes() {
-    try {
-        const response = await fetch('/api/psicologia/remarcacoes/pendentes', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const contentType = response.headers.get('content-type') || '';
-        if (!response.ok || !contentType.includes('application/json')) {
-            __lembretesAtuais = [];
-            return;
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && Array.isArray(data.remarcacoes)) {
-            __lembretesAtuais = data.remarcacoes;
-            verificarLembretesNotificar();
-            atualizarBadgeComUrgencia();
-            limparNotificacoesAntigas();
-        } else {
-            __lembretesAtuais = [];
-        }
-    } catch (error) {
-        console.debug('ℹ️ Lembretes: rota ainda não disponível');
-        __lembretesAtuais = [];
-    }
-}
-
-// ============================================
-// VER ATENDIMENTO (MODAL DE DETALHES)
-// ============================================
-async function verAtendimento(atendimentoId) {
-    if (!atendimentoId) return;
-    fecharNotificacoes();
-    
-    try {
-        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const data = await response.json();
-        
-        if (!data.success || !data.atendimento) {
-            alert('Erro ao carregar atendimento');
-            return;
-        }
-        
-        const a = data.atendimento;
-        
-        let detalhesHTML = '';
-        if (a.detalhes && Object.keys(a.detalhes).length > 0) {
-            const detalhesMap = {
-                tipoEscuta: 'Tipo de Escuta', duracaoEscuta: 'Duração (min)',
-                tipoCrise: 'Tipo de Crise', acoesTomadas: 'Ações Tomadas',
-                encaminhamentoEmergencial: 'Encaminhamento', nomeAtividade: 'Nome da Atividade',
-                participantesAtividade: 'Participantes', localAtividade: 'Local',
-                duracaoAtividade: 'Duração (min)', temaAcao: 'Tema', publicoAlvo: 'Público Alvo',
-                localAcao: 'Local', temaSocioemocional: 'Tema Socioemocional',
-                tipoAtividadeCultural: 'Tipo Cultural', parceria: 'Parcerias',
-                tipoTarefaOutros: 'Especificação', providenciasTomadas: 'Providências',
-                proximosPassos: 'Próximos Passos', contextoFamiliar: 'Contexto Familiar',
-                historicoAnterior: 'Histórico Anterior'
-            };
-            
-            detalhesHTML = '<div class="section-title">📋 Detalhes</div>';
-            Object.entries(a.detalhes).forEach(([key, value]) => {
-                if (!value || (Array.isArray(value) && value.length === 0)) return;
-                const label = detalhesMap[key] || key;
-                const valor = Array.isArray(value) ? value.join(', ') : value;
-                detalhesHTML += `
-                    <div class="info-row">
-                        <div class="info-label">${escapeHTML(label)}:</div>
-                        <div class="info-value">${escapeHTML(String(valor))}</div>
-                    </div>
-                `;
-            });
-        }
-        
-        let assinaturaHTML = '';
-        if (a.entrada?.temAssinatura && a.entrada?.assinaturaBase64) {
-            assinaturaHTML = `
-                <div class="section-title">✍️ Assinatura do Responsável</div>
-                <div class="assinatura-preview">
-                    <img src="${a.entrada.assinaturaBase64}" alt="Assinatura">
-                </div>
-            `;
-        }
-        
-        let remarcacoesHTML = '';
-        if (a.remarcacoes && a.remarcacoes.length > 0) {
-            remarcacoesHTML = '<div class="section-title">📅 Histórico de Remarcações</div>';
-            a.remarcacoes.forEach((r, idx) => {
-                const statusLabel = {
-                    'pendente': '⏳ Pendente',
-                    'realizado': '✅ Realizado',
-                    'cancelado': '❌ Cancelado'
-                }[r.status] || r.status;
-                
-                remarcacoesHTML += `
-                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                            <strong style="color: #0d9488;">#${idx + 1} - ${statusLabel}</strong>
-                            <small style="color: #6b7280;">${formatarDataBR(r.dataRemarcacao)} às ${r.horarioRemarcacao}</small>
-                        </div>
-                        <div style="font-size: 13px; color: #4b5563;">
-                            <strong>Motivo:</strong> ${escapeHTML(r.motivoRemarcacao || '-')}
-                        </div>
-                        ${r.observacoesRemarcacao ? `<div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${escapeHTML(r.observacoesRemarcacao)}</div>` : ''}
-                        ${r.criadaPorNome ? `<div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">Criada por ${escapeHTML(r.criadaPorNome)} em ${new Date(r.criadaEm).toLocaleString('pt-BR')}</div>` : ''}
-                    </div>
-                `;
-            });
-        }
-        
-        const oldModal = safeGet('modalVerAtendimento');
-        if (oldModal) oldModal.remove();
-        
-        const modalHtml = `
-            <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white;">
-                            <h5 class="modal-title"><i class="fas fa-eye"></i> Detalhes do Atendimento</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body detalhe-atendimento">
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f0fdfa; border-radius: 10px; margin-bottom: 16px;">
-                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
-                                <div style="flex: 1;">
-                                    <h5 style="margin: 0; color: #0f766e;">${escapeHTML(a.alunoNome)}</h5>
-                                    <small style="color: #6b7280;">
-                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
-                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
-                                    </small>
-                                </div>
-                                <span class="badge" style="background: #14b8a6; font-size: 12px;">${escapeHTML(a.tipoTarefaLabel)}</span>
-                            </div>
-                            
-                            <div class="section-title">📌 Informações</div>
-                            <div class="info-row">
-                                <div class="info-label">Status:</div>
-                                <div class="info-value">
-                                    <span class="badge" style="background: ${a.status === 'finalizado' ? '#10b981' : '#f59e0b'};">
-                                        ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Prioridade:</div>
-                                <div class="info-value">
-                                    <span class="badge" style="background: ${a.prioridade === 'urgente' ? '#dc2626' : a.prioridade === 'alta' ? '#f59e0b' : '#3b82f6'};">
-                                        ${escapeHTML(a.prioridade || 'normal').toUpperCase()}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Gravidade:</div>
-                                <div class="info-value">${escapeHTML(a.entrada?.gravidade || 'media').toUpperCase()}</div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Data de Entrada:</div>
-                                <div class="info-value">${a.entrada?.dataHoraFormatada || '-'}</div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Registrado por:</div>
-                                <div class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</div>
-                            </div>
-                            
-                            <div class="section-title">📝 Descrição</div>
-                            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 14px; color: #374151; line-height: 1.5;">
-                                ${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}
-                            </div>
-                            
-                            ${a.entrada?.observacoes ? `
-                                <div class="section-title">💬 Observações</div>
-                                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
-                                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
-                                </div>
-                            ` : ''}
-                            
-                            ${detalhesHTML}
-                            ${assinaturaHTML}
-                            ${remarcacoesHTML}
-                            
-                            ${a.saida ? `
-                                <div class="section-title">🎯 Resultado</div>
-                                <div class="info-row">
-                                    <div class="info-label">Resultado:</div>
-                                    <div class="info-value"><strong>${escapeHTML(a.saida.resultadoTexto || a.saida.resultado)}</strong></div>
-                                </div>
-                                <div class="info-row">
-                                    <div class="info-label">Data de Saída:</div>
-                                    <div class="info-value">${a.saida.dataHoraFormatada || '-'}</div>
-                                </div>
-                                ${a.saida.observacoesFinais ? `
-                                    <div class="info-row">
-                                        <div class="info-label">Obs. Finais:</div>
-                                        <div class="info-value">${escapeHTML(a.saida.observacoesFinais)}</div>
-                                    </div>
-                                ` : ''}
-                            ` : ''}
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> Fechar
-                            </button>
-                            <button type="button" class="btn btn-info" onclick="imprimirAtendimento('${a.id}')">
-                                <i class="fas fa-print"></i> Imprimir
-                            </button>
-                            ${a.status === 'em_andamento' ? `
-                                <button type="button" class="btn btn-secondary" onclick="fecharVerAtendimento(); abrirEditarAtendimento('${a.id}')">
-                                    <i class="fas fa-edit"></i> Editar
-                                </button>
-                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')">
-                                    <i class="fas fa-calendar-plus"></i> Remarcar
-                                </button>
-                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); abrirFinalizacao('${a.id}')">
-                                    <i class="fas fa-check"></i> Finalizar
-                                </button>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        const modal = new bootstrap.Modal(safeGet('modalVerAtendimento'));
-        modal.show();
-        
-    } catch (error) {
-        console.error('Erro ao ver atendimento:', error);
-        alert('Erro ao carregar detalhes do atendimento');
-    }
-}
-
-function fecharVerAtendimento() {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
-    if (modal) modal.hide();
-    setTimeout(() => {
-        const el = safeGet('modalVerAtendimento');
-        if (el) el.remove();
-    }, 300);
-}
-
-// ============================================
-// ✏️ EDITAR ATENDIMENTO
-// ============================================
-async function abrirEditarAtendimento(atendimentoId) {
-    if (!atendimentoId) return;
-    
-    try {
-        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        
-        if (!data.success || !data.atendimento) {
-            alert('Erro ao carregar atendimento');
-            return;
-        }
-        
-        const a = data.atendimento;
-        const oldModal = safeGet('modalEditarAtendimento');
-        if (oldModal) oldModal.remove();
-        
-        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
-            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
-        ).join('');
-        
-        const modalHtml = `
-            <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white;">
-                            <h5 class="modal-title">
-                                <i class="fas fa-edit"></i> Editar Atendimento
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <input type="hidden" id="editAtendimentoId" value="${a.id}">
-                            
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f0fdfa; border-radius: 10px; margin-bottom: 16px;">
-                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
-                                <div style="flex: 1;">
-                                    <h5 style="margin: 0; color: #0f766e;">${escapeHTML(a.alunoNome)}</h5>
-                                    <small style="color: #6b7280;">
-                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
-                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
-                                    </small>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
-                                <select id="editTipoTarefa" class="form-select">
-                                    ${tiposOptions}
-                                </select>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Descrição <span class="text-danger">*</span></label>
-                                <textarea id="editDescricao" class="form-control" rows="3">${escapeHTML(a.entrada?.descricao || '')}</textarea>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Gravidade</label>
-                                    <select id="editGravidade" class="form-select">
-                                        <option value="baixa" ${a.entrada?.gravidade === 'baixa' ? 'selected' : ''}>Baixa</option>
-                                        <option value="media" ${a.entrada?.gravidade === 'media' ? 'selected' : ''}>Média</option>
-                                        <option value="alta" ${a.entrada?.gravidade === 'alta' ? 'selected' : ''}>Alta</option>
-                                        <option value="critica" ${a.entrada?.gravidade === 'critica' ? 'selected' : ''}>Crítica</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Prioridade</label>
-                                    <select id="editPrioridade" class="form-select">
-                                        <option value="baixa" ${a.prioridade === 'baixa' ? 'selected' : ''}>Baixa</option>
-                                        <option value="normal" ${a.prioridade === 'normal' ? 'selected' : ''}>Normal</option>
-                                        <option value="alta" ${a.prioridade === 'alta' ? 'selected' : ''}>Alta</option>
-                                        <option value="urgente" ${a.prioridade === 'urgente' ? 'selected' : ''}>Urgente</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Observações</label>
-                                <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> Cancelar
-                            </button>
-                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoAtendimento()">
-                                <i class="fas fa-save"></i> Salvar Alterações
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao carregar para edição');
-    }
-}
-
-async function salvarEdicaoAtendimento() {
-    const atendimentoId = safeGet('editAtendimentoId')?.value;
-    const tipoTarefa = safeGet('editTipoTarefa')?.value;
-    const descricao = (safeGet('editDescricao')?.value || '').trim();
-    const gravidade = safeGet('editGravidade')?.value;
-    const prioridade = safeGet('editPrioridade')?.value;
-    const observacoes = safeGet('editObservacoes')?.value || '';
-    
-    if (!tipoTarefa || !descricao) {
-        alert('Preencha todos os campos obrigatórios');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                tipoTarefa,
-                descricao,
-                gravidade,
-                prioridade,
-                observacoes
-            })
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
-            if (modal) modal.hide();
-            
-            mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
-            
-            carregarAtendimentosAtivos();
-            carregarDashboard();
-            carregarLembretes();
-            carregarAtendimentosConcluidos(__concluidosPaginaAtual);
-        } else {
-            alert('❌ ' + (data.error || 'Erro ao salvar'));
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao salvar alterações');
-    }
-}
-
-// ============================================================================
-// ====================== ASSINATURA DIGITAL (CANVAS) =========================
-// ============================================================================
-function inicializarAssinatura() {
-    const canvas = safeGet('assinaturaCanvas');
-    if (!canvas) return;
-    if (canvas.dataset.assinaturaInit === 'true') return;
-    canvas.dataset.assinaturaInit = 'true';
-
-    const state = assinaturaState;
-    const container = canvas.parentElement;
-    const placeholder = safeGet('assinaturaPlaceholder');
-
-    function ajustarCanvas() {
-        const rect = canvas.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) {
-            setTimeout(ajustarCanvas, 300);
-            return;
-        }
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        canvas.style.width = rect.width + 'px';
-        canvas.style.height = rect.height + 'px';
-        const ctx = canvas.getContext('2d');
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-        ctx.lineWidth = 2.5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#0d9488';
-        state.ctx = ctx;
-        state.larguraBase = rect.width;
-        state.alturaBase = rect.height;
-    }
-    ajustarCanvas();
-
-    window.addEventListener('resize', () => {
-        if (!state.temAssinatura) ajustarCanvas();
-    });
-
-    state.canvas = canvas;
-
-    function getPos(e) {
-        const rect = canvas.getBoundingClientRect();
-        let clientX, clientY;
-        if (e.touches && e.touches.length > 0) {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else if (e.changedTouches && e.changedTouches.length > 0) {
-            clientX = e.changedTouches[0].clientX;
-            clientY = e.changedTouches[0].clientY;
-        } else {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        }
-        return { x: clientX - rect.left, y: clientY - rect.top };
-    }
-
-    function iniciar(e) {
-        e.preventDefault();
-        state.desenhando = true;
-        const pos = getPos(e);
-        state.lastX = pos.x;
-        state.lastY = pos.y;
-        state.temAssinatura = true;
-        container.classList.add('ativa');
-        if (placeholder) placeholder.classList.add('escondido');
-    }
-
-    function desenhar(e) {
-        if (!state.desenhando) return;
-        e.preventDefault();
-        const pos = getPos(e);
-        state.ctx.beginPath();
-        state.ctx.moveTo(state.lastX, state.lastY);
-        state.ctx.lineTo(pos.x, pos.y);
-        state.ctx.stroke();
-        state.lastX = pos.x;
-        state.lastY = pos.y;
-    }
-
-    function parar(e) {
-        if (e && e.preventDefault) e.preventDefault();
-        state.desenhando = false;
-        container.classList.remove('ativa');
-        salvarAssinaturaBase64();
-    }
-
-    canvas.addEventListener('touchstart', iniciar, { passive: false });
-    canvas.addEventListener('touchmove', desenhar, { passive: false });
-    canvas.addEventListener('touchend', parar, { passive: false });
-    canvas.addEventListener('touchcancel', parar, { passive: false });
-    canvas.addEventListener('mousedown', iniciar);
-    canvas.addEventListener('mousemove', desenhar);
-    canvas.addEventListener('mouseup', parar);
-    canvas.addEventListener('mouseleave', () => {
-        if (state.desenhando) parar();
-    });
-
-    console.log('✅ Assinatura inicializada');
-}
-
-function limparAssinatura() {
-    const state = assinaturaState;
-    if (!state.canvas || !state.ctx) return;
-    const rect = state.canvas.getBoundingClientRect();
-    state.ctx.clearRect(0, 0, rect.width, rect.height);
-    state.temAssinatura = false;
-    const placeholder = safeGet('assinaturaPlaceholder');
-    if (placeholder) placeholder.classList.remove('escondido');
-    const hidden = safeGet('assinaturaBase64');
-    if (hidden) hidden.value = '';
-}
-
-function salvarAssinaturaBase64() {
-    const state = assinaturaState;
-    if (!state.canvas || !state.temAssinatura) return;
-    try {
-        const dataURL = state.canvas.toDataURL('image/png');
-        const hidden = safeGet('assinaturaBase64');
-        if (hidden) hidden.value = dataURL;
-    } catch (e) {
-        console.warn('Erro ao salvar assinatura:', e);
-    }
-}
-
-function obterAssinaturaBase64() {
-    const state = assinaturaState;
-    if (!state || !state.temAssinatura) return '';
-    try {
-        return state.canvas.toDataURL('image/png');
-    } catch (e) {
-        return '';
     }
 }
 
@@ -1202,8 +162,10 @@ async function pararScannerAutomatico() {
 }
 
 async function onScanSuccessAuto(decodedText) {
+    console.log('QR Code (Automático):', decodedText);
     const alunoId = extrairAlunoId(decodedText);
     if (!alunoId) { alert('QR Code inválido'); return; }
+    
     await pararScannerAutomatico();
     await buscarAluno(alunoId);
 }
@@ -1228,21 +190,23 @@ async function setModo(modo) {
     modoAtual = modo;
     
     safeGet('alunoInfo').style.display = 'none';
-    safeGet('formRegistro').style.display = 'none';
+    safeGet('formEntrada').style.display = 'none';
+    safeGet('formSaida').style.display = 'none';
     currentAluno = null;
-    tipoTarefaSelecionado = null;
     
     if (modo === 'automatico') {
         safeGet('modoAutomaticoBtn').classList.add('active');
         safeGet('modoManualBtn').classList.remove('active');
         safeGet('modoAutomatico').style.display = 'block';
         safeGet('modoManual').style.display = 'none';
+        
         await iniciarScannerAutomatico();
     } else {
         safeGet('modoManualBtn').classList.add('active');
         safeGet('modoAutomaticoBtn').classList.remove('active');
         safeGet('modoAutomatico').style.display = 'none';
         safeGet('modoManual').style.display = 'block';
+        
         await pararScannerAutomatico();
         
         const turmaSelecionada = safeGet('filtroTurmaManual').value;
@@ -1255,11 +219,11 @@ async function setModo(modo) {
 }
 
 // ============================================
-// MODO MANUAL
+// MODO MANUAL - TURMAS E ALUNOS
 // ============================================
 async function carregarTurmasParaManual() {
     try {
-        const response = await fetch('/api/psicologia/turmas', {
+        const response = await fetch('/api/enfermaria/turmas', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -1291,7 +255,7 @@ async function carregarAlunosPorTurma() {
         '<div class="text-center py-3"><div class="loading"></div><p>Carregando alunos...</p></div>';
     
     try {
-        const response = await fetch(`/api/psicologia/alunos-por-turma?turma=${encodeURIComponent(turma)}`, {
+        const response = await fetch(`/api/enfermaria/alunos-por-turma?turma=${encodeURIComponent(turma)}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -1314,8 +278,12 @@ function filtrarAlunosManual() {
     if (!Array.isArray(alunosPorTurma)) return;
     
     const busca = (safeGet('filtroBuscaManual')?.value || '').toLowerCase();
+    
     let filtrados = alunosPorTurma;
-    if (busca) filtrados = filtrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
+    if (busca) {
+        filtrados = filtrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
+    }
+    
     filtrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
     
     const container = safeGet('listaAlunosManual');
@@ -1329,7 +297,8 @@ function filtrarAlunosManual() {
     filtrados.forEach(aluno => {
         html += `
             <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
-                 data-aluno-id="${aluno.id}" data-aluno-nome="${escapeHTML(aluno.nome)}"
+                 data-aluno-id="${aluno.id}"
+                 data-aluno-nome="${escapeHTML(aluno.nome)}"
                  style="cursor: pointer;">
                 <div>
                     <strong>${escapeHTML(aluno.nome)}</strong>
@@ -1341,8 +310,10 @@ function filtrarAlunosManual() {
         `;
     });
     html += '</div>';
+    
     container.innerHTML = html;
     
+    // Adicionar listeners (mais seguro que onclick inline)
     container.querySelectorAll('.list-group-item').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.getAttribute('data-aluno-id');
@@ -1352,32 +323,40 @@ function filtrarAlunosManual() {
     });
 }
 
+// ============================================
+// CLICAR NO ALUNO PROCESSA DIRETO (SEM QR CODE)
+// ============================================
 async function selecionarAluno(alunoId, alunoNome, itemEl) {
+    console.log(`🎯 Aluno selecionado: ${alunoNome} (${alunoId})`);
+    
+    // Feedback visual
     if (itemEl) {
-        itemEl.style.background = '#ccfbf1';
-        itemEl.style.borderColor = '#14b8a6';
-        itemEl.style.pointerEvents = 'none';
+        itemEl.style.background = '#d1fae5';
+        itemEl.style.borderColor = '#10b981';
         itemEl.innerHTML = `
-            <div><strong>${escapeHTML(alunoNome)}</strong><br><small style="color: #0d9488;">Processando...</small></div>
-            <i class="fas fa-spinner fa-spin fa-2x" style="color: #0d9488;"></i>
+            <div>
+                <strong>${escapeHTML(alunoNome)}</strong>
+                <br>
+                <small class="text-success">Processando...</small>
+            </div>
+            <i class="fas fa-spinner fa-spin fa-2x text-success"></i>
         `;
     }
-    try { await buscarAluno(alunoId); } catch (error) { console.error('Erro:', error); }
+    
+    // Processar direto (como se tivesse escaneado o QR Code)
+    await buscarAluno(alunoId);
 }
 
+// ============================================
+// BUSCAR E EXIBIR ALUNO
+// ============================================
 async function buscarAluno(alunoId) {
     try {
         await pararScannerAutomatico();
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const response = await fetch(`/api/psicologia/aluno/${alunoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-            signal: controller.signal
+        const response = await fetch(`/api/enfermaria/aluno/${alunoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        clearTimeout(timeoutId);
         
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
@@ -1385,7 +364,14 @@ async function buscarAluno(alunoId) {
         if (data.success && data.aluno) {
             currentAluno = data.aluno;
             exibirAluno(data);
-            mostrarFormRegistro();
+            
+            if (data.emAtendimento && data.atendimentoAtivo) {
+                currentAtendimento = data.atendimentoAtivo;
+                mostrarFormSaida();
+            } else {
+                currentAtendimento = null;
+                mostrarFormEntrada();
+            }
         } else {
             alert(data.error || 'Aluno não encontrado');
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
@@ -1393,24 +379,27 @@ async function buscarAluno(alunoId) {
         }
     } catch (error) {
         console.error('Erro:', error);
-        if (error.name === 'AbortError') alert('Tempo esgotado ao buscar aluno.');
-        else alert('Erro ao buscar aluno');
-        
+        alert('Erro ao buscar aluno');
         if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         else carregarAlunosPorTurma();
     }
 }
 
 function exibirAluno(data) {
-    if (!data || !data.aluno) return;
     const aluno = data.aluno;
     
     const fotoEl = safeGet('alunoFoto');
     if (fotoEl) {
+        // Remove o onerror antes de definir
         fotoEl.onerror = null;
-        fotoEl.src = aluno.fotoPerfil || gerarAvatarSVG(aluno.nome);
+        
+        // Se não tem foto, usa um SVG local (não depende de servidor externo)
+        const fotoUrl = aluno.fotoPerfil || gerarAvatarSVG(aluno.nome);
+        fotoEl.src = fotoUrl;
+        
+        // onerror com trava para não entrar em loop
         fotoEl.onerror = function() {
-            this.onerror = null;
+            this.onerror = null; // Remove o onerror imediatamente
             this.src = gerarAvatarSVG(aluno.nome);
         };
     }
@@ -1422,50 +411,20 @@ function exibirAluno(data) {
     
     const statusDiv = safeGet('statusAtendimento');
     if (statusDiv) {
-        if (data.atendimentosAtivos && data.atendimentosAtivos.length > 0) {
+        if (data.emAtendimento && data.atendimentoAtivo) {
             statusDiv.innerHTML = `
                 <div class="alert alert-warning">
-                    <i class="fas fa-clock"></i> 
-                    <strong>${data.atendimentosAtivos.length} atendimento(s) em andamento</strong>
-                    ${data.atendimentosAtivos.map(a => `
-                        <div class="mt-2 p-2" style="background: white; border-radius: 8px;">
-                            <strong>${escapeHTML(a.tipoTarefaLabel || '')}</strong>: 
-                            ${escapeHTML((a.descricao || '').substring(0, 100))}
-                            <br><small class="text-muted">
-                                <i class="fas fa-clock"></i> 
-                                ${a.dataHoraEntrada ? new Date(a.dataHoraEntrada).toLocaleString('pt-BR') : ''}
-                            </small>
-                        </div>
-                    `).join('')}
+                    <i class="fas fa-clock"></i> Aluno em atendimento desde 
+                    ${new Date(data.atendimentoAtivo.dataHoraEntrada).toLocaleString('pt-BR')}
+                    <br><strong>Queixa:</strong> ${escapeHTML(data.atendimentoAtivo.queixa)}
                 </div>
             `;
         } else {
             statusDiv.innerHTML = `
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Nenhum atendimento em andamento
+                    <i class="fas fa-info-circle"></i> Aluno não está em atendimento no momento.
                 </div>
             `;
-        }
-    }
-    
-    const histDiv = safeGet('historicoRecente');
-    if (histDiv) {
-        if (data.historicoRecente && data.historicoRecente.length > 0) {
-            histDiv.innerHTML = `
-                <h6 class="text-muted mt-3 mb-2"><i class="fas fa-history"></i> Histórico Recente</h6>
-                ${data.historicoRecente.map(h => `
-                    <div class="p-2 mb-2" style="background: #f8fafc; border-radius: 8px; font-size: 13px;">
-                        <strong>${escapeHTML(h.tipoTarefaLabel || '')}</strong>: 
-                        ${escapeHTML((h.descricao || '').substring(0, 80))}
-                        <br><small class="text-muted">
-                            ${h.dataHora ? new Date(h.dataHora).toLocaleDateString('pt-BR') : ''}
-                            ${h.resultado ? `• ${escapeHTML(h.resultado)}` : ''}
-                        </small>
-                    </div>
-                `).join('')}
-            `;
-        } else {
-            histDiv.innerHTML = '';
         }
     }
     
@@ -1473,280 +432,136 @@ function exibirAluno(data) {
     safeGet('alunoInfo').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ============================================
-// FORMULÁRIO
-// ============================================
-function mostrarFormRegistro() {
-    safeGet('formRegistro').style.display = 'block';
-    
-    const tipoInput = safeGet('tipoTarefaSelecionado');
-    if (tipoInput) tipoInput.value = '';
-    
-    tipoTarefaSelecionado = null;
-    document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
-    
-    safeGet('descricao').value = '';
-    safeGet('observacoes').value = '';
-    safeGet('gravidade').value = 'media';
-    safeGet('prioridade').value = 'normal';
-    safeSetHTML('camposEspecificos', '');
-    limparAssinatura();
-}
-
-function selecionarTipo(tipo) {
-    if (!tipo) return;
-    tipoTarefaSelecionado = tipo;
-    safeGet('tipoTarefaSelecionado').value = tipo;
-    
-    document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`.tipo-card[data-tipo="${tipo}"]`);
-    if (card) card.classList.add('selected');
-    
-    renderizarCamposEspecificos(tipo);
-}
-
-function renderizarCamposEspecificos(tipo) {
-    const container = safeGet('camposEspecificos');
-    if (!container) return;
-    
-    let html = '';
-    const camposComuns = `
-        <div class="mb-3">
-            <label class="form-label">Contexto Familiar</label>
-            <textarea id="detalheContextoFamiliar" class="form-control" rows="2" placeholder="Informações sobre o contexto familiar..."></textarea>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Histórico Anterior</label>
-            <textarea id="detalheHistoricoAnterior" class="form-control" rows="2" placeholder="Histórico de situações anteriores..."></textarea>
-        </div>
+// Gera um avatar SVG local (não depende de servidor externo)
+function gerarAvatarSVG(nome) {
+    const inicial = (nome || '?').charAt(0).toUpperCase();
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+            <defs>
+                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="50" fill="url(#grad)"/>
+            <text x="50" y="50" font-family="Arial, sans-serif" font-size="45" font-weight="bold" 
+                  fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text>
+        </svg>
     `;
-    
-    switch (tipo) {
-        case 'escuta_acolhimento':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tipo de Escuta</label>
-                        <select id="detalheTipoEscuta" class="form-select">
-                            <option value="">Selecione...</option>
-                            <option value="Individual">Individual</option>
-                            <option value="Em Grupo">Em Grupo</option>
-                            <option value="Com Responsável">Com Responsável</option>
-                            <option value="Com Professor">Com Professor</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Duração (minutos)</label>
-                        <input type="number" id="detalheDuracaoEscuta" class="form-control" min="1">
-                    </div>
-                </div>
-                ${camposComuns}
-            `;
-            break;
-            
-        case 'manejo_crises_emocionais':
-            html = `
-                <div class="mb-3">
-                    <label class="form-label">Tipo de Crise</label>
-                    <select id="detalheTipoCrise" class="form-select">
-                        <option value="">Selecione...</option>
-                        <option value="Ansiedade">Ansiedade</option>
-                        <option value="Pânico">Pânico</option>
-                        <option value="Depressão">Depressão</option>
-                        <option value="Agressividade">Agressividade</option>
-                        <option value="Automutilação">Automutilação</option>
-                        <option value="Ideação Suicida">Ideação Suicida</option>
-                        <option value="Outro">Outro</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Ações Tomadas</label>
-                    <textarea id="detalheAcoesTomadas" class="form-control" rows="2" placeholder="O que foi feito durante o manejo..."></textarea>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Encaminhamento Emergencial</label>
-                    <input type="text" id="detalheEncaminhamentoEmergencial" class="form-control" placeholder="Ex: SAMU, Bombeiros, Família">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-            
-        case 'atividades_grupos':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Nome da Atividade</label>
-                        <input type="text" id="detalheNomeAtividade" class="form-control" placeholder="Ex: Roda de Conversa">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Local</label>
-                        <input type="text" id="detalheLocalAtividade" class="form-control" placeholder="Ex: Sala 3, Pátio">
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Participantes (separados por vírgula)</label>
-                        <input type="text" id="detalheParticipantesAtividade" class="form-control" placeholder="Ex: João, Maria, Pedro">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Duração (minutos)</label>
-                        <input type="number" id="detalheDuracaoAtividade" class="form-control" min="1">
-                    </div>
-                </div>
-                ${camposComuns}
-            `;
-            break;
-            
-        case 'acoes_atividades_saude':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tema da Ação</label>
-                        <input type="text" id="detalheTemaAcao" class="form-control" placeholder="Ex: Saúde Mental">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Local</label>
-                        <input type="text" id="detalheLocalAcao" class="form-control" placeholder="Ex: Pátio, Auditório">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Público Alvo</label>
-                    <input type="text" id="detalhePublicoAlvo" class="form-control" placeholder="Ex: Todos os alunos">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-            
-        case 'acoes_socioemocionais_culturais':
-            html = `
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tema Socioemocional</label>
-                        <input type="text" id="detalheTemaSocioemocional" class="form-control" placeholder="Ex: Empatia">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tipo de Atividade Cultural</label>
-                        <input type="text" id="detalheTipoAtividadeCultural" class="form-control" placeholder="Ex: Teatro, Música">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Parcerias</label>
-                    <input type="text" id="detalheParceria" class="form-control" placeholder="Ex: Secretaria de Cultura">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-            
-        case 'outros':
-            html = `
-                <div class="mb-3">
-                    <label class="form-label">Especifique o Tipo de Tarefa <span class="text-danger">*</span></label>
-                    <input type="text" id="detalheTipoTarefaOutros" class="form-control" placeholder="Descreva o tipo...">
-                </div>
-                ${camposComuns}
-            `;
-            break;
-    }
-    
-    html += `
-        <div class="mb-3">
-            <label class="form-label">Providências Tomadas</label>
-            <textarea id="detalheProvidencias" class="form-control" rows="2" placeholder="O que já foi feito..."></textarea>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Próximos Passos</label>
-            <textarea id="detalheProximosPassos" class="form-control" rows="2" placeholder="O que será feito..."></textarea>
-        </div>
-    `;
-    
-    container.innerHTML = html;
-}
-
-function coletarDetalhes() {
-    const detalhes = {};
-    
-    const participantesAtivEl = safeGet('detalheParticipantesAtividade');
-    if (participantesAtivEl) {
-        detalhes.participantesAtividade = participantesAtivEl.value
-            .split(',').map(t => t.trim()).filter(t => t.length > 0);
-    }
-    
-    const camposTexto = {
-        'detalheContextoFamiliar': 'contextoFamiliar', 'detalheHistoricoAnterior': 'historicoAnterior',
-        'detalheTipoEscuta': 'tipoEscuta', 'detalheTipoCrise': 'tipoCrise',
-        'detalheAcoesTomadas': 'acoesTomadas', 'detalheEncaminhamentoEmergencial': 'encaminhamentoEmergencial',
-        'detalheNomeAtividade': 'nomeAtividade', 'detalheLocalAtividade': 'localAtividade',
-        'detalheTemaAcao': 'temaAcao', 'detalhePublicoAlvo': 'publicoAlvo',
-        'detalheLocalAcao': 'localAcao', 'detalheTemaSocioemocional': 'temaSocioemocional',
-        'detalheTipoAtividadeCultural': 'tipoAtividadeCultural', 'detalheParceria': 'parceria',
-        'detalheTipoTarefaOutros': 'tipoTarefaOutros', 'detalheProvidencias': 'providenciasTomadas',
-        'detalheProximosPassos': 'proximosPassos'
-    };
-    
-    Object.entries(camposTexto).forEach(([elementId, key]) => {
-        const el = safeGet(elementId);
-        if (el && el.value) detalhes[key] = el.value.trim();
-    });
-    
-    const duracaoEscutaEl = safeGet('detalheDuracaoEscuta');
-    if (duracaoEscutaEl && duracaoEscutaEl.value) {
-        const d = parseInt(duracaoEscutaEl.value);
-        if (!isNaN(d) && d > 0) detalhes.duracaoEscuta = d;
-    }
-    
-    const duracaoAtividadeEl = safeGet('detalheDuracaoAtividade');
-    if (duracaoAtividadeEl && duracaoAtividadeEl.value) {
-        const d = parseInt(duracaoAtividadeEl.value);
-        if (!isNaN(d) && d > 0) detalhes.duracaoAtividade = d;
-    }
-    
-    return detalhes;
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 }
 
 // ============================================
-// REGISTRAR
+// FORMULÁRIOS
 // ============================================
-async function registrarOcorrencia() {
-    if (!tipoTarefaSelecionado) { alert('Selecione o tipo de tarefa'); return; }
-    const descricao = (safeGet('descricao')?.value || '').trim();
-    if (!descricao) { alert('Descreva o ocorrido'); return; }
+function mostrarFormEntrada() {
+    safeGet('formEntrada').style.display = 'block';
+    safeGet('formSaida').style.display = 'none';
+    safeGet('queixa').value = '';
+    safeGet('observacoesEntrada').value = '';
+}
+
+function mostrarFormSaida() {
+    safeGet('formEntrada').style.display = 'none';
+    safeGet('formSaida').style.display = 'block';
+    safeGet('desfecho').value = '';
+    safeGet('coordenadorPatioNome').value = '';
+    safeGet('outrosTexto').value = '';
+    safeGet('observacoesSaida').value = '';
+    safeGet('campoCoordenador').style.display = 'none';
+    safeGet('campoOutros').style.display = 'none';
+}
+
+function toggleOutrosCampos() {
+    const desfecho = safeGet('desfecho').value;
+    safeGet('campoCoordenador').style.display = desfecho === 'liberado_coordenador' ? 'block' : 'none';
+    safeGet('campoOutros').style.display = desfecho === 'outros' ? 'block' : 'none';
+}
+
+// ============================================
+// REGISTRAR ENTRADA
+// ============================================
+async function registrarEntrada() {
+    const queixa = (safeGet('queixa')?.value || '').trim();
+    if (!queixa) { alert('Por favor, descreva a queixa do aluno'); return; }
+    
     if (!currentAluno || !currentAluno.id) { alert('Nenhum aluno selecionado'); return; }
     
-    const btn = document.querySelector('#formRegistro .btn-primary-custom');
+    const btn = document.querySelector('#formEntrada .btn-primary-custom');
     if (btn) btn.disabled = true;
     
     try {
-        const assinaturaBase64 = obterAssinaturaBase64();
-        
-        const response = await fetch('/api/psicologia/registrar', {
+        const response = await fetch('/api/enfermaria/entrada', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({
                 alunoId: currentAluno.id,
-                tipoTarefa: tipoTarefaSelecionado,
-                descricao,
-                observacoes: safeGet('observacoes')?.value || '',
-                gravidade: safeGet('gravidade')?.value || 'media',
-                prioridade: safeGet('prioridade')?.value || 'normal',
-                detalhes: coletarDetalhes(),
-                assinaturaBase64: assinaturaBase64
+                queixa,
+                observacoes: safeGet('observacoesEntrada').value
             })
         });
-        
         const data = await response.json();
         
         if (data.success) {
             alert(`✅ ${data.message}`);
             finalizarAposSucesso();
         } else {
-            alert('❌ ' + (data.error || 'Erro ao registrar'));
+            alert('❌ ' + data.error);
+            if (modoAtual === 'automatico') reiniciarScannerAutomatico();
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao registrar: ' + error.message);
+        alert('Erro ao registrar');
+        if (modoAtual === 'automatico') reiniciarScannerAutomatico();
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ============================================
+// REGISTRAR SAÍDA
+// ============================================
+async function registrarSaida() {
+    const desfecho = safeGet('desfecho').value;
+    if (!desfecho) { alert('Por favor, selecione o desfecho do atendimento'); return; }
+    
+    if (desfecho === 'outros' && !(safeGet('outrosTexto').value || '').trim()) {
+        alert('Por favor, descreva o desfecho');
+        return;
+    }
+    
+    if (!currentAluno || !currentAluno.id) { alert('Nenhum aluno selecionado'); return; }
+    
+    const btn = document.querySelector('#formSaida .btn-primary-custom');
+    if (btn) btn.disabled = true;
+    
+    try {
+        const body = {
+            alunoId: currentAluno.id,
+            desfecho,
+            desfechoOutrosTexto: safeGet('outrosTexto').value,
+            coordenadorPatioNome: safeGet('coordenadorPatioNome').value,
+            observacoes: safeGet('observacoesSaida').value
+        };
+        
+        const response = await fetch('/api/enfermaria/saida', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            finalizarAposSucesso();
+        } else {
+            alert('❌ ' + data.error);
+            if (modoAtual === 'automatico') reiniciarScannerAutomatico();
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao registrar');
+        if (modoAtual === 'automatico') reiniciarScannerAutomatico();
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -1754,26 +569,31 @@ async function registrarOcorrencia() {
 
 function finalizarAposSucesso() {
     limparTela();
-    if (modoAtual === 'automatico') reiniciarScannerAutomatico();
-    else carregarAlunosPorTurma();
+    
+    if (modoAtual === 'automatico') {
+        reiniciarScannerAutomatico();
+    } else {
+        // Recarregar a lista de alunos da turma
+        carregarAlunosPorTurma();
+    }
     
     carregarAtendimentosAtivos();
     carregarDashboard();
-    carregarLembretes();
 }
 
 function limparTela() {
     safeGet('alunoInfo').style.display = 'none';
-    safeGet('formRegistro').style.display = 'none';
+    safeGet('formEntrada').style.display = 'none';
+    safeGet('formSaida').style.display = 'none';
     currentAluno = null;
     currentAtendimento = null;
-    tipoTarefaSelecionado = null;
-    limparAssinatura();
 }
 
 function reiniciarScannerAutomatico() {
     setTimeout(() => {
-        if (!scannerAutoAtivo && modoAtual === 'automatico') iniciarScannerAutomatico();
+        if (!scannerAutoAtivo && modoAtual === 'automatico') {
+            iniciarScannerAutomatico();
+        }
     }, 1000);
 }
 
@@ -1785,1506 +605,79 @@ async function carregarAtendimentosAtivos() {
     if (!container) return;
     
     try {
-        const response = await fetch('/api/psicologia/atendimentos-ativos', {
+        const response = await fetch('/api/enfermaria/atendimentos-ativos', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         
-        __atendimentosAtivosBrutos = (data.success && Array.isArray(data.atendimentos)) ? data.atendimentos : [];
-        popularFiltroTurmasAndamento();
-        aplicarFiltrosAndamento();
-        atualizarBadgeTabAtivos(__atendimentosAtivosBrutos.length);
-    } catch (error) {
-        console.error('Erro:', error);
-        container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
-    }
-}
-
-function atualizarBadgeTabAtivos(total) {
-    const badge = safeGet('badgeAtivosTab');
-    if (!badge) return;
-    if (total > 0) { badge.textContent = total; badge.style.display = 'inline-block'; }
-    else badge.style.display = 'none';
-}
-
-function renderizarListaAtendimentosAtivos(lista) {
-    const container = safeGet('listaAtendimentosAtivos');
-    if (!container) return;
-    
-    if (!lista || lista.length === 0) {
-        if (__atendimentosAtivosBrutos.length > 0) {
-            container.innerHTML = `
-                <div class="estado-vazio-filtro">
-                    <i class="fas fa-search"></i>
-                    <p>Nenhum atendimento corresponde aos filtros</p>
-                    <button class="btn btn-sm btn-outline-primary" onclick="limparFiltrosAndamento()">
-                        <i class="fas fa-times"></i> Limpar filtros
-                    </button>
-                </div>`;
+        if (data.success && Array.isArray(data.atendimentos) && data.atendimentos.length > 0) {
+            container.innerHTML = data.atendimentos.map(a => `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
+                                 style="width:50px;height:50px;border-radius:50%;object-fit:cover;"
+                                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome || '?')}'">
+                            <div>
+                                <strong>${escapeHTML(a.alunoNome || '')}</strong>
+                                <br><small class="text-muted">Turma: ${escapeHTML(a.alunoTurma || '-')}</small>
+                                <br><small class="text-muted">
+                                    <i class="fas fa-clock"></i> Há ${a.tempoAtendimento || 0} minutos
+                                </small>
+                                <br>
+                                <span class="badge bg-warning text-dark">Em atendimento</span>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 justify-content-end">
+                            <button class="btn btn-sm btn-info" 
+                                    onclick="verAtendimento('${a.id}')" 
+                                    title="Ver detalhes">
+                                <i class="fas fa-eye"></i> Ver
+                            </button>
+                            <button class="btn btn-sm btn-warning" 
+                                    onclick="editarAtendimento('${a.id}')" 
+                                    title="Editar queixa/observações">
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                            <button class="btn btn-sm btn-success" 
+                                    onclick="finalizarAtendimentoAtivo('${a.alunoId}')" 
+                                    title="Finalizar atendimento">
+                                <i class="fas fa-check"></i> Finalizar
+                            </button>
+                            <button class="btn btn-sm btn-danger" 
+                                    onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
+                                    title="Excluir atendimento">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-2 p-2" style="background:#f8fafc;border-radius:8px;font-size:13px;">
+                        <strong>Queixa:</strong> ${escapeHTML((a.queixa || '').substring(0, 200))}${(a.queixa || '').length > 200 ? '...' : ''}
+                    </div>
+                </div>
+            `).join('');
         } else {
             container.innerHTML = `
                 <div class="text-center text-muted py-5">
                     <i class="fas fa-check-circle fa-3x mb-3" style="color:#10b981;"></i>
-                    <p>Nenhum atendimento em andamento</p>
-                </div>`;
-        }
-        return;
-    }
-    
-    const prioridadeIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baixa: '🟢' };
-    
-    container.innerHTML = lista.map(a => `
-        <div class="list-group-item filtrado">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                <div class="d-flex align-items-center gap-3">
-                    <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
-                         style="width:50px;height:50px;border-radius:50%;object-fit:cover;"
-                         onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome || '?')}'">
-                    <div>
-                        <strong>${escapeHTML(a.alunoNome || '')}</strong>
-                        <br><small class="text-muted">Turma: ${escapeHTML(a.alunoTurma || '-')}</small>
-                        <br>
-                        <span class="badge bg-primary">${escapeHTML(a.tipoTarefaLabel || '')}</span>
-                        <span class="badge badge-gravidade gravidade-${a.gravidade || 'media'}">${escapeHTML(a.gravidade || 'media')}</span>
-                        <span class="badge bg-secondary">${prioridadeIcon[a.prioridade] || '🟡'} ${escapeHTML(a.prioridade || 'normal')}</span>
-                        ${a.temRemarcacaoPendente ? '<span class="badge bg-warning text-dark"><i class="fas fa-calendar"></i> Remarcado</span>' : ''}
-                        ${a.temAssinatura ? '<span class="badge bg-success"><i class="fas fa-signature"></i></span>' : ''}
-                    </div>
-                </div>
-                <div class="text-end">
-                    <small class="text-muted d-block"><i class="fas fa-clock"></i> Há ${a.tempoAtendimento || 0} min</small>
-                    <div class="mt-2 d-flex gap-1 flex-wrap justify-content-end">
-                        <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes">
-                            <i class="fas fa-eye"></i> Ver
-                        </button>
-                        <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir"><i class="fas fa-print"></i></button>
-                        <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-primary" onclick="abrirFinalizacao('${a.id}')" title="Finalizar">
-                            <i class="fas fa-check"></i>
-                        </button>
-                        <button class="btn btn-sm btn-warning" onclick="abrirRemarcar('${a.id}')" title="Remarcar">
-                            <i class="fas fa-calendar-plus"></i>
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}')" title="Excluir">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="mt-2 p-2" style="background:#f8fafc;border-radius:8px;font-size:13px;">
-                ${escapeHTML((a.descricao || '').substring(0, 150))}${(a.descricao || '').length > 150 ? '...' : ''}
-            </div>
-        </div>
-    `).join('');
-}
-
-// ============================================
-// FINALIZAR / REMARCAR / EXCLUIR
-// ============================================
-function abrirFinalizacao(atendimentoId) {
-    if (!atendimentoId) return;
-    
-    const modalHtml = `
-        <div class="modal fade" id="modalFinalizar" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white;">
-                        <h5 class="modal-title"><i class="fas fa-check-circle"></i> Finalizar Atendimento</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>Selecione o resultado do atendimento:</p>
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-outline-success text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'resolvido')">
-                                <i class="fas fa-check-circle"></i> <strong>Resolvido</strong>
-                                <br><small class="text-muted">O caso foi resolvido</small>
-                            </button>
-                            <button class="btn btn-outline-info text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'em_acompanhamento')">
-                                <i class="fas fa-clock"></i> <strong>Em Acompanhamento</strong>
-                                <br><small class="text-muted">Precisa de acompanhamento contínuo</small>
-                            </button>
-                            <button class="btn btn-outline-warning text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'reincidente')">
-                                <i class="fas fa-redo"></i> <strong>Reincidente</strong>
-                                <br><small class="text-muted">O aluno já teve ocorrências anteriores</small>
-                            </button>
-                            <button class="btn btn-outline-secondary text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'encaminhado')">
-                                <i class="fas fa-share"></i> <strong>Encaminhado</strong>
-                                <br><small class="text-muted">Encaminhado para outro setor</small>
-                            </button>
-                            <button class="btn btn-outline-danger text-start" onclick="confirmarFinalizacao('${atendimentoId}', 'pendente')">
-                                <i class="fas fa-hourglass-half"></i> <strong>Pendente</strong>
-                                <br><small class="text-muted">Aguardando ação</small>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const oldModal = safeGet('modalFinalizar');
-    if (oldModal) oldModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(safeGet('modalFinalizar'));
-    modal.show();
-}
-
-async function confirmarFinalizacao(atendimentoId, resultado) {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizar'));
-    if (modal) modal.hide();
-    
-    if (resultado === 'em_acompanhamento') {
-        const querRemarcar = await confirm(
-            '✅ Atendimento marcado como "Em Acompanhamento".\n\n' +
-            '🔄 Deseja REMARCAR este atendimento para uma nova data?\n\n' +
-            '• Sim → Abre formulário de remarcação\n' +
-            '• Não → Apenas finaliza'
-        );
-        
-        if (querRemarcar) {
-            await finalizarAtendimento(atendimentoId, resultado, true);
-            setTimeout(() => abrirRemarcar(atendimentoId), 500);
-            return;
-        }
-    }
-    
-    await finalizarAtendimento(atendimentoId, resultado, false);
-}
-
-async function finalizarAtendimento(atendimentoId, resultado, pularAlerta) {
-    try {
-        const response = await fetch('/api/psicologia/finalizar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ atendimentoId, resultado, observacoesFinais: '' })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            if (!pularAlerta) alert(`✅ ${data.message}`);
-            carregarAtendimentosAtivos();
-            carregarDashboard();
-            carregarLembretes();
-        } else {
-            alert('❌ ' + (data.error || 'Erro ao finalizar'));
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao finalizar');
-    }
-}
-
-function abrirRemarcar(atendimentoId) {
-    if (!atendimentoId) return;
-    fecharNotificacoes();
-    
-    const hoje = new Date();
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
-    const dataMin = amanha.toISOString().split('T')[0];
-    
-    const modalHtml = `
-        <div class="modal fade" id="modalRemarcar" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
-                        <h5 class="modal-title"><i class="fas fa-calendar-plus"></i> Remarcar Atendimento</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="hidden" id="remarcarAtendimentoId" value="${atendimentoId}">
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Nova Data <span class="text-danger">*</span></label>
-                            <input type="date" id="remarcarData" class="form-control" min="${dataMin}" value="${dataMin}">
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Horário <span class="text-danger">*</span></label>
-                            <input type="time" id="remarcarHorario" class="form-control" value="08:00">
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Motivo da Remarcação <span class="text-danger">*</span></label>
-                            <select id="remarcarMotivo" class="form-select">
-                                <option value="">Selecione...</option>
-                                <option value="Aluno ausente">Aluno ausente</option>
-                                <option value="Aluno não compareceu">Aluno não compareceu</option>
-                                <option value="Profissional indisponível">Profissional indisponível</option>
-                                <option value="Necessita mais tempo">Necessita mais tempo</option>
-                                <option value="Aguardando documento">Aguardando documento</option>
-                                <option value="Aguardando responsável">Aguardando responsável</option>
-                                <option value="Outros">Outros</option>
-                            </select>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Observações</label>
-                            <textarea id="remarcarObservacoes" class="form-control" rows="2" 
-                                      placeholder="Informações adicionais sobre a remarcação..."></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-warning" onclick="confirmarRemarcacao()">
-                            <i class="fas fa-calendar-check"></i> Remarcar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const oldModal = safeGet('modalRemarcar');
-    if (oldModal) oldModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(safeGet('modalRemarcar'));
-    modal.show();
-}
-
-async function confirmarRemarcacao() {
-    const atendimentoId = safeGet('remarcarAtendimentoId')?.value;
-    const dataRemarcacao = safeGet('remarcarData')?.value;
-    const horarioRemarcacao = safeGet('remarcarHorario')?.value;
-    const motivoRemarcacao = safeGet('remarcarMotivo')?.value;
-    const observacoesRemarcacao = safeGet('remarcarObservacoes')?.value || '';
-    
-    if (!dataRemarcacao) { alert('Selecione a nova data'); return; }
-    if (!horarioRemarcacao) { alert('Selecione o horário'); return; }
-    if (!motivoRemarcacao) { alert('Selecione o motivo da remarcação'); return; }
-    
-    try {
-        const response = await fetch('/api/psicologia/remarcar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({
-                atendimentoId, dataRemarcacao, horarioRemarcacao, motivoRemarcacao, observacoesRemarcacao
-            })
-        });
-        
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-            alert('⚠️ Esta funcionalidade ainda não está disponível no servidor.');
-            return;
-        }
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            alert(`✅ ${data.message}`);
-            const modal = bootstrap.Modal.getInstance(safeGet('modalRemarcar'));
-            if (modal) modal.hide();
-            
-            carregarAtendimentosAtivos();
-            carregarLembretes();
-        } else {
-            alert('❌ ' + (data.error || 'Erro ao remarcar'));
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('⚠️ Erro ao remarcar. Verifique se o backend está atualizado.');
-    }
-}
-
-function abrirFinalizacaoRemarcacao(remarcacaoId) {
-    if (!remarcacaoId) return;
-    fecharNotificacoes();
-    
-    const modalHtml = `
-        <div class="modal fade" id="modalFinalizarRemarcacao" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white;">
-                        <h5 class="modal-title"><i class="fas fa-check-circle"></i> Finalizar Remarcação</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>O atendimento remarcado foi realizado?</p>
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-outline-success text-start" onclick="confirmarFinalizacaoRemarcacao('${remarcacaoId}', 'realizado')">
-                                <i class="fas fa-check-circle"></i> <strong>Sim, foi realizado</strong>
-                                <br><small class="text-muted">O atendimento foi concluído</small>
-                            </button>
-                            <button class="btn btn-outline-warning text-start" onclick="abrirRemarcarPorRemarcacao('${remarcacaoId}')">
-                                <i class="fas fa-calendar-plus"></i> <strong>Não, precisa remarcar novamente</strong>
-                                <br><small class="text-muted">Escolher nova data</small>
-                            </button>
-                            <button class="btn btn-outline-secondary text-start" onclick="confirmarFinalizacaoRemarcacao('${remarcacaoId}', 'cancelado')">
-                                <i class="fas fa-times-circle"></i> <strong>Cancelar</strong>
-                                <br><small class="text-muted">O atendimento não será mais realizado</small>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const oldModal = safeGet('modalFinalizarRemarcacao');
-    if (oldModal) oldModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(safeGet('modalFinalizarRemarcacao'));
-    modal.show();
-}
-
-async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizarRemarcacao'));
-    if (modal) modal.hide();
-    
-    if (acao === 'cancelado') {
-        const confirmar = await confirm('Tem certeza que deseja CANCELAR esta remarcação?');
-        if (!confirmar) return;
-    }
-    
-    try {
-        const response = await fetch('/api/psicologia/remarcacoes/finalizar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ remarcacaoId, acao })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido(`✅ ${data.message}`, 'success');
-            } else {
-                console.log(`✅ ${data.message}`);
-            }
-            carregarAtendimentosAtivos();
-            carregarLembretes();
-        } else {
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao finalizar remarcação'), 'error');
-            } else {
-                console.error('❌ ' + (data.error || 'Erro'));
-            }
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        if (typeof mostrarToastConcluido === 'function') {
-            mostrarToastConcluido('Erro ao finalizar remarcação', 'error');
-        } else {
-            console.error('Erro ao finalizar remarcação');
-        }
-    }
-}
-
-function abrirRemarcarPorRemarcacao(remarcacaoId) {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizarRemarcacao'));
-    if (modal) modal.hide();
-    
-    fetch(`/api/psicologia/remarcacoes/${remarcacaoId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success && data.remarcacao?.atendimentoId) {
-            abrirRemarcar(data.remarcacao.atendimentoId);
-        } else {
-            alert('Erro ao carregar dados da remarcação');
-        }
-    })
-    .catch(e => {
-        console.error(e);
-        alert('Erro ao carregar dados');
-    });
-}
-
-async function excluirAtendimento(atendimentoId) {
-    if (!atendimentoId) return;
-    
-    const confirmar1 = await confirm('⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nEsta ação não pode ser desfeita!');
-    if (!confirmar1) return;
-    
-    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?');
-    if (!confirmar2) return;
-    
-    try {
-        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido('✅ Atendimento excluído com sucesso!', 'success');
-            } else {
-                console.log('✅ Atendimento excluído com sucesso!');
-            }
-            carregarAtendimentosAtivos();
-            carregarDashboard();
-            carregarLembretes();
-            carregarAtendimentosConcluidos(__concluidosPaginaAtual);
-        } else {
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao excluir'), 'error');
-            } else {
-                console.error('❌ ' + (data.error || 'Erro ao excluir'));
-            }
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        if (typeof mostrarToastConcluido === 'function') {
-            mostrarToastConcluido('Erro ao excluir atendimento', 'error');
-        } else {
-            console.error('Erro ao excluir atendimento');
-        }
-    }
-}
-
-// ============================================
-// 🆕 GERENCIAR ATENDIMENTOS CONCLUÍDOS
-// ============================================
-async function carregarAtendimentosConcluidos(pagina = 1) {
-    const container = safeGet('listaConcluidos');
-    if (!container) return;
-
-    __concluidosPaginaAtual = pagina;
-
-    const busca = (safeGet('filtroConcluidosBusca')?.value || '').trim().toLowerCase();
-    const tipo = safeGet('filtroConcluidosTipo')?.value || '';
-    const resultado = safeGet('filtroConcluidosResultado')?.value || '';
-
-    container.innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border spinner-border-sm text-teal" role="status"></div>
-            <p class="text-muted mt-2 mb-0">Carregando atendimentos...</p>
-        </div>`;
-
-    try {
-        const params = new URLSearchParams();
-        params.append('status', 'finalizado');
-        params.append('limit', __concluidosPorPagina);
-        params.append('page', pagina);
-        if (tipo) params.append('tipo', tipo);
-
-        const response = await fetch(`/api/psicologia/atendimentos?${params.toString()}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-
-        if (!data.success || !Array.isArray(data.atendimentos)) {
-            container.innerHTML = `<div class="alert alert-warning">Nenhum atendimento concluído encontrado</div>`;
-            return;
-        }
-
-        let lista = data.atendimentos;
-
-        if (busca) {
-            lista = lista.filter(a =>
-                (a.alunoNome || '').toLowerCase().includes(busca) ||
-                (a.alunoMatricula || '').toLowerCase().includes(busca)
-            );
-        }
-
-        if (resultado) {
-            lista = lista.filter(a => a.saida?.resultado === resultado);
-        }
-
-        __concluidosDados = lista;
-        __concluidosTotal = data.total || lista.length;
-
-        atualizarContadorConcluidos(lista.length);
-        renderizarListaConcluidos(lista);
-        renderizarPaginacaoConcluidos(data.totalPages || 1);
-
-    } catch (error) {
-        console.error('Erro ao carregar concluídos:', error);
-        container.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle"></i> Erro ao carregar atendimentos
-            </div>`;
-    }
-}
-
-function atualizarContadorConcluidos(total) {
-    const el = safeGet('contadorConcluidos');
-    if (el) el.textContent = total;
-}
-
-function renderizarListaConcluidos(lista) {
-    const container = safeGet('listaConcluidos');
-    if (!container) return;
-
-    if (lista.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-4 text-muted">
-                <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
-                <p>Nenhum atendimento corresponde aos filtros</p>
-            </div>`;
-        return;
-    }
-
-    const resultadoLabel = {
-        'resolvido': { label: 'Resolvido', color: '#10b981', icon: '✅' },
-        'em_acompanhamento': { label: 'Em Acompanhamento', color: '#3b82f6', icon: '🔄' },
-        'reincidente': { label: 'Reincidente', color: '#f59e0b', icon: '⚠️' },
-        'encaminhado': { label: 'Encaminhado', color: '#8b5cf6', icon: '↗️' },
-        'pendente': { label: 'Pendente', color: '#6b7280', icon: '⏳' }
-    };
-
-    container.innerHTML = `
-        <div class="table-responsive">
-            <table class="table table-hover table-sm align-middle">
-                <thead style="background: #f0fdfa;">
-                    <tr>
-                        <th style="width: 30%;">Aluno</th>
-                        <th style="width: 20%;">Tipo</th>
-                        <th style="width: 15%;">Entrada</th>
-                        <th style="width: 15%;">Saída</th>
-                        <th style="width: 12%;">Resultado</th>
-                        <th style="width: 8%; text-align: center;">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${lista.map(a => {
-                        const r = resultadoLabel[a.saida?.resultado] || { label: a.saida?.resultado || '-', color: '#6b7280', icon: '•' };
-                        return `
-                            <tr data-id="${a.id}">
-                                <td>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <img src="${gerarAvatarSVG(a.alunoNome || '?')}" 
-                                             style="width: 32px; height: 32px; border-radius: 50%;" alt="">
-                                        <div>
-                                            <strong style="font-size: 13px;">${escapeHTML(a.alunoNome || '')}</strong>
-                                            <br>
-                                            <small class="text-muted" style="font-size: 11px;">
-                                                ${escapeHTML(a.alunoMatricula || '')} • ${escapeHTML(a.alunoTurma || '')}
-                                            </small>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="badge" style="background: #14b8a6; font-size: 10px;">
-                                        ${escapeHTML(a.tipoTarefaLabel || '')}
-                                    </span>
-                                </td>
-                                <td>
-                                    <small>${a.dataEntradaFormatada || (a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-')}</small>
-                                </td>
-                                <td>
-                                    <small>${a.saida?.dataHoraFormatada || '-'}</small>
-                                </td>
-                                <td>
-                                    <span class="badge" style="background: ${r.color}; font-size: 10px;">
-                                        ${r.icon} ${escapeHTML(r.label)}
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <div class="d-flex gap-1 justify-content-center">
-                                        <button class="btn btn-sm btn-info" 
-                                                onclick="verAtendimento('${a.id}')" 
-                                                title="Ver detalhes">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-danger" 
-                                                onclick="excluirAtendimentoConcluido('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
-                                                title="Excluir">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-}
-
-function renderizarPaginacaoConcluidos(totalPaginas) {
-    const container = safeGet('paginacaoConcluidos');
-    const info = safeGet('infoPaginacaoConcluidos');
-    if (!container) return;
-
-    if (info) {
-        info.textContent = `Página ${__concluidosPaginaAtual} de ${totalPaginas}`;
-    }
-
-    if (totalPaginas <= 1) {
-        container.innerHTML = '';
-        return;
-    }
-
-    let html = '<nav><ul class="pagination pagination-sm mb-0">';
-
-    html += `
-        <li class="page-item ${__concluidosPaginaAtual === 1 ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="event.preventDefault(); ${__concluidosPaginaAtual > 1 ? `carregarAtendimentosConcluidos(${__concluidosPaginaAtual - 1})` : ''}">
-                <i class="fas fa-chevron-left"></i>
-            </a>
-        </li>`;
-
-    const inicio = Math.max(1, __concluidosPaginaAtual - 2);
-    const fim = Math.min(totalPaginas, __concluidosPaginaAtual + 2);
-
-    if (inicio > 1) {
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarAtendimentosConcluidos(1)">1</a></li>`;
-        if (inicio > 2) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-    }
-
-    for (let i = inicio; i <= fim; i++) {
-        html += `
-            <li class="page-item ${i === __concluidosPaginaAtual ? 'active' : ''}">
-                <a class="page-link" href="#" onclick="event.preventDefault(); carregarAtendimentosConcluidos(${i})">${i}</a>
-            </li>`;
-    }
-
-    if (fim < totalPaginas) {
-        if (fim < totalPaginas - 1) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarAtendimentosConcluidos(${totalPaginas})">${totalPaginas}</a></li>`;
-    }
-
-    html += `
-        <li class="page-item ${__concluidosPaginaAtual === totalPaginas ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="event.preventDefault(); ${__concluidosPaginaAtual < totalPaginas ? `carregarAtendimentosConcluidos(${__concluidosPaginaAtual + 1})` : ''}">
-                <i class="fas fa-chevron-right"></i>
-            </a>
-        </li>`;
-
-    html += '</ul></nav>';
-    container.innerHTML = html;
-}
-
-async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
-    if (!atendimentoId) return;
-
-    const confirmar1 = await confirm(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`);
-    if (!confirmar1) {
-        return;
-    }
-
-    const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?');
-    if (!confirmar2) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            const row = document.querySelector(`tr[data-id="${atendimentoId}"]`);
-            if (row) {
-                row.style.transition = 'all 0.3s';
-                row.style.opacity = '0';
-                row.style.transform = 'translateX(-20px)';
-                setTimeout(() => {
-                    row.remove();
-                    const contador = safeGet('contadorConcluidos');
-                    if (contador) {
-                        const atual = parseInt(contador.textContent) || 0;
-                        contador.textContent = Math.max(0, atual - 1);
-                    }
-                    const tabela = document.querySelector('#listaConcluidos tbody');
-                    if (tabela && tabela.children.length === 0) {
-                        carregarAtendimentosConcluidos(__concluidosPaginaAtual);
-                    }
-                }, 300);
-            }
-
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido('✅ Atendimento excluído com sucesso!', 'success');
-            } else {
-                console.log('✅ Atendimento excluído com sucesso!');
-            }
-            carregarDashboard();
-            carregarLembretes();
-        } else {
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao excluir'), 'error');
-            } else {
-                console.error('❌ ' + (data.error || 'Erro ao excluir'));
-            }
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        if (typeof mostrarToastConcluido === 'function') {
-            mostrarToastConcluido('Erro ao excluir atendimento', 'error');
-        } else {
-            console.error('Erro ao excluir atendimento');
-        }
-    }
-}
-
-// ============================================
-// 🍞 TOAST DE NOTIFICAÇÃO
-// ============================================
-function mostrarToastConcluido(mensagem, tipo = 'info') {
-    const cores = {
-        success: '#10b981',
-        error: '#ef4444',
-        warning: '#f59e0b',
-        info: '#3b82f6'
-    };
-
-    const icons = {
-        success: 'fa-check-circle',
-        error: 'fa-times-circle',
-        warning: 'fa-exclamation-triangle',
-        info: 'fa-info-circle'
-    };
-
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: ${cores[tipo] || cores.info};
-        color: white;
-        padding: 12px 20px;
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-        z-index: 99999;
-        font-size: 14px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        animation: slideInRight 0.3s ease-out;
-        max-width: 400px;
-    `;
-    toast.innerHTML = `<i class="fas ${icons[tipo] || icons.info}"></i> ${mensagem}`;
-
-    if (!document.getElementById('toastAnimation')) {
-        const style = document.createElement('style');
-        style.id = 'toastAnimation';
-        style.textContent = `
-            @keyframes slideInRight {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOutRight {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'slideOutRight 0.3s ease-in';
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
-}
-
-// ============================================
-// ⚠️ EXCLUSÃO EM MASSA
-// ============================================
-function abrirExclusaoEmMassa() {
-    const modalHtml = `
-        <div class="modal fade" id="modalExclusaoMassa" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header bg-danger text-white">
-                        <h5 class="modal-title">
-                            <i class="fas fa-exclamation-triangle"></i> 
-                            Exclusão em Massa
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-danger">
-                            <strong>⚠️ ATENÇÃO!</strong><br>
-                            Esta ação é <strong>IRREVERSÍVEL</strong>. Todos os atendimentos 
-                            que corresponderem aos filtros serão <strong>PERMANENTEMENTE EXCLUÍDOS</strong>.
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Excluir atendimentos finalizados antes de:</label>
-                            <input type="date" id="massaDataCorte" class="form-control" 
-                                   value="${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
-                            <small class="text-muted">Todos os atendimentos finalizados antes desta data serão excluídos</small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Digite "CONFIRMAR" para prosseguir:</label>
-                            <input type="text" id="massaConfirmacao" class="form-control" 
-                                   placeholder="Digite CONFIRMAR" autocomplete="off">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-danger" onclick="confirmarExclusaoMassa()">
-                            <i class="fas fa-trash-alt"></i> Excluir Definitivamente
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const old = safeGet('modalExclusaoMassa');
-    if (old) old.remove();
-
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(safeGet('modalExclusaoMassa'));
-    modal.show();
-}
-
-async function confirmarExclusaoMassa() {
-    const dataCorte = safeGet('massaDataCorte')?.value;
-    const confirmacao = (safeGet('massaConfirmacao')?.value || '').trim().toUpperCase();
-
-    if (confirmacao !== 'CONFIRMAR') {
-        alert('⚠️ Digite "CONFIRMAR" para prosseguir');
-        return;
-    }
-
-    if (!dataCorte) {
-        alert('⚠️ Selecione uma data de corte');
-        return;
-    }
-
-    const modal = bootstrap.Modal.getInstance(safeGet('modalExclusaoMassa'));
-    if (modal) modal.hide();
-
-    try {
-        const response = await fetch('/api/psicologia/atendimentos/exclusao-massa', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${token}` 
-            },
-            body: JSON.stringify({ 
-                dataCorte, 
-                status: 'finalizado',
-                confirmacao: 'CONFIRMAR'
-            })
-        });
-
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-            alert('⚠️ Esta funcionalidade ainda não está disponível no servidor.');
-            return;
-        }
-
-        const data = await response.json();
-
-        if (data.success) {
-            mostrarToastConcluido(`✅ ${data.excluidos || 0} atendimentos excluídos!`, 'success');
-            carregarAtendimentosConcluidos(1);
-            carregarDashboard();
-        } else {
-            alert('❌ ' + (data.error || 'Erro ao excluir em massa'));
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao excluir em massa');
-    }
-}
-
-// ============================================
-// DASHBOARD
-// ============================================
-async function carregarDashboard() {
-    try {
-        const response = await fetch('/api/psicologia/dashboard', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        if (!data.success) return;
-        
-        safeSetText('totalHoje', data.metricas?.hoje || 0);
-        safeSetText('totalEmAndamento', data.metricas?.emAndamento || 0);
-        safeSetText('totalFinalizadosHoje', data.metricas?.finalizadosHoje || 0);
-        safeSetText('totalGeral', data.metricas?.total || 0);
-        
-        const ctxTipos = safeGet('chartTipos');
-        if (ctxTipos && data.porTipo) {
-            if (dashboardCharts.tipos) try { dashboardCharts.tipos.destroy(); } catch(e){}
-            dashboardCharts.tipos = new Chart(ctxTipos.getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: data.porTipo.map(t => t.label || ''),
-                    datasets: [{
-                        label: 'Ocorrências', data: data.porTipo.map(t => t.count || 0),
-                        backgroundColor: ['#14b8a6', '#0d9488', '#0f766e', '#115e59', '#2dd4bf', '#5eead4'],
-                        borderRadius: 8
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y', plugins: { legend: { display: false } } }
-            });
-        }
-        
-        const ctxGravidade = safeGet('chartGravidade');
-        if (ctxGravidade && data.porGravidade) {
-            if (dashboardCharts.gravidade) try { dashboardCharts.gravidade.destroy(); } catch(e){}
-            const labels = { baixa: 'Baixa', media: 'Média', alta: 'Alta', critica: 'Crítica' };
-            const colors = { baixa: '#10b981', media: '#f59e0b', alta: '#ef4444', critica: '#7f1d1d' };
-            dashboardCharts.gravidade = new Chart(ctxGravidade.getContext('2d'), {
-                type: 'doughnut',
-                data: {
-                    labels: data.porGravidade.map(g => labels[g.gravidade] || g.gravidade || ''),
-                    datasets: [{
-                        data: data.porGravidade.map(g => g.count || 0),
-                        backgroundColor: data.porGravidade.map(g => colors[g.gravidade] || '#6b7280')
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
-        }
-        
-        const ctxAtendimentos = safeGet('chartAtendimentos');
-        if (ctxAtendimentos && data.tendencias?.ultimos7Dias) {
-            if (dashboardCharts.atendimentos) try { dashboardCharts.atendimentos.destroy(); } catch(e){}
-            dashboardCharts.atendimentos = new Chart(ctxAtendimentos.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: data.tendencias.ultimos7Dias.map(d => d.dia || ''),
-                    datasets: [{
-                        label: 'Ocorrências', data: data.tendencias.ultimos7Dias.map(d => d.atendimentos || 0),
-                        borderColor: '#14b8a6', backgroundColor: 'rgba(20, 184, 166, 0.1)', fill: true, tension: 0.4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
-        }
-        
-        const ctxTurmas = safeGet('chartTurmas');
-        if (ctxTurmas && data.tendencias?.porTurma) {
-            if (dashboardCharts.turmas) try { dashboardCharts.turmas.destroy(); } catch(e){}
-            dashboardCharts.turmas = new Chart(ctxTurmas.getContext('2d'), {
-                type: 'bar',
-                data: {
-                    labels: data.tendencias.porTurma.map(t => t.turma || 'Sem turma'),
-                    datasets: [{
-                        label: 'Ocorrências', data: data.tendencias.porTurma.map(t => t.count || 0),
-                        backgroundColor: '#5eead4', borderRadius: 8
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
-            });
-        }
-        
-        const reinc = safeGet('alunosReincidentes');
-        if (reinc) {
-            const lista = data.tendencias?.alunosReincidentes || [];
-            if (lista.length > 0) {
-                reinc.innerHTML = `
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead><tr><th>Aluno</th><th>Turma</th><th>Ocorrências</th></tr></thead>
-                            <tbody>
-                                ${lista.map(a => `
-                                    <tr>
-                                        <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                                        <td>${escapeHTML(a.alunoTurma || '-')}</td>
-                                        <td><span class="badge bg-danger">${a.count || 0}</span></td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                reinc.innerHTML = `<p class="text-muted text-center py-3"><i class="fas fa-check-circle text-success"></i> Nenhum aluno reincidente</p>`;
-            }
-        }
-    } catch (error) {
-        console.error('Erro no dashboard:', error);
-    }
-}
-
-// ============================================
-// RELATÓRIOS
-// ============================================
-async function carregarTurmasParaRelatorio() {
-    try {
-        const response = await fetch('/api/psicologia/turmas', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        
-        const select = safeGet('filtroTurma');
-        if (!select) return;
-        
-        if (data.success && Array.isArray(data.turmas)) {
-            const valorAtual = select.value;
-            select.innerHTML = '<option value="">Selecione...</option>';
-            data.turmas.forEach(t => {
-                const option = document.createElement('option');
-                option.value = t;
-                option.textContent = t;
-                select.appendChild(option);
-            });
-            if (valorAtual && data.turmas.includes(valorAtual)) select.value = valorAtual;
-        }
-    } catch (error) {
-        console.error('Erro ao carregar turmas:', error);
-    }
-}
-
-function toggleRelatorioFiltros() {
-    const tipo = safeGet('tipoRelatorio')?.value;
-    const filtroTurmaDiv = safeGet('filtroTurmaDiv');
-    const filtroAlunoDiv = safeGet('filtroAlunoDiv');
-    
-    if (filtroTurmaDiv) filtroTurmaDiv.style.display = tipo === 'turma' ? 'block' : 'none';
-    if (filtroAlunoDiv) filtroAlunoDiv.style.display = tipo === 'aluno' ? 'block' : 'none';
-    
-    if (tipo === 'turma') {
-        const selectTurma = safeGet('filtroTurma');
-        if (selectTurma && selectTurma.options.length <= 1) carregarTurmasParaRelatorio();
-    }
-    
-    if (tipo === 'aluno') {
-        inicializarAutocompleteAluno();
-        setTimeout(() => safeGet('buscaAlunoRelatorio')?.focus(), 100);
-        if (!__alunosCarregados) carregarAlunosParaRelatorio();
-    }
-}
-
-function inicializarAutocompleteAluno() {
-    const input = safeGet('buscaAlunoRelatorio');
-    const listEl = safeGet('autocompleteAlunoList');
-    const hiddenInput = safeGet('filtroAluno');
-    
-    if (!input || !listEl || !hiddenInput) return;
-    if (input.dataset.autocompleteInit === 'true') return;
-    input.dataset.autocompleteInit = 'true';
-    
-    input.addEventListener('input', (e) => {
-        const termo = e.target.value.trim();
-        hiddenInput.value = '';
-        const infoEl = safeGet('alunoSelecionadoInfo');
-        if (infoEl) infoEl.textContent = '';
-        
-        if (termo.length < 1) { listEl.style.display = 'none'; return; }
-        filtrarAlunosAutocomplete(termo);
-    });
-    
-    input.addEventListener('focus', () => {
-        const termo = input.value.trim();
-        if (termo.length >= 1) filtrarAlunosAutocomplete(termo);
-    });
-    
-    input.addEventListener('keydown', (e) => {
-        if (listEl.style.display === 'none') return;
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            __indiceSelecionado = Math.min(__indiceSelecionado + 1, __alunosFiltrados.length - 1);
-            destacarItemAutocomplete();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            __indiceSelecionado = Math.max(__indiceSelecionado - 1, -1);
-            destacarItemAutocomplete();
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (__indiceSelecionado >= 0 && __alunosFiltrados[__indiceSelecionado]) {
-                selecionarAlunoAutocomplete(__alunosFiltrados[__indiceSelecionado]);
-            }
-        } else if (e.key === 'Escape') {
-            listEl.style.display = 'none';
-        }
-    });
-    
-    document.addEventListener('click', (e) => {
-        const listEl = safeGet('autocompleteAlunoList');
-        const input = safeGet('buscaAlunoRelatorio');
-        if (!listEl || !input) return;
-        if (listEl.style.display === 'none') return;
-        if (listEl.contains(e.target) || input.contains(e.target)) return;
-        listEl.style.display = 'none';
-    });
-}
-
-async function carregarAlunosParaRelatorio() {
-    if (__alunosCarregados && __alunosParaRelatorio.length > 0) return;
-    
-    const inputBusca = safeGet('buscaAlunoRelatorio');
-    if (inputBusca) { inputBusca.placeholder = 'Carregando alunos...'; inputBusca.disabled = true; }
-    
-    try {
-        const turmasRes = await fetch('/api/psicologia/turmas', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const turmasData = await turmasRes.json();
-        
-        if (!turmasData.success || !Array.isArray(turmasData.turmas)) return;
-        
-        const todosAlunos = [];
-        for (const turma of turmasData.turmas) {
-            try {
-                const res = await fetch(`/api/psicologia/alunos-por-turma?turma=${encodeURIComponent(turma)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (data.success && Array.isArray(data.alunos)) {
-                    data.alunos.forEach(aluno => {
-                        todosAlunos.push({
-                            id: aluno.id, nome: aluno.nome,
-                            matricula: aluno.matricula || '', turma: aluno.turma || turma, curso: aluno.curso || ''
-                        });
-                    });
-                }
-            } catch (e) { console.warn(`Erro turma ${turma}:`, e); }
-        }
-        
-        todosAlunos.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-        __alunosParaRelatorio = todosAlunos;
-        __alunosCarregados = true;
-        
-        if (inputBusca) { inputBusca.placeholder = 'Digite o nome do aluno...'; inputBusca.disabled = false; }
-    } catch (error) {
-        console.error('Erro ao carregar alunos:', error);
-        if (inputBusca) { inputBusca.placeholder = 'Erro ao carregar alunos'; inputBusca.disabled = false; }
-    }
-}
-
-function filtrarAlunosAutocomplete(termo) {
-    const listEl = safeGet('autocompleteAlunoList');
-    if (!listEl) return;
-    
-    if (!__alunosCarregados) {
-        listEl.innerHTML = `<div class="autocomplete-aluno-loading">Carregando alunos...</div>`;
-        listEl.style.display = 'block';
-        carregarAlunosParaRelatorio().then(() => {
-            if (__alunosCarregados) filtrarAlunosAutocomplete(termo);
-        });
-        return;
-    }
-    
-    const termoLower = termo.toLowerCase();
-    __alunosFiltrados = __alunosParaRelatorio.filter(a => 
-        (a.nome || '').toLowerCase().includes(termoLower) ||
-        (a.matricula || '').toLowerCase().includes(termoLower)
-    ).slice(0, 10);
-    
-    __indiceSelecionado = -1;
-    
-    if (__alunosFiltrados.length === 0) {
-        listEl.innerHTML = `<div class="autocomplete-aluno-empty">Nenhum aluno encontrado</div>`;
-        listEl.style.display = 'block';
-        return;
-    }
-    
-    listEl.innerHTML = __alunosFiltrados.map((aluno, index) => {
-        const nomeDestacado = destacarTermo(aluno.nome, termo);
-        const matricula = aluno.matricula ? `<span class="aluno-matricula">${escapeHTML(aluno.matricula)}</span>` : '';
-        return `
-            <div class="autocomplete-aluno-item" data-index="${index}">
-                <div class="aluno-nome">${nomeDestacado}</div>
-                <div class="aluno-info">
-                    <span class="aluno-turma">${escapeHTML(aluno.turma || 'Sem turma')}</span>
-                    ${matricula}
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    listEl.querySelectorAll('.autocomplete-aluno-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const index = parseInt(item.getAttribute('data-index'));
-            const aluno = __alunosFiltrados[index];
-            if (aluno) selecionarAlunoAutocomplete(aluno);
-        });
-        item.addEventListener('mouseenter', () => {
-            __indiceSelecionado = parseInt(item.getAttribute('data-index'));
-            destacarItemAutocomplete();
-        });
-    });
-    
-    listEl.style.display = 'block';
-}
-
-function destacarTermo(texto, termo) {
-    if (!texto) return '';
-    if (!termo) return escapeHTML(texto);
-    const regex = new RegExp(`(${escapeRegex(termo)})`, 'gi');
-    return escapeHTML(texto).replace(regex, '<mark>$1</mark>');
-}
-
-function destacarItemAutocomplete() {
-    const listEl = safeGet('autocompleteAlunoList');
-    if (!listEl) return;
-    listEl.querySelectorAll('.autocomplete-aluno-item').forEach((item, i) => {
-        if (i === __indiceSelecionado) {
-            item.classList.add('selected');
-            item.scrollIntoView({ block: 'nearest' });
-        } else item.classList.remove('selected');
-    });
-}
-
-function selecionarAlunoAutocomplete(aluno) {
-    if (!aluno) return;
-    const input = safeGet('buscaAlunoRelatorio');
-    const hiddenInput = safeGet('filtroAluno');
-    const listEl = safeGet('autocompleteAlunoList');
-    const infoEl = safeGet('alunoSelecionadoInfo');
-    
-    if (input) input.value = aluno.nome;
-    if (hiddenInput) hiddenInput.value = aluno.id;
-    if (listEl) listEl.style.display = 'none';
-    
-    if (infoEl) {
-        const mat = aluno.matricula ? ` • ${aluno.matricula}` : '';
-        infoEl.innerHTML = `✅ <strong>${escapeHTML(aluno.nome)}</strong>${mat} — Turma ${escapeHTML(aluno.turma || '-')}`;
-        infoEl.style.color = '#0d9488';
-    }
-}
-
-async function carregarRelatorio() {
-    const tipo = safeGet('tipoRelatorio')?.value;
-    const dataInicio = safeGet('dataInicio')?.value || '';
-    const dataFim = safeGet('dataFim')?.value || '';
-    let url = '';
-    
-    try {
-        if (tipo === 'geral') {
-            url = `/api/psicologia/relatorio/geral?`;
-            if (dataInicio) url += `dataInicio=${dataInicio}&`;
-            if (dataFim) url += `dataFim=${dataFim}&`;
-        } else if (tipo === 'turma') {
-            const turma = safeGet('filtroTurma')?.value;
-            if (!turma) { alert('Selecione uma turma'); return; }
-            url = `/api/psicologia/relatorio/turma/${encodeURIComponent(turma)}?`;
-            if (dataInicio) url += `dataInicio=${dataInicio}&`;
-            if (dataFim) url += `dataFim=${dataFim}&`;
-        } else if (tipo === 'aluno') {
-            const alunoId = safeGet('filtroAluno')?.value;
-            if (!alunoId) { alert('Selecione um aluno na lista'); return; }
-            url = `/api/psicologia/relatorio/aluno/${alunoId}?`;
-            if (dataInicio) url += `dataInicio=${dataInicio}&`;
-            if (dataFim) url += `dataFim=${dataFim}&`;
-        }
-        
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        const data = await response.json();
-        
-        if (data.success) {
-            relatorioData = data;
-            exibirRelatorio(data, tipo);
-        } else {
-            alert('Erro ao carregar relatório: ' + (data.error || ''));
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao carregar relatório');
-    }
-}
-
-function exibirRelatorio(data, tipo) {
-    const container = safeGet('resultadoRelatorio');
-    if (!container) return;
-    
-    try {
-        if (tipo === 'geral') {
-            const porTipo = Array.isArray(data.porTipo) ? data.porTipo : [];
-            const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
-            const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
-            
-            container.innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <h5><i class="fas fa-chart-bar"></i> Relatório Geral</h5>
-                        <p>Total: <strong>${data.totalAtendimentos || 0}</strong></p>
-                        <h6 class="mt-4">Por Tipo</h6>
-                        <div class="row">
-                            ${porTipo.map(t => `
-                                <div class="col-md-4 mb-2">
-                                    <div class="p-2" style="background:#ccfbf1;border-radius:8px;">
-                                        <strong>${escapeHTML(t.label || '')}</strong>: ${t.count || 0}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <h6 class="mt-4">Por Turma</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead><tr><th>Turma</th><th>Total</th><th>Alunos</th></tr></thead>
-                                <tbody>
-                                    ${porTurma.map(t => `
-                                        <tr><td>${escapeHTML(t.turma || '-')}</td><td>${t.total || 0}</td><td>${t.totalAlunos || 0}</td></tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                        <h6 class="mt-4">Últimos</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead><tr><th>Aluno</th><th>Tipo</th><th>Data</th><th>Status</th></tr></thead>
-                                <tbody>
-                                    ${atendimentos.slice(0, 20).map(a => `
-                                        <tr>
-                                            <td>${escapeHTML(a.alunoNome || '')}</td>
-                                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
-                                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleString('pt-BR') : '-'}</td>
-                                            <td>${a.status === 'em_andamento' ? 'Em andamento' : 'Finalizado'}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else if (tipo === 'turma') {
-            const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
-            const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
-            
-            container.innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <h5>Relatório da Turma: ${escapeHTML(data.turma || '')}</h5>
-                        <p>Total: <strong>${data.estatisticas?.totalAtendimentos || 0}</strong></p>
-                        <h6 class="mt-4">Por Tipo</h6>
-                        <div class="row">
-                            ${porTipo.map(t => `
-                                <div class="col-md-4 mb-2">
-                                    <div class="p-2" style="background:#ccfbf1;border-radius:8px;">
-                                        <strong>${escapeHTML(t.label || '')}</strong>: ${t.count || 0}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <h6 class="mt-4">Por Aluno</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead><tr><th>Aluno</th><th>Total</th><th>Tipos</th></tr></thead>
-                                <tbody>
-                                    ${porAluno.map(a => `
-                                        <tr>
-                                            <td>${escapeHTML(a.alunoNome || '')}</td>
-                                            <td><span class="badge bg-primary">${a.total || 0}</span></td>
-                                            <td>${Object.entries(a.tipos || {}).map(([t, c]) => 
-                                                `${escapeHTML(TIPO_LABELS[t] || t)}: ${c}`).join(', ')}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else if (tipo === 'aluno') {
-            const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
-            const porGravidade = data.estatisticas?.porGravidade || {};
-            const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
-            
-            container.innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <h5>Relatório: ${escapeHTML(data.aluno?.nome || '')}</h5>
-                        <p>Matrícula: ${escapeHTML(data.aluno?.matricula || 'N/A')} | Turma: ${escapeHTML(data.aluno?.turma || 'N/A')}</p>
-                        <p>Total: <strong>${data.estatisticas?.totalAtendimentos || 0}</strong></p>
-                        <div class="row mt-3">
-                            <div class="col-md-6">
-                                <h6>Por Tipo</h6>
-                                ${porTipo.map(t => `
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span>${escapeHTML(t.label || '')}</span>
-                                        <span class="badge bg-primary">${t.count || 0}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <div class="col-md-6">
-                                <h6>Por Gravidade</h6>
-                                ${Object.entries(porGravidade).map(([g, c]) => `
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span>${escapeHTML(g)}</span>
-                                        <span class="badge bg-secondary">${c}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        <h6 class="mt-4">Histórico</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Status</th><th></th></tr></thead>
-                                <tbody>
-                                    ${atendimentos.map(a => `
-                                        <tr>
-                                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleString('pt-BR') : '-'}</td>
-                                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
-                                            <td>${escapeHTML((a.descricao || '').substring(0, 80))}</td>
-                                            <td>${a.status === 'em_andamento' ? 'Em andamento' : escapeHTML(a.resultado || 'Finalizado')}</td>
-                                            <td>
-                                                <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <p>Nenhum atendimento ativo no momento</p>
                 </div>
             `;
         }
     } catch (error) {
-        console.error('Erro ao exibir relatório:', error);
-        container.innerHTML = `<div class="alert alert-danger">Erro ao exibir relatório.</div>`;
+        console.error('Erro:', error);
+        container.innerHTML = '<div class="alert alert-danger">Erro ao carregar atendimentos</div>';
     }
 }
 
-function exportarCSV() {
-    if (!relatorioData) {
-        alert('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.');
-        return;
-    }
-    
-    const dados = relatorioData.registros || relatorioData.atendimentos || [];
-    
-    if (dados.length === 0) {
-        alert('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.');
-        return;
-    }
-    
-    let csv = "Data,Aluno,Matrícula,Turma,Tipo,Descrição,Gravidade,Status,Resultado\n";
-    
-    dados.forEach(a => {
-        csv += [
-            a.dataFormatada || (a.dataEntrada ? new Date(a.dataEntrada).toLocaleString('pt-BR') : ''),
-            `"${(a.alunoNome || relatorioData.aluno?.nome || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoTurma || relatorioData.aluno?.turma || relatorioData.turma || '').replace(/"/g, '""')}"`,
-            `"${(a.tipoTarefaLabel || TIPO_LABELS[a.tipoTarefa] || '').replace(/"/g, '""')}"`,
-            `"${(a.descricao || '').replace(/"/g, '""')}"`,
-            a.gravidade || '',
-            a.status === 'em_andamento' ? 'Em andamento' : 'Finalizado',
-            `"${(a.resultado || a.saida?.resultado || '').replace(/"/g, '""')}"`
-        ].join(',') + '\n';
-    });
-    
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `psicologia_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-}
-
 // ============================================
-// 🖨️ IMPRESSÃO DE ATENDIMENTO (COM CARIMBO)
+// 🆕 VER ATENDIMENTO (MODAL DE DETALHES)
 // ============================================
-async function imprimirAtendimento(atendimentoId) {
+async function verAtendimento(atendimentoId) {
     if (!atendimentoId) return;
     
     try {
-        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}`, {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -3296,208 +689,737 @@ async function imprimirAtendimento(atendimentoId) {
         
         const a = data.atendimento;
         
-        let qr = '';
-        try {
-            const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const qrD = await qrR.json();
-            if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
-        } catch (e) { console.warn('Sem QR Code'); }
+        // Montar HTML das informações de saída (se houver)
+        let saidaHTML = '';
+        if (a.saida) {
+            saidaHTML = `
+                <div class="section-title">🎯 Resultado / Saída</div>
+                <div class="info-row">
+                    <div class="info-label">Desfecho:</div>
+                    <div class="info-value"><strong>${escapeHTML(a.saida.desfechoTexto || '')}</strong></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Data da Saída:</div>
+                    <div class="info-value">${escapeHTML(a.saida.dataHoraFormatada || '-')}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Registrado por:</div>
+                    <div class="info-value">${escapeHTML(a.saida.registradoPorNome || '-')}</div>
+                </div>
+                ${a.saida.observacoes ? `
+                    <div class="info-row">
+                        <div class="info-label">Observações finais:</div>
+                        <div class="info-value">${escapeHTML(a.saida.observacoes)}</div>
+                    </div>
+                ` : ''}
+            `;
+        }
         
-        const win = window.open('', '_blank');
-        win.document.write(gerarHTMLImpressaoPsicologia(a, qr));
-        win.document.close();
-        win.onload = () => setTimeout(() => win.print(), 500);
-    } catch (e) {
-        console.error(e);
-        alert('Erro ao imprimir atendimento');
+        // Info sobre edição
+        let editadoHTML = '';
+        if (a.entrada.editadoEm) {
+            editadoHTML = `
+                <div class="alert alert-info mt-2" style="font-size: 12px;">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Editado em:</strong> ${new Date(a.entrada.editadoEm).toLocaleString('pt-BR')} 
+                    por <strong>${escapeHTML(a.entrada.editadoPorNome || 'Enfermeiro')}</strong>
+                </div>
+            `;
+        }
+        
+        const oldModal = safeGet('modalVerAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-eye"></i> Detalhes do Atendimento</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body detalhe-atendimento">
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f0fdf4; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                                     style="width: 50px; height: 50px; border-radius: 50%;"
+                                     onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #065f46;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                                <span class="badge" style="background: ${a.status === 'finalizado' ? '#10b981' : '#f59e0b'}; font-size: 12px;">
+                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Atendimento'}
+                                </span>
+                            </div>
+                            
+                            <div class="section-title">📌 Informações da Entrada</div>
+                            <div class="info-row">
+                                <div class="info-label">Data de Entrada:</div>
+                                <div class="info-value">${escapeHTML(a.entrada.dataHoraFormatada || '-')}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Registrado por:</div>
+                                <div class="info-value">${escapeHTML(a.entrada.registradoPorNome || '-')}</div>
+                            </div>
+                            
+                            <div class="section-title">📝 Queixa</div>
+                            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 14px; color: #374151; line-height: 1.5;">
+                                ${escapeHTML(a.entrada.queixa || '-').replace(/\n/g, '<br>')}
+                            </div>
+                            
+                            ${a.entrada.observacoes ? `
+                                <div class="section-title">💬 Observações</div>
+                                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
+                                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
+                                </div>
+                            ` : ''}
+                            
+                            ${editadoHTML}
+                            ${saidaHTML}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                            ${a.status === 'em_atendimento' ? `
+                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); editarAtendimento('${a.id}')">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
+                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); finalizarAtendimentoAtivo('${a.alunoId}')">
+                                    <i class="fas fa-check"></i> Finalizar
+                                </button>
+                            ` : ''}
+                            <button type="button" class="btn btn-danger" onclick="fecharVerAtendimento(); excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome)}')">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(safeGet('modalVerAtendimento'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao ver atendimento:', error);
+        alert('Erro ao carregar detalhes do atendimento');
     }
 }
 
-function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
-    const logo = '/uploads/logo-iema.png';
-    const carimbo = '/icons/assinatura_psicologia.ico';
-    const dataExt = new Date(a.entrada.dataHora).toLocaleDateString('pt-BR', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+function fecharVerAtendimento() {
+    const modal = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
+    if (modal) modal.hide();
+    setTimeout(() => {
+        const el = safeGet('modalVerAtendimento');
+        if (el) el.remove();
+    }, 300);
+}
+
+// ============================================
+// 🆕 EDITAR ATENDIMENTO
+// ============================================
+async function editarAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        // Buscar dados atuais
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            alert('Erro ao carregar atendimento');
+            return;
+        }
+        
+        const a = data.atendimento;
+        
+        if (a.status === 'finalizado') {
+            alert('⚠️ Não é possível editar atendimentos já finalizados');
+            return;
+        }
+        
+        const oldModal = safeGet('modalEditarAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-edit"></i> Editar Atendimento</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="editarAtendimentoId" value="${atendimentoId}">
+                            
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #fffbeb; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                                     style="width: 50px; height: 50px; border-radius: 50%;"
+                                     onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                                <div>
+                                    <strong>${escapeHTML(a.alunoNome)}</strong><br>
+                                    <small class="text-muted">${escapeHTML(a.alunoMatricula || '-')} • ${escapeHTML(a.alunoTurma || '-')}</small>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Queixa / Motivo <span class="text-danger">*</span></label>
+                                <textarea id="editarQueixa" class="form-control" rows="4" placeholder="Descreva o que o aluno está sentindo...">${escapeHTML(a.entrada.queixa || '')}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="editarObservacoes" class="form-control" rows="3" placeholder="Sinais vitais, medicamentos, etc...">${escapeHTML(a.entrada.observacoes || '')}</textarea>
+                            </div>
+                            
+                            <div class="alert alert-info" style="font-size: 13px;">
+                                <i class="fas fa-info-circle"></i>
+                                As alterações serão registradas no histórico com seu nome e data/hora.
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-warning" onclick="salvarEdicaoAtendimento()">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(safeGet('modalEditarAtendimento'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao editar atendimento:', error);
+        alert('Erro ao carregar atendimento para edição');
+    }
+}
+
+async function salvarEdicaoAtendimento() {
+    const atendimentoId = safeGet('editarAtendimentoId')?.value;
+    const queixa = safeGet('editarQueixa')?.value.trim();
+    const observacoes = safeGet('editarObservacoes')?.value || '';
+    
+    if (!queixa) {
+        alert('A queixa é obrigatória');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ queixa, observacoes })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Atendimento atualizado com sucesso!');
+            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
+            if (modal) modal.hide();
+            setTimeout(() => safeGet('modalEditarAtendimento')?.remove(), 300);
+            
+            carregarAtendimentosAtivos();
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao salvar'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao salvar alterações');
+    }
+}
+
+// ============================================
+// 🆕 EXCLUIR ATENDIMENTO
+// ============================================
+async function excluirAtendimento(atendimentoId, alunoNome) {
+    if (!atendimentoId) return;
+    
+    if (!(await confirmar(`⚠️ Tem certeza que deseja EXCLUIR este atendimento?\n\nAluno: ${alunoNome}\n\nEsta ação NÃO pode ser desfeita!`))) {
+        return;
+    }
+    
+    if (!(await confirmar('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nTodos os dados serão perdidos permanentemente.\n\nDeseja continuar?'))) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Atendimento excluído com sucesso!');
+            
+            // Remover linha com animação
+            const row = document.querySelector(`[data-id="${atendimentoId}"]`);
+            if (row) {
+                row.style.transition = 'all 0.3s';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-20px)';
+                setTimeout(() => row.remove(), 300);
+            }
+            
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+        } else {
+            alert('❌ ' + (data.error || 'Erro ao excluir'));
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao excluir atendimento');
+    }
+}
+
+// ============================================
+// 🆕 FINALIZAR ATENDIMENTO ATIVO (a partir do botão)
+// ============================================
+async function finalizarAtendimentoAtivo(alunoId) {
+    if (!alunoId) return;
+    
+    // Buscar o aluno para pegar seus dados
+    try {
+        const response = await fetch(`/api/enfermaria/aluno/${alunoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.aluno) {
+            currentAluno = data.aluno;
+            // Fechar modal se estiver aberto
+            const modalVer = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
+            if (modalVer) modalVer.hide();
+            
+            // Ir para a aba de atendimento
+            const tabAtendimento = safeGet('atendimento-tab');
+            if (tabAtendimento) {
+                new bootstrap.Tab(tabAtendimento).show();
+            }
+            
+            // Exibir aluno e formulário de saída
+            exibirAluno(data);
+            mostrarFormSaida();
+        } else {
+            alert('Erro ao carregar dados do aluno');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar aluno');
+    }
+}
+
+// ============================================
+// MODAL DE CONFIRMAÇÃO CUSTOMIZADO
+// ============================================
+function confirmar(mensagem) {
+    return new Promise((resolve) => {
+        // Remove modal anterior se existir
+        const oldModal = document.getElementById('modalConfirmacao');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalConfirmacao" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmação</h5>
+                        </div>
+                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">
+                            ${escapeHTML(mensagem)}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmacao">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmacao">
+                                <i class="fas fa-check"></i> Confirmar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modalEl = document.getElementById('modalConfirmacao');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        
+        const finalizar = (resultado) => {
+            modal.hide();
+            setTimeout(() => modalEl.remove(), 300);
+            resolve(resultado);
+        };
+        
+        document.getElementById('btnConfirmarConfirmacao').addEventListener('click', () => finalizar(true));
+        document.getElementById('btnCancelarConfirmacao').addEventListener('click', () => finalizar(false));
+        
+        // Fechar com ESC = cancelar
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            if (!modalEl.dataset.resolvido) {
+                resolve(false);
+            }
+        });
     });
+}
+
+// ============================================
+// DASHBOARD
+// ============================================
+async function carregarDashboard() {
+    try {
+        const response = await fetch('/api/enfermaria/dashboard', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            safeSetText('totalHoje', data.metricas.hoje);
+            safeSetText('totalSemana', data.metricas.semana);
+            safeSetText('totalMes', data.metricas.mes);
+            safeSetText('totalGeral', data.metricas.total);
+            
+            // Gráfico Atendimentos por Dia
+            const ctxAtendimentos = safeGet('chartAtendimentos');
+            if (ctxAtendimentos && data.tendencias?.ultimos7Dias) {
+                if (dashboardCharts.atendimentos) try { dashboardCharts.atendimentos.destroy(); } catch(e){}
+                dashboardCharts.atendimentos = new Chart(ctxAtendimentos.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.tendencias.ultimos7Dias.map(d => d.dia),
+                        datasets: [{
+                            label: 'Atendimentos',
+                            data: data.tendencias.ultimos7Dias.map(d => d.atendimentos),
+                            backgroundColor: '#10b981',
+                            borderRadius: 8
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true }
+                });
+            }
+            
+            // Gráfico Desfechos
+            const ctxDesfechos = safeGet('chartDesfechos');
+            if (ctxDesfechos && data.desfechos) {
+                if (dashboardCharts.desfechos) try { dashboardCharts.desfechos.destroy(); } catch(e){}
+                dashboardCharts.desfechos = new Chart(ctxDesfechos.getContext('2d'), {
+                    type: 'pie',
+                    data: {
+                        labels: data.desfechos.map(d => d.label),
+                        datasets: [{
+                            data: data.desfechos.map(d => d.count),
+                            backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6b7280']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true }
+                });
+            }
+            
+            // Gráfico Turmas
+            const ctxTurmas = safeGet('chartTurmas');
+            if (ctxTurmas && data.tendencias?.porTurma) {
+                if (dashboardCharts.turmas) try { dashboardCharts.turmas.destroy(); } catch(e){}
+                dashboardCharts.turmas = new Chart(ctxTurmas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.tendencias.porTurma.map(t => t.turma),
+                        datasets: [{
+                            label: 'Atendimentos',
+                            data: data.tendencias.porTurma.map(t => t.count),
+                            backgroundColor: '#8b5cf6',
+                            borderRadius: 8
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y' }
+                });
+            }
+            
+            // Gráfico Horário
+            const ctxHorario = safeGet('chartHorario');
+            if (ctxHorario && data.tendencias?.distribuicaoHoraria) {
+                if (dashboardCharts.horario) try { dashboardCharts.horario.destroy(); } catch(e){}
+                const horas = Array.from({length: 24}, (_, i) => `${i}:00`);
+                dashboardCharts.horario = new Chart(ctxHorario.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: horas,
+                        datasets: [{
+                            label: 'Atendimentos',
+                            data: data.tendencias.distribuicaoHoraria,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true }
+                });
+            }
+            
+            // Queixas Comuns
+            const queixasContainer = safeGet('queixasComuns');
+            if (queixasContainer && data.tendencias?.queixasComuns) {
+                if (data.tendencias.queixasComuns.length > 0) {
+                    queixasContainer.innerHTML = `
+                        <div class="list-group">
+                            ${data.tendencias.queixasComuns.map(q => `
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-comment-medical text-primary me-2"></i> ${escapeHTML(q.queixa)}</span>
+                                    <span class="badge bg-primary rounded-pill">${q.count} vezes</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    queixasContainer.innerHTML = '<div class="text-center text-muted py-3">Nenhuma queixa registrada</div>';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar dashboard:', error);
+    }
+}
+
+// ============================================
+// RELATÓRIOS
+// ============================================
+async function carregarTurmasParaRelatorio() {
+    try {
+        const response = await fetch('/api/enfermaria/relatorio/geral', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.turmasDisponiveis) {
+            const turmaSelect = safeGet('filtroTurma');
+            if (turmaSelect) {
+                turmaSelect.innerHTML = '<option value="">Selecione uma turma...</option>';
+                data.turmasDisponiveis.forEach(turma => {
+                    turmaSelect.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar turmas:', error);
+    }
+}
+
+function toggleRelatorioFiltros() {
+    const tipo = safeGet('tipoRelatorio')?.value;
+    safeGet('filtroTurmaDiv').style.display = tipo === 'turma' ? 'block' : 'none';
+    safeGet('filtroAlunoDiv').style.display = tipo === 'aluno' ? 'block' : 'none';
     
-    const assinaturaHTML = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64
-        ? `<div class="assinatura-digital"><img src="${a.entrada.assinaturaBase64}" alt="Assinatura"></div>`
-        : '<div class="assinatura-vazia">_____________________________________</div>';
+    if (tipo === 'aluno') {
+        carregarAlunosParaRelatorio();
+    }
+}
+
+async function carregarAlunosParaRelatorio() {
+    try {
+        const response = await fetch('/api/coordenacao-patio/alunos', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.alunos) {
+            const alunoSelect = safeGet('filtroAluno');
+            if (alunoSelect) {
+                alunoSelect.innerHTML = '<option value="">Selecione um aluno...</option>';
+                data.alunos.forEach(aluno => {
+                    alunoSelect.innerHTML += `<option value="${aluno.id}">${escapeHTML(aluno.nome)} (${escapeHTML(aluno.turma || 'Sem turma')})</option>`;
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+    }
+}
+
+async function carregarRelatorio() {
+    const tipo = safeGet('tipoRelatorio')?.value;
+    const dataInicio = safeGet('dataInicio')?.value || '';
+    const dataFim = safeGet('dataFim')?.value || '';
     
-    const carimboHTML = `
-        <div class="carimbo-psicologia">
-            <img src="${carimbo}" alt="Carimbo Psicologia">
-        </div>`;
+    let url = '';
     
-    return `<!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <title>Atendimento Psicologia - ${a.alunoNome}</title>
-        <style>
-            @page { size: A4 landscape; margin: 0; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body { width: 297mm; height: 210mm; font-family: 'Times New Roman', Times, serif; background: #f0f0f0; }
-            .folha-metade {
-                width: 148.5mm; height: 210mm; padding: 8mm 10mm;
-                background: white; position: relative; margin: 0;
-                page-break-after: always; overflow: hidden;
-                font-size: 9pt; line-height: 1.3;
-            }
-            @media print {
-                html, body { width: 297mm; height: 210mm; background: white; }
-                .folha-metade { width: 148.5mm; height: 210mm; padding: 8mm 10mm; page-break-after: always; }
-                .btn-print { display: none !important; }
-            }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 5px; margin-bottom: 6px; }
-            .header img { max-width: 100%; height: auto; max-height: 22mm; object-fit: contain; }
-            .header h1 { font-size: 9pt; margin: 3px 0 0 0; text-transform: uppercase; font-weight: bold; }
-            .titulo { text-align: center; font-size: 11pt; font-weight: bold; text-transform: uppercase; margin: 6px 0; background: #e0f2fe; padding: 5px; border: 1.5px solid #000; letter-spacing: 1px; }
-            .info-section { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; }
-            .info-row { display: flex; margin-bottom: 4px; gap: 10px; align-items: baseline; }
-            .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 4px; min-width: 0; }
-            .label { font-weight: bold; font-size: 8pt; white-space: nowrap; }
-            .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 14px; min-height: 14px;
-                font-size: 9pt; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            }
-            .section-box { background: #f5f5f5; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
-            .section-box h3 { margin: 0 0 3px 0; font-size: 9pt; text-transform: uppercase; }
-            .section-box p { margin: 0; font-size: 9pt; }
-            .descricao-box { border: 1px solid #000; padding: 6px 8px; min-height: 20mm; margin: 6px 0; font-size: 8.5pt; }
-            .descricao-box strong { display: block; margin-bottom: 3px; font-size: 9pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 4mm; gap: 8mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 8pt; }
-            .assinatura-digital {
-                border-bottom: 1px solid #000; min-height: 15mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
-            }
-            .assinatura-digital img { max-height: 14mm; max-width: 100%; object-fit: contain; }
-            .assinatura-vazia {
-                border-bottom: 1px solid #000; min-height: 15mm;
-                display: flex; align-items: flex-end; justify-content: center;
-                color: #999; font-size: 8pt; padding-bottom: 2px;
-            }
-            .assinatura-linha { padding-top: 3px; font-size: 8pt; }
-            .carimbo-psicologia {
-                border-bottom: 1px solid #000; min-height: 15mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
-            }
-            .carimbo-psicologia img {
-                max-height: 14mm; max-width: 100%; object-fit: contain; opacity: 0.9;
-            }
-            .qr-code { text-align: center; margin-top: 4px; }
-            .qr-code img { width: 18mm; height: 18mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 7pt; margin: 2px 0 0 0; }
-            .footer {
-                text-align: center; margin-top: 5px; padding-top: 4px;
-                border-top: 1px solid #000; font-size: 7pt; color: #444;
-            }
-            .footer p { margin: 1px 0; }
-            .btn-print {
-                display: block; margin: 15px auto; padding: 10px 30px;
-                background: #14b8a6; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
-            }
-            .btn-print:hover { background: #0d9488; }
-            .linha-corte {
-                position: fixed; left: 148.5mm; top: 0; width: 0; height: 210mm;
-                border-left: 1px dashed #999; pointer-events: none;
-            }
-            @media print { .linha-corte { display: none; } }
-        </style>
-    </head>
-    <body>
-        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="linha-corte"></div>
-        <div class="folha-metade">
-            <div class="header">
-                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
-                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
-            </div>
-            <div class="titulo">🧠 ATENDIMENTO PSICOLOGIA</div>
-            
-            <div class="info-section">
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Estudante:</span>
-                        <span class="underline">${a.alunoNome || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Matrícula:</span>
-                        <span class="underline">${a.alunoMatricula || ''}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Turma:</span>
-                        <span class="underline">${a.alunoTurma || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Curso:</span>
-                        <span class="underline">${a.alunoCurso || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Data:</span>
-                        <span class="underline">${dataExt}</span>
+    if (tipo === 'geral') {
+        url = `/api/enfermaria/relatorio/geral?`;
+        if (dataInicio) url += `dataInicio=${dataInicio}&`;
+        if (dataFim) url += `dataFim=${dataFim}&`;
+    } else if (tipo === 'turma') {
+        const turma = safeGet('filtroTurma')?.value;
+        if (!turma) { alert('Selecione uma turma'); return; }
+        url = `/api/enfermaria/relatorio/turma/${encodeURIComponent(turma)}?`;
+        if (dataInicio) url += `dataInicio=${dataInicio}&`;
+        if (dataFim) url += `dataFim=${dataFim}&`;
+    } else if (tipo === 'aluno') {
+        const alunoId = safeGet('filtroAluno')?.value;
+        if (!alunoId) { alert('Selecione um aluno'); return; }
+        url = `/api/enfermaria/relatorio/aluno/${alunoId}?`;
+        if (dataInicio) url += `dataInicio=${dataInicio}&`;
+        if (dataFim) url += `dataFim=${dataFim}&`;
+    }
+    
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            relatorioData = data;
+            exibirRelatorio(data, tipo);
+        } else {
+            alert('Erro ao carregar relatório');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        alert('Erro ao carregar relatório');
+    }
+}
+
+function exibirRelatorio(data, tipo) {
+    const container = safeGet('resultadoRelatorio');
+    if (!container) return;
+    
+    if (tipo === 'geral') {
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <h5>Relatório Geral</h5>
+                    <p>Total de atendimentos: <strong>${data.totalAtendimentos || 0}</strong></p>
+                    <hr>
+                    <h6>Atendimentos por Turma</h6>
+                    ${(data.porTurma || []).map(t => `
+                        <div class="mb-3">
+                            <strong>${escapeHTML(t.turma || '')}</strong>
+                            <ul>
+                                <li>Total: ${t.total || 0} atendimentos</li>
+                                <li>Alunos atendidos: ${t.totalAlunos || 0}</li>
+                            </ul>
+                        </div>
+                    `).join('')}
+                    <hr>
+                    <h6>Últimos Atendimentos</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead><tr><th>Aluno</th><th>Turma</th><th>Data</th><th>Status</th></tr></thead>
+                            <tbody>
+                                ${(data.ultimosAtendimentos || []).map(a => `
+                                    <tr>
+                                        <td>${escapeHTML(a.alunoNome || '')}</td>
+                                        <td>${escapeHTML(a.alunoTurma || '')}</td>
+                                        <td>${new Date(a.dataEntrada).toLocaleString('pt-BR')}</td>
+                                        <td>${a.status === 'em_atendimento' ? 'Em atendimento' : 'Finalizado'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-            
-            <div class="section-box">
-                <h3>📌 Tipo de Tarefa:</h3>
-                <p><strong>${a.tipoTarefaLabel || '-'}</strong></p>
-            </div>
-            
-            <div class="section-box">
-                <h3>⚠️ Gravidade / Prioridade:</h3>
-                <p>Gravidade: <strong>${(a.entrada?.gravidade || 'media').toUpperCase()}</strong> | 
-                   Prioridade: <strong>${(a.prioridade || 'normal').toUpperCase()}</strong></p>
-            </div>
-            
-            <div class="descricao-box">
-                <strong>📝 Descrição do Ocorrido:</strong>
-                ${a.entrada?.descricao || '_______________________________________________________________'}
-            </div>
-            
-            ${a.entrada?.observacoes ? `
-                <div class="descricao-box" style="min-height: 12mm;">
-                    <strong>💬 Observações:</strong>
-                    ${a.entrada.observacoes}
-                </div>
-            ` : ''}
-            
-            <div class="assinaturas">
-                <div class="assinatura">
-                    ${assinaturaHTML}
-                    <div class="assinatura-linha">Assinatura do Responsável</div>
-                </div>
-                <div class="assinatura">
-                    ${carimboHTML}
-                    <div class="assinatura-linha">Coordenação / Psicologia</div>
+        `;
+    } else if (tipo === 'turma') {
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <h5>Relatório da Turma: ${escapeHTML(data.turma || '')}</h5>
+                    <p>Total de atendimentos: <strong>${data.estatisticas?.totalAtendimentos || 0}</strong></p>
+                    <p>Alunos atendidos: <strong>${data.estatisticas?.totalAlunosAtendidos || 0}</strong></p>
+                    <hr>
+                    <h6>Desfechos</h6>
+                    <ul>
+                        ${Object.entries(data.estatisticas?.desfechos || {}).map(([k, v]) => `<li>${escapeHTML(k)}: ${v}</li>`).join('')}
+                    </ul>
+                    <hr>
+                    <h6>Atendimentos por Aluno</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead><tr><th>Aluno</th><th>Total</th><th>Desfechos</th></tr></thead>
+                            <tbody>
+                                ${(data.porAluno || []).map(a => `
+                                    <tr>
+                                        <td>${escapeHTML(a.alunoNome || '')}</td>
+                                        <td>${a.total || 0}</td>
+                                        <td>${Object.entries(a.desfechos || {}).map(([k, v]) => `${escapeHTML(k)}: ${v}`).join(', ')}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-            
-            ${qrCodeUrl ? `
-                <div class="qr-code">
-                    <img src="${qrCodeUrl}" alt="QR Code">
-                    <p>Identificação do Aluno</p>
-                </div>` : ''}
-            
-            <div class="footer">
-                <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.entrada?.registradoPor || 'Psicólogo'}</p>
-                <p>EducaPleno</p>
+        `;
+    } else if (tipo === 'aluno') {
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <h5>Relatório do Aluno: ${escapeHTML(data.aluno?.nome || '')}</h5>
+                    <p>Matrícula: ${escapeHTML(data.aluno?.matricula || 'N/A')} | Turma: ${escapeHTML(data.aluno?.turma || 'N/A')}</p>
+                    <p>Total de atendimentos: <strong>${data.estatisticas?.totalAtendimentos || 0}</strong></p>
+                    <hr>
+                    <h6>Histórico de Atendimentos</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead><tr><th>Data</th><th>Queixa</th><th>Desfecho</th></tr></thead>
+                            <tbody>
+                                ${(data.atendimentos || []).map(a => `
+                                    <tr>
+                                        <td>${new Date(a.dataEntrada).toLocaleString('pt-BR')}</td>
+                                        <td>${escapeHTML((a.queixa || '').substring(0, 100))}${(a.queixa || '').length > 100 ? '...' : ''}</td>
+                                        <td>${escapeHTML(a.desfechoTexto || '')}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-        </div>
-    </body>
-    </html>`;
+        `;
+    }
+}
+
+function exportarCSV() {
+    if (!relatorioData) { alert('Nenhum relatório carregado'); return; }
+    
+    let csvContent = "Data,Aluno,Turma,Queixa,Desfecho\n";
+    
+    if (relatorioData.atendimentos) {
+        relatorioData.atendimentos.forEach(a => {
+            csvContent += `${new Date(a.dataEntrada).toLocaleString('pt-BR')},"${relatorioData.aluno?.nome || a.alunoNome || ''}","${relatorioData.aluno?.turma || a.alunoTurma || ''}","${(a.queixa || '').replace(/"/g, '""')}","${(a.desfechoTexto || '').replace(/"/g, '""')}"\n`;
+        });
+    } else if (relatorioData.ultimosAtendimentos) {
+        relatorioData.ultimosAtendimentos.forEach(a => {
+            csvContent += `${new Date(a.dataEntrada).toLocaleString('pt-BR')},"${a.alunoNome}","${a.alunoTurma}","${(a.queixa || '').replace(/"/g, '""')}",${a.status}\n`;
+        });
+    }
+    
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio_enfermaria_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+async function exportarPDF() {
+    if (!relatorioData) { alert('Nenhum relatório carregado'); return; }
+    alert('Função de PDF será implementada em breve');
 }
 
 async function logout() {
@@ -3508,456 +1430,20 @@ async function logout() {
         window.location.href = '/login.html';
     }
 }
-
 // ============================================
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================
-window.selecionarTipo = selecionarTipo;
-window.registrarOcorrencia = registrarOcorrencia;
-window.limparTela = limparTela;
-window.abrirFinalizacao = abrirFinalizacao;
-window.confirmarFinalizacao = confirmarFinalizacao;
-window.abrirRemarcar = abrirRemarcar;
-window.confirmarRemarcacao = confirmarRemarcacao;
-window.abrirFinalizacaoRemarcacao = abrirFinalizacaoRemarcacao;
-window.confirmarFinalizacaoRemarcacao = confirmarFinalizacaoRemarcacao;
-window.abrirRemarcarPorRemarcacao = abrirRemarcarPorRemarcacao;
-window.excluirAtendimento = excluirAtendimento;
-window.verAtendimento = verAtendimento;
-window.fecharVerAtendimento = fecharVerAtendimento;
-window.toggleRelatorioFiltros = toggleRelatorioFiltros;
+window.toggleOutrosCampos = toggleOutrosCampos;
+window.registrarEntrada = registrarEntrada;
+window.registrarSaida = registrarSaida;
 window.carregarRelatorio = carregarRelatorio;
 window.exportarCSV = exportarCSV;
-window.logout = logout;
-window.selecionarAlunoAutocomplete = selecionarAlunoAutocomplete;
-window.limparAssinatura = limparAssinatura;
-window.inicializarAssinatura = inicializarAssinatura;
-window.obterAssinaturaBase64 = obterAssinaturaBase64;
-window.carregarLembretes = carregarLembretes;
-window.toggleFiltrosAvancados = toggleFiltrosAvancados;
-window.limparFiltrosAndamento = limparFiltrosAndamento;
-window.limparFiltroIndividual = limparFiltroIndividual;
-window.abrirEditarAtendimento = abrirEditarAtendimento;
+window.exportarPDF = exportarPDF;
+window.toggleRelatorioFiltros = toggleRelatorioFiltros;
+window.verAtendimento = verAtendimento;
+window.fecharVerAtendimento = fecharVerAtendimento;
+window.editarAtendimento = editarAtendimento;
 window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
-
-// Novas funções para Concluídos
-window.carregarAtendimentosConcluidos = carregarAtendimentosConcluidos;
-window.excluirAtendimentoConcluido = excluirAtendimentoConcluido;
-window.limparFiltrosConcluidos = limparFiltrosConcluidos;
-window.abrirExclusaoEmMassa = abrirExclusaoEmMassa;
-window.confirmarExclusaoMassa = confirmarExclusaoMassa;
-window.mostrarToastConcluido = mostrarToastConcluido;
-window.imprimirAtendimento = imprimirAtendimento;
-
-// ============================================
-// 🔔 SISTEMA DE NOTIFICAÇÕES UNIFICADO
-// (Notificações do sistema + Lembretes de remarcação)
-// ============================================
-
-let notificacoesInterval = null;
-let __notificacoesCache = [];
-let __lembretesCache = [];
-
-function isWebView() {
-    return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
-           (typeof window.AppInventor !== 'undefined');
-}
-
-function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
-    if (!isWebView()) { alert(mensagem); return; }
-    
-    const modal = document.createElement('div');
-    modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
-        z-index: 999999; padding: 20px; box-sizing: border-box;`;
-    const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
-    const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#14b8a6' };
-    
-    modal.innerHTML = `
-        <div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div>
-            <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
-                ${mensagem}</p>
-            <button onclick="this.closest('div').parentElement.remove()"
-                    style="width: 100%; padding: 12px; background: ${cores[tipo] || cores.info};
-                           color: white; border: none; border-radius: 10px; font-size: 14px;
-                           font-weight: 600; cursor: pointer;">OK</button>
-        </div>`;
-    document.body.appendChild(modal);
-}
-
-function confirmarInterno(mensagem) {
-    return new Promise((resolve) => {
-        const old = document.getElementById('confirmInternoModal');
-        if (old) old.remove();
-        
-        const modalHtml = `
-            <div class="modal fade" id="confirmInternoModal" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #14b8a6, #0d9488); color: white;">
-                            <h5 class="modal-title"><i class="fas fa-question-circle"></i> Confirmação</h5>
-                        </div>
-                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">${escapeHTML(mensagem)}</div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmInterno">
-                                <i class="fas fa-times"></i> Cancelar</button>
-                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmInterno">
-                                <i class="fas fa-check"></i> Confirmar</button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
-        const modalEl = document.getElementById('confirmInternoModal');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-        
-        const finalizar = (resultado) => {
-            modal.hide();
-            setTimeout(() => modalEl.remove(), 300);
-            resolve(resultado);
-        };
-        document.getElementById('btnConfirmarConfirmInterno').addEventListener('click', () => finalizar(true));
-        document.getElementById('btnCancelarConfirmInterno').addEventListener('click', () => finalizar(false));
-    });
-}
-
-// ============================================
-// INICIAR SISTEMA
-// ============================================
-function iniciarSistemaNotificacoesUnificado() {
-    if (!document.getElementById('notificacoesBtn')) return;
-    
-    carregarTudo();
-    if (notificacoesInterval) clearInterval(notificacoesInterval);
-    notificacoesInterval = setInterval(carregarTudo, 30000);
-    
-    document.addEventListener('click', function(event) {
-        const dropdown = document.getElementById('notificacoesDropdown');
-        const btn = document.getElementById('notificacoesBtn');
-        if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
-            dropdown.classList.remove('show');
-        }
-    });
-}
-
-async function carregarTudo() {
-    await Promise.all([
-        carregarNotificacoesSistema(),
-        carregarLembretesRemarcacao()
-    ]);
-    renderizarSinoUnificado();
-    atualizarBadgeUnificado();
-}
-
-// ============================================
-// NOTIFICAÇÕES DO SISTEMA
-// ============================================
-async function carregarNotificacoesSistema() {
-    try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
-        
-        const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        if (data.success) {
-            __notificacoesCache = data.notificacoes || [];
-        }
-    } catch (error) {
-        console.error('Erro ao carregar notificações:', error);
-    }
-}
-
-// ============================================
-// LEMBRETES DE REMARCAÇÃO
-// ============================================
-async function carregarLembretesRemarcacao() {
-    try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
-        
-        const response = await fetch('/api/psicologia/remarcacoes/pendentes', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const contentType = response.headers.get('content-type') || '';
-        if (!response.ok || !contentType.includes('application/json')) {
-            __lembretesCache = [];
-            return;
-        }
-        const data = await response.json();
-        if (data.success && Array.isArray(data.remarcacoes)) {
-            __lembretesCache = data.remarcacoes;
-        } else {
-            __lembretesCache = [];
-        }
-    } catch (error) {
-        __lembretesCache = [];
-    }
-}
-
-// ============================================
-// RENDERIZAÇÃO UNIFICADA
-// ============================================
-function renderizarSinoUnificado() {
-    const lista = document.getElementById('notificacoesLista');
-    if (!lista) return;
-    
-    const temNotificacoes = __notificacoesCache.length > 0;
-    const temLembretes = __lembretesCache.length > 0;
-    
-    if (!temNotificacoes && !temLembretes) {
-        lista.innerHTML = `
-            <div class="notificacoes-vazio">
-                <i class="fas fa-bell-slash"></i>
-                <p>Nenhuma notificação</p>
-            </div>`;
-        return;
-    }
-    
-    let html = '';
-    
-    // ========== SEÇÃO 1: LEMBRETES DE REMARCAÇÃO ==========
-    if (temLembretes) {
-        html += `
-            <div class="notificacoes-secao">
-                <div class="notificacoes-secao-titulo">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>Lembretes de Remarcação</span>
-                    <span class="badge-count">${__lembretesCache.length}</span>
-                </div>`;
-        
-        const ordem = { atrasado: 0, iminente: 1, proximo: 2, hoje: 3, amanha: 4, futuro: 5 };
-        const lembretesOrdenados = [...__lembretesCache].sort((a, b) => {
-            return ordem[calcularNivelAlerta(a).nivel] - ordem[calcularNivelAlerta(b).nivel];
-        });
-        
-        lembretesOrdenados.forEach(r => {
-            const nivel = calcularNivelAlerta(r);
-            let itemClass = '';
-            let badgeClass = 'futuro';
-            let badgeText = nivel.label;
-            
-            if (nivel.nivel === 'atrasado') { itemClass = 'atrasado'; badgeClass = 'atrasado'; badgeText = `⚠️ ${nivel.label}`; }
-            else if (nivel.nivel === 'iminente') { itemClass = 'urgente'; badgeClass = 'urgente'; badgeText = `🔴 ${nivel.label}`; }
-            else if (nivel.nivel === 'proximo') { itemClass = 'proximo'; badgeClass = 'proximo'; badgeText = `🟠 ${nivel.label}`; }
-            else if (nivel.nivel === 'hoje') { itemClass = 'hoje'; badgeClass = 'hoje'; badgeText = `🟡 Hoje ${r.horarioRemarcacao}`; }
-            else if (nivel.nivel === 'amanha') { itemClass = 'amanha'; badgeClass = 'amanha'; badgeText = `🔵 Amanhã ${r.horarioRemarcacao}`; }
-            
-            html += `
-                <div class="lembrete-item ${itemClass}">
-                    <div class="lembrete-header">
-                        <span class="lembrete-nome">${escapeHTML(r.alunoNome || '')}</span>
-                        <span class="lembrete-badge ${badgeClass}">${badgeText}</span>
-                    </div>
-                    <div class="lembrete-turma">
-                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(r.alunoTurma || '-')}
-                    </div>
-                    <div class="lembrete-data">
-                        <span><i class="fas fa-calendar"></i> ${formatarDataBR(r.dataRemarcacao)}</span>
-                        <span><i class="fas fa-clock"></i> ${r.horarioRemarcacao || '-'}</span>
-                    </div>
-                    <span class="lembrete-tipo">${escapeHTML(r.tipoTarefaLabel || '')}</span>
-                    <div class="lembrete-acoes">
-                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); verAtendimento('${r.atendimentoId}')">
-                            <i class="fas fa-eye"></i> Ver
-                        </button>
-                        <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); abrirRemarcar('${r.atendimentoId}')">
-                            <i class="fas fa-calendar-plus"></i> Remarcar
-                        </button>
-                        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); abrirFinalizacaoRemarcacao('${r.id}')">
-                            <i class="fas fa-check"></i> Finalizar
-                        </button>
-                    </div>
-                </div>`;
-        });
-        
-        html += `</div>`;
-    }
-    
-    // ========== SEÇÃO 2: NOTIFICAÇÕES DO SISTEMA ==========
-    if (temNotificacoes) {
-        html += `
-            <div class="notificacoes-secao">
-                <div class="notificacoes-secao-titulo" style="background: #f0fdfa; color: #115e59;">
-                    <i class="fas fa-bell" style="color: #14b8a6;"></i>
-                    <span>Notificações do Sistema</span>
-                    <span class="badge-count" style="background: #14b8a6;">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
-                </div>`;
-        
-        __notificacoesCache.forEach(notif => {
-            const data = new Date(notif.createdAt);
-            const agora = new Date();
-            const diffMs = agora - data;
-            const diffMin = Math.floor(diffMs / 60000);
-            const diffHr = Math.floor(diffMs / 3600000);
-            const diffDia = Math.floor(diffMs / 86400000);
-            
-            let tempoTexto;
-            if (diffMin < 1) tempoTexto = 'agora mesmo';
-            else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
-            else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
-            else tempoTexto = `há ${diffDia} d`;
-            
-            const classeLida = notif.lida ? '' : 'nao-lida';
-            
-            html += `
-                <div class="notificacao-item ${classeLida}"
-                     data-notif-id="${notif._id}"
-                     data-notif-link="${escapeHTML(notif.link || '#')}"
-                     style="cursor: pointer;">
-                    <div class="notificacao-icone" style="background: ${notif.cor || '#14b8a6'};">
-                        ${notif.icone || '📋'}
-                    </div>
-                    <div class="notificacao-conteudo">
-                        <div class="notificacao-titulo">${escapeHTML(notif.titulo || '')}</div>
-                        <div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div>
-                        <div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div>
-                    </div>
-                </div>`;
-        });
-        
-        html += `</div>`;
-    }
-    
-    lista.innerHTML = html;
-    
-    lista.querySelectorAll('.notificacao-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const id = item.getAttribute('data-notif-id');
-            const link = item.getAttribute('data-notif-link');
-            abrirNotificacao(id, link);
-        });
-    });
-}
-
-// ============================================
-// BADGE UNIFICADO
-// ============================================
-function atualizarBadgeUnificado() {
-    const badge = document.getElementById('notificacoesBadge');
-    const btn = document.getElementById('notificacoesBtn');
-    if (!badge || !btn) return;
-    
-    const total = __notificacoesCache.filter(n => !n.lida).length + __lembretesCache.length;
-    
-    if (total > 0) {
-        badge.textContent = total > 99 ? '99+' : total;
-        badge.style.display = 'inline';
-        
-        const temUrgente = __lembretesCache.some(r => calcularNivelAlerta(r).urgente);
-        if (temUrgente) {
-            btn.classList.add('tem-notificacao');
-            badge.style.background = '#dc2626';
-        } else {
-            btn.classList.remove('tem-notificacao');
-            badge.style.background = '#ef4444';
-        }
-    } else {
-        badge.style.display = 'none';
-        btn.classList.remove('tem-notificacao');
-    }
-}
-
-// ============================================
-// ABRIR / FECHAR
-// ============================================
-function abrirNotificacoes() {
-    const dropdown = document.getElementById('notificacoesDropdown');
-    if (!dropdown) return;
-    dropdown.classList.toggle('show');
-    if (dropdown.classList.contains('show')) {
-        carregarTudo();
-    }
-}
-
-function fecharNotificacoes() {
-    document.getElementById('notificacoesDropdown')?.classList.remove('show');
-}
-
-// ============================================
-// AÇÕES EM NOTIFICAÇÕES
-// ============================================
-async function abrirNotificacao(id, link) {
-    try {
-        const token = localStorage.getItem('auth_token');
-        await fetch(`/api/notificacoes/${id}/lida`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        fecharNotificacoes();
-        if (link && link !== '#') window.location.href = link;
-        carregarTudo();
-    } catch (error) {
-        console.error('Erro ao abrir notificação:', error);
-    }
-}
-
-async function marcarTodasLidas() {
-    try {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        if (data.success) {
-            await carregarTudo();
-            mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success');
-        }
-    } catch (error) {
-        console.error('Erro ao marcar todas como lidas:', error);
-    }
-}
-
-async function limparMinhasNotificacoes(event) {
-    try {
-        const token = localStorage.getItem('auth_token');
-        const confirmacao = await confirmarInterno('🗑️ Deseja excluir TODAS as suas notificações do sistema?\n\n⚠️ Os lembretes de remarcação NÃO serão afetados.\n\nEsta ação não pode ser desfeita.');
-        if (!confirmacao) return;
-        
-        const response = await fetch('/api/notificacoes/limpar-minhas', {
-            method: 'DELETE',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            __notificacoesCache = [];
-            await carregarTudo();
-            mostrarNotificacaoInterna('Notificações excluídas com sucesso!', 'success');
-        } else {
-            throw new Error(data.error || 'Erro ao excluir');
-        }
-    } catch (error) {
-        console.error('❌ Erro:', error);
-        mostrarNotificacaoInterna(error.message, 'error');
-    }
-}
-
-// Iniciar quando o DOM carregar
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
-});
-
-window.addEventListener('beforeunload', () => {
-    if (notificacoesInterval) clearInterval(notificacoesInterval);
-});
-
-// ============================================
-// EXPORTAR GLOBAIS DO SISTEMA DE NOTIFICAÇÕES
-// ============================================
-window.abrirNotificacoes = abrirNotificacoes;
-window.abrirNotificacao = abrirNotificacao;
-window.marcarTodasLidas = marcarTodasLidas;
-window.limparMinhasNotificacoes = limparMinhasNotificacoes;
-window.fecharNotificacoes = fecharNotificacoes;
-window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
-window.confirmarInterno = confirmarInterno;
+window.excluirAtendimento = excluirAtendimento;
+window.finalizarAtendimentoAtivo = finalizarAtendimentoAtivo;
+window.logout = logout;
