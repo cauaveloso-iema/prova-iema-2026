@@ -2554,11 +2554,6 @@ class AdminPanel {
                     4. O dispositivo é vinculado automaticamente<br>
                     5. Você verá "Vinculado" na tabela ✅
                 </div>
-                
-                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px; border-radius: 6px; font-size: 12px; text-align: left;">
-                    ⚠️ <strong>Importante:</strong> Os usuários precisam ter o app instalado 
-                    e com permissão de notificação ativa.
-                </div>
             `
         );
         
@@ -2570,18 +2565,20 @@ class AdminPanel {
             const token = localStorage.getItem('auth_token');
             const BASE_URL = window.location.origin;
             
-            let enviados = 0;
-            let erros = 0;
+            let pushEnviados = 0;
+            let pushErros = 0;
+            let notifInternas = 0;
             
-            // 🔥 ENVIAR UMA NOTIFICAÇÃO POR DISPOSITIVO (com URL personalizada)
             for (const disp of naoVinculados) {
                 const linkVinculo = `${BASE_URL}/confirmar-vinculo.html?playerId=${disp.playerId}`;
                 
-                console.log(`📤 Enviando para ${disp.playerId.substring(0, 30)}...`);
-                console.log(`   🔗 Link: ${linkVinculo}`);
+                console.log(`📤 Processando dispositivo: ${disp.playerId.substring(0, 30)}...`);
                 
+                // ═══════════════════════════════════════════
+                // 1️⃣ ENVIAR PUSH (com URL para abrir a página)
+                // ═══════════════════════════════════════════
                 try {
-                    const response = await fetch('/api/admin/onesignal/enviar-massa', {
+                    const pushRes = await fetch('/api/admin/onesignal/enviar-massa', {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -2590,8 +2587,8 @@ class AdminPanel {
                         body: JSON.stringify({
                             playerIds: [disp.playerId],
                             titulo: '🔔 Vincule seu dispositivo',
-                            mensagem: 'Toque aqui para vincular seu celular e receber notificações!',
-                            url: linkVinculo,
+                            mensagem: 'Toque aqui para vincular seu celular!',
+                            url: linkVinculo,                          // ✅ ESSENCIAL
                             dados: {
                                 tipo: 'solicitacao_vinculo',
                                 link: linkVinculo,
@@ -2601,26 +2598,70 @@ class AdminPanel {
                         })
                     });
                     
-                    const data = await response.json();
+                    const pushData = await pushRes.json();
                     
-                    if (data.success) {
-                        enviados++;
-                        console.log(`   ✅ Enviado!`);
+                    if (pushData.success) {
+                        pushEnviados++;
+                        console.log(`   ✅ Push enviado`);
                     } else {
-                        erros++;
-                        console.warn(`   ❌ Erro:`, data.error);
+                        pushErros++;
+                        console.warn(`   ❌ Push falhou:`, pushData.error);
                     }
                 } catch (err) {
-                    erros++;
-                    console.warn(`   ❌ Erro de rede:`, err.message);
+                    pushErros++;
+                    console.warn(`   ❌ Push erro de rede:`, err.message);
+                }
+                
+                // ═══════════════════════════════════════════
+                // 2️⃣ CRIAR NOTIFICAÇÃO INTERNA (no sino do sistema)
+                // ═══════════════════════════════════════════
+                if (disp.usuario?.id) {
+                    try {
+                        const notifRes = await fetch('/api/notificacoes', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                usuarioId: disp.usuario.id,
+                                tipo: 'sistema',
+                                titulo: '🔔 Vincule seu dispositivo',
+                                mensagem: 'Clique aqui para vincular seu celular e receber notificações!',
+                                icone: '📱',
+                                cor: '#10b981',
+                                link: linkVinculo,                       // ✅ Link pra onde vai ao clicar
+                                prioridade: 5,
+                                dados: {
+                                    tipo: 'solicitacao_vinculo',
+                                    link: linkVinculo,
+                                    playerId: disp.playerId
+                                }
+                            })
+                        });
+                        
+                        const notifData = await notifRes.json();
+                        
+                        if (notifData.success) {
+                            notifInternas++;
+                            console.log(`   ✅ Notificação interna criada`);
+                        } else {
+                            console.warn(`   ⚠️ Notificação interna falhou:`, notifData.error);
+                        }
+                    } catch (err) {
+                        console.warn(`   ⚠️ Notificação interna erro:`, err.message);
+                    }
                 }
                 
                 // Delay entre envios
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, 300));
             }
             
+            // ═══════════════════════════════════════════
+            // RESUMO
+            // ═══════════════════════════════════════════
             this.showToast(
-                `✅ ${enviados} notificações enviadas!${erros > 0 ? ` (${erros} erros)` : ''}`,
+                `✅ ${pushEnviados} push + ${notifInternas} notificações internas enviadas!`,
                 'success'
             );
             
@@ -2631,8 +2672,10 @@ class AdminPanel {
             this.mostrarNotificacaoSistema(
                 'success',
                 '📨 Solicitação Enviada',
-                `${enviados} usuário(s) notificados. Aguarde os cliques para ver os vínculos.`,
-                5000
+                `<strong>${pushEnviados}</strong> push enviados<br>
+                <strong>${notifInternas}</strong> notificações internas criadas<br>
+                ${pushErros > 0 ? `⚠️ <strong>${pushErros}</strong> erros` : ''}`,
+                6000
             );
             
             // Atualizar a lista após 3 segundos
