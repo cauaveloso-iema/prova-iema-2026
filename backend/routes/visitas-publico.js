@@ -12,7 +12,7 @@ const NotificacaoVisita = require('../models/NotificacaoVisita');
 const ConsentimentoLGPD = require('../models/ConsentimentoLGPD');
 
 // 🔐 Criptografia explícita
-const { encrypt, decrypt, hash } = require('../utils/crypto-utils');
+const { encrypt, decrypt, hash, mascararCPF } = require('../utils/crypto-utils');
 
 // ============================================
 // RATE LIMITING
@@ -473,12 +473,13 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       nome, rg, cpf, telefone, email,
       lgpdAceito,
       assinaturaBase64,
-      localizacao
+      localizacao,
+      alunoId  // 🔥 NOVO: qual aluno este responsável está autorizando
     } = req.body;
     
-    console.log(`📝 [AUTORIZAR] Termo: ${termoId}`);
+    console.log(`📝 [AUTORIZAR] Termo: ${termoId}, Aluno: ${alunoId || 'todos'}`);
     
-    // Validações
+    // ============ VALIDAÇÕES ============
     if (!nome || !rg || !cpf || !telefone) {
       return res.status(400).json({ success: false, error: 'Nome, RG, CPF e telefone são obrigatórios' });
     }
@@ -504,9 +505,23 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       return res.status(400).json({ success: false, error: 'CPF inválido' });
     }
     
-    let responsavelIndex = termo.responsaveis.findIndex(r => 
-      !r.nome || r.status === 'pendente'
-    );
+    // 🔥 NOVO: Encontrar o índice do responsável
+    // Se alunoId foi enviado, procura o responsável DAQUELE aluno
+    // Senão, procura o primeiro pendente
+    let responsavelIndex = -1;
+    
+    if (alunoId) {
+      responsavelIndex = termo.responsaveis.findIndex(r => 
+        (r.alunoId?._id || r.alunoId || '').toString() === alunoId.toString()
+      );
+    }
+    
+    if (responsavelIndex === -1) {
+      // Fallback: primeiro pendente
+      responsavelIndex = termo.responsaveis.findIndex(r => 
+        !r.nome || r.status === 'pendente'
+      );
+    }
     
     if (responsavelIndex === -1) {
       responsavelIndex = 0;
@@ -517,12 +532,12 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       ...termo.responsaveis[responsavelIndex],
       nome: nome.trim(),
       
-      // Campos criptografados
+      // 🔐 Criptografados explicitamente
       rg: encrypt(rg.trim()),
       cpf: encrypt(cpfLimpo),
       telefone: encrypt(telefone.replace(/\D/g, '')),
       
-      // Hash para busca
+      // 🔍 Hash para busca
       cpfHash: hash(cpfLimpo),
       
       email: email ? email.toLowerCase().trim() : '',
@@ -531,11 +546,11 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       autenticacaoData: new Date(),
       autenticacaoMetodo: 'totp',
       
-      // Assinatura criptografada
+      // 🔐 Assinatura criptografada
       assinaturaBase64: encrypt(assinaturaBase64),
       assinaturaData: new Date(),
       
-      // LGPD
+      // LGPD - Consentimento
       lgpdAceito: true,
       lgpdAceitoData: new Date(),
       lgpdVersao: process.env.LGPD_VERSAO || '1.0',
@@ -636,6 +651,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         status: termo.status,
         responsavel: {
           nome: termo.responsaveis[responsavelIndex].nome,
+          cpf: mascararCPF(cpfLimpo),
           assinaturaData: termo.responsaveis[responsavelIndex].assinaturaData
         },
         assinaturaGestor: termo.assinaturaGestor
@@ -653,14 +669,25 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
 // ============================================
 router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
   try {
-    const { motivo, nome } = req.body;
+    const { motivo, nome, alunoId } = req.body;
     
     const termo = await TermoVisita.findById(req.params.termoId);
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
-    let responsavelIndex = termo.responsaveis.findIndex(r => 
-      !r.nome || r.status === 'pendente'
-    );
+    let responsavelIndex = -1;
+    
+    if (alunoId) {
+      responsavelIndex = termo.responsaveis.findIndex(r => 
+        (r.alunoId?._id || r.alunoId || '').toString() === alunoId.toString()
+      );
+    }
+    
+    if (responsavelIndex === -1) {
+      responsavelIndex = termo.responsaveis.findIndex(r => 
+        !r.nome || r.status === 'pendente'
+      );
+    }
+    
     if (responsavelIndex === -1) responsavelIndex = 0;
     
     termo.responsaveis[responsavelIndex].status = 'recusado';
@@ -691,7 +718,8 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
 });
 
 // ============================================
-// 📄 GERAR TERMO OFICIAL (COM DESCRIPTOGRAFIA)
+// 📄 GERAR TERMO OFICIAL (INDIVIDUAL)
+// ⚠️ IMPORTANTE: Retorna 1 PÁGINA POR ALUNO
 // ============================================
 router.get('/termo-oficial/:id', async (req, res) => {
   try {
@@ -710,6 +738,7 @@ router.get('/termo-oficial/:id', async (req, res) => {
       });
     }
     
+    // 🔥 Gera HTML com 1 página por aluno
     const html = gerarHTMLTermoOficial(termo);
     
     res.json({
@@ -718,7 +747,8 @@ router.get('/termo-oficial/:id', async (req, res) => {
       termo: {
         codigo: termo.codigo,
         totalAutorizados: responsaveisAutorizados.length,
-        totalAlunos: termo.alunos?.length || 1
+        totalAlunos: termo.alunos?.length || 1,
+        totalPaginas: termo.alunos?.length || 1
       }
     });
     
@@ -730,6 +760,7 @@ router.get('/termo-oficial/:id', async (req, res) => {
 
 // ============================================
 // 📄 GERAR MÚLTIPLOS TERMOS (LOTE)
+// ⚠️ Cada termo gera N páginas (1 por aluno)
 // ============================================
 router.post('/termos-oficiais-lote', async (req, res) => {
   try {
@@ -779,11 +810,20 @@ router.post('/termos-oficiais-lote', async (req, res) => {
     
     const htmlsGerados = [];
     const errosGeracao = [];
+    let totalPaginas = 0;
     
     for (const termo of termosParaImprimir) {
       try {
         const html = gerarHTMLTermoOficial(termo);
-        htmlsGerados.push({ termoId: termo._id, codigo: termo.codigo, html });
+        const numAlunos = termo.alunos?.length || 1;
+        totalPaginas += numAlunos;
+        
+        htmlsGerados.push({ 
+          termoId: termo._id, 
+          codigo: termo.codigo, 
+          totalAlunos: numAlunos,
+          html 
+        });
       } catch (err) {
         errosGeracao.push({ codigo: termo.codigo, erro: err.message });
       }
@@ -795,14 +835,21 @@ router.post('/termos-oficiais-lote', async (req, res) => {
     
     const htmlCombinado = combinarHTMLsTermos(htmlsGerados.map(h => h.html));
     
+    console.log(`✅ [LOTE] ${htmlsGerados.length} termo(s) / ${totalPaginas} página(s) geradas`);
+    
     res.json({
       success: true,
       html: htmlCombinado,
       total: htmlsGerados.length,
+      totalPaginas: totalPaginas,
       totalSolicitados: termoIds.length,
       ignorados: termosIgnorados.length,
       erros: errosGeracao.length,
-      termos: htmlsGerados.map(h => ({ id: h.termoId, codigo: h.codigo }))
+      termos: htmlsGerados.map(h => ({ 
+        id: h.termoId, 
+        codigo: h.codigo,
+        totalAlunos: h.totalAlunos
+      }))
     });
     
   } catch (error) {
@@ -813,18 +860,56 @@ router.post('/termos-oficiais-lote', async (req, res) => {
 
 // ============================================
 // 🎨 GERAR HTML DO TERMO OFICIAL
+// ⚠️ IMPORTANTE: Gera 1 PÁGINA POR ALUNO
 // ============================================
 function gerarHTMLTermoOficial(termo) {
+  const alunos = termo.alunos || [];
+  
+  if (alunos.length === 0) {
+    console.warn('⚠️ Termo sem alunos:', termo.codigo);
+    return '';
+  }
+
+  // Gera 1 página por aluno
+  const paginasHTML = alunos.map((aluno, index) => {
+    return gerarPaginaTermoOficial(termo, aluno, index + 1, alunos.length);
+  });
+
+  // Se é só 1 aluno, retorna direto
+  if (paginasHTML.length === 1) {
+    return paginasHTML[0];
+  }
+
+  // Se tem múltiplos, combina todas as páginas
+  return combinarPaginasTermo(paginasHTML, termo);
+}
+
+// ============================================
+// 📄 GERAR UMA PÁGINA PARA UM ALUNO ESPECÍFICO
+// ============================================
+function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
   const dataVisita = new Date(termo.dataVisita).toLocaleDateString('pt-BR', {
     day: '2-digit', month: 'long', year: 'numeric'
   });
-  
-  const mapaResponsaveis = new Map();
-  (termo.responsaveis || []).forEach(r => {
-    const alunoId = (r.alunoId?._id || r.alunoId || '').toString();
-    if (alunoId) mapaResponsaveis.set(alunoId, r);
-  });
-  
+
+  // ✅ Buscar responsável DESSE aluno específico
+  const alunoIdStr = (aluno.alunoId?._id || aluno.alunoId || '').toString();
+  const responsavelDoAluno = (termo.responsaveis || []).find(r => 
+    (r.alunoId?._id || r.alunoId || '').toString() === alunoIdStr
+  );
+
+  // ✅ Dados do responsável DESTE aluno
+  const assinaturaResponsavel = responsavelDoAluno?.assinaturaBase64 || '';
+  const nomeResponsavel = responsavelDoAluno?.nome || 'Aguardando responsável';
+  const cpfResponsavel = responsavelDoAluno?.cpf || '';
+  const statusResponsavel = responsavelDoAluno?.status || 'pendente';
+
+  // Formatar CPF
+  const cpfFormatado = cpfResponsavel 
+    ? String(cpfResponsavel).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+    : '—';
+
+  // Professores
   const professores = termo.professores || [];
   let professoresTexto = '';
   
@@ -839,67 +924,33 @@ function gerarHTMLTermoOficial(termo) {
   } else {
     professoresTexto = '<span class="destaque">Professor(a)</span>';
   }
-  
-  const alunos = termo.alunos || [];
-  const alunosTexto = alunos.map(a => {
-    const responsavel = mapaResponsaveis.get((a.alunoId?._id || a.alunoId || '').toString());
-    const status = responsavel?.status || 'pendente';
-    
-    return `
-      <li>
-        <strong>${a.nome}</strong>
-        ${a.turma ? ` — ${a.turma}` : ''}
-        ${a.curso ? ` — ${a.curso}` : ''}
-        ${status === 'autorizado' ? '<span style="color: #10b981; font-weight: 600;">✓ Autorizado</span>' : ''}
-        ${status === 'recusado' ? '<span style="color: #ef4444; font-weight: 600;">✗ Recusado</span>' : ''}
-      </li>
-    `;
-  }).join('');
-  
-  // 🔓 Descriptografar dados do responsável autorizado
-  const responsavelAutorizado = (termo.responsaveis || []).find(r => r.status === 'autorizado');
-  
-  let assinaturaResponsavel = '';
-  let cpfResponsavel = '';
-  
-  if (responsavelAutorizado) {
-    try {
-      if (responsavelAutorizado.assinaturaBase64) {
-        assinaturaResponsavel = decrypt(responsavelAutorizado.assinaturaBase64);
-      }
-      if (responsavelAutorizado.cpf) {
-        cpfResponsavel = decrypt(responsavelAutorizado.cpf);
-      }
-    } catch (err) {
-      console.warn('⚠️ Erro ao descriptografar:', err.message);
-    }
-  }
-  
-  const nomeResponsavel = responsavelAutorizado?.nome || 'Aguardando responsável';
-  
-  const cpfFormatado = cpfResponsavel 
-    ? String(cpfResponsavel).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-    : '—';
-  
-  // 🔓 Descriptografar assinatura do gestor
-  let assinaturaGestor = '';
-  if (termo.assinaturaGestor?.base64) {
-    try {
-      assinaturaGestor = decrypt(termo.assinaturaGestor.base64);
-    } catch (err) {
-      console.warn('⚠️ Erro ao descriptografar assinatura do gestor:', err.message);
-    }
-  }
-  
+
+  // Assinatura do gestor
+  const assinaturaGestor = termo.assinaturaGestor?.base64 || '';
   const nomeGestor = termo.assinaturaGestor?.nome || 'Gestor Pedagógico';
   const cargoGestor = termo.assinaturaGestor?.cargo || 'Gestor Pedagógico';
-  
+
+  // Indicador de página (só se tiver múltiplas)
+  const indicadorPagina = totalPaginas > 1 
+    ? `<div class="page-indicator">Página ${numeroPagina} de ${totalPaginas}</div>`
+    : '';
+
+  // Status badge
+  let statusBadge = '';
+  if (statusResponsavel === 'autorizado') {
+    statusBadge = '<span class="badge autorizado">✓ Autorizado</span>';
+  } else if (statusResponsavel === 'recusado') {
+    statusBadge = '<span class="badge recusado">✗ Recusado</span>';
+  } else {
+    statusBadge = '<span class="badge pendente">⏳ Pendente</span>';
+  }
+
   return `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
       <meta charset="UTF-8">
-      <title>Termo de Visita - ${termo.codigo}</title>
+      <title>Termo de Visita - ${termo.codigo} - ${aluno.nome}</title>
       <style>
         @page { size: A4 portrait; margin: 15mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -909,29 +960,127 @@ function gerarHTMLTermoOficial(termo) {
           line-height: 1.6;
           padding: 15mm;
           color: #000;
+          position: relative;
         }
-        .header { text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 25px; }
+        .header {
+          text-align: center;
+          border-bottom: 3px double #000;
+          padding-bottom: 15px;
+          margin-bottom: 25px;
+        }
         .header h1 { font-size: 14pt; text-transform: uppercase; margin-bottom: 5px; }
         .header h2 { font-size: 12pt; font-weight: normal; }
-        .codigo-topo { text-align: right; font-size: 10pt; margin-bottom: 10px; }
-        .codigo-topo code { background: #f0f0f0; padding: 3px 10px; border-radius: 4px; font-family: monospace; }
-        .titulo { text-align: center; font-size: 16pt; font-weight: bold; text-transform: uppercase; margin: 25px 0; padding: 15px; background: #f0f0f0; border: 2px solid #000; }
-        .conteudo { text-align: justify; font-size: 12pt; line-height: 2; margin: 25px 0; }
+        .codigo-topo { 
+          text-align: right; 
+          font-size: 10pt; 
+          margin-bottom: 10px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .codigo-topo code {
+          background: #f0f0f0;
+          padding: 3px 10px;
+          border-radius: 4px;
+          font-family: monospace;
+        }
+        .page-indicator {
+          font-size: 9pt;
+          color: #666;
+          font-style: italic;
+        }
+        .titulo {
+          text-align: center;
+          font-size: 16pt;
+          font-weight: bold;
+          text-transform: uppercase;
+          margin: 25px 0;
+          padding: 15px;
+          background: #f0f0f0;
+          border: 2px solid #000;
+        }
+        .conteudo {
+          text-align: justify;
+          font-size: 12pt;
+          line-height: 2;
+          margin: 25px 0;
+        }
         .conteudo p { margin-bottom: 15px; }
-        .destaque { background: #f9f9f9; padding: 3px 8px; border-bottom: 1px solid #333; font-weight: bold; }
-        .alunos-lista { margin: 15px 0 15px 25px; padding-left: 20px; line-height: 1.8; }
-        .alunos-lista li { margin-bottom: 5px; }
+        .destaque {
+          background: #f9f9f9;
+          padding: 3px 8px;
+          border-bottom: 1px solid #333;
+          font-weight: bold;
+        }
+        .aluno-destaque {
+          background: #fff3cd;
+          padding: 15px;
+          border-left: 5px solid #ffc107;
+          margin: 20px 0;
+          font-size: 12pt;
+        }
+        .aluno-destaque strong {
+          font-size: 14pt;
+          color: #856404;
+        }
+        .aluno-info {
+          font-size: 11pt;
+          color: #333;
+          margin-top: 5px;
+        }
+        .status-badge-container {
+          text-align: center;
+          margin: 15px 0;
+        }
+        .badge {
+          display: inline-block;
+          padding: 5px 15px;
+          border-radius: 20px;
+          font-size: 10pt;
+          font-weight: bold;
+        }
+        .badge.autorizado { background: #d1fae5; color: #065f46; border: 1px solid #10b981; }
+        .badge.recusado { background: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
+        .badge.pendente { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
         .cidade-data { text-align: right; margin: 40px 0 30px; font-size: 12pt; }
-        .assinaturas { display: flex; justify-content: space-between; gap: 40px; margin-top: 70px; page-break-inside: avoid; }
+        .assinaturas {
+          display: flex;
+          justify-content: space-between;
+          gap: 40px;
+          margin-top: 70px;
+          page-break-inside: avoid;
+        }
         .assinatura { flex: 1; text-align: center; }
-        .assinatura-img { max-height: 70px; max-width: 100%; display: block; margin: 0 auto 5px; }
-        .assinatura-linha { border-top: 1px solid #000; padding-top: 8px; font-size: 11pt; margin-top: 65px; }
+        .assinatura-img {
+          max-height: 70px;
+          max-width: 100%;
+          display: block;
+          margin: 0 auto 5px;
+        }
+        .assinatura-linha {
+          border-top: 1px solid #000;
+          padding-top: 8px;
+          font-size: 11pt;
+          margin-top: 65px;
+        }
         .assinatura-linha.com-assinatura { margin-top: 5px; }
         .assinatura-linha strong { display: block; margin-bottom: 2px; }
         .assinatura-linha small { font-size: 9pt; color: #666; display: block; }
-        .rodape { position: fixed; bottom: 10mm; left: 15mm; right: 15mm; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }
-        .status-resumo { background: #f0fdf4; border-left: 4px solid #10b981; padding: 10px 15px; margin: 20px 0; font-size: 10pt; border-radius: 5px; }
-        @media print { body { padding: 0; } .no-print { display: none !important; } }
+        .rodape {
+          position: fixed;
+          bottom: 10mm;
+          left: 15mm;
+          right: 15mm;
+          text-align: center;
+          font-size: 8pt;
+          color: #666;
+          border-top: 1px solid #ccc;
+          padding-top: 5px;
+        }
+        @media print {
+          body { padding: 0; }
+          .no-print { display: none !important; }
+        }
       </style>
     </head>
     <body>
@@ -940,14 +1089,24 @@ function gerarHTMLTermoOficial(termo) {
         <h2>Termo de Autorização de Visita Técnica</h2>
       </div>
       
-      <div class="codigo-topo"><code>${termo.codigo}</code></div>
+      <div class="codigo-topo">
+        <div class="page-indicator">${indicadorPagina}</div>
+        <code>${termo.codigo}</code>
+      </div>
       
       <div class="titulo">Autorização de Visita</div>
       
+      <div class="status-badge-container">
+        ${statusBadge}
+      </div>
+      
       <div class="conteudo">
         <p>
-          <strong>AUTORIZO</strong> a participação do(s) aluno(s) listado(s) abaixo na atividade 
-          <span class="destaque">${termo.atividade}</span>, 
+          <strong>AUTORIZO</strong> a participação do(a) aluno(a) 
+          <span class="destaque">${aluno.nome}</span>, 
+          ${aluno.turma ? `da turma <span class="destaque">${aluno.turma}</span>,` : ''}
+          ${aluno.curso ? `do curso <span class="destaque">${aluno.curso}</span>,` : ''}
+          na atividade <span class="destaque">${termo.atividade}</span>, 
           sob coordenação do(a) ${professoresTexto}, 
           a ser realizada no dia <span class="destaque">${dataVisita}</span>, 
           no período <span class="destaque">${termo.periodo}</span>, 
@@ -961,8 +1120,15 @@ function gerarHTMLTermoOficial(termo) {
           </p>
         ` : ''}
         
-        <p style="margin-top: 20px;"><strong>Alunos autorizados:</strong></p>
-        <ul class="alunos-lista">${alunosTexto}</ul>
+        <div class="aluno-destaque">
+          <strong>📌 ALUNO(A) AUTORIZADO(A):</strong>
+          <div class="aluno-info">
+            <strong>${aluno.nome}</strong>
+            ${aluno.matricula ? ` • Matrícula: ${aluno.matricula}` : ''}
+            ${aluno.turma ? `<br>Turma: ${aluno.turma}` : ''}
+            ${aluno.curso ? ` • Curso: ${aluno.curso}` : ''}
+          </div>
+        </div>
         
         <p style="margin-top: 20px;">
           Declaro estar ciente das normas e responsabilidades referentes a esta atividade, 
@@ -970,23 +1136,8 @@ function gerarHTMLTermoOficial(termo) {
         </p>
       </div>
       
-      <div class="status-resumo">
-        <strong>📋 Status das Autorizações:</strong>
-        ${(termo.responsaveis || []).map(r => {
-          const status = r.status === 'autorizado' ? '✓ Autorizado' :
-                         r.status === 'recusado' ? '✗ Recusado' :
-                         '⏳ Pendente';
-          const cor = r.status === 'autorizado' ? '#10b981' :
-                      r.status === 'recusado' ? '#ef4444' :
-                      '#f59e0b';
-          return `<span style="display: inline-block; margin-right: 15px; color: ${cor}; font-weight: 600;">
-            ${r.alunoNome || 'Aluno'}: ${status}
-          </span>`;
-        }).join('')}
-      </div>
-      
       <div class="cidade-data">
-        ${termo.cidade || 'São Luís'} - MA, ${new Date(termo.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+        ${termo.cidade || 'São Luís'} - MA, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
       </div>
       
       <div class="assinaturas">
@@ -996,7 +1147,7 @@ function gerarHTMLTermoOficial(termo) {
           ` : ''}
           <div class="assinatura-linha ${assinaturaResponsavel ? 'com-assinatura' : ''}">
             <strong>${nomeResponsavel}</strong>
-            <small>Responsável Legal ${cpfResponsavel ? `• CPF: ${cpfFormatado}` : ''}</small>
+            <small>Responsável Legal do(a) aluno(a) ${aluno.nome}${cpfResponsavel ? ` • CPF: ${cpfFormatado}` : ''}</small>
           </div>
         </div>
         
@@ -1021,7 +1172,73 @@ function gerarHTMLTermoOficial(termo) {
 }
 
 // ============================================
-// 🎨 COMBINAR HTMLs DE TERMOS
+// 🎨 COMBINAR MÚLTIPLAS PÁGINAS DE UM MESMO TERMO
+// ============================================
+function combinarPaginasTermo(paginas, termo) {
+  if (paginas.length === 0) {
+    return '<!DOCTYPE html><html><body><p>Nenhuma página para exibir</p></body></html>';
+  }
+
+  if (paginas.length === 1) {
+    return paginas[0];
+  }
+
+  // Extrair <head> do primeiro
+  const headMatch = paginas[0].match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+  const headOriginal = headMatch ? headMatch[1] : '';
+
+  // Extrair <body> de cada página
+  const bodies = paginas.map((html, index) => {
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const conteudo = bodyMatch ? bodyMatch[1] : html;
+    
+    return `
+      <div class="termo-aluno-pagina" data-pagina="${index + 1}">
+        ${conteudo}
+      </div>
+    `;
+  });
+
+  const cssMultiplasPaginas = `
+    <style>
+      .termo-aluno-pagina {
+        page-break-after: always;
+        page-break-inside: avoid;
+        position: relative;
+      }
+      .termo-aluno-pagina:last-child {
+        page-break-after: auto;
+      }
+      @media print {
+        .termo-aluno-pagina {
+          page-break-after: always;
+        }
+        .termo-aluno-pagina:last-child {
+          page-break-after: auto;
+        }
+      }
+    </style>
+  `;
+
+  return `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Termo ${termo.codigo} - ${paginas.length} aluno(s)</title>
+      ${headOriginal}
+      ${cssMultiplasPaginas}
+    </head>
+    <body>
+      ${bodies.join('\n')}
+    </body>
+    </html>
+  `;
+}
+
+// ============================================
+// 🎨 COMBINAR HTMLs DE MÚLTIPLOS TERMOS (IMPRESSÃO EM LOTE)
+// Cada termo já traz suas N páginas internamente
 // ============================================
 function combinarHTMLsTermos(htmls) {
   if (!htmls || htmls.length === 0) {
@@ -1036,7 +1253,7 @@ function combinarHTMLsTermos(htmls) {
     const conteudo = bodyMatch ? bodyMatch[1] : html;
     
     return `
-      <div class="termo-page" data-termo-index="${index + 1}">
+      <div class="termo-lote-page" data-termo-index="${index + 1}">
         ${conteudo}
       </div>
     `;
@@ -1044,15 +1261,62 @@ function combinarHTMLsTermos(htmls) {
   
   const cssLote = `
     <style>
-      .termo-page { page-break-after: always; page-break-inside: avoid; position: relative; min-height: 100vh; }
-      .termo-page:last-child { page-break-after: auto; }
-      .termo-page .rodape { position: fixed; bottom: 10mm; left: 15mm; right: 15mm; }
-      .lote-info { position: fixed; top: 5mm; right: 15mm; font-size: 8pt; color: #999; font-family: Arial, sans-serif; z-index: 9999; }
-      @media print { .lote-info { display: none; } .termo-page { page-break-after: always; page-break-inside: avoid; } .termo-page:last-child { page-break-after: auto; } }
+      .termo-lote-page {
+        page-break-after: always;
+        page-break-inside: avoid;
+        position: relative;
+      }
+      .termo-lote-page:last-child {
+        page-break-after: auto;
+      }
+      
+      /* Mantém a quebra de página entre alunos dentro do mesmo termo */
+      .termo-aluno-pagina {
+        page-break-after: always;
+        page-break-inside: avoid;
+      }
+      .termo-aluno-pagina:last-child {
+        page-break-after: auto;
+      }
+      
+      .lote-info {
+        position: fixed;
+        top: 5mm;
+        right: 15mm;
+        font-size: 8pt;
+        color: #999;
+        font-family: Arial, sans-serif;
+        z-index: 9999;
+      }
+      
+      @media print {
+        .lote-info { display: none; }
+        .termo-lote-page {
+          page-break-after: always;
+          page-break-inside: avoid;
+        }
+        .termo-lote-page:last-child {
+          page-break-after: auto;
+        }
+        .termo-aluno-pagina {
+          page-break-after: always;
+          page-break-inside: avoid;
+        }
+        .termo-aluno-pagina:last-child {
+          page-break-after: auto;
+        }
+      }
+      
       @media screen {
         body { background: #e5e7eb; padding: 20px; }
-        .termo-page { background: white; padding: 15mm; margin: 0 auto 20px; max-width: 210mm; min-height: 297mm; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-radius: 4px; }
-        .termo-page .rodape { position: absolute; bottom: 10mm; left: 15mm; right: 15mm; }
+        .termo-lote-page {
+          background: white;
+          padding: 15mm;
+          margin: 0 auto 20px;
+          max-width: 210mm;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+          border-radius: 4px;
+        }
       }
     </style>
   `;
