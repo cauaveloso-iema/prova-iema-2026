@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Script de deploy automatizado para o Sistema de Provas (Node.js + MongoDB).
+    Script de deploy automatizado para o Educa Pleno (Node.js + MongoDB).
 
 .DESCRIPTION
     Realiza backup, atualização de código, instalação de dependências,
@@ -99,7 +99,7 @@ function Invoke-Step {
 $startTime = Get-Date
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════╗" -ForegroundColor Magenta
-Write-Host "║   🚀  DEPLOY - SISTEMA DE PROVAS                     ║" -ForegroundColor Magenta
+Write-Host "║   🚀  DEPLOY - EDUCAPLENO                   ║" -ForegroundColor Magenta
 Write-Host "╚══════════════════════════════════════════════════════╝" -ForegroundColor Magenta
 Write-Host "  Ambiente : $Environment" -ForegroundColor White
 Write-Host "  Início   : $($startTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor White

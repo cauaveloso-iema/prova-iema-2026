@@ -65,6 +65,7 @@ class SetorPedagogico {
         this.arquivoSelecionadoSetor = null;
         this.temPermissao2Chamada = false;
         this.temPermissaoSubstituicao = false;
+        this.temPermissaoVisitas = false;
         
         this.estadoSegundaChamada = {
             currentAluno: null,
@@ -161,43 +162,89 @@ class SetorPedagogico {
         try {
             if (!this.token) return;
             
-            const response = await fetch('/api/admin/permissoes-modulos/verificar/segunda_chamada_setor_pedagogico', {
-                headers: { 'Authorization': `Bearer ${this.token}` }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success && data.temPermissao) {
-                const navItem = document.getElementById('navSegundaChamada');
-                if (navItem) navItem.style.display = 'flex';
-                const menuMobile = document.getElementById('menuItemSegundaChamada');
-                if (menuMobile) menuMobile.style.display = 'flex';
-                this.temPermissao2Chamada = true;
-            } else {
+            // ============================================
+            // 1. VERIFICAR PERMISSÃO - 2ª CHAMADA
+            // ============================================
+            try {
+                const response = await fetch('/api/admin/permissoes-modulos/verificar/segunda_chamada_setor_pedagogico', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.temPermissao) {
+                    const navItem = document.getElementById('navSegundaChamada');
+                    if (navItem) navItem.style.display = 'flex';
+                    const menuMobile = document.getElementById('menuItemSegundaChamada');
+                    if (menuMobile) menuMobile.style.display = 'flex';
+                    this.temPermissao2Chamada = true;
+                    console.log('✅ Permissão 2ª Chamada concedida');
+                } else {
+                    this.temPermissao2Chamada = false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar permissão 2ª Chamada:', error);
                 this.temPermissao2Chamada = false;
             }
 
-            const responseSub = await fetch('/api/admin/permissoes-modulos/verificar/substituicao_professores_setor_pedagogico', {
-                headers: { 'Authorization': `Bearer ${this.token}` }
-            });
-            
-            const dataSub = await responseSub.json();
-            
-            if (dataSub.success && dataSub.temPermissao) {
-                const navItem = document.getElementById('navSubstituicaoProfessores');
-                if (navItem) navItem.style.display = 'flex';
-                const menuMobile = document.getElementById('menuItemSubstituicaoProfessores');
-                if (menuMobile) menuMobile.style.display = 'flex';
-                this.temPermissaoSubstituicao = true;
-            } else {
+            // ============================================
+            // 2. VERIFICAR PERMISSÃO - SUBSTITUIÇÃO PROFESSORES
+            // ============================================
+            try {
+                const responseSub = await fetch('/api/admin/permissoes-modulos/verificar/substituicao_professores_setor_pedagogico', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                
+                const dataSub = await responseSub.json();
+                
+                if (dataSub.success && dataSub.temPermissao) {
+                    const navItem = document.getElementById('navSubstituicaoProfessores');
+                    if (navItem) navItem.style.display = 'flex';
+                    const menuMobile = document.getElementById('menuItemSubstituicaoProfessores');
+                    if (menuMobile) menuMobile.style.display = 'flex';
+                    this.temPermissaoSubstituicao = true;
+                    console.log('✅ Permissão Substituição de Professores concedida');
+                } else {
+                    this.temPermissaoSubstituicao = false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar permissão Substituição:', error);
                 this.temPermissaoSubstituicao = false;
             }
+
+            // ============================================
+            // 3. 🔥 NOVO: VERIFICAR PERMISSÃO - AUTORIZAÇÃO DE VISITAS
+            // ============================================
+            try {
+                const responseVisitas = await fetch('/api/admin/permissoes-modulos/verificar/autorizacao_visitas', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                
+                const dataVisitas = await responseVisitas.json();
+                
+                if (dataVisitas.success && dataVisitas.temPermissao) {
+                    const navItem = document.getElementById('navVisitas');
+                    if (navItem) navItem.style.display = 'flex';
+                    const menuMobile = document.getElementById('menuItemVisitas');
+                    if (menuMobile) menuMobile.style.display = 'flex';
+                    this.temPermissaoVisitas = true;
+                    console.log('✅ Permissão Autorização de Visitas concedida');
+                } else {
+                    this.temPermissaoVisitas = false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar permissão Visitas:', error);
+                this.temPermissaoVisitas = false;
+            }
+            
         } catch (error) {
-            console.error('❌ Erro ao verificar permissões:', error);
+            console.error('❌ Erro geral ao verificar permissões:', error);
             this.temPermissao2Chamada = false;
             this.temPermissaoSubstituicao = false;
+            this.temPermissaoVisitas = false;
         }
     }
+    
     
     async carregarFotoPerfil() {
         try {
@@ -315,6 +362,7 @@ class SetorPedagogico {
     }
     
     setupNavigation() {
+        // Todos os nav-links com data-section
         document.querySelectorAll('.nav-link[data-section]').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -326,19 +374,32 @@ class SetorPedagogico {
             });
         });
         
-        document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('mobile-open');
-        });
+        // Menu mobile (hamburguer)
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', () => {
+                document.getElementById('sidebar').classList.toggle('mobile-open');
+            });
+        }
         
-        document.getElementById('logoutBtn').addEventListener('click', (e) => {
-            e.preventDefault();
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('user_data');
-            window.location.href = '/login.html';
-        });
+        // Logout
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_data');
+                window.location.href = '/login.html';
+            });
+        }
+        
+        console.log('✅ Navegação configurada');
     }
     
     navigateTo(section) {
+        // ============================================
+        // VERIFICAÇÕES DE PERMISSÃO
+        // ============================================
         if (section === 'segunda-chamada' && !this.temPermissao2Chamada) {
             this.showToast('❌ Você não tem permissão para acessar 2ª Chamada', 'error');
             return;
@@ -347,12 +408,21 @@ class SetorPedagogico {
             this.showToast('❌ Você não tem permissão para acessar Substituição de Professores', 'error');
             return;
         }
+        // 🔥 NOVO: Verificar permissão de visitas
+        if (section === 'visitas' && !this.temPermissaoVisitas) {
+            this.showToast('❌ Você não tem permissão para acessar Autorização de Visitas', 'error');
+            return;
+        }
         
-        // Atualizar nav ativo (sidebar)
+        // ============================================
+        // ATUALIZAR NAV ATIVO (SIDEBAR)
+        // ============================================
         document.querySelectorAll('.nav-link[data-section]').forEach(link => link.classList.remove('active'));
         document.querySelector(`.nav-link[data-section="${section}"]`)?.classList.add('active');
         
-        // 🔥 Atualizar bottom nav
+        // ============================================
+        // ATUALIZAR BOTTOM NAV (MOBILE)
+        // ============================================
         const bottomNavSections = ['dashboard', 'alunos', 'provas', 'relatorios'];
         if (bottomNavSections.includes(section)) {
             this.updateBottomNav(section);
@@ -361,24 +431,32 @@ class SetorPedagogico {
             document.querySelector('#bottomNavSp .nav-item-sp[data-section="menu"]')?.classList.add('active');
         }
         
-        // 🔥 Fechar menu mobile
+        // Fechar menu mobile
         if (window.innerWidth <= 768) {
             setTimeout(() => this.fecharMenuLateral(), 100);
         }
         
+        // ============================================
+        // TÍTULOS E ÍCONES DAS PÁGINAS
+        // ============================================
         const titles = {
             dashboard: 'Dashboard',
             alunos: 'Alunos com Necessidades Especiais (AEE)',
             provas: 'Provas Publicadas',
             relatorios: 'Relatórios',
             'segunda-chamada': '2ª Chamada',
-            'substituicao-professores': 'Substituição de Professores'
+            'substituicao-professores': 'Substituição de Professores',
+            'visitas': 'Autorização de Visitas'  // 🔥 NOVO
         };
+        
         const icons = {
-            dashboard: 'fa-chart-line', alunos: 'fa-users',
-            provas: 'fa-file-alt', relatorios: 'fa-chart-bar',
+            dashboard: 'fa-chart-line',
+            alunos: 'fa-users',
+            provas: 'fa-file-alt',
+            relatorios: 'fa-chart-bar',
             'segunda-chamada': 'fa-redo',
-            'substituicao-professores': 'fa-people-arrows'
+            'substituicao-professores': 'fa-people-arrows',
+            'visitas': 'fa-map-marked-alt'  // 🔥 NOVO
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -386,12 +464,24 @@ class SetorPedagogico {
             pageTitle.textContent = titles[section] || 'Dashboard';
         }
         
-        if (section === 'dashboard') this.loadDashboard();
-        else if (section === 'alunos') this.loadAlunos();
-        else if (section === 'provas') this.loadProvas();
-        else if (section === 'relatorios') this.loadRelatorios();
-        else if (section === 'segunda-chamada') this.loadSegundaChamada();
-        else if (section === 'substituicao-professores') this.loadSubstituicaoProfessores();
+        // ============================================
+        // CARREGAR CONTEÚDO DA SEÇÃO
+        // ============================================
+        if (section === 'dashboard') {
+            this.loadDashboard();
+        } else if (section === 'alunos') {
+            this.loadAlunos();
+        } else if (section === 'provas') {
+            this.loadProvas();
+        } else if (section === 'relatorios') {
+            this.loadRelatorios();
+        } else if (section === 'segunda-chamada') {
+            this.loadSegundaChamada();
+        } else if (section === 'substituicao-professores') {
+            this.loadSubstituicaoProfessores();
+        } else if (section === 'visitas') {  // 🔥 NOVO
+            this.loadVisitas();
+        }
     }
     
     // ============ DASHBOARD ============
@@ -5963,6 +6053,79 @@ class SetorPedagogico {
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
+    }
+
+    // ============================================
+    // 🔥 CARREGAR MÓDULO DE AUTORIZAÇÃO DE VISITAS
+    // ============================================
+    loadVisitas() {
+        const content = document.getElementById('content');
+        if (!content) return;
+        
+        // Verificar permissão
+        if (!this.temPermissaoVisitas) {
+            content.innerHTML = `
+                <div class="alert alert-warning m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Restrito</strong>
+                    <p>Você não tem permissão para acessar este módulo.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        console.log('📋 Carregando módulo de Autorização de Visitas...');
+        
+        // Criar container
+        content.innerHTML = `
+            <div id="aba-visitas-content">
+                <div style="text-align: center; padding: 60px;">
+                    <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #667eea; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                    <p style="color: #6b7280;">Carregando módulo de visitas...</p>
+                </div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            </div>
+        `;
+        
+        // Inicializar o módulo admin de visitas
+        setTimeout(async () => {
+            try {
+                if (typeof window.visitasAdmin !== 'undefined' && window.visitasAdmin) {
+                    await window.visitasAdmin.init();
+                    console.log('✅ Módulo de visitas inicializado');
+                } else {
+                    console.warn('⚠️ visitasAdmin não encontrado, tentando carregar...');
+                    
+                    // Tentar carregar o script se ainda não existir
+                    if (!document.querySelector('script[src*="visitas-admin.js"]')) {
+                        const script = document.createElement('script');
+                        script.src = 'js/visitas-admin.js';
+                        script.onload = async () => {
+                            if (window.visitasAdmin) {
+                                await window.visitasAdmin.init();
+                            }
+                        };
+                        document.body.appendChild(script);
+                    } else {
+                        content.innerHTML = `
+                            <div class="alert alert-danger m-4">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>Erro:</strong> Módulo de visitas não carregado.
+                                <br><small>Recarregue a página (F5) e tente novamente.</small>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Erro ao inicializar módulo de visitas:', error);
+                content.innerHTML = `
+                    <div class="alert alert-danger m-4">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Erro ao carregar módulo:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }, 150);
     }
     
     // ============ NOTIFICAÇÕES ============

@@ -1,7 +1,7 @@
 // ============================================================================
 // SERVIDOR EDUCAPLENO 2026
 // ============================================================================
-// Descrição: Backend do sistema de provas online do EducaPleno
+// Descrição: Backend do EducaPleno online do EducaPleno
 // Ambiente: Desenvolvimento/Produção
 // Versão: 1.0.0
 // Autor: Equipe de Desenvolvimento
@@ -414,12 +414,30 @@ const emailService = new EmailService();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Segurança e compressão
+// ============================================================
+// 🔓 SEGURANÇA + IFRAMES PERMITIDOS
+// ============================================================
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: false
+  crossOriginResourcePolicy: false,
+  frameguard: false   // 🔥 Desabilita o X-Frame-Options do Helmet
 }));
+
+// 🔥 MIDDLEWARE QUE FORÇA O HEADER CORRETO EM TODAS AS RESPOSTAS
+// DEVE FICAR LOGO APÓS O HELMET
+app.use((req, res, next) => {
+  // Remove qualquer X-Frame-Options pré-existente
+  res.removeHeader('X-Frame-Options');
+  
+  // Define explicitamente como SAMEORIGIN (permite iframe do mesmo domínio)
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  
+  // Remove CSP se existir (para não bloquear iframes por frame-ancestors)
+  res.removeHeader('Content-Security-Policy');
+  
+  next();
+});
 
 app.use(compression());
 
@@ -433,6 +451,28 @@ app.use(cors({
 
 // Cookies
 app.use(cookieParser());
+
+// ============================================
+// 🔐 HEADERS DE SEGURANÇA LGPD
+// ============================================
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');  // ✅ PERMITE IFRAME DO MESMO DOMÍNIO
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(self), microphone=()');
+  next();
+});
+
+// 🔒 FORÇAR HTTPS EM PRODUÇÃO
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.header('x-forwarded-proto') !== 'https') {
+      return res.redirect(`https://${req.header('host')}${req.url}`);
+    }
+    next();
+  });
+}
 
 // Raw body capture (opcional)
 app.use((req, res, next) => {
@@ -753,6 +793,13 @@ const Notificacao = require('./models/Notificacao');
 const Eixo = require('./models/Eixo');      
 const Curso = require('./models/Cursos');    
 
+// 🔐 LGPD - Modelos e Middlewares
+const AuditoriaVisita = require('./models/AuditoriaVisita');
+const ConsentimentoLGPD = require('./models/ConsentimentoLGPD');
+const retencaoService = require('./services/retencao-visitas');
+const lgpdRoutes = require('./routes/lgpd');
+
+
 // ============================================================================
 // DEFINIÇÃO DE MODELOS INLINE
 // ============================================================================
@@ -1011,6 +1058,13 @@ const protagonismoPublicoRoutes = require('./routes/protagonismo-publico');
 app.use('/api/protagonismo', protagonismoRoutes);
 app.use('/api/protagonismo-publico', protagonismoPublicoRoutes);
 
+//AUTORIZAÇÃO DE VISITAS
+const visitasRoutes = require('./routes/visitas');
+const visitasPublicoRoutes = require('./routes/visitas-publico');
+
+app.use('/api/setor-pedagogico/visitas', visitasRoutes);
+app.use('/api/visitas-publico', visitasPublicoRoutes);
+
 //Rotas de autorização
 const autorizacaoRoutes = require('./routes/autorizacao-routes');
 app.use('/api/gestao-geral/autorizacao', autorizacaoRoutes);
@@ -1030,6 +1084,9 @@ app.use('/api/substituicao-professor', substituicaoProfessorRoutes);
 // NOVA rota compartilhada
 const acompanhamentoCompartilhadoRoutes = require('./routes/acompanhamento-compartilhado');
 app.use('/api/acompanhamento-compartilhado', acompanhamentoCompartilhadoRoutes);
+
+//LGPD
+app.use('/api/lgpd', lgpdRoutes);
 
 
 // ============================================
@@ -1202,6 +1259,12 @@ const connectToDatabase = async () => {
     
     console.log('='.repeat(60));
     console.log('✅ CONEXÃO ESTABELECIDA COM SUCESSO!');
+    // ⏰ Iniciar cron jobs de retenção LGPD
+    try {
+      retencaoService.iniciarCronJobs();
+    } catch (error) {
+      console.warn('⚠️ Erro ao iniciar cron jobs LGPD:', error.message);
+    }
     console.log(`📁 Banco: ${db.databaseName}`);
     console.log(`📍 Host: ${host}`);
     console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
@@ -15757,7 +15820,7 @@ app.post('/api/auth/2fa/resend', authenticateToken, async (req, res) => {
     await user.save();
 
     const telefoneLimpo = user.telefone.replace(/\D/g, '');
-    const mensagem = `🔐 ${user.nome}, seu código de verificação do SISTEMA DE PROVAS é: ${codigo}. Válido por 5 minutos.`;
+    const mensagem = `🔐 ${user.nome}, seu código de verificação do EDUCAPLENO é: ${codigo}. Válido por 5 minutos.`;
 
     console.log('📱 Enviando SMS...');
     console.log(`   Para: ${telefoneLimpo}`);
@@ -21491,12 +21554,18 @@ app.get('*', (req, res) => {
 // ============ INICIAR SERVIDOR ============
 server.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
-  console.log(`🚀 SISTEMA DE PROVAS ONLINE - PRODUÇÃO`);
+  console.log(`🚀 EDUCAPLENO ONLINE - PRODUÇÃO`);
   console.log(`📡 Servidor rodando na porta: ${PORT}`);
   console.log(`🌐 URL: https://prova-iema-2026.onrender.com`);
   console.log('Servidor Local:http://localhost:3000/login.html');
   console.log(`🗄️  Banco de Dados: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
   console.log(`🔐 Autenticação: ${process.env.JWT_SECRET ? '✅ Configurada' : '⚠️  Configurar JWT_SECRET'}`);
+  console.log('🔐 ===== CONFORMIDADE LGPD =====');
+  console.log(`   • Criptografia: ${process.env.ENCRYPTION_KEY ? '✅' : '❌'} (AES-256-GCM)`);
+  console.log(`   • Retenção: ${process.env.RETENCAO_VISITAS_ANOS || 2} anos`);
+  console.log(`   • DPO: ${process.env.DPO_EMAIL || 'não configurado'}`);
+  console.log(`   • Cron jobs: ✅`);
+  console.log('=================================');
   console.log(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
   console.log('='.repeat(50));
   console.log('\n📊 Principais rotas disponíveis:');

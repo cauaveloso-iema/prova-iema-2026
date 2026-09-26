@@ -1,0 +1,948 @@
+/* ============================================================
+   VISITAS PÚBLICO - CSS
+   Baseado no protagonismo-publico.css
+   ============================================================ */
+
+:root {
+  --primary: #667eea;
+  --primary-dark: #5568d3;
+  --secondary: #764ba2;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f0f4ff;
+  min-height: 100vh;
+  color: #1f2937;
+}
+
+/* ============ FUNDO ANIMADO ============ */
+.animated-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  animation: float 20s infinite ease-in-out;
+}
+
+.blob-1 { width: 400px; height: 400px; background: #818cf8; top: -100px; left: -100px; }
+.blob-2 { width: 500px; height: 500px; background: #a78bfa; bottom: -150px; right: -150px; animation-delay: -7s; }
+.blob-3 { width: 300px; height: 300px; background: #f472b6; top: 50%; left: 50%; animation-delay: -14s; }
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+/* ============ CONTAINER ============ */
+.container-public {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 30px 20px;
+}
+
+/* ============ HERO ============ */
+.hero-section {
+  background: white;
+  border-radius: 24px;
+  padding: 40px 30px;
+  text-align: center;
+  margin-bottom: 30px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+}
+
+.hero-icon {
+  width: 90px;
+  height: 90px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 42px;
+  color: white;
+  box-shadow: 0 10px 24px rgba(102,126,234,0.4);
+}
+
+.hero-section h1 {
+  margin: 0 0 10px;
+  font-size: 2rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-section p {
+  color: #6b7280;
+  font-size: 1rem;
+  margin: 0 0 20px;
+}
+
+.hero-status {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  padding: 6px 16px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-pill.ativo {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+/* ============ AVISO ============ */
+.aviso-card {
+  background: #fef3c7;
+  border-left: 4px solid #f59e0b;
+  border-radius: 12px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #92400e;
+  font-size: 14px;
+}
+
+.aviso-card i {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+/* ============ AÇÕES ============ */
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.action-card {
+  background: white;
+  border-radius: 20px;
+  padding: 30px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  font-family: inherit;
+}
+
+.action-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+  border-color: #667eea;
+}
+
+.action-icon {
+  width: 70px;
+  height: 70px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: white;
+  margin: 0 auto 15px;
+}
+
+.action-icon.inscricao { background: linear-gradient(135deg, #667eea, #764ba2); }
+.action-icon.eleicao { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.action-icon.tutores { background: linear-gradient(135deg, #10b981, #059669); }
+.action-icon.verificar { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+
+.action-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  color: #1f2937;
+}
+
+.action-card p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+/* ============ SEÇÕES ============ */
+.section-content {
+  background: white;
+  border-radius: 24px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  display: none;
+}
+
+.section-content.active {
+  display: block;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.btn-voltar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: #f3f4f6;
+  color: #4b5563;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.3s;
+}
+
+.btn-voltar:hover {
+  background: #667eea;
+  color: white;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #1f2937;
+}
+
+/* ============ FORMULÁRIO ============ */
+.form-public {
+  background: #f8fafc;
+  border-radius: 20px;
+  padding: 25px;
+  margin-bottom: 20px;
+}
+
+.form-header {
+  margin-bottom: 25px;
+}
+
+.form-header h3 {
+  margin: 0 0 5px;
+  font-size: 1.2rem;
+  color: #1f2937;
+}
+
+.form-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.form-group label i {
+  color: #667eea;
+  margin-right: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102,126,234,0.1);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.btn-submit {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s;
+  box-shadow: 0 8px 20px rgba(102,126,234,0.35);
+}
+
+.btn-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(102,126,234,0.45);
+}
+
+.btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============ CARDS DE TERMOS ============ */
+.termos-disponiveis-grid {
+  display: grid;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.termo-publico-card {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.termo-publico-card:hover {
+  border-color: #667eea;
+  transform: translateX(5px);
+  box-shadow: 0 8px 24px rgba(102,126,234,0.15);
+}
+
+.termo-publico-card.selected {
+  border-color: #667eea;
+  background: #f0f4ff;
+}
+
+.termo-publico-card h4 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  color: #1f2937;
+}
+
+.termo-publico-card .info {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 4px 0;
+}
+
+.termo-publico-card .info i {
+  color: #667eea;
+  margin-right: 6px;
+  width: 16px;
+}
+
+/* ============ LGPD ============ */
+.lgpd-box {
+  background: #e0f2fe;
+  border-left: 4px solid #0284c7;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #0c4a6e;
+  line-height: 1.6;
+}
+
+.lgpd-box h4 {
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lgpd-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px;
+  background: white;
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.lgpd-checkbox input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: #667eea;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.lgpd-checkbox label {
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ============ AUTENTICAÇÃO ============ */
+.auth-steps {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 16px;
+}
+
+.auth-step {
+  flex: 1;
+  text-align: center;
+  position: relative;
+}
+
+.auth-step .step-num {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 8px;
+  font-weight: 700;
+  font-size: 15px;
+  transition: all 0.3s;
+}
+
+.auth-step.active .step-num {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+}
+
+.auth-step.done .step-num {
+  background: #10b981;
+  color: white;
+}
+
+.auth-step .step-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.auth-step.active .step-label {
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* ============ ASSINATURA ============ */
+.assinatura-container-public {
+  position: relative;
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  background: white;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.assinatura-canvas-public {
+  display: block;
+  width: 100%;
+  height: 180px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.assinatura-placeholder-public {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #9ca3af;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  transition: opacity 0.3s;
+}
+
+.assinatura-placeholder-public.escondido {
+  opacity: 0;
+}
+
+/* ============ SUCESSO ============ */
+.sucesso-box {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.sucesso-icon {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 48px;
+  color: white;
+  box-shadow: 0 15px 30px rgba(16,185,129,0.4);
+}
+
+.sucesso-box h2 {
+  color: #065f46;
+  margin: 0 0 10px;
+}
+
+.sucesso-box p {
+  color: #6b7280;
+  margin: 0 0 25px;
+}
+
+/* ============ MODAIS ============ */
+.modal-public {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.modal-public.active {
+  display: flex;
+}
+
+.modal-content-public {
+  background: white;
+  border-radius: 24px;
+  padding: 30px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 40px;
+  color: white;
+}
+
+.modal-icon.sucesso { background: linear-gradient(135deg, #10b981, #059669); }
+.modal-icon.erro { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+/* ============ RESPONSIVO ============ */
+@media (max-width: 768px) {
+  .hero-section h1 { font-size: 1.5rem; }
+  .action-grid { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .auth-steps { padding: 15px 10px; }
+  .auth-step .step-label { font-size: 10px; }
+  .container-public { padding: 20px 15px; }
+}
+
+/* ============================================
+   ETAPAS DE AUTENTICAÇÃO
+   ============================================ */
+.auth-etapa {
+    background: #f8fafc;
+    border-radius: 16px;
+    padding: 25px;
+    margin-top: 20px;
+    border: 2px solid #e5e7eb;
+}
+
+.etapa-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.etapa-numero {
+    width: 45px;
+    height: 45px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+}
+
+.etapa-titulo h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.etapa-titulo p {
+    margin: 3px 0 0;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+/* ============================================
+   TOTP - QR CODE E VERIFICAÇÃO
+   ============================================ */
+.totp-info {
+    display: flex;
+    gap: 12px;
+    padding: 15px;
+    background: #dbeafe;
+    border-left: 4px solid #3b82f6;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #1e40af;
+}
+
+.totp-info i {
+    font-size: 20px;
+    color: #3b82f6;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.totp-info ol {
+    color: #1e3a8a;
+    line-height: 1.7;
+}
+
+.totp-qrcode-container {
+    text-align: center;
+    padding: 25px;
+    background: white;
+    border-radius: 16px;
+    border: 3px solid #3b82f6;
+    margin-bottom: 20px;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(59,130,246,0.15);
+}
+
+.totp-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #6b7280;
+}
+
+.totp-loading i {
+    font-size: 42px;
+    color: #3b82f6;
+}
+
+#totpQRCodeBox img {
+    width: 250px;
+    height: 250px;
+    padding: 12px;
+    background: white;
+    border-radius: 12px;
+    display: block;
+    margin: 0 auto;
+}
+
+.totp-hint {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.totp-verify-box {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+}
+
+.totp-verify-box label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #374151;
+    font-size: 14px;
+}
+
+.totp-verify-box label i {
+    color: #3b82f6;
+    margin-right: 5px;
+}
+
+.totp-codigo-input {
+    text-align: center;
+    font-size: 28px;
+    letter-spacing: 12px;
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    padding: 15px;
+    border: 3px solid #e5e7eb;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    width: 100%;
+    transition: all 0.3s;
+}
+
+.totp-codigo-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59,130,246,0.1);
+}
+
+/* ============================================
+   LGPD - MAIS DESTAQUE
+   ============================================ */
+.lgpd-box {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    font-size: 13px;
+    color: #1e3a8a;
+    line-height: 1.7;
+}
+
+.lgpd-box h4 {
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1e40af;
+    font-size: 15px;
+}
+
+.lgpd-box p {
+    margin: 8px 0;
+}
+
+.lgpd-box ul {
+    line-height: 1.6;
+}
+
+.lgpd-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: white;
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+    cursor: pointer;
+    margin-bottom: 20px;
+    transition: all 0.2s;
+}
+
+.lgpd-checkbox:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+}
+
+.lgpd-checkbox input {
+    width: 22px;
+    height: 22px;
+    margin-top: 2px;
+    accent-color: #3b82f6;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.lgpd-checkbox label {
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.btn-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #9ca3af !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+@media (max-width: 600px) {
+    .totp-codigo-input {
+        font-size: 22px;
+        letter-spacing: 8px;
+    }
+    
+    #totpQRCodeBox img {
+        width: 200px;
+        height: 200px;
+    }
+    
+    .etapa-numero {
+        width: 38px;
+        height: 38px;
+        font-size: 17px;
+    }
+}
+
+/* ============================================
+   BOTÕES DE AÇÃO FINAL (AUTORIZAR / RECUSAR)
+   ============================================ */
+.botoes-acao-final {
+    display: flex;
+    gap: 12px;
+    margin-top: 25px;
+    align-items: stretch;
+}
+
+.btn-recusar-compacto {
+    padding: 15px 22px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.btn-recusar-compacto:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+}
+
+.btn-recusar-compacto i {
+    font-size: 1rem;
+}
+
+.btn-autorizar-grande {
+    flex: 1;
+    padding: 15px 30px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+}
+
+.btn-autorizar-grande:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(16, 185, 129, 0.45);
+}
+
+.btn-autorizar-grande i {
+    font-size: 1.1rem;
+}
+
+/* Mobile: botões empilhados */
+@media (max-width: 600px) {
+    .botoes-acao-final {
+        flex-direction: column-reverse;
+    }
+    
+    .btn-recusar-compacto,
+    .btn-autorizar-grande {
+        width: 100%;
+        flex: 1 1 auto;
+    }
+}

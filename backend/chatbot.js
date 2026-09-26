@@ -1454,17 +1454,17 @@ Se não receber o email, verifique a pasta de spam ou contate o suporte.`;
 
     try {
       const contextos = {
-        aluno: 'Você é um assistente para ALUNOS do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        professor: 'Você é um assistente para PROFESSORES do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        login: 'Você é um assistente para LOGIN do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        adminSimples: 'Você é um assistente para ADMINISTRADORES do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        superAdmin: 'Você é um assistente para SUPER ADMINISTRADORES do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        setorPedagogico: 'Você é um assistente do SETOR PEDAGÓGICO do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        coordenacaoPatio: 'Você é um assistente da COORDENAÇÃO DE PÁTIO do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        cozinha: 'Você é um assistente da COZINHA do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        gestaoGeral: 'Você é um assistente da GESTÃO GERAL do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        enfermaria: 'Você é um assistente da ENFERMARIA do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.',
-        padrao: 'Você é um assistente do Sistema de Provas. Responda em português brasileiro. Seja direto e objetivo.'
+        aluno: 'Você é um assistente para ALUNOS do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        professor: 'Você é um assistente para PROFESSORES do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        login: 'Você é um assistente para LOGIN do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        adminSimples: 'Você é um assistente para ADMINISTRADORES do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        superAdmin: 'Você é um assistente para SUPER ADMINISTRADORES do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        setorPedagogico: 'Você é um assistente do SETOR PEDAGÓGICO do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        coordenacaoPatio: 'Você é um assistente da COORDENAÇÃO DE PÁTIO do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        cozinha: 'Você é um assistente da COZINHA do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        gestaoGeral: 'Você é um assistente da GESTÃO GERAL do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        enfermaria: 'Você é um assistente da ENFERMARIA do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.',
+        padrao: 'Você é um assistente do EducaPleno. Responda em português brasileiro. Seja direto e objetivo.'
       };
 
       const messages = [

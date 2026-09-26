@@ -21,7 +21,8 @@
 
     <link rel="stylesheet" href="css/setor-pedagogico.css">
     <link rel="stylesheet" href="css/substituicao-professores.css">
-    <script src="js/dialog-helper.js"></script> 
+    <link rel="stylesheet" href="css/visitas-admin.css">
+    <script src="js/dialog-helper.js"></script>
 </head>
 <body>
     <button class="mobile-menu-btn" id="mobileMenuBtn">
@@ -56,6 +57,11 @@
             </a>
             <a href="#" class="nav-link" data-section="substituicao-professores" id="navSubstituicaoProfessores" style="display: none;">
                 <i class="fas fa-people-arrows"></i> Substituição de Professores
+            </a>
+
+            <a class="nav-link" data-section="visitas" href="#" id="navVisitas" style="display: none;">
+                <i class="fas fa-map-marked-alt"></i>
+                <span>Autorização de Visitas</span>
             </a>
 
             <a href="#" class="nav-link" onclick="event.preventDefault(); setorPedagogico.fecharMenuLateral(); setTimeout(() => setorPedagogico.abrirModalUploadAdaptarDocumento(), 300);" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; margin: 12px 16px;">
@@ -191,11 +197,66 @@
             </div>
         </div>
     </div>
+
+    <!-- ================================================
+         MODAL GENÉRICO (usado por todos os módulos)
+         ================================================ -->
+    <div class="modal fade" id="modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 20px 25px;">
+                    <h5 class="modal-title" id="modalTitle">
+                        <i class="fas fa-info-circle"></i> Modal
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body" id="modalBody" style="padding: 25px;">
+                    <!-- Conteúdo dinâmico -->
+                </div>
+                <div class="modal-footer" style="padding: 15px 25px; background: #f8fafc; border-top: 1px solid #e5e7eb;">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 10px; padding: 10px 20px;">
+                        <i class="fas fa-times"></i> Fechar
+                    </button>
+                    <button type="button" class="btn btn-primary" id="modalSaveBtn" style="border-radius: 10px; padding: 10px 24px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; font-weight: 600;">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================
+         MODAL DE CONFIRMAÇÃO
+         ================================================ -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 16px; border: none;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none;">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle"></i> Confirmação
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="confirmMessage" style="padding: 25px; font-size: 15px;">
+                    Tem certeza?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-cancel" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-warning" id="confirmBtn">
+                        <i class="fas fa-check"></i> Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
     <script src="js/setor-pedagogico.js"></script>
+    <script src="js/visitas-admin.js"></script>
     
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>

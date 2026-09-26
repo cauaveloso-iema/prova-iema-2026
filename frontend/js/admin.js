@@ -42009,6 +42009,8 @@ class AdminPanel {
         }
     }
 
+
+    // ============ CARREGAR PERMISSÕES ESPECIAIS ============
     // ============================================================================
     // MÓDULO: PERMISSÕES ESPECIAIS (Módulos com emails autorizados)
     // ============================================================================
@@ -42058,6 +42060,29 @@ class AdminPanel {
 
     // ============ RENDERIZAR INTERFACE ============
     renderPermissoesEspeciais() {
+        // Mapeamento de ícones por módulo
+        const getIconeModulo = (modulo) => {
+            const icones = {
+                'segunda_chamada_setor_pedagogico': 'fa-redo',
+                'relatorios_setor_pedagogico': 'fa-file-alt',
+                'exportar_dados_setor_pedagogico': 'fa-download',
+                'substituicao_professores_setor_pedagogico': 'fa-people-arrows',
+                'autorizacao_visitas': 'fa-map-marked-alt'
+            };
+            return icones[modulo] || 'fa-key';
+        };
+        
+        const getCorModulo = (modulo) => {
+            const cores = {
+                'segunda_chamada_setor_pedagogico': 'linear-gradient(135deg, #f59e0b, #d97706)',
+                'relatorios_setor_pedagogico': 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                'exportar_dados_setor_pedagogico': 'linear-gradient(135deg, #10b981, #059669)',
+                'substituicao_professores_setor_pedagogico': 'linear-gradient(135deg, #ef4444, #dc2626)',
+                'autorizacao_visitas': 'linear-gradient(135deg, #667eea, #764ba2)'
+            };
+            return cores[modulo] || 'linear-gradient(135deg, #8b5cf6, #7c3aed)';
+        };
+        
         return `
             <div class="permissoes-container">
                 <!-- HEADER PROFISSIONAL -->
@@ -42097,8 +42122,8 @@ class AdminPanel {
                     ${this.modulosPermissoes.map(modulo => `
                         <div class="modulo-card" data-modulo="${modulo.modulo}">
                             <div class="modulo-header">
-                                <div class="modulo-icon">
-                                    <i class="fas fa-key"></i>
+                                <div class="modulo-icon" style="background: ${getCorModulo(modulo.modulo)};">
+                                    <i class="fas ${getIconeModulo(modulo.modulo)}"></i>
                                 </div>
                                 <div class="modulo-info">
                                     <h3>${modulo.nomeAmigavel}</h3>
@@ -42255,7 +42280,6 @@ class AdminPanel {
                 .modulo-icon {
                     width: 50px;
                     height: 50px;
-                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
                     border-radius: 12px;
                     display: flex;
                     align-items: center;

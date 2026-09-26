@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Política de Privacidade">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Política de Privacidade — EducaPleno</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/dialog-helper.js"></script>
+
+    <style>
+        /* ============================================
+           CSS TOTALMENTE ESCOPADO
+           Nada fora de .pagina-politica é afetado
+           ============================================ */
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ---------- WRAPPER ---------- */
+        .pagina-politica {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #ffffff;
+            color: #1f2937;
+            font-size: 16px;
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        /* ---------- CONTAINER ---------- */
+        .pagina-politica .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 60px 24px 80px;
+        }
+
+        /* ---------- CABEÇALHO ---------- */
+        .pagina-politica .cabecalho {
+            text-align: center;
+            padding-bottom: 40px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 48px;
+        }
+
+        .pagina-politica .cabecalho i {
+            font-size: 40px;
+            color: #667eea;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .pagina-politica .cabecalho h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #111827;
+            letter-spacing: -0.5px;
+            margin: 0 0 12px;
+        }
+
+        .pagina-politica .cabecalho p {
+            font-size: 15px;
+            color: #6b7280;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        /* ---------- METADADOS ---------- */
+        .pagina-politica .metadados {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            flex-wrap: wrap;
+            padding: 24px 0;
+            margin-bottom: 48px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .pagina-politica .metadados .item {
+            text-align: center;
+        }
+
+        .pagina-politica .metadados .label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+
+        .pagina-politica .metadados .valor {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1f2937;
+        }
+
+        .pagina-politica .metadados .valor a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .pagina-politica .metadados .valor a:hover {
+            text-decoration: underline;
+        }
+
+        /* ---------- SEÇÕES ---------- */
+        .pagina-politica .secao {
+            margin-bottom: 40px;
+        }
+
+        .pagina-politica .secao h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 16px;
+            letter-spacing: -0.3px;
+        }
+
+        .pagina-politica .secao h2 span {
+            color: #667eea;
+            margin-right: 4px;
+        }
+
+        .pagina-politica .secao p {
+            color: #4b5563;
+            margin: 0 0 14px;
+        }
+
+        .pagina-politica .secao p:last-child {
+            margin-bottom: 0;
+        }
+
+        .pagina-politica .secao strong {
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .pagina-politica .secao ul,
+        .pagina-politica .secao ol {
+            margin: 14px 0 14px 22px;
+            color: #4b5563;
+            padding: 0;
+        }
+
+        .pagina-politica .secao li {
+            margin-bottom: 8px;
+            padding-left: 4px;
+        }
+
+        .pagina-politica .secao a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .pagina-politica .secao a:hover {
+            border-bottom-color: #667eea;
+        }
+
+        /* ---------- DESTAQUE ---------- */
+        .pagina-politica .destaque {
+            background: #f9fafb;
+            border-left: 3px solid #667eea;
+            padding: 18px 22px;
+            border-radius: 4px;
+            margin: 20px 0;
+            font-size: 15px;
+            color: #374151;
+        }
+
+        .pagina-politica .destaque strong {
+            color: #111827;
+        }
+
+        /* ---------- CONTATO ---------- */
+        .pagina-politica .contato {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 28px;
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .pagina-politica .contato h3 {
+            font-size: 17px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0 0 10px;
+        }
+
+        .pagina-politica .contato p {
+            font-size: 15px;
+            color: #4b5563;
+            margin: 0 0 16px;
+        }
+
+        .pagina-politica .contato .email {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            color: #667eea;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-size: 15px;
+        }
+
+        .pagina-politica .contato .email:hover {
+            border-color: #667eea;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+
+        .pagina-politica .contato .info-extra {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-top: 16px;
+        }
+
+        /* ---------- AÇÕES ---------- */
+        .pagina-politica .acoes {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 48px;
+            padding-top: 32px;
+            border-top: 1px solid #e5e7eb;
+            flex-wrap: wrap;
+        }
+
+        .pagina-politica .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 13px 28px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            border: none;
+            transition: all 0.2s;
+            min-width: 140px;
+        }
+
+        .pagina-politica .btn-voltar {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .pagina-politica .btn-voltar:hover {
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        .pagina-politica .btn-imprimir {
+            background: #667eea;
+            color: white;
+        }
+
+        .pagina-politica .btn-imprimir:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+        }
+
+        /* ---------- RODAPÉ ---------- */
+        .pagina-politica .rodape {
+            text-align: center;
+            margin-top: 60px;
+            padding-top: 32px;
+            border-top: 1px solid #e5e7eb;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .pagina-politica .rodape p {
+            margin: 0;
+        }
+
+        .pagina-politica .rodape p + p {
+            margin-top: 6px;
+        }
+
+        .pagina-politica .rodape a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .pagina-politica .rodape a:hover {
+            text-decoration: underline;
+        }
+
+        /* ============================================
+           PRINT — ESCONDER CONTROLES DE ACESSIBILIDADE
+           ============================================ */
+        @media print {
+            /* Esconder elementos da própria página */
+            .pagina-politica .acoes,
+            .pagina-politica .rodape,
+            .pagina-politica .metadados {
+                display: none !important;
+            }
+
+            /* Esconder VLibras */
+            [vw],
+            [vw-access-button],
+            [vw-plugin-wrapper],
+            .vw-plugin-top-wrapper,
+            div[vw] {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+            }
+
+            /* Esconder botão de acessibilidade */
+            [class*="acessib"],
+            [id*="acessib"],
+            [class*="btn-acessib"],
+            [class*="botao-acessib"],
+            #botaoAcessibilidade,
+            #btnAcessibilidade {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+            }
+
+            /* Esconder barra de acessibilidade */
+            [class*="barra-acessib"],
+            [class*="toolbar-acessib"],
+            [class*="acessibilidade-barra"],
+            [class*="widget-acessib"] {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+            }
+
+            /* Esconder toggles */
+            [class*="toggle-acessib"],
+            [class*="toggle-btn"],
+            [class*="toggle-buttons"] {
+                display: none !important;
+            }
+
+            /* Esconder qualquer coisa com position: fixed direto no body */
+            body > [style*="position: fixed"],
+            body > [style*="position:fixed"],
+            body > div[style*="fixed"] {
+                display: none !important;
+            }
+
+            /* Reset de espaçamento para impressão */
+            .pagina-politica {
+                background: white;
+            }
+
+            .pagina-politica .container {
+                padding: 0;
+                max-width: 100%;
+                margin: 0;
+            }
+
+            .pagina-politica .cabecalho {
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+            }
+
+            .pagina-politica .cabecalho i {
+                font-size: 24px;
+                margin-bottom: 10px;
+            }
+
+            .pagina-politica .cabecalho h1 {
+                font-size: 22px;
+            }
+
+            .pagina-politica .secao {
+                page-break-inside: avoid;
+            }
+
+            /* Cores em impressão */
+            .pagina-politica .destaque {
+                background: white !important;
+                border-left: 3px solid #000 !important;
+            }
+
+            .pagina-politica .contato {
+                background: white !important;
+                border: 1px solid #ccc !important;
+            }
+
+            .pagina-politica .contato .email {
+                border: 1px solid #999 !important;
+                color: #000 !important;
+            }
+
+            /* Forçar cores de fundo em impressão */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+
+        /* ---------- MOBILE ---------- */
+        @media (max-width: 600px) {
+            .pagina-politica .container {
+                padding: 40px 20px 60px;
+            }
+
+            .pagina-politica .cabecalho h1 {
+                font-size: 26px;
+            }
+
+            .pagina-politica .metadados {
+                gap: 20px;
+                padding: 20px 0;
+            }
+
+            .pagina-politica .metadados .item {
+                min-width: 100px;
+            }
+
+            .pagina-politica .secao h2 {
+                font-size: 18px;
+            }
+
+            .pagina-politica .contato {
+                padding: 24px 20px;
+            }
+
+            .pagina-politica .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TODO O CONTEÚDO DENTRO DE .pagina-politica -->
+    <main class="pagina-politica">
+
+        <div class="container">
+
+            <!-- CABEÇALHO -->
+            <header class="cabecalho">
+                <i class="fas fa-shield-alt"></i>
+                <h1>Política de Privacidade</h1>
+                <p>Sistema de Autorização de Visitas Técnicas<br>IEMA Pleno São Luís Centro</p>
+            </header>
+
+            <!-- METADADOS -->
+            <div class="metadados">
+                <div class="item">
+                    <div class="label">Base Legal</div>
+                    <div class="valor">LGPD — Lei 13.709/2018</div>
+                </div>
+                <div class="item">
+                    <div class="label">Versão</div>
+                    <div class="valor">1.0</div>
+                </div>
+                <div class="item">
+                    <div class="label">Encarregado (DPO)</div>
+                    <div class="valor">
+                        <a href="mailto:dpo@iemasaoluiscentro.net">dpo@iemasaoluiscentro.net</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1 -->
+            <section class="secao">
+                <h2><span>1.</span> Quais dados coletamos?</h2>
+                <p>Para emissão do <strong>Termo de Autorização de Visita Técnica</strong>, coletamos os seguintes dados do responsável legal:</p>
+                <ul>
+                    <li><strong>Nome completo</strong> — para identificação legal no documento</li>
+                    <li><strong>RG e CPF</strong> — para validade jurídica do termo</li>
+                    <li><strong>Telefone e e-mail</strong> — para contato e notificações sobre a visita</li>
+                    <li><strong>Assinatura digital</strong> — para validade jurídica do documento</li>
+                    <li><strong>Localização aproximada</strong> (apenas cidade e estado) — para auditoria do consentimento</li>
+                    <li><strong>Data, hora e endereço IP</strong> — para registro do aceite da LGPD</li>
+                </ul>
+            </section>
+
+            <!-- 2 -->
+            <section class="secao">
+                <h2><span>2.</span> Para que usamos seus dados?</h2>
+                <p>Seus dados são utilizados <strong>exclusivamente</strong> para:</p>
+                <ul>
+                    <li>Emitir o Termo de Autorização de Visita Técnica exigido pela instituição</li>
+                    <li>Comprovar juridicamente a autorização dada pelo responsável</li>
+                    <li>Permitir a auditoria educacional e de conformidade</li>
+                    <li>Comunicar sobre eventuais alterações na visita</li>
+                </ul>
+                <div class="destaque">
+                    <strong>Não compartilhamos, vendemos ou cedemos seus dados</strong> para terceiros.
+                </div>
+            </section>
+
+            <!-- 3 -->
+            <section class="secao">
+                <h2><span>3.</span> Como protegemos seus dados?</h2>
+                <p>Aplicamos medidas técnicas e organizacionais para garantir a segurança dos seus dados pessoais:</p>
+                <ul>
+                    <li><strong>Criptografia em repouso:</strong> RG, CPF, telefone e assinatura são criptografados com AES-256-GCM antes de serem armazenados.</li>
+                    <li><strong>Criptografia em trânsito:</strong> Toda comunicação usa HTTPS/TLS.</li>
+                    <li><strong>Auditoria de acesso:</strong> Todo acesso aos dados sensíveis é registrado.</li>
+                    <li><strong>Minimização:</strong> Coletamos apenas o mínimo necessário para a finalidade.</li>
+                </ul>
+            </section>
+
+            <!-- 4 -->
+            <section class="secao">
+                <h2><span>4.</span> Por quanto tempo guardamos seus dados?</h2>
+                <p>Seus dados pessoais são mantidos por <strong>2 (dois) anos</strong> após a data da visita técnica. Após esse período, eles são <strong>automaticamente anonimizados</strong>, ou seja, deixam de ser vinculáveis à sua pessoa.</p>
+                <p>Alguns dados podem ser mantidos por prazo superior caso haja obrigação legal, como prazos fiscais ou judiciais.</p>
+            </section>
+
+            <!-- 5 -->
+            <section class="secao">
+                <h2><span>5.</span> Seus direitos (LGPD Art. 18)</h2>
+                <p>Você, como titular dos dados, tem direito a:</p>
+                <ol>
+                    <li><strong>Confirmação</strong> — saber se tratamos seus dados</li>
+                    <li><strong>Acesso</strong> — obter uma cópia dos dados que temos sobre você</li>
+                    <li><strong>Correção</strong> — solicitar correção de dados incompletos ou desatualizados</li>
+                    <li><strong>Anonimização</strong> — solicitar anonimização de dados desnecessários ou excessivos</li>
+                    <li><strong>Portabilidade</strong> — transferir seus dados para outro fornecedor</li>
+                    <li><strong>Eliminação</strong> — solicitar exclusão dos dados tratados com consentimento</li>
+                    <li><strong>Informação</strong> — saber com quem compartilhamos seus dados</li>
+                    <li><strong>Revogação</strong> — revogar o consentimento a qualquer momento</li>
+                </ol>
+            </section>
+
+            <!-- 6 -->
+            <section class="secao">
+                <h2><span>6.</span> Consentimento</h2>
+                <p>Ao marcar a caixa "Li e aceito a Política de Privacidade" e assinar o termo, você:</p>
+                <ul>
+                    <li>Declara ter lido e compreendido esta política</li>
+                    <li>Autoriza o tratamento dos dados para a finalidade específica descrita</li>
+                    <li>Reconhece seus direitos como titular (LGPD Art. 18)</li>
+                    <li>Pode revogar este consentimento a qualquer momento</li>
+                </ul>
+            </section>
+
+            <!-- 7 -->
+            <section class="secao">
+                <h2><span>7.</span> Cookies e tecnologias similares</h2>
+                <p>Este sistema <strong>não utiliza cookies de rastreamento</strong> ou tecnologias de perfilamento. Usamos apenas cookies essenciais para o funcionamento técnico da página.</p>
+            </section>
+
+            <!-- 8 -->
+            <section class="secao">
+                <h2><span>8.</span> Alterações nesta política</h2>
+                <p>Esta política pode ser atualizada. Quando isso ocorrer, a nova versão será publicada nesta página com a data de revisão atualizada. O uso continuado dos serviços implica aceitação da versão vigente.</p>
+            </section>
+
+            <!-- 9 -->
+            <section class="secao">
+                <h2><span>9.</span> Autoridade Nacional de Proteção de Dados</h2>
+                <p>Se você considerar que seus direitos não foram atendidos, pode peticionar diretamente à ANPD:</p>
+                <p><a href="https://www.gov.br/anpd" target="_blank" rel="noopener">www.gov.br/anpd</a></p>
+            </section>
+
+            <!-- CONTATO DPO -->
+            <div class="contato">
+                <h3>Como exercer seus direitos?</h3>
+                <p>Entre em contato com o Encarregado de Proteção de Dados (DPO):</p>
+                <a href="mailto:dpo@iemasaoluiscentro.net" class="email">
+                    <i class="fas fa-envelope"></i>
+                    dpo@iemasaoluiscentro.net
+                </a>
+                <p class="info-extra">
+                    <i class="fas fa-clock"></i> Resposta em até 15 dias corridos
+                </p>
+            </div>
+
+            <!-- AÇÕES -->
+            <div class="acoes">
+                <button class="btn btn-voltar" onclick="voltar()">
+                    <i class="fas fa-arrow-left"></i>
+                    Voltar
+                </button>
+                <button class="btn btn-imprimir" onclick="window.print()">
+                    <i class="fas fa-print"></i>
+                    Imprimir
+                </button>
+            </div>
+
+            <!-- RODAPÉ -->
+            <footer class="rodape">
+                <p>Última atualização: <span id="data"></span></p>
+                <p><a href="/visitas-publico.html">← Voltar para Autorização de Visitas</a></p>
+            </footer>
+
+        </div>
+    </main>
+
+    <script>
+        // Data atual
+        document.getElementById('data').textContent =
+            new Date().toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric'
+            });
+
+        // Botão voltar robusto
+        function voltar() {
+            if (window.history.length > 1 && document.referrer) {
+                window.history.back();
+                setTimeout(() => {
+                    if (!document.hidden) {
+                        window.location.href = '/visitas-publico.html';
+                    }
+                }, 500);
+            } else {
+                window.location.href = '/visitas-publico.html';
+            }
+        }
+
+        // Esconder controles de acessibilidade antes de imprimir (fallback JS)
+        window.addEventListener('beforeprint', () => {
+            window._acessibHidden = [];
+            const seletores = [
+                '[vw]', '[vw-access-button]', '[vw-plugin-wrapper]',
+                '[class*="acessib"]', '[id*="acessib"]',
+                '[class*="vlibras"]', '[class*="toggle-btn"]',
+                '#botaoAcessibilidade', '#btnAcessibilidade'
+            ];
+            seletores.forEach(sel => {
+                document.querySelectorAll(sel).forEach(el => {
+                    if (el.style.display !== 'none') {
+                        window._acessibHidden.push({
+                            el,
+                            display: el.style.display
+                        });
+                        el.style.display = 'none';
+                    }
+                });
+            });
+        });
+
+        window.addEventListener('afterprint', () => {
+            (window._acessibHidden || []).forEach(({ el, display }) => {
+                el.style.display = display || '';
+            });
+            window._acessibHidden = [];
+        });
+
+        console.log('✅ Política de Privacidade carregada');
+    </script>
+</body>
+</html>

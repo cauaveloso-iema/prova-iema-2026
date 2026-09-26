@@ -13,6 +13,74 @@
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
+    <!-- ============================================ -->
+    <!-- 🛡️ PROTEÇÃO CONTRA mostrarAlertaGeral() E confirm() NATIVOS -->
+    <!-- Deve vir ANTES de qualquer outro script      -->
+    <!-- ============================================ -->
+    <script>
+    (function protegerContraAlertEConfirmNativos() {
+        let __mostrarAlertaGeralaEmProgresso = false;
+        
+        window.mostrarAlertaGeral = function(mensagem) {
+            if (__mostrarAlertaGeralaEmProgresso) return;
+            __mostrarAlertaGeralaEmProgresso = true;
+            
+            try {
+                const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
+                                (typeof window.AppInventor !== 'undefined');
+                
+                // Tenta usar toast do professor primeiro
+                if (typeof window.mostrarAlertaGeral === 'function') {
+                    window.mostrarAlertaGeral(String(mensagem), 'info');
+                    return;
+                }
+                if (typeof window.mostrarAlerta === 'function') {
+                    window.mostrarAlerta('mostrarAlertaGeralGeral', String(mensagem), 'info');
+                    return;
+                }
+                
+                if (!isWebView) {
+                    console.log('%c[ALERT] ' + mensagem, 'background:#4f46e5;color:white;padding:4px 8px;border-radius:4px;');
+                    return;
+                }
+                
+                const modal = document.createElement('div');
+                modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
+                    background:rgba(0,0,0,0.6);display:flex;align-items:center;
+                    justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;`;
+                modal.innerHTML = `
+                    <div style="background:white;border-radius:16px;padding:25px;max-width:380px;
+                                width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+                        <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
+                        <p style="margin:0 0 20px;color:#374151;font-size:15px;
+                                line-height:1.5;white-space:pre-line;">${String(mensagem)}</p>
+                        <button onclick="this.closest('div').parentElement.remove()"
+                                style="width:100%;padding:12px;background:#4f46e5;color:white;
+                                    border:none;border-radius:10px;font-size:14px;
+                                    font-weight:600;cursor:pointer;">OK</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } finally {
+                __mostrarAlertaGeralaEmProgresso = false;
+            }
+        };
+        
+        // Confirm: se dialog-helper.js já sobrescreveu, respeita
+        const confirmOriginal = window.confirm;
+        const jaSobrescrito = !confirmOriginal.toString().includes('[native code]');
+        
+        if (!jaSobrescrito) {
+            window.confirm = function(mensagem) {
+                console.warn('⚠️ confirm() nativo — usando fallback');
+                return true;
+            };
+        }
+        
+        console.log('🛡️ [Proteção] mostrarAlertaGeral() e confirm() blindados (professor)');
+    })();
+    </script>
+
     <!-- ========== ONE SIGNAL - NOTIFICAÇÕES PUSH ========== -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
@@ -346,7 +414,7 @@ async function limparMinhasNotificacoes() {
             document.getElementById('notificacoesBadge').style.display = 'none';
             document.getElementById('notificacoesBtn').classList.remove('tem-notificacao');
             
-            // Toast em vez de alert
+            // Toast em vez de mostrarAlertaGeral
             if (typeof showToast === 'function') {
                 showToast(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`, 'success');
             } else {
@@ -1052,7 +1120,7 @@ window.addEventListener('scroll', function() {
                 </div>
                 
                 <!-- Alertas -->
-                <div id="alertProva" class="alert"></div>
+                <div id="mostrarAlertaGeralProva" class="mostrarAlertaGeral"></div>
                 
                 <!-- Formulário Nova Prova -->
                 <div class="form-container">
@@ -1544,7 +1612,7 @@ window.addEventListener('scroll', function() {
                 </div>
                 
                 <!-- Alertas -->
-                <div id="alertTurma" class="alert" style="display: none; margin-bottom: 25px;"></div>
+                <div id="mostrarAlertaGeralTurma" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
                 
                 <!-- Card do Formulário (mesmo estilo dos filtros das provas) -->
                 <div style="
@@ -2072,7 +2140,7 @@ window.addEventListener('scroll', function() {
                 </div>
                 
                 <!-- Alertas -->
-                <div id="alertMinhasTurmas" class="alert" style="display: none; margin-bottom: 25px;"></div>
+                <div id="mostrarAlertaGeralMinhasTurmas" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
                 
                 <!-- Lista de Turmas (cards no mesmo estilo das provas) -->
                 <div id="listaTurmas" style="width: 100%; min-height: 400px;">
@@ -2510,7 +2578,7 @@ window.addEventListener('scroll', function() {
                 </div>
                 
                 <!-- Alertas -->
-                <div id="alertMinhasProvas" class="alert" style="display: none; margin-bottom: 25px;"></div>
+                <div id="mostrarAlertaGeralMinhasProvas" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
                 
                 <!-- Lista de Provas -->
                 <div id="listaProvas" style="width: 100%; min-height: 400px;">
@@ -2642,7 +2710,7 @@ window.addEventListener('scroll', function() {
                     </div>
                 </div>
                 <!-- Alertas para resultados -->
-                <div id="alertResultados" class="alert" style="display: none; margin-bottom: 25px;"></div>
+                <div id="mostrarAlertaGeralResultados" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
 
                 <!-- 🔥 ADICIONE ESTE BOTÃO DE EXPORTAÇÃO AQUI -->
                 <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
@@ -3060,6 +3128,10 @@ window.addEventListener('scroll', function() {
         let provaGerada = null;
         let turmaParaExcluir = null;
         let arquivosOriginaisParaRegeneracao = [];
+
+        let arquivosOriginaisBackup = [];
+        let editoresCKEditor = {};
+        let questaoAtualIndex = 0;
 
         // ============ FUNÇÕES PARA PROVA CORRIGIDA ============
 
@@ -3837,7 +3909,7 @@ window.addEventListener('scroll', function() {
         // Função para enviar prova corrigida para o aluno
         async function enviarProvaCorrigida() {
             if (!provaParaCorrigir || !alunoParaCorrigir) {
-                mostrarAlerta('alertMinhasProvas', '❌ Nenhum aluno selecionado para enviar a correção', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Nenhum aluno selecionado para enviar a correção', 'error');
                 return;
             }
             
@@ -3880,7 +3952,7 @@ window.addEventListener('scroll', function() {
                 const dados = await resposta.json();
                 
                 if (dados.success) {
-                    mostrarAlerta('alertMinhasProvas', `✅ Prova corrigida enviada para o aluno! Nota: ${nota.toFixed(2)}`, 'success');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', `✅ Prova corrigida enviada para o aluno! Nota: ${nota.toFixed(2)}`, 'success');
                     fecharModal('modalProvaCorrigida');
                     
                     // Recarregar a lista de provas após 2 segundos
@@ -3893,7 +3965,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao enviar prova corrigida:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro ao enviar correção: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro ao enviar correção: ${error.message}`, 'error');
             }
         }
 
@@ -4216,7 +4288,7 @@ window.addEventListener('scroll', function() {
                 const resultados = data.resultados || [];
                 
                 if (resultados.length === 0) {
-                    mostrarAlerta('alertMinhasProvas', '❌ Nenhum aluno realizou esta prova ainda', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Nenhum aluno realizou esta prova ainda', 'info');
                     return;
                 }
                 
@@ -4277,7 +4349,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao abrir prova corrigida:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
         }
         // ============ FUNÇÕES PARA LIBERAR NOTAS ============
@@ -4289,7 +4361,7 @@ window.addEventListener('scroll', function() {
                 const resultados = await buscarResultadosProva(provaId);
                 
                 if (resultados.length === 0) {
-                    mostrarAlerta('alertMinhasProvas', '❌ Nenhum aluno realizou esta prova ainda', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Nenhum aluno realizou esta prova ainda', 'info');
                     return;
                 }
                 
@@ -4302,7 +4374,7 @@ window.addEventListener('scroll', function() {
                 if (!confirmacao) return;
                 
                 // Mostrar loading com contagem correta
-                mostrarAlerta('alertMinhasProvas', `🔧 Liberando notas para ${resultados.length} aluno(s)...`, 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `🔧 Liberando notas para ${resultados.length} aluno(s)...`, 'info');
                 
                 const response = await fetch(`/api/provas/${provaId}/liberar-notas-todos`, {
                     method: 'POST',
@@ -4317,7 +4389,7 @@ window.addEventListener('scroll', function() {
                 if (data.success) {
                     // Usar a contagem correta da resposta do servidor
                     const alunosProcessados = data.alunosProcessados || resultados.length;
-                    mostrarAlerta('alertMinhasProvas', 
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', 
                         `✅ Notas liberadas para ${alunosProcessados} aluno(s)! (Correções enviadas)`, 
                         'success'
                     );
@@ -4333,7 +4405,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao liberar notas:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
         }
         // ============ FUNÇÕES PARA EXCLUIR PROVA ============
@@ -4397,7 +4469,7 @@ window.addEventListener('scroll', function() {
         // Função para confirmar exclusão de prova
         async function confirmarExclusaoProva() {
             if (!provaParaExcluir) {
-                mostrarAlerta('alertMinhasProvas', '❌ Nenhuma prova selecionada para exclusão', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Nenhuma prova selecionada para exclusão', 'error');
                 return;
             }
             
@@ -4405,7 +4477,7 @@ window.addEventListener('scroll', function() {
                 const token = localStorage.getItem('auth_token');
                 
                 // Mostrar loading
-                mostrarAlerta('alertMinhasProvas', '🗑️ Excluindo prova...', 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '🗑️ Excluindo prova...', 'info');
                 
                 const response = await fetch(`/api/professor/provas/${provaParaExcluir}`, {
                     method: 'DELETE',
@@ -4417,7 +4489,7 @@ window.addEventListener('scroll', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    mostrarAlerta('alertMinhasProvas', `✅ ${data.message || 'Prova excluída com sucesso!'}`, 'success');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', `✅ ${data.message || 'Prova excluída com sucesso!'}`, 'success');
                     fecharModal('modalExcluirProva');
                     
                     // Recarregar a lista de provas após 2 segundos
@@ -4431,7 +4503,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao excluir prova:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
             
             provaParaExcluir = null;
@@ -4447,7 +4519,7 @@ window.addEventListener('scroll', function() {
                 if (!confirmacao) return;
                 
                 // Mostrar loading
-                mostrarAlerta('alertMinhasProvas', `🔧 Liberando nota para ${alunoNome}...`, 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `🔧 Liberando nota para ${alunoNome}...`, 'info');
                 
                 const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
                     method: 'POST',
@@ -4465,7 +4537,7 @@ window.addEventListener('scroll', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    mostrarAlerta('alertMinhasProvas', `✅ Nota liberada para ${alunoNome}!`, 'success');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', `✅ Nota liberada para ${alunoNome}!`, 'success');
                     
                     // Recarregar a lista de provas após 2 segundos
                     setTimeout(() => {
@@ -4477,7 +4549,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao liberar nota:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
         }
 
@@ -4572,7 +4644,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao buscar notas:', error);
-                mostrarAlerta('alertResultados', `❌ Erro ao carregar notas: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralResultados', `❌ Erro ao carregar notas: ${error.message}`, 'error');
                 return [];
             }
         }
@@ -4649,7 +4721,7 @@ window.addEventListener('scroll', function() {
                 }
                 
                 // ========== 3. BUSCAR TODAS AS PROVAS DO PROFESSOR ==========
-                mostrarAlerta('alertResultados', '🔍 Buscando provas...', 'info');
+                mostrarAlerta('mostrarAlertaGeralResultados', '🔍 Buscando provas...', 'info');
                 
                 const responseProvas = await fetch('/api/professor/provas', {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -4690,12 +4762,12 @@ window.addEventListener('scroll', function() {
                 console.log(`📚 Total de provas após filtros: ${provas.length}`);
                 
                 if (provas.length === 0) {
-                    mostrarAlerta('alertResultados', '⚠️ Nenhuma prova encontrada com os filtros selecionados', 'info');
+                    mostrarAlerta('mostrarAlertaGeralResultados', '⚠️ Nenhuma prova encontrada com os filtros selecionados', 'info');
                     return;
                 }
                 
                 // ========== 4. BUSCAR RESULTADOS DE CADA PROVA ==========
-                mostrarAlerta('alertResultados', `🔍 Buscando resultados dos alunos...`, 'info');
+                mostrarAlerta('mostrarAlertaGeralResultados', `🔍 Buscando resultados dos alunos...`, 'info');
                 
                 let todosResultados = [];
                 
@@ -4744,7 +4816,7 @@ window.addEventListener('scroll', function() {
                 console.log(`📊 TOTAL DE RESULTADOS ENCONTRADOS: ${todosResultados.length}`);
                 
                 if (todosResultados.length === 0) {
-                    mostrarAlerta('alertResultados', '⚠️ Nenhum resultado encontrado. Os alunos ainda não realizaram as provas.', 'info');
+                    mostrarAlerta('mostrarAlertaGeralResultados', '⚠️ Nenhum resultado encontrado. Os alunos ainda não realizaram as provas.', 'info');
                     return;
                 }
                 
@@ -4882,11 +4954,11 @@ window.addEventListener('scroll', function() {
                 // ========== 8. CRIAR EXCEL ==========
                 
                 if (typeof XLSX === 'undefined') {
-                    mostrarAlerta('alertResultados', '⚠️ Carregando biblioteca do Excel...', 'info');
+                    mostrarAlerta('mostrarAlertaGeralResultados', '⚠️ Carregando biblioteca do Excel...', 'info');
                     const script = document.createElement('script');
                     script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
                     script.onload = () => {
-                        mostrarAlerta('alertResultados', '✅ Biblioteca carregada! Clique novamente.', 'success');
+                        mostrarAlerta('mostrarAlertaGeralResultados', '✅ Biblioteca carregada! Clique novamente.', 'success');
                     };
                     document.head.appendChild(script);
                     return;
@@ -4940,7 +5012,7 @@ window.addEventListener('scroll', function() {
                 XLSX.writeFile(wb, nomeArquivo);
                 
                 // Mensagem de sucesso
-                mostrarAlerta('alertResultados', 
+                mostrarAlerta('mostrarAlertaGeralResultados', 
                     `✅ Relatório gerado com sucesso!\n` +
                     `📊 ${totalAlunos} alunos • ${totalResultados} notas\n` +
                     `📁 Período: ${periodoTexto}\n` +
@@ -4956,7 +5028,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro na exportação:', error);
-                mostrarAlerta('alertResultados', `❌ Erro ao exportar: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralResultados', `❌ Erro ao exportar: ${error.message}`, 'error');
             }
         }
 
@@ -5492,7 +5564,7 @@ window.addEventListener('scroll', function() {
         };
 
         window.verDetalhesDisciplina = function(disciplinaNome) {
-            alert(`Detalhes da disciplina "${disciplinaNome}" - Funcionalidade em desenvolvimento`);
+            mostrarAlertaGeral(`Detalhes da disciplina "${disciplinaNome}" - Funcionalidade em desenvolvimento`);
         };
         
         // Esconder loading após carregamento
@@ -5585,7 +5657,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
-                mostrarAlerta('alertProva', '❌ Erro ao carregar dados. Tente recarregar a página.', 'error');
+                mostrarAlerta('mostrarAlertaGeralProva', '❌ Erro ao carregar dados. Tente recarregar a página.', 'error');
                 esconderLoading();
             }
         }
@@ -5771,9 +5843,9 @@ window.addEventListener('scroll', function() {
                 
                 // Verificar se é erro de rede
                 if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    mostrarAlerta('alertMinhasTurmas', '❌ Erro de conexão com o servidor. Verifique sua internet.', 'error');
+                    mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '❌ Erro de conexão com o servidor. Verifique sua internet.', 'error');
                 } else {
-                    mostrarAlerta('alertMinhasTurmas', '❌ Erro ao carregar turmas: ' + error.message, 'error');
+                    mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '❌ Erro ao carregar turmas: ' + error.message, 'error');
                 }
             }
         }
@@ -5782,7 +5854,7 @@ window.addEventListener('scroll', function() {
         // ============ FUNÇÃO ATUALIZAR LISTA DE PROVAS - VERSÃO CORRIGIDA COM BOTÃO EDITAR ============
         function atualizarListaProvas(provas) {
             const listaProvas = document.getElementById('listaProvas');
-            const alerta = document.getElementById('alertMinhasProvas');
+            const mostrarAlertaGerala = document.getElementById('mostrarAlertaGeralMinhasProvas');
             
             if (!listaProvas) return;
             
@@ -5810,9 +5882,9 @@ window.addEventListener('scroll', function() {
                 </div>
             `;
             
-            // Esconder alerta se tiver sucesso
-            if (alerta) {
-                alerta.style.display = 'none';
+            // Esconder mostrarAlertaGerala se tiver sucesso
+            if (mostrarAlertaGerala) {
+                mostrarAlertaGerala.style.display = 'none';
             }
             
             if (!provas || provas.length === 0) {
@@ -6196,7 +6268,7 @@ window.addEventListener('scroll', function() {
             });
             
             if (count === 0) {
-                mostrarAlerta('alertMinhasProvas', '📋 Nenhuma prova adaptada encontrada', 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '📋 Nenhuma prova adaptada encontrada', 'info');
             }
             
             // Alterar texto do botão
@@ -7230,7 +7302,7 @@ window.addEventListener('scroll', function() {
                         </div>
                     `;
                 } else {
-                    alert(`Erro: ${error.message}`);
+                    mostrarAlertaGeral(`Erro: ${error.message}`);
                 }
             }
         };
@@ -7319,7 +7391,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao preparar impressão:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
         };
 
@@ -8108,7 +8180,7 @@ window.addEventListener('scroll', function() {
         // ============ MODAL DE OPÇÕES DE ADAPTAÇÃO (COM SCROLL CORRIGIDO) ============
         function mostrarModalOpcoesAdaptacao() {
             if (!window.provaParaImpressao || !window.provaParaImpressao.prova) {
-                mostrarAlerta('alertMinhasProvas', '❌ Dados da prova não encontrados.', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Dados da prova não encontrados.', 'error');
                 return;
             }
             
@@ -8308,7 +8380,7 @@ window.addEventListener('scroll', function() {
             const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
             if (!prova) {
                 console.error('❌ Dados da prova não encontrados');
-                mostrarAlerta('alertMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
                 return;
             }
             
@@ -8323,7 +8395,7 @@ window.addEventListener('scroll', function() {
             if (tipoImpressao === 'todos') {
                 const alunos = window.alunosDaTurma || [];
                 if (alunos.length === 0) {
-                    mostrarAlerta('alertMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
                     return;
                 }
                 await gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, {}, alunos);
@@ -8331,7 +8403,7 @@ window.addEventListener('scroll', function() {
             }
             
             if (!alunoId) {
-                mostrarAlerta('alertMinhasProvas', '⚠️ Selecione um aluno', 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ Selecione um aluno', 'info');
                 mostrarModalPerguntaAdaptacao();
                 return;
             }
@@ -8358,11 +8430,11 @@ window.addEventListener('scroll', function() {
                     console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco (gerado em ${data.geradoEm})`);
                 } else {
                     console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoId);
-                    mostrarAlerta('alertMinhasProvas', '⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
                 }
             } catch (error) {
                 console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
-                mostrarAlerta('alertMinhasProvas', '❌ Erro ao buscar QR Code do aluno', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Erro ao buscar QR Code do aluno', 'error');
             }
             
             await gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl);
@@ -8370,7 +8442,7 @@ window.addEventListener('scroll', function() {
 
         // ============ GERAR IMPRESSÃO (ABRE A JANELA DE IMPRESSÃO) ============
         async function gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}, qrCodeAlunoUrl = null) {
-            mostrarAlerta('alertMinhasProvas', '🖨️ Preparando impressão...', 'info');
+            mostrarAlerta('mostrarAlertaGeralMinhasProvas', '🖨️ Preparando impressão...', 'info');
             
             try {
                 // Reutilizar a função que gera o HTML
@@ -8388,16 +8460,16 @@ window.addEventListener('scroll', function() {
                     };
                 };
                 
-                mostrarAlerta('alertMinhasProvas', '✅ Impressão preparada!', 'success');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '✅ Impressão preparada!', 'success');
                 
             } catch (error) {
                 console.error('❌ Erro:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
         }
 
         async function gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, alunos) {
-            mostrarAlerta('alertMinhasProvas', `🖨️ Gerando prova para ${alunos.length} aluno(s)...`, 'info');
+            mostrarAlerta('mostrarAlertaGeralMinhasProvas', `🖨️ Gerando prova para ${alunos.length} aluno(s)...`, 'info');
             
             try {
                 const token = localStorage.getItem('auth_token');
@@ -8492,11 +8564,11 @@ window.addEventListener('scroll', function() {
                     }, 500);
                 };
                 
-                mostrarAlerta('alertMinhasProvas', `✅ Impressão preparada para ${alunosComQRCode.length} aluno(s)!`, 'success');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `✅ Impressão preparada para ${alunosComQRCode.length} aluno(s)!`, 'success');
                 
             } catch (error) {
                 console.error('❌ Erro:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro: ${error.message}`, 'error');
             }
         }
 
@@ -8504,7 +8576,7 @@ window.addEventListener('scroll', function() {
             const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
             if (!prova) {
                 console.error('❌ Dados da prova não encontrados');
-                mostrarAlerta('alertMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Erro: dados da prova não encontrados', 'error');
                 return;
             }
 
@@ -8549,7 +8621,7 @@ window.addEventListener('scroll', function() {
             
             if (tipoImpressao === 'individual') {
                 if (!alunoSelecionadoId) {
-                    mostrarAlerta('alertMinhasProvas', '⚠️ Selecione um aluno para imprimir a prova individual', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ Selecione um aluno para imprimir a prova individual', 'info');
                     mostrarModalPerguntaAdaptacao();
                     return;
                 }
@@ -8578,7 +8650,7 @@ window.addEventListener('scroll', function() {
                         console.log(`✅ QR Code do aluno ${alunoNome} obtido do banco`);
                     } else {
                         console.warn('⚠️ QR Code não encontrado no banco para o aluno:', alunoSelecionadoId);
-                        mostrarAlerta('alertMinhasProvas', '⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
+                        mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ QR Code do aluno não encontrado. Peça para o aluno atualizar o cadastro.', 'warning');
                     }
                 } catch (error) {
                     console.error('❌ Erro ao buscar QR Code do aluno no banco:', error);
@@ -8588,11 +8660,11 @@ window.addEventListener('scroll', function() {
                 if (alunoSelecionado) {
                     await gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl);
                 } else {
-                    mostrarAlerta('alertMinhasProvas', '❌ Aluno não encontrado', 'error');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Aluno não encontrado', 'error');
                 }
             } else {
                 if (alunosDaTurma.length === 0) {
-                    mostrarAlerta('alertMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ Nenhum aluno encontrado nesta turma', 'info');
                     return;
                 }
                 await gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoes, alunosDaTurma);
@@ -8609,16 +8681,16 @@ window.addEventListener('scroll', function() {
 
         window.compartilharProva = function(codigoProva) {
             if (!codigoProva || codigoProva === '') {
-                alert('Esta prova não tem código disponível');
+                mostrarAlertaGeral('Esta prova não tem código disponível');
                 return;
             }
             
             navigator.clipboard.writeText(codigoProva)
                 .then(() => {
-                    alert(`✅ Código ${codigoProva} copiado para a área de transferência!`);
+                    mostrarAlertaGeral(`✅ Código ${codigoProva} copiado para a área de transferência!`);
                 })
                 .catch(err => {
-                    alert(`📋 Código: ${codigoProva}`);
+                    mostrarAlertaGeral(`📋 Código: ${codigoProva}`);
                 });
         };
 
@@ -8674,7 +8746,7 @@ window.addEventListener('scroll', function() {
             
             try {
                 // Mostrar loading
-                mostrarAlerta('alertMinhasProvas', '📝 Carregando dados da prova...', 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '📝 Carregando dados da prova...', 'info');
                 
                 const token = localStorage.getItem('auth_token');
                 
@@ -8713,7 +8785,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao carregar prova para edição:', error);
-                mostrarAlerta('alertMinhasProvas', '❌ Erro: ' + error.message, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Erro: ' + error.message, 'error');
             }
         }
 
@@ -8850,7 +8922,7 @@ window.addEventListener('scroll', function() {
         // ============ SALVAR EDIÇÃO DA PROVA (PROFESSOR) - VERSÃO CORRIGIDA ============
         async function salvarEdicaoProvaProfessor(provaId) {
             try {
-                mostrarAlerta('alertMinhasProvas', '💾 Salvando alterações...', 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '💾 Salvando alterações...', 'info');
                 
                 const token = localStorage.getItem('auth_token');
                 
@@ -8924,7 +8996,7 @@ window.addEventListener('scroll', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    mostrarAlerta('alertMinhasProvas', '✅ Prova atualizada com sucesso!', 'success');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '✅ Prova atualizada com sucesso!', 'success');
                     fecharModal('modalEditarProvaProfessor');
                     
                     // Recarregar lista de provas
@@ -8940,7 +9012,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro:', error);
-                mostrarAlerta('alertMinhasProvas', '❌ ' + error.message, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ ' + error.message, 'error');
             }
         }
 
@@ -9318,7 +9390,7 @@ window.addEventListener('scroll', function() {
             
             // Mostrar mensagem específica para prova adaptada
             if (tipoProva === 'adaptada') {
-                mostrarAlerta('alertProva', 
+                mostrarAlerta('mostrarAlertaGeralProva', 
                     '🎯 Modo Prova Adaptada ativado! As questões terão apenas 3 alternativas e serão enviadas exclusivamente para alunos com necessidades de acessibilidade.', 
                     'info'
                 );
@@ -9327,7 +9399,7 @@ window.addEventListener('scroll', function() {
                 const dificuldadeSelect = document.getElementById('dificuldade');
                 if (dificuldadeSelect && dificuldadeSelect.value === 'dificil') {
                     dificuldadeSelect.value = 'media';
-                    mostrarAlerta('alertProva', 'ℹ️ Dificuldade ajustada para "Médio" (recomendado para prova adaptada)', 'info');
+                    mostrarAlerta('mostrarAlertaGeralProva', 'ℹ️ Dificuldade ajustada para "Médio" (recomendado para prova adaptada)', 'info');
                 }
             }
         }
@@ -9338,17 +9410,17 @@ window.addEventListener('scroll', function() {
             const conteudo = document.getElementById('textoConteudo').value.trim();
             
             if (!titulo) {
-                mostrarAlerta('alertProva', '⚠️ Digite um título para o texto', 'info');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Digite um título para o texto', 'info');
                 return;
             }
             
             if (!conteudo) {
-                mostrarAlerta('alertProva', '⚠️ Digite o conteúdo do texto', 'info');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Digite o conteúdo do texto', 'info');
                 return;
             }
             
             if (conteudo.length > 10000) {
-                mostrarAlerta('alertProva', '⚠️ O texto é muito longo (máx: 10,000 caracteres)', 'error');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ O texto é muito longo (máx: 10,000 caracteres)', 'error');
                 return;
             }
             
@@ -9369,7 +9441,7 @@ window.addEventListener('scroll', function() {
             document.getElementById('textoDescricao').value = '';
             document.getElementById('charCount').textContent = '10000';
             
-            mostrarAlerta('alertProva', `✅ Texto "${titulo}" adicionado!`, 'success');
+            mostrarAlerta('mostrarAlertaGeralProva', `✅ Texto "${titulo}" adicionado!`, 'success');
         }
 
         // Função para adicionar link
@@ -9378,17 +9450,17 @@ window.addEventListener('scroll', function() {
             const url = document.getElementById('linkURL').value.trim();
             
             if (!titulo) {
-                mostrarAlerta('alertProva', '⚠️ Digite um título para o link', 'info');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Digite um título para o link', 'info');
                 return;
             }
             
             if (!url) {
-                mostrarAlerta('alertProva', '⚠️ Digite a URL do link', 'info');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Digite a URL do link', 'info');
                 return;
             }
             
             if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                mostrarAlerta('alertProva', '⚠️ Digite uma URL válida (comece com http:// ou https://)', 'error');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Digite uma URL válida (comece com http:// ou https://)', 'error');
                 return;
             }
             
@@ -9408,7 +9480,7 @@ window.addEventListener('scroll', function() {
             document.getElementById('linkURL').value = '';
             document.getElementById('linkDescricao').value = '';
             
-            mostrarAlerta('alertProva', `✅ Link "${titulo}" adicionado!`, 'success');
+            mostrarAlerta('mostrarAlertaGeralProva', `✅ Link "${titulo}" adicionado!`, 'success');
         }
 
         // FUNÇÃO CORRIGIDA PARA LIDAR COM MÚLTIPLOS ARQUIVOS
@@ -9427,7 +9499,7 @@ window.addEventListener('scroll', function() {
                 
                 // Validar tamanho (10MB)
                 if (file.size > 10 * 1024 * 1024) {
-                    mostrarAlerta('alertProva', `⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
+                    mostrarAlerta('mostrarAlertaGeralProva', `⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
                     continue;
                 }
                 
@@ -9437,7 +9509,7 @@ window.addEventListener('scroll', function() {
                 const allowedExtensions = /\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i;
                 
                 if (!allowedTypes.includes(file.type) && !file.name.match(allowedExtensions)) {
-                    mostrarAlerta('alertProva', `⚠️ Tipo de arquivo não permitido: "${file.name}"`, 'error');
+                    mostrarAlerta('mostrarAlertaGeralProva', `⚠️ Tipo de arquivo não permitido: "${file.name}"`, 'error');
                     continue;
                 }
                 
@@ -9477,7 +9549,7 @@ window.addEventListener('scroll', function() {
             Array.from(files).forEach(file => {
                 // Validar tamanho (10MB)
                 if (file.size > 10 * 1024 * 1024) {
-                    mostrarAlerta('alertProva', `⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
+                    mostrarAlerta('mostrarAlertaGeralProva', `⚠️ Arquivo "${file.name}" muito grande (máx: 10MB)`, 'error');
                     return;
                 }
                 
@@ -9486,7 +9558,7 @@ window.addEventListener('scroll', function() {
                                     'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
                 
                 if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|jpg|jpeg|png|gif|txt|doc|docx)$/i)) {
-                    mostrarAlerta('alertProva', `⚠️ Tipo de arquivo não permitido: "${file.name}"`, 'error');
+                    mostrarAlerta('mostrarAlertaGeralProva', `⚠️ Tipo de arquivo não permitido: "${file.name}"`, 'error');
                     return;
                 }
                 
@@ -9826,7 +9898,7 @@ window.addEventListener('scroll', function() {
                 document.getElementById('fileInput').value = '';
                 
                 atualizarContadorAnexos();
-                mostrarAlerta('alertProva', '✅ Todos os materiais foram removidos', 'success');
+                mostrarAlerta('mostrarAlertaGeralProva', '✅ Todos os materiais foram removidos', 'success');
             }
         }
 
@@ -9929,7 +10001,7 @@ window.addEventListener('scroll', function() {
             });
             
             xhr.addEventListener('error', () => {
-            mostrarAlerta('alertProva', `❌ Erro ao fazer upload de "${file.name}"`, 'error');
+            mostrarAlerta('mostrarAlertaGeralProva', `❌ Erro ao fazer upload de "${file.name}"`, 'error');
             
             const progressBar = document.getElementById(`progress-${fileId}`);
             if (progressBar) {
@@ -9943,7 +10015,7 @@ window.addEventListener('scroll', function() {
             
         } catch (error) {
             console.error('Erro no upload:', error);
-            mostrarAlerta('alertProva', `❌ Erro ao fazer upload: ${error.message}`, 'error');
+            mostrarAlerta('mostrarAlertaGeralProva', `❌ Erro ao fazer upload: ${error.message}`, 'error');
         }
         }
 
@@ -10166,15 +10238,15 @@ window.addEventListener('scroll', function() {
             }
         }
         
-        // Mostrar alerta
+        // Mostrar mostrarAlertaGerala
         function mostrarAlerta(elementId, mensagem, tipo = 'info') {
-            const alerta = document.getElementById(elementId);
-            if (!alerta) {
-                console.error('Elemento de alerta não encontrado:', elementId);
+            const mostrarAlertaGerala = document.getElementById(elementId);
+            if (!mostrarAlertaGerala) {
+                console.error('Elemento de mostrarAlertaGerala não encontrado:', elementId);
                 return;
             }
             
-            alerta.innerHTML = `
+            mostrarAlertaGerala.innerHTML = `
                 <div style="display: flex; align-items: flex-start; gap: 10px;">
                     <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
                     <div>
@@ -10184,13 +10256,13 @@ window.addEventListener('scroll', function() {
                 </div>
             `;
             
-            alerta.className = `alert alert-${tipo}`;
-            alerta.style.display = 'block';
+            mostrarAlertaGerala.className = `mostrarAlertaGeral mostrarAlertaGeral-${tipo}`;
+            mostrarAlertaGerala.style.display = 'block';
             
-            // Auto-esconder alertas de sucesso/info após alguns segundos
+            // Auto-esconder mostrarAlertaGeralas de sucesso/info após alguns segundos
             if (tipo !== 'error') {
                 setTimeout(() => {
-                    alerta.style.display = 'none';
+                    mostrarAlertaGerala.style.display = 'none';
                 }, 5000);
             }
         }
@@ -10340,7 +10412,7 @@ window.addEventListener('scroll', function() {
         // Função para confirmar exclusão de prova
         async function confirmarExclusaoProva() {
             if (!provaParaExcluir) {
-                mostrarAlerta('alertMinhasProvas', '❌ Nenhuma prova selecionada para exclusão', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '❌ Nenhuma prova selecionada para exclusão', 'error');
                 return;
             }
             
@@ -10348,7 +10420,7 @@ window.addEventListener('scroll', function() {
                 const token = localStorage.getItem('auth_token');
                 
                 // Mostrar loading
-                mostrarAlerta('alertMinhasProvas', '🗑️ Excluindo prova...', 'info');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '🗑️ Excluindo prova...', 'info');
                 
                 const response = await fetch(`/api/professor/provas/${provaParaExcluir}`, {
                     method: 'DELETE',
@@ -10378,7 +10450,7 @@ window.addEventListener('scroll', function() {
                 }
                 
                 if (data.success) {
-                    mostrarAlerta('alertMinhasProvas', `✅ ${data.message || 'Prova excluída com sucesso!'}`, 'success');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', `✅ ${data.message || 'Prova excluída com sucesso!'}`, 'success');
                     fecharModal('modalExcluirProva');
                     
                     // Recarregar a lista de provas após 2 segundos
@@ -10401,7 +10473,7 @@ window.addEventListener('scroll', function() {
                     mensagemErro = '❌ Erro de conexão com o servidor. Verifique sua internet.';
                 }
                 
-                mostrarAlerta('alertMinhasProvas', mensagemErro, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', mensagemErro, 'error');
             }
             
             provaParaExcluir = null;
@@ -10490,7 +10562,7 @@ window.addEventListener('scroll', function() {
         // Função para confirmar exclusão de turma
         async function confirmarExclusaoTurma() {
             if (!turmaParaExcluir) {
-                mostrarAlerta('alertMinhasTurmas', '❌ Nenhuma turma selecionada para exclusão', 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '❌ Nenhuma turma selecionada para exclusão', 'error');
                 fecharModal('modalExcluirTurma');
                 return;
             }
@@ -10532,7 +10604,7 @@ window.addEventListener('scroll', function() {
                 
                 if (data.success) {
                     // Atualizar interface
-                    mostrarAlerta('alertMinhasTurmas', `✅ ${data.message || 'Turma excluída com sucesso!'}`, 'success');
+                    mostrarAlerta('mostrarAlertaGeralMinhasTurmas', `✅ ${data.message || 'Turma excluída com sucesso!'}`, 'success');
                     
                     // Remover turma da lista local
                     turmasProfessor = turmasProfessor.filter(t => t.id !== turmaId);
@@ -10582,7 +10654,7 @@ window.addEventListener('scroll', function() {
                 console.log('📊 Exportando relatório de provas em PDF...');
                 
                 if (!provasOriginais || provasOriginais.length === 0) {
-                    mostrarAlerta('alertMinhasProvas', '⚠️ Não há dados de provas para exportar', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ Não há dados de provas para exportar', 'info');
                     return;
                 }
 
@@ -10770,11 +10842,11 @@ window.addEventListener('scroll', function() {
                     printWindow.print();
                 }, 500);
 
-                mostrarAlerta('alertMinhasProvas', '✅ PDF gerado! Clique em "Salvar" ou "Imprimir" para baixar.', 'success');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', '✅ PDF gerado! Clique em "Salvar" ou "Imprimir" para baixar.', 'success');
 
             } catch (error) {
                 console.error('❌ Erro ao exportar PDF:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro ao exportar: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro ao exportar: ${error.message}`, 'error');
             }
         }
 
@@ -11054,19 +11126,19 @@ window.addEventListener('scroll', function() {
                 console.log('📊 Exportando relatório de provas em Excel...');
                 
                 if (!provasOriginais || provasOriginais.length === 0) {
-                    mostrarAlerta('alertMinhasProvas', '⚠️ Não há dados de provas para exportar', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ Não há dados de provas para exportar', 'info');
                     return;
                 }
 
                 // Verificar se a biblioteca XLSX está carregada
                 if (typeof XLSX === 'undefined') {
-                    mostrarAlerta('alertMinhasProvas', '⚠️ Carregando biblioteca do Excel. Tente novamente...', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '⚠️ Carregando biblioteca do Excel. Tente novamente...', 'info');
                     
                     // Carregar a biblioteca dinamicamente se não estiver disponível
                     const script = document.createElement('script');
                     script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
                     script.onload = function() {
-                        mostrarAlerta('alertMinhasProvas', '✅ Biblioteca carregada! Clique novamente em Exportar.', 'success');
+                        mostrarAlerta('mostrarAlertaGeralMinhasProvas', '✅ Biblioteca carregada! Clique novamente em Exportar.', 'success');
                     };
                     document.head.appendChild(script);
                     return;
@@ -11125,7 +11197,7 @@ window.addEventListener('scroll', function() {
                 
                 // Primeira aba: Resumo
                 const dadosResumo = [
-                    ['📊 RELATÓRIO DE PROVAS - SISTEMA DE PROVAS'],
+                    ['📊 RELATÓRIO DE PROVAS - EDUCAPLENO'],
                     [`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`],
                     [''],
                     ['📈 RESUMO ESTATÍSTICO'],
@@ -11206,7 +11278,7 @@ window.addEventListener('scroll', function() {
                 });
 
                 // Mostrar mensagem de sucesso com instruções
-                mostrarAlerta('alertMinhasProvas', 
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', 
                     `✅ Arquivo Excel gerado com sucesso!\n` +
                     `📊 ${provasOriginais.length} provas • ${totalQuestoes} questões\n` +
                     `📁 Nome: ${nomeArquivo}`, 
@@ -11214,7 +11286,7 @@ window.addEventListener('scroll', function() {
 
             } catch (error) {
                 console.error('❌ Erro ao exportar Excel:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro ao exportar: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro ao exportar: ${error.message}`, 'error');
             }
         }
 
@@ -11222,15 +11294,15 @@ window.addEventListener('scroll', function() {
         function exportarTurmasExcel() {
             try {
                 if (!turmasProfessor || turmasProfessor.length === 0) {
-                    mostrarAlerta('alertMinhasTurmas', '⚠️ Não há dados de turmas para exportar', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '⚠️ Não há dados de turmas para exportar', 'info');
                     return;
                 }
 
                 if (typeof XLSX === 'undefined') {
-                    mostrarAlerta('alertMinhasTurmas', '⚠️ Carregando biblioteca do Excel...', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '⚠️ Carregando biblioteca do Excel...', 'info');
                     const script = document.createElement('script');
                     script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-                    script.onload = () => mostrarAlerta('alertMinhasTurmas', '✅ Pronto! Clique novamente.', 'success');
+                    script.onload = () => mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '✅ Pronto! Clique novamente.', 'success');
                     document.head.appendChild(script);
                     return;
                 }
@@ -11290,11 +11362,11 @@ window.addEventListener('scroll', function() {
                 const dataAtual = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
                 XLSX.writeFile(wb, `relatorio-turmas-${dataAtual}.xlsx`);
 
-                mostrarAlerta('alertMinhasTurmas', '✅ Relatório de turmas exportado!', 'success');
+                mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '✅ Relatório de turmas exportado!', 'success');
 
             } catch (error) {
                 console.error('❌ Erro:', error);
-                mostrarAlerta('alertMinhasTurmas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasTurmas', `❌ Erro: ${error.message}`, 'error');
             }
         }
 
@@ -11302,7 +11374,7 @@ window.addEventListener('scroll', function() {
         async function exportarDadosTurmasPDF() {
             try {
                 if (!turmasProfessor || turmasProfessor.length === 0) {
-                    mostrarAlerta('alertMinhasTurmas', '⚠️ Não há dados de turmas para exportar', 'info');
+                    mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '⚠️ Não há dados de turmas para exportar', 'info');
                     return;
                 }
 
@@ -11434,11 +11506,11 @@ window.addEventListener('scroll', function() {
                     printWindow.print();
                 }, 500);
 
-                mostrarAlerta('alertMinhasTurmas', '✅ PDF gerado com sucesso!', 'success');
+                mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '✅ PDF gerado com sucesso!', 'success');
 
             } catch (error) {
                 console.error('❌ Erro ao exportar PDF:', error);
-                mostrarAlerta('alertMinhasTurmas', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasTurmas', `❌ Erro: ${error.message}`, 'error');
             }
         }
 
@@ -11566,7 +11638,7 @@ window.addEventListener('scroll', function() {
         
         async function publicarProva() {
             if (!provaGerada || !provaGerada.id) {
-                mostrarAlerta('alertProva', '⚠️ Nenhuma prova válida para publicar', 'info');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Nenhuma prova válida para publicar', 'info');
                 return;
             }
 
@@ -11601,7 +11673,7 @@ window.addEventListener('scroll', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    mostrarAlerta('alertProva', '✅ Prova publicada com sucesso! Agora está visível para os alunos.', 'success');
+                    mostrarAlerta('mostrarAlertaGeralProva', '✅ Prova publicada com sucesso! Agora está visível para os alunos.', 'success');
                     
                     // ===== NOTIFICAR ALUNOS SOBRE A NOVA PROVA =====
                     if (provaCompleta && provaCompleta.turmaId) {
@@ -11681,7 +11753,7 @@ window.addEventListener('scroll', function() {
                                 }
                                 
                                 console.log(`✅ ${notificacoesEnviadas} alunos notificados sobre nova prova`);
-                                mostrarAlerta('alertProva', `📢 ${notificacoesEnviadas} alunos notificados!`, 'info');
+                                mostrarAlerta('mostrarAlertaGeralProva', `📢 ${notificacoesEnviadas} alunos notificados!`, 'info');
                             }
                         } catch (notifError) {
                             console.error('❌ Erro ao notificar alunos:', notifError);
@@ -11712,7 +11784,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('❌ Erro ao publicar prova:', error);
-                mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralProva', `❌ Erro: ${error.message}`, 'error');
             } finally {
                 // Restaurar botão
                 const btnPublicar = document.querySelector('#previewQuestoes button.btn-success');
@@ -11773,7 +11845,7 @@ window.addEventListener('scroll', function() {
         // Regenerar prova (CORRIGIDO COM ANIMAÇÃO)
         async function regenerarProva() {
             if (!provaGerada) {
-                mostrarAlerta('alertProva', '⚠️ Nenhuma prova para regenerar', 'info');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Nenhuma prova para regenerar', 'info');
                 return;
             }
 
@@ -11996,7 +12068,7 @@ window.addEventListener('scroll', function() {
                     }
 
                     // Mostrar mensagem de sucesso
-                    mostrarAlerta('alertProva', '✅ Prova regenerada com sucesso!', 'success');
+                    mostrarAlerta('mostrarAlertaGeralProva', '✅ Prova regenerada com sucesso!', 'success');
 
                 } else {
                     throw new Error(data.error || 'Erro ao regenerar prova');
@@ -12028,7 +12100,7 @@ window.addEventListener('scroll', function() {
                     `;
                 }
 
-                mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralProva', `❌ Erro: ${error.message}`, 'error');
 
             } finally {
                 // Reabilitar botões do preview
@@ -12414,24 +12486,24 @@ window.addEventListener('scroll', function() {
             }
         };
 
-        // Função auxiliar para mostrar alerta
+        // Função auxiliar para mostrar mostrarAlertaGerala
         function mostrarAlertaGeral(mensagem, tipo = 'info') {
-            const alerta = document.getElementById('alertGeral');
-            if (alerta) {
-                alerta.innerHTML = `
+            const mostrarAlertaGerala = document.getElementById('mostrarAlertaGeralGeral');
+            if (mostrarAlertaGerala) {
+                mostrarAlertaGerala.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
                         <div>${mensagem}</div>
                     </div>
                 `;
-                alerta.className = `alert alert-${tipo}`;
-                alerta.style.display = 'block';
+                mostrarAlertaGerala.className = `mostrarAlertaGeral mostrarAlertaGeral-${tipo}`;
+                mostrarAlertaGerala.style.display = 'block';
                 
                 setTimeout(() => {
-                    alerta.style.display = 'none';
+                    mostrarAlertaGerala.style.display = 'none';
                 }, 5000);
             } else {
-                alert(mensagem);
+                mostrarAlertaGeral(mensagem);
             }
         }
         
@@ -12658,26 +12730,26 @@ window.addEventListener('scroll', function() {
                     const periodoProva = document.getElementById('periodoProva').value;
                     
                     if (!tema) {
-                        mostrarAlerta('alertProva', '⚠️ Digite o tema da prova', 'info');
+                        mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Digite o tema da prova', 'info');
                         document.getElementById('temaProva').focus();
                         return;
                     }
                     
                     if (!titulo) {
-                        mostrarAlerta('alertProva', '⚠️ Digite o título da prova', 'info');
+                        mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Digite o título da prova', 'info');
                         document.getElementById('tituloProva').focus();
                         return;
                     }
                     
                     if (!turmaId) {
-                        mostrarAlerta('alertProva', '⚠️ Selecione uma turma', 'info');
+                        mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Selecione uma turma', 'info');
                         document.getElementById('turmaProva').focus();
                         return;
                     }
                     
                     // 🔴 VALIDAR SE O PERÍODO FOI SELECIONADO
                     if (!periodoProva) {
-                        mostrarAlerta('alertProva', '⚠️ Selecione o período letivo', 'info');
+                        mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Selecione o período letivo', 'info');
                         document.getElementById('periodoProva').focus();
                         return;
                     }
@@ -12685,13 +12757,13 @@ window.addEventListener('scroll', function() {
                     // Verificar se a turma selecionada existe
                     const turmaSelecionada = turmasProfessor.find(t => t.id === turmaId);
                     if (!turmaSelecionada) {
-                        mostrarAlerta('alertProva', '⚠️ Turma selecionada não encontrada', 'error');
+                        mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Turma selecionada não encontrada', 'error');
                         return;
                     }
                     
                     // Verificar se a turma tem alunos
                     if (turmaSelecionada.totalAlunos === 0) {
-                        mostrarAlerta('alertProva', '⚠️ Esta turma não tem alunos. Adicione alunos primeiro.', 'warning');
+                        mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Esta turma não tem alunos. Adicione alunos primeiro.', 'warning');
                         return;
                     }
                     
@@ -12718,7 +12790,7 @@ window.addEventListener('scroll', function() {
                     // Obter token de autenticação
                     const token = localStorage.getItem('auth_token');
                     if (!token) {
-                        mostrarAlerta('alertProva', '❌ Sessão expirada. Faça login novamente.', 'error');
+                        mostrarAlerta('mostrarAlertaGeralProva', '❌ Sessão expirada. Faça login novamente.', 'error');
                         window.location.href = 'login.html';
                         btn.innerHTML = originalText;
                         btn.disabled = false;
@@ -12838,7 +12910,7 @@ window.addEventListener('scroll', function() {
                         console.log('✅ Resposta do servidor:', data);
                         
                         if (data.success) {
-                            mostrarAlerta('alertProva', data.mensagem || '✅ Prova criada com sucesso!', 'success');
+                            mostrarAlerta('mostrarAlertaGeralProva', data.mensagem || '✅ Prova criada com sucesso!', 'success');
                             
                             // Salvar dados da prova gerada
                             provaGerada = {
@@ -12864,7 +12936,7 @@ window.addEventListener('scroll', function() {
                         
                     } catch (error) {
                         console.error('❌ Erro ao gerar prova:', error);
-                        mostrarAlerta('alertProva', `❌ Erro: ${error.message}`, 'error');
+                        mostrarAlerta('mostrarAlertaGeralProva', `❌ Erro: ${error.message}`, 'error');
                     } finally {
                         // Restaurar botão
                         btn.innerHTML = originalText;
@@ -12885,13 +12957,13 @@ window.addEventListener('scroll', function() {
                     const descricao = document.getElementById('descricaoTurma').value.trim();
                     
                     if (!nome) {
-                        mostrarAlerta('alertTurma', '⚠️ Digite o nome da turma', 'info');
+                        mostrarAlerta('mostrarAlertaGeralTurma', '⚠️ Digite o nome da turma', 'info');
                         document.getElementById('nomeTurma').focus();
                         return;
                     }
                     
                     if (!disciplina) {
-                        mostrarAlerta('alertTurma', '⚠️ Digite a disciplina', 'info');
+                        mostrarAlerta('mostrarAlertaGeralTurma', '⚠️ Digite a disciplina', 'info');
                         document.getElementById('disciplinaTurma').focus();
                         return;
                     }
@@ -12914,7 +12986,7 @@ window.addEventListener('scroll', function() {
                     btn.disabled = false;
                     
                     if (resultado.success) {
-                        mostrarAlerta('alertTurma', resultado.mensagem, 'success');
+                        mostrarAlerta('mostrarAlertaGeralTurma', resultado.mensagem, 'success');
                         formNovaTurma.reset();
                         
                         // Recarregar turmas
@@ -12925,7 +12997,7 @@ window.addEventListener('scroll', function() {
                             document.querySelector('[onclick="mostrarTab(\'turmas\')"]').click();
                         }, 1500);
                     } else {
-                        mostrarAlerta('alertTurma', resultado.error, 'error');
+                        mostrarAlerta('mostrarAlertaGeralTurma', resultado.error, 'error');
                     }
                 });
             }
@@ -13064,7 +13136,7 @@ window.addEventListener('scroll', function() {
         // ============ ABRIR EDITOR AVANÇADO DE QUESTÕES (COMPLETO) ============
         async function abrirEdicaoQuestoesPreview() {
             if (!provaGerada || !provaGerada.questoes || provaGerada.questoes.length === 0) {
-                mostrarAlerta('alertProva', '⚠️ Nenhuma prova gerada para editar', 'info');
+                mostrarAlerta('mostrarAlertaGeralProva', '⚠️ Nenhuma prova gerada para editar', 'info');
                 return;
             }
             
@@ -13078,7 +13150,7 @@ window.addEventListener('scroll', function() {
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && data.prova.publicada) {
-                        mostrarAlerta('alertProva', 
+                        mostrarAlerta('mostrarAlertaGeralProva', 
                             '❌ Esta prova já foi publicada e não pode ser editada.\n' +
                             'Crie uma nova prova para fazer alterações.', 
                             'error');
@@ -13169,7 +13241,7 @@ window.addEventListener('scroll', function() {
                         </div>
                         
                         <!-- ÁREA DE ALERTA -->
-                        <div id="alertEditorAvancado" class="alert" style="display: none; margin: 0; border-radius: 0;"></div>
+                        <div id="mostrarAlertaGeralEditorAvancado" class="mostrarAlertaGeral" style="display: none; margin: 0; border-radius: 0;"></div>
                         
                         <!-- NAVEGAÇÃO ENTRE QUESTÕES -->
                         <div style="background: #f1f5f9; padding: 10px 20px; border-bottom: 1px solid #e5e7eb;">
@@ -14765,7 +14837,7 @@ window.addEventListener('scroll', function() {
                 const result = await createResponse.json();
                 
                 if (result.success) {
-                    mostrarAlerta('alertMinhasProvas', '✅ Cópia da prova criada com sucesso! Agora você pode editá-la.', 'success');
+                    mostrarAlerta('mostrarAlertaGeralMinhasProvas', '✅ Cópia da prova criada com sucesso! Agora você pode editá-la.', 'success');
                     
                     // Carregar a nova prova
                     setTimeout(() => {
@@ -14779,7 +14851,7 @@ window.addEventListener('scroll', function() {
                 
             } catch (error) {
                 console.error('Erro ao duplicar prova:', error);
-                mostrarAlerta('alertMinhasProvas', `❌ Erro ao duplicar: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralMinhasProvas', `❌ Erro ao duplicar: ${error.message}`, 'error');
                 return null;
             }
         }
@@ -14881,7 +14953,7 @@ window.addEventListener('scroll', function() {
                     // Fechar editor
                     setTimeout(() => {
                         fecharEditorAvancado();
-                        mostrarAlerta('alertProva', '✅ Questões editadas com sucesso! A prova foi atualizada.', 'success');
+                        mostrarAlerta('mostrarAlertaGeralProva', '✅ Questões editadas com sucesso! A prova foi atualizada.', 'success');
                     }, 1500);
                     
                 } else {
@@ -14894,23 +14966,23 @@ window.addEventListener('scroll', function() {
             }
         }
 
-        // Mostrar alerta no editor
+        // Mostrar mostrarAlertaGerala no editor
         function mostrarAlertaEditor(mensagem, tipo = 'info') {
-            const alerta = document.getElementById('alertEditorAvancado');
-            if (alerta) {
-                alerta.innerHTML = `
+            const mostrarAlertaGerala = document.getElementById('mostrarAlertaGeralEditorAvancado');
+            if (mostrarAlertaGerala) {
+                mostrarAlertaGerala.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
                         <div>${mensagem}</div>
                     </div>
                 `;
-                alerta.className = `alert alert-${tipo}`;
-                alerta.style.display = 'block';
+                mostrarAlertaGerala.className = `mostrarAlertaGeral mostrarAlertaGeral-${tipo}`;
+                mostrarAlertaGerala.style.display = 'block';
                 
                 // Auto-esconder para mensagens de sucesso/info
                 if (tipo !== 'error') {
                     setTimeout(() => {
-                        alerta.style.display = 'none';
+                        mostrarAlertaGerala.style.display = 'none';
                     }, 3000);
                 }
             }
@@ -15027,7 +15099,7 @@ window.addEventListener('scroll', function() {
                     throw new Error('Token de autenticação não encontrado. Faça login novamente.');
                 }
                 
-                mostrarAlerta('alertResultados', '🔍 Buscando dados dos alunos...', 'info');
+                mostrarAlerta('mostrarAlertaGeralResultados', '🔍 Buscando dados dos alunos...', 'info');
                 
                 // ========== 3. BUSCAR RESULTADOS DA API ==========
                 const response = await fetch('/api/professor/resultados', {
@@ -15050,7 +15122,7 @@ window.addEventListener('scroll', function() {
                 console.log(`📊 ${resultados.length} resultados obtidos da API`);
                 
                 if (resultados.length === 0) {
-                    mostrarAlerta('alertResultados', '⚠️ Nenhum resultado encontrado', 'info');
+                    mostrarAlerta('mostrarAlertaGeralResultados', '⚠️ Nenhum resultado encontrado', 'info');
                     return;
                 }
                 
@@ -15096,7 +15168,7 @@ window.addEventListener('scroll', function() {
                 
                 // Se não houver resultados após os filtros
                 if (resultadosFiltrados.length === 0) {
-                    mostrarAlerta('alertResultados', `⚠️ Nenhum resultado encontrado para ${turmaNome}`, 'info');
+                    mostrarAlerta('mostrarAlertaGeralResultados', `⚠️ Nenhum resultado encontrado para ${turmaNome}`, 'info');
                     return;
                 }
                 
@@ -15247,11 +15319,11 @@ window.addEventListener('scroll', function() {
                 
                 // ========== 7. CRIAR EXCEL ==========
                 if (typeof XLSX === 'undefined') {
-                    mostrarAlerta('alertResultados', '⚠️ Carregando biblioteca do Excel...', 'info');
+                    mostrarAlerta('mostrarAlertaGeralResultados', '⚠️ Carregando biblioteca do Excel...', 'info');
                     const script = document.createElement('script');
                     script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
                     script.onload = () => {
-                        mostrarAlerta('alertResultados', '✅ Biblioteca carregada! Clique novamente.', 'success');
+                        mostrarAlerta('mostrarAlertaGeralResultados', '✅ Biblioteca carregada! Clique novamente.', 'success');
                     };
                     document.head.appendChild(script);
                     return;
@@ -15298,18 +15370,18 @@ window.addEventListener('scroll', function() {
                 
                 XLSX.writeFile(wb, nomeArquivo);
                 
-                mostrarAlerta('alertResultados', 
+                mostrarAlerta('mostrarAlertaGeralResultados', 
                     `✅ Relatório gerado com sucesso!\n📊 ${totalAlunos} alunos • ${totalProvas} notas\n📁 Turma: ${turmaNome}\n📁 ${nomeArquivo}`, 
                     'success');
                 
             } catch (error) {
                 console.error('❌ Erro na exportação:', error);
-                mostrarAlerta('alertResultados', `❌ Erro ao exportar: ${error.message}`, 'error');
+                mostrarAlerta('mostrarAlertaGeralResultados', `❌ Erro ao exportar: ${error.message}`, 'error');
             }
         }
 
     </script>
-    <div id="alertGeral" class="alert" style="display: none;"></div>
+    <div id="mostrarAlertaGeralGeral" class="mostrarAlertaGeral" style="display: none;"></div>
 
     <script>
     // Verificar status do push para alunos/professores (indicador ao lado das notificações)
@@ -15997,7 +16069,7 @@ async function registrarPushSubscription() {
 function mostrarNotificacaoBoasVindas() {
     if (Notification.permission === 'granted') {
         new Notification('📱 Notificações ativadas!', {
-            body: 'Você receberá alertas de provas, resultados e mensagens importantes',
+            body: 'Você receberá mostrarAlertaGeralas de provas, resultados e mensagens importantes',
             icon: '/icons/favicon.ico',
             badge: '/icons/favicon.ico',
             vibrate: [200, 100, 200],
@@ -16048,7 +16120,7 @@ function mostrarBotaoAtivarNotificacoes() {
             <div style="flex: 1;">
                 <strong style="font-size: 16px;">🔕 Notificações bloqueadas</strong>
                 <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">
-                    Você não está recebendo alertas de provas e resultados
+                    Você não está recebendo mostrarAlertaGeralas de provas e resultados
                 </p>
             </div>
             <button onclick="this.parentElement.parentElement.remove()" style="
@@ -16817,7 +16889,7 @@ document.addEventListener('DOMContentLoaded', function() {
             helpBtn.innerHTML = '<i class="fas fa-question"></i>';
             helpBtn.title = 'Dicas para preencher a prova';
             helpBtn.onclick = () => {
-                alert('💡 DICAS:\n\n• Clique em cada seção para expandir\n• Preencha todos os campos necessários\n• A duração é calculada automaticamente\n• Após preencher, clique em "Gerar Prova com IA"');
+                mostrarAlertaGeral('💡 DICAS:\n\n• Clique em cada seção para expandir\n• Preencha todos os campos necessários\n• A duração é calculada automaticamente\n• Após preencher, clique em "Gerar Prova com IA"');
             };
             document.body.appendChild(helpBtn);
         }
@@ -17292,7 +17364,7 @@ function renderizarAcompanhamento(data) {
     
     let html = '';
     atendimentos.forEach(a => {
-        const tempoClass = a.tempoMinutos > 60 ? 'acompanhamento-tempo-alerta' : '';
+        const tempoClass = a.tempoMinutos > 60 ? 'acompanhamento-tempo-mostrarAlertaGerala' : '';
         const nomeSeguro = escapeHtmlAcompanhamento(a.alunoNome || 'Aluno');
         const turmaSegura = escapeHtmlAcompanhamento(a.turmaPrincipal || 'Sem turma');
 

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Autorização de Visitas">
+
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/favicon.ico">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Autorização de Visitas - EducaPleno</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Acessibilidade -->
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/dialog-helper.js"></script>
+
+    <link rel="stylesheet" href="css/visitas-publico.css">
+
+    <!-- Estilos inline de correção (evita depender do CSS externo estar atualizado) -->
+    <style>
+        /* ============================================
+           BOTÕES DE AÇÃO FINAL (AUTORIZAR / RECUSAR)
+           ============================================ */
+        .botoes-acao-final {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+            align-items: stretch;
+        }
+
+        .btn-recusar-compacto {
+            padding: 15px 22px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+            white-space: nowrap;
+            flex: 0 0 auto;
+            font-family: inherit;
+        }
+
+        .btn-recusar-compacto:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-recusar-compacto i {
+            font-size: 1rem;
+        }
+
+        .btn-autorizar-grande {
+            flex: 1;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.3s;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+            font-family: inherit;
+        }
+
+        .btn-autorizar-grande:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(16, 185, 129, 0.45);
+        }
+
+        .btn-autorizar-grande i {
+            font-size: 1.1rem;
+        }
+
+        /* Mobile: botões empilhados */
+        @media (max-width: 600px) {
+            .botoes-acao-final {
+                flex-direction: column-reverse;
+            }
+            
+            .btn-recusar-compacto,
+            .btn-autorizar-grande {
+                width: 100%;
+                flex: 1 1 auto;
+            }
+        }
+
+        /* ============================================
+           LINK DA POLÍTICA DE PRIVACIDADE (NOVO)
+           ============================================ */
+        .link-politica {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #3b82f6;
+            text-decoration: underline;
+            font-weight: 600;
+            transition: all 0.2s;
+            margin-left: 4px;
+        }
+
+        .link-politica:hover {
+            color: #1e40af;
+            text-decoration: none;
+        }
+
+        .link-politica i {
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <!-- Fundo animado -->
+    <div class="animated-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container-public">
+        
+        <!-- HERO -->
+        <div class="hero-section">
+            <div class="hero-icon">
+                <i class="fas fa-map-marked-alt"></i>
+            </div>
+            <h1>Autorização de Visitas</h1>
+            <p>Autorize a participação do seu filho(a) em visitas técnicas</p>
+            
+            <div class="hero-status">
+                <span class="status-pill" id="statusPill">
+                    <i class="fas fa-circle" style="font-size: 8px;"></i>
+                    Verificando...
+                </span>
+            </div>
+        </div>
+
+        <!-- AVISO PÚBLICO -->
+        <div id="avisoPublicoContainer" style="display: none;">
+            <div class="aviso-card">
+                <i class="fas fa-bullhorn"></i>
+                <span id="avisoPublicoTexto"></span>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PASSO 1: LOCALIZAR ALUNO                     -->
+        <!-- ============================================ -->
+        <div class="form-public" id="passoBusca">
+            <div class="form-header">
+                <h3><i class="fas fa-search"></i> Localizar Aluno</h3>
+                <p>Informe os dados do aluno para continuar</p>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-school"></i> Turma</label>
+                    <select id="filtroTurmaPublico" class="form-input" onchange="visitasPublico.buscarAlunos()">
+                        <option value="">Todas as turmas</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-book"></i> Curso</label>
+                    <select id="filtroCursoPublico" class="form-input" onchange="visitasPublico.buscarAlunos()">
+                        <option value="">Todos os cursos</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label><i class="fas fa-user-graduate"></i> Nome do Aluno</label>
+                <input type="text" id="buscaAlunoPublico" class="form-input" 
+                    placeholder="Digite o nome do aluno..." autocomplete="off">
+            </div>
+
+            <div id="listaAlunosPublico" class="termos-disponiveis-grid">
+                <!-- Alunos aparecem aqui -->
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PASSO 2: SELECIONAR TERMO                    -->
+        <!-- ============================================ -->
+        <div class="form-public" id="secaoTermos" style="display: none;">
+            <div class="section-header" style="margin-bottom: 20px;">
+                <button class="btn-voltar" onclick="visitasPublico.voltarBusca()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.2rem;">
+                        <i class="fas fa-file-alt"></i> Termos Disponíveis
+                    </h3>
+                    <p style="margin: 3px 0 0; font-size: 0.85rem; color: #6b7280;">
+                        Selecione o termo que deseja autorizar
+                    </p>
+                </div>
+            </div>
+            <div id="listaTermosPublico" class="termos-disponiveis-grid"></div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- PASSO 3: DETALHES + LGPD + TOTP + DADOS      -->
+        <!-- ============================================ -->
+        <div class="form-public" id="secaoDetalhes" style="display: none;">
+            
+            <div class="section-header" style="margin-bottom: 20px;">
+                <button class="btn-voltar" onclick="visitasPublico.voltarTermos()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h2 style="margin: 0;">Autorizar Participação</h2>
+            </div>
+
+            <!-- DETALHES DO TERMO -->
+            <div id="detalhesTermo"></div>
+
+            <!-- ============================================ -->
+            <!-- 🔒 ETAPA 1: LGPD                             -->
+            <!-- ============================================ -->
+            <div id="etapaLGPD" class="auth-etapa">
+                <div class="etapa-header">
+                    <div class="etapa-numero">1</div>
+                    <div class="etapa-titulo">
+                        <h3><i class="fas fa-shield-alt"></i> Termo de Consentimento - LGPD</h3>
+                        <p>Leia atentamente antes de continuar</p>
+                    </div>
+                </div>
+
+                <div class="lgpd-box">
+                    <h4><i class="fas fa-info-circle"></i> Lei Geral de Proteção de Dados (Lei nº 13.709/2018)</h4>
+                    
+                    <p><strong>1. Finalidade da coleta:</strong> Seus dados pessoais (nome, RG, CPF, telefone, email, assinatura, localização e registros de acesso) serão coletados e utilizados <strong>exclusivamente</strong> para:</p>
+                    <ul style="margin: 8px 0 12px 20px; padding: 0;">
+                        <li>Autenticar sua identidade como responsável legal;</li>
+                        <li>Registrar formalmente sua autorização para participação do aluno na visita técnica;</li>
+                        <li>Manter histórico institucional para fins de auditoria e segurança;</li>
+                        <li>Cumprir obrigações legais da instituição de ensino.</li>
+                    </ul>
+                    
+                    <p><strong>2. Armazenamento:</strong> Seus dados serão armazenados de forma segura, com criptografia, e mantidos apenas pelo tempo necessário ao cumprimento da finalidade ou conforme exigido por lei.</p>
+                    
+                    <p><strong>3. Compartilhamento:</strong> Seus dados <strong>NÃO serão compartilhados</strong> com terceiros, exceto quando exigido por lei ou por ordem judicial.</p>
+                    
+                    <p><strong>4. Seus direitos:</strong> Conforme o Art. 18 da LGPD, você tem direito a:</p>
+                    <ul style="margin: 8px 0 12px 20px; padding: 0;">
+                        <li>Confirmar a existência de tratamento dos seus dados;</li>
+                        <li>Acessar, corrigir ou atualizar seus dados;</li>
+                        <li>Solicitar anonimização, bloqueio ou eliminação de dados desnecessários;</li>
+                        <li>Revogar o consentimento a qualquer momento.</li>
+                    </ul>
+                    
+                    <p><strong>5. Contato do DPO:</strong> Para exercer seus direitos, entre em contato pelo email: <strong>dpo@iemasaoluiscentro.net</strong></p>
+                    
+                    <p style="margin-top: 15px; padding: 10px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                        <strong>⚠️ Importante:</strong> Ao clicar em "Estou ciente e concordo", você declara ter lido e compreendido este termo, autorizando o tratamento dos seus dados conforme descrito.
+                    </p>
+                </div>
+
+                <!-- 🔗 LINK DA POLÍTICA DE PRIVACIDADE -->
+                <div style="margin-top: 18px; padding: 14px 18px; background: #eff6ff; border-radius: 10px; border-left: 4px solid #3b82f6; font-size: 14px; line-height: 1.6;">
+                    <i class="fas fa-file-contract" style="color: #3b82f6; margin-right: 6px;"></i>
+                    Para conhecer todos os detalhes sobre como tratamos seus dados, acesse a 
+                    <a href="/politica-privacidade.html" target="_blank" rel="noopener" class="link-politica">
+                        <i class="fas fa-external-link-alt"></i> Política de Privacidade completa
+                    </a>.
+                </div>
+
+                <label class="lgpd-checkbox" style="margin-top: 15px;">
+                    <input type="checkbox" id="lgpdCheckbox" onchange="visitasPublico.toggleBotaoLGPD(this.checked)">
+                    <label for="lgpdCheckbox">
+                        <strong>Estou ciente e concordo</strong> com os termos da LGPD acima descritos 
+                        e autorizo o tratamento dos meus dados pessoais para as finalidades apresentadas. 
+                        Li também a 
+                        <a href="/politica-privacidade.html" target="_blank" rel="noopener" 
+                           style="color: #3b82f6; text-decoration: underline; font-weight: 600;"
+                           onclick="event.stopPropagation();">
+                            Política de Privacidade
+                        </a>.
+                    </label>
+                </label>
+
+                <button class="btn-submit" id="btnProsseguirLGPD" onclick="visitasPublico.prosseguirParaAutenticacao()" disabled>
+                    <i class="fas fa-arrow-right"></i> Prosseguir para Autenticação
+                </button>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- 🔐 ETAPA 2: AUTENTICAÇÃO TOTP                -->
+            <!-- ============================================ -->
+            <div id="etapaTOTP" class="auth-etapa" style="display: none;">
+                <div class="etapa-header">
+                    <div class="etapa-numero">2</div>
+                    <div class="etapa-titulo">
+                        <h3><i class="fas fa-qrcode"></i> Autenticação em 2 Etapas</h3>
+                        <p>Escaneie o QR Code com o Google Authenticator</p>
+                    </div>
+                </div>
+
+                <div class="totp-info">
+                    <i class="fas fa-mobile-alt"></i>
+                    <div>
+                        <strong>Como funciona:</strong>
+                        <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
+                            <li>Instale o app <strong>Google Authenticator</strong> (Android/iOS) - é gratuito</li>
+                            <li>Abra o app e toque no ícone <strong>"+"</strong></li>
+                            <li>Escolha <strong>"Escanear QR Code"</strong></li>
+                            <li>Aponte a câmera para o código abaixo</li>
+                            <li>Digite o código de 6 dígitos que aparecerá no app</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- QR Code -->
+                <div class="totp-qrcode-container">
+                    <div id="totpLoading" class="totp-loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Gerando QR Code...</span>
+                    </div>
+                    <div id="totpQRCodeBox" style="display: none;">
+                        <img id="totpQRCodeImg" src="" alt="QR Code TOTP">
+                        <p class="totp-hint">
+                            <i class="fas fa-info-circle"></i>
+                            Escaneie com o Google Authenticator
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Campo de verificação -->
+                <div class="totp-verify-box">
+                    <label><i class="fas fa-key"></i> Código do Google Authenticator *</label>
+                    <input type="text" id="totpCodigo" class="form-input totp-codigo-input" 
+                           placeholder="000000" maxlength="6" autocomplete="off"
+                           oninput="this.value = this.value.replace(/\D/g, '')">
+                    <button class="btn-submit" onclick="visitasPublico.verificarTOTP()">
+                        <i class="fas fa-check-circle"></i> Verificar Código
+                    </button>
+                </div>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- 📝 ETAPA 3: DADOS + ASSINATURA               -->
+            <!-- ============================================ -->
+            <div id="etapaDados" class="auth-etapa" style="display: none;">
+                <div class="etapa-header">
+                    <div class="etapa-numero">3</div>
+                    <div class="etapa-titulo">
+                        <h3><i class="fas fa-user-edit"></i> Dados do Responsável</h3>
+                        <p>Preencha e assine para finalizar</p>
+                    </div>
+                </div>
+
+                <div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <strong style="color: #065f46;">
+                        <i class="fas fa-check-circle"></i> Identidade verificada!
+                    </strong>
+                    <p style="margin: 5px 0 0; font-size: 13px; color: #065f46;">
+                        Preencha seus dados abaixo e assine para confirmar a autorização.
+                    </p>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Nome Completo *</label>
+                        <input type="text" id="respNome" class="form-input" placeholder="Seu nome completo">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> RG *</label>
+                        <input type="text" id="respRG" class="form-input" placeholder="00.000.000-0">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> CPF *</label>
+                        <input type="text" id="respCPF" class="form-input" placeholder="000.000.000-00" maxlength="14">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Telefone *</label>
+                        <input type="tel" id="respTelefone" class="form-input" placeholder="(00) 00000-0000" maxlength="15">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email (opcional)</label>
+                    <input type="email" id="respEmail" class="form-input" placeholder="seuemail@exemplo.com">
+                </div>
+
+                <!-- Assinatura -->
+                <div class="form-group" style="margin-top: 20px;">
+                    <label><i class="fas fa-signature"></i> Assinatura do Responsável *</label>
+                    <div class="assinatura-container-public">
+                        <canvas id="assinaturaCanvasPublic" class="assinatura-canvas-public"></canvas>
+                        <div class="assinatura-placeholder-public" id="assinaturaPlaceholderPublic">
+                            <i class="fas fa-pen-fancy" style="font-size: 22px;"></i>
+                            <span>Assine aqui com o dedo ou mouse</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                        <button type="button" class="btn-filter btn-clear" onclick="visitasPublico.limparAssinatura()">
+                            <i class="fas fa-eraser"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Botões de ação -->
+                <div class="botoes-acao-final">
+                    <button class="btn-recusar-compacto" onclick="visitasPublico.recusar()">
+                        <i class="fas fa-times"></i> Recusar
+                    </button>
+                    <button class="btn-autorizar-grande" onclick="visitasPublico.autorizar()">
+                        <i class="fas fa-check-circle"></i> Autorizar Visita
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <footer style="text-align: center; padding: 30px 0; color: white; margin-top: 30px;">
+            <p style="margin: 0;"><i class="fas fa-map-marked-alt"></i> Autorização de Visitas • 2026</p>
+            <p style="margin: 5px 0 0; font-size: 12px;"><i class="fas fa-graduation-cap"></i> EducaPleno</p>
+            <p style="margin: 10px 0 0; font-size: 12px;">
+                <a href="/politica-privacidade.html" target="_blank" rel="noopener" 
+                   style="color: rgba(255,255,255,0.85); text-decoration: underline;">
+                    Política de Privacidade
+                </a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- MODAL DE SUCESSO -->
+    <div class="modal-public" id="modalSucesso">
+        <div class="modal-content-public">
+            <div class="modal-icon sucesso">
+                <i class="fas fa-check"></i>
+            </div>
+            <h2 id="modalSucessoTitulo">Autorização Confirmada!</h2>
+            <p id="modalSucessoMensagem">Sua autorização foi registrada com sucesso.</p>
+            <div id="modalSucessoDetalhes" class="modal-detalhes"></div>
+            <button class="btn-submit" onclick="visitasPublico.fecharModalSucesso()">
+                <i class="fas fa-check"></i> Entendi
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL DE ERRO -->
+    <div class="modal-public" id="modalErro">
+        <div class="modal-content-public">
+            <div class="modal-icon erro">
+                <i class="fas fa-times"></i>
+            </div>
+            <h2>Ops!</h2>
+            <p id="modalErroMensagem">Algo deu errado. Tente novamente.</p>
+            <button class="btn-submit btn-erro" onclick="visitasPublico.fecharModalErro()">
+                <i class="fas fa-times"></i> Fechar
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/visitas-publico.js"></script>
+</body>
+</html>

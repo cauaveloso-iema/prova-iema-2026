@@ -78,10 +78,14 @@ const MODULOS_DISPONIVEIS = {
         nomeAmigavel: 'Exportar Dados - Setor Pedagógico',
         descricao: 'Permite exportar dados de alunos AEE'
     },
-    // 🔥 NOVO MÓDULO
     'substituicao_professores_setor_pedagogico': {
         nomeAmigavel: 'Substituição de Professores',
         descricao: 'Permite registrar substituições de professores quando há ausências'
+    },
+    // 🔥 NOVO MÓDULO
+    'autorizacao_visitas': {
+        nomeAmigavel: 'Autorização de Visitas',
+        descricao: 'Permite criar e gerenciar termos de visita técnica e autorizações de responsáveis'
     }
 };
 
