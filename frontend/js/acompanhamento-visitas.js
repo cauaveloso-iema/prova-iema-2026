@@ -554,7 +554,7 @@
     };
 
     // ============================================
-    // IMPRIMIR TERMO
+    // IMPRIMIR TERMO (INDIVIDUAL)
     // ============================================
     window.imprimirTermoAcompanhamentoVisita = async function(termoId) {
         if (!termoId) return;
@@ -568,11 +568,17 @@
             }
             
             const win = window.open('', '_blank');
+            win.document.open();
             win.document.write(data.html);
             win.document.close();
             
+            // Garante que a impressão só ocorra após o carregamento completo de imagens e CSS
             win.onload = () => {
-                setTimeout(() => win.print(), 800);
+                setTimeout(() => {
+                    win.focus();
+                    win.print();
+                    // win.close(); // Opcional: fecha a janela após imprimir
+                }, 600);
             };
         } catch (error) {
             console.error('Erro:', error);
@@ -581,7 +587,7 @@
     };
 
     // ============================================
-    // IMPRIMIR TODOS OS FILTRADOS
+    // IMPRIMIR TODOS OS FILTRADOS (LOTE)
     // ============================================
     window.imprimirTodosTermosFiltrados = async function() {
         const filtrados = estadoAcompanhamento.filtrados;
@@ -617,11 +623,17 @@
             }
             
             const win = window.open('', '_blank');
+            win.document.open();
             win.document.write(data.html);
             win.document.close();
             
+            // Garante que a impressão só ocorra após o carregamento completo de imagens e CSS
             win.onload = () => {
-                setTimeout(() => win.print(), 1000);
+                setTimeout(() => {
+                    win.focus();
+                    win.print();
+                    // win.close(); // Opcional: fecha a janela após imprimir
+                }, 800); // Tempo maior para lote
             };
         } catch (error) {
             console.error('Erro:', error);

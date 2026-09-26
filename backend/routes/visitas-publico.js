@@ -954,25 +954,37 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
       <style>
         @page { size: A4 portrait; margin: 15mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+          height: 100%;
+          width: 100%;
+        }
         body {
           font-family: 'Times New Roman', Times, serif;
           font-size: 11pt;
-          line-height: 1.6;
-          padding: 15mm;
+          line-height: 1.5;
           color: #000;
-          position: relative;
+          /* Layout flex para empurrar o rodapé para o fim da página sem sobrepor */
+          display: flex;
+          flex-direction: column;
+          min-height: 100vh; /* Garante que o body ocupe a altura total da folha */
+        }
+        .page-content {
+          flex: 1 0 auto; /* Ocupa todo o espaço disponível */
+          padding: 15mm 15mm 0 15mm; /* Margem superior/lateral, sem margem inferior */
+          display: flex;
+          flex-direction: column;
         }
         .header {
           text-align: center;
           border-bottom: 3px double #000;
-          padding-bottom: 15px;
-          margin-bottom: 25px;
+          padding-bottom: 10px;
+          margin-bottom: 15px;
         }
-        .header h1 { font-size: 14pt; text-transform: uppercase; margin-bottom: 5px; }
-        .header h2 { font-size: 12pt; font-weight: normal; }
+        .header h1 { font-size: 13pt; text-transform: uppercase; margin-bottom: 3px; }
+        .header h2 { font-size: 11pt; font-weight: normal; }
         .codigo-topo { 
           text-align: right; 
-          font-size: 10pt; 
+          font-size: 9pt; 
           margin-bottom: 10px;
           display: flex;
           justify-content: space-between;
@@ -980,188 +992,210 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
         }
         .codigo-topo code {
           background: #f0f0f0;
-          padding: 3px 10px;
-          border-radius: 4px;
+          padding: 2px 8px;
+          border-radius: 3px;
           font-family: monospace;
         }
         .page-indicator {
-          font-size: 9pt;
+          font-size: 8pt;
           color: #666;
           font-style: italic;
         }
         .titulo {
           text-align: center;
-          font-size: 16pt;
+          font-size: 14pt;
           font-weight: bold;
           text-transform: uppercase;
-          margin: 25px 0;
-          padding: 15px;
+          margin: 15px 0;
+          padding: 10px;
           background: #f0f0f0;
           border: 2px solid #000;
         }
         .conteudo {
           text-align: justify;
-          font-size: 12pt;
-          line-height: 2;
-          margin: 25px 0;
+          font-size: 11pt;
+          line-height: 1.8;
+          margin: 15px 0;
+          flex: 1 0 auto; /* Permite que o conteúdo cresça */
         }
-        .conteudo p { margin-bottom: 15px; }
+        .conteudo p { margin-bottom: 12px; }
         .destaque {
           background: #f9f9f9;
-          padding: 3px 8px;
+          padding: 2px 6px;
           border-bottom: 1px solid #333;
           font-weight: bold;
         }
         .aluno-destaque {
           background: #fff3cd;
-          padding: 15px;
+          padding: 12px;
           border-left: 5px solid #ffc107;
-          margin: 20px 0;
-          font-size: 12pt;
+          margin: 15px 0;
+          font-size: 11pt;
         }
         .aluno-destaque strong {
-          font-size: 14pt;
+          font-size: 13pt;
           color: #856404;
         }
         .aluno-info {
-          font-size: 11pt;
+          font-size: 10pt;
           color: #333;
           margin-top: 5px;
         }
         .status-badge-container {
           text-align: center;
-          margin: 15px 0;
+          margin: 10px 0;
         }
         .badge {
           display: inline-block;
-          padding: 5px 15px;
-          border-radius: 20px;
-          font-size: 10pt;
+          padding: 4px 12px;
+          border-radius: 15px;
+          font-size: 9pt;
           font-weight: bold;
         }
         .badge.autorizado { background: #d1fae5; color: #065f46; border: 1px solid #10b981; }
         .badge.recusado { background: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
         .badge.pendente { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
-        .cidade-data { text-align: right; margin: 40px 0 30px; font-size: 12pt; }
+        .cidade-data { text-align: right; margin: 25px 0 15px; font-size: 11pt; }
+        
         .assinaturas {
           display: flex;
           justify-content: space-between;
           gap: 40px;
-          margin-top: 70px;
+          margin-top: auto; /* Empurra as assinaturas para o fim do conteúdo */
+          padding-top: 40px; /* Espaço mínimo acima das assinaturas */
           page-break-inside: avoid;
         }
         .assinatura { flex: 1; text-align: center; }
         .assinatura-img {
-          max-height: 70px;
+          max-height: 60px;
           max-width: 100%;
           display: block;
-          margin: 0 auto 5px;
+          margin: 0 auto 3px;
         }
         .assinatura-linha {
           border-top: 1px solid #000;
-          padding-top: 8px;
-          font-size: 11pt;
-          margin-top: 65px;
+          padding-top: 6px;
+          font-size: 10pt;
+          margin-top: 55px; /* Reduzido para caber melhor */
         }
-        .assinatura-linha.com-assinatura { margin-top: 5px; }
-        .assinatura-linha strong { display: block; margin-bottom: 2px; }
-        .assinatura-linha small { font-size: 9pt; color: #666; display: block; }
+        .assinatura-linha.com-assinatura { margin-top: 3px; }
+        .assinatura-linha strong { display: block; margin-bottom: 1px; }
+        .assinatura-linha small { font-size: 8pt; color: #666; display: block; }
+        
+        /* 🔥 RODAPÉ CORRIGIDO: Não é mais fixed, flui no final do flex */
         .rodape {
-          position: fixed;
-          bottom: 10mm;
-          left: 15mm;
-          right: 15mm;
+          flex-shrink: 0; /* Impede que o rodapé seja encolhido */
           text-align: center;
-          font-size: 8pt;
+          font-size: 7.5pt;
           color: #666;
           border-top: 1px solid #ccc;
-          padding-top: 5px;
+          padding: 8px 15mm 10mm 15mm; /* Respeita a margem inferior da página */
+          margin-top: 10px;
+          width: 100%;
         }
+        
         @media print {
-          body { padding: 0; }
+          body { 
+            display: flex; 
+            flex-direction: column;
+            min-height: 100vh;
+            height: 100vh; /* Força altura total na impressão */
+          }
+          .page-content { 
+            flex: 1 0 auto; 
+            padding: 0; 
+          }
+          .rodape {
+            position: relative; /* Volta ao fluxo normal */
+            margin-top: auto;
+          }
           .no-print { display: none !important; }
         }
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1>IEMA Pleno: São Luís - Centro</h1>
-        <h2>Termo de Autorização de Visita Técnica</h2>
-      </div>
-      
-      <div class="codigo-topo">
-        <div class="page-indicator">${indicadorPagina}</div>
-        <code>${termo.codigo}</code>
-      </div>
-      
-      <div class="titulo">Autorização de Visita</div>
-      
-      <div class="status-badge-container">
-        ${statusBadge}
-      </div>
-      
-      <div class="conteudo">
-        <p>
-          <strong>AUTORIZO</strong> a participação do(a) aluno(a) 
-          <span class="destaque">${aluno.nome}</span>, 
-          ${aluno.turma ? `da turma <span class="destaque">${aluno.turma}</span>,` : ''}
-          ${aluno.curso ? `do curso <span class="destaque">${aluno.curso}</span>,` : ''}
-          na atividade <span class="destaque">${termo.atividade}</span>, 
-          sob coordenação do(a) ${professoresTexto}, 
-          a ser realizada no dia <span class="destaque">${dataVisita}</span>, 
-          no período <span class="destaque">${termo.periodo}</span>, 
-          no horário <span class="destaque">${termo.horario}</span>, 
-          no local <span class="destaque">${termo.local}</span>.
-        </p>
+      <!-- Conteúdo Principal -->
+      <div class="page-content">
+        <div class="header">
+          <h1>IEMA Pleno: São Luís - Centro</h1>
+          <h2>Termo de Autorização de Visita Técnica</h2>
+        </div>
         
-        ${termo.localizacao?.enderecoCompleto ? `
-          <p style="font-size: 10pt; color: #555; margin-top: 10px;">
-            <strong>Endereço:</strong> ${termo.localizacao.enderecoCompleto}
+        <div class="codigo-topo">
+          <div class="page-indicator">${indicadorPagina}</div>
+          <code>${termo.codigo}</code>
+        </div>
+        
+        <div class="titulo">Autorização de Visita</div>
+        
+        <div class="status-badge-container">
+          ${statusBadge}
+        </div>
+        
+        <div class="conteudo">
+          <p>
+            <strong>AUTORIZO</strong> a participação do(a) aluno(a) 
+            <span class="destaque">${aluno.nome}</span>, 
+            ${aluno.turma ? `da turma <span class="destaque">${aluno.turma}</span>,` : ''}
+            ${aluno.curso ? `do curso <span class="destaque">${aluno.curso}</span>,` : ''}
+            na atividade <span class="destaque">${termo.atividade}</span>, 
+            sob coordenação do(a) ${professoresTexto}, 
+            a ser realizada no dia <span class="destaque">${dataVisita}</span>, 
+            no período <span class="destaque">${termo.periodo}</span>, 
+            no horário <span class="destaque">${termo.horario}</span>, 
+            no local <span class="destaque">${termo.local}</span>.
           </p>
-        ` : ''}
-        
-        <div class="aluno-destaque">
-          <strong>📌 ALUNO(A) AUTORIZADO(A):</strong>
-          <div class="aluno-info">
-            <strong>${aluno.nome}</strong>
-            ${aluno.matricula ? ` • Matrícula: ${aluno.matricula}` : ''}
-            ${aluno.turma ? `<br>Turma: ${aluno.turma}` : ''}
-            ${aluno.curso ? ` • Curso: ${aluno.curso}` : ''}
-          </div>
-        </div>
-        
-        <p style="margin-top: 20px;">
-          Declaro estar ciente das normas e responsabilidades referentes a esta atividade, 
-          bem como das medidas de segurança adotadas pela instituição.
-        </p>
-      </div>
-      
-      <div class="cidade-data">
-        ${termo.cidade || 'São Luís'} - MA, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-      </div>
-      
-      <div class="assinaturas">
-        <div class="assinatura">
-          ${assinaturaResponsavel ? `
-            <img src="${assinaturaResponsavel}" class="assinatura-img" alt="Assinatura do Responsável">
+          
+          ${termo.localizacao?.enderecoCompleto ? `
+            <p style="font-size: 9pt; color: #555; margin-top: 8px;">
+              <strong>Endereço:</strong> ${termo.localizacao.enderecoCompleto}
+            </p>
           ` : ''}
-          <div class="assinatura-linha ${assinaturaResponsavel ? 'com-assinatura' : ''}">
-            <strong>${nomeResponsavel}</strong>
-            <small>Responsável Legal do(a) aluno(a) ${aluno.nome}${cpfResponsavel ? ` • CPF: ${cpfFormatado}` : ''}</small>
+          
+          <div class="aluno-destaque">
+            <strong>📌 ALUNO(A) AUTORIZADO(A):</strong>
+            <div class="aluno-info">
+              <strong>${aluno.nome}</strong>
+              ${aluno.matricula ? ` • Matrícula: ${aluno.matricula}` : ''}
+              ${aluno.turma ? `<br>Turma: ${aluno.turma}` : ''}
+              ${aluno.curso ? ` • Curso: ${aluno.curso}` : ''}
+            </div>
           </div>
+          
+          <p style="margin-top: 15px;">
+            Declaro estar ciente das normas e responsabilidades referentes a esta atividade, 
+            bem como das medidas de segurança adotadas pela instituição.
+          </p>
         </div>
         
-        <div class="assinatura">
-          ${assinaturaGestor ? `
-            <img src="${assinaturaGestor}" class="assinatura-img" alt="Assinatura do Gestor">
-          ` : ''}
-          <div class="assinatura-linha ${assinaturaGestor ? 'com-assinatura' : ''}">
-            <strong>${nomeGestor}</strong>
-            <small>${cargoGestor}</small>
+        <div class="cidade-data">
+          ${termo.cidade || 'São Luís'} - MA, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </div>
+        
+        <div class="assinaturas">
+          <div class="assinatura">
+            ${assinaturaResponsavel ? `
+              <img src="${assinaturaResponsavel}" class="assinatura-img" alt="Assinatura do Responsável">
+            ` : ''}
+            <div class="assinatura-linha ${assinaturaResponsavel ? 'com-assinatura' : ''}">
+              <strong>${nomeResponsavel}</strong>
+              <small>Responsável Legal do(a) aluno(a) ${aluno.nome}${cpfResponsavel ? ` • CPF: ${cpfFormatado}` : ''}</small>
+            </div>
+          </div>
+          
+          <div class="assinatura">
+            ${assinaturaGestor ? `
+              <img src="${assinaturaGestor}" class="assinatura-img" alt="Assinatura do Gestor">
+            ` : ''}
+            <div class="assinatura-linha ${assinaturaGestor ? 'com-assinatura' : ''}">
+              <strong>${nomeGestor}</strong>
+              <small>${cargoGestor}</small>
+            </div>
           </div>
         </div>
       </div>
       
+      <!-- Rodapé -->
       <div class="rodape">
         <p>Documento gerado em ${new Date().toLocaleString('pt-BR')} - EducaPleno</p>
         <p>Este documento é válido como autorização oficial de visita técnica</p>
