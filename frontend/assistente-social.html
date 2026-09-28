@@ -280,7 +280,7 @@
                 </div>
                 <!-- FIM DO SINO -->
 
-                <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" 
+                <a href="https://drive.google.com/file/d/1YyvTzg-LG77wE7SdmEl3lKuq8vn_wRd5/view?usp=sharing" 
                    target="_blank" class="btn-icon" style="
                     background: linear-gradient(135deg, #10b981, #059669);
                     border-radius: 50%; width: 45px; height: 45px;
@@ -897,7 +897,7 @@
                     </div>
                     <div class="tab-pane fade" id="acompanhamento" role="tabpanel">
                         <div class="row g-3 mb-4" id="resumoDiaCards">
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="card-acompanhamento card-gestao" onclick="filtrarPorSetor('gestao')" style="cursor:pointer;">
                                     <div class="card-icon"><i class="fas fa-clock"></i></div>
                                     <div class="card-info">
@@ -907,7 +907,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="card-acompanhamento card-as" onclick="filtrarPorSetor('assistente_social')" style="cursor:pointer;">
                                     <div class="card-icon"><i class="fas fa-hands-helping"></i></div>
                                     <div class="card-info">
@@ -917,7 +917,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="card-acompanhamento card-psico" onclick="filtrarPorSetor('psicologia')" style="cursor:pointer;">
                                     <div class="card-icon"><i class="fas fa-brain"></i></div>
                                     <div class="card-info">
@@ -927,13 +927,24 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="card-acompanhamento card-supervisao" onclick="filtrarPorSetor('supervisao')" style="cursor:pointer;">
                                     <div class="card-icon"><i class="fas fa-shield-alt"></i></div>
                                     <div class="card-info">
                                         <span class="card-label">Supervisão Hoje</span>
                                         <span class="card-value" id="resumoSupervisaoTotal">0</span>
                                         <small class="card-sub" id="resumoSupervisaoMotivos">—</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 🔥 NOVO: CARD BIBLIOTECA -->
+                            <div class="col-md-4">
+                                <div class="card-acompanhamento card-biblioteca" onclick="filtrarPorSetor('biblioteca')" style="cursor:pointer;">
+                                    <div class="card-icon"><i class="fas fa-book"></i></div>
+                                    <div class="card-info">
+                                        <span class="card-label">Biblioteca Hoje</span>
+                                        <span class="card-value" id="resumoBibliotecaTotal">0</span>
+                                        <small class="card-sub" id="resumoBibliotecaMotivos">—</small>
                                     </div>
                                 </div>
                             </div>

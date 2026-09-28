@@ -1823,3 +1823,89 @@
         box-sizing: border-box !important;
     }
 }
+
+/* ============================================
+   ACOMPANHAMENTO - SETOR BIBLIOTECA
+   ============================================ */
+
+/* Card da biblioteca */
+.acompanhamento-card[data-setor="biblioteca"] {
+    border-left: 4px solid #0ea5e9;
+}
+
+/* Badge da biblioteca */
+.acompanhamento-card-setor.biblioteca {
+    background: #e0f2fe;
+    color: #0ea5e9;
+    border: 1px solid #0ea5e9;
+}
+
+/* Ícone da biblioteca */
+.acompanhamento-setor-biblioteca {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Info extra do card (motivo da visita) */
+.acompanhamento-card-extra {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #f0f9ff;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+}
+
+.acompanhamento-card-extra i {
+    color: #0ea5e9;
+}
+
+/* Header do grupo de setor */
+.acompanhamento-grupo-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    margin: 20px 0 10px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border-left: 4px solid #0ea5e9;
+}
+
+.acompanhamento-grupo-header:first-child {
+    margin-top: 0;
+}
+
+/* Animação de pulse para o ícone da biblioteca */
+@keyframes pulse-biblioteca {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.acompanhamento-card[data-setor="biblioteca"] .acompanhamento-card-avatar {
+    animation: pulse-biblioteca 3s infinite;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .acompanhamento-card-extra {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .acompanhamento-card-extra span:last-child {
+        margin-left: 0 !important;
+    }
+}

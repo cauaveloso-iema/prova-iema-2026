@@ -1,6 +1,7 @@
 // ============================================================================
 // ROTAS DE ACOMPANHAMENTO DE ALUNOS
-// Mostra ao professor ONDE cada aluno está em atendimento (sem detalhes)
+// Mostra ao professor ONDE cada aluno está em atendimento
+// Inclui: Enfermaria, Psicologia, Assistente Social, Supervisão e BIBLIOTECA
 // ============================================================================
 
 const express = require('express');
@@ -10,6 +11,7 @@ const mongoose = require('mongoose');
 
 const User = require('../models/User');
 const AtendimentoEnfermaria = require('../models/AtendimentoEnfermaria');
+const AtendimentoBiblioteca = require('../models/AtendimentoBiblioteca');
 
 // ============================================================================
 // MODELOS OPCIONAIS
@@ -23,6 +25,37 @@ try { AtendimentoPsicologia = require('../models/AtendimentoPsicologia'); } catc
 try { AtendimentoAssistenteSocial = require('../models/AtendimentoAssistenteSocial'); } catch (e) {}
 try { AtendimentoSupervisao = require('../models/AtendimentoSupervisao'); } catch (e) {}
 try { Turma = require('../models/Turma'); } catch (e) {}
+
+// ============================================================================
+// CONFIGURAÇÃO DOS SETORES
+// ============================================================================
+const SETORES_CONFIG = {
+    'enfermaria': {
+        label: 'Enfermaria',
+        icone: '🏥',
+        cor: '#10b981'
+    },
+    'psicologia': {
+        label: 'Psicologia',
+        icone: '🧠',
+        cor: '#14b8a6'
+    },
+    'assistente_social': {
+        label: 'Assistente Social',
+        icone: '🤝',
+        cor: '#7c3aed'
+    },
+    'supervisao': {
+        label: 'Supervisão',
+        icone: '🛡️',
+        cor: '#1e3a8a'
+    },
+    'biblioteca': {
+        label: 'Biblioteca',
+        icone: '📚',
+        cor: '#0ea5e9'
+    }
+};
 
 // ============================================================================
 // MIDDLEWARES
@@ -47,9 +80,9 @@ const authenticateToken = (req, res, next) => {
 };
 
 const verificarProfessor = (req, res, next) => {
-    const allowedRoles = ['professor', 'admin', 'super_admin'];
+    const allowedRoles = ['professor', 'admin', 'super_admin', 'biblioteca'];
     if (!allowedRoles.includes(req.userRole)) {
-        return res.status(403).json({ success: false, error: 'Acesso restrito a professores e admins' });
+        return res.status(403).json({ success: false, error: 'Acesso restrito' });
     }
     next();
 };
@@ -157,9 +190,9 @@ function normalizarAtendimento(doc, config) {
 
     return {
         setor: config.setor,
-        setorLabel: config.setorLabel,
-        setorIcone: config.setorIcone,
-        setorCor: config.setorCor,
+        setorLabel: config.setorLabel || SETORES_CONFIG[config.setor]?.label || 'Setor',
+        setorIcone: config.setorIcone || SETORES_CONFIG[config.setor]?.icone || '📍',
+        setorCor: config.setorCor || SETORES_CONFIG[config.setor]?.cor || '#6b7280',
         atendimentoId: doc._id.toString(),
         alunoId: alunoId ? alunoId.toString() : null,
         alunoNome,
@@ -167,6 +200,103 @@ function normalizarAtendimento(doc, config) {
         alunoTurma,
         dataHoraInicio
     };
+}
+
+// ============================================================================
+// HELPER: normalizar atendimento da BIBLIOTECA
+// ✅ AJUSTADO com os campos REAIS do model AtendimentoBiblioteca
+// ============================================================================
+function normalizarAtendimentoBiblioteca(doc) {
+    const alunoId = pegar(doc, 'alunoId', 'aluno', 'userId');
+    const alunoNome = pegar(doc, 'alunoNome', 'aluno.nome') || 'Aluno';
+    const alunoMatricula = pegar(doc, 'alunoMatricula', 'aluno.matricula') || '';
+    const alunoTurma = pegar(doc, 'alunoTurma', 'aluno.turma') || '';
+    const alunoCurso = pegar(doc, 'alunoCurso', 'aluno.curso') || '';
+    const alunoFoto = pegar(doc, 'alunoFoto', 'aluno.fotoPerfil') || '';
+
+    // ✅ CAMPO CORRETO: entrada.dataHora
+    const dataHoraInicio = pegar(
+        doc,
+        'entrada.dataHora',   // ← CORRETO para seu model
+        'dataHoraEntrada',
+        'createdAt'
+    );
+
+    // ✅ MOTIVO: usa os enums reais do seu model
+    const motivoVisita = pegar(doc, 'motivoVisita') || 'outros';
+    const motivoOutros = pegar(doc, 'motivoOutros') || '';
+    const motivoLabel = getMotivoBibliotecaLabel(motivoVisita, motivoOutros);
+    
+    // ✅ ATIVIDADES: usa os enums reais do seu model
+    let atividades = [];
+    const atividadesRaw = pegar(doc, 'atividades');
+    if (Array.isArray(atividadesRaw)) {
+        atividades = atividadesRaw.map(a => getAtividadeBibliotecaLabel(a));
+    }
+    
+    const atividadesOutros = pegar(doc, 'atividadesOutros') || '';
+    
+    // ✅ OBSERVAÇÕES: entrada.observacoes
+    const observacoes = pegar(doc, 'entrada.observacoes', 'observacoes') || '';
+
+    // ✅ VISITANTE EXTERNO
+    const visitanteExterno = pegar(doc, 'visitanteExterno') || false;
+
+    return {
+        setor: 'biblioteca',
+        setorLabel: 'Biblioteca',
+        setorIcone: '📚',
+        setorCor: '#0ea5e9',
+        atendimentoId: doc._id.toString(),
+        alunoId: alunoId ? alunoId.toString() : null,
+        alunoNome,
+        alunoMatricula,
+        alunoTurma,
+        alunoCurso,
+        alunoFoto,
+        dataHoraInicio,
+        // 🔥 DADOS EXTRA DA BIBLIOTECA
+        motivo: motivoVisita,
+        motivoLabel: motivoLabel,
+        motivoOutros: motivoOutros,
+        atividades: atividades,
+        atividadesOutros: atividadesOutros,
+        observacoes: observacoes,
+        visitanteExterno: visitanteExterno
+    };
+}
+
+// ============================================================================
+// HELPER: label do motivo da biblioteca (ENUMS REAIS)
+// ============================================================================
+function getMotivoBibliotecaLabel(motivo, motivoOutros) {
+    const labels = {
+        'ler_livro': 'Ler um Livro',
+        'pegar_livro_emprestado': 'Pegar um Livro Emprestado',
+        'participar_atividade_leitura': 'Participar de Atividade de Leitura',
+        'fazer_pesquisa': 'Fazer Pesquisa',
+        'outros': motivoOutros ? `Outros: ${motivoOutros}` : 'Outros'
+    };
+    return labels[motivo] || 'Consulta';
+}
+
+// ============================================================================
+// HELPER: label da atividade da biblioteca (ENUMS REAIS)
+// ============================================================================
+function getAtividadeBibliotecaLabel(atividade) {
+    const labels = {
+        'leitura_individual': 'Leitura Individual',
+        'leitura_grupo': 'Leitura em Grupo',
+        'pesquisa_internet': 'Pesquisa na Internet',
+        'pesquisa_livros': 'Pesquisa em Livros',
+        'estudo_dirigido': 'Estudo Dirigido',
+        'producao_texto': 'Produção de Texto',
+        'emprestimo_livro': 'Empréstimo de Livro',
+        'devolucao_livro': 'Devolução de Livro',
+        'atividade_pedagogica': 'Atividade Pedagógica',
+        'outros': 'Outros'
+    };
+    return labels[atividade] || atividade;
 }
 
 // ============================================================================
@@ -197,6 +327,7 @@ async function buscarAtendimentosAtivos(alunosIds) {
                 campoData: 'entrada.dataHora'
             }));
         });
+        
     } catch (e) {
         console.error('❌ Erro Enfermaria:', e.message);
     }
@@ -222,6 +353,7 @@ async function buscarAtendimentosAtivos(alunosIds) {
                     campoData: 'entrada.dataHora'
                 }));
             });
+        
         } catch (e) {
             console.error('❌ Erro Psicologia:', e.message);
         }
@@ -248,6 +380,7 @@ async function buscarAtendimentosAtivos(alunosIds) {
                     campoData: 'entrada.dataHora'
                 }));
             });
+            
         } catch (e) {
             console.error('❌ Erro Assistente Social:', e.message);
         }
@@ -275,9 +408,37 @@ async function buscarAtendimentosAtivos(alunosIds) {
                     campoData: 'dataHoraEntrada'
                 }));
             });
+
         } catch (e) {
             console.error('❌ Erro Supervisão:', e.message);
         }
+    }
+
+    // ============================================================================
+    // 🔥 BIBLIOTECA - AJUSTADO com os campos reais do model
+    // ============================================================================
+    try {
+        // ✅ Status correto: 'em_visita' (não 'ativo')
+        const docs = await AtendimentoBiblioteca.find({
+            alunoId: { $in: objectIds },
+            status: 'em_visita'    // ← CORRETO para seu model
+        })
+        .sort({ 'entrada.dataHora': -1 })
+        .lean();
+
+        docs.forEach(doc => {
+            todos.push(normalizarAtendimentoBiblioteca(doc));
+        });
+        
+        
+        // Debug dos alunos da biblioteca
+        if (docs.length > 0) {
+            docs.forEach(d => {
+                console.log(`      - ${d.alunoNome} (${d.alunoTurma || 'sem turma'}) desde ${d.entrada?.dataHora}`);
+            });
+        }
+    } catch (e) {
+        console.error('❌ Erro Biblioteca:', e.message);
     }
 
     return todos;
@@ -314,6 +475,7 @@ router.get('/health', (req, res) => {
             psicologia: !!AtendimentoPsicologia,
             assistenteSocial: !!AtendimentoAssistenteSocial,
             supervisao: !!AtendimentoSupervisao,
+            biblioteca: !!AtendimentoBiblioteca,
             turma: !!Turma
         },
         timestamp: new Date().toISOString()
@@ -343,6 +505,7 @@ router.get('/ativos', authenticateToken, verificarProfessor, async (req, res) =>
         }
 
         let atendimentos = await buscarAtendimentosAtivos(alunosIds);
+        
 
         // Enriquecer com dados do aluno (se faltar nome/turma)
         atendimentos = await Promise.all(atendimentos.map(async (a) => {
@@ -379,6 +542,7 @@ router.get('/ativos', authenticateToken, verificarProfessor, async (req, res) =>
 
         if (setor && setor !== 'todos') {
             atendimentos = atendimentos.filter(a => a.setor === setor);
+            console.log(`   🔍 Filtro por setor "${setor}": ${atendimentos.length} resultado(s)`);
         }
 
         if (busca) {
@@ -398,6 +562,7 @@ router.get('/ativos', authenticateToken, verificarProfessor, async (req, res) =>
             porSetor[a.setor] = (porSetor[a.setor] || 0) + 1;
             if (a.alunoId) alunosUnicos.add(a.alunoId);
         });
+
 
         res.json({
             success: true,

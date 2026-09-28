@@ -1,6 +1,6 @@
 // ============================================================================
 // ROTA: /api/acompanhamento-compartilhado
-// Agrega dados de TODOS os setores para a aba compartilhada
+// Agrega dados de TODOS os setores (incluindo BIBLIOTECA)
 // ============================================================================
 
 const express = require('express');
@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
 const User = require('../models/User');
+const AtendimentoBiblioteca = require('../models/AtendimentoBiblioteca');
 
 // ============================================================================
 // MODELOS OPCIONAIS (carregamento seguro)
@@ -22,6 +23,13 @@ try { Atraso = require('../models/Atraso'); } catch (e) {}
 try { AtendimentoAssistenteSocial = require('../models/AtendimentoAssistenteSocial'); } catch (e) {}
 try { AtendimentoPsicologia = require('../models/AtendimentoPsicologia'); } catch (e) {}
 try { AtendimentoSupervisao = require('../models/AtendimentoSupervisao'); } catch (e) {}
+
+console.log('📚 [acompanhamento-compartilhado] Models carregados:');
+console.log('   - Atraso:', !!Atraso);
+console.log('   - AssistenteSocial:', !!AtendimentoAssistenteSocial);
+console.log('   - Psicologia:', !!AtendimentoPsicologia);
+console.log('   - Supervisao:', !!AtendimentoSupervisao);
+console.log('   - Biblioteca:', !!AtendimentoBiblioteca);
 
 // ============================================================================
 // MIDDLEWARES
@@ -45,11 +53,10 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Permite TODOS os setores de acompanhamento
 const verificarAcesso = (req, res, next) => {
   const allowedRoles = [
     'gestao_geral', 'assistente-social', 'psicologia', 'supervisao',
-    'super_admin', 'admin'
+    'biblioteca', 'professor', 'super_admin', 'admin'
   ];
   if (!allowedRoles.includes(req.userRole)) {
     return res.status(403).json({
@@ -71,7 +78,21 @@ function fimDoDiaBrasil(dataStr) {
 }
 
 // ============================================================================
-// HELPER: Resumo do dia atual
+// HELPER: Label do motivo da biblioteca
+// ============================================================================
+function getMotivoBibliotecaLabel(motivo, motivoOutros) {
+  const labels = {
+    'ler_livro': 'Ler um Livro',
+    'pegar_livro_emprestado': 'Pegar um Livro Emprestado',
+    'participar_atividade_leitura': 'Participar de Atividade de Leitura',
+    'fazer_pesquisa': 'Fazer Pesquisa',
+    'outros': motivoOutros ? `Outros: ${motivoOutros}` : 'Outros'
+  };
+  return labels[motivo] || 'Consulta';
+}
+
+// ============================================================================
+// HELPER: Resumo do dia atual (COM BIBLIOTECA)
 // ============================================================================
 async function getResumoDia() {
   const hojeStr = new Date().toISOString().split('T')[0];
@@ -83,6 +104,7 @@ async function getResumoDia() {
     assistente_social: { total: 0, tipos: [] },
     psicologia: { total: 0, tipos: [] },
     supervisao: { total: 0, motivos: [] },
+    biblioteca: { total: 0, motivos: [] },  // 🔥 NOVO
     alunosUnicos: 0
   };
 
@@ -91,6 +113,7 @@ async function getResumoDia() {
   const tiposAS = {};
   const tiposPsico = {};
   const motivosSupervisao = {};
+  const motivosBiblioteca = {};  // 🔥 NOVO
 
   // ===== GESTÃO (Atrasos) =====
   if (Atraso) {
@@ -150,6 +173,23 @@ async function getResumoDia() {
     } catch (e) { console.error('Erro Supervisão:', e.message); }
   }
 
+  // ===== 🔥 BIBLIOTECA =====
+  if (AtendimentoBiblioteca) {
+    try {
+      const visitas = await AtendimentoBiblioteca.find({
+        'entrada.dataHora': { $gte: inicio, $lte: fim }
+      }).lean();
+
+      resumo.biblioteca.total = visitas.length;
+      visitas.forEach(v => {
+        const label = getMotivoBibliotecaLabel(v.motivoVisita, v.motivoOutros);
+        motivosBiblioteca[label] = (motivosBiblioteca[label] || 0) + 1;
+        if (v.alunoId) alunosSet.add(v.alunoId.toString());
+      });
+
+    } catch (e) { console.error('Erro Biblioteca:', e.message); }
+  }
+
   const toArray = (obj) => Object.entries(obj)
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count)
@@ -159,13 +199,14 @@ async function getResumoDia() {
   resumo.assistente_social.tipos = toArray(tiposAS);
   resumo.psicologia.tipos = toArray(tiposPsico);
   resumo.supervisao.motivos = toArray(motivosSupervisao);
+  resumo.biblioteca.motivos = toArray(motivosBiblioteca);  // 🔥 NOVO
   resumo.alunosUnicos = alunosSet.size;
 
   return resumo;
 }
 
 // ============================================================================
-// HELPER: Agrega dados por aluno
+// HELPER: Agrega dados por aluno (COM BIBLIOTECA)
 // ============================================================================
 async function agregarPorAluno(filtros = {}) {
   const { turma, dataInicio, dataFim, alunoId } = filtros;
@@ -198,6 +239,7 @@ async function agregarPorAluno(filtros = {}) {
         assistente_social: { total: 0, tipos: {}, registros: [] },
         psicologia: { total: 0, tipos: {}, registros: [] },
         supervisao: { total: 0, motivos: {}, registros: [] },
+        biblioteca: { total: 0, motivos: {}, registros: [] },  // 🔥 NOVO
         totalGeral: 0,
         ultimaAtualizacao: null
       });
@@ -205,12 +247,11 @@ async function agregarPorAluno(filtros = {}) {
     return alunosMap.get(key);
   }
 
-  // ===== GESTÃO (Atrasos) =====
+  // ===== GESTÃO =====
   if (Atraso) {
     try {
       const query = { ...matchAluno };
       if (temFiltroData) query.dataHora = matchData;
-
       const atrasos = await Atraso.find(query).sort({ dataHora: -1 }).lean();
 
       atrasos.forEach(a => {
@@ -219,12 +260,8 @@ async function agregarPorAluno(filtros = {}) {
         aluno.gestao.total++;
         aluno.gestao.motivos[motivoLabel] = (aluno.gestao.motivos[motivoLabel] || 0) + 1;
         aluno.gestao.registros.push({
-          id: a._id,
-          data: a.dataHora,
-          motivo: a.motivo,
-          motivoLabel,
-          descricao: a.descricao,
-          registradoPor: a.registradoPorNome
+          id: a._id, data: a.dataHora, motivo: a.motivo, motivoLabel,
+          descricao: a.descricao, registradoPor: a.registradoPorNome
         });
         aluno.totalGeral++;
         if (a.dataHora && (!aluno.ultimaAtualizacao || new Date(a.dataHora) > new Date(aluno.ultimaAtualizacao))) {
@@ -239,9 +276,7 @@ async function agregarPorAluno(filtros = {}) {
     try {
       const query = { ...matchAluno };
       if (temFiltroData) query['entrada.dataHora'] = matchData;
-
-      const atends = await AtendimentoAssistenteSocial.find(query)
-        .sort({ 'entrada.dataHora': -1 }).lean();
+      const atends = await AtendimentoAssistenteSocial.find(query).sort({ 'entrada.dataHora': -1 }).lean();
 
       atends.forEach(a => {
         const aluno = getOrCreate(a.alunoId, a.alunoNome, a.alunoTurma, a.alunoCurso, a.alunoMatricula);
@@ -249,15 +284,9 @@ async function agregarPorAluno(filtros = {}) {
         aluno.assistente_social.total++;
         aluno.assistente_social.tipos[tipoLabel] = (aluno.assistente_social.tipos[tipoLabel] || 0) + 1;
         aluno.assistente_social.registros.push({
-          id: a._id,
-          data: a.entrada?.dataHora,
-          tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: tipoLabel,
-          descricao: a.entrada?.descricao,
-          status: a.status,
-          gravidade: a.entrada?.gravidade,
-          temAssinatura: !!(a.entrada?.assinaturaBase64),
-          temRemarcacao: !!a.temRemarcacaoPendente
+          id: a._id, data: a.entrada?.dataHora, tipoTarefa: a.tipoTarefa, tipoTarefaLabel: tipoLabel,
+          descricao: a.entrada?.descricao, status: a.status, gravidade: a.entrada?.gravidade,
+          temAssinatura: !!(a.entrada?.assinaturaBase64), temRemarcacao: !!a.temRemarcacaoPendente
         });
         aluno.totalGeral++;
         if (a.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(a.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
@@ -272,9 +301,7 @@ async function agregarPorAluno(filtros = {}) {
     try {
       const query = { ...matchAluno };
       if (temFiltroData) query['entrada.dataHora'] = matchData;
-
-      const atends = await AtendimentoPsicologia.find(query)
-        .sort({ 'entrada.dataHora': -1 }).lean();
+      const atends = await AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 }).lean();
 
       atends.forEach(a => {
         const aluno = getOrCreate(a.alunoId, a.alunoNome, a.alunoTurma, a.alunoCurso, a.alunoMatricula);
@@ -282,15 +309,9 @@ async function agregarPorAluno(filtros = {}) {
         aluno.psicologia.total++;
         aluno.psicologia.tipos[tipoLabel] = (aluno.psicologia.tipos[tipoLabel] || 0) + 1;
         aluno.psicologia.registros.push({
-          id: a._id,
-          data: a.entrada?.dataHora,
-          tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: tipoLabel,
-          descricao: a.entrada?.descricao,
-          status: a.status,
-          gravidade: a.entrada?.gravidade,
-          temAssinatura: !!(a.entrada?.assinaturaBase64),
-          temRemarcacao: !!a.temRemarcacaoPendente
+          id: a._id, data: a.entrada?.dataHora, tipoTarefa: a.tipoTarefa, tipoTarefaLabel: tipoLabel,
+          descricao: a.entrada?.descricao, status: a.status, gravidade: a.entrada?.gravidade,
+          temAssinatura: !!(a.entrada?.assinaturaBase64), temRemarcacao: !!a.temRemarcacaoPendente
         });
         aluno.totalGeral++;
         if (a.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(a.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
@@ -305,9 +326,7 @@ async function agregarPorAluno(filtros = {}) {
     try {
       const query = { ...matchAluno };
       if (temFiltroData) query['entrada.dataHora'] = matchData;
-
-      const atends = await AtendimentoSupervisao.find(query)
-        .sort({ 'entrada.dataHora': -1 }).lean();
+      const atends = await AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 }).lean();
 
       atends.forEach(a => {
         const aluno = getOrCreate(a.alunoId, a.alunoNome, a.alunoTurma, a.alunoCurso, a.alunoMatricula);
@@ -315,15 +334,9 @@ async function agregarPorAluno(filtros = {}) {
         aluno.supervisao.total++;
         aluno.supervisao.motivos[tipoLabel] = (aluno.supervisao.motivos[tipoLabel] || 0) + 1;
         aluno.supervisao.registros.push({
-          id: a._id,
-          data: a.entrada?.dataHora,
-          tipoTarefa: a.tipoTarefa,
-          tipoTarefaLabel: tipoLabel,
-          descricao: a.entrada?.descricao,
-          status: a.status,
-          gravidade: a.entrada?.gravidade,
-          temAssinatura: !!(a.entrada?.assinaturaBase64),
-          temRemarcacao: !!a.temRemarcacaoPendente
+          id: a._id, data: a.entrada?.dataHora, tipoTarefa: a.tipoTarefa, tipoTarefaLabel: tipoLabel,
+          descricao: a.entrada?.descricao, status: a.status, gravidade: a.entrada?.gravidade,
+          temAssinatura: !!(a.entrada?.assinaturaBase64), temRemarcacao: !!a.temRemarcacaoPendente
         });
         aluno.totalGeral++;
         if (a.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(a.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
@@ -333,9 +346,52 @@ async function agregarPorAluno(filtros = {}) {
     } catch (e) { console.error('Erro agregar Supervisão:', e.message); }
   }
 
+  // ============================================================================
+  // 🔥 BIBLIOTECA - NOVO
+  // ============================================================================
+  if (AtendimentoBiblioteca) {
+    try {
+      const query = { ...matchAluno };
+      if (temFiltroData) query['entrada.dataHora'] = matchData;
+
+      const visitas = await AtendimentoBiblioteca.find(query).sort({ 'entrada.dataHora': -1 }).lean();
+
+      visitas.forEach(v => {
+        const aluno = getOrCreate(v.alunoId, v.alunoNome, v.alunoTurma, v.alunoCurso, v.alunoMatricula);
+        const motivoLabel = getMotivoBibliotecaLabel(v.motivoVisita, v.motivoOutros);
+
+        // Calcular duração
+        let duracao = 0;
+        if (v.entrada?.dataHora && v.saida?.dataHora) {
+          duracao = Math.round((new Date(v.saida.dataHora) - new Date(v.entrada.dataHora)) / 60000);
+        } else if (v.duracaoMinutos) {
+          duracao = v.duracaoMinutos;
+        }
+
+        aluno.biblioteca.total++;
+        aluno.biblioteca.motivos[motivoLabel] = (aluno.biblioteca.motivos[motivoLabel] || 0) + 1;
+        aluno.biblioteca.registros.push({
+          id: v._id,
+          data: v.entrada?.dataHora,
+          dataSaida: v.saida?.dataHora || null,
+          motivo: v.motivoVisita,
+          motivoLabel,
+          atividades: v.atividades || [],
+          duracao,
+          status: v.status,
+          observacoes: v.entrada?.observacoes || ''
+        });
+        aluno.totalGeral++;
+        if (v.entrada?.dataHora && (!aluno.ultimaAtualizacao || new Date(v.entrada.dataHora) > new Date(aluno.ultimaAtualizacao))) {
+          aluno.ultimaAtualizacao = v.entrada.dataHora;
+        }
+      });
+
+    } catch (e) { console.error('Erro agregar Biblioteca:', e.message); }
+  }
+
   const alunos = Array.from(alunosMap.values());
   alunos.sort((a, b) => b.totalGeral - a.totalGeral);
-
   return alunos;
 }
 
@@ -350,7 +406,8 @@ router.get('/health', (req, res) => {
       atraso: !!Atraso,
       assistenteSocial: !!AtendimentoAssistenteSocial,
       psicologia: !!AtendimentoPsicologia,
-      supervisao: !!AtendimentoSupervisao
+      supervisao: !!AtendimentoSupervisao,
+      biblioteca: !!AtendimentoBiblioteca
     },
     timestamp: new Date().toISOString()
   });
@@ -358,7 +415,6 @@ router.get('/health', (req, res) => {
 
 // ============================================================================
 // ROTA: RESUMO DO DIA
-// GET /api/acompanhamento-compartilhado/resumo-dia
 // ============================================================================
 router.get('/resumo-dia', authenticateToken, verificarAcesso, async (req, res) => {
   try {
@@ -372,8 +428,6 @@ router.get('/resumo-dia', authenticateToken, verificarAcesso, async (req, res) =
 
 // ============================================================================
 // ROTA: LISTA DE ALUNOS AGREGADOS
-// GET /api/acompanhamento-compartilhado/alunos
-// Query: ?turma=X&dataInicio=YYYY-MM-DD&dataFim=YYYY-MM-DD&alunoId=X&busca=X&limit=100
 // ============================================================================
 router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
   try {
@@ -381,7 +435,6 @@ router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
 
     let alunos = await agregarPorAluno({ turma, dataInicio, dataFim, alunoId });
 
-    // Filtro de busca
     if (busca) {
       const termo = String(busca).toLowerCase();
       alunos = alunos.filter(a =>
@@ -394,7 +447,6 @@ router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
     const limitNum = parseInt(limit);
     const alunosPaginados = alunos.slice(0, limitNum);
 
-    // Estatísticas gerais
     const stats = {
       totalAlunos: total,
       totalOcorrencias: alunos.reduce((s, a) => s + a.totalGeral, 0),
@@ -402,17 +454,12 @@ router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
         gestao: alunos.reduce((s, a) => s + a.gestao.total, 0),
         assistente_social: alunos.reduce((s, a) => s + a.assistente_social.total, 0),
         psicologia: alunos.reduce((s, a) => s + a.psicologia.total, 0),
-        supervisao: alunos.reduce((s, a) => s + a.supervisao.total, 0)
+        supervisao: alunos.reduce((s, a) => s + a.supervisao.total, 0),
+        biblioteca: alunos.reduce((s, a) => s + a.biblioteca.total, 0)  // 🔥 NOVO
       }
     };
 
-    res.json({
-      success: true,
-      total,
-      stats,
-      alunos: alunosPaginados,
-      timestamp: new Date().toISOString()
-    });
+    res.json({ success: true, total, stats, alunos: alunosPaginados, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('❌ Erro /alunos:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -421,7 +468,6 @@ router.get('/alunos', authenticateToken, verificarAcesso, async (req, res) => {
 
 // ============================================================================
 // ROTA: DETALHE DE UM ALUNO
-// GET /api/acompanhamento-compartilhado/aluno/:alunoId
 // ============================================================================
 router.get('/aluno/:alunoId', authenticateToken, verificarAcesso, async (req, res) => {
   try {
@@ -446,14 +492,12 @@ router.get('/aluno/:alunoId', authenticateToken, verificarAcesso, async (req, re
 });
 
 // ============================================================================
-// ROTA: TURMAS DISPONÍVEIS
-// GET /api/acompanhamento-compartilhado/turmas
+// ROTA: TURMAS DISPONÍVEIS (COM BIBLIOTECA)
 // ============================================================================
 router.get('/turmas', authenticateToken, verificarAcesso, async (req, res) => {
   try {
     const turmasSet = new Set();
 
-    // Turmas dos alunos cadastrados
     try {
       const turmasAlunos = await User.distinct('turma', {
         role: 'aluno', ativo: true,
@@ -462,12 +506,12 @@ router.get('/turmas', authenticateToken, verificarAcesso, async (req, res) => {
       turmasAlunos.forEach(t => turmasSet.add(t));
     } catch (e) {}
 
-    // Turmas com registros nos setores
     const models = [
       { m: Atraso, campo: 'alunoTurma' },
       { m: AtendimentoAssistenteSocial, campo: 'alunoTurma' },
       { m: AtendimentoPsicologia, campo: 'alunoTurma' },
-      { m: AtendimentoSupervisao, campo: 'alunoTurma' }
+      { m: AtendimentoSupervisao, campo: 'alunoTurma' },
+      { m: AtendimentoBiblioteca, campo: 'alunoTurma' }  // 🔥 NOVO
     ];
 
     for (const { m, campo } of models) {
@@ -487,8 +531,7 @@ router.get('/turmas', authenticateToken, verificarAcesso, async (req, res) => {
 });
 
 // ============================================================================
-// ROTA: RANKING DE ALUNOS
-// GET /api/acompanhamento-compartilhado/ranking?limit=10&dataInicio=&dataFim=
+// ROTA: RANKING DE ALUNOS (COM BIBLIOTECA)
 // ============================================================================
 router.get('/ranking', authenticateToken, verificarAcesso, async (req, res) => {
   try {
@@ -510,7 +553,8 @@ router.get('/ranking', authenticateToken, verificarAcesso, async (req, res) => {
           gestao: a.gestao.total,
           assistente_social: a.assistente_social.total,
           psicologia: a.psicologia.total,
-          supervisao: a.supervisao.total
+          supervisao: a.supervisao.total,
+          biblioteca: a.biblioteca.total  // 🔥 NOVO
         }
       }))
     });
@@ -521,8 +565,7 @@ router.get('/ranking', authenticateToken, verificarAcesso, async (req, res) => {
 });
 
 // ============================================================================
-// ROTA: ESTATÍSTICAS POR SETOR (gráficos)
-// GET /api/acompanhamento-compartilhado/estatisticas?dataInicio=&dataFim=
+// ROTA: ESTATÍSTICAS POR SETOR (COM BIBLIOTECA)
 // ============================================================================
 router.get('/estatisticas', authenticateToken, verificarAcesso, async (req, res) => {
   try {
@@ -533,21 +576,15 @@ router.get('/estatisticas', authenticateToken, verificarAcesso, async (req, res)
     const tiposAS = {};
     const tiposPsico = {};
     const motivosSupervisao = {};
+    const motivosBiblioteca = {};  // 🔥 NOVO
     const porTurma = {};
 
     alunos.forEach(a => {
-      Object.entries(a.gestao.motivos).forEach(([k, v]) => {
-        motivosGestao[k] = (motivosGestao[k] || 0) + v;
-      });
-      Object.entries(a.assistente_social.tipos).forEach(([k, v]) => {
-        tiposAS[k] = (tiposAS[k] || 0) + v;
-      });
-      Object.entries(a.psicologia.tipos).forEach(([k, v]) => {
-        tiposPsico[k] = (tiposPsico[k] || 0) + v;
-      });
-      Object.entries(a.supervisao.motivos).forEach(([k, v]) => {
-        motivosSupervisao[k] = (motivosSupervisao[k] || 0) + v;
-      });
+      Object.entries(a.gestao.motivos).forEach(([k, v]) => { motivosGestao[k] = (motivosGestao[k] || 0) + v; });
+      Object.entries(a.assistente_social.tipos).forEach(([k, v]) => { tiposAS[k] = (tiposAS[k] || 0) + v; });
+      Object.entries(a.psicologia.tipos).forEach(([k, v]) => { tiposPsico[k] = (tiposPsico[k] || 0) + v; });
+      Object.entries(a.supervisao.motivos).forEach(([k, v]) => { motivosSupervisao[k] = (motivosSupervisao[k] || 0) + v; });
+      Object.entries(a.biblioteca.motivos).forEach(([k, v]) => { motivosBiblioteca[k] = (motivosBiblioteca[k] || 0) + v; });  // 🔥 NOVO
       const t = a.alunoTurma || 'Sem turma';
       porTurma[t] = (porTurma[t] || 0) + a.totalGeral;
     });
@@ -563,6 +600,7 @@ router.get('/estatisticas', authenticateToken, verificarAcesso, async (req, res)
         assistente_social: { tipos: toArray(tiposAS) },
         psicologia: { tipos: toArray(tiposPsico) },
         supervisao: { motivos: toArray(motivosSupervisao) },
+        biblioteca: { motivos: toArray(motivosBiblioteca) },  // 🔥 NOVO
         porTurma: toArray(porTurma)
       },
       timestamp: new Date().toISOString()

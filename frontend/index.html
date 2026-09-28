@@ -888,7 +888,7 @@ window.addEventListener('scroll', function() {
                     </button>
 
                     <!-- COLE AQUI O LINK DO APP (ANTES DAS NOTIFICAÇÕES) -->
-                    <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" target="_blank" style="
+                    <a href="https://drive.google.com/file/d/1YyvTzg-LG77wE7SdmEl3lKuq8vn_wRd5/view?usp=sharing" target="_blank" style="
                         background: linear-gradient(135deg, #10b981, #059669);
                         color: white;
                         padding: 10px 20px;
@@ -3076,6 +3076,7 @@ window.addEventListener('scroll', function() {
                             <option value="gestao_geral">📊 Gestão Geral</option>
                             <option value="supervisao">🛡️ Supervisão</option>
                             <option value="assistente_social">🤝 Assistente Social</option>
+                            <option value="biblioteca">📚 Biblioteca</option>
                         </select>
                     </div>
                     <div class="acompanhamento-filtro-item acompanhamento-filtro-busca">
@@ -17334,8 +17335,9 @@ async function carregarAcompanhamento() {
     }
 }
 
+
 // ============================================
-// RENDERIZAR LISTA
+// RENDERIZAR LISTA (COM SUPORTE A BIBLIOTECA)
 // ============================================
 function renderizarAcompanhamento(data) {
     const lista = document.getElementById('acompanhamentoLista');
@@ -17362,50 +17364,191 @@ function renderizarAcompanhamento(data) {
     
     const atendimentos = data.atendimentos || [];
     
-    let html = '';
+    // 🔥 AGRUPAR POR SETOR (opcional - melhora a visualização)
+    const porSetor = {};
     atendimentos.forEach(a => {
-        const tempoClass = a.tempoMinutos > 60 ? 'acompanhamento-tempo-mostrarAlertaGerala' : '';
-        const nomeSeguro = escapeHtmlAcompanhamento(a.alunoNome || 'Aluno');
-        const turmaSegura = escapeHtmlAcompanhamento(a.turmaPrincipal || 'Sem turma');
-
-        html += `
-            <div class="acompanhamento-card" data-atendimento-id="${a.atendimentoId}">
-                <div class="acompanhamento-card-avatar" style="background: ${a.setorCor};">
-                    ${(a.alunoNome || 'A').charAt(0).toUpperCase()}
+        const setor = a.setor || 'outros';
+        if (!porSetor[setor]) {
+            porSetor[setor] = [];
+        }
+        porSetor[setor].push(a);
+    });
+    
+    let html = '';
+    
+    // Ordem dos setores para exibição
+    const ordemSetores = ['enfermaria', 'psicologia', 'biblioteca', 'gestao_geral', 'supervisao', 'assistente_social'];
+    
+    // Renderizar por setor (agrupado)
+    ordemSetores.forEach(setorKey => {
+        if (!porSetor[setorKey] || porSetor[setorKey].length === 0) return;
+        
+        const config = getSetorConfig(setorKey);
+        const atendimentosSetor = porSetor[setorKey];
+        
+        // Cabeçalho do grupo (apenas se houver mais de um setor)
+        if (Object.keys(porSetor).length > 1) {
+            html += `
+                <div class="acompanhamento-grupo-header" style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 12px 15px;
+                    margin: 20px 0 10px;
+                    background: ${config.corBg};
+                    border-radius: 12px;
+                    border-left: 4px solid ${config.cor};
+                ">
+                    <span style="font-size: 1.3rem;">${config.icone}</span>
+                    <strong style="color: ${config.cor};">${config.label}</strong>
+                    <span style="
+                        background: ${config.cor};
+                        color: white;
+                        padding: 2px 10px;
+                        border-radius: 20px;
+                        font-size: 0.75rem;
+                        font-weight: 600;
+                    ">${atendimentosSetor.length}</span>
                 </div>
+            `;
+        }
+        
+        // Renderizar cada aluno do setor
+        atendimentosSetor.forEach(a => {
+            const tempoClass = a.tempoMinutos > 60 ? 'acompanhamento-tempo-mostrarAlertaGerala' : '';
+            const nomeSeguro = escapeHtmlAcompanhamento(a.alunoNome || 'Aluno');
+            const turmaSegura = escapeHtmlAcompanhamento(a.turmaPrincipal || 'Sem turma');
+            
+            // 🔥 USAR CONFIG DO SETOR (fallback para dados da API)
+            const setorConfig = getSetorConfig(a.setor);
+            const setorCor = a.setorCor || setorConfig.cor;
+            const setorIcone = a.setorIcone || setorConfig.icone;
+            const setorLabel = a.setorLabel || setorConfig.label;
+            
+            // 🔥 ADICIONAR INFO EXTRA PARA BIBLIOTECA
+            let infoExtra = '';
+            if (a.setor === 'biblioteca') {
+                const motivo = a.motivoLabel || a.motivo || 'Consulta';
+                const atividades = a.atividades && a.atividades.length > 0 
+                    ? a.atividades.slice(0, 2).join(', ') 
+                    : '';
                 
-                <div class="acompanhamento-card-content">
-                    <div class="acompanhamento-card-header">
-                        <div>
-                            <h4 class="acompanhamento-card-nome">${nomeSeguro}</h4>
-                            <div class="acompanhamento-card-turma">
-                                <i class="fas fa-users"></i> ${turmaSegura}
-                                ${a.alunoMatricula ? `• ${escapeHtmlAcompanhamento(a.alunoMatricula)}` : ''}
+                infoExtra = `
+                    <div class="acompanhamento-card-extra" style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        margin-top: 8px;
+                        padding: 8px 12px;
+                        background: ${setorConfig.corBg};
+                        border-radius: 8px;
+                        font-size: 0.8rem;
+                        color: ${setorCor};
+                    ">
+                        <i class="fas fa-book-open"></i>
+                        <span><strong>Motivo:</strong> ${escapeHtmlAcompanhamento(motivo)}</span>
+                        ${atividades ? `
+                            <span style="margin-left: auto; opacity: 0.8;">
+                                <i class="fas fa-tasks"></i> ${escapeHtmlAcompanhamento(atividades)}
+                            </span>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div class="acompanhamento-card" data-atendimento-id="${a.atendimentoId}" style="
+                    border-left: 4px solid ${setorCor};
+                ">
+                    <div class="acompanhamento-card-avatar" style="background: ${setorCor};">
+                        ${(a.alunoNome || 'A').charAt(0).toUpperCase()}
+                    </div>
+                    
+                    <div class="acompanhamento-card-content">
+                        <div class="acompanhamento-card-header">
+                            <div>
+                                <h4 class="acompanhamento-card-nome">${nomeSeguro}</h4>
+                                <div class="acompanhamento-card-turma">
+                                    <i class="fas fa-users"></i> ${turmaSegura}
+                                    ${a.alunoMatricula ? `• ${escapeHtmlAcompanhamento(a.alunoMatricula)}` : ''}
+                                </div>
+                            </div>
+                            
+                            <div class="acompanhamento-card-setor" style="
+                                background: ${setorCor}20; 
+                                color: ${setorCor}; 
+                                border: 1px solid ${setorCor}40;
+                            ">
+                                <span>${setorIcone}</span>
+                                <span>${escapeHtmlAcompanhamento(setorLabel)}</span>
                             </div>
                         </div>
                         
-                        <div class="acompanhamento-card-setor" style="background: ${a.setorCor}20; color: ${a.setorCor}; border: 1px solid ${a.setorCor}40;">
-                            <span>${a.setorIcone}</span>
-                            <span>${escapeHtmlAcompanhamento(a.setorLabel)}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="acompanhamento-card-info">
-                        <div class="acompanhamento-card-tempo ${tempoClass}">
-                            <i class="fas fa-clock"></i>
-                            <span>Há ${a.tempoFormatado || a.tempoMinutos + ' min'}</span>
+                        <div class="acompanhamento-card-info">
+                            <div class="acompanhamento-card-tempo ${tempoClass}">
+                                <i class="fas fa-clock"></i>
+                                <span>Há ${a.tempoFormatado || a.tempoMinutos + ' min'}</span>
+                            </div>
+                            
+                            ${infoExtra}
                         </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        });
+    });
+    
+    // 🔥 RENDERIZAR SETORES NÃO MAPEADOS (fallback)
+    Object.keys(porSetor).forEach(setorKey => {
+        if (ordemSetores.includes(setorKey)) return;
+        
+        const config = getSetorConfig(setorKey);
+        porSetor[setorKey].forEach(a => {
+            const nomeSeguro = escapeHtmlAcompanhamento(a.alunoNome || 'Aluno');
+            const turmaSegura = escapeHtmlAcompanhamento(a.turmaPrincipal || 'Sem turma');
+            
+            html += `
+                <div class="acompanhamento-card" data-atendimento-id="${a.atendimentoId}">
+                    <div class="acompanhamento-card-avatar" style="background: ${config.cor};">
+                        ${(a.alunoNome || 'A').charAt(0).toUpperCase()}
+                    </div>
+                    
+                    <div class="acompanhamento-card-content">
+                        <div class="acompanhamento-card-header">
+                            <div>
+                                <h4 class="acompanhamento-card-nome">${nomeSeguro}</h4>
+                                <div class="acompanhamento-card-turma">
+                                    <i class="fas fa-users"></i> ${turmaSegura}
+                                </div>
+                            </div>
+                            
+                            <div class="acompanhamento-card-setor" style="
+                                background: ${config.cor}20; 
+                                color: ${config.cor}; 
+                                border: 1px solid ${config.cor}40;
+                            ">
+                                <span>${config.icone}</span>
+                                <span>${config.label}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="acompanhamento-card-info">
+                            <div class="acompanhamento-card-tempo">
+                                <i class="fas fa-clock"></i>
+                                <span>Há ${a.tempoFormatado || a.tempoMinutos + ' min'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
     });
     
     lista.innerHTML = html;
 }
 
 // ============================================
-// VERIFICAR NOVOS ATENDIMENTOS
+// VERIFICAR NOVOS ATENDIMENTOS (INCLUINDO BIBLIOTECA)
 // ============================================
 async function verificarNovosAtendimentos() {
     try {
@@ -17417,6 +17560,7 @@ async function verificarNovosAtendimentos() {
             params.append('desde', window.acompanhamentoUltimaConsulta);
         }
         
+        // 🔥 Incluir todos os setores (incluindo biblioteca)
         const response = await fetch(`/api/acompanhamento/notificacoes?${params}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -17431,6 +17575,14 @@ async function verificarNovosAtendimentos() {
             }
             
             window.acompanhamentoAtendimentosConhecidos.add(novo.atendimentoId);
+            
+            // 🔥 Verificar se é da biblioteca para personalizar
+            if (novo.setor === 'biblioteca') {
+                novo.setorLabel = 'Biblioteca';
+                novo.setorIcone = '📚';
+                novo.setorCor = '#0ea5e9';
+            }
+            
             mostrarNotificacaoAcompanhamento(novo);
             enviarNotificacaoNavegador(novo);
         });
@@ -17906,6 +18058,26 @@ window.addEventListener('beforeunload', function() {
         console.log('🛑 Polling de acompanhamento interrompido');
     }
 });
+
+// ============================================
+// CONFIGURAÇÃO DOS SETORES (INCLUINDO BIBLIOTECA)
+// ============================================
+const SETORES_CONFIG = {
+    'enfermaria': { label: 'Enfermaria', icone: '🏥', cor: '#10b981', corBg: '#d1fae5' },
+    'psicologia': { label: 'Psicologia', icone: '🧠', cor: '#14b8a6', corBg: '#ccfbf1' },
+    'assistente_social': { label: 'Assistente Social', icone: '🤝', cor: '#7c3aed', corBg: '#ede9fe' },
+    'supervisao': { label: 'Supervisão', icone: '🛡️', cor: '#1e3a8a', corBg: '#dbeafe' },
+    'biblioteca': { label: 'Biblioteca', icone: '📚', cor: '#0ea5e9', corBg: '#e0f2fe' }
+};
+
+function getSetorConfig(setor) {
+    return SETORES_CONFIG[setor] || {
+        label: setor || 'Setor',
+        icone: '📍',
+        cor: '#6b7280',
+        corBg: '#f3f4f6'
+    };
+}
 
 </script>
 

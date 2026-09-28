@@ -1,304 +1,335 @@
-// ============================================
+// ============================================================================
 // ACOMPANHAMENTO COMPARTILHADO - FRONTEND
+// Agrega dados de TODOS os setores (incluindo BIBLIOTECA)
+// ============================================================================
+
+let __acompanhamentoDados = null;
+let __acompanhamentoFiltroSetor = 'todos';
+
 // ============================================
-(function() {
-  let __acompAlunosBrutos = [];
-  let __acompFiltroSetor = null;
-
-  // ====== CARREGAR TUDO ======
-  async function carregarAcompanhamento() {
-    const turma = document.getElementById('acompFiltroTurma')?.value || '';
-    const dataInicio = document.getElementById('acompDataInicio')?.value || '';
-    const dataFim = document.getElementById('acompDataFim')?.value || '';
-    const busca = document.getElementById('acompBusca')?.value || '';
-
-    const params = new URLSearchParams();
-    if (turma) params.append('turma', turma);
-    if (dataInicio) params.append('dataInicio', dataInicio);
-    if (dataFim) params.append('dataFim', dataFim);
-    if (busca) params.append('busca', busca);
-
-    const container = document.getElementById('acompListaAlunos');
-    container.innerHTML = `
-      <div class="text-center py-5">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="text-muted mt-3">Carregando...</p>
-      </div>`;
-
-    try {
-      const token = localStorage.getItem('auth_token');
-      const [resumoRes, alunosRes] = await Promise.all([
-        fetch('/api/acompanhamento-compartilhado/resumo-dia', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`/api/acompanhamento-compartilhado/alunos?${params.toString()}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-      ]);
-
-      const resumoData = await resumoRes.json();
-      const alunosData = await alunosRes.json();
-
-      if (resumoData.success) renderizarResumoDia(resumoData.resumo);
-      if (alunosData.success) {
-        __acompAlunosBrutos = alunosData.alunos;
-        renderizarLista(__acompAlunosBrutos);
-      }
-    } catch (error) {
-      console.error('Erro:', error);
-      container.innerHTML = `
-        <div class="alert alert-danger">
-          <i class="fas fa-exclamation-triangle"></i> Erro ao carregar acompanhamento.
-        </div>`;
-    }
-  }
-
-  // ====== RENDER RESUMO DO DIA ======
-  function renderizarResumoDia(resumo) {
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    const setMotivos = (id, arr) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (!arr || arr.length === 0) { el.textContent = 'Nenhum registro'; return; }
-      el.textContent = arr.map(m => `${m.label} (${m.count})`).join(' • ');
-    };
-
-    set('resumoGestaoTotal', resumo.gestao.total);
-    set('resumoASTotal', resumo.assistente_social.total);
-    set('resumoPsicoTotal', resumo.psicologia.total);
-    set('resumoSupervisaoTotal', resumo.supervisao.total);
-
-    setMotivos('resumoGestaoMotivos', resumo.gestao.motivos);
-    setMotivos('resumoASTipos', resumo.assistente_social.tipos);
-    setMotivos('resumoPsicoTipos', resumo.psicologia.tipos);
-    setMotivos('resumoSupervisaoMotivos', resumo.supervisao.motivos);
-  }
-
-  // ====== RENDER LISTA DE ALUNOS ======
-  function renderizarLista(alunos) {
+// CARREGAR ACOMPANHAMENTO
+// ============================================
+async function carregarAcompanhamento() {
     const container = document.getElementById('acompListaAlunos');
     if (!container) return;
 
-    // Filtro por setor (ao clicar nos cards do topo)
-    let lista = alunos;
-    if (__acompFiltroSetor) {
-      lista = alunos.filter(a => (a[__acompFiltroSetor]?.total || 0) > 0);
-    }
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
 
-    if (lista.length === 0) {
-      container.innerHTML = `
-        <div class="text-center py-5 text-muted">
-          <i class="fas fa-search fa-3x mb-3" style="color:#cbd5e1;"></i>
-          <p>Nenhum aluno encontrado com os filtros aplicados.</p>
+    container.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="text-muted mt-3">Carregando acompanhamento...</p>
         </div>`;
-      return;
-    }
 
-    container.innerHTML = lista.map(a => `
-      <div class="card-acompanhamento-aluno mb-3" onclick="abrirDetalheAluno('${a.alunoId}')">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-          <div class="d-flex align-items-center gap-3">
-            <div class="avatar-acomp">${(a.alunoNome || '?').charAt(0).toUpperCase()}</div>
-            <div>
-              <h6 class="mb-0">${escapeHTML(a.alunoNome)}</h6>
-              <small class="text-muted">
-                <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || 'Sem matrícula')}
-                • <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || 'Sem turma')}
-                ${a.alunoCurso ? ` • ${escapeHTML(a.alunoCurso)}` : ''}
-              </small>
-            </div>
-          </div>
-          <div class="total-badge">
-            <span class="total-num">${a.totalGeral}</span>
-            <small>ocorrências</small>
-          </div>
-        </div>
-
-        <div class="setores-grid mt-3">
-          ${renderSetorCard('gestao', a.gestao, 'clock', 'Gestão', 'motivos')}
-          ${renderSetorCard('assistente_social', a.assistente_social, 'hands-helping', 'Assist. Social', 'tipos')}
-          ${renderSetorCard('psicologia', a.psicologia, 'brain', 'Psicologia', 'tipos')}
-          ${renderSetorCard('supervisao', a.supervisao, 'shield-alt', 'Supervisão', 'motivos')}
-        </div>
-      </div>
-    `).join('');
-  }
-
-  function renderSetorCard(setorKey, data, icon, label, campoMotivos) {
-    const total = data?.total || 0;
-    const motivosObj = data?.[campoMotivos] || {};
-    const motivosArr = Object.entries(motivosObj)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3);
-
-    if (total === 0) {
-      return `
-        <div class="setor-card setor-${setorKey} vazio">
-          <div class="setor-icon"><i class="fas fa-${icon}"></i></div>
-          <div class="setor-info">
-            <span class="setor-label">${label}</span>
-            <span class="setor-total">0</span>
-          </div>
-        </div>`;
-    }
-
-    return `
-      <div class="setor-card setor-${setorKey}">
-        <div class="setor-icon"><i class="fas fa-${icon}"></i></div>
-        <div class="setor-info">
-          <span class="setor-label">${label}</span>
-          <span class="setor-total">${total}</span>
-          <div class="setor-motivos">
-            ${motivosArr.map(([m, c]) => `<span class="motivo-tag">${escapeHTML(m)}: ${c}</span>`).join('')}
-          </div>
-        </div>
-      </div>`;
-  }
-
-  // ====== DETALHE DO ALUNO (MODAL) ======
-  async function abrirDetalheAluno(alunoId) {
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch(`/api/acompanhamento-compartilhado/aluno/${alunoId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!data.success) { alert('Erro ao carregar'); return; }
+        await carregarResumoDiaCompartilhado();
 
-      const a = data.aluno;
-      const old = document.getElementById('modalDetalheAcomp');
-      if (old) old.remove();
+        const params = new URLSearchParams();
+        const turma = document.getElementById('acompFiltroTurma')?.value || '';
+        const dataInicio = document.getElementById('acompDataInicio')?.value || '';
+        const dataFim = document.getElementById('acompDataFim')?.value || '';
+        const busca = document.getElementById('acompBusca')?.value || '';
 
-      const modalHtml = `
-        <div class="modal fade" id="modalDetalheAcomp" tabindex="-1">
-          <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
-              <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-user-graduate"></i> ${escapeHTML(a.alunoNome)}</h5>
-                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-              </div>
-              <div class="modal-body">
-                <div class="mb-3 p-3 bg-light rounded">
-                  <small><strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || '-')} •
-                  <strong>Turma:</strong> ${escapeHTML(a.alunoTurma)} •
-                  <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}</small>
-                </div>
+        if (turma) params.append('turma', turma);
+        if (dataInicio) params.append('dataInicio', dataInicio);
+        if (dataFim) params.append('dataFim', dataFim);
+        if (busca) params.append('busca', busca);
+        params.append('limit', '200');
 
-                ${renderSecaoDetalhe('Gestão (Atrasos)', 'clock', 'gestao', a.gestao, 'motivos')}
-                ${renderSecaoDetalhe('Assistente Social', 'hands-helping', 'assistente_social', a.assistente_social, 'tipos')}
-                ${renderSecaoDetalhe('Psicologia', 'brain', 'psicologia', a.psicologia, 'tipos')}
-                ${renderSecaoDetalhe('Supervisão', 'shield-alt', 'supervisao', a.supervisao, 'motivos')}
-              </div>
-            </div>
-          </div>
-        </div>`;
+        const response = await fetch(`/api/acompanhamento-compartilhado/alunos?${params}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-      document.body.insertAdjacentHTML('beforeend', modalHtml);
-      new bootstrap.Modal(document.getElementById('modalDetalheAcomp')).show();
-    } catch (e) {
-      console.error(e);
-      alert('Erro ao carregar detalhes');
-    }
-  }
+        const data = await response.json();
 
-function renderSecaoDetalhe(titulo, icon, setorKey, data, campoMotivos) {
-    const total = data?.total || 0;
-    if (total === 0) {
-        return `
-            <div class="secao-detalhe vazia mb-3">
-                <h6><i class="fas fa-${icon}"></i> ${titulo} <span class="badge bg-secondary">0</span></h6>
-                <p class="text-muted small mb-0">Nenhum registro</p>
+        if (!data.success) throw new Error(data.error || 'Erro ao carregar');
+
+        __acompanhamentoDados = data;
+
+        await popularFiltroTurmasCompartilhado();
+        renderizarListaAcompanhamentoCompartilhado(data.alunos);
+
+    } catch (error) {
+        console.error('❌ Erro no acompanhamento compartilhado:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                Erro ao carregar: ${error.message}
+                <button class="btn btn-sm btn-outline-danger ms-2" onclick="carregarAcompanhamento()">
+                    <i class="fas fa-redo"></i> Tentar novamente
+                </button>
             </div>`;
     }
-
-    const registros = data.registros || [];
-    const labelColuna = setorKey === 'gestao' ? 'Motivo' : 'Tipo';
-
-    return `
-      <div class="secao-detalhe mb-3">
-        <h6><i class="fas fa-${icon}"></i> ${titulo} <span class="badge bg-primary">${total}</span></h6>
-        <div class="table-responsive">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>${labelColuna}</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${registros.slice(0, 20).map(r => `
-                <tr>
-                  <td>${r.data ? new Date(r.data).toLocaleString('pt-BR') : '-'}</td>
-                  <td>${escapeHTML(r.motivoLabel || r.tipoTarefaLabel || '-')}</td>
-                  <td>${r.status ? `<span class="badge bg-info">${escapeHTML(r.status)}</span>` : '-'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          ${registros.length > 20 ? `<small class="text-muted">Mostrando 20 de ${registros.length} registros</small>` : ''}
-        </div>
-      </div>`;
 }
 
-  // ====== FILTRO POR SETOR (cards topo) ======
-  function filtrarPorSetor(setor) {
-    __acompFiltroSetor = (__acompFiltroSetor === setor) ? null : setor;
-    renderizarLista(__acompAlunosBrutos);
-  }
+// ============================================
+// CARREGAR RESUMO DO DIA (COM BIBLIOTECA)
+// ============================================
+async function carregarResumoDiaCompartilhado() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
 
-  // ====== LIMPAR FILTROS ======
-  function limparFiltrosAcompanhamento() {
-    ['acompFiltroTurma', 'acompDataInicio', 'acompDataFim', 'acompBusca'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    __acompFiltroSetor = null;
-    carregarAcompanhamento();
-  }
-
-  // ====== CARREGAR TURMAS ======
-  async function carregarTurmasAcompanhamento() {
     try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch('/api/acompanhamento-compartilhado/turmas', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.turmas)) {
-        const sel = document.getElementById('acompFiltroTurma');
-        if (sel) {
-          sel.innerHTML = '<option value="">Todas as turmas</option>';
-          data.turmas.forEach(t => {
-            sel.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`;
-          });
-        }
-      }
-    } catch (e) { console.error(e); }
-  }
+        const response = await fetch('/api/acompanhamento-compartilhado/resumo-dia', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-  // ====== UTIL ======
-  function escapeHTML(str) {
+        const data = await response.json();
+        if (!data.success) return;
+
+        const resumo = data.resumo;
+
+        atualizarCardResumoCompartilhado('Gestao', resumo.gestao, 'motivos');
+        atualizarCardResumoCompartilhado('AS', resumo.assistente_social, 'tipos');
+        atualizarCardResumoCompartilhado('Psico', resumo.psicologia, 'tipos');
+        atualizarCardResumoCompartilhado('Supervisao', resumo.supervisao, 'motivos');
+        atualizarCardResumoCompartilhado('Biblioteca', resumo.biblioteca, 'motivos');  // 🔥 NOVO
+
+    } catch (error) {
+        console.error('Erro ao carregar resumo:', error);
+    }
+}
+
+// ============================================
+// ATUALIZAR CARD DE RESUMO
+// ============================================
+function atualizarCardResumoCompartilhado(prefixo, dados, campoLista) {
+    if (!dados) return;
+
+    const totalEl = document.getElementById(`resumo${prefixo}Total`);
+    if (totalEl) totalEl.textContent = dados.total || 0;
+
+    const sufixo = campoLista === 'tipos' ? 'Tipos' : 'Motivos';
+    const listaEl = document.getElementById(`resumo${prefixo}${sufixo}`);
+
+    if (listaEl && dados[campoLista] && dados[campoLista].length > 0) {
+        const top3 = dados[campoLista].slice(0, 3)
+            .map(item => `${item.label} (${item.count})`)
+            .join(' • ');
+        listaEl.textContent = top3;
+        listaEl.title = top3;
+    } else if (listaEl) {
+        listaEl.textContent = '—';
+    }
+}
+
+// ============================================
+// POPULAR FILTRO DE TURMAS
+// ============================================
+async function popularFiltroTurmasCompartilhado() {
+    const select = document.getElementById('acompFiltroTurma');
+    if (!select) return;
+
+    const token = localStorage.getItem('auth_token');
+    const valorAtual = select.value;
+
+    try {
+        const response = await fetch('/api/acompanhamento-compartilhado/turmas', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.turmas)) {
+            select.innerHTML = '<option value="">Todas as turmas</option>';
+            data.turmas.forEach(t => {
+                select.innerHTML += `<option value="${escapeHTMLCompartilhado(t)}">${escapeHTMLCompartilhado(t)}</option>`;
+            });
+            if (valorAtual) select.value = valorAtual;
+        }
+    } catch (error) {
+        console.error('Erro ao popular turmas:', error);
+    }
+}
+
+// ============================================
+// RENDERIZAR LISTA (COM BIBLIOTECA)
+// ============================================
+function renderizarListaAcompanhamentoCompartilhado(alunos) {
+    const container = document.getElementById('acompListaAlunos');
+    if (!container) return;
+
+    if (!alunos || alunos.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-users-slash fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Nenhum aluno com ocorrências no período</p>
+            </div>`;
+        return;
+    }
+
+    let alunosFiltrados = alunos;
+    if (__acompanhamentoFiltroSetor !== 'todos') {
+        alunosFiltrados = alunos.filter(a => {
+            const setor = __acompanhamentoFiltroSetor;
+            return a[setor] && a[setor].total > 0;
+        });
+    }
+
+    if (alunosFiltrados.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <i class="fas fa-filter fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Nenhum aluno no setor "${__acompanhamentoFiltroSetor}"</p>
+                <button class="btn btn-sm btn-outline-primary" onclick="limparFiltrosAcompanhamento()">
+                    <i class="fas fa-times"></i> Limpar filtros
+                </button>
+            </div>`;
+        return;
+    }
+
+    const setores = [
+        { key: 'gestao', label: 'Atrasos', icon: 'fa-clock', color: '#3b82f6', bg: '#dbeafe' },
+        { key: 'assistente_social', label: 'Assist. Social', icon: 'fa-hands-helping', color: '#10b981', bg: '#d1fae5' },
+        { key: 'psicologia', label: 'Psicologia', icon: 'fa-brain', color: '#8b5cf6', bg: '#ede9fe' },
+        { key: 'supervisao', label: 'Supervisão', icon: 'fa-shield-alt', color: '#1e3a8a', bg: '#dbeafe' },
+        { key: 'biblioteca', label: 'Biblioteca', icon: 'fa-book', color: '#0ea5e9', bg: '#e0f2fe' }  // 🔥 NOVO
+    ];
+
+    container.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h6 class="mb-0">
+                <i class="fas fa-users"></i>
+                ${alunosFiltrados.length} aluno(s) com ocorrências
+            </h6>
+            ${__acompanhamentoFiltroSetor !== 'todos' ? `
+                <button class="btn btn-sm btn-outline-secondary" onclick="limparFiltrosAcompanhamento()">
+                    <i class="fas fa-times"></i> Limpar filtro de setor
+                </button>
+            ` : ''}
+        </div>
+
+        <div class="row g-3">
+            ${alunosFiltrados.map(aluno => {
+                const temOcorrencias = setores.some(s => aluno[s.key] && aluno[s.key].total > 0);
+                if (!temOcorrencias) return '';
+
+                return `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100" style="border-left: 4px solid #0ea5e9;">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <img src="${gerarAvatarSVGCompartilhado(aluno.alunoNome)}"
+                                         style="width: 40px; height: 40px; border-radius: 50%;"
+                                         alt="">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <h6 class="mb-0 text-truncate" title="${escapeHTMLCompartilhado(aluno.alunoNome)}">
+                                            ${escapeHTMLCompartilhado(aluno.alunoNome)}
+                                        </h6>
+                                        <small class="text-muted">
+                                            ${escapeHTMLCompartilhado(aluno.alunoMatricula || '')} •
+                                            ${escapeHTMLCompartilhado(aluno.alunoTurma || 'Sem turma')}
+                                        </small>
+                                    </div>
+                                    <span class="badge bg-primary">${aluno.totalGeral}</span>
+                                </div>
+
+                                <div class="d-flex flex-wrap gap-1 mt-2">
+                                    ${setores.map(setor => {
+                                        const dados = aluno[setor.key];
+                                        if (!dados || dados.total === 0) return '';
+                                        return `
+                                            <span class="badge"
+                                                  style="background: ${setor.bg}; color: ${setor.color}; border: 1px solid ${setor.color}40; font-size: 11px;"
+                                                  title="${setor.label}: ${dados.total} ocorrência(s)">
+                                                <i class="fas ${setor.icon}"></i>
+                                                ${setor.label}: ${dados.total}
+                                            </span>`;
+                                    }).join('')}
+                                </div>
+
+                                ${aluno.ultimaAtualizacao ? `
+                                    <small class="text-muted d-block mt-2">
+                                        <i class="far fa-clock"></i>
+                                        Última: ${new Date(aluno.ultimaAtualizacao).toLocaleDateString('pt-BR')}
+                                    </small>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+// ============================================
+// FILTRAR POR SETOR (INCLUINDO BIBLIOTECA)
+// ============================================
+function filtrarPorSetor(setor) {
+    __acompanhamentoFiltroSetor = setor;
+
+    document.querySelectorAll('#resumoDiaCards .card-acompanhamento').forEach(card => {
+        card.style.opacity = '0.5';
+    });
+
+    const cardMap = {
+        'gestao': '.card-gestao',
+        'assistente_social': '.card-as',
+        'psicologia': '.card-psico',
+        'supervisao': '.card-supervisao',
+        'biblioteca': '.card-biblioteca'  // 🔥 NOVO
+    };
+
+    const cardSelecionado = document.querySelector(`#resumoDiaCards ${cardMap[setor]}`);
+    if (cardSelecionado) cardSelecionado.style.opacity = '1';
+
+    if (__acompanhamentoDados && __acompanhamentoDados.alunos) {
+        renderizarListaAcompanhamentoCompartilhado(__acompanhamentoDados.alunos);
+    } else {
+        carregarAcompanhamento();
+    }
+}
+
+// ============================================
+// LIMPAR FILTROS
+// ============================================
+function limparFiltrosAcompanhamento() {
+    __acompanhamentoFiltroSetor = 'todos';
+
+    document.querySelectorAll('#resumoDiaCards .card-acompanhamento').forEach(card => {
+        card.style.opacity = '1';
+    });
+
+    ['acompFiltroTurma', 'acompDataInicio', 'acompDataFim', 'acompBusca'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    carregarAcompanhamento();
+}
+
+// ============================================
+// UTILITÁRIOS
+// ============================================
+function escapeHTMLCompartilhado(str) {
     if (typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
               .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+}
 
-  // ====== EXPOR GLOBAIS ======
-  window.carregarAcompanhamento = carregarAcompanhamento;
-  window.filtrarPorSetor = filtrarPorSetor;
-  window.limparFiltrosAcompanhamento = limparFiltrosAcompanhamento;
-  window.abrirDetalheAluno = abrirDetalheAluno;
-  window.carregarTurmasAcompanhamento = carregarTurmasAcompanhamento;
+function gerarAvatarSVGCompartilhado(nome) {
+    const inicial = (nome || '?').charAt(0).toUpperCase();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="50" font-family="Arial,sans-serif" font-size="45" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
 
-  // ====== AUTO-INIT quando a aba é aberta ======
-  document.addEventListener('DOMContentLoaded', () => {
-    const aba = document.getElementById('acompanhamento-tab') || document.getElementById('acompanhamentoCompartilhado-tab');
-    if (aba) {
-      aba.addEventListener('shown.bs.tab', () => {
-        carregarTurmasAcompanhamento();
-        carregarAcompanhamento();
-      });
+// ============================================
+// INICIALIZAR
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+    const tabAcompanhamento = document.getElementById('acompanhamento-tab');
+    if (tabAcompanhamento) {
+        tabAcompanhamento.addEventListener('shown.bs.tab', () => {
+            carregarAcompanhamento();
+        });
     }
-  });
-})();
+});
+
+// ============================================
+// EXPORTAR GLOBAIS
+// ============================================
+window.carregarAcompanhamento = carregarAcompanhamento;
+window.filtrarPorSetor = filtrarPorSetor;
+window.limparFiltrosAcompanhamento = limparFiltrosAcompanhamento;
+window.carregarResumoDiaCompartilhado = carregarResumoDiaCompartilhado;
