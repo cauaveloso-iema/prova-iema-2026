@@ -4299,7 +4299,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                     ${a.responsavelCPF ? `<p><strong>CPF:</strong> ${a.responsavelCPF}</p>` : ''}
                     ${a.responsavelTelefone ? `<p><strong>Telefone:</strong> ${a.responsavelTelefone}</p>` : ''}
                 </div>` : ''}
-            <div class="observacoes">;
+            <div class="observacoes">
                 <strong>📝 Observações:</strong>
                 ${a.observacoes || '___________________________________________________________________'}
             </div>
