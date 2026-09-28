@@ -583,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i id="alunoFotoPlaceholder" class="fas fa-user-graduate" style="font-size: 2rem; color: white;"></i>
                 </div>
                 <div>
-                    <h1></i> Painel do Aluno</h1>
+                    <h1><i class="fas fa-user-graduate"></i> Painel do Aluno</h1>
                     <div class="aluno-details" id="alunoDetails">
                         <p>Carregando informações...</p>
                     </div>
@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
 
-                <!-- SISTEMA DE NOTIFICAÇÕES -->
+                <!-- SISTEMA DE NOTIFICAÇÕES (DESKTOP) -->
                 <div class="notificacoes-container" style="position: relative; display: inline-block;">
                     <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="
                         background: rgba(255,255,255,0.15);
@@ -836,7 +836,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 <!-- FILTROS COMBINADOS: EIXO + PERÍODO + STATUS -->
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <!-- Filtro por Eixo/Disciplina (existente) -->
+                    <!-- Filtro por Eixo/Disciplina -->
                     <div style="position: relative; min-width: 250px;">
                         <select id="filtroEixoProvasConcluidas" style="
                             padding: 10px 35px 10px 15px;
@@ -853,30 +853,22 @@ document.addEventListener('DOMContentLoaded', function() {
                             width: 100%;
                         ">
                             <option value="todos">Todas as disciplinas</option>
-                            
-                            <!-- Eixo Natureza e Matemática -->
                             <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
                             <option value="biologia" style="padding-left: 20px;">&nbsp;&nbsp;🌿 Biologia</option>
                             <option value="fisica" style="padding-left: 20px;">&nbsp;&nbsp;⚛️ Física</option>
                             <option value="quimica" style="padding-left: 20px;">&nbsp;&nbsp;🧪 Química</option>
                             <option value="matematica" style="padding-left: 20px;">&nbsp;&nbsp;📐 Matemática</option>
-                            
-                            <!-- Eixo Humanas -->
                             <option value="humanas" style="font-weight: 600; background: #fef3c7;">🏛️ Humanas</option>
                             <option value="filosofia" style="padding-left: 20px;">&nbsp;&nbsp;🤔 Filosofia</option>
                             <option value="sociologia" style="padding-left: 20px;">&nbsp;&nbsp;👥 Sociologia</option>
                             <option value="geografia" style="padding-left: 20px;">&nbsp;&nbsp;🌍 Geografia</option>
                             <option value="historia" style="padding-left: 20px;">&nbsp;&nbsp;📜 História</option>
-                            
-                            <!-- Eixo Linguagens -->
                             <option value="linguagens" style="font-weight: 600; background: #f0fdf4;">🎭 Linguagens</option>
                             <option value="artes" style="padding-left: 20px;">&nbsp;&nbsp;🎨 Artes</option>
                             <option value="ingles" style="padding-left: 20px;">&nbsp;&nbsp;🇬🇧 Inglês</option>
                             <option value="educacao fisica" style="padding-left: 20px;">&nbsp;&nbsp;⚽ Educação Física</option>
                             <option value="espanhol" style="padding-left: 20px;">&nbsp;&nbsp;🇪🇸 Espanhol</option>
                             <option value="portugues" style="padding-left: 20px;">&nbsp;&nbsp;📖 Português</option>
-                            
-                            <!-- Eixos Técnicos -->
                             <option value="desenvolvimento" style="font-weight: 600; background: #f3e8ff;">💻 Desenvolvimento de Sistemas</option>
                             <option value="redes" style="font-weight: 600; background: #e0f2fe;">🌐 Redes de Computadores</option>
                             <option value="gestao" style="font-weight: 600; background: #fef9c3;">📊 Gestão e Negócios</option>
@@ -910,7 +902,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </select>
                     </div>
                     
-                    <!-- 🔥 NOVO: FILTRO POR STATUS (COM OPÇÃO DE CANCELADAS) -->
+                    <!-- FILTRO POR STATUS -->
                     <div style="position: relative; min-width: 200px;">
                         <select id="filtroStatusProvas" style="
                             padding: 10px 35px 10px 15px;
@@ -953,7 +945,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             
             <div class="card-body">
-                <!-- Container das provas concluídas filtradas -->
                 <div id="provasConcluidas">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
@@ -961,20 +952,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
                 
-                <!-- Container para backup de todas as provas concluídas -->
                 <div id="backupProvasConcluidas" style="display: none;"></div>
             </div>
         </div>
         
         <!-- Turmas -->
-        <!-- Substitua a seção de Turmas existente por este código -->
         <div class="card" style="margin-top: 30px; margin-bottom: 50px;">
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                 <h2><i class="fas fa-school"></i> Minhas Turmas</h2>
                 
-                <!-- FILTROS POR EIXO E PERÍODO (TURMAS) -->
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <!-- Filtro por Eixo (existente) -->
                     <div style="position: relative; min-width: 250px;">
                         <select id="filtroEixoTurmas" style="
                             padding: 10px 35px 10px 15px;
@@ -991,13 +978,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             width: 100%;
                         ">
                             <option value="todos">Todas as disciplinas</option>
-                            
-                            <!-- Eixos da BNCC (sempre visíveis) -->
                             <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
                             <option value="humanas" style="font-weight: 600; background: #fef3c7;">🏛️ Humanas</option>
                             <option value="linguagens" style="font-weight: 600; background: #f0fdf4;">🎭 Linguagens</option>
-                            
-                            <!-- Eixos Técnicos (aparece apenas o do curso do aluno) -->
                             <option value="desenvolvimento" style="font-weight: 600; background: #f3e8ff; display: none;">💻 Desenvolvimento de Sistemas</option>
                             <option value="redes" style="font-weight: 600; background: #e0f2fe; display: none;">🌐 Redes de Computadores</option>
                             <option value="turismo" style="font-weight: 600; background: #fff7ed; display: none;">✈️ Turismo, Eventos e Gastronomia</option>
@@ -1032,7 +1015,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
                 
-                <!-- Container para backup de todas as turmas -->
                 <div id="backupTurmas" style="display: none;"></div>
             </div>
         </div>
@@ -1045,7 +1027,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button class="modal-close" onclick="fecharModal('modalDetalhesTurma')">&times;</button>
                 </div>
                 <div id="detalhesTurmaContent" style="padding: 20px;">
-                    <!-- Conteúdo será preenchido dinamicamente -->
                 </div>
                 <div style="padding: 15px 20px; border-top: 1px solid #e5e7eb; text-align: right;">
                     <button class="btn-sair-prova" onclick="fecharModal('modalDetalhesTurma')">
@@ -1079,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
     
-    <!-- Modal Iniciar Prova (COM CLASSES CSS) -->
+    <!-- Modal Iniciar Prova -->
     <div class="modal" id="modalIniciarProva">
         <div class="modal-content modal-prova-container">
             <div class="modal-prova-header">
@@ -1093,7 +1074,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             
             <div id="modalProvaInfo" class="modal-prova-content">
-                <!-- O conteúdo será inserido aqui pelo JavaScript -->
             </div>
             
             <div class="modal-prova-footer">
@@ -1107,10 +1087,51 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 
-        <!-- ===== MENU MOBILE FLUTUANTE ===== -->
-    <div class="fab-menu">
-        <button class="fab-button" id="fabMenuBtn">
+    <!-- ===== MENU MOBILE FLUTUANTE (DIREITA) ===== -->
+    <div class="fab-menu" id="fabMenuContainer" style="
+        position: fixed;
+        bottom: 25px;
+        right: 25px;
+        left: auto;
+        z-index: 9999;
+        display: none;
+    ">
+        <button class="fab-button" id="fabMenuBtn" style="
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4f46e5, #3730a3);
+            color: white;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+            position: relative;
+            transition: all 0.2s;
+        "
+        onmouseover="this.style.transform='scale(1.08)'"
+        onmouseout="this.style.transform='scale(1)'">
             <i class="fas fa-bars"></i>
+            <!-- 🔥 BADGE DE NOTIFICAÇÕES NO FAB -->
+            <span class="fab-notification-badge" id="fabNotificationBadge" style="
+                position: absolute;
+                top: -5px;
+                right: -5px;
+                background: #dc3545;
+                color: white;
+                font-size: 0.7rem;
+                font-weight: bold;
+                padding: 4px 7px;
+                border-radius: 20px;
+                min-width: 22px;
+                text-align: center;
+                border: 2px solid white;
+                display: none;
+                z-index: 10;
+            ">0</span>
         </button>
     </div>
 
@@ -1128,8 +1149,22 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="menu-item" onclick="window.location.href='calendario.html'">
                 <i class="fas fa-calendar-alt"></i><span>Ver Calendário</span>
             </div>
-            <div class="menu-item" onclick="abrirNotificacoesMobile()">
-                <i class="fas fa-bell"></i><span>Notificações</span>
+            <!-- 🔥 ITEM DE NOTIFICAÇÕES COM BADGE -->
+            <div class="menu-item" id="menuItemNotificacoes" onclick="abrirNotificacoesMobile()">
+                <i class="fas fa-bell"></i>
+                <span>Notificações</span>
+                <span class="menu-notification-badge" id="menuNotificationBadge" style="
+                    background: #dc3545;
+                    color: white;
+                    font-size: 0.65rem;
+                    font-weight: bold;
+                    padding: 3px 8px;
+                    border-radius: 20px;
+                    min-width: 20px;
+                    text-align: center;
+                    margin-left: auto;
+                    display: none;
+                ">0</span>
             </div>
             <div class="menu-item" onclick="mostrarModal('modalEntrarTurma')">
                 <i class="fas fa-sign-in-alt"></i><span>Entrar em Turma</span>
@@ -1143,29 +1178,254 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 
+    <!-- 🔥 MODAL DE NOTIFICAÇÕES MOBILE -->
+    <div class="modal-notificacoes-mobile" id="modalNotificacoesMobile" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 10001;
+        display: none;
+        align-items: flex-end;
+        justify-content: center;
+    ">
+        <div class="notificacoes-mobile-content" style="
+            background: white;
+            width: 100%;
+            max-width: 500px;
+            max-height: 85vh;
+            border-radius: 20px 20px 0 0;
+            display: flex;
+            flex-direction: column;
+            animation: slideUpModal 0.3s ease;
+            overflow: hidden;
+        ">
+            <!-- Header do modal -->
+            <div style="
+                padding: 20px;
+                border-bottom: 1px solid #e5e7eb;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: linear-gradient(135deg, #4f46e5, #3730a3);
+                color: white;
+                border-radius: 20px 20px 0 0;
+            ">
+                <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-bell"></i>
+                    Notificações
+                    <span id="modalNotificacoesBadge" style="
+                        background: rgba(255,255,255,0.3);
+                        padding: 2px 10px;
+                        border-radius: 20px;
+                        font-size: 0.75rem;
+                        display: none;
+                    ">0</span>
+                </h3>
+                <button onclick="fecharModalNotificacoesMobile()" style="
+                    background: rgba(255,255,255,0.2);
+                    border: none;
+                    color: white;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    font-size: 1.2rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Ações -->
+            <div style="
+                padding: 12px 20px;
+                border-bottom: 1px solid #e5e7eb;
+                display: flex;
+                justify-content: space-between;
+                background: #f9fafb;
+            ">
+                <button onclick="marcarTodasLidasMobile()" style="
+                    background: none;
+                    border: none;
+                    color: #4f46e5;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                    padding: 6px 12px;
+                    border-radius: 6px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                ">
+                    <i class="fas fa-check-double"></i> Marcar todas
+                </button>
+                <button onclick="limparNotificacoesMobile(event)" style="
+                    background: none;
+                    border: none;
+                    color: #ef4444;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                    padding: 6px 12px;
+                    border-radius: 6px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                ">
+                    <i class="fas fa-trash"></i> Limpar
+                </button>
+            </div>
+            
+            <!-- Lista de notificações -->
+            <div id="notificacoesListaMobile" style="
+                flex: 1;
+                overflow-y: auto;
+                padding: 0;
+                min-height: 200px;
+            ">
+                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                    <p>Carregando notificações...</p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="
+                padding: 15px 20px;
+                border-top: 1px solid #e5e7eb;
+                text-align: center;
+                background: #f9fafb;
+            ">
+                <a href="notificacoes.html" style="
+                    color: #4f46e5;
+                    text-decoration: none;
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                ">
+                    <i class="fas fa-external-link-alt"></i> Ver página completa
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    /* ========== ESTILOS PARA NOTIFICAÇÕES MOBILE ========== */
+    @keyframes slideUpModal {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    /* 🔥 FAB MENU FIXO À DIREITA */
+    .fab-menu {
+        position: fixed !important;
+        bottom: 25px !important;
+        right: 25px !important;
+        left: auto !important;
+        top: auto !important;
+        z-index: 9999 !important;
+    }
+
+    .fab-menu .fab-button {
+        position: relative;
+    }
+
+    .fab-notification-badge {
+        animation: pulse-badge 2s infinite;
+    }
+
+    @keyframes pulse-badge {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+
+    .menu-item {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .menu-item .menu-notification-badge {
+        animation: pulse-badge 2s infinite;
+    }
+
+    /* Notificação item mobile */
+    .notificacao-item-mobile {
+        padding: 15px;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        gap: 12px;
+        cursor: pointer;
+        transition: background 0.2s;
+        align-items: flex-start;
+    }
+
+    .notificacao-item-mobile:active {
+        background: #f1f5f9;
+    }
+
+    .notificacao-item-mobile.nao-lida {
+        background: #eff6ff;
+        border-left: 4px solid #3b82f6;
+    }
+
+    /* Responsividade */
+    @media (max-width: 768px) {
+        .modal-notificacoes-mobile {
+            display: none;
+        }
+        
+        .modal-notificacoes-mobile.show {
+            display: flex !important;
+        }
+        
+        /* Garantir FAB à direita no mobile */
+        .fab-menu {
+            right: 20px !important;
+            left: auto !important;
+            bottom: 20px !important;
+        }
+        
+        .fab-menu .fab-button {
+            width: 58px !important;
+            height: 58px !important;
+        }
+    }
+    </style>
+
     <script>
     // ========== FUNÇÕES DO MENU MOBILE ==========
     (function() {
-        // Aguardar o DOM carregar
         function initMenuMobile() {
             const fabBtn = document.getElementById('fabMenuBtn');
             const bottomSheet = document.getElementById('bottomSheet');
             const sheetOverlay = document.getElementById('sheetOverlay');
             const closeSheetBtn = document.getElementById('closeSheetBtn');
             
-            // Função para abrir o menu
             function openBottomSheet() {
                 if (bottomSheet) bottomSheet.classList.add('open');
                 if (sheetOverlay) sheetOverlay.classList.add('active');
             }
             
-            // Função para fechar o menu
             function closeBottomSheet() {
                 if (bottomSheet) bottomSheet.classList.remove('open');
                 if (sheetOverlay) sheetOverlay.classList.remove('active');
             }
             
-            // Adicionar eventos
             if (fabBtn) fabBtn.addEventListener('click', openBottomSheet);
             if (closeSheetBtn) closeSheetBtn.addEventListener('click', closeBottomSheet);
             if (sheetOverlay) sheetOverlay.addEventListener('click', closeBottomSheet);
@@ -1173,7 +1433,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('✅ Menu mobile inicializado');
         }
         
-        // Executar quando o DOM estiver pronto
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initMenuMobile);
         } else {
@@ -1181,25 +1440,421 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     })();
 
-    // Função para abrir notificações no mobile (se não existir)
+    // ========== SISTEMA DE NOTIFICAÇÕES MOBILE ==========
+    let notificacoesMobileInterval;
+
+    // Função para abrir o modal de notificações mobile
     function abrirNotificacoesMobile() {
-        const dropdown = document.getElementById('notificacoesDropdown');
-        if (dropdown) dropdown.classList.toggle('show');
-        if (typeof carregarListaNotificacoes === 'function') {
-            carregarListaNotificacoes();
-        }
+
         // Fechar o bottom sheet se estiver aberto
         const bottomSheet = document.getElementById('bottomSheet');
         const sheetOverlay = document.getElementById('sheetOverlay');
         if (bottomSheet) bottomSheet.classList.remove('open');
         if (sheetOverlay) sheetOverlay.classList.remove('active');
+        
+        // Abrir o modal de notificações
+        const modal = document.getElementById('modalNotificacoesMobile');
+        if (modal) {
+            modal.style.display = 'flex';
+            modal.classList.add('show');
+        }
+        
+        // Carregar notificações
+        carregarNotificacoesMobile();
     }
 
-    // Logout mobile (se não existir)
+    // Função para fechar o modal de notificações mobile
+    function fecharModalNotificacoesMobile() {
+        const modal = document.getElementById('modalNotificacoesMobile');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
+    }
+
+    // Função para carregar notificações mobile
+    async function carregarNotificacoesMobile() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            if (!token) return;
+            
+            const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=30', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                renderizarNotificacoesMobile(data.notificacoes);
+                atualizarBadgesMobile(data.notificacoes);
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar notificações mobile:', error);
+            const lista = document.getElementById('notificacoesListaMobile');
+            if (lista) {
+                lista.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <p>Erro ao carregar notificações</p>
+                        <button onclick="carregarNotificacoesMobile()" style="
+                            margin-top: 15px;
+                            padding: 10px 20px;
+                            background: #4f46e5;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        ">
+                            <i class="fas fa-redo"></i> Tentar novamente
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    // Função para renderizar notificações no modal mobile
+    function renderizarNotificacoesMobile(notificacoes) {
+        const lista = document.getElementById('notificacoesListaMobile');
+        if (!lista) return;
+        
+        if (!notificacoes || notificacoes.length === 0) {
+            lista.innerHTML = `
+                <div style="text-align: center; padding: 50px 20px; color: #6c757d;">
+                    <i class="fas fa-bell-slash" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.4;"></i>
+                    <p style="font-size: 1rem; margin: 0;">Nenhuma notificação</p>
+                    <p style="font-size: 0.85rem; margin-top: 5px; opacity: 0.7;">Você está em dia! 🎉</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        notificacoes.forEach(notif => {
+            const data = new Date(notif.createdAt);
+            const agora = new Date();
+            const diffMs = agora - data;
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHr = Math.floor(diffMs / 3600000);
+            const diffDia = Math.floor(diffMs / 86400000);
+            
+            let tempoTexto;
+            if (diffMin < 1) tempoTexto = 'agora mesmo';
+            else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+            else if (diffHr < 24) tempoTexto = `há ${diffHr}h`;
+            else tempoTexto = `há ${diffDia}d`;
+            
+            const classeNaoLida = notif.lida ? '' : 'nao-lida';
+            
+            // Sanitizar link para evitar problemas com aspas
+            const linkSeguro = (notif.link || '').replace(/'/g, "\\'");
+            
+            html += `
+                <div class="notificacao-item-mobile ${classeNaoLida}" 
+                     onclick="abrirNotificacaoMobile('${notif._id}', '${linkSeguro}')">
+                    <div style="
+                        width: 42px;
+                        height: 42px;
+                        border-radius: 12px;
+                        background: ${notif.cor || '#4f46e5'};
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                        font-size: 1.1rem;
+                        flex-shrink: 0;
+                    ">
+                        ${notif.icone || '📋'}
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="
+                            font-weight: 600;
+                            margin-bottom: 4px;
+                            font-size: 0.9rem;
+                            color: ${!notif.lida ? '#1e40af' : '#1f2937'};
+                        ">${notif.titulo}</div>
+                        <div style="
+                            font-size: 0.8rem;
+                            color: #6b7280;
+                            margin-bottom: 6px;
+                            line-height: 1.4;
+                            display: -webkit-box;
+                            -webkit-line-clamp: 2;
+                            -webkit-box-orient: vertical;
+                            overflow: hidden;
+                        ">${notif.mensagem}</div>
+                        <div style="
+                            font-size: 0.7rem;
+                            color: #9ca3af;
+                            display: flex;
+                            align-items: center;
+                            gap: 5px;
+                        ">
+                            <i class="far fa-clock"></i> ${tempoTexto}
+                            ${!notif.lida ? '<span style="background: #3b82f6; color: white; padding: 1px 6px; border-radius: 10px; font-size: 0.6rem; margin-left: 5px;">NOVA</span>' : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; color: #9ca3af; align-self: center;">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+            `;
+        });
+        
+        lista.innerHTML = html;
+    }
+
+    // Função para atualizar badges no mobile
+    function atualizarBadgesMobile(notificacoes) {
+        const naoLidas = notificacoes ? notificacoes.filter(n => !n.lida).length : 0;
+        
+        // Badge no FAB
+        const fabBadge = document.getElementById('fabNotificationBadge');
+        if (fabBadge) {
+            if (naoLidas > 0) {
+                fabBadge.textContent = naoLidas > 99 ? '99+' : naoLidas;
+                fabBadge.style.display = 'block';
+            } else {
+                fabBadge.style.display = 'none';
+            }
+        }
+        
+        // Badge no item do menu
+        const menuBadge = document.getElementById('menuNotificationBadge');
+        if (menuBadge) {
+            if (naoLidas > 0) {
+                menuBadge.textContent = naoLidas > 99 ? '99+' : naoLidas;
+                menuBadge.style.display = 'inline-block';
+            } else {
+                menuBadge.style.display = 'none';
+            }
+        }
+        
+        // Badge no header do modal
+        const modalBadge = document.getElementById('modalNotificacoesBadge');
+        if (modalBadge) {
+            if (naoLidas > 0) {
+                modalBadge.textContent = `${naoLidas} nova${naoLidas > 1 ? 's' : ''}`;
+                modalBadge.style.display = 'inline-block';
+            } else {
+                modalBadge.style.display = 'none';
+            }
+        }
+    }
+
+    // Função para abrir uma notificação específica
+    async function abrirNotificacaoMobile(id, link) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Marcar como lida
+            await fetch(`/api/notificacoes/${id}/lida`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            // Fechar modal
+            fecharModalNotificacoesMobile();
+            
+            // Redirecionar se tiver link
+            if (link && link !== '' && link !== '#') {
+                window.location.href = link;
+            } else {
+                // Atualizar lista se não tiver link
+                carregarNotificacoesMobile();
+                // Atualizar contador global (desktop)
+                if (typeof carregarNotificacoes === 'function') {
+                    carregarNotificacoes();
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao abrir notificação:', error);
+        }
+    }
+
+    // Função para marcar todas como lidas (mobile)
+    async function marcarTodasLidasMobile() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                await carregarNotificacoesMobile();
+                
+                // Atualizar badges
+                atualizarBadgesMobile([]);
+                
+                // Atualizar o badge do desktop também
+                const desktopBadge = document.getElementById('notificacoesBadge');
+                if (desktopBadge) desktopBadge.style.display = 'none';
+                
+                // Atualizar botão do desktop
+                const desktopBtn = document.getElementById('notificacoesBtn');
+                if (desktopBtn) desktopBtn.classList.remove('tem-notificacao');
+                
+                // Mostrar feedback
+                if (typeof mostrarMensagemAluno === 'function') {
+                    mostrarMensagemAluno('✅ Todas as notificações foram marcadas como lidas!', 'info');
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao marcar todas como lidas:', error);
+            if (typeof mostrarMensagemAluno === 'function') {
+                mostrarMensagemAluno('❌ Erro ao marcar notificações como lidas', 'info');
+            }
+        }
+    }
+
+    // Função para limpar notificações (mobile)
+    async function limparNotificacoesMobile(event) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+            
+            if (!confirmacao) return;
+            
+            // Mostrar loading no botão
+            const btn = event?.currentTarget;
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+                btn.disabled = true;
+            }
+            
+            const response = await fetch('/api/notificacoes/limpar-minhas', {
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Recarregar lista
+                await carregarNotificacoesMobile();
+                
+                // Atualizar badges
+                atualizarBadgesMobile([]);
+                
+                // Atualizar o desktop também
+                const desktopBadge = document.getElementById('notificacoesBadge');
+                if (desktopBadge) desktopBadge.style.display = 'none';
+                
+                const desktopBtn = document.getElementById('notificacoesBtn');
+                if (desktopBtn) desktopBtn.classList.remove('tem-notificacao');
+                
+                // Mostrar mensagem
+                if (typeof mostrarMensagemAluno === 'function') {
+                    mostrarMensagemAluno(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`, 'info');
+                }
+            } else {
+                throw new Error(data.error || 'Erro ao excluir notificações');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            if (typeof mostrarMensagemAluno === 'function') {
+                mostrarMensagemAluno('❌ ' + error.message, 'info');
+            }
+        } finally {
+            // Restaurar botão
+            const btn = document.querySelector('#modalNotificacoesMobile button[onclick*="limparNotificacoesMobile"]');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-trash"></i> Limpar';
+                btn.disabled = false;
+            }
+        }
+    }
+
+    // Fechar modal ao clicar fora
+    document.addEventListener('click', function(event) {
+        const modal = document.getElementById('modalNotificacoesMobile');
+        if (modal && event.target === modal) {
+            fecharModalNotificacoesMobile();
+        }
+    });
+
+    // ========== INICIALIZAR SISTEMA MOBILE ==========
+    document.addEventListener('DOMContentLoaded', function() {
+        const isMobile = window.innerWidth < 768;
+        
+        if (isMobile) {
+            
+            // Carregar contador de notificações
+            async function carregarContadorMobile() {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    if (!token) return;
+                    
+                    const response = await fetch('/api/notificacoes/nao-lidas/contador', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const naoLidas = data.count || 0;
+                        
+                        // Atualizar badge no FAB
+                        const fabBadge = document.getElementById('fabNotificationBadge');
+                        if (fabBadge) {
+                            if (naoLidas > 0) {
+                                fabBadge.textContent = naoLidas > 99 ? '99+' : naoLidas;
+                                fabBadge.style.display = 'block';
+                            } else {
+                                fabBadge.style.display = 'none';
+                            }
+                        }
+                        
+                        // Atualizar badge no menu
+                        const menuBadge = document.getElementById('menuNotificationBadge');
+                        if (menuBadge) {
+                            if (naoLidas > 0) {
+                                menuBadge.textContent = naoLidas > 99 ? '99+' : naoLidas;
+                                menuBadge.style.display = 'inline-block';
+                            } else {
+                                menuBadge.style.display = 'none';
+                            }
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao carregar contador mobile:', error);
+                }
+            }
+            
+            // Carregar contador inicial
+            carregarContadorMobile();
+            
+            // Atualizar a cada 30 segundos
+            notificacoesMobileInterval = setInterval(carregarContadorMobile, 30000);
+        }
+        
+        // Limpar intervalo ao sair
+        window.addEventListener('beforeunload', function() {
+            if (notificacoesMobileInterval) {
+                clearInterval(notificacoesMobileInterval);
+            }
+        });
+    });
+
+    // ========== LOGOUT MOBILE ==========
     const logoutMobileBtn = document.getElementById('logoutMobileBtn');
     if (logoutMobileBtn) {
         logoutMobileBtn.addEventListener('click', function() {
             localStorage.clear();
+            sessionStorage.clear();
             window.location.href = 'login.html';
         });
     }
@@ -1211,13 +1866,11 @@ document.addEventListener('DOMContentLoaded', function() {
         function aplicarMenuMobile() {
             const isMobile = window.innerWidth < 768;
             
-            // Elementos que precisam ser controlados
             const headerActions = document.querySelector('.aluno-header > div:last-child');
             const btnLogout = document.getElementById('btnLogout');
-            const fabMenu = document.querySelector('.fab-menu');
+            const fabMenu = document.getElementById('fabMenuContainer');
             
             if (isMobile) {
-                // MODO MOBILE: Esconde o header e mostra o menu FAB
                 if (headerActions) {
                     headerActions.style.setProperty('display', 'none', 'important');
                 }
@@ -1227,9 +1880,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (fabMenu) {
                     fabMenu.style.setProperty('display', 'block', 'important');
                 }
-                console.log('📱 Modo mobile ativado - Header oculto, menu FAB visível');
+                console.log('📱 Modo mobile ativado - Header oculto, menu FAB visível (direita)');
             } else {
-                // MODO DESKTOP: Mostra o header e esconde o menu FAB
                 if (headerActions) {
                     headerActions.style.setProperty('display', 'flex', 'important');
                 }
@@ -1243,7 +1895,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Executar em vários momentos para garantir
         aplicarMenuMobile();
         window.addEventListener('resize', aplicarMenuMobile);
         window.addEventListener('DOMContentLoaded', aplicarMenuMobile);
