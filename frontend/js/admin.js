@@ -29077,6 +29077,9 @@ class AdminPanel {
                         <button class="tab-btn" onclick="admin.mudarTabConfig('logs')">
                             <i class="fas fa-history"></i> Logs
                         </button>
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('banco-dados')">
+                            <i class="fas fa-database"></i> Banco de Dados
+                        </button>
                         <button class="tab-btn" onclick="admin.mudarTabConfig('backups')">
                             <i class="fas fa-database"></i> Backups
                         </button>
@@ -30814,6 +30817,26 @@ class AdminPanel {
         `;
     }
 
+    // ============ RENDERIZAR CONFIGURAÇÕES DE BANCO DE DADOS (NOVA ABA) ============
+    renderConfigBancoDados(config) {
+        return `
+            <div class="config-section active" id="config-banco-dados">
+                <h3 class="section-title">
+                    <i class="fas fa-database"></i> Gerenciamento do Banco de Dados
+                </h3>
+                
+                <!-- Container que será preenchido pelo módulo BancoDados -->
+                <div id="bancoDadosContent" style="margin-top: 20px;">
+                    <div style="text-align: center; padding: 60px; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;">
+                        <i class="fas fa-database" style="font-size: 48px; color: #3b82f6; margin-bottom: 15px;"></i>
+                        <h4 style="color: #1e293b; margin: 10px 0 5px;">Inicializando módulo...</h4>
+                        <p style="color: #64748b;">Aguarde enquanto carregamos as estatísticas do banco de dados.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     // ============ RENDERIZAR CONFIGURAÇÕES DE BACKUP ============
     renderConfigBackup(config) {
         const ultimoBackup = config.backups?.ultimoBackup ? new Date(config.backups.ultimoBackup).toLocaleString('pt-BR') : 'Nunca';
@@ -31142,7 +31165,8 @@ class AdminPanel {
             'notificacoes': 'config-notificacoes',
             'email': 'config-email',
             'logs': 'config-logs',
-            'backups': 'config-backup',      // <-- CORREÇÃO AQUI!
+            'banco-dados': 'config-banco-dados',   // 🔥 NOVA LINHA
+            'backups': 'config-backup',
             'desempenho': 'config-desempenho',
             'api': 'config-api'
         };
@@ -31181,6 +31205,28 @@ class AdminPanel {
         if (tab === 'email') {
             this.atualizarCamposEmail();
         }
+        
+        // 🔥 NOVA PARTE: Se for a tab de banco-dados, inicializar o módulo
+        if (tab === 'banco-dados') {
+            setTimeout(() => {
+                if (window.BancoDados && typeof window.BancoDados.init === 'function') {
+                    console.log('🗄️ Inicializando módulo BancoDados dentro de Configurações');
+                    window.BancoDados.init();
+                } else {
+                    console.error('❌ Módulo BancoDados não carregado!');
+                    const container = document.getElementById('bancoDadosContent');
+                    if (container) {
+                        container.innerHTML = `
+                            <div style="text-align: center; padding: 60px;">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545;"></i>
+                                <h3 style="color: #721c24;">Erro: Módulo não carregado</h3>
+                                <p style="color: #6c757d;">Verifique se o arquivo <code>js/admin-banco-dados.js</code> foi incluído no HTML.</p>
+                            </div>
+                        `;
+                    }
+                }
+            }, 100);
+        }
     }
 
     // ============ RECRIAR CONTEÚDO DE CONFIGURAÇÃO ============
@@ -31196,8 +31242,8 @@ class AdminPanel {
         // Recriar todas as seções
         let html = '';
         
-        // Lista de todas as abas
-        const tabs = ['aparencia', 'sistema', 'seguranca', 'provas', 'notificacoes', 'email', 'logs', 'backups', 'desempenho', 'api'];
+        // Lista de todas as abas (INCLUINDO banco-dados)
+        const tabs = ['aparencia', 'sistema', 'seguranca', 'provas', 'notificacoes', 'email', 'logs', 'banco-dados', 'backups', 'desempenho', 'api'];
         
         tabs.forEach(tab => {
             switch(tab) {
@@ -31221,6 +31267,10 @@ class AdminPanel {
                     break;
                 case 'logs':
                     html += this.renderConfigLogs(config);
+                    break;
+                // 🔥 NOVO CASE: BANCO DE DADOS
+                case 'banco-dados':
+                    html += this.renderConfigBancoDados(config);
                     break;
                 case 'backups':
                     html += this.renderConfigBackup(config);
@@ -31259,6 +31309,15 @@ class AdminPanel {
         // Se for a tab de email, atualizar campos
         if (tabAtiva === 'email') {
             this.atualizarCamposEmail();
+        }
+        
+        // 🔥 NOVO: Se for banco-dados, inicializar módulo
+        if (tabAtiva === 'banco-dados') {
+            setTimeout(() => {
+                if (window.BancoDados && typeof window.BancoDados.init === 'function') {
+                    window.BancoDados.init();
+                }
+            }, 150);
         }
         
         console.log(`✅ Conteúdo recriado com sucesso, aba ativa: ${tabAtiva}`);

@@ -1088,6 +1088,9 @@ app.use('/api/acompanhamento-compartilhado', acompanhamentoCompartilhadoRoutes);
 //LGPD
 app.use('/api/lgpd', lgpdRoutes);
 
+// ============ ROTAS DE GERENCIAMENTO DO BANCO DE DADOS ============
+const adminBancoDadosRoutes = require('./routes/admin-banco-dados');
+app.use('/api/admin/banco-dados', adminBancoDadosRoutes);
 
 // ============================================
 // BIBLIOTECA
