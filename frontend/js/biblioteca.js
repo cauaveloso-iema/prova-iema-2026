@@ -1430,13 +1430,13 @@ function renderizarNotificacoes(notificacoes) {
         
         const classeLida = notif.lida ? '' : 'nao-lida';
         
-        // 🔥 CORREÇÃO: data-attributes para evitar problemas com aspas
+        // 🔥 Estrutura com botão X de excluir
         html += `
             <div class="notificacao-item ${classeLida}" 
                  data-notif-id="${notif._id}" 
                  data-notif-link="${escapeHTML(notif.link || '#')}"
                  style="
-                    padding: 12px 15px;
+                    padding: 12px 40px 12px 15px;
                     border-bottom: 1px solid #e5e7eb;
                     cursor: pointer;
                     transition: all 0.3s;
@@ -1444,6 +1444,7 @@ function renderizarNotificacoes(notificacoes) {
                     gap: 12px;
                     background: ${notif.lida ? 'white' : '#eff6ff'};
                     ${!notif.lida ? 'border-left: 3px solid #0ea5e9;' : ''}
+                    position: relative;
                  ">
                 <div class="notificacao-icone" style="
                     width: 36px;
@@ -1459,7 +1460,7 @@ function renderizarNotificacoes(notificacoes) {
                 ">
                     ${notif.icone || '📋'}
                 </div>
-                <div class="notificacao-conteudo" style="flex: 1;">
+                <div class="notificacao-conteudo" style="flex: 1; min-width: 0;">
                     <div class="notificacao-titulo" style="
                         font-weight: 600;
                         margin-bottom: 3px;
@@ -1482,20 +1483,120 @@ function renderizarNotificacoes(notificacoes) {
                         <i class="far fa-clock"></i> ${tempoTexto}
                     </div>
                 </div>
+                
+                <!-- 🔥 BOTÃO X DE EXCLUIR -->
+                <button class="btn-excluir-notificacao" 
+                        data-excluir-id="${notif._id}"
+                        title="Excluir notificação"
+                        style="
+                            position: absolute;
+                            top: 50%;
+                            right: 10px;
+                            transform: translateY(-50%);
+                            background: #fee2e2;
+                            color: #dc2626;
+                            border: none;
+                            border-radius: 6px;
+                            width: 28px;
+                            height: 28px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            cursor: pointer;
+                            opacity: 0.6;
+                            transition: all 0.2s;
+                            font-size: 12px;
+                        "
+                        onmouseover="this.style.opacity='1'; this.style.background='#fecaca';"
+                        onmouseout="this.style.opacity='0.6'; this.style.background='#fee2e2';">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         `;
     });
     
     lista.innerHTML = html;
     
-    // 🔥 CORREÇÃO: Adicionar listeners após renderizar
+    // 🔥 Adicionar listeners para clicar na notificação
     lista.querySelectorAll('.notificacao-item').forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+            // Se clicou no botão X, não abre a notificação
+            if (e.target.closest('.btn-excluir-notificacao')) return;
+            
             const id = item.getAttribute('data-notif-id');
             const link = item.getAttribute('data-notif-link');
             abrirNotificacao(id, link);
         });
     });
+    
+    // 🔥 Adicionar listeners para o botão X (excluir)
+    lista.querySelectorAll('.btn-excluir-notificacao').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute('data-excluir-id');
+            excluirNotificacao(id, btn);
+        });
+    });
+}
+
+// ========== EXCLUIR NOTIFICAÇÃO INDIVIDUAL ==========
+async function excluirNotificacao(id, btnElement = null) {
+    try {
+        const confirmacao = await confirmar('🗑️ Deseja excluir esta notificação?');
+        if (!confirmacao) return;
+        
+        const token = localStorage.getItem('auth_token');
+        
+        // Feedback visual no botão
+        if (btnElement) {
+            btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btnElement.disabled = true;
+        }
+        
+        const response = await fetch(`/api/notificacoes/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Remove o item da lista
+            const item = btnElement?.closest('.notificacao-item');
+            if (item) {
+                item.style.transition = 'all 0.3s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-100%)';
+                setTimeout(() => item.remove(), 300);
+            }
+            
+            // Atualiza o contador (badge)
+            const badge = document.getElementById('notificacoesBadge');
+            if (badge && badge.style.display !== 'none') {
+                const currentCount = parseInt(badge.textContent) || 0;
+                if (currentCount > 1) {
+                    badge.textContent = currentCount - 1;
+                } else {
+                    badge.style.display = 'none';
+                    document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+                }
+            }
+            
+            mostrarToast('✅ Notificação excluída', 'success');
+            
+            // Se a lista ficar vazia, recarrega
+            const lista = document.getElementById('notificacoesLista');
+            if (lista && lista.children.length === 0) {
+                carregarListaNotificacoes();
+            }
+        } else {
+            throw new Error(data.error || 'Erro ao excluir');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro:', error);
+        mostrarToast('❌ ' + error.message, 'error');
+    }
 }
 
 function abrirNotificacoes() {
@@ -1539,9 +1640,15 @@ async function abrirNotificacao(id, link) {
     }
 }
 
-async function marcarTodasLidas() {
+async function marcarTodasLidas(event) {
     try {
         const token = localStorage.getItem('auth_token');
+        
+        const btn = event?.currentTarget;
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Marcando...';
+            btn.disabled = true;
+        }
         
         const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
             method: 'PUT',
@@ -1552,13 +1659,23 @@ async function marcarTodasLidas() {
         
         if (data.success) {
             await carregarListaNotificacoes();
+            
             const badge = document.getElementById('notificacoesBadge');
             if (badge) badge.style.display = 'none';
             document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+            
+            mostrarToast('✅ Todas marcadas como lidas', 'success');
         }
         
     } catch (error) {
-        console.error('Erro ao marcar todas como lidas:', error);
+        console.error('❌ Erro:', error);
+        mostrarToast('❌ Erro ao marcar notificações', 'error');
+    } finally {
+        const btn = document.querySelector('.btn-marcar-todas');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-check-double"></i> Marcar todas';
+            btn.disabled = false;
+        }
     }
 }
 

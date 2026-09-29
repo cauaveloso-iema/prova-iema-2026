@@ -2575,9 +2575,68 @@ class AdminPanel {
         
         if (!confirmar) return;
         
+        // 🔥 MOSTRAR PROGRESSO ANTES DE FECHAR O MODAL
+        const modalBody = document.getElementById('modalBody');
+        const conteudoOriginal = modalBody.innerHTML;
+        
+        modalBody.innerHTML = `
+            <div style="padding: 60px 40px; text-align: center;">
+                <div style="
+                    width: 80px;
+                    height: 80px;
+                    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 25px;
+                    animation: pulseSend 1.5s ease-in-out infinite;
+                ">
+                    <i class="fas fa-paper-plane" style="font-size: 36px; color: white;"></i>
+                </div>
+                <h3 style="margin: 0 0 10px; color: #1f2937; font-size: 20px;">
+                    Enviando notificações...
+                </h3>
+                <p style="color: #6b7280; margin-bottom: 25px;">
+                    Aguarde enquanto enviamos as notificações para <strong>${naoVinculados.length}</strong> dispositivo(s).
+                </p>
+                <div style="
+                    background: #f3f4f6;
+                    border-radius: 20px;
+                    height: 8px;
+                    overflow: hidden;
+                    max-width: 400px;
+                    margin: 0 auto;
+                ">
+                    <div id="progressoEnvio" style="
+                        background: linear-gradient(90deg, #6366f1, #8b5cf6);
+                        height: 100%;
+                        width: 0%;
+                        transition: width 0.3s ease;
+                    "></div>
+                </div>
+                <p style="color: #9ca3af; font-size: 13px; margin-top: 15px;">
+                    <i class="fas fa-clock"></i> Isso pode levar alguns segundos
+                </p>
+            </div>
+            <style>
+                @keyframes pulseSend {
+                    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+                    50% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(99, 102, 241, 0); }
+                }
+            </style>
+        `;
+        
+        // Animar barra de progresso
+        let progresso = 0;
+        const intervaloProgresso = setInterval(() => {
+            progresso += Math.random() * 15;
+            if (progresso > 90) progresso = 90;
+            const barra = document.getElementById('progressoEnvio');
+            if (barra) barra.style.width = progresso + '%';
+        }, 300);
+        
         try {
-            this.showToast(`📨 Enviando ${naoVinculados.length} notificações...`, 'info');
-            
             const token = localStorage.getItem('auth_token');
             const response = await fetch('/api/admin/onesignal/solicitar-vinculo-massa', {
                 method: 'POST',
@@ -2589,28 +2648,141 @@ class AdminPanel {
             
             const data = await response.json();
             
+            clearInterval(intervaloProgresso);
+            
+            // Completar barra
+            const barra = document.getElementById('progressoEnvio');
+            if (barra) barra.style.width = '100%';
+            
             if (data.success) {
-                this.showToast(
-                    `✅ ${data.enviados} notificações enviadas!${data.erros > 0 ? ` (${data.erros} erros)` : ''}`,
-                    'success'
-                );
+                // 🔥 MOSTRAR TELA DE SUCESSO DENTRO DO MODAL
+                modalBody.innerHTML = `
+                    <div style="padding: 50px 40px; text-align: center;">
+                        <div style="
+                            width: 90px;
+                            height: 90px;
+                            background: linear-gradient(135deg, #10b981, #059669);
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0 auto 25px;
+                            animation: successPulse 0.6s ease-out;
+                            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+                        ">
+                            <i class="fas fa-check" style="font-size: 45px; color: white;"></i>
+                        </div>
+                        
+                        <h2 style="margin: 0 0 10px; color: #10b981; font-size: 24px; font-weight: 700;">
+                            ✅ Notificações Enviadas!
+                        </h2>
+                        
+                        <p style="color: #6b7280; margin-bottom: 25px; font-size: 15px;">
+                            As notificações foram enviadas com sucesso
+                        </p>
+                        
+                        <div style="
+                            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+                            border: 2px solid #10b981;
+                            border-radius: 16px;
+                            padding: 25px;
+                            margin: 0 auto 25px;
+                            max-width: 400px;
+                        ">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div>
+                                    <div style="font-size: 36px; font-weight: 800; color: #059669; line-height: 1;">
+                                        ${data.enviados || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #065f46; margin-top: 5px; font-weight: 600;">
+                                        <i class="fas fa-paper-plane"></i> Enviadas
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 36px; font-weight: 800; color: ${data.erros > 0 ? '#dc2626' : '#6b7280'}; line-height: 1;">
+                                        ${data.erros || 0}
+                                    </div>
+                                    <div style="font-size: 12px; color: #6b7280; margin-top: 5px; font-weight: 600;">
+                                        <i class="fas fa-exclamation-circle"></i> Erros
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="
+                            background: #fef3c7;
+                            border-left: 4px solid #f59e0b;
+                            border-radius: 10px;
+                            padding: 15px;
+                            text-align: left;
+                            margin-bottom: 25px;
+                            max-width: 500px;
+                            margin-left: auto;
+                            margin-right: auto;
+                        ">
+                            <div style="display: flex; align-items: start; gap: 10px;">
+                                <i class="fas fa-lightbulb" style="color: #f59e0b; font-size: 18px; margin-top: 2px;"></i>
+                                <div style="font-size: 13px; color: #92400e;">
+                                    <strong>Próximos passos:</strong><br>
+                                    Os usuários receberão uma notificação no celular. 
+                                    Quando clicarem, serão vinculados automaticamente. 
+                                    <strong>Atualize esta página em alguns minutos</strong> para ver os vínculos.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; justify-content: center;">
+                            <button onclick="admin.closeModal()" style="
+                                padding: 12px 30px;
+                                background: #6b7280;
+                                color: white;
+                                border: none;
+                                border-radius: 30px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 14px;
+                            ">
+                                Fechar
+                            </button>
+                            <button onclick="admin.closeModal(); admin.atualizarOneSignal();" style="
+                                padding: 12px 30px;
+                                background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                                color: white;
+                                border: none;
+                                border-radius: 30px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 14px;
+                                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+                            ">
+                                <i class="fas fa-sync-alt"></i> Atualizar Agora
+                            </button>
+                        </div>
+                    </div>
+                    <style>
+                        @keyframes successPulse {
+                            0% { transform: scale(0); opacity: 0; }
+                            50% { transform: scale(1.15); }
+                            100% { transform: scale(1); opacity: 1; }
+                        }
+                    </style>
+                `;
                 
-                // Fechar modal
-                this.closeModal();
+                // Esconder botão de salvar (só fechar)
+                const modalSaveBtn = document.getElementById('modalSaveBtn');
+                if (modalSaveBtn) modalSaveBtn.style.display = 'none';
                 
-                // Notificação detalhada
-                this.mostrarNotificacaoSistema(
-                    'success',
-                    '📨 Solicitação Enviada',
-                    `${data.enviados} usuário(s) notificados. Aguarde os cliques para ver os vínculos.`,
-                    5000
-                );
             } else {
                 throw new Error(data.error || 'Erro ao enviar');
             }
             
         } catch (error) {
             console.error('❌ Erro:', error);
+            clearInterval(intervaloProgresso);
+            
+            // Restaurar conteúdo original
+            modalBody.innerHTML = conteudoOriginal;
+            
             this.showToast('❌ ' + error.message, 'error');
         }
     }
@@ -12141,54 +12313,6 @@ class AdminPanel {
         this.alunosDisponiveis = alunosDisponiveis;
         
         this.openModal();
-    }
-
-    // ============ showToast melhorado ============
-    showToast(mensagem, tipo = 'info', duracao = 3000) {
-        const container = document.getElementById('toastContainer');
-        if (!container) {
-            console.log(`[${tipo}] ${mensagem}`);
-            return;
-        }
-
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${tipo}`;
-        
-        const icones = {
-            success: 'fa-check-circle',
-            error: 'fa-exclamation-circle',
-            info: 'fa-info-circle',
-            warning: 'fa-exclamation-triangle'
-        };
-        
-        toast.innerHTML = `
-            <i class="fas ${icones[tipo] || 'fa-info-circle'}"></i>
-            <span>${mensagem}</span>
-        `;
-        
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: ${tipo === 'success' ? '#10b981' : tipo === 'error' ? '#ef4444' : tipo === 'warning' ? '#f59e0b' : '#3b82f6'};
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 10000;
-            animation: slideIn 0.3s ease;
-            max-width: 400px;
-        `;
-        
-        container.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, duracao);
     }
 
 
@@ -24160,6 +24284,9 @@ class AdminPanel {
         // ============================================================================
         // 📤 ENVIAR NOTIFICAÇÃO EM MASSA (VERSÃO ATUALIZADA COM MODO INDIVIDUAL)
         // ============================================================================
+        // ============================================================================
+        // 📤 ENVIAR NOTIFICAÇÃO EM MASSA (VERSÃO ATUALIZADA COM FEEDBACK VISUAL)
+        // ============================================================================
         async enviarNotificacaoEmMassa() {
             console.log('📤 Iniciando envio de notificação...');
             
@@ -24172,20 +24299,18 @@ class AdminPanel {
                 notificacao: isModalNotificacao
             });
             
-            // ===== 2. COLETAR DADOS DO FORMULÁRIO (aceita os dois formatos) =====
+            // ===== 2. COLETAR DADOS DO FORMULÁRIO =====
             let titulo, mensagem, cor, prioridade, enviarPush;
             
             if (isModalEnvioMassa) {
-                // Modal "Envio em Massa" da aba OneSignal
                 titulo = document.getElementById('massaTitulo')?.value?.trim();
                 mensagem = document.getElementById('massaMensagem')?.value?.trim();
-                cor = '#e54b4b'; // cor padrão da aba OneSignal
+                cor = '#e54b4b';
                 prioridade = 3;
                 enviarPush = document.getElementById('massaIncluirDados')?.checked ?? true;
                 
                 console.log('📋 Modal: ENVIO EM MASSA');
             } else if (isModalNotificacao) {
-                // Modal "Envio de Notificação" (com modo individual/massa)
                 titulo = document.getElementById('notificacaoTitulo')?.value?.trim();
                 mensagem = document.getElementById('notificacaoMensagem')?.value?.trim();
                 cor = document.getElementById('notificacaoCor')?.value || '#4f46e5';
@@ -24224,18 +24349,15 @@ class AdminPanel {
             
             // 🔥 CASO A: Modal de "Envio em Massa" (aba OneSignal)
             if (isModalEnvioMassa) {
-                // Pega o segmento selecionado (todos, ativos, vinculados)
                 segmentoSelecionado = document.querySelector('input[name="segmento"]:checked')?.value || 'todos';
                 
                 console.log(`📱 Segmento selecionado: ${segmentoSelecionado}`);
                 
-                // Verificar se temos os dispositivos carregados
                 if (!this.onesignalDispositivos || this.onesignalDispositivos.length === 0) {
                     this.showToast('❌ Nenhum dispositivo carregado. Atualize a lista.', 'error');
                     return;
                 }
                 
-                // Filtrar dispositivos baseado no segmento
                 let dispositivosFiltrados = [...this.onesignalDispositivos];
                 
                 if (segmentoSelecionado === 'vinculados') {
@@ -24298,7 +24420,6 @@ class AdminPanel {
             // 🔥 CASO B: Modal de "Envio de Notificação" (com modo individual/massa)
             else if (isModalNotificacao) {
                 if (this.modoSelecaoIndividual) {
-                    // Modo individual
                     if (!this.usuarioIndividualSelecionado) {
                         this.showToast('❌ Selecione um usuário para enviar a notificação', 'error');
                         return;
@@ -24313,7 +24434,6 @@ class AdminPanel {
                     labelDestinatarios = this.usuarioIndividualSelecionado.nome;
                     
                 } else {
-                    // Modo massa por role
                     const roleFiltro = this.roleFiltroNotificacao || 'todos';
                     
                     if (!this.usuariosParaNotificacao || this.usuariosParaNotificacao.length === 0) {
@@ -24368,73 +24488,148 @@ class AdminPanel {
             
             if (!confirmar) return;
             
-            // ===== 7. FECHAR MODAL E MOSTRAR PROGRESSO =====
-            this.closeModal();
-            this.showToast(`📤 Enviando para ${usuariosDestino.length} usuários...`, 'info');
+            // ===== 7. MOSTRAR TELA DE PROGRESSO DENTRO DO MODAL =====
+            const modalBody = document.getElementById('modalBody');
+            const conteudoOriginal = modalBody ? modalBody.innerHTML : '';
             
-            // Criar barra de progresso flutuante
-            const progressId = 'progresso-notificacao-' + Date.now();
-            const progressHTML = `
-                <div id="${progressId}" style="
-                    position: fixed;
-                    bottom: 20px;
-                    right: 20px;
-                    background: white;
-                    border-radius: 12px;
-                    padding: 20px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                    z-index: 10000;
-                    min-width: 320px;
-                    border: 1px solid #e5e7eb;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <div style="padding: 60px 40px; text-align: center;">
                         <div style="
-                            width: 40px;
-                            height: 40px;
-                            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-                            border-radius: 10px;
+                            width: 90px;
+                            height: 90px;
+                            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                            border-radius: 50%;
                             display: flex;
                             align-items: center;
                             justify-content: center;
-                            color: white;
-                            font-size: 20px;
+                            margin: 0 auto 25px;
+                            animation: pulseEnvio 1.5s ease-in-out infinite;
+                            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
                         ">
-                            <i class="fas fa-paper-plane"></i>
+                            <i class="fas fa-paper-plane" style="font-size: 40px; color: white;"></i>
                         </div>
-                        <div>
-                            <strong style="display: block; color: #1f2937;">Enviando Notificações</strong>
-                            <small style="color: #6b7280;">${labelDestinatarios}</small>
+                        <h3 style="margin: 0 0 10px; color: #1f2937; font-size: 22px; font-weight: 700;">
+                            Enviando Notificações...
+                        </h3>
+                        <p style="color: #6b7280; margin-bottom: 30px; font-size: 15px;">
+                            Aguarde enquanto enviamos para <strong>${usuariosDestino.length}</strong> usuário(s).
+                        </p>
+                        
+                        <div style="
+                            background: #f3f4f6;
+                            border-radius: 20px;
+                            height: 10px;
+                            overflow: hidden;
+                            max-width: 450px;
+                            margin: 0 auto;
+                        ">
+                            <div id="barraEnvioMassa" style="
+                                background: linear-gradient(90deg, #6366f1, #8b5cf6);
+                                height: 100%;
+                                width: 0%;
+                                transition: width 0.4s ease;
+                                border-radius: 20px;
+                            "></div>
                         </div>
+                        
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            max-width: 450px;
+                            margin: 15px auto 0;
+                            font-size: 13px;
+                            color: #6b7280;
+                        ">
+                            <span id="contadorEnvioMassa">0 de ${usuariosDestino.length}</span>
+                            <span id="percentualEnvioMassa">0%</span>
+                        </div>
+                        
+                        <p style="color: #9ca3af; font-size: 13px; margin-top: 20px;">
+                            <i class="fas fa-clock"></i> Isso pode levar alguns segundos
+                        </p>
                     </div>
-                    
-                    <div style="
-                        background: #f3f4f6;
-                        border-radius: 20px;
-                        height: 8px;
-                        overflow: hidden;
-                        margin-bottom: 10px;
+                    <style>
+                        @keyframes pulseEnvio {
+                            0%, 100% { 
+                                transform: scale(1); 
+                                box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); 
+                            }
+                            50% { 
+                                transform: scale(1.05); 
+                                box-shadow: 0 0 0 20px rgba(99, 102, 241, 0); 
+                            }
+                        }
+                    </style>
+                `;
+            }
+            
+            // Criar barra de progresso também (fora do modal, caso o modal não esteja aberto)
+            const progressId = 'progresso-notificacao-' + Date.now();
+            if (!modalBody) {
+                const progressHTML = `
+                    <div id="${progressId}" style="
+                        position: fixed;
+                        bottom: 20px;
+                        right: 20px;
+                        background: white;
+                        border-radius: 12px;
+                        padding: 20px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        z-index: 10000;
+                        min-width: 320px;
+                        border: 1px solid #e5e7eb;
                     ">
-                        <div id="${progressId}-bar" style="
-                            background: linear-gradient(90deg, #4f46e5, #7c3aed);
-                            height: 100%;
-                            width: 0%;
-                            transition: width 0.3s ease;
-                        "></div>
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="
+                                width: 40px;
+                                height: 40px;
+                                background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                                border-radius: 10px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                color: white;
+                                font-size: 20px;
+                            ">
+                                <i class="fas fa-paper-plane"></i>
+                            </div>
+                            <div>
+                                <strong style="display: block; color: #1f2937;">Enviando Notificações</strong>
+                                <small style="color: #6b7280;">${labelDestinatarios}</small>
+                            </div>
+                        </div>
+                        
+                        <div style="
+                            background: #f3f4f6;
+                            border-radius: 20px;
+                            height: 8px;
+                            overflow: hidden;
+                            margin-bottom: 10px;
+                        ">
+                            <div id="${progressId}-bar" style="
+                                background: linear-gradient(90deg, #4f46e5, #7c3aed);
+                                height: 100%;
+                                width: 0%;
+                                transition: width 0.3s ease;
+                            "></div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #4b5563;">
+                            <span id="${progressId}-text">Iniciando...</span>
+                            <span id="${progressId}-percent">0%</span>
+                        </div>
                     </div>
-                    
-                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #4b5563;">
-                        <span id="${progressId}-text">Iniciando...</span>
-                        <span id="${progressId}-percent">0%</span>
-                    </div>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', progressHTML);
+                `;
+                document.body.insertAdjacentHTML('beforeend', progressHTML);
+            }
             
             // ===== 8. ENVIAR NOTIFICAÇÕES =====
             let enviados = 0;
             let erros = 0;
             let pushEnviados = 0;
             const token = localStorage.getItem('auth_token');
+            const resultadosDetalhados = [];
             
             for (let i = 0; i < usuariosDestino.length; i++) {
                 const usuario = usuariosDestino[i];
@@ -24471,9 +24666,19 @@ class AdminPanel {
                     
                     if (notificacaoData.success) {
                         enviados++;
+                        resultadosDetalhados.push({
+                            nome: usuario.nome,
+                            status: 'success',
+                            push: false
+                        });
                     } else {
                         console.warn(`⚠️ Erro ao notificar ${usuario.nome}:`, notificacaoData.error);
                         erros++;
+                        resultadosDetalhados.push({
+                            nome: usuario.nome,
+                            status: 'error',
+                            mensagem: notificacaoData.error
+                        });
                     }
                     
                     // 8.2 - ENVIAR PUSH (SE ATIVADO)
@@ -24492,6 +24697,9 @@ class AdminPanel {
                             
                             if (pushEnviado) {
                                 pushEnviados++;
+                                // Atualizar último resultado com push
+                                const ultimo = resultadosDetalhados[resultadosDetalhados.length - 1];
+                                if (ultimo) ultimo.push = true;
                             }
                         } catch (pushError) {
                             console.warn(`⚠️ Erro ao enviar push para ${usuario.nome}:`, pushError);
@@ -24501,10 +24709,26 @@ class AdminPanel {
                 } catch (error) {
                     console.error(`❌ Erro ao processar ${usuario.nome}:`, error);
                     erros++;
+                    resultadosDetalhados.push({
+                        nome: usuario.nome,
+                        status: 'error',
+                        mensagem: error.message
+                    });
                 }
                 
                 // 8.3 - ATUALIZAR PROGRESSO
                 const percent = Math.round(((i + 1) / usuariosDestino.length) * 100);
+                
+                // Atualizar barra do modal
+                const barraModal = document.getElementById('barraEnvioMassa');
+                const contadorModal = document.getElementById('contadorEnvioMassa');
+                const percentualModal = document.getElementById('percentualEnvioMassa');
+                
+                if (barraModal) barraModal.style.width = `${percent}%`;
+                if (contadorModal) contadorModal.textContent = `${i + 1} de ${usuariosDestino.length}`;
+                if (percentualModal) percentualModal.textContent = `${percent}%`;
+                
+                // Atualizar barra flutuante (fallback)
                 const barElement = document.getElementById(`${progressId}-bar`);
                 const textElement = document.getElementById(`${progressId}-text`);
                 const percentElement = document.getElementById(`${progressId}-percent`);
@@ -24523,7 +24747,6 @@ class AdminPanel {
             
             // ===== 9. FINALIZAR =====
             const progressElement = document.getElementById(progressId);
-            
             const barElement = document.getElementById(`${progressId}-bar`);
             const textElement = document.getElementById(`${progressId}-text`);
             const percentElement = document.getElementById(`${progressId}-percent`);
@@ -24532,42 +24755,233 @@ class AdminPanel {
             if (percentElement) percentElement.textContent = '100%';
             if (textElement) textElement.textContent = 'Concluído!';
             
-            // Trocar ícone para sucesso
+            // Remover progresso flutuante
             if (progressElement) {
                 const iconeEl = progressElement.querySelector('div[style*="linear-gradient"]');
                 if (iconeEl) {
                     iconeEl.innerHTML = '<i class="fas fa-check"></i>';
                     iconeEl.style.background = 'linear-gradient(135deg, #10b981, #059669)';
                 }
-            }
-            
-            // Aguardar 2 segundos e remover
-            setTimeout(() => {
-                if (progressElement) {
+                
+                setTimeout(() => {
                     progressElement.style.transition = 'all 0.3s ease';
                     progressElement.style.opacity = '0';
                     progressElement.style.transform = 'translateY(20px)';
                     setTimeout(() => progressElement.remove(), 300);
-                }
-            }, 2000);
+                }, 2000);
+            }
             
-            // ===== 10. MOSTRAR RESULTADO =====
+            // ===== 10. MOSTRAR TELA DE SUCESSO DENTRO DO MODAL =====
             console.log(`✅ Envio concluído: ${enviados} enviados, ${erros} erros, ${pushEnviados} push`);
             
+            if (modalBody) {
+                // Filtrar erros para mostrar (máx 10)
+                const errosLista = resultadosDetalhados.filter(r => r.status === 'error').slice(0, 10);
+                
+                modalBody.innerHTML = `
+                    <div style="padding: 40px 30px; text-align: center;">
+                        <!-- Ícone de Sucesso -->
+                        <div style="
+                            width: 100px;
+                            height: 100px;
+                            background: linear-gradient(135deg, ${erros === 0 ? '#10b981, #059669' : '#f59e0b, #d97706'});
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0 auto 25px;
+                            animation: successPop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                            box-shadow: 0 15px 40px ${erros === 0 ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'};
+                        ">
+                            <i class="fas fa-${erros === 0 ? 'check' : 'exclamation'}" style="font-size: 50px; color: white;"></i>
+                        </div>
+                        
+                        <h2 style="margin: 0 0 10px; color: ${erros === 0 ? '#10b981' : '#f59e0b'}; font-size: 26px; font-weight: 800;">
+                            ${erros === 0 ? '✅ Enviadas com Sucesso!' : '⚠️ Envio Concluído'}
+                        </h2>
+                        
+                        <p style="color: #6b7280; margin-bottom: 30px; font-size: 15px;">
+                            ${erros === 0 
+                                ? `Todas as notificações foram entregues` 
+                                : `Algumas notificações tiveram problemas`}
+                        </p>
+                        
+                        <!-- Cards de Estatísticas -->
+                        <div style="
+                            display: grid;
+                            grid-template-columns: repeat(3, 1fr);
+                            gap: 15px;
+                            max-width: 500px;
+                            margin: 0 auto 25px;
+                        ">
+                            <div style="
+                                background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+                                border: 2px solid #10b981;
+                                border-radius: 16px;
+                                padding: 20px 10px;
+                            ">
+                                <div style="font-size: 38px; font-weight: 800; color: #065f46; line-height: 1; margin-bottom: 5px;">
+                                    ${enviados}
+                                </div>
+                                <div style="font-size: 11px; color: #065f46; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fas fa-check-circle"></i> Enviadas
+                                </div>
+                            </div>
+                            
+                            <div style="
+                                background: ${pushEnviados > 0 ? 'linear-gradient(135deg, #dbeafe, #bfdbfe)' : 'linear-gradient(135deg, #f3f4f6, #e5e7eb)'};
+                                border: 2px solid ${pushEnviados > 0 ? '#3b82f6' : '#9ca3af'};
+                                border-radius: 16px;
+                                padding: 20px 10px;
+                            ">
+                                <div style="font-size: 38px; font-weight: 800; color: ${pushEnviados > 0 ? '#1e40af' : '#4b5563'}; line-height: 1; margin-bottom: 5px;">
+                                    ${pushEnviados}
+                                </div>
+                                <div style="font-size: 11px; color: ${pushEnviados > 0 ? '#1e40af' : '#4b5563'}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fas fa-mobile-alt"></i> Push
+                                </div>
+                            </div>
+                            
+                            <div style="
+                                background: ${erros > 0 ? 'linear-gradient(135deg, #fee2e2, #fecaca)' : 'linear-gradient(135deg, #f3f4f6, #e5e7eb)'};
+                                border: 2px solid ${erros > 0 ? '#ef4444' : '#9ca3af'};
+                                border-radius: 16px;
+                                padding: 20px 10px;
+                            ">
+                                <div style="font-size: 38px; font-weight: 800; color: ${erros > 0 ? '#991b1b' : '#4b5563'}; line-height: 1; margin-bottom: 5px;">
+                                    ${erros}
+                                </div>
+                                <div style="font-size: 11px; color: ${erros > 0 ? '#991b1b' : '#4b5563'}; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <i class="fas fa-exclamation-circle"></i> Erros
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${errosLista.length > 0 ? `
+                            <div style="
+                                background: #fef2f2;
+                                border-left: 4px solid #ef4444;
+                                border-radius: 12px;
+                                padding: 15px;
+                                text-align: left;
+                                max-width: 500px;
+                                margin: 0 auto 25px;
+                            ">
+                                <div style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                    margin-bottom: 10px;
+                                    color: #991b1b;
+                                    font-weight: 700;
+                                    font-size: 14px;
+                                ">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Falhas no envio:
+                                </div>
+                                ${errosLista.map(e => `
+                                    <div style="
+                                        font-size: 12px;
+                                        color: #7f1d1d;
+                                        padding: 4px 0;
+                                        border-bottom: 1px solid #fecaca;
+                                    ">
+                                        • <strong>${e.nome}:</strong> ${e.mensagem || 'Erro desconhecido'}
+                                    </div>
+                                `).join('')}
+                                ${resultadosDetalhados.filter(r => r.status === 'error').length > 10 ? `
+                                    <div style="font-size: 11px; color: #991b1b; margin-top: 8px; font-style: italic;">
+                                        ... e mais ${resultadosDetalhados.filter(r => r.status === 'error').length - 10} erro(s)
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : `
+                            <div style="
+                                background: #f0fdf4;
+                                border-left: 4px solid #10b981;
+                                border-radius: 12px;
+                                padding: 15px;
+                                text-align: left;
+                                max-width: 500px;
+                                margin: 0 auto 25px;
+                            ">
+                                <div style="display: flex; align-items: start; gap: 10px;">
+                                    <i class="fas fa-lightbulb" style="color: #10b981; font-size: 18px; margin-top: 2px;"></i>
+                                    <div style="font-size: 13px; color: #065f46;">
+                                        <strong>Tudo certo! 🎉</strong><br>
+                                        ${enviarPush ? 'As notificações foram enviadas para o sistema e para os celulares dos usuários.' : 'As notificações foram enviadas para o sistema dos usuários.'}
+                                    </div>
+                                </div>
+                            </div>
+                        `}
+                        
+                        <!-- Botões de Ação -->
+                        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                            <button onclick="admin.closeModal()" style="
+                                padding: 12px 30px;
+                                background: #6b7280;
+                                color: white;
+                                border: none;
+                                border-radius: 30px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 14px;
+                                transition: all 0.2s;
+                            " onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#6b7280'">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                            <button onclick="admin.closeModal(); admin.abrirModalEnvioMassa();" style="
+                                padding: 12px 30px;
+                                background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                                color: white;
+                                border: none;
+                                border-radius: 30px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 14px;
+                                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+                                transition: all 0.2s;
+                            " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                <i class="fas fa-paper-plane"></i> Enviar Outra
+                            </button>
+                        </div>
+                    </div>
+                    <style>
+                        @keyframes successPop {
+                            0% { transform: scale(0); opacity: 0; }
+                            50% { transform: scale(1.15); }
+                            100% { transform: scale(1); opacity: 1; }
+                        }
+                    </style>
+                `;
+                
+                // Esconder botão de salvar
+                const modalSaveBtn = document.getElementById('modalSaveBtn');
+                if (modalSaveBtn) modalSaveBtn.style.display = 'none';
+            }
+            
+            // ===== 11. TOAST E NOTIFICAÇÃO DE SISTEMA =====
+            
+            // Toast de sucesso com duração maior
             this.showToast(
                 `✅ ${enviados} notificações enviadas!${erros > 0 ? ` (${erros} erros)` : ''}`,
-                enviados > 0 ? 'success' : 'error'
+                enviados > 0 ? 'success' : 'error',
+                6000
             );
             
-            // Notificação de sistema detalhada
+            // Notificação de sistema (canto superior direito)
             if (typeof this.mostrarNotificacaoSistema === 'function') {
                 this.mostrarNotificacaoSistema(
                     enviados > 0 ? 'success' : 'error',
-                    '📢 Envio Concluído',
-                    `<strong>${enviados}</strong> notificações enviadas!<br>
-                    ${pushEnviados > 0 ? `📱 <strong>${pushEnviados}</strong> push enviados<br>` : ''}
-                    ${erros > 0 ? `⚠️ <strong>${erros}</strong> falhas` : ''}`,
-                    6000
+                    enviados > 0 ? '📢 Envio Concluído!' : '❌ Falha no Envio',
+                    `
+                        <strong style="font-size: 16px; display: block; margin-bottom: 8px;">
+                            ${enviados} notificações enviadas
+                        </strong>
+                        ${pushEnviados > 0 ? `📱 <strong>${pushEnviados}</strong> push para celular<br>` : ''}
+                        ${erros > 0 ? `⚠️ <strong style="color: #dc2626;">${erros}</strong> falhas` : '🎯 Todas enviadas com sucesso!'}
+                    `,
+                    7000
                 );
             }
         }
@@ -34998,7 +35412,7 @@ class AdminPanel {
         });
     }
 
-    showToast(mensagem, tipo = 'info') {
+    showToast(mensagem, tipo = 'info', duracao = 3000) {
         const container = document.getElementById('toastContainer');
         if (!container) {
             alert(mensagem);
@@ -35020,11 +35434,67 @@ class AdminPanel {
             <span>${mensagem}</span>
         `;
         
+        // 🔥 Estilo aprimorado
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: ${tipo === 'success' ? 'linear-gradient(135deg, #10b981, #059669)' : 
+                        tipo === 'error' ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 
+                        tipo === 'warning' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 
+                        'linear-gradient(135deg, #3b82f6, #2563eb)'};
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 99999;
+            font-size: 14px;
+            font-weight: 500;
+            max-width: 450px;
+            animation: toastSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        `;
+        
+        toast.querySelector('i').style.fontSize = '20px';
+        
+        // Adicionar animação CSS se ainda não existir
+        if (!document.getElementById('toastAnimations')) {
+            const style = document.createElement('style');
+            style.id = 'toastAnimations';
+            style.textContent = `
+                @keyframes toastSlideIn {
+                    from { 
+                        transform: translateX(500px) scale(0.8); 
+                        opacity: 0; 
+                    }
+                    to { 
+                        transform: translateX(0) scale(1); 
+                        opacity: 1; 
+                    }
+                }
+                @keyframes toastSlideOut {
+                    from { 
+                        transform: translateX(0) scale(1); 
+                        opacity: 1; 
+                    }
+                    to { 
+                        transform: translateX(500px) scale(0.8); 
+                        opacity: 0; 
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
         container.appendChild(toast);
         
         setTimeout(() => {
-            toast.remove();
-        }, 3000);
+            toast.style.animation = 'toastSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            setTimeout(() => toast.remove(), 300);
+        }, duracao);
     }
 
     openModal() {
