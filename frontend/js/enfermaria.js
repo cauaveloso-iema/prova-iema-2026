@@ -58,9 +58,6 @@ function escapeHTML(str) {
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
-// ============================================
-// INICIALIZAÇÃO
-// ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Verificar se tem token
     if (!token) { 
@@ -484,7 +481,7 @@ function mostrarFormEntrada() {
     safeGet('queixa').value = '';
     safeGet('observacoesEntrada').value = '';
     
-    // 🆕 Preencher data/hora atual no campo (formato datetime-local)
+    // Preencher data/hora atual no campo (formato datetime-local)
     const agora = new Date();
     // Ajustar para timezone local (datetime-local precisa formato YYYY-MM-DDTHH:MM)
     const offset = agora.getTimezoneOffset() * 60000;
@@ -492,6 +489,7 @@ function mostrarFormEntrada() {
     safeGet('dataEntrada').value = dataLocal.toISOString().slice(0, 16);
 }
 
+// ✅ FUNÇÃO QUE ESTAVA FALTANDO — ADICIONADA AQUI
 function mostrarFormSaida() {
     safeGet('formEntrada').style.display = 'none';
     safeGet('formSaida').style.display = 'block';
@@ -501,12 +499,12 @@ function mostrarFormSaida() {
     safeGet('observacoesSaida').value = '';
     safeGet('campoCoordenador').style.display = 'none';
     safeGet('campoOutros').style.display = 'none';
-}
-
-function toggleOutrosCampos() {
-    const desfecho = safeGet('desfecho').value;
-    safeGet('campoCoordenador').style.display = desfecho === 'liberado_coordenador' ? 'block' : 'none';
-    safeGet('campoOutros').style.display = desfecho === 'outros' ? 'block' : 'none';
+    
+    // Preencher data/hora atual no campo dataSaida
+    const agora = new Date();
+    const offset = agora.getTimezoneOffset() * 60000;
+    const dataLocal = new Date(agora.getTime() - offset);
+    safeGet('dataSaida').value = dataLocal.toISOString().slice(0, 16);
 }
 
 // ============================================
@@ -516,7 +514,7 @@ async function registrarEntrada() {
     const queixa = (safeGet('queixa')?.value || '').trim();
     if (!queixa) { mostrarToast('Por favor, descreva a queixa do aluno'); return; }
     
-    // 🆕 Validar e capturar a data escolhida
+    // Validar e capturar a data escolhida
     const dataEntradaInput = safeGet('dataEntrada')?.value;
     if (!dataEntradaInput) {
         mostrarToast('Por favor, informe a data/hora do atendimento');
@@ -545,7 +543,7 @@ async function registrarEntrada() {
                 alunoId: currentAluno.id,
                 queixa,
                 observacoes: safeGet('observacoesEntrada').value,
-                dataEntrada: dataEntrada.toISOString() // 🆕 Enviar data
+                dataEntrada: dataEntrada.toISOString()
             })
         });
         const data = await response.json();
@@ -571,14 +569,44 @@ async function registrarEntrada() {
 // ============================================
 async function registrarSaida() {
     const desfecho = safeGet('desfecho').value;
-    if (!desfecho) { mostrarToast('Por favor, selecione o desfecho do atendimento'); return; }
+    if (!desfecho) { 
+        mostrarToast('Por favor, selecione o desfecho do atendimento'); 
+        return; 
+    }
+    
+    // Validar e capturar data/hora da saída
+    const dataSaidaInput = safeGet('dataSaida')?.value;
+    if (!dataSaidaInput) {
+        mostrarToast('Por favor, informe a data/hora da saída');
+        return;
+    }
+    
+    const dataSaida = new Date(dataSaidaInput);
+    
+    // Validação: não pode ser no futuro
+    if (dataSaida > new Date()) {
+        mostrarToast('⚠️ A data da saída não pode ser no futuro');
+        return;
+    }
+    
+    // Validação: não pode ser anterior à entrada
+    if (currentAtendimento && currentAtendimento.dataHoraEntrada) {
+        const dataEntrada = new Date(currentAtendimento.dataHoraEntrada);
+        if (dataSaida < dataEntrada) {
+            mostrarToast('⚠️ A data da saída não pode ser anterior à data de entrada');
+            return;
+        }
+    }
     
     if (desfecho === 'outros' && !(safeGet('outrosTexto').value || '').trim()) {
         mostrarToast('Por favor, descreva o desfecho');
         return;
     }
     
-    if (!currentAluno || !currentAluno.id) { mostrarToast('Nenhum aluno selecionado'); return; }
+    if (!currentAluno || !currentAluno.id) { 
+        mostrarToast('Nenhum aluno selecionado'); 
+        return; 
+    }
     
     const btn = document.querySelector('#formSaida .btn-primary-custom');
     if (btn) btn.disabled = true;
@@ -589,7 +617,8 @@ async function registrarSaida() {
             desfecho,
             desfechoOutrosTexto: safeGet('outrosTexto').value,
             coordenadorPatioNome: safeGet('coordenadorPatioNome').value,
-            observacoes: safeGet('observacoesSaida').value
+            observacoes: safeGet('observacoesSaida').value,
+            dataSaida: dataSaida.toISOString() // Enviar data personalizada
         };
         
         const response = await fetch('/api/enfermaria/saida', {
@@ -613,6 +642,12 @@ async function registrarSaida() {
     } finally {
         if (btn) btn.disabled = false;
     }
+}
+
+function toggleOutrosCampos() {
+    const desfecho = safeGet('desfecho').value;
+    safeGet('campoCoordenador').style.display = desfecho === 'liberado_coordenador' ? 'block' : 'none';
+    safeGet('campoOutros').style.display = desfecho === 'outros' ? 'block' : 'none';
 }
 
 function finalizarAposSucesso() {
@@ -1046,23 +1081,49 @@ async function editarAtendimento(atendimentoId) {
         
         const a = data.atendimento;
         
-        if (a.status === 'finalizado') {
-            mostrarToast('⚠️ Não é possível editar atendimentos já finalizados');
-            return;
-        }
-        
-        // 🆕 Preparar valor do campo datetime-local
+        // Preparar valor do campo datetime-local (ENTRADA)
         const dataEntradaObj = new Date(a.entrada.dataHora);
-        const offset = dataEntradaObj.getTimezoneOffset() * 60000;
-        const dataLocal = new Date(dataEntradaObj.getTime() - offset);
-        const dataEntradaValue = dataLocal.toISOString().slice(0, 16);
+        const offsetEntrada = dataEntradaObj.getTimezoneOffset() * 60000;
+        const dataEntradaLocal = new Date(dataEntradaObj.getTime() - offsetEntrada);
+        const dataEntradaValue = dataEntradaLocal.toISOString().slice(0, 16);
+        
+        // Preparar valor do campo datetime-local (SAÍDA) — só se já finalizado
+        let dataSaidaValue = '';
+        if (a.saida && a.saida.dataHora) {
+            const dataSaidaObj = new Date(a.saida.dataHora);
+            const offsetSaida = dataSaidaObj.getTimezoneOffset() * 60000;
+            const dataSaidaLocal = new Date(dataSaidaObj.getTime() - offsetSaida);
+            dataSaidaValue = dataSaidaLocal.toISOString().slice(0, 16);
+        }
         
         const oldModal = safeGet('modalEditarAtendimento');
         if (oldModal) oldModal.remove();
         
+        // Bloco de saída (só aparece se já estiver finalizado)
+        const blocoSaida = a.status === 'finalizado' ? `
+            <hr>
+            <h6 class="mb-3"><i class="fas fa-sign-out-alt"></i> Dados da Saída</h6>
+            
+            <div class="mb-3">
+                <label class="form-label">
+                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora da Saída <span class="text-danger">*</span>
+                </label>
+                <input type="datetime-local" id="editarDataSaida" class="form-control" value="${dataSaidaValue}" required>
+                <small class="text-muted">
+                    <i class="fas fa-info-circle"></i> 
+                    Altere caso necessário (correção de registro).
+                </small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Observações da Saída</label>
+                <textarea id="editarObservacoesSaida" class="form-control" rows="3">${escapeHTML(a.saida?.observacoes || '')}</textarea>
+            </div>
+        ` : '';
+        
         const modalHtml = `
             <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
-                <div class="modal-dialog modal-lg">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content">
                         <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
                             <h5 class="modal-title"><i class="fas fa-edit"></i> Editar Atendimento</h5>
@@ -1079,18 +1140,19 @@ async function editarAtendimento(atendimentoId) {
                                     <strong>${escapeHTML(a.alunoNome)}</strong><br>
                                     <small class="text-muted">${escapeHTML(a.alunoMatricula || '-')} • ${escapeHTML(a.alunoTurma || '-')}</small>
                                 </div>
+                                <span class="badge ms-auto" style="background: ${a.status === 'finalizado' ? '#10b981' : '#f59e0b'};">
+                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Atendimento'}
+                                </span>
                             </div>
                             
-                            <!-- 🆕 CAMPO DE DATA EDITÁVEL -->
+                            <h6 class="mb-3"><i class="fas fa-sign-in-alt"></i> Dados da Entrada</h6>
+                            
+                            <!-- CAMPO DE DATA DE ENTRADA EDITÁVEL -->
                             <div class="mb-3">
                                 <label class="form-label">
-                                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora do Atendimento <span class="text-danger">*</span>
+                                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora da Entrada <span class="text-danger">*</span>
                                 </label>
                                 <input type="datetime-local" id="editarDataEntrada" class="form-control" value="${dataEntradaValue}" required>
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle"></i> 
-                                    Altere a data caso necessário (correção de registro).
-                                </small>
                             </div>
                             
                             <div class="mb-3">
@@ -1103,7 +1165,9 @@ async function editarAtendimento(atendimentoId) {
                                 <textarea id="editarObservacoes" class="form-control" rows="3" placeholder="Sinais vitais, medicamentos, etc...">${escapeHTML(a.entrada.observacoes || '')}</textarea>
                             </div>
                             
-                            <div class="mostrarToast mostrarToast-info" style="font-size: 13px;">
+                            ${blocoSaida}
+                            
+                            <div class="mostrarToast mostrarToast-info mt-3" style="font-size: 13px;">
                                 <i class="fas fa-info-circle"></i>
                                 As alterações serão registradas no histórico com seu nome e data/hora.
                             </div>
@@ -1133,7 +1197,11 @@ async function salvarEdicaoAtendimento() {
     const atendimentoId = safeGet('editarAtendimentoId')?.value;
     const queixa = safeGet('editarQueixa')?.value.trim();
     const observacoes = safeGet('editarObservacoes')?.value || '';
-    const dataEntradaInput = safeGet('editarDataEntrada')?.value; // 🆕
+    const dataEntradaInput = safeGet('editarDataEntrada')?.value;
+    
+    // Campos de saída (podem não existir se não estiver finalizado)
+    const dataSaidaInput = safeGet('editarDataSaida')?.value || null;
+    const observacoesSaida = safeGet('editarObservacoesSaida')?.value || null;
     
     if (!queixa) {
         mostrarToast('A queixa é obrigatória');
@@ -1141,27 +1209,47 @@ async function salvarEdicaoAtendimento() {
     }
     
     if (!dataEntradaInput) {
-        mostrarToast('A data do atendimento é obrigatória');
+        mostrarToast('A data de entrada é obrigatória');
         return;
     }
     
     const dataEntrada = new Date(dataEntradaInput);
     
-    // Validação: não permitir data futura
     if (dataEntrada > new Date()) {
-        mostrarToast('⚠️ A data do atendimento não pode ser no futuro');
+        mostrarToast('⚠️ A data de entrada não pode ser no futuro');
         return;
     }
     
+    // Validar data de saída (se fornecida)
+    let dataSaidaISO = null;
+    if (dataSaidaInput) {
+        const dataSaida = new Date(dataSaidaInput);
+        if (dataSaida > new Date()) {
+            mostrarToast('⚠️ A data de saída não pode ser no futuro');
+            return;
+        }
+        if (dataSaida < dataEntrada) {
+            mostrarToast('⚠️ A data de saída não pode ser anterior à data de entrada');
+            return;
+        }
+        dataSaidaISO = dataSaida.toISOString();
+    }
+    
     try {
+        const body = {
+            queixa,
+            observacoes,
+            dataEntrada: dataEntrada.toISOString()
+        };
+        
+        // Só envia campos de saída se existirem
+        if (dataSaidaISO) body.dataSaida = dataSaidaISO;
+        if (observacoesSaida !== null) body.observacoesSaida = observacoesSaida;
+        
         const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ 
-                queixa, 
-                observacoes,
-                dataEntrada: dataEntrada.toISOString() // 🆕
-            })
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
@@ -2734,6 +2822,7 @@ async function logout() {
         window.location.href = '/login.html';
     }
 }
+
 // ============================================
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================
@@ -2751,8 +2840,9 @@ window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
 window.excluirAtendimento = excluirAtendimento;
 window.finalizarAtendimentoAtivo = finalizarAtendimentoAtivo;
 window.logout = logout;
+
 // ============================================
-// EXPORTAR FUNÇÕES GLOBAIS
+// EXPORTAR FUNÇÕES GLOBAIS (NOTIFICAÇÕES)
 // ============================================
 window.abrirNotificacoes = abrirNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
@@ -2762,4 +2852,3 @@ window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 
 window.imprimirAtendimentosAtivos = imprimirAtendimentosAtivos;
 window.imprimirAtendimentoIndividual = imprimirAtendimentoIndividual;
-window.imprimirRelatorioEnfermaria = imprimirRelatorioEnfermaria;

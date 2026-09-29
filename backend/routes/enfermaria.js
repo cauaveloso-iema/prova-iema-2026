@@ -188,9 +188,19 @@ router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res)
 // ============================================
 // 📤 REGISTRAR SAÍDA
 // ============================================
+// ============================================
+// 📤 REGISTRAR SAÍDA
+// ============================================
 router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
-    const { alunoId, desfecho, desfechoOutrosTexto, coordenadorPatioNome, observacoes } = req.body;
+    const { 
+      alunoId, 
+      desfecho, 
+      desfechoOutrosTexto, 
+      coordenadorPatioNome, 
+      observacoes,
+      dataSaida // 🆕 NOVO CAMPO
+    } = req.body;
     
     const desfechosValidos = ['retornou_sala', 'encaminhado_gestao', 'liberado_responsavel', 'liberado_coordenador', 'outros'];
     if (!desfechosValidos.includes(desfecho)) {
@@ -206,10 +216,30 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
       return res.status(404).json({ success: false, error: 'Nenhum atendimento ativo encontrado' });
     }
     
+    // 🆕 Validar e processar dataHoraSaida
+    let dataHoraSaida = new Date(); // fallback: agora
+    if (dataSaida) {
+      const dataParsed = new Date(dataSaida);
+      if (isNaN(dataParsed.getTime())) {
+        return res.status(400).json({ success: false, error: 'Data de saída inválida' });
+      }
+      if (dataParsed > new Date()) {
+        return res.status(400).json({ success: false, error: 'Data de saída não pode ser no futuro' });
+      }
+      // 🆕 Não pode ser anterior à entrada
+      if (dataParsed < new Date(atendimento.entrada.dataHora)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Data de saída não pode ser anterior à data de entrada' 
+        });
+      }
+      dataHoraSaida = dataParsed;
+    }
+    
     const enfermeiro = await User.findById(req.userId).select('nome');
     
     atendimento.saida = {
-      dataHora: new Date(),
+      dataHora: dataHoraSaida, // 🆕 Data personalizada
       desfecho,
       desfechoOutrosTexto: desfecho === 'outros' ? desfechoOutrosTexto : undefined,
       coordenadorPatioNome: desfecho === 'liberado_coordenador' ? coordenadorPatioNome : undefined,
@@ -234,8 +264,10 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
       success: true,
       message: `Atendimento finalizado para ${atendimento.alunoNome}. Desfecho: ${desfechoTexto}`,
       atendimento: {
-        id: atendimento._id, status: atendimento.status,
-        desfecho: desfechoTexto, dataHoraSaida: atendimento.saida.dataHora
+        id: atendimento._id, 
+        status: atendimento.status,
+        desfecho: desfechoTexto, 
+        dataHoraSaida: atendimento.saida.dataHora
       }
     });
   } catch (error) {
@@ -305,17 +337,26 @@ router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 // ============================================
 // 🆕 ✏️ EDITAR ATENDIMENTO (queixa, observações, data)
 // ============================================
+// ============================================
+// 🆕 ✏️ EDITAR ATENDIMENTO (queixa, observações, data entrada e saída)
+// ============================================
 router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
-    const { queixa, observacoes, dataEntrada } = req.body; // 🆕 dataEntrada
+    const { 
+      queixa, 
+      observacoes, 
+      dataEntrada,  // 🆕
+      dataSaida,    // 🆕
+      desfecho,     // 🆕 (opcional - permitir editar desfecho)
+      desfechoOutrosTexto,      // 🆕
+      coordenadorPatioNome,     // 🆕
+      observacoesSaida          // 🆕
+    } = req.body;
+    
     const atendimento = await AtendimentoEnfermaria.findById(req.params.id);
     
     if (!atendimento) {
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-    
-    if (atendimento.status === 'finalizado') {
-      return res.status(400).json({ success: false, error: 'Não é possível editar atendimentos já finalizados' });
     }
     
     if (!queixa || queixa.trim() === '') {
@@ -323,27 +364,67 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
     }
     
     const enfermeiro = await User.findById(req.userId).select('nome');
+    const agora = new Date();
     
-    // 🆕 Validar e atualizar data se fornecida
+    // 🆕 Validar e atualizar data de entrada
     if (dataEntrada) {
       const dataParsed = new Date(dataEntrada);
       if (isNaN(dataParsed.getTime())) {
         return res.status(400).json({ success: false, error: 'Data de entrada inválida' });
       }
-      if (dataParsed > new Date()) {
+      if (dataParsed > agora) {
         return res.status(400).json({ success: false, error: 'Data de entrada não pode ser no futuro' });
       }
       atendimento.entrada.dataHora = dataParsed;
     }
     
-    // Atualizar dados
+    // Atualizar dados da entrada
     atendimento.entrada.queixa = queixa.trim();
     atendimento.entrada.observacoes = observacoes || '';
-    atendimento.entrada.editadoEm = new Date();
+    atendimento.entrada.editadoEm = agora;
     atendimento.entrada.editadoPor = req.userId;
     atendimento.entrada.editadoPorNome = enfermeiro?.nome || req.userNome || 'Enfermeiro';
-    atendimento.updatedAt = new Date();
     
+    // 🆕 Se for finalizado e vieram dados de saída, permitir editar
+    if (atendimento.status === 'finalizado' && atendimento.saida) {
+      if (desfecho) {
+        const desfechosValidos = ['retornou_sala', 'encaminhado_gestao', 'liberado_responsavel', 'liberado_coordenador', 'outros'];
+        if (!desfechosValidos.includes(desfecho)) {
+          return res.status(400).json({ success: false, error: 'Desfecho inválido' });
+        }
+        atendimento.saida.desfecho = desfecho;
+        atendimento.saida.desfechoOutrosTexto = desfecho === 'outros' ? desfechoOutrosTexto : undefined;
+        atendimento.saida.coordenadorPatioNome = desfecho === 'liberado_coordenador' ? coordenadorPatioNome : undefined;
+      }
+      
+      if (typeof observacoesSaida === 'string') {
+        atendimento.saida.observacoes = observacoesSaida;
+      }
+      
+      // 🆕 Validar e atualizar data de saída
+      if (dataSaida) {
+        const dataParsed = new Date(dataSaida);
+        if (isNaN(dataParsed.getTime())) {
+          return res.status(400).json({ success: false, error: 'Data de saída inválida' });
+        }
+        if (dataParsed > agora) {
+          return res.status(400).json({ success: false, error: 'Data de saída não pode ser no futuro' });
+        }
+        if (dataParsed < new Date(atendimento.entrada.dataHora)) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Data de saída não pode ser anterior à data de entrada' 
+          });
+        }
+        atendimento.saida.dataHora = dataParsed;
+      }
+      
+      atendimento.saida.editadoEm = agora;
+      atendimento.saida.editadoPor = req.userId;
+      atendimento.saida.editadoPorNome = enfermeiro?.nome || req.userNome || 'Enfermeiro';
+    }
+    
+    atendimento.updatedAt = agora;
     await atendimento.save();
     
     res.json({
@@ -353,8 +434,13 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
         id: atendimento._id,
         queixa: atendimento.entrada.queixa,
         observacoes: atendimento.entrada.observacoes,
-        dataHora: atendimento.entrada.dataHora, // 🆕
-        editadoEm: atendimento.entrada.editadoEm
+        dataHora: atendimento.entrada.dataHora,
+        editadoEm: atendimento.entrada.editadoEm,
+        saida: atendimento.saida ? {
+          dataHora: atendimento.saida.dataHora,
+          desfecho: atendimento.saida.desfecho,
+          observacoes: atendimento.saida.observacoes
+        } : null
       }
     });
   } catch (error) {
