@@ -2882,7 +2882,7 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <!-- ===== 4 CARDS EM LINHA (ONLINE + TURMAS + PROVAS + QUESTÕES) ===== -->
+                        <!-- ===== 4 CARDS EM LINHA (ONLINE + APP + TURMAS + PROVAS + QUESTÕES) ===== -->
                         <div class="dashboard-stats-row">
                             
                             <!-- CARD: USUÁRIOS ONLINE (CLICÁVEL) -->
@@ -2899,6 +2899,27 @@ class AdminPanel {
                                     <div class="dash-card-details">
                                         <span><i class="fas fa-circle" style="font-size:6px;"></i> Ativos agora</span>
                                         <span><i class="fas fa-clock"></i> últimos 5 min</span>
+                                        <span style="margin-top: 4px; display: block; font-size: 10px; opacity: 0.85;">
+                                            <i class="fas fa-hand-pointer"></i> Clique para ver
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 🔥 NOVO CARD: USUÁRIOS NO APP -->
+                            <div class="dash-card dash-card-app" 
+                                onclick="admin.abrirModalUsuariosApp()" 
+                                style="cursor: pointer;" 
+                                title="Clique para ver quem usa o aplicativo">
+                                <div class="dash-card-icon app-pulse">
+                                    <i class="fas fa-mobile-alt"></i>
+                                </div>
+                                <div class="dash-card-content">
+                                    <div class="dash-card-label">Usuários no App</div>
+                                    <div class="dash-card-value" id="usuarios-app">${stats.usuariosComApp || 0}</div>
+                                    <div class="dash-card-details">
+                                        <span><i class="fas fa-download"></i> <strong id="usuarios-online-app">${stats.usuariosOnlineApp || 0}</strong> online agora</span>
+                                        <span><i class="fas fa-mobile-alt"></i> com app instalado</span>
                                         <span style="margin-top: 4px; display: block; font-size: 10px; opacity: 0.85;">
                                             <i class="fas fa-hand-pointer"></i> Clique para ver
                                         </span>
@@ -3137,6 +3158,146 @@ class AdminPanel {
             `;
         }
     }
+
+        // ============ ABRIR MODAL DE USUÁRIOS COM APP ============
+    async abrirModalUsuariosApp() {
+        console.log('📱 Abrindo modal de usuários do app...');
+        
+        try {
+            this.showToast('🔄 Carregando usuários do app...', 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/usuarios-app', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar usuários do app');
+            }
+            
+            const usuarios = data.usuarios || [];
+            const total = data.total || 0;
+            const onlineAgora = data.onlineAgora || 0;
+            
+            // Se não há ninguém
+            if (usuarios.length === 0) {
+                const modalBody = document.getElementById('modalBody');
+                modalBody.innerHTML = `
+                    <div style="padding: 40px 20px; text-align: center;">
+                        <div style="width: 80px; height: 80px; background: #f3f4f6; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                            <i class="fas fa-mobile-alt" style="font-size: 36px; color: #9ca3af;"></i>
+                        </div>
+                        <h3 style="margin: 0 0 8px; color: #1f2937; font-size: 18px;">Nenhum usuário com app</h3>
+                        <p style="color: #6b7280; margin: 0; font-size: 14px;">
+                            Nenhum usuário baixou/instalou o aplicativo ainda.
+                        </p>
+                    </div>
+                `;
+                
+                document.getElementById('modalTitle').innerHTML = '<i class="fas fa-mobile-alt"></i> Usuários no App';
+                document.getElementById('modalSaveBtn').style.display = 'none';
+                this.openModal();
+                return;
+            }
+            
+            // Montar HTML dos cards
+            let usuariosHtml = '';
+            usuarios.forEach(u => {
+                const iniciais = (u.nome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                const roleInfo = this.getRoleInfo(u.role);
+                
+                let tempoTexto = 'Nunca acessou';
+                if (u.ultimoAcesso) {
+                    const diffMin = Math.floor((Date.now() - new Date(u.ultimoAcesso).getTime()) / 60000);
+                    if (diffMin < 1) tempoTexto = 'Agora';
+                    else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
+                    else if (diffMin < 1440) tempoTexto = `há ${Math.floor(diffMin / 60)}h`;
+                    else tempoTexto = `há ${Math.floor(diffMin / 1440)}d`;
+                }
+                
+                const avatarHtml = u.fotoPerfil
+                    ? `<img src="${u.fotoPerfil}" style="width: 100%; height: 100%; object-fit: cover;">`
+                    : `<span style="font-size: 16px; color: white; font-weight: 700;">${iniciais}</span>`;
+                
+                usuariosHtml += `
+                    <div class="usuario-online-card">
+                        <div class="usuario-online-avatar" style="background: ${roleInfo.corGradiente}; position: relative;">
+                            ${avatarHtml}
+                            ${u.estaOnline ? '<span class="online-indicator"></span>' : ''}
+                        </div>
+                        <div class="usuario-online-content">
+                            <div class="usuario-online-nome">
+                                ${u.nome}
+                                <span class="role-badge-online" style="background: ${roleInfo.corBg}; color: ${roleInfo.corTexto};">
+                                    ${roleInfo.icone} ${roleInfo.label}
+                                </span>
+                            </div>
+                            <div class="usuario-online-email">
+                                <i class="fas fa-envelope"></i> ${u.email}
+                            </div>
+                            <div class="usuario-online-detalhes">
+                                ${u.matricula ? `<span><i class="fas fa-id-card"></i> ${u.matricula}</span>` : ''}
+                                ${u.turma ? `<span><i class="fas fa-users"></i> ${u.turma}</span>` : ''}
+                                ${u.curso ? `<span><i class="fas fa-graduation-cap"></i> ${u.curso}</span>` : ''}
+                            </div>
+                            <div class="usuario-online-footer">
+                                <span class="usuario-online-tempo">
+                                    <i class="fas fa-clock"></i> ${tempoTexto}
+                                </span>
+                                <span style="background: ${u.estaOnline ? '#d1fae5' : '#f3f4f6'}; color: ${u.estaOnline ? '#065f46' : '#6b7280'}; padding: 2px 8px; border-radius: 20px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;">
+                                    <i class="fas fa-mobile-alt"></i> ${u.estaOnline ? 'Online no App' : 'App instalado'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div style="padding: 0; max-height: 75vh; overflow-y: auto;">
+                    <div class="usuarios-online-header" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);">
+                        <div class="usuarios-online-stat">
+                            <div class="stat-icon-wrapper online-pulse-icon">
+                                <i class="fas fa-mobile-alt"></i>
+                            </div>
+                            <div>
+                                <div class="stat-valor">${total}</div>
+                                <div class="stat-label">Usuários com App</div>
+                            </div>
+                        </div>
+                        
+                        <div class="usuarios-online-perfis">
+                            <div class="perfil-chip" style="background: rgba(255,255,255,0.2); color: white;">
+                                <i class="fas fa-circle" style="color: #10b981; font-size: 8px;"></i> <strong>${onlineAgora}</strong> online agora
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="usuarios-online-lista">
+                        ${usuariosHtml}
+                    </div>
+                    
+                    <div style="padding: 12px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 11px;">
+                        <i class="fas fa-info-circle"></i> 
+                        Considera-se "online no app" quem acessou nos últimos 15 minutos • 
+                        Atualizado em ${new Date().toLocaleTimeString('pt-BR')}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-mobile-alt" style="color: #8b5cf6;"></i> Usuários no App';
+            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.openModal();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
 
     // ============ ABRIR MODAL DE USUÁRIOS ONLINE ============
     async abrirModalUsuariosOnline() {

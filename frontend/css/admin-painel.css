@@ -5827,3 +5827,117 @@ body {
     background: linear-gradient(135deg, #0ea5e9, #0284c7); 
     color: white; 
 }
+
+/* ============================================================================
+   🔥 NOVO CARD: USUÁRIOS NO APP
+   ============================================================================ */
+
+/* Grid de 5 colunas em telas grandes */
+.dashboard-stats-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+}
+
+/* Card do App - Azul Roxo */
+.dash-card-app {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    border: none !important;
+    color: white !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.dash-card-app::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+    animation: appGlow 4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes appGlow {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(1.05); }
+}
+
+.dash-card-app .dash-card-label,
+.dash-card-app .dash-card-value,
+.dash-card-app .dash-card-details,
+.dash-card-app .dash-card-details strong {
+    color: white !important;
+}
+
+.dash-card-app .dash-card-details i {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.dash-card-app .dash-card-icon {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+}
+
+/* Efeito de pulso do ícone do app */
+.dash-card-icon.app-pulse {
+    position: relative;
+    animation: iconAppPulse 2s ease-in-out infinite;
+}
+
+.dash-card-icon.app-pulse::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.4);
+    animation: pulseRingApp 2.5s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes iconAppPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+@keyframes pulseRingApp {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.6;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.8);
+        opacity: 0;
+    }
+}
+
+/* Responsivo */
+@media (max-width: 1400px) {
+    .dashboard-stats-row {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 1200px) {
+    .dashboard-stats-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .dashboard-stats-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .dashboard-stats-row {
+        grid-template-columns: 1fr;
+    }
+}

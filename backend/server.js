@@ -11192,6 +11192,8 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
             // Totais gerais
             totalUsuarios: 0,
             usuariosOnline: 0,
+            usuariosComApp: 0,        // 🔥 NOVO
+            usuariosOnlineApp: 0,     // 🔥 NOVO
             
             // Contagem por perfil (TODOS)
             totalAlunos: 0,
@@ -11207,7 +11209,7 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
             totalPsicologia: 0,
             totalAssistenteSocial: 0,
             totalProtagonismo: 0,
-            totalBiblioteca: 0,                    // 🔥 NOVO — ADICIONADO
+            totalBiblioteca: 0,
             
             // Outras estatísticas
             totalTurmas: 0,
@@ -11263,7 +11265,7 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
                     stats.totalSupervisao = count; 
                     break;
                 case 'biblioteca': 
-                    stats.totalBiblioteca = count;              // 🔥 NOVO — CORRIGIDO (era totalSupervisao)
+                    stats.totalBiblioteca = count;
                     break;
                 case 'psicologia': 
                     stats.totalPsicologia = count; 
@@ -11291,6 +11293,26 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
                 { lastLogin: { $gte: cincoMinutosAtras } }
             ]
         });
+
+        // ====================================================================
+        // 2.1. CONTAGEM DE USUÁRIOS COM APP (NOVO)
+        // ====================================================================
+        
+        // Usuários que baixaram/instalaram o app (têm onesignalPlayerId)
+        stats.usuariosComApp = await User.countDocuments({
+            ativo: true,
+            onesignalPlayerId: { $exists: true, $nin: [null, ''] }
+        });
+        
+        // Usuários ONLINE no app (últimos 15 minutos)
+        const quinzeMinAtras = new Date(Date.now() - 15 * 60 * 1000);
+        stats.usuariosOnlineApp = await User.countDocuments({
+            ativo: true,
+            onesignalPlayerId: { $exists: true, $nin: [null, ''] },
+            ultimaValidacaoPush: { $gte: quinzeMinAtras }
+        });
+        
+        console.log(`📱 Usuários com App: ${stats.usuariosComApp} (${stats.usuariosOnlineApp} online agora)`);
 
         // ====================================================================
         // 3. OUTRAS ESTATÍSTICAS (PROVAS, TURMAS, RESULTADOS)
@@ -11454,6 +11476,73 @@ app.get('/api/admin/usuarios-online', authenticateToken, isSuperAdmin, async (re
         res.status(500).json({
             success: false,
             error: 'Erro ao listar usuários online: ' + error.message
+        });
+    }
+});
+
+// ============================================================================
+// ROTA: LISTAR USUÁRIOS COM APP INSTALADO (NOVO)
+// ============================================================================
+
+app.get('/api/admin/usuarios-app', authenticateToken, isSuperAdmin, async (req, res) => {
+    try {
+        console.log(`📱 Admin ${req.userId} listando usuários com app`);
+        
+        const usuarios = await User.find({
+            onesignalPlayerId: { $exists: true, $nin: [null, ''] }
+        })
+        .select('nome email role matricula turma curso eixo departamento fotoPerfil ultimaValidacaoPush onesignalPlayerId ativo lastActive lastLogin')
+        .sort({ ultimaValidacaoPush: -1 })
+        .lean();
+        
+        // Formatar dados
+        const usuariosFormatados = usuarios.map(u => {
+            // Determinar última atividade no app
+            const ultimaAtividade = u.ultimaValidacaoPush || u.lastActive || u.lastLogin;
+            
+            let estaOnline = false;
+            let tempoOnline = 0;
+            
+            if (ultimaAtividade) {
+                const diffMs = Date.now() - new Date(ultimaAtividade).getTime();
+                tempoOnline = Math.floor(diffMs / 60000); // minutos
+                estaOnline = diffMs < (15 * 60 * 1000); // menos de 15 min
+            }
+            
+            return {
+                id: u._id,
+                nome: u.nome || 'Sem nome',
+                email: u.email || '',
+                role: u.role || 'desconhecido',
+                matricula: u.matricula || null,
+                turma: u.turma || null,
+                curso: u.curso || null,
+                eixo: u.eixo || null,
+                departamento: u.departamento || null,
+                fotoPerfil: u.fotoPerfil || null,
+                ultimoAcesso: ultimaAtividade,
+                estaOnline: estaOnline,
+                tempoOnline: tempoOnline,
+                temApp: true
+            };
+        });
+        
+        // Estatísticas
+        const onlineAgora = usuariosFormatados.filter(u => u.estaOnline).length;
+        
+        res.json({
+            success: true,
+            total: usuariosFormatados.length,
+            onlineAgora: onlineAgora,
+            usuarios: usuariosFormatados,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao listar usuários do app:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao listar usuários do app: ' + error.message
         });
     }
 });
