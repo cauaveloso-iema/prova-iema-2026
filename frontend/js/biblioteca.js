@@ -1278,55 +1278,78 @@ function mostrarNotificacao(mensagem, tipo = 'info') {
     document.body.appendChild(modal);
 }
 
-// Modal de confirmação customizado (não trava o WebView)
+// ============================================
+// MODAL DE CONFIRMAÇÃO (SEM BOOTSTRAP - KODULAR SAFE)
+// ============================================
 function confirmar(mensagem) {
     return new Promise((resolve) => {
-        const oldModal = document.getElementById('modalConfirmacao');
+        const oldModal = document.getElementById('modalConfirmacaoCustom');
         if (oldModal) oldModal.remove();
-        
-        const modalHtml = `
-            <div class="modal fade" id="modalConfirmacao" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white;">
-                            <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Confirmação</h5>
-                        </div>
-                        <div class="modal-body" style="white-space: pre-line; font-size: 15px;">
-                            ${escapeHTML(mensagem)}
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" id="btnCancelarConfirmacao">
-                                <i class="fas fa-times"></i> Cancelar
-                            </button>
-                            <button type="button" class="btn btn-danger" id="btnConfirmarConfirmacao">
-                                <i class="fas fa-check"></i> Confirmar
-                            </button>
-                        </div>
-                    </div>
+
+        const modal = document.createElement('div');
+        modal.id = 'modalConfirmacaoCustom';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999999;
+            padding: 20px;
+            box-sizing: border-box;
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 25px;
+                max-width: 380px;
+                width: 100%;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                text-align: center;
+                animation: fadeIn 0.2s ease;
+            ">
+                <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
+                    ${escapeHTML(mensagem)}
+                </p>
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-cancelar-conf" style="
+                        flex: 1; padding: 12px; background: #e5e7eb; color: #374151;
+                        border: none; border-radius: 10px; font-size: 14px;
+                        font-weight: 600; cursor: pointer;
+                    ">Cancelar</button>
+                    <button id="btn-confirmar-conf" style="
+                        flex: 1; padding: 12px; background: #dc2626; color: white;
+                        border: none; border-radius: 10px; font-size: 14px;
+                        font-weight: 600; cursor: pointer;
+                    ">Confirmar</button>
                 </div>
             </div>
         `;
-        
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
-        const modalEl = document.getElementById('modalConfirmacao');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-        
-        const finalizar = (resultado) => {
-            modal.hide();
-            setTimeout(() => modalEl.remove(), 300);
-            resolve(resultado);
+
+        document.body.appendChild(modal);
+
+        // 🔥 Listeners diretos via onclick (mais confiável no WebView)
+        modal.querySelector('#btn-confirmar-conf').onclick = function() {
+            modal.remove();
+            resolve(true);
         };
-        
-        document.getElementById('btnConfirmarConfirmacao').addEventListener('click', () => finalizar(true));
-        document.getElementById('btnCancelarConfirmacao').addEventListener('click', () => finalizar(false));
-        
-        modalEl.addEventListener('hidden.bs.modal', () => {
-            if (!modalEl.dataset.resolvido) {
+
+        modal.querySelector('#btn-cancelar-conf').onclick = function() {
+            modal.remove();
+            resolve(false);
+        };
+
+        // Fechar clicando fora
+        modal.onclick = function(e) {
+            if (e.target === modal) {
+                modal.remove();
                 resolve(false);
             }
-        });
+        };
     });
 }
 
@@ -1402,7 +1425,7 @@ async function carregarListaNotificacoes() {
 function renderizarNotificacoes(notificacoes) {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
-    
+
     if (!notificacoes || notificacoes.length === 0) {
         lista.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #6c757d;">
@@ -1412,7 +1435,7 @@ function renderizarNotificacoes(notificacoes) {
         `;
         return;
     }
-    
+
     let html = '';
     notificacoes.forEach(notif => {
         const data = new Date(notif.createdAt);
@@ -1421,20 +1444,23 @@ function renderizarNotificacoes(notificacoes) {
         const diffMin = Math.floor(diffMs / 60000);
         const diffHr = Math.floor(diffMs / 3600000);
         const diffDia = Math.floor(diffMs / 86400000);
-        
+
         let tempoTexto;
         if (diffMin < 1) tempoTexto = 'agora mesmo';
         else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
         else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
         else tempoTexto = `há ${diffDia} d`;
-        
+
         const classeLida = notif.lida ? '' : 'nao-lida';
-        
-        // 🔥 Estrutura com botão X de excluir
+        const linkSeguro = escapeHTML(notif.link || '#');
+        const idSeguro = String(notif._id);
+
+        // 🔥 onclick inline — mais confiável no WebView do Kodular
         html += `
             <div class="notificacao-item ${classeLida}" 
-                 data-notif-id="${notif._id}" 
-                 data-notif-link="${escapeHTML(notif.link || '#')}"
+                 data-notif-id="${idSeguro}" 
+                 data-notif-link="${linkSeguro}"
+                 onclick="if(!event.target.closest('.btn-excluir-notificacao')) { abrirNotificacao('${idSeguro}', '${linkSeguro}'); }"
                  style="
                     padding: 12px 40px 12px 15px;
                     border-bottom: 1px solid #e5e7eb;
@@ -1484,10 +1510,11 @@ function renderizarNotificacoes(notificacoes) {
                     </div>
                 </div>
                 
-                <!-- 🔥 BOTÃO X DE EXCLUIR -->
-                <button class="btn-excluir-notificacao" 
-                        data-excluir-id="${notif._id}"
+                <button type="button"
+                        class="btn-excluir-notificacao" 
+                        data-excluir-id="${idSeguro}"
                         title="Excluir notificação"
+                        onclick="event.stopPropagation(); event.preventDefault(); excluirNotificacao('${idSeguro}', this); return false;"
                         style="
                             position: absolute;
                             top: 50%;
@@ -1503,65 +1530,51 @@ function renderizarNotificacoes(notificacoes) {
                             align-items: center;
                             justify-content: center;
                             cursor: pointer;
-                            opacity: 0.6;
+                            opacity: 0.7;
                             transition: all 0.2s;
                             font-size: 12px;
+                            z-index: 10;
                         "
                         onmouseover="this.style.opacity='1'; this.style.background='#fecaca';"
-                        onmouseout="this.style.opacity='0.6'; this.style.background='#fee2e2';">
+                        onmouseout="this.style.opacity='0.7'; this.style.background='#fee2e2';">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
         `;
     });
-    
+
     lista.innerHTML = html;
-    
-    // 🔥 Adicionar listeners para clicar na notificação
-    lista.querySelectorAll('.notificacao-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            // Se clicou no botão X, não abre a notificação
-            if (e.target.closest('.btn-excluir-notificacao')) return;
-            
-            const id = item.getAttribute('data-notif-id');
-            const link = item.getAttribute('data-notif-link');
-            abrirNotificacao(id, link);
-        });
-    });
-    
-    // 🔥 Adicionar listeners para o botão X (excluir)
-    lista.querySelectorAll('.btn-excluir-notificacao').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const id = btn.getAttribute('data-excluir-id');
-            excluirNotificacao(id, btn);
-        });
-    });
 }
 
 // ========== EXCLUIR NOTIFICAÇÃO INDIVIDUAL ==========
+// ========== EXCLUIR NOTIFICAÇÃO INDIVIDUAL ==========
 async function excluirNotificacao(id, btnElement = null) {
     try {
+        // 🔥 Confirmação com modal HTML puro (funciona no Kodular)
         const confirmacao = await confirmar('🗑️ Deseja excluir esta notificação?');
         if (!confirmacao) return;
-        
+
         const token = localStorage.getItem('auth_token');
-        
+        if (!token) {
+            mostrarToast('❌ Sessão expirada', 'error');
+            return;
+        }
+
         // Feedback visual no botão
         if (btnElement) {
             btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             btnElement.disabled = true;
         }
-        
+
         const response = await fetch(`/api/notificacoes/${id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-            // Remove o item da lista
+            // Remove o item da lista com animação
             const item = btnElement?.closest('.notificacao-item');
             if (item) {
                 item.style.transition = 'all 0.3s ease';
@@ -1569,7 +1582,7 @@ async function excluirNotificacao(id, btnElement = null) {
                 item.style.transform = 'translateX(-100%)';
                 setTimeout(() => item.remove(), 300);
             }
-            
+
             // Atualiza o contador (badge)
             const badge = document.getElementById('notificacoesBadge');
             if (badge && badge.style.display !== 'none') {
@@ -1581,9 +1594,9 @@ async function excluirNotificacao(id, btnElement = null) {
                     document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
                 }
             }
-            
+
             mostrarToast('✅ Notificação excluída', 'success');
-            
+
             // Se a lista ficar vazia, recarrega
             const lista = document.getElementById('notificacoesLista');
             if (lista && lista.children.length === 0) {
@@ -1592,10 +1605,16 @@ async function excluirNotificacao(id, btnElement = null) {
         } else {
             throw new Error(data.error || 'Erro ao excluir');
         }
-        
+
     } catch (error) {
-        console.error('❌ Erro:', error);
+        console.error('❌ Erro ao excluir notificação:', error);
         mostrarToast('❌ ' + error.message, 'error');
+        
+        // Restaura o botão em caso de erro
+        if (btnElement) {
+            btnElement.innerHTML = '<i class="fas fa-times"></i>';
+            btnElement.disabled = false;
+        }
     }
 }
 
@@ -1617,24 +1636,25 @@ function abrirNotificacoes() {
 async function abrirNotificacao(id, link) {
     try {
         const token = localStorage.getItem('auth_token');
-        
+        if (!token) return;
+
         await fetch(`/api/notificacoes/${id}/lida`, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const dropdown = document.getElementById('notificacoesDropdown');
         if (dropdown) {
             dropdown.classList.remove('show');
             dropdown.style.display = 'none';
         }
-        
-        if (link && link !== '#') {
+
+        if (link && link !== '#' && link !== 'null' && link !== 'undefined') {
             window.location.href = link;
+        } else {
+            carregarNotificacoes();
         }
-        
-        carregarNotificacoes();
-        
+
     } catch (error) {
         console.error('Erro ao abrir notificação:', error);
     }
@@ -1682,18 +1702,21 @@ async function marcarTodasLidas(event) {
 async function limparMinhasNotificacoes(event) {
     try {
         const token = localStorage.getItem('auth_token');
-        
-        // 🔥 USA confirmar() em vez de confirm() nativo
+        if (!token) {
+            mostrarToast('❌ Sessão expirada', 'error');
+            return;
+        }
+
+        // 🔥 USA confirmar() customizado (Kodular safe)
         const confirmacao = await confirmar('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
-        
         if (!confirmacao) return;
-        
+
         const btn = event?.currentTarget;
         if (btn) {
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
             btn.disabled = true;
         }
-        
+
         const response = await fetch('/api/notificacoes/limpar-minhas', {
             method: 'DELETE',
             headers: { 
@@ -1701,20 +1724,19 @@ async function limparMinhasNotificacoes(event) {
                 'Content-Type': 'application/json'
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             await carregarListaNotificacoes();
             const badge = document.getElementById('notificacoesBadge');
             if (badge) badge.style.display = 'none';
             document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
-            // 🔥 USA mostrarNotificacao() em vez de mostrarToast() nativo
             mostrarNotificacao(data.message || 'Notificações excluídas com sucesso!', 'success');
         } else {
             throw new Error(data.error || 'Erro ao excluir notificações');
         }
-        
+
     } catch (error) {
         console.error('❌ Erro:', error);
         mostrarNotificacao(error.message, 'error');
@@ -1773,7 +1795,9 @@ window.fecharNotificacoes = fecharNotificacoes;
 window.logout = logout;
 
 // Exportar funções de notificações
+window.excluirNotificacao = excluirNotificacao;
 window.abrirNotificacao = abrirNotificacao;
-window.marcarTodasLidas = marcarTodasLidas;
 window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+window.confirmar = confirmar;
+window.marcarTodasLidas = marcarTodasLidas;
 window.carregarNotificacoes = carregarNotificacoes;
