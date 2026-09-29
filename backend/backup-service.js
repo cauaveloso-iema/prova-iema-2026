@@ -32,7 +32,6 @@ class BackupService {
                     await this.processSyncQueue();
                 } catch (error) {
                     this.online = false;
-                    console.log('⚠️ Modo offline ativado');
                 }
             }, 10000); // Verificar a cada 10 segundos
         }
