@@ -11312,8 +11312,6 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
             ultimaValidacaoPush: { $gte: quinzeMinAtras }
         });
         
-        console.log(`📱 Usuários com App: ${stats.usuariosComApp} (${stats.usuariosOnlineApp} online agora)`);
-
         // ====================================================================
         // 3. OUTRAS ESTATÍSTICAS (PROVAS, TURMAS, RESULTADOS)
         // ====================================================================
@@ -11486,7 +11484,6 @@ app.get('/api/admin/usuarios-online', authenticateToken, isSuperAdmin, async (re
 
 app.get('/api/admin/usuarios-app', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`📱 Admin ${req.userId} listando usuários com app`);
         
         const usuarios = await User.find({
             onesignalPlayerId: { $exists: true, $nin: [null, ''] }
