@@ -985,7 +985,7 @@ async function imprimirAtendimento(atendimentoId) {
 }
 
 // ============================================
-// 🖨️ GERAR HTML DA IMPRESSÃO (padrão Enfermaria/Pedagógico)
+// 🖨️ GERAR HTML DA IMPRESSÃO
 // ============================================
 function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
     const logo = '/uploads/logo-iema.png';
