@@ -1974,6 +1974,12 @@ function exibirRelatorio(data, tipo) {
     const container = safeGet('resultadoRelatorio');
     if (!container) return;
     
+    // ✅ HABILITAR BOTÕES DE EXPORTAÇÃO
+    const btnCSV = safeGet('btnExportarCSVPsicologia');
+    const btnPDF = safeGet('btnExportarPDFPsicologia');
+    if (btnCSV) btnCSV.disabled = false;
+    if (btnPDF) btnPDF.disabled = false;
+    
     if (tipo === 'geral') {
         container.innerHTML = `
             <div class="card">
