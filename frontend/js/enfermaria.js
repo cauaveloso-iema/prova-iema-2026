@@ -2559,6 +2559,14 @@ function gerarHTMLRelatorioEnfermaria(data) {
             <p>Setor: Enfermaria</p>
         </div>
     </body>
+
+    <button class="btn-print no-print" 
+        onclick="history.back()" 
+        style="background:#6b7280; margin-right:10px;">
+        ← Voltar ao sistema
+    </button>
+
+
     </html>`;
 }
 
