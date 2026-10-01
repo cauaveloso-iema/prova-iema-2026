@@ -25,6 +25,27 @@ window.prompt = function(mensagem, valorPadrao) {
     console.warn('⚠️ prompt() nativo bloqueado.');
     return null;
 };
+
+// ============================================
+// 🌐 DETECTAR KODULAR
+// ============================================
+function estaNoKodular() {
+    const ua = navigator.userAgent || '';
+    return /Android/i.test(ua) && (
+        /Kodular|Companion|Thunkable/i.test(ua) ||
+        typeof window.AppInventor !== 'undefined'
+    );
+}
+
+// Envia HTML para o Kodular gerar PDF
+function enviarPDFParaKodular(html, titulo) {
+    window.__KODULAR_HTML__ = html;
+    window.__KODULAR_TITULO__ = titulo || 'relatorio';
+    
+    // Alerta simples (curto, o Kodular captura)
+    window.alert('KODULAR_PDF');
+}
+
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -767,31 +788,23 @@ async function imprimirAtendimentosAtivos() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
             mostrarToast('⚠️ Nenhum atendimento ativo para imprimir', 'warning');
             return;
         }
-        
-        const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
-        
-        const ua = navigator.userAgent || '';
-        const noKodular = /Android/i.test(ua) && /Kodular|Companion|Thunkable/i.test(ua);
 
-        if (noKodular) {
-            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } else {
-            const blob = new Blob([html], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
+        const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
+        const titulo = 'Atendimentos_Andamento_' + new Date().toISOString().split('T')[0];
+
+        if (estaNoKodular()) {
+            enviarPDFParaKodular(html, titulo);
+            return;
         }
-        
+
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -1287,37 +1300,29 @@ async function salvarEdicaoAtendimento() {
 // ============================================
 async function imprimirAtendimentoIndividual(atendimentoId) {
     if (!atendimentoId) return;
-    
+
     try {
         const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (!data.success || !data.atendimento) {
             mostrarToast('Erro ao carregar atendimento', 'error');
             return;
         }
-        
-        const html = gerarHTMLAtendimentoIndividual(data.atendimento);
-        
-        const ua = navigator.userAgent || '';
-        const noKodular = /Android/i.test(ua) && /Kodular|Companion|Thunkable/i.test(ua);
 
-        if (noKodular) {
-            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } else {
-            const blob = new Blob([html], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
+        const html = gerarHTMLAtendimentoIndividual(data.atendimento);
+        const titulo = 'Ficha_' + (data.atendimento.alunoNome || 'aluno').replace(/\s+/g, '_');
+
+        if (estaNoKodular()) {
+            enviarPDFParaKodular(html, titulo);
+            return;
         }
-        
+
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -2134,25 +2139,15 @@ function exportarPDF() {
     }
 
     const html = gerarHTMLRelatorioEnfermaria(relatorioData);
+    const titulo = 'Relatorio_Enfermaria_' + new Date().toISOString().split('T')[0];
 
-    // 🔥 Detecta se está no Kodular
-    const ua = navigator.userAgent || '';
-    const noKodular = /Android/i.test(ua) && /Kodular|Companion|Thunkable/i.test(ua);
-
-    if (noKodular) {
-        // 📱 NO KODULAR: usa data URL (WebView Android aceita)
-        const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    // 🔥 MODO KODULAR
+    if (estaNoKodular()) {
+        enviarPDFParaKodular(html, titulo);
         return;
     }
 
-    // 🌐 NO NAVEGADOR: Blob normal (funciona perfeitamente)
+    // 🌐 MODO WEB
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
