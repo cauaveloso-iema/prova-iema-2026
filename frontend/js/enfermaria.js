@@ -25,38 +25,6 @@ window.prompt = function(mensagem, valorPadrao) {
     console.warn('⚠️ prompt() nativo bloqueado.');
     return null;
 };
-
-// ============================================
-// 🌐 DETECTAR KODULAR
-// ============================================
-function estaNoKodular() {
-    const ua = navigator.userAgent || '';
-    return /Android/i.test(ua) && (
-        /Kodular|Companion|Thunkable/i.test(ua) ||
-        typeof window.AppInventor !== 'undefined'
-    );
-}
-
-// ============================================
-// 📤 ENVIAR HTML PARA KODULAR EM CHUNKS
-// ============================================
-function enviarPDFParaKodular(html, titulo) {
-    // Divide o HTML em pedaços de 20KB (seguro para o Android)
-    const CHUNK_SIZE = 20000;
-    const chunks = [];
-    for (let i = 0; i < html.length; i += CHUNK_SIZE) {
-        chunks.push(html.substring(i, i + CHUNK_SIZE));
-    }
-    
-    // Guarda tudo no window para o Kodular buscar depois
-    window.__KODULAR_HTML_CHUNKS__ = chunks;
-    window.__KODULAR_TITULO__ = titulo || 'relatorio';
-    window.__KODULAR_TOTAL_CHUNKS__ = chunks.length;
-    
-    // Avisa o Kodular para começar
-    window.alert('KODULAR_PDF_INICIO:' + chunks.length);
-}
-
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -799,23 +767,19 @@ async function imprimirAtendimentosAtivos() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-
+        
         if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
             mostrarToast('⚠️ Nenhum atendimento ativo para imprimir', 'warning');
             return;
         }
-
+        
         const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
-        const titulo = 'Atendimentos_Andamento_' + new Date().toISOString().split('T')[0];
-
-        if (estaNoKodular()) {
-            enviarPDFParaKodular(html, titulo);
-            return;
-        }
-
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -1311,29 +1275,25 @@ async function salvarEdicaoAtendimento() {
 // ============================================
 async function imprimirAtendimentoIndividual(atendimentoId) {
     if (!atendimentoId) return;
-
+    
     try {
         const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-
+        
         if (!data.success || !data.atendimento) {
             mostrarToast('Erro ao carregar atendimento', 'error');
             return;
         }
-
+        
         const html = gerarHTMLAtendimentoIndividual(data.atendimento);
-        const titulo = 'Ficha_' + (data.atendimento.alunoNome || 'aluno').replace(/\s+/g, '_');
-
-        if (estaNoKodular()) {
-            enviarPDFParaKodular(html, titulo);
-            return;
-        }
-
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -2144,24 +2104,17 @@ function exportarCSV() {
 // 📄 EXPORTAR PDF (padrão Setor Pedagógico)
 // ============================================
 function exportarPDF() {
-    if (!relatorioData) {
-        mostrarToast('⚠️ Gere um relatório primeiro', 'warning');
-        return;
+    if (!relatorioData) { 
+        mostrarToast('⚠️ Gere um relatório primeiro', 'warning'); 
+        return; 
     }
-
+    
     const html = gerarHTMLRelatorioEnfermaria(relatorioData);
-    const titulo = 'Relatorio_Enfermaria_' + new Date().toISOString().split('T')[0];
-
-    // 🔥 MODO KODULAR
-    if (estaNoKodular()) {
-        enviarPDFParaKodular(html, titulo);
-        return;
-    }
-
-    // 🌐 MODO WEB
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
 }
 
 // ============================================
