@@ -37,13 +37,24 @@ function estaNoKodular() {
     );
 }
 
-// Envia HTML para o Kodular gerar PDF
+// ============================================
+// 📤 ENVIAR HTML PARA KODULAR EM CHUNKS
+// ============================================
 function enviarPDFParaKodular(html, titulo) {
-    window.__KODULAR_HTML__ = html;
-    window.__KODULAR_TITULO__ = titulo || 'relatorio';
+    // Divide o HTML em pedaços de 20KB (seguro para o Android)
+    const CHUNK_SIZE = 20000;
+    const chunks = [];
+    for (let i = 0; i < html.length; i += CHUNK_SIZE) {
+        chunks.push(html.substring(i, i + CHUNK_SIZE));
+    }
     
-    // Alerta simples (curto, o Kodular captura)
-    window.alert('KODULAR_PDF');
+    // Guarda tudo no window para o Kodular buscar depois
+    window.__KODULAR_HTML_CHUNKS__ = chunks;
+    window.__KODULAR_TITULO__ = titulo || 'relatorio';
+    window.__KODULAR_TOTAL_CHUNKS__ = chunks.length;
+    
+    // Avisa o Kodular para começar
+    window.alert('KODULAR_PDF_INICIO:' + chunks.length);
 }
 
 // ============================================
