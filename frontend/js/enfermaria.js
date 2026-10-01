@@ -767,19 +767,22 @@ async function imprimirAtendimentosAtivos() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
             mostrarToast('⚠️ Nenhum atendimento ativo para imprimir', 'warning');
             return;
         }
-        
+
         const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
-        
-        // 🔥 Abre numa nova janela (Kodular trata via OnNewWindowRequest)
+
+        if (estaNoKodular()) {
+            window.location.href = htmlParaDataUrl(html);
+            return;
+        }
+
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
-        
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -1275,25 +1278,28 @@ async function salvarEdicaoAtendimento() {
 // ============================================
 async function imprimirAtendimentoIndividual(atendimentoId) {
     if (!atendimentoId) return;
-    
+
     try {
         const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (!data.success || !data.atendimento) {
             mostrarToast('Erro ao carregar atendimento', 'error');
             return;
         }
-        
+
         const html = gerarHTMLAtendimentoIndividual(data.atendimento);
-        
-        // 🔥 Abre numa nova janela (Kodular trata via OnNewWindowRequest)
+
+        if (estaNoKodular()) {
+            window.location.href = htmlParaDataUrl(html);
+            return;
+        }
+
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
-        
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -2077,6 +2083,9 @@ function exibirRelatorio(data, tipo) {
     }
 }
 
+// ============================================
+// 📊 EXPORTAR CSV
+// ============================================
 function exportarCSV() {
     if (!relatorioData) {
         mostrarToast('Nenhum relatório carregado');
@@ -2094,7 +2103,6 @@ function exportarCSV() {
         });
     }
 
-    // Codifica como data URL (funciona no WebView do Kodular)
     const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csvContent);
     const link = document.createElement('a');
     link.href = dataUrl;
@@ -2105,7 +2113,24 @@ function exportarCSV() {
 }
 
 // ============================================
-// 📄 EXPORTAR PDF (padrão Setor Pedagógico)
+// 🌐 HELPER: detecta Kodular
+// ============================================
+function estaNoKodular() {
+    const ua = navigator.userAgent || '';
+    return /Android/i.test(ua) && (
+        /Kodular|Companion|Thunkable/i.test(ua) ||
+        typeof window.AppInventor !== 'undefined'
+    );
+}
+
+// Converte HTML em data URL (funciona no WebView Android)
+function htmlParaDataUrl(html) {
+    // Usa encodeURIComponent em vez de base64 (mais seguro com UTF-8)
+    return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+}
+
+// ============================================
+// 📄 EXPORTAR PDF
 // ============================================
 function exportarPDF() {
     if (!relatorioData) {
@@ -2115,7 +2140,13 @@ function exportarPDF() {
 
     const html = gerarHTMLRelatorioEnfermaria(relatorioData);
 
-    // Abre numa nova janela (o Kodular já trata via OnNewWindowRequest)
+    // 🔥 MODO KODULAR — usa data URL em vez de Blob
+    if (estaNoKodular()) {
+        window.location.href = htmlParaDataUrl(html);
+        return;
+    }
+
+    // 🌐 WEB — Blob normal
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
