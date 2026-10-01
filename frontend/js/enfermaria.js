@@ -775,17 +775,22 @@ async function imprimirAtendimentosAtivos() {
         
         const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
         
-        // Cria Blob URL e clica num <a target="_blank">
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        const ua = navigator.userAgent || '';
+        const noKodular = /Android/i.test(ua) && /Kodular|Companion|Thunkable/i.test(ua);
+
+        if (noKodular) {
+            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        }
         
     } catch (error) {
         console.error('Erro:', error);
@@ -1296,17 +1301,22 @@ async function imprimirAtendimentoIndividual(atendimentoId) {
         
         const html = gerarHTMLAtendimentoIndividual(data.atendimento);
         
-        // Cria Blob URL e clica num <a target="_blank">
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        const ua = navigator.userAgent || '';
+        const noKodular = /Android/i.test(ua) && /Kodular|Companion|Thunkable/i.test(ua);
+
+        if (noKodular) {
+            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        }
         
     } catch (error) {
         console.error('Erro:', error);
@@ -2125,21 +2135,27 @@ function exportarPDF() {
 
     const html = gerarHTMLRelatorioEnfermaria(relatorioData);
 
-    // Cria o Blob URL
+    // 🔥 Detecta se está no Kodular
+    const ua = navigator.userAgent || '';
+    const noKodular = /Android/i.test(ua) && /Kodular|Companion|Thunkable/i.test(ua);
+
+    if (noKodular) {
+        // 📱 NO KODULAR: usa data URL (WebView Android aceita)
+        const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+    }
+
+    // 🌐 NO NAVEGADOR: Blob normal (funciona perfeitamente)
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-
-    // Cria um <a target="_blank"> e clica programaticamente
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    // Libera memória depois
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    window.open(url, '_blank');
 }
 
 // ============================================
