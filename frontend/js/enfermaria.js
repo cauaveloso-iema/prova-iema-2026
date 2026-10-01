@@ -2169,7 +2169,7 @@ function exportarCSV() {
 }
 
 // ============================================
-// 📄 EXPORTAR PDF (WEB + KODULAR)
+// EXPORTAR PDF (WEB + KODULAR)
 // ============================================
 function exportarPDF() {
     if (!relatorioData) {
