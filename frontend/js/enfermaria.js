@@ -767,22 +767,26 @@ async function imprimirAtendimentosAtivos() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-
+        
         if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
             mostrarToast('⚠️ Nenhum atendimento ativo para imprimir', 'warning');
             return;
         }
-
+        
         const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
-
-        if (estaNoKodular()) {
-            window.location.href = htmlParaDataUrl(html);
-            return;
-        }
-
+        
+        // Cria Blob URL e clica num <a target="_blank">
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -1278,28 +1282,32 @@ async function salvarEdicaoAtendimento() {
 // ============================================
 async function imprimirAtendimentoIndividual(atendimentoId) {
     if (!atendimentoId) return;
-
+    
     try {
         const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-
+        
         if (!data.success || !data.atendimento) {
             mostrarToast('Erro ao carregar atendimento', 'error');
             return;
         }
-
+        
         const html = gerarHTMLAtendimentoIndividual(data.atendimento);
-
-        if (estaNoKodular()) {
-            window.location.href = htmlParaDataUrl(html);
-            return;
-        }
-
+        
+        // Cria Blob URL e clica num <a target="_blank">
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        
     } catch (error) {
         console.error('Erro:', error);
         mostrarToast('Erro ao gerar PDF', 'error');
@@ -2083,16 +2091,11 @@ function exibirRelatorio(data, tipo) {
     }
 }
 
-// ============================================
-// 📊 EXPORTAR CSV
-// ============================================
 function exportarCSV() {
-    if (!relatorioData) {
-        mostrarToast('Nenhum relatório carregado');
-        return;
-    }
-
+    if (!relatorioData) { mostrarToast('Nenhum relatório carregado'); return; }
+    
     let csvContent = "Data,Aluno,Turma,Queixa,Desfecho\n";
+    
     if (relatorioData.atendimentos) {
         relatorioData.atendimentos.forEach(a => {
             csvContent += `${new Date(a.dataEntrada).toLocaleString('pt-BR')},"${relatorioData.aluno?.nome || a.alunoNome || ''}","${relatorioData.aluno?.turma || a.alunoTurma || ''}","${(a.queixa || '').replace(/"/g, '""')}","${(a.desfechoTexto || '').replace(/"/g, '""')}"\n`;
@@ -2102,35 +2105,17 @@ function exportarCSV() {
             csvContent += `${new Date(a.dataEntrada).toLocaleString('pt-BR')},"${a.alunoNome}","${a.alunoTurma}","${(a.queixa || '').replace(/"/g, '""')}",${a.status}\n`;
         });
     }
-
-    const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\uFEFF' + csvContent);
+    
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = dataUrl;
-    link.download = 'relatorio_enfermaria_' + new Date().toISOString().split('T')[0] + '.csv';
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio_enfermaria_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
 }
 
 // ============================================
-// 🌐 HELPER: detecta Kodular
-// ============================================
-function estaNoKodular() {
-    const ua = navigator.userAgent || '';
-    return /Android/i.test(ua) && (
-        /Kodular|Companion|Thunkable/i.test(ua) ||
-        typeof window.AppInventor !== 'undefined'
-    );
-}
-
-// Converte HTML em data URL (funciona no WebView Android)
-function htmlParaDataUrl(html) {
-    // Usa encodeURIComponent em vez de base64 (mais seguro com UTF-8)
-    return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-}
-
-// ============================================
-// 📄 EXPORTAR PDF
+// 📄 EXPORTAR PDF (padrão Setor Pedagógico)
 // ============================================
 function exportarPDF() {
     if (!relatorioData) {
@@ -2140,16 +2125,21 @@ function exportarPDF() {
 
     const html = gerarHTMLRelatorioEnfermaria(relatorioData);
 
-    // 🔥 MODO KODULAR — usa data URL em vez de Blob
-    if (estaNoKodular()) {
-        window.location.href = htmlParaDataUrl(html);
-        return;
-    }
-
-    // 🌐 WEB — Blob normal
+    // Cria o Blob URL
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+
+    // Cria um <a target="_blank"> e clica programaticamente
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Libera memória depois
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ============================================
@@ -2559,14 +2549,6 @@ function gerarHTMLRelatorioEnfermaria(data) {
             <p>Setor: Enfermaria</p>
         </div>
     </body>
-
-    <button class="btn-print no-print" 
-        onclick="history.back()" 
-        style="background:#6b7280; margin-right:10px;">
-        ← Voltar ao sistema
-    </button>
-
-
     </html>`;
 }
 
