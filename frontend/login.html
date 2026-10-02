@@ -544,7 +544,7 @@
         });
 
         // ============================================================
-        // 🔥 VERIFICAR LOGIN AUTOMÁTICO
+        // 🔥 VERIFICAR LOGIN AUTOMÁTICO (VERSÃO CORRIGIDA)
         // ============================================================
         function verificarLoginAutomatico() {
             console.log('🔍 Verificando login automático...');
@@ -587,22 +587,43 @@
                         resetarRedirectCount();
                         window.location.href = destino;
                     } else {
-                        console.log('❌ Token inválido, limpando dados');
+                        // 🔥 CORREÇÃO: Token inválido/expirado - LIMPAR TUDO E QUEBRAR O LOOP
+                        console.log('❌ Token inválido (status ' + response.status + '), limpando dados...');
+                        
                         localStorage.removeItem('auth_token');
                         localStorage.removeItem('user_data');
                         sessionStorage.removeItem('auth_token');
                         sessionStorage.removeItem('user_data');
+                        
                         resetarRedirectCount();
                         carregarLembrar();
+                        
+                        // Opcional: mostrar mensagem
+                        // mostrarAlerta('Sessão expirada. Faça login novamente.', 'info');
                     }
                 })
-                .catch(() => {
-                    console.log('⚠️ Erro ao verificar token');
+                .catch((error) => {
+                    // 🔥 CORREÇÃO CRÍTICA: Erro de rede também limpa os tokens
+                    console.error('❌ Erro ao verificar token:', error);
+                    
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('user_data');
+                    sessionStorage.removeItem('auth_token');
+                    sessionStorage.removeItem('user_data');
+                    
+                    resetarRedirectCount();
+                    carregarLembrar();
+                    
+                    // Opcional: mostrar mensagem
+                    // mostrarAlerta('Não foi possível verificar sua sessão. Faça login.', 'error');
                 });
 
             } catch (e) {
                 console.error('❌ Erro ao processar dados:', e);
                 localStorage.removeItem('user_data');
+                localStorage.removeItem('auth_token');
+                sessionStorage.removeItem('auth_token');
+                sessionStorage.removeItem('user_data');
                 resetarRedirectCount();
                 carregarLembrar();
             }

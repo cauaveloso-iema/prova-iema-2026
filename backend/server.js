@@ -21632,12 +21632,83 @@ setInterval(async () => {
     }
 }, 60000); // 60 segundos = 1 minuto
 
+// ============================================================================
+// 🔥 ROTA RAIZ INTELIGENTE - Redireciona baseado no token
+// ============================================================================
+app.get('/', async (req, res) => {
+    try {
+        // Tentar obter token do cookie ou do header
+        let token = req.cookies?.auth_token || 
+                    (req.headers.authorization?.split(' ')[1]);
+        
+        // Se não tem token, vai direto para o login
+        if (!token) {
+            return res.redirect('/login.html');
+        }
+        
+        // Verificar se o token é válido
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            
+            // Token válido - buscar usuário para saber o role
+            const user = await User.findById(decoded.id).select('role ativo');
+            
+            if (!user || !user.ativo) {
+                return res.redirect('/login.html');
+            }
+            
+            // Redirecionar baseado no role
+            const redirectMap = {
+                'super_admin': '/admin.html',
+                'admin': '/admin-simples.html',
+                'professor': '/index.html',
+                'setor_pedagogico': '/setor-pedagogico.html',
+                'coordenacao_patio': '/coordenacao-patio.html',
+                'cozinha': '/cozinha-dashboard.html',
+                'gestao_geral': '/gestao-geral.html',
+                'enfermaria': '/enfermaria.html',
+                'supervisao': '/supervisao.html',
+                'biblioteca': '/biblioteca.html',
+                'psicologia': '/psicologia.html',
+                'assistente-social': '/assistente-social.html',
+                'protagonismo': '/protagonismo.html',
+                'aluno': '/aluno.html'
+            };
+            
+            const destino = redirectMap[user.role] || '/login.html';
+            return res.redirect(destino);
+            
+        } catch (jwtError) {
+            // Token inválido/expirado
+            res.clearCookie('auth_token');
+            return res.redirect('/login.html');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro na rota raiz:', error);
+        return res.redirect('/login.html');
+    }
+});
+
 
 // ============ FRONTEND ESTÁTICO ============
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// 🔥 Catch-all: se não achou o arquivo estático, redireciona para login
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
+    // Se for uma rota de API que não existe, retornar 404
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ 
+            success: false, 
+            error: 'Rota de API não encontrada' 
+        });
+    }
+    
+    // Se for uma página HTML não encontrada, redirecionar para login
+    // (assim evita mostrar o dashboard para quem não está logado)
+    console.log(`🔀 Rota não encontrada: ${req.path} → redirecionando para /login.html`);
+    res.redirect('/login.html');
 });
 
 // ============ INICIAR SERVIDOR ============
