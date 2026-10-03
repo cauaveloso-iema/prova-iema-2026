@@ -33528,9 +33528,6 @@ class AdminPanel {
         `;
     }
 
-    /**
-     * Fecha o modal
-     */
     fecharModalLiberarNotas() {
         const modal = document.getElementById('modalLiberarNotasAdmin');
         if (modal) {
