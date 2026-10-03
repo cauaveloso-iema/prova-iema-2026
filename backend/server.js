@@ -2478,7 +2478,7 @@ app.post('/api/auth/2fa/enable', authenticateToken, async (req, res) => {
 app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (req, res) => {
     try {
         // Verificar se é admin
-        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem gerar códigos de backup'
@@ -2646,7 +2646,7 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
 // ============ ROTA PARA ADMIN LISTAR USUÁRIOS COM 2FA ATIVADO ============
 app.get('/api/admin/2fa/usuarios', authenticateToken, async (req, res) => {
     try {
-        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem acessar esta rota'
@@ -2685,7 +2685,7 @@ app.get('/api/admin/2fa/usuarios', authenticateToken, async (req, res) => {
 // ============ ROTA PARA ADMIN VER CÓDIGOS DE UM USUÁRIO ============
 app.get('/api/admin/2fa/ver-codigos/:userId', authenticateToken, async (req, res) => {
     try {
-        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem ver códigos de backup'
@@ -4072,23 +4072,240 @@ app.put('/api/provas/:id/questoes', authenticateToken, async (req, res) => {
   }
 });
 
-// Rota para limpar imagens não utilizadas
+// ============================================================================
+// ROTA PARA LIMPAR IMAGENS NÃO UTILIZADAS
+// ============================================================================
 app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => {
     try {
-        // Correção: usar req.userRole em vez de req.user.role
-        if (req.userRole !== 'admin') {
+        // Verificar permissão - apenas admin e super_admin
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem limpar imagens'
             });
         }
-        
-        // ... resto do código
+
+        console.log('='.repeat(60));
+        console.log(`🧹 Admin ${req.userId} (${req.userRole}) iniciando limpeza de imagens`);
+        console.log('='.repeat(60));
+
+        const uploadsDir = path.join(__dirname, 'uploads');
+        const imagensDir = path.join(__dirname, 'uploads', 'imagens-questoes');
+
+        // ========================================================================
+        // 1. COLETAR TODAS AS IMAGENS REFERENCIADAS NO BANCO DE DADOS
+        // ========================================================================
+        console.log('📊 Coletando imagens referenciadas no banco...');
+
+        const imagensEmUso = new Set();
+
+        // 1.1 - Imagens em questões de provas (campo imagens das questões)
+        const provas = await Prova.find({ 
+            'questoes.imagens': { $exists: true, $ne: [] } 
+        }).select('questoes').lean();
+
+        provas.forEach(prova => {
+            if (prova.questoes && Array.isArray(prova.questoes)) {
+                prova.questoes.forEach(questao => {
+                    if (questao.imagens && Array.isArray(questao.imagens)) {
+                        questao.imagens.forEach(img => {
+                            if (img.url) {
+                                // Extrair o nome do arquivo da URL
+                                const nomeArquivo = img.url.split('/').pop();
+                                imagensEmUso.add(nomeArquivo);
+                            }
+                            if (img.nomeArquivo) {
+                                imagensEmUso.add(img.nomeArquivo);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // 1.2 - Imagens em anexos de provas (campo anexos)
+        const provasComAnexos = await Prova.find({ 
+            'anexos': { $exists: true, $ne: [] } 
+        }).select('anexos').lean();
+
+        provasComAnexos.forEach(prova => {
+            if (prova.anexos && Array.isArray(prova.anexos)) {
+                prova.anexos.forEach(anexo => {
+                    if (anexo.url) {
+                        const nomeArquivo = anexo.url.split('/').pop();
+                        imagensEmUso.add(nomeArquivo);
+                    }
+                    if (anexo.nomeArquivo) {
+                        imagensEmUso.add(anexo.nomeArquivo);
+                    }
+                });
+            }
+        });
+
+        // 1.3 - Fotos de perfil de usuários
+        const usuariosComFoto = await User.find({ 
+            fotoPerfil: { $exists: true, $ne: null } 
+        }).select('fotoPerfil').lean();
+
+        // Fotos de perfil são armazenadas como base64 no banco, não como arquivos
+        // então não precisamos verificar arquivos físicos para elas
+
+        // 1.4 - Imagens de Face ID
+        const facesComImagem = await FaceID.find({ 
+            imagemBase64: { $exists: true, $ne: null } 
+        }).select('imagemHash').lean();
+
+        // Face ID também é armazenado como base64, não como arquivo
+
+        // 1.5 - QR Codes (armazenados como base64, não como arquivo)
+
+        console.log(`   ✅ ${imagensEmUso.size} imagens referenciadas no banco`);
+
+        // ========================================================================
+        // 2. LISTAR ARQUIVOS FÍSICOS NA PASTA DE UPLOADS
+        // ========================================================================
+        console.log('📁 Verificando arquivos físicos...');
+
+        const extensoesImagem = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+        const arquivosParaDeletar = [];
+        let totalArquivos = 0;
+        let tamanhoTotalLiberado = 0;
+
+        // 2.1 - Verificar pasta principal de uploads
+        if (fs.existsSync(uploadsDir)) {
+            const arquivosUploads = fs.readdirSync(uploadsDir);
+            
+            for (const arquivo of arquivosUploads) {
+                const filePath = path.join(uploadsDir, arquivo);
+                const stat = fs.statSync(filePath);
+                
+                // Pular diretórios
+                if (stat.isDirectory()) continue;
+                
+                // Verificar se é imagem
+                const ext = path.extname(arquivo).toLowerCase();
+                if (!extensoesImagem.includes(ext)) continue;
+                
+                totalArquivos++;
+                
+                // Se a imagem não está em uso, adicionar para deletar
+                if (!imagensEmUso.has(arquivo)) {
+                    arquivosParaDeletar.push({
+                        caminho: filePath,
+                        nome: arquivo,
+                        tamanho: stat.size,
+                        pasta: 'uploads'
+                    });
+                    tamanhoTotalLiberado += stat.size;
+                }
+            }
+        }
+
+        // 2.2 - Verificar pasta de imagens de questões
+        if (fs.existsSync(imagensDir)) {
+            const arquivosImagens = fs.readdirSync(imagensDir);
+            
+            for (const arquivo of arquivosImagens) {
+                const filePath = path.join(imagensDir, arquivo);
+                const stat = fs.statSync(filePath);
+                
+                // Pular diretórios
+                if (stat.isDirectory()) continue;
+                
+                // Verificar se é imagem
+                const ext = path.extname(arquivo).toLowerCase();
+                if (!extensoesImagem.includes(ext)) continue;
+                
+                totalArquivos++;
+                
+                // Se a imagem não está em uso, adicionar para deletar
+                if (!imagensEmUso.has(arquivo)) {
+                    arquivosParaDeletar.push({
+                        caminho: filePath,
+                        nome: arquivo,
+                        tamanho: stat.size,
+                        pasta: 'imagens-questoes'
+                    });
+                    tamanhoTotalLiberado += stat.size;
+                }
+            }
+        }
+
+        console.log(`   📊 ${totalArquivos} imagens encontradas`);
+        console.log(`   🗑️ ${arquivosParaDeletar.length} imagens não utilizadas`);
+
+        // ========================================================================
+        // 3. DELETAR ARQUIVOS NÃO UTILIZADOS
+        // ========================================================================
+        let deletados = 0;
+        let errosDelecao = 0;
+        const erros = [];
+
+        if (arquivosParaDeletar.length > 0) {
+            console.log('🗑️ Deletando arquivos não utilizados...');
+
+            for (const arquivo of arquivosParaDeletar) {
+                try {
+                    fs.unlinkSync(arquivo.caminho);
+                    deletados++;
+                    console.log(`   ✅ Deletado: ${arquivo.pasta}/${arquivo.nome}`);
+                } catch (error) {
+                    errosDelecao++;
+                    erros.push({
+                        arquivo: arquivo.nome,
+                        erro: error.message
+                    });
+                    console.error(`   ❌ Erro ao deletar ${arquivo.nome}:`, error.message);
+                }
+            }
+        }
+
+        // ========================================================================
+        // 4. FORMATAR TAMANHO LIBERADO
+        // ========================================================================
+        const formatarBytes = (bytes) => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
+        const tamanhoFormatado = formatarBytes(tamanhoTotalLiberado);
+
+        // ========================================================================
+        // 5. RETORNAR RESULTADO
+        // ========================================================================
+        console.log('='.repeat(60));
+        console.log('✅ LIMPEZA CONCLUÍDA');
+        console.log(`   📊 Total de imagens: ${totalArquivos}`);
+        console.log(`   🗑️ Deletadas: ${deletados}`);
+        console.log(`   💾 Espaço liberado: ${tamanhoFormatado}`);
+        console.log(`   ❌ Erros: ${errosDelecao}`);
+        console.log('='.repeat(60));
+
+        res.json({
+            success: true,
+            message: `${deletados} imagem(ns) removida(s) com sucesso!`,
+            estatisticas: {
+                totalArquivos: totalArquivos,
+                arquivosEmUso: imagensEmUso.size,
+                deletados: deletados,
+                erros: errosDelecao,
+                espacoLiberado: tamanhoFormatado,
+                espacoLiberadoBytes: tamanhoTotalLiberado
+            },
+            erros: erros.length > 0 ? erros : undefined,
+            timestamp: new Date().toISOString()
+        });
+
     } catch (error) {
-        console.error('Erro na limpeza:', error);
+        console.error('❌ Erro na limpeza de imagens:', error);
+        console.error('Stack:', error.stack);
+        
         res.status(500).json({
             success: false,
-            error: 'Erro na limpeza de imagens'
+            error: 'Erro na limpeza de imagens: ' + error.message
         });
     }
 });
@@ -4445,7 +4662,7 @@ app.get('/api/turmas/:id/provas', authenticateToken, async (req, res) => {
     }
     
     // Verificar permissão
-    if (turma.professorId.toString() !== userId && req.userRole !== 'admin') {
+    if (turma.professorId.toString() !== userId && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
         error: 'Você não tem permissão para ver as provas desta turma'
@@ -6450,7 +6667,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
       });
     }
     
-    if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+    if (prova.userId.toString() !== professorId && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
         error: 'Você não é o professor desta prova'
@@ -6630,7 +6847,7 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
       });
     }
     
-    if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+    if (prova.userId.toString() !== professorId && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
         error: 'Você não é o professor desta prova'
@@ -8692,7 +8909,7 @@ app.get('/api/turmas/:turmaId/resultados', authenticateToken, async (req, res) =
       });
     }
 
-    if (turma.professorId.toString() !== professorId && req.userRole !== 'admin') {
+    if (turma.professorId.toString() !== professorId && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
         error: 'Você não tem permissão para ver os resultados desta turma'
@@ -9392,7 +9609,7 @@ app.get('/api/provas/:id/correcao', authenticateToken, async (req, res) => {
     }
 
     // Verificar se é o professor da prova
-    if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+    if (prova.userId.toString() !== professorId && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
         error: 'Você não é o professor desta prova'
@@ -9528,7 +9745,7 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
       });
     }
     
-    if (prova.userId.toString() !== professorId && req.userRole !== 'admin') {
+    if (prova.userId.toString() !== professorId && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
         error: 'Você não é o professor desta prova'
@@ -10383,7 +10600,7 @@ app.get('/api/backup/list', authenticateToken, async (req, res) => {
 // Rota para restaurar backup (apenas admin)
 app.post('/api/backup/restore/:filename', authenticateToken, async (req, res) => {
     try {
-        if (req.userRole !== 'admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem restaurar backups'
@@ -11157,7 +11374,7 @@ app.get('/api/chatbot/context', authenticateToken, (req, res) => {
 
 // Middleware para verificar se é super admin
 const isSuperAdmin = (req, res, next) => {
-    if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+    if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
         return res.status(403).json({
             success: false,
             error: 'Acesso negado. Apenas administradores podem acessar esta rota.'
@@ -12471,7 +12688,7 @@ app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) =
 app.delete('/api/admin/turmas/:id', authenticateToken, async (req, res) => {
     try {
         // Verificar se é admin ou super_admin
-        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem excluir turmas'
@@ -12590,7 +12807,7 @@ app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) =
 app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
     try {
         // Verificar se é admin ou super_admin
-        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem editar provas'
@@ -14761,7 +14978,7 @@ app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
 // ============ ROTA PARA ADMIN ATIVAR/DESATIVAR PUSH GLOBAL ============
 app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
     try {
-        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem controlar o push global'
@@ -18371,7 +18588,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
 app.get('/api/admin/provas/:provaId/resultados', authenticateToken, async (req, res) => {
   try {
     // Verificar se é admin
-    if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+    if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
         error: 'Apenas administradores podem acessar esta rota'
@@ -19166,7 +19383,7 @@ app.post('/api/auth/validar-camera-stream', authenticateToken, async (req, res) 
 app.get('/api/admin/faces/:usuarioId', authenticateToken, async (req, res) => {
     try {
         // Verificar se é admin
-        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Apenas administradores podem acessar faces'
@@ -21048,7 +21265,7 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
 app.get('/api/coordenacao-patio/turmas', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
-        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
@@ -21085,7 +21302,7 @@ app.get('/api/coordenacao-patio/turmas', authenticateToken, async (req, res) => 
 app.get('/api/coordenacao-patio/alunos', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
-        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
@@ -21143,7 +21360,7 @@ app.get('/api/coordenacao-patio/alunos', authenticateToken, async (req, res) => 
 app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
-        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
@@ -21306,7 +21523,7 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
 app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
-        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'
@@ -21440,7 +21657,7 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
 app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, res) => {
     try {
         // Verificar permissão
-        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+        if (req.userRole !== 'coordenacao_patio' && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
             return res.status(403).json({
                 success: false,
                 error: 'Acesso negado. Apenas Coordenação de Pátio pode acessar.'

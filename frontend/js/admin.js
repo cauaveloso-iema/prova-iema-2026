@@ -19730,7 +19730,7 @@ class AdminPanel {
     // Excluir questão
     async excluirQuestao(questaoIndex) {
         if (this.provaGeradaAdmin && this.provaGeradaAdmin.questoes.length > 1) {
-            const confirmar = await this.confirm('Tem certeza que deseja excluir esta questão?');
+            const confirmar = await confirm('Tem certeza que deseja excluir esta questão?');
             if (confirmar) {
                 this.provaGeradaAdmin.questoes.splice(questaoIndex, 1);
                 this.abrirEdicaoQuestoesPreview();
@@ -22094,7 +22094,7 @@ class AdminPanel {
         const anomaliaCard = document.getElementById(`anomalia-${anomaliaId}`);
         if (!anomaliaCard) return;
         
-        const confirmar = await this.confirm('Ignorar esta anomalia?');
+        const confirmar = await confirm('Ignorar esta anomalia?');
         if (confirmar) {
             anomaliaCard.remove();
             this.adicionarLogServidor({
@@ -33159,9 +33159,87 @@ class AdminPanel {
     }
 
     // ============================================================================
-    // ============================================================================
     // 🔓 LIBERAR NOTAS - INDIVIDUAL OU EM CONJUNTO (ADMIN)
     // ============================================================================
+
+    /**
+     * Mostra um modal de confirmação customizado (compatível com Kodular/WebView)
+     * Retorna uma Promise<boolean>
+     */
+    mostrarConfirmacao(titulo, mensagemHTML, opcoes = {}) {
+        return new Promise((resolve) => {
+            const {
+                textoConfirmar = 'Confirmar',
+                textoCancelar = 'Cancelar',
+                corConfirmar = 'linear-gradient(135deg, #10b981, #059669)',
+                corCancelar = '#6b7280',
+                icone = '❓'
+            } = opcoes;
+
+            // Remover modal anterior se existir
+            const modalAntigo = document.getElementById('modalConfirmacaoCustom');
+            if (modalAntigo) modalAntigo.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'modalConfirmacaoCustom';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0; left: 0;
+                width: 100%; height: 100%;
+                background: rgba(0,0,0,0.6);
+                z-index: 200000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                box-sizing: border-box;
+            `;
+
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 20px; max-width: 480px; width: 100%; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.3); animation: modalFadeIn 0.2s ease-out;">
+                    <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 18px 22px; display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.5rem;">${icone}</span>
+                        <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700;">${titulo}</h3>
+                    </div>
+                    <div style="padding: 22px; color: #374151; font-size: 0.92rem; line-height: 1.55;">
+                        ${mensagemHTML}
+                    </div>
+                    <div style="padding: 14px 22px; background: #f8fafc; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+                        <button id="btnConfirmacaoCancelar" style="padding: 10px 22px; background: ${corCancelar}; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 0.88rem;">
+                            ${textoCancelar}
+                        </button>
+                        <button id="btnConfirmacaoOk" style="padding: 10px 22px; background: ${corConfirmar}; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 0.88rem;">
+                            ${textoConfirmar}
+                        </button>
+                    </div>
+                </div>
+                <style>
+                    @keyframes modalFadeIn {
+                        from { opacity: 0; transform: scale(0.95); }
+                        to { opacity: 1; transform: scale(1); }
+                    }
+                </style>
+            `;
+
+            document.body.appendChild(modal);
+
+            const finalizar = (resultado) => {
+                modal.remove();
+                resolve(resultado);
+            };
+
+            // Botão OK
+            modal.querySelector('#btnConfirmacaoOk').addEventListener('click', () => finalizar(true));
+
+            // Botão Cancelar
+            modal.querySelector('#btnConfirmacaoCancelar').addEventListener('click', () => finalizar(false));
+
+            // Fechar ao clicar fora
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) finalizar(false);
+            });
+        });
+    }
 
     /**
      * Abre o modal principal de liberação de notas
@@ -33169,14 +33247,13 @@ class AdminPanel {
     async abrirModalLiberarNotas(provaId, provaTitulo) {
         try {
             console.log(`🔓 Admin abrindo modal de liberação de notas: ${provaId}`);
-            
+
             const token = localStorage.getItem('auth_token');
             if (!token) {
                 this.showToast('❌ Sessão expirada', 'error');
                 return;
             }
-            
-            // Criar/reutilizar modal
+
             let modal = document.getElementById('modalLiberarNotasAdmin');
             if (!modal) {
                 modal = document.createElement('div');
@@ -33184,10 +33261,8 @@ class AdminPanel {
                 modal.style.cssText = `
                     display: none;
                     position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
+                    top: 0; left: 0;
+                    width: 100%; height: 100%;
                     background: rgba(0,0,0,0.6);
                     z-index: 100000;
                     align-items: center;
@@ -33197,8 +33272,7 @@ class AdminPanel {
                 `;
                 document.body.appendChild(modal);
             }
-            
-            // Loading
+
             modal.innerHTML = `
                 <div style="background: white; border-radius: 20px; max-width: 950px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
                     <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px;">
@@ -33213,32 +33287,31 @@ class AdminPanel {
                 </div>
             `;
             modal.style.display = 'flex';
-            
-            // URL ABSOLUTA
+
             const response = await fetch(`/api/provas/${provaId}/resultados`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
+
             const data = await response.json();
-            
+
             if (!data.success) {
                 throw new Error(data.error || 'Erro ao carregar alunos');
             }
-            
+
             const resultados = data.resultados || [];
-            
+
             this._provaAtualLiberacao = {
                 provaId,
                 provaTitulo,
                 resultados
             };
-            
+
             this.renderizarModalLiberarNotas(provaId, provaTitulo, resultados);
-            
+
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast(`❌ ${error.message}`, 'error');
-            
+
             const modal = document.getElementById('modalLiberarNotasAdmin');
             if (modal) {
                 modal.innerHTML = `
@@ -33261,15 +33334,15 @@ class AdminPanel {
     renderizarModalLiberarNotas(provaId, provaTitulo, resultados) {
         const modal = document.getElementById('modalLiberarNotasAdmin');
         if (!modal) return;
-        
+
         const total = resultados.length;
-        const pendentes = resultados.filter(r => 
-            r.nota !== null && r.nota !== undefined && 
+        const pendentes = resultados.filter(r =>
+            r.nota !== null && r.nota !== undefined &&
             !r.notaLiberada && !r.cancelada
         ).length;
         const liberados = resultados.filter(r => r.notaLiberada && !r.cancelada).length;
         const cancelados = resultados.filter(r => r.cancelada).length;
-        
+
         const resultadosOrdenados = [...resultados].sort((a, b) => {
             const getPrioridade = (r) => {
                 if (r.cancelada) return 3;
@@ -33279,9 +33352,9 @@ class AdminPanel {
             };
             return getPrioridade(a) - getPrioridade(b);
         });
-        
+
         let alunosHTML = '';
-        
+
         if (resultados.length === 0) {
             alunosHTML = `
                 <div style="text-align: center; padding: 60px 20px; color: #6b7280;">
@@ -33295,11 +33368,11 @@ class AdminPanel {
                 const notaLiberada = aluno.notaLiberada === true;
                 const temNota = aluno.nota !== null && aluno.nota !== undefined;
                 const notaFormatada = temNota ? parseFloat(aluno.nota).toFixed(1) : '—';
-                
+
                 const nome = aluno.alunoNome || 'Aluno';
                 const partes = nome.split(' ');
                 const iniciais = ((partes[0]?.[0] || '') + (partes[1]?.[0] || '')).toUpperCase() || 'A';
-                
+
                 let statusCor, statusTexto, statusIcon, statusBg;
                 if (isCancelado) {
                     statusCor = '#dc2626'; statusBg = '#fee2e2';
@@ -33314,18 +33387,18 @@ class AdminPanel {
                     statusCor = '#6b7280'; statusBg = '#f3f4f6';
                     statusTexto = 'Sem nota'; statusIcon = 'fa-hourglass-half';
                 }
-                
+
                 let checkboxHTML = '';
                 if (temNota && !notaLiberada && !isCancelado) {
                     checkboxHTML = `
-                        <input type="checkbox" class="check-liberar-nota" data-aluno-id="${aluno.alunoId}" 
+                        <input type="checkbox" class="check-liberar-nota" data-aluno-id="${aluno.alunoId}"
                             style="width: 20px; height: 20px; cursor: pointer; accent-color: #10b981;"
                             onchange="admin.atualizarSelecaoNotas()">
                     `;
                 } else {
                     checkboxHTML = `<div style="width: 20px;"></div>`;
                 }
-                
+
                 let botaoHTML = '';
                 if (isCancelado) {
                     botaoHTML = `
@@ -33341,20 +33414,20 @@ class AdminPanel {
                     `;
                 } else if (notaLiberada) {
                     botaoHTML = `
-                        <button onclick="admin.revogarNotaAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}')" 
+                        <button onclick="admin.revogarNotaAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}')"
                                 style="padding: 6px 12px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 8px; font-weight: 600; font-size: 0.75rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                             <i class="fas fa-lock"></i> Revogar
                         </button>
                     `;
                 } else {
                     botaoHTML = `
-                        <button onclick="admin.liberarNotaIndividualAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}', ${aluno.nota})" 
+                        <button onclick="admin.liberarNotaIndividualAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}', ${aluno.nota})"
                                 style="padding: 6px 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.75rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                             <i class="fas fa-unlock"></i> Liberar
                         </button>
                     `;
                 }
-                
+
                 return `
                     <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 15px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
                         ${checkboxHTML}
@@ -33384,7 +33457,7 @@ class AdminPanel {
                 `;
             }).join('');
         }
-        
+
         modal.innerHTML = `
             <div style="background: white; border-radius: 20px; max-width: 950px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
                 <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
@@ -33396,7 +33469,7 @@ class AdminPanel {
                     </div>
                     <button onclick="admin.fecharModalLiberarNotas()" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1;">&times;</button>
                 </div>
-                
+
                 <div style="padding: 12px 25px; background: #f8fafc; border-bottom: 1px solid #e5e7eb; display: flex; gap: 12px; flex-wrap: wrap; flex-shrink: 0; align-items: center;">
                     <span style="background: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
                         <i class="fas fa-users"></i> Total: ${total}
@@ -33410,7 +33483,7 @@ class AdminPanel {
                     <span style="background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
                         <i class="fas fa-ban"></i> Canceladas: ${cancelados}
                     </span>
-                    
+
                     ${pendentes > 0 ? `
                         <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.8rem; color: #4b5563; font-weight: 600;">
@@ -33421,31 +33494,31 @@ class AdminPanel {
                         </div>
                     ` : ''}
                 </div>
-                
+
                 <div style="padding: 15px 25px; overflow-y: auto; flex: 1;">
                     ${alunosHTML}
                 </div>
-                
+
                 <div style="padding: 15px 25px; background: #f8fafc; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
                     <div style="font-size: 0.85rem; color: #6b7280;">
-                        <i class="fas fa-info-circle"></i> 
+                        <i class="fas fa-info-circle"></i>
                         <span id="infoSelecaoNotas">Selecione os alunos para liberar em massa</span>
                     </div>
-                    
+
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <button onclick="admin.liberarNotasSelecionadas('${provaId}')" id="btnLiberarSelecionadas"
                                 style="padding: 10px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; opacity: 0.5; pointer-events: none;">
                             <i class="fas fa-check-double"></i> Liberar Selecionadas (<span id="countSelecionadas">0</span>)
                         </button>
-                        
+
                         ${pendentes > 0 ? `
-                            <button onclick="admin.liberarTodasNotasAdmin('${provaId}', '${(provaTitulo || '').replace(/'/g, "\\'")}')" 
+                            <button onclick="admin.liberarTodasNotasAdmin('${provaId}', '${(provaTitulo || '').replace(/'/g, "\\'")}')"
                                     style="padding: 10px 24px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                                 <i class="fas fa-unlock-alt"></i> Liberar Todas (${pendentes})
                             </button>
                         ` : ''}
-                        
-                        <button onclick="admin.fecharModalLiberarNotas()" 
+
+                        <button onclick="admin.fecharModalLiberarNotas()"
                                 style="padding: 10px 24px; background: #6b7280; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
                             Fechar
                         </button>
@@ -33472,13 +33545,13 @@ class AdminPanel {
     atualizarSelecaoNotas() {
         const checkboxes = document.querySelectorAll('.check-liberar-nota:checked');
         const count = checkboxes.length;
-        
+
         const countEl = document.getElementById('countSelecionadas');
         const btn = document.getElementById('btnLiberarSelecionadas');
         const info = document.getElementById('infoSelecaoNotas');
-        
+
         if (countEl) countEl.textContent = count;
-        
+
         if (btn) {
             if (count > 0) {
                 btn.style.opacity = '1';
@@ -33488,7 +33561,7 @@ class AdminPanel {
                 btn.style.pointerEvents = 'none';
             }
         }
-        
+
         if (info) {
             if (count > 0) {
                 info.innerHTML = `<strong style="color: #3b82f6;">${count}</strong> aluno(s) selecionado(s) para liberação`;
@@ -33496,7 +33569,7 @@ class AdminPanel {
                 info.innerHTML = 'Selecione os alunos para liberar em massa';
             }
         }
-        
+
         const checkTodos = document.getElementById('checkSelecionarTodos');
         if (checkTodos) {
             const todos = document.querySelectorAll('.check-liberar-nota').length;
@@ -33521,33 +33594,39 @@ class AdminPanel {
      */
     async liberarNotasSelecionadas(provaId) {
         const checkboxes = document.querySelectorAll('.check-liberar-nota:checked');
-        
+
         if (checkboxes.length === 0) {
             this.showToast('⚠️ Nenhum aluno selecionado', 'warning');
             return;
         }
-        
+
         const alunosIds = Array.from(checkboxes).map(cb => cb.dataset.alunoId);
-        
-        // 🔥 USAR APENAS this.confirmar() - método customizado da classe
-        const confirmar = await this.confirmar(
-            '🔓 Liberar Notas Selecionadas',
+
+        // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
+        const confirmar = await this.mostrarConfirmacao(
+            'Liberar Notas Selecionadas',
             `Deseja liberar as notas de <strong>${alunosIds.length} aluno(s)</strong> selecionado(s)?<br><br>
-            <span style="color: #10b981;">✅ Todos os alunos selecionados poderão visualizar suas notas.</span>`
+            <span style="color: #10b981; font-weight: 600;">✅ Todos os alunos selecionados poderão visualizar suas notas.</span>`,
+            {
+                textoConfirmar: 'Liberar Notas',
+                textoCancelar: 'Cancelar',
+                corConfirmar: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                icone: '🔓'
+            }
         );
-        
+
         if (!confirmar) return;
-        
+
         const btn = document.getElementById('btnLiberarSelecionadas');
         const textoOriginal = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Liberando...';
         btn.disabled = true;
-        
+
         try {
             const token = localStorage.getItem('auth_token');
             let sucessos = 0;
             let erros = 0;
-            
+
             for (const alunoId of alunosIds) {
                 try {
                     const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
@@ -33561,32 +33640,32 @@ class AdminPanel {
                             liberarNota: true
                         })
                     });
-                    
+
                     const contentType = response.headers.get('content-type');
                     if (!contentType || !contentType.includes('application/json')) {
                         erros++;
                         continue;
                     }
-                    
+
                     const data = await response.json();
                     if (data.success) sucessos++;
                     else erros++;
-                    
+
                 } catch (err) {
                     console.error(`Erro ao liberar ${alunoId}:`, err);
                     erros++;
                 }
             }
-            
+
             if (sucessos > 0) {
                 this.showToast(`✅ ${sucessos} notas liberadas${erros > 0 ? ` (${erros} erros)` : ''}!`, 'success');
             } else {
                 this.showToast(`❌ Nenhuma nota foi liberada. ${erros} erro(s).`, 'error');
             }
-            
+
             await this.recarregarModalLiberarNotas(provaId);
             await this.loadProvas();
-            
+
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast(`❌ ${error.message}`, 'error');
@@ -33601,15 +33680,22 @@ class AdminPanel {
      */
     async liberarNotaIndividualAdmin(provaId, alunoId, alunoNome, nota) {
         try {
-            const confirmar = await this.confirmar(
-                '🔓 Liberar Nota',
-                `Deseja liberar a nota <strong>${parseFloat(nota).toFixed(1)}</strong> para o aluno <strong>${alunoNome}</strong>?`
+            // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
+            const confirmar = await this.mostrarConfirmacao(
+                'Liberar Nota',
+                `Deseja liberar a nota <strong>${parseFloat(nota).toFixed(1)}</strong> para o aluno <strong>${alunoNome}</strong>?`,
+                {
+                    textoConfirmar: 'Liberar',
+                    textoCancelar: 'Cancelar',
+                    corConfirmar: 'linear-gradient(135deg, #10b981, #059669)',
+                    icone: '🔓'
+                }
             );
-            
+
             if (!confirmar) return;
-            
+
             this.showToast(`🔓 Liberando nota para ${alunoNome}...`, 'info');
-            
+
             const token = localStorage.getItem('auth_token');
             const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
                 method: 'POST',
@@ -33623,14 +33709,14 @@ class AdminPanel {
                     liberarNota: true
                 })
             });
-            
+
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 throw new Error('Servidor retornou resposta inválida.');
             }
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.showToast(`✅ Nota de ${alunoNome} liberada!`, 'success');
                 await this.recarregarModalLiberarNotas(provaId);
@@ -33638,7 +33724,7 @@ class AdminPanel {
             } else {
                 throw new Error(data.error || 'Erro ao liberar nota');
             }
-            
+
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast(`❌ ${error.message}`, 'error');
@@ -33650,16 +33736,23 @@ class AdminPanel {
      */
     async revogarNotaAdmin(provaId, alunoId, alunoNome) {
         try {
-            const confirmar = await this.confirmar(
-                '🔒 Revogar Liberação',
+            // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
+            const confirmar = await this.mostrarConfirmacao(
+                'Revogar Liberação',
                 `Deseja <strong>ocultar</strong> a nota do aluno <strong>${alunoNome}</strong>?<br><br>
-                <span style="color: #f59e0b;">⚠️ O aluno deixará de ver a nota até ser liberada novamente.</span>`
+                <span style="color: #f59e0b; font-weight: 600;">⚠️ O aluno deixará de ver a nota até ser liberada novamente.</span>`,
+                {
+                    textoConfirmar: 'Revogar',
+                    textoCancelar: 'Cancelar',
+                    corConfirmar: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    icone: '🔒'
+                }
             );
-            
+
             if (!confirmar) return;
-            
+
             this.showToast(`🔒 Revogando liberação...`, 'info');
-            
+
             const token = localStorage.getItem('auth_token');
             const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
                 method: 'POST',
@@ -33672,14 +33765,14 @@ class AdminPanel {
                     liberarNota: false
                 })
             });
-            
+
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 throw new Error('Servidor retornou resposta inválida.');
             }
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.showToast(`✅ Nota de ${alunoNome} ocultada!`, 'success');
                 await this.recarregarModalLiberarNotas(provaId);
@@ -33687,7 +33780,7 @@ class AdminPanel {
             } else {
                 throw new Error(data.error || 'Erro ao revogar');
             }
-            
+
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast(`❌ ${error.message}`, 'error');
@@ -33699,26 +33792,33 @@ class AdminPanel {
      */
     async liberarTodasNotasAdmin(provaId, provaTitulo) {
         try {
-            const pendentes = this._provaAtualLiberacao?.resultados.filter(r => 
+            const pendentes = this._provaAtualLiberacao?.resultados.filter(r =>
                 r.nota !== null && r.nota !== undefined && !r.notaLiberada && !r.cancelada
             ).length || 0;
-            
+
             if (pendentes === 0) {
                 this.showToast('ℹ️ Nenhuma nota pendente', 'info');
                 return;
             }
-            
-            const confirmar = await this.confirmar(
-                '🔓 Liberar TODAS as Notas',
+
+            // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
+            const confirmar = await this.mostrarConfirmacao(
+                'Liberar TODAS as Notas',
                 `Deseja liberar <strong>TODAS as ${pendentes} notas pendentes</strong> desta prova?<br><br>
                 <strong>Prova:</strong> ${provaTitulo}<br><br>
-                <span style="color: #10b981;">✅ Todos os alunos poderão visualizar suas notas.</span>`
+                <span style="color: #10b981; font-weight: 600;">✅ Todos os alunos poderão visualizar suas notas.</span>`,
+                {
+                    textoConfirmar: 'Liberar Todas',
+                    textoCancelar: 'Cancelar',
+                    corConfirmar: 'linear-gradient(135deg, #10b981, #059669)',
+                    icone: '🔓'
+                }
             );
-            
+
             if (!confirmar) return;
-            
+
             this.showToast(`🔓 Liberando ${pendentes} notas...`, 'info');
-            
+
             const token = localStorage.getItem('auth_token');
             const response = await fetch(`/api/provas/${provaId}/liberar-notas-todos`, {
                 method: 'POST',
@@ -33727,14 +33827,14 @@ class AdminPanel {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
                 throw new Error('Servidor retornou resposta inválida.');
             }
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.showToast(`✅ ${data.message || 'Todas as notas liberadas!'}`, 'success');
                 this.fecharModalLiberarNotas();
@@ -33742,7 +33842,7 @@ class AdminPanel {
             } else {
                 throw new Error(data.error || 'Erro ao liberar notas');
             }
-            
+
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast(`❌ ${error.message}`, 'error');
@@ -33758,19 +33858,19 @@ class AdminPanel {
             const response = await fetch(`/api/provas/${provaId}/resultados`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 const { provaTitulo } = this._provaAtualLiberacao || {};
                 const resultados = data.resultados || [];
-                
+
                 this._provaAtualLiberacao = {
                     provaId,
                     provaTitulo,
                     resultados
                 };
-                
+
                 this.renderizarModalLiberarNotas(provaId, provaTitulo, resultados);
             }
         } catch (error) {
@@ -35268,7 +35368,7 @@ class AdminPanel {
         const nenhumaOpcao = !opcoes.fonteAmpliada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
         
         if (nenhumaOpcao) {
-            const confirmar = await this.confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
+            const confirmar = await confirm('Nenhuma opção de adaptação foi selecionada. Deseja imprimir a prova normalmente?');
             if (confirmar) {
                 this.fecharModalOpcoesAdaptacao();
                 await this.gerarImpressaoNormal();
