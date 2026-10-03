@@ -3396,7 +3396,7 @@
             provaSendoFinalizada: monitoramento ? monitoramento.provaSendoFinalizada : false
         };
         
-        // 2. DESATIVAR PROTECÕES TEMPORARIAMENTE (para mostrar confirmação)
+        // 2. DESATIVAR PROTEÇÕES TEMPORARIAMENTE (para mostrar confirmação)
         window.onbeforeunload = null;
         
         if (monitoramento) {
@@ -3790,28 +3790,41 @@
                         ${prova.titulo}
                     </p>
                     
+                    <!-- RESUMO DA PROVA -->
                     <div style="background: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #10b981;">
                         <div style="display: flex; justify-content: space-around; text-align: center;">
                             <div>
                                 <div style="font-size: 1.6rem; font-weight: 700; color: #10b981;">${respondidas}</div>
                                 <div style="font-size: 0.8rem; color: #6b7280; margin-top: 3px;">Respondidas</div>
                             </div>
-                            <div>
+                            <div style="border-left: 1px solid #d1fae5; padding-left: 15px;">
                                 <div style="font-size: 1.6rem; font-weight: 700; color: #4b5563;">${totalQuestoes}</div>
                                 <div style="font-size: 0.8rem; color: #6b7280; margin-top: 3px;">Total</div>
                             </div>
-                            <div>
+                            <div style="border-left: 1px solid #d1fae5; padding-left: 15px;">
                                 <div style="font-size: 1.6rem; font-weight: 700; color: #3b82f6;">${tempoGastoMinutos}</div>
                                 <div style="font-size: 0.8rem; color: #6b7280; margin-top: 3px;">Minutos</div>
                             </div>
                         </div>
+                        
+                        <!-- Barra de conclusão -->
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #d1fae5;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #6b7280; margin-bottom: 6px;">
+                                <span>Conclusão</span>
+                                <span><strong style="color: #10b981;">${porcentagem}%</strong></span>
+                            </div>
+                            <div style="height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                                <div style="height: 100%; width: ${porcentagem}%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 4px; transition: width 1s ease;"></div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <p style="color: #6b7280; margin-bottom: 25px;">
+                    <p style="color: #6b7280; margin-bottom: 25px; font-size: 0.95rem;">
                         <i class="fas fa-info-circle"></i> Aguarde a correção do professor.
                     </p>
                     
-                    <div style="
+                    <!-- 🔥 CONTAGEM REGRESSIVA VISÍVEL -->
+                    <div id="redirectContainer" style="
                         display: flex;
                         align-items: center;
                         justify-content: center;
@@ -3822,6 +3835,7 @@
                         background: #f9fafb;
                         border-radius: 10px;
                         margin-bottom: 20px;
+                        transition: all 0.3s;
                     ">
                         <div style="
                             width: 24px;
@@ -3831,7 +3845,7 @@
                             border-radius: 50%;
                             animation: spin 0.8s linear infinite;
                         "></div>
-                        <span>Redirecionando para o painel...</span>
+                        <span>Redirecionando em <strong id="countdownRedirect" style="color: #10b981;">8</strong>s...</span>
                     </div>
                     
                     <button onclick="window.location.replace('/aluno.html?prova_finalizada=true&prova_id=${prova._id}')" style="
@@ -3845,7 +3859,7 @@
                         cursor: pointer;
                         box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
                     ">
-                        <i class="fas fa-arrow-left"></i> Ir para o Painel Agora
+                        <i class="fas fa-arrow-left"></i> Ir Agora
                     </button>
                 </div>
                 
@@ -3864,26 +3878,52 @@
                     }
                 </style>
             `;
+            
+            // 🔥 CONTAGEM REGRESSIVA: 8 → 0
+            let segundosRestantes = 8;
+            const countdownEl = document.getElementById('countdownRedirect');
+            const redirectContainer = document.getElementById('redirectContainer');
+            
+            const countdownInterval = setInterval(() => {
+                segundosRestantes--;
+                
+                if (countdownEl) {
+                    countdownEl.textContent = segundosRestantes;
+                    
+                    // Aviso visual quando chegar nos últimos 3s
+                    if (segundosRestantes <= 3) {
+                        countdownEl.style.color = '#ef4444';
+                        if (redirectContainer) {
+                            redirectContainer.style.background = '#fef2f2';
+                            redirectContainer.style.borderLeft = '3px solid #ef4444';
+                        }
+                    }
+                }
+                
+                if (segundosRestantes <= 0) {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
         }
         
         // 🔥 4. REDIRECIONAR COM MÚLTIPLOS FALLBACKS
+        // O aluno tem 8 segundos para ver o resumo antes do redirect automático
         
-        // Fallback 1: Redirecionamento normal após 2 segundos
         const urlDestino = '/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id);
         
-        console.log('🌍 Redirecionando para:', urlDestino);
+        console.log('🌍 Redirecionando para:', urlDestino, '(em 8 segundos)');
         
-        // setTimeout 1: Primeira tentativa (2s)
-        const tentativa1 = setTimeout(() => {
+        // setTimeout 1: Primeira tentativa (8s) - deixa o aluno ver o resumo
+        setTimeout(() => {
             console.log('🔄 Tentativa 1: location.replace');
             try {
                 window.location.replace(urlDestino);
             } catch (e) {
                 console.warn('⚠️ Falha no replace:', e);
             }
-        }, 2000);
+        }, 8000);
         
-        // setTimeout 2: Fallback (4s) - se ainda estiver aqui, usa href
+        // setTimeout 2: Fallback (10s) - se ainda estiver aqui, usa href
         setTimeout(() => {
             console.log('🔄 Tentativa 2: location.href');
             try {
@@ -3891,9 +3931,9 @@
             } catch (e) {
                 console.warn('⚠️ Falha no href:', e);
             }
-        }, 4000);
+        }, 10000);
         
-        // setTimeout 3: Fallback final (6s) - força reload com redirect
+        // setTimeout 3: Fallback final (12s) - força redirecionamento
         setTimeout(() => {
             console.log('🔄 Tentativa 3: Fallback final');
             try {
@@ -3902,9 +3942,9 @@
                 console.warn('⚠️ Falha no assign, forçando via document');
                 document.location.href = urlDestino;
             }
-        }, 6000);
+        }, 12000);
         
-        console.log('✅ Processo de finalização completo. Redirecionamentos agendados.');
+        console.log('✅ Processo de finalização completo. Redirecionamentos agendados (8s, 10s, 12s).');
     }
         
         function atualizarMensagemLoading(mensagem) {
