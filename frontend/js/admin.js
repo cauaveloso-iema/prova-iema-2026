@@ -33159,7 +33159,9 @@ class AdminPanel {
     }
 
     // ============================================================================
+    // ============================================================================
     // 🔓 LIBERAR NOTAS - INDIVIDUAL OU EM CONJUNTO (ADMIN)
+    // ⚠️ IMPORTANTE: Usa URLs ABSOLUTAS (/api/professor/...) pois this.apiBase = '/api/admin'
     // ============================================================================
 
     /**
@@ -33213,8 +33215,8 @@ class AdminPanel {
             `;
             modal.style.display = 'flex';
             
-            // Buscar resultados
-            const response = await fetch(`${this.apiBase}/provas/${provaId}/resultados`, {
+            // 🔥 CORREÇÃO: URL absoluta (não usa this.apiBase que é /api/admin)
+            const response = await fetch(`/api/provas/${provaId}/resultados`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -33277,8 +33279,8 @@ class AdminPanel {
             const getPrioridade = (r) => {
                 if (r.cancelada) return 3;
                 if (r.notaLiberada) return 2;
-                if (r.nota !== null && r.nota !== undefined) return 0; // Pendentes primeiro
-                return 4; // Sem nota por último
+                if (r.nota !== null && r.nota !== undefined) return 0;
+                return 4;
             };
             return getPrioridade(a) - getPrioridade(b);
         });
@@ -33320,7 +33322,7 @@ class AdminPanel {
                     statusTexto = 'Sem nota'; statusIcon = 'fa-hourglass-half';
                 }
                 
-                // Checkbox (para liberação em massa) - só mostra para pendentes
+                // Checkbox (só para pendentes)
                 let checkboxHTML = '';
                 if (temNota && !notaLiberada && !isCancelado) {
                     checkboxHTML = `
@@ -33570,10 +33572,10 @@ class AdminPanel {
             let sucessos = 0;
             let erros = 0;
             
-            // Liberar cada nota individualmente (ou use endpoint em massa se existir)
             for (const alunoId of alunosIds) {
                 try {
-                    const response = await fetch(`${this.apiBase}/professor/provas/${provaId}/corrigir`, {
+                    // 🔥 CORREÇÃO CRÍTICA: URL ABSOLUTA sem this.apiBase
+                    const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -33585,6 +33587,14 @@ class AdminPanel {
                         })
                     });
                     
+                    // Verificar se a resposta é JSON válido
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        console.warn(`⚠️ Resposta não-JSON para ${alunoId}`);
+                        erros++;
+                        continue;
+                    }
+                    
                     const data = await response.json();
                     if (data.success) sucessos++;
                     else erros++;
@@ -33595,7 +33605,11 @@ class AdminPanel {
                 }
             }
             
-            this.showToast(`✅ ${sucessos} notas liberadas${erros > 0 ? ` (${erros} erros)` : ''}!`, 'success');
+            if (sucessos > 0) {
+                this.showToast(`✅ ${sucessos} notas liberadas${erros > 0 ? ` (${erros} erros)` : ''}!`, 'success');
+            } else {
+                this.showToast(`❌ Nenhuma nota foi liberada. ${erros} erro(s).`, 'error');
+            }
             
             // Recarregar modal com dados atualizados
             await this.recarregarModalLiberarNotas(provaId);
@@ -33627,7 +33641,8 @@ class AdminPanel {
             this.showToast(`🔓 Liberando nota para ${alunoNome}...`, 'info');
             
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`${this.apiBase}/professor/provas/${provaId}/corrigir`, {
+            // 🔥 CORREÇÃO CRÍTICA: URL ABSOLUTA sem this.apiBase
+            const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -33639,6 +33654,12 @@ class AdminPanel {
                     liberarNota: true
                 })
             });
+            
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Servidor retornou resposta inválida. Verifique a rota da API.');
+            }
             
             const data = await response.json();
             
@@ -33676,7 +33697,8 @@ class AdminPanel {
             this.showToast(`🔒 Revogando liberação...`, 'info');
             
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`${this.apiBase}/professor/provas/${provaId}/corrigir`, {
+            // 🔥 CORREÇÃO CRÍTICA: URL ABSOLUTA sem this.apiBase
+            const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -33687,6 +33709,12 @@ class AdminPanel {
                     liberarNota: false
                 })
             });
+            
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Servidor retornou resposta inválida.');
+            }
             
             const data = await response.json();
             
@@ -33731,13 +33759,20 @@ class AdminPanel {
             this.showToast(`🔓 Liberando ${pendentes} notas...`, 'info');
             
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`${this.apiBase}/provas/${provaId}/liberar-notas-todos`, {
+            // 🔥 CORREÇÃO CRÍTICA: URL ABSOLUTA sem this.apiBase
+            const response = await fetch(`/api/provas/${provaId}/liberar-notas-todos`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
+            
+            // Verificar se a resposta é JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Servidor retornou resposta inválida.');
+            }
             
             const data = await response.json();
             
@@ -33762,7 +33797,8 @@ class AdminPanel {
     async recarregarModalLiberarNotas(provaId) {
         try {
             const token = localStorage.getItem('auth_token');
-            const response = await fetch(`${this.apiBase}/provas/${provaId}/resultados`, {
+            // 🔥 CORREÇÃO CRÍTICA: URL ABSOLUTA sem this.apiBase
+            const response = await fetch(`/api/provas/${provaId}/resultados`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
