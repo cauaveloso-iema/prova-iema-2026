@@ -11656,7 +11656,7 @@ class AdminPanel {
                 }
             </style>
 
-            <div class="trm-container">
+            <div class="trm-container turmas-container">
                 <!-- HEADER -->
                 <div class="trm-header">
                     <div class="trm-header-left">
