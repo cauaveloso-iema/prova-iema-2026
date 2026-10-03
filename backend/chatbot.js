@@ -22,7 +22,7 @@ const SISTEMA_INFO = {
   nome: 'EducaPleno',
   emailSuporte: 'caua.veloso@iemasaoluiscentro.net',
   telefoneSuporte: '(98) 98308-6504',
-  site: 'sistemadeprovas.com',
+  site: 'educapleno.com',
   
   recuperacaoSenha: {
     passo1: 'Clique em "Esqueci minha senha" na tela de login',

@@ -18116,7 +18116,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
         // 4. Base URL
         const BASE_URL = process.env.NODE_ENV === 'development'
             ? 'http://localhost:3000'
-            : 'https://www.sistemadeprovas.com';
+            : 'https://www.educapleno.com';
         
         // ============================================================
         // 5. ENVIAR PUSH usando o SERVICE

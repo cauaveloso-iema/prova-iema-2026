@@ -1116,7 +1116,7 @@ class SistemaProvasChatbot {
 📞 Entre em contato com o suporte:
 Email: caua.veloso@iemasaoluiscentro.net
 Telefone: (98) 98308-6504
-Site: sistemadeprovas.com
+Site: educapleno.com
 
 🔄 Tente novamente em alguns instantes.`;
     }
