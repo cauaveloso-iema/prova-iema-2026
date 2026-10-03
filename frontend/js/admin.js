@@ -33159,12 +33159,19 @@ class AdminPanel {
     }
 
     // ============================================================================
+    // ============================================================================
     // 🔓 LIBERAR NOTAS - INDIVIDUAL OU EM CONJUNTO (ADMIN)
+    // ⚠️ URLs ABSOLUTAS: /api/provas/... e /api/professor/provas/...
+    // ⚠️ NÃO usa this.apiBase (que é /api/admin)
+    // ⚠️ SEM window.confirm() - usa modal customizado (compatível com Kodular)
     // ============================================================================
 
+    // ============================================================================
+    // MODAL GENÉRICO DE CONFIRMAÇÃO (compatível com WebView/Kodular)
+    // ============================================================================
     /**
-     * Mostra um modal de confirmação customizado (compatível com Kodular/WebView)
-     * Retorna uma Promise<boolean>
+     * Mostra um modal de confirmação customizado
+     * Retorna Promise<boolean>
      */
     mostrarConfirmacao(titulo, mensagemHTML, opcoes = {}) {
         return new Promise((resolve) => {
@@ -33176,7 +33183,6 @@ class AdminPanel {
                 icone = '❓'
             } = opcoes;
 
-            // Remover modal anterior se existir
             const modalAntigo = document.getElementById('modalConfirmacaoCustom');
             if (modalAntigo) modalAntigo.remove();
 
@@ -33228,18 +33234,217 @@ class AdminPanel {
                 resolve(resultado);
             };
 
-            // Botão OK
             modal.querySelector('#btnConfirmacaoOk').addEventListener('click', () => finalizar(true));
-
-            // Botão Cancelar
             modal.querySelector('#btnConfirmacaoCancelar').addEventListener('click', () => finalizar(false));
-
-            // Fechar ao clicar fora
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) finalizar(false);
             });
         });
     }
+
+    // ============================================================================
+    // MODAL DE REVOGAÇÃO/EDIÇÃO DE NOTA (novo comportamento)
+    // ============================================================================
+    /**
+     * Abre modal para REVOGAR/EDITAR a nota de um aluno
+     * Permite alterar a nota antes de revogar a liberação
+     * Retorna Promise<{confirmado: boolean, novaNota?: number, motivo?: string}>
+     */
+    abrirModalRevogarNota(provaId, alunoId, alunoNome, notaAtual) {
+        return new Promise((resolve) => {
+            const modalAntigo = document.getElementById('modalRevogarNotaAdmin');
+            if (modalAntigo) modalAntigo.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'modalRevogarNotaAdmin';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0; left: 0;
+                width: 100%; height: 100%;
+                background: rgba(0,0,0,0.6);
+                z-index: 200000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                box-sizing: border-box;
+            `;
+
+            const notaFormatada = (notaAtual !== null && notaAtual !== undefined)
+                ? parseFloat(notaAtual).toFixed(1)
+                : '0.0';
+
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 20px; max-width: 480px; width: 100%; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.3); animation: modalFadeIn 0.2s ease-out;">
+                    <!-- HEADER -->
+                    <div style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 18px 22px; display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.5rem;">🔒</span>
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700;">Revogar / Editar Nota</h3>
+                            <p style="margin: 3px 0 0 0; font-size: 0.8rem; opacity: 0.9;">${alunoNome}</p>
+                        </div>
+                    </div>
+
+                    <!-- BODY -->
+                    <div style="padding: 22px;">
+                        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.85rem; color: #92400e;">
+                            <i class="fas fa-info-circle"></i> 
+                            Você pode alterar a nota antes de revogar. O aluno voltará a <strong>não ver</strong> a nota até liberá-la novamente.
+                        </div>
+
+                        <!-- CAMPO DE NOTA -->
+                        <div style="margin-bottom: 18px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.9rem;">
+                                <i class="fas fa-star" style="color: #f59e0b; margin-right: 5px;"></i>
+                                Nota do Aluno (0 a 10)
+                            </label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="number"
+                                    id="inputNotaRevogar"
+                                    value="${notaFormatada}"
+                                    min="0"
+                                    max="10"
+                                    step="0.1"
+                                    style="
+                                        flex: 1;
+                                        padding: 14px;
+                                        border: 2px solid #e5e7eb;
+                                        border-radius: 12px;
+                                        font-size: 1.4rem;
+                                        font-weight: 700;
+                                        text-align: center;
+                                        color: #1f2937;
+                                        outline: none;
+                                        transition: all 0.2s;
+                                    ">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <button type="button" id="btnAumentarNota" style="width: 40px; height: 30px; background: #d1fae5; color: #065f46; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 1rem;">+</button>
+                                    <button type="button" id="btnDiminuirNota" style="width: 40px; height: 30px; background: #fee2e2; color: #991b1b; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 1rem;">−</button>
+                                </div>
+                            </div>
+                            <div style="margin-top: 8px; text-align: center; font-size: 0.8rem; color: #6b7280;">
+                                Nota anterior: <strong style="color: #f59e0b;">${notaFormatada}</strong>
+                            </div>
+                        </div>
+
+                        <!-- MOTIVO (OPCIONAL) -->
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.9rem;">
+                                <i class="fas fa-comment-alt" style="color: #6b7280; margin-right: 5px;"></i>
+                                Motivo da alteração (opcional)
+                            </label>
+                            <textarea id="inputMotivoRevogar"
+                                    rows="2"
+                                    placeholder="Ex: Erro na correção, revisão de gabarito..."
+                                    style="
+                                        width: 100%;
+                                        padding: 10px 14px;
+                                        border: 2px solid #e5e7eb;
+                                        border-radius: 12px;
+                                        font-size: 0.9rem;
+                                        font-family: inherit;
+                                        resize: vertical;
+                                        outline: none;
+                                        box-sizing: border-box;
+                                    "></textarea>
+                        </div>
+                    </div>
+
+                    <!-- FOOTER -->
+                    <div style="padding: 14px 22px; background: #f8fafc; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+                        <button id="btnRevogarCancelar" style="padding: 10px 22px; background: #6b7280; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 0.88rem;">
+                            Cancelar
+                        </button>
+                        <button id="btnRevogarConfirmar" style="padding: 10px 22px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-lock"></i> Revogar com Nova Nota
+                        </button>
+                    </div>
+                </div>
+                <style>
+                    @keyframes modalFadeIn {
+                        from { opacity: 0; transform: scale(0.95); }
+                        to { opacity: 1; transform: scale(1); }
+                    }
+                </style>
+            `;
+
+            document.body.appendChild(modal);
+
+            const inputNota = modal.querySelector('#inputNotaRevogar');
+            const inputMotivo = modal.querySelector('#inputMotivoRevogar');
+
+            // Focar no input e selecionar
+            setTimeout(() => {
+                inputNota.focus();
+                inputNota.select();
+            }, 100);
+
+            // Botões +/-
+            modal.querySelector('#btnAumentarNota').addEventListener('click', () => {
+                let v = parseFloat(inputNota.value) || 0;
+                v = Math.min(10, v + 0.5);
+                inputNota.value = v.toFixed(1);
+            });
+
+            modal.querySelector('#btnDiminuirNota').addEventListener('click', () => {
+                let v = parseFloat(inputNota.value) || 0;
+                v = Math.max(0, v - 0.5);
+                inputNota.value = v.toFixed(1);
+            });
+
+            // Enter confirma, Escape cancela
+            const handleKey = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    finalizar(true);
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    finalizar(false);
+                }
+            };
+            inputNota.addEventListener('keydown', handleKey);
+            inputMotivo.addEventListener('keydown', handleKey);
+
+            const finalizar = (confirmado) => {
+                let resultado = { confirmado: false };
+                
+                if (confirmado) {
+                    const novaNota = parseFloat(inputNota.value);
+                    const motivo = (inputMotivo.value || '').trim();
+                    
+                    if (isNaN(novaNota) || novaNota < 0 || novaNota > 10) {
+                        // Destacar erro
+                        inputNota.style.borderColor = '#ef4444';
+                        inputNota.style.background = '#fef2f2';
+                        setTimeout(() => {
+                            inputNota.style.borderColor = '#e5e7eb';
+                            inputNota.style.background = 'white';
+                        }, 1500);
+                        return;
+                    }
+                    
+                    resultado = {
+                        confirmado: true,
+                        novaNota: novaNota,
+                        motivo: motivo || null
+                    };
+                }
+                
+                modal.remove();
+                resolve(resultado);
+            };
+
+            modal.querySelector('#btnRevogarConfirmar').addEventListener('click', () => finalizar(true));
+            modal.querySelector('#btnRevogarCancelar').addEventListener('click', () => finalizar(false));
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) finalizar(false);
+            });
+        });
+    }
+
+    // ============================================================================
+    // MODAL PRINCIPAL DE LIBERAÇÃO DE NOTAS
+    // ============================================================================
 
     /**
      * Abre o modal principal de liberação de notas
@@ -33413,15 +33618,16 @@ class AdminPanel {
                         </span>
                     `;
                 } else if (notaLiberada) {
+                    // 🔥 BOTÃO REVOGAR AGORA ABRE O MODAL DE EDIÇÃO
                     botaoHTML = `
-                        <button onclick="admin.revogarNotaAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}')"
+                        <button onclick="admin.revogarNotaAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}', ${aluno.nota})" 
                                 style="padding: 6px 12px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 8px; font-weight: 600; font-size: 0.75rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                             <i class="fas fa-lock"></i> Revogar
                         </button>
                     `;
                 } else {
                     botaoHTML = `
-                        <button onclick="admin.liberarNotaIndividualAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}', ${aluno.nota})"
+                        <button onclick="admin.liberarNotaIndividualAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}', ${aluno.nota})" 
                                 style="padding: 6px 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.75rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                             <i class="fas fa-unlock"></i> Liberar
                         </button>
@@ -33501,7 +33707,7 @@ class AdminPanel {
 
                 <div style="padding: 15px 25px; background: #f8fafc; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
                     <div style="font-size: 0.85rem; color: #6b7280;">
-                        <i class="fas fa-info-circle"></i>
+                        <i class="fas fa-info-circle"></i> 
                         <span id="infoSelecaoNotas">Selecione os alunos para liberar em massa</span>
                     </div>
 
@@ -33512,13 +33718,13 @@ class AdminPanel {
                         </button>
 
                         ${pendentes > 0 ? `
-                            <button onclick="admin.liberarTodasNotasAdmin('${provaId}', '${(provaTitulo || '').replace(/'/g, "\\'")}')"
+                            <button onclick="admin.liberarTodasNotasAdmin('${provaId}', '${(provaTitulo || '').replace(/'/g, "\\'")}')" 
                                     style="padding: 10px 24px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px;">
                                 <i class="fas fa-unlock-alt"></i> Liberar Todas (${pendentes})
                             </button>
                         ` : ''}
 
-                        <button onclick="admin.fecharModalLiberarNotas()"
+                        <button onclick="admin.fecharModalLiberarNotas()" 
                                 style="padding: 10px 24px; background: #6b7280; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
                             Fechar
                         </button>
@@ -33528,6 +33734,9 @@ class AdminPanel {
         `;
     }
 
+    /**
+     * Fecha o modal
+     */
     fecharModalLiberarNotas() {
         const modal = document.getElementById('modalLiberarNotasAdmin');
         if (modal) {
@@ -33586,9 +33795,9 @@ class AdminPanel {
         this.atualizarSelecaoNotas();
     }
 
-    /**
-     * Libera notas das selecionadas (EM CONJUNTO)
-     */
+    // ============================================================================
+    // LIBERAR NOTAS SELECIONADAS (COM NOTA OBRIGATÓRIA - CORREÇÃO DO 400)
+    // ============================================================================
     async liberarNotasSelecionadas(provaId) {
         const checkboxes = document.querySelectorAll('.check-liberar-nota:checked');
 
@@ -33627,7 +33836,7 @@ class AdminPanel {
 
             for (const alunoId of alunosIds) {
                 try {
-                    // 🔥 BUSCAR A NOTA DO ALUNO NA LISTA ATUAL
+                    // 🔥 BUSCAR A NOTA DO ALUNO NA LISTA ATUAL (RESOLVE O 400)
                     const aluno = resultados.find(r =>
                         (r.alunoId?._id?.toString() || r.alunoId?.toString()) === alunoId.toString()
                     );
@@ -33646,7 +33855,7 @@ class AdminPanel {
                         },
                         body: JSON.stringify({
                             alunoId: alunoId,
-                            nota: aluno.nota,     // 🔥 AGORA MANDA A NOTA!
+                            nota: aluno.nota, // 🔥 AGORA MANDA A NOTA!
                             liberarNota: true
                         })
                     });
@@ -33690,7 +33899,6 @@ class AdminPanel {
      */
     async liberarNotaIndividualAdmin(provaId, alunoId, alunoNome, nota) {
         try {
-            // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
             const confirmar = await this.mostrarConfirmacao(
                 'Liberar Nota',
                 `Deseja liberar a nota <strong>${parseFloat(nota).toFixed(1)}</strong> para o aluno <strong>${alunoNome}</strong>?`,
@@ -33741,27 +33949,25 @@ class AdminPanel {
         }
     }
 
+    // ============================================================================
+    // REVOGAR NOTA (AGORA COM MODAL DE EDIÇÃO)
+    // ============================================================================
     /**
-     * Revoga a liberação (oculta novamente)
+     * Revoga a liberação (oculta novamente) E permite editar a nota
+     * Abre um modal customizado com campo de edição da nota
      */
-    async revogarNotaAdmin(provaId, alunoId, alunoNome) {
+    async revogarNotaAdmin(provaId, alunoId, alunoNome, notaAtual) {
         try {
-            // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
-            const confirmar = await this.mostrarConfirmacao(
-                'Revogar Liberação',
-                `Deseja <strong>ocultar</strong> a nota do aluno <strong>${alunoNome}</strong>?<br><br>
-                <span style="color: #f59e0b; font-weight: 600;">⚠️ O aluno deixará de ver a nota até ser liberada novamente.</span>`,
-                {
-                    textoConfirmar: 'Revogar',
-                    textoCancelar: 'Cancelar',
-                    corConfirmar: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                    icone: '🔒'
-                }
-            );
+            // 🔥 ABRIR MODAL DE EDIÇÃO/REVOGAÇÃO
+            const resultado = await this.abrirModalRevogarNota(provaId, alunoId, alunoNome, notaAtual);
 
-            if (!confirmar) return;
+            if (!resultado.confirmado) return;
 
-            this.showToast(`🔒 Revogando liberação...`, 'info');
+            const { novaNota, motivo } = resultado;
+
+            console.log(`🔒 Revogando nota de ${alunoNome}: ${notaAtual} → ${novaNota}`);
+
+            this.showToast(`🔒 Revogando liberação de ${alunoNome}...`, 'info');
 
             const token = localStorage.getItem('auth_token');
             const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
@@ -33772,7 +33978,9 @@ class AdminPanel {
                 },
                 body: JSON.stringify({
                     alunoId: alunoId,
-                    liberarNota: false
+                    nota: novaNota,           // 🔥 NOVA NOTA EDITADA
+                    liberarNota: false,        // 🔥 REVOGA
+                    motivo: motivo || null     // Motivo opcional
                 })
             });
 
@@ -33784,7 +33992,12 @@ class AdminPanel {
             const data = await response.json();
 
             if (data.success) {
-                this.showToast(`✅ Nota de ${alunoNome} ocultada!`, 'success');
+                const notaMudou = Math.abs(parseFloat(notaAtual) - novaNota) > 0.001;
+                const mensagem = notaMudou 
+                    ? `✅ Nota de ${alunoNome} alterada para ${novaNota.toFixed(1)} e ocultada!`
+                    : `✅ Nota de ${alunoNome} ocultada!`;
+                
+                this.showToast(mensagem, 'success');
                 await this.recarregarModalLiberarNotas(provaId);
                 await this.loadProvas();
             } else {
@@ -33797,9 +34010,9 @@ class AdminPanel {
         }
     }
 
-    /**
-     * Libera TODAS as notas pendentes de uma prova
-     */
+    // ============================================================================
+    // LIBERAR TODAS AS NOTAS
+    // ============================================================================
     async liberarTodasNotasAdmin(provaId, provaTitulo) {
         try {
             const pendentes = this._provaAtualLiberacao?.resultados.filter(r =>
@@ -33811,7 +34024,6 @@ class AdminPanel {
                 return;
             }
 
-            // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
             const confirmar = await this.mostrarConfirmacao(
                 'Liberar TODAS as Notas',
                 `Deseja liberar <strong>TODAS as ${pendentes} notas pendentes</strong> desta prova?<br><br>
@@ -33859,9 +34071,9 @@ class AdminPanel {
         }
     }
 
-    /**
-     * Recarrega os dados do modal
-     */
+    // ============================================================================
+    // RECARREGAR MODAL
+    // ============================================================================
     async recarregarModalLiberarNotas(provaId) {
         try {
             const token = localStorage.getItem('auth_token');
