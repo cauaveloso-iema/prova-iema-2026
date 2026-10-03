@@ -1209,8 +1209,17 @@ if (typeof module !== 'undefined' && module.exports) {
 }
 
 // ============================================================================
-// CONEXÃO COM MONGODB
+// CONEXÃO COM MONGODB (VERSÃO CORRIGIDA - RESISTENTE A TIMEOUTS NO RENDER)
 // ============================================================================
+
+// 🔥 AUMENTAR O BUFFER TIMEOUT DO MONGOOSE (padrão é 10s, que é pouco para Render)
+// Isso evita o erro "buffering timed out after 10000ms" durante cold start
+mongoose.set('bufferTimeoutMS', 60000); // 60 segundos
+
+// 🔥 DESABILITAR BUFFERING GLOBAL (opcional, mas ajuda a falhar rápido se não conectar)
+// Se preferir que as queries aguardem, comente a linha abaixo
+// mongoose.set('bufferCommands', false);
+
 const connectToDatabase = async () => {
   const ENV = process.env.NODE_ENV || 'development';
   const IS_PRODUCTION = ENV === 'production';
@@ -1241,20 +1250,58 @@ const connectToDatabase = async () => {
   console.log(`📊 Tipo: ${databaseType}`);
   console.log('='.repeat(60));
   
+  // 🔥 OPÇÕES OTIMIZADAS PARA RENDER + ATLAS
   const options = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
+    
+    // Timeouts aumentados para lidar com cold start do Render
+    serverSelectionTimeoutMS: 60000,  // 60s para escolher um servidor (era 30s)
+    socketTimeoutMS: 90000,            // 90s de socket (era 45s)
+    connectTimeoutMS: 60000,           // 60s para conectar (era 30s)
+    
+    // Pool de conexões
     maxPoolSize: 10,
+    minPoolSize: 1,                    // Manter pelo menos 1 conexão viva
+    maxIdleTimeMS: 30000,              // Fechar conexões ociosas após 30s
+    
+    // Confiabilidade
     retryWrites: true,
-    w: 'majority'
+    retryReads: true,                  // 🔥 NOVO: retry em leituras também
+    w: 'majority',
+    
+    // Heartbeat (importante para detectar conexão morta)
+    heartbeatFrequencyMS: 10000,       // Ping no servidor a cada 10s
+    
+    // Família de IP (evita problemas de IPv6 no Render)
+    family: 4,                         // 🔥 FORÇA IPv4
+  };
+  
+  // 🔥 FUNÇÃO PARA TENTAR CONECTAR COM RETRY
+  const tentarConectar = async (uri, tentativa = 1, maxTentativas = 3) => {
+    try {
+      console.log(`🔄 Tentativa ${tentativa}/${maxTentativas} de conexão...`);
+      await mongoose.connect(uri, options);
+      return true;
+    } catch (error) {
+      console.error(`❌ Tentativa ${tentativa} falhou: ${error.message}`);
+      
+      if (tentativa < maxTentativas) {
+        const espera = tentativa * 3000; // 3s, 6s, 9s...
+        console.log(`⏳ Aguardando ${espera}ms antes de tentar novamente...`);
+        await new Promise(resolve => setTimeout(resolve, espera));
+        return tentarConectar(uri, tentativa + 1, maxTentativas);
+      }
+      
+      throw error;
+    }
   };
   
   try {
-    console.log('🔄 Tentando conexão...');
-    await mongoose.connect(connectionUri, options);
+    console.log('🔄 Iniciando conexão com o banco de dados...');
+    
+    // 🔥 TENTAR CONECTAR COM RETRY AUTOMÁTICO
+    await tentarConectar(connectionUri, 1, 3);
     
     const db = mongoose.connection.db;
     const host = mongoose.connection.host;
@@ -1262,75 +1309,194 @@ const connectToDatabase = async () => {
     
     console.log('='.repeat(60));
     console.log('✅ CONEXÃO ESTABELECIDA COM SUCESSO!');
+    console.log(`📁 Banco: ${db.databaseName}`);
+    console.log(`📍 Host: ${host}`);
+    console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
+    console.log(`🎯 Buffer Timeout: ${mongoose.get('bufferTimeoutMS')}ms`);
+    console.log('='.repeat(60));
+    
     // ⏰ Iniciar cron jobs de retenção LGPD
     try {
       retencaoService.iniciarCronJobs();
     } catch (error) {
       console.warn('⚠️ Erro ao iniciar cron jobs LGPD:', error.message);
     }
-    console.log(`📁 Banco: ${db.databaseName}`);
-    console.log(`📍 Host: ${host}`);
-    console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
-    console.log('='.repeat(60));
     
     // ============================================
-    // EVENTOS DE RECONEXÃO DO MONGODB (ADICIONADO)
+    // EVENTOS DE CONEXÃO DO MONGODB
     // ============================================
+    
+    // 🔥 EVITAR MÚLTIPLAS TENTATIVAS DE RECONEXÃO SIMULTÂNEAS
+    let reconectando = false;
+    
     mongoose.connection.on('disconnected', () => {
+      if (reconectando) {
+        console.log('⏭️ Reconexão já em andamento, ignorando evento...');
+        return;
+      }
+      
+      reconectando = true;
       console.log('⚠️ MongoDB desconectado! Tentando reconectar em 5 segundos...');
-      setTimeout(() => {
-        console.log('🔄 Tentando reconectar ao MongoDB...');
-        mongoose.connect(connectionUri, options).catch(err => {
+      
+      setTimeout(async () => {
+        try {
+          console.log('🔄 Tentando reconectar ao MongoDB...');
+          await mongoose.connect(connectionUri, options);
+          console.log('✅ Reconexão bem-sucedida!');
+        } catch (err) {
           console.error('❌ Falha na reconexão:', err.message);
-        });
+        } finally {
+          reconectando = false;
+        }
       }, 5000);
     });
 
     mongoose.connection.on('error', (err) => {
-      console.error('❌ Erro no MongoDB:', err);
+      console.error('❌ Erro no MongoDB:', err.message);
     });
 
     mongoose.connection.on('reconnected', () => {
       console.log('✅ MongoDB reconectado com sucesso!');
+      reconectando = false;
     });
 
     mongoose.connection.on('timeout', () => {
       console.warn('⏰ Timeout na conexão com MongoDB');
     });
+
+    mongoose.connection.on('close', () => {
+      console.log('🔌 Conexão com MongoDB fechada');
+    });
+    
     // ============================================
 
-    const matriculasManager = require('./matriculas');
-    await matriculasManager.importarDadosIniciais();
-    
-    if (groq) {
-      setTimeout(() => testarModelosDisponiveis(), 2000);
+    // 🔥 IMPORTAR MATRÍCULAS (com try/catch separado para não travar se falhar)
+    try {
+      const matriculasManager = require('./matriculas');
+      await matriculasManager.importarDadosIniciais();
+    } catch (error) {
+      console.warn('⚠️ Erro ao importar matrículas:', error.message);
+      // Não lança o erro - o sistema continua funcionando
     }
     
-  } catch (error) {
-    console.error('❌ ERRO na conexão principal:', error.message);
+    // Testar modelos Groq em background (não bloqueia)
+    if (groq) {
+      setTimeout(() => {
+        testarModelosDisponiveis().catch(err => {
+          console.warn('⚠️ Erro ao testar modelos Groq:', err.message);
+        });
+      }, 5000); // Esperar 5s após conectar
+    }
     
+    return true; // ✅ SUCESSO
+    
+  } catch (error) {
+    console.error('='.repeat(60));
+    console.error('❌ ERRO NA CONEXÃO PRINCIPAL:', error.message);
+    console.error('='.repeat(60));
+    
+    // ============================================
+    // FALLBACK PARA DESENVOLVIMENTO
+    // ============================================
     if (IS_DEVELOPMENT) {
       console.log('🔄 DESENVOLVIMENTO: Tentando fallback para Atlas...');
+      
       try {
         const fallbackUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
+        
+        if (!fallbackUri) {
+          throw new Error('URI de fallback não configurada');
+        }
+        
         await mongoose.connect(fallbackUri, options);
         console.log('✅ Fallback para Atlas bem-sucedido');
+        return true;
+        
       } catch (fallbackError) {
         console.error('❌ Todos os fallbacks falharam:', fallbackError.message);
         console.log('💡 SOLUÇÃO:');
         console.log('   1. Inicie o MongoDB local: mongod');
         console.log('   2. Ou verifique sua conexão com a internet');
-        throw fallbackError;
+        console.log('   3. Ou verifique se MONGODB_ATLAS_URI está no .env');
+        
+        // 🔥 EM DESENVOLVIMENTO, NÃO MATA O SERVIDOR
+        // Deixa o servidor rodar mesmo sem banco (útil para debug)
+        console.warn('⚠️ Servidor continuará rodando SEM banco de dados');
+        return false;
       }
-    } else if (IS_PRODUCTION) {
+    }
+    
+    // ============================================
+    // FALLBACK PARA PRODUÇÃO (RENDER)
+    // ============================================
+    if (IS_PRODUCTION) {
       console.error('❌ PRODUÇÃO: Conexão com Atlas falhou!');
-      throw error;
+      console.log('💡 Verificações sugeridas:');
+      console.log('   1. IP do Render está na whitelist do Atlas?');
+      console.log('   2. A URI do MongoDB está correta nas variáveis de ambiente?');
+      console.log('   3. O cluster do Atlas está ativo (não pausado)?');
+      
+      // 🔥 TENTAR FALLBACK TAMBÉM EM PRODUÇÃO
+      const fallbackUri = process.env.MONGODB_URI;
+      
+      if (fallbackUri && fallbackUri !== connectionUri) {
+        console.log('🔄 Tentando URI alternativa em produção...');
+        try {
+          await mongoose.connect(fallbackUri, options);
+          console.log('✅ Fallback em produção bem-sucedido');
+          return true;
+        } catch (fallbackError) {
+          console.error('❌ Fallback também falhou:', fallbackError.message);
+        }
+      }
+      
+      // Em produção, NÃO joga o erro (deixa o servidor rodar e tentar reconectar)
+      console.warn('⚠️ Servidor continuará rodando. Tentará reconectar automaticamente.');
+      return false;
     }
   }
 };
 
-// Executar conexão com o banco de dados
-connectToDatabase();
+// ============================================================================
+// EXECUTAR CONEXÃO COM RETRY AUTOMÁTICO
+// ============================================================================
+
+// 🔥 PROMISE GLOBAL PARA SABER SE O BANCO ESTÁ PRONTO
+let databaseReady = false;
+let databaseConnectionPromise = null;
+
+const iniciarConexaoComRetry = async () => {
+  const MAX_TENTATIVAS_INICIAIS = 5;
+  const INTERVALO_ENTRE_TENTATIVAS = 5000; // 5 segundos
+  
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_INICIAIS; tentativa++) {
+    console.log(`\n🔁 Tentativa de conexão inicial ${tentativa}/${MAX_TENTATIVAS_INICIAIS}...`);
+    
+    const sucesso = await connectToDatabase();
+    
+    if (sucesso) {
+      databaseReady = true;
+      console.log('✅ Banco de dados pronto para uso!');
+      return true;
+    }
+    
+    if (tentativa < MAX_TENTATIVAS_INICIAIS) {
+      console.log(`⏳ Aguardando ${INTERVALO_ENTRE_TENTATIVAS / 1000}s antes da próxima tentativa...`);
+      await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_TENTATIVAS));
+    }
+  }
+  
+  console.error('❌ Todas as tentativas iniciais de conexão falharam!');
+  console.warn('⚠️ O servidor continuará rodando e tentará reconectar automaticamente.');
+  return false;
+};
+
+// Iniciar conexão (não bloqueia o servidor)
+databaseConnectionPromise = iniciarConexaoComRetry();
+
+// 🔥 EXPORTAR ESTADO DA CONEXÃO PARA USO EM OUTROS LUGARES
+global.isDatabaseReady = () => databaseReady;
+global.waitForDatabase = () => databaseConnectionPromise;
 
 // ============================================================================
 // CONFIGURAÇÃO DO MULTER PARA UPLOAD DE ARQUIVOS
