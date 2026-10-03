@@ -263,7 +263,7 @@
         }
 
         // ============================================
-        // VERIFICAR GEOLOCALIZAÇÃO
+        // VERIFICAR GEOLOCALIZAÇÃO (CORRIGIDO)
         // ============================================
         async function verificarGeolocalizacao() {
             return new Promise((resolve) => {
@@ -304,10 +304,17 @@
                         let mensagem = '';
                         switch(error.code) {
                             case error.PERMISSION_DENIED:
-                                mensagem = '⚠️ Permissão negada. A prova continuará.';
+                                // MUDANÇA AQUI: Mensagem mais amigável para o WebView
+                                mensagem = '📍 Aguardando permissão de localização...';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                mensagem = '⚠️ Localização indisponível.';
+                                break;
+                            case error.TIMEOUT:
+                                mensagem = '⚠️ Tempo esgotado ao buscar localização.';
                                 break;
                             default:
-                                mensagem = '⚠️ Localização não disponível.';
+                                mensagem = '⚠️ Erro desconhecido na localização.';
                         }
                         
                         if (statusEl) statusEl.innerHTML = mensagem;
@@ -316,9 +323,11 @@
                             statusDiv.style.color = '#92400e';
                         }
                         
+                        // Mesmo com erro, permite continuar (não bloqueia a prova)
                         resolve({ success: false, error: mensagem, podeContinuar: true });
                     },
-                    { enableHighAccuracy: true, timeout: 10000 }
+                    // MUDANÇA AQUI: Aumentado para 30 segundos e máxima precisão
+                    { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
                 );
             });
         }
@@ -627,10 +636,10 @@
         carregarDadosProva();
         iniciarCamera();
 
-        // Verificar localização automaticamente
-        setTimeout(() => {
-            verificarGeolocalizacao();
-        }, 5000);
+        // 🔥 REMOVIDO: Não verificar localização automaticamente ao carregar.
+        // A localização agora só é pedida quando o usuário clica em "Iniciar Validação".
+        // Isso evita conflitos de timing com o WebView do Kodular.
+
     </script>
 
     <script>
