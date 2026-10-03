@@ -3353,33 +3353,41 @@
     }
     
     async function finalizarProva() {
-
         // ============ VERIFICAR SE JÁ FOI FINALIZADA ============
         if (provaFinalizada) {
             console.log('⏭️ Prova já foi finalizada anteriormente');
             
-            // 🔥 VERIFICAR SE O LOCALSTORAGE TEM A MARCAÇÃO
             const finalizadaStorage = localStorage.getItem('provaFinalizada_' + prova._id) === 'true';
             if (finalizadaStorage) {
                 console.log('✅ Prova marcada como finalizada no localStorage');
                 
-                // Já redirecionar direto
-                alert('Você já finalizou esta prova anteriormente. Redirecionando...');
+                // Desativar proteções antes de redirecionar
+                window.onbeforeunload = null;
+                window._permitirSaidaProva = true;
+                
+                if (typeof showToast === 'function') {
+                    showToast('Você já finalizou esta prova. Redirecionando...', 'info');
+                } else {
+                    console.log('Você já finalizou esta prova. Redirecionando...');
+                }
+                
                 setTimeout(() => {
-                    window.location.href = '/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id);
-                }, 2000);
+                    window.location.replace('/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id));
+                }, 1500);
                 return;
             }
         }
         
         console.log('🚀 INICIANDO PROCESSO DE FINALIZAÇÃO DA PROVA');
         
-        // 🔥 VARIÁVEL DE CONTROLE PARA SABER SE FOI CANCELADO PELO USUÁRIO
-        let canceladoPeloUsuario = false;
+        // 🔥 FLAG GLOBAL: PERMITE SAÍDA DA PÁGINA
+        // (os listeners de beforeunload checam este flag)
+        window._permitirSaidaProva = false;
         
         // Variáveis de controle
         let processoCancelado = false;
         let estadoRestaurado = false;
+        let canceladoPeloUsuario = false;
         
         // 1. SALVAR ESTADO ORIGINAL
         const estadoOriginal = {
@@ -3388,17 +3396,14 @@
             provaSendoFinalizada: monitoramento ? monitoramento.provaSendoFinalizada : false
         };
         
-        // 2. DESATIVAR COMPLETAMENTE TODAS AS PROTEÇÕES
-        // Desativar beforeunload
+        // 2. DESATIVAR PROTECÕES TEMPORARIAMENTE (para mostrar confirmação)
         window.onbeforeunload = null;
         
-        // Marcar que a prova está sendo finalizada
         if (monitoramento) {
             monitoramento.provaSendoFinalizada = true;
-            console.log('✅ Monitoramento desativado para finalização');
+            console.log('✅ Monitoramento pausado para finalização');
         }
         
-        // Parar todos os timers
         if (timerInterval) {
             clearInterval(timerInterval);
             timerInterval = null;
@@ -3427,15 +3432,13 @@
             estadoRestaurado = true;
             console.log('🔄 Restaurando estado original...');
             
-            // Restaurar beforeunload
             window.onbeforeunload = estadoOriginal.onbeforeunload;
+            window._permitirSaidaProva = false;
             
-            // Restaurar monitoramento
             if (monitoramento) {
                 monitoramento.provaSendoFinalizada = estadoOriginal.provaSendoFinalizada;
             }
             
-            // Restaurar timer
             if (!timerInterval && estadoOriginal.timerInterval) {
                 timerInterval = setInterval(atualizarTimer, 1000);
                 console.log('⏰ Timer restaurado');
@@ -3447,11 +3450,9 @@
             return new Promise((resolve) => {
                 console.log(`📍 Exibindo confirmação: ${mensagem.substring(0, 50)}...`);
                 
-                // 🔥 ATIVAR FLAGS DE ACESSIBILIDADE
                 window.acessibilidadeAtiva = true;
                 window.acessibilidadeClicada = true;
                 
-                // 🔥 MARCAR O MODAL COMO SEGURO
                 const modal = document.querySelector('.modal-saida.active') || 
                             document.querySelector('.modal-warning.active');
                 if (modal) {
@@ -3459,26 +3460,21 @@
                     modal.setAttribute('data-ignorar-monitoramento', 'true');
                 }
                 
-                // 🔥 MARCAR TODOS OS BOTÕES DO MODAL COMO SEGUROS
                 document.querySelectorAll('.btn-saida, .btn-return, .modal-close, button').forEach(btn => {
                     btn.setAttribute('data-seguro', 'true');
                     btn.setAttribute('data-ignorar-monitoramento', 'true');
                 });
                 
-                // Pequena pausa para garantir
                 setTimeout(async () => {
                     try {
                         const resultado = await confirm(mensagem);
                         
-                        // 🔥 SE O USUÁRIO CANCELOU, MARCAR ISSO
                         if (!resultado) {
                             canceladoPeloUsuario = true;
                             console.log('🔴 USUÁRIO CANCELOU A AÇÃO');
                         }
                         
-                        // Pequena pausa após o confirm
                         setTimeout(() => {
-                            // Desativar proteção
                             window.acessibilidadeAtiva = false;
                             window.acessibilidadeClicada = false;
                             
@@ -3487,47 +3483,8 @@
                         }, 150);
                     } catch (error) {
                         console.error('❌ Erro na confirmação:', error);
-                        
-                        // Desativar proteção mesmo em caso de erro
                         window.acessibilidadeAtiva = false;
                         window.acessibilidadeClicada = false;
-                        
-                        resolve(false); // Em caso de erro, assume recusado
-                    }
-                }, 100);
-            });
-        };
-        
-        // ============ FUNÇÃO AUXILIAR PARA MOSTRAR ALERTA SEGURO ============
-        const mostrarAlertaSeguro = (mensagem) => {
-            return new Promise((resolve) => {
-                console.log(`💡 Exibindo alerta: ${mensagem.substring(0, 50)}...`);
-                
-                // Ativar proteção
-                window.acessibilidadeAtiva = true;
-                window.acessibilidadeClicada = true;
-                
-                // Pequena pausa para garantir
-                setTimeout(() => {
-                    try {
-                        alert(mensagem);
-                        
-                        // Pequena pausa após o alert
-                        setTimeout(() => {
-                            // Desativar proteção
-                            window.acessibilidadeAtiva = false;
-                            window.acessibilidadeClicada = false;
-                            
-                            console.log('✅ Alerta exibido com sucesso');
-                            resolve(true);
-                        }, 150);
-                    } catch (error) {
-                        console.error('❌ Erro no alerta:', error);
-                        
-                        // Desativar proteção mesmo em caso de erro
-                        window.acessibilidadeAtiva = false;
-                        window.acessibilidadeClicada = false;
-                        
                         resolve(false);
                     }
                 }, 100);
@@ -3557,13 +3514,9 @@
                     processoCancelado = true;
                     canceladoPeloUsuario = true;
                     
-                    // 🔥 RESTAURAR ESTADO E SAIR SEM CANCELAR PROVA
                     restaurarEstado();
-                    
-                    // Reexibir conteúdo da prova
                     document.getElementById('provaContent').style.display = 'flex';
                     
-                    // 🔥 IMPORTANTE: Não ativar nenhuma violação
                     console.log('✅ Cancelamento ignorado - volta normal à prova');
                     return;
                 }
@@ -3584,7 +3537,6 @@
         try {
             console.log('🎯 ETAPA 2: Confirmação final');
             
-            // 🔥 RESETAR A FLAG ANTES DA CONFIRMAÇÃO FINAL
             canceladoPeloUsuario = false;
             
             const mensagemConfirmacao2 = 
@@ -3601,19 +3553,14 @@
             
             const confirmacaoFinal = await mostrarConfirmacaoSegura(mensagemConfirmacao2);
             
-            // 🔥 SE O USUÁRIO CANCELOU, SAIR SEM CANCELAR PROVA
             if (!confirmacaoFinal) {
                 console.log('↩️  Usuário cancelou na confirmação final');
                 processoCancelado = true;
                 canceladoPeloUsuario = true;
                 
-                // Restaurar estado e sair
                 restaurarEstado();
-                
-                // Reexibir conteúdo da prova
                 document.getElementById('provaContent').style.display = 'flex';
                 
-                // 🔥 IMPORTANTE: Garantir que não ative violação
                 console.log('✅ Cancelamento na confirmação final ignorado');
                 return;
             }
@@ -3631,24 +3578,28 @@
         // ============ SE CHEGOU AQUI, USUÁRIO CONFIRMOU ============
         console.log('🎯 USUÁRIO CONFIRMOU - PROSSEGUINDO COM FINALIZAÇÃO');
         
-        // ============ AGORA SIM MARCAR QUE A PROVA ESTÁ SENDO FINALIZADA ============
+        // 🔥 MARCAR PROVA COMO FINALIZADA
         provaFinalizada = true;
         window.provaFinalizada = true;
-        localStorage.setItem('provaFinalizada_' + prova._id, 'true');
         
-        // ============ ETAPA 3: PREPARAÇÃO E ENVIO ============
+        if (prova && prova._id) {
+            localStorage.setItem('provaFinalizada_' + prova._id, 'true');
+        }
+        
+        // ============ ETAPA 3: ENVIO DAS RESPOSTAS ============
+        let tempoGastoMinutos = Math.max(1, Math.ceil(tempoTotal / 60));
+        
         try {
             console.log('📤 ETAPA 3: Preparação e envio das respostas');
             
-            // Mostrar tela de carregamento
+            // Mostrar tela de loading
             document.getElementById('provaContent').style.display = 'none';
             document.getElementById('loadingScreen').style.display = 'flex';
             
-            // Atualizar mensagem de loading
             atualizarMensagemLoading('Preparando envio das respostas...');
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await new Promise(resolve => setTimeout(resolve, 500));
             
-            // 1. Preparar array de respostas
+            // Preparar array de respostas
             atualizarMensagemLoading('Organizando respostas...');
             const respostasArray = [];
             for (let i = 0; i < totalQuestoes; i++) {
@@ -3656,12 +3607,9 @@
             }
             
             console.log(`📦 Respostas preparadas: ${respostasArray.length} itens`);
-            
-            // 2. Calcular tempo gasto
-            const tempoGastoMinutos = Math.max(1, Math.ceil(tempoTotal / 60));
             console.log(`⏱️ Tempo total gasto: ${tempoGastoMinutos} minutos`);
             
-            // 3. Verificar token de autenticação
+            // Verificar token
             atualizarMensagemLoading('Verificando autenticação...');
             const authToken = localStorage.getItem('auth_token');
             
@@ -3671,7 +3619,7 @@
             
             console.log('🔑 Token de autenticação encontrado');
             
-            // 4. Enviar para o servidor
+            // Enviar para o servidor
             atualizarMensagemLoading('Enviando respostas para o servidor...');
             
             console.log('🌐 Enviando dados para:', `${API_BASE_URL}/provas/${prova._id}/responder`);
@@ -3709,119 +3657,254 @@
             console.log('✅ Respostas enviadas com sucesso!');
             console.log('📊 Resposta do servidor:', data);
             
-            // 5. Limpar dados locais
-            atualizarMensagemLoading('Finalizando processo...');
-            
+            // Limpar dados locais
             localStorage.removeItem(`prova_${prova._id}`);
             localStorage.removeItem(`tempo_prova_${prova._id}`);
             localStorage.removeItem(`hora_entrada_${prova._id}`);
             
             console.log('🗑️ Dados locais removidos');
             
-            // 6. Sair do modo tela cheia
-            if (document.exitFullscreen) {
-                try {
-                    await document.exitFullscreen();
-                    console.log('🖥️ Modo tela cheia finalizado');
-                } catch (error) {
-                    console.log('⚠️ Não foi possível sair do modo tela cheia:', error);
-                }
-            }
-            
-            // Pequena pausa final
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // 7. Mostrar mensagem de sucesso
-            atualizarMensagemLoading('Prova finalizada com sucesso!');
-            
-            const mensagemSucesso = 
-                `🎉 PROVA FINALIZADA COM SUCESSO!\n\n` +
-                `📋 ${prova.titulo}\n` +
-                `✅ ${respondidas}/${totalQuestoes} questões respondidas\n` +
-                `⏱️ Tempo gasto: ${tempoGastoMinutos} minutos\n` +
-                `📊 Aguarde a correção do professor\n\n` +
-                `Você será redirecionado para o painel em alguns segundos...`;
-            
-            await mostrarAlertaSeguro(mensagemSucesso);
-            
-            console.log('✅ Processo de finalização concluído com sucesso');
-            
         } catch (error) {
-            console.error('❌ ERRO CRÍTICO NO PROCESSO DE FINALIZAÇÃO:', error);
+            console.error('❌ ERRO CRÍTICO NO ENVIO:', error);
             
             // Restaurar estado em caso de erro
             restaurarEstado();
             
-            // Mostrar conteúdo da prova novamente
             document.getElementById('loadingScreen').style.display = 'none';
             document.getElementById('provaContent').style.display = 'flex';
             
-            // Mostrar mensagem de erro
-            const mensagemErro = 
-                `⚠️ ERRO AO FINALIZAR PROVA\n\n` +
-                `Ocorreu um erro durante o processo de finalização:\n\n` +
-                `"${error.message}"\n\n` +
-                `Por favor:\n` +
-                `1. Verifique sua conexão com a internet\n` +
-                `2. Tente finalizar novamente\n` +
-                `3. Se o erro persistir, entre em contato com o professor\n\n` +
-                `Suas respostas foram salvas localmente e podem ser recuperadas.`;
+            // 🔥 REVERTER FLAG DE FINALIZAÇÃO
+            provaFinalizada = false;
+            window.provaFinalizada = false;
+            if (prova && prova._id) {
+                localStorage.removeItem('provaFinalizada_' + prova._id);
+            }
             
-            await mostrarAlertaSeguro(mensagemErro);
-            
-            return; // Não continuar com o redirecionamento
+            // Mostrar erro SEM bloquear
+            const loadingScreen = document.getElementById('loadingScreen');
+            loadingScreen.innerHTML = `
+                <div style="text-align: center; padding: 40px; max-width: 500px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 5rem; color: #ef4444; margin-bottom: 20px;"></i>
+                    <h2 style="color: #ef4444; margin-bottom: 15px;">Erro ao Finalizar</h2>
+                    <p style="color: #4b5563; margin-bottom: 15px; line-height: 1.6;">
+                        Ocorreu um erro durante o envio das respostas:
+                    </p>
+                    <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 8px; text-align: left; margin-bottom: 20px;">
+                        <strong style="color: #991b1b;">${error.message}</strong>
+                    </div>
+                    <p style="color: #6b7280; margin-bottom: 25px;">
+                        <i class="fas fa-info-circle"></i> Suas respostas foram salvas localmente.<br>
+                        Tente finalizar novamente.
+                    </p>
+                    <button onclick="location.reload()" style="
+                        padding: 14px 30px;
+                        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        font-weight: 600;
+                        font-size: 1rem;
+                        cursor: pointer;
+                        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+                    ">
+                        <i class="fas fa-redo"></i> Tentar Novamente
+                    </button>
+                </div>
+            `;
+            return;
         }
         
-        // ============ ETAPA FINAL: REDIRECIONAMENTO ============
-        try {
-            console.log('🔄 Preparando redirecionamento...');
+        // ============ ETAPA 4: TELA DE SUCESSO E REDIRECIONAMENTO ============
+        console.log('✅ ETAPA 4: Tela de sucesso e redirecionamento');
+        
+        // 🔥 1. DESATIVAR TODAS AS PROTEÇÕES (PRIORIDADE MÁXIMA)
+        window.onbeforeunload = null;
+        window._permitirSaidaProva = true;
+        
+        if (monitoramento) {
+            monitoramento.provaSendoFinalizada = true;
+            monitoramento.provaCancelada = false;
             
-            // 🔥 CORREÇÃO CRÍTICA: DESATIVAR O BLOQUEIO DE NAVEGAÇÃO ANTES DE REDIRECIONAR
-            if (monitoramento && monitoramento.bloqueioNavegacao) {
-                console.log('🔓 Desativando bloqueio de navegação para permitir redirecionamento');
-                monitoramento.bloqueioNavegacao.permitirSaida();
+            if (monitoramento.timerPerdaFoco) {
+                clearInterval(monitoramento.timerPerdaFoco);
+                monitoramento.timerPerdaFoco = null;
             }
             
-            // 🔥 TAMBÉM DESATIVAR O beforeunload DIRETAMENTE
-            window.onbeforeunload = null;
-            
-            // 🔥 DESATIVAR O MONITORAMENTO
-            if (monitoramento) {
-                monitoramento.provaSendoFinalizada = true;
-                monitoramento.provaCancelada = false;
-                
-                // Se tiver algum timer rodando, parar
-                if (monitoramento.timerPerdaFoco) {
-                    clearInterval(monitoramento.timerPerdaFoco);
-                    monitoramento.timerPerdaFoco = null;
+            // Desativar bloqueio de navegação
+            if (monitoramento.bloqueioNavegacao) {
+                monitoramento.bloqueioNavegacao.saidaConfirmada = true;
+                if (typeof monitoramento.bloqueioNavegacao.permitirSaida === 'function') {
+                    monitoramento.bloqueioNavegacao.permitirSaida();
                 }
+                console.log('🔓 Bloqueio de navegação desativado');
             }
-            
-            // Garantir que o estado foi restaurado antes do redirecionamento
-            restaurarEstado();
-            
-            // Pequeno delay antes do redirecionamento
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
-            // Redirecionar para o painel
-            console.log('🌍 Redirecionando para /aluno.html');
-            window.location.href = '/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id);
-            
-        } catch (error) {
-            console.error('❌ Erro no redirecionamento:', error);
-            
-            // Em caso de erro no redirecionamento, mostrar mensagem
-            await mostrarAlertaSeguro(
-                '✅ Prova finalizada, mas houve um problema no redirecionamento.\n\n' +
-                'Por favor, clique no botão abaixo para voltar ao painel:\n\n' +
-                'Para voltar, acesse: /aluno.html'
-            );
-            
-            // Tentar redirecionar de qualquer forma após 2 segundos
-            setTimeout(() => {
-                window.location.href = '/aluno.html';
-            }, 2000);
         }
+        
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        
+        // 🔥 2. SAIR DO FULLSCREEN
+        if (document.exitFullscreen) {
+            try {
+                await document.exitFullscreen();
+                console.log('🖥️ Fullscreen finalizado');
+            } catch (e) {}
+        } else if (document.webkitExitFullscreen) {
+            try {
+                document.webkitExitFullscreen();
+            } catch (e) {}
+        } else if (document.msExitFullscreen) {
+            try {
+                document.msExitFullscreen();
+            } catch (e) {}
+        }
+        
+        // 🔥 3. MOSTRAR TELA DE SUCESSO (SEM ALERT BLOQUEANTE)
+        const loadingScreen = document.getElementById('loadingScreen');
+        if (loadingScreen) {
+            loadingScreen.style.display = 'flex';
+            loadingScreen.innerHTML = `
+                <div style="text-align: center; padding: 40px; max-width: 500px; animation: fadeIn 0.5s ease;">
+                    <div style="
+                        width: 120px;
+                        height: 120px;
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin: 0 auto 25px;
+                        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+                        animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    ">
+                        <i class="fas fa-check" style="font-size: 60px; color: white;"></i>
+                    </div>
+                    
+                    <h2 style="color: #10b981; margin-bottom: 15px; font-size: 1.8rem;">
+                        🎉 Prova Finalizada!
+                    </h2>
+                    
+                    <p style="color: #1f2937; font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">
+                        ${prova.titulo}
+                    </p>
+                    
+                    <div style="background: #f0fdf4; border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #10b981;">
+                        <div style="display: flex; justify-content: space-around; text-align: center;">
+                            <div>
+                                <div style="font-size: 1.6rem; font-weight: 700; color: #10b981;">${respondidas}</div>
+                                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 3px;">Respondidas</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.6rem; font-weight: 700; color: #4b5563;">${totalQuestoes}</div>
+                                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 3px;">Total</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 1.6rem; font-weight: 700; color: #3b82f6;">${tempoGastoMinutos}</div>
+                                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 3px;">Minutos</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #6b7280; margin-bottom: 25px;">
+                        <i class="fas fa-info-circle"></i> Aguarde a correção do professor.
+                    </p>
+                    
+                    <div style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 12px;
+                        color: #4b5563;
+                        font-weight: 600;
+                        padding: 15px;
+                        background: #f9fafb;
+                        border-radius: 10px;
+                        margin-bottom: 20px;
+                    ">
+                        <div style="
+                            width: 24px;
+                            height: 24px;
+                            border: 3px solid #e5e7eb;
+                            border-top-color: #10b981;
+                            border-radius: 50%;
+                            animation: spin 0.8s linear infinite;
+                        "></div>
+                        <span>Redirecionando para o painel...</span>
+                    </div>
+                    
+                    <button onclick="window.location.replace('/aluno.html?prova_finalizada=true&prova_id=${prova._id}')" style="
+                        padding: 14px 30px;
+                        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        font-weight: 600;
+                        font-size: 1rem;
+                        cursor: pointer;
+                        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+                    ">
+                        <i class="fas fa-arrow-left"></i> Ir para o Painel Agora
+                    </button>
+                </div>
+                
+                <style>
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    @keyframes scaleIn {
+                        from { transform: scale(0.3); opacity: 0; }
+                        to { transform: scale(1); opacity: 1; }
+                    }
+                    @keyframes spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        }
+        
+        // 🔥 4. REDIRECIONAR COM MÚLTIPLOS FALLBACKS
+        
+        // Fallback 1: Redirecionamento normal após 2 segundos
+        const urlDestino = '/aluno.html?prova_finalizada=true&prova_id=' + encodeURIComponent(prova._id);
+        
+        console.log('🌍 Redirecionando para:', urlDestino);
+        
+        // setTimeout 1: Primeira tentativa (2s)
+        const tentativa1 = setTimeout(() => {
+            console.log('🔄 Tentativa 1: location.replace');
+            try {
+                window.location.replace(urlDestino);
+            } catch (e) {
+                console.warn('⚠️ Falha no replace:', e);
+            }
+        }, 2000);
+        
+        // setTimeout 2: Fallback (4s) - se ainda estiver aqui, usa href
+        setTimeout(() => {
+            console.log('🔄 Tentativa 2: location.href');
+            try {
+                window.location.href = urlDestino;
+            } catch (e) {
+                console.warn('⚠️ Falha no href:', e);
+            }
+        }, 4000);
+        
+        // setTimeout 3: Fallback final (6s) - força reload com redirect
+        setTimeout(() => {
+            console.log('🔄 Tentativa 3: Fallback final');
+            try {
+                window.location.assign(urlDestino);
+            } catch (e) {
+                console.warn('⚠️ Falha no assign, forçando via document');
+                document.location.href = urlDestino;
+            }
+        }, 6000);
+        
+        console.log('✅ Processo de finalização completo. Redirecionamentos agendados.');
     }
         
         function atualizarMensagemLoading(mensagem) {

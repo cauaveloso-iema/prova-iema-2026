@@ -6812,10 +6812,10 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
   try {
     const provaId = req.params.provaId;
     const professorId = req.userId;
-    const { alunoId, nota, liberarNota = true } = req.body;
-    
+    const { alunoId, nota, liberarNota = true, motivo = null } = req.body;
+
     console.log(`📝 Professor ${professorId} corrigindo prova ${provaId} do aluno ${alunoId}`);
-    
+
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
     if (!isAdmin && req.userRole !== 'professor') {
       return res.status(403).json({
@@ -6823,8 +6823,8 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         error: 'Apenas professores e administradores podem corrigir provas'
       });
     }
-    
-    // Verificar se a prova existe e pertence ao professor
+
+    // Verificar se a prova existe
     const prova = await Prova.findById(provaId);
     if (!prova) {
       return res.status(404).json({
@@ -6832,14 +6832,14 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         error: 'Prova não encontrada'
       });
     }
-    
-    if (prova.userId.toString() !== professorId && req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'super_admin') {
+
+    if (prova.userId.toString() !== professorId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Você não é o professor desta prova'
       });
     }
-    
+
     // Validar nota
     if (nota === undefined || nota === null) {
       return res.status(400).json({
@@ -6847,7 +6847,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         error: 'Nota é obrigatória'
       });
     }
-    
+
     const notaNumber = parseFloat(nota);
     if (isNaN(notaNumber) || notaNumber < 0 || notaNumber > 10) {
       return res.status(400).json({
@@ -6855,75 +6855,135 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         error: 'Nota inválida. Deve ser um número entre 0 e 10'
       });
     }
-    
-    // Buscar prova realizada do aluno
-    let provaRealizada = await ProvaRealizada.findOne({
-      provaId: provaId,
-      alunoId: alunoId
-    });
-    
-    let resultado = await Resultado.findOne({
-      provaId: provaId,
-      userId: alunoId
-    });
-    
+
+    // Buscar registros do aluno
+    let provaRealizada = await ProvaRealizada.findOne({ provaId, alunoId });
+    let resultado = await Resultado.findOne({ provaId, userId: alunoId });
+
     if (!provaRealizada && !resultado) {
       return res.status(404).json({
         success: false,
         error: 'Prova do aluno não encontrada'
       });
     }
-    
+
+    // 🔥 CAPTURAR ESTADO ANTERIOR PARA DETECTAR REVOGAÇÃO
+    const estavaLiberada = (provaRealizada?.notaLiberada === true) || (resultado?.notaLiberada === true);
+    const notaAnterior = provaRealizada?.nota ?? resultado?.nota;
+
     // Atualizar ProvaRealizada
     if (provaRealizada) {
       provaRealizada.nota = notaNumber;
       provaRealizada.status = 'corrigida';
       provaRealizada.notaLiberada = liberarNota;
+      if (motivo) provaRealizada.notaManualObservacao = motivo;
       await provaRealizada.save();
-      console.log(`✅ ProvaRealizada atualizada com nota: ${notaNumber}`);
+      console.log(`✅ ProvaRealizada atualizada: nota=${notaNumber}, liberada=${liberarNota}`);
     }
-    
+
     // Atualizar Resultado
     if (resultado) {
       resultado.nota = notaNumber;
       resultado.notaLiberada = liberarNota;
       resultado.porcentagem = ((notaNumber / 10) * 100).toFixed(1);
+      if (motivo) resultado.observacoes = motivo;
       await resultado.save();
-      console.log(`✅ Resultado atualizado com nota: ${notaNumber} e notaLiberada: ${liberarNota}`);
+      console.log(`✅ Resultado atualizado: nota=${notaNumber}, liberada=${liberarNota}`);
     }
-    
-    // Atualizar estatísticas da prova
+
+    // Atualizar estatísticas da prova (apenas se liberando)
     if (liberarNota) {
       prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
-      
+
       if (prova.mediaNotas) {
         const somaTotal = prova.mediaNotas * (prova.totalParticipantes - 1);
         prova.mediaNotas = (somaTotal + notaNumber) / prova.totalParticipantes;
       } else {
         prova.mediaNotas = notaNumber;
       }
-      
+
       prova.mediaNotas = parseFloat(prova.mediaNotas.toFixed(2));
       await prova.save();
-      console.log(`📈 Estatísticas da prova atualizadas. Nova média: ${prova.mediaNotas}`);
     }
-    
-    // ===== 🔥 NOTIFICAR ALUNO SOBRE CORREÇÃO =====
-    if (liberarNota) {
-      try {
-        const aluno = await User.findById(alunoId).select('nome onesignalPlayerId');
-        const professor = await User.findById(professorId).select('nome');
-        
-        const Config = mongoose.model('Config');
-        const configDoc = await Config.findOne({ chave: 'notificacoes' });
-        const pushAtivado = configDoc?.valor?.push === true;
-        
+
+    // ============================================================
+    // 🔔 NOTIFICAÇÕES PARA O ALUNO
+    // ============================================================
+    try {
+      const aluno = await User.findById(alunoId).select('nome onesignalPlayerId');
+      const professor = await User.findById(professorId).select('nome');
+
+      const Config = mongoose.model('Config');
+      const configDoc = await Config.findOne({ chave: 'notificacoes' });
+      const pushAtivado = configDoc?.valor?.push === true;
+      const OneSignalService = require('./services/onesignal-service');
+      const oneSignal = pushAtivado ? new OneSignalService() : null;
+
+      const notaMudou = notaAnterior !== null && notaAnterior !== undefined &&
+                        Math.abs(parseFloat(notaAnterior) - notaNumber) > 0.001;
+
+      // 🔥 CASO 1: REVOGAÇÃO (estava liberada e agora não está mais)
+      if (estavaLiberada && !liberarNota) {
+        let titulo, mensagem, icone, cor;
+
+        if (notaMudou) {
+          titulo = '🔒 Nota Alterada e Ocultada';
+          mensagem = `Sua nota em "${prova.titulo}" foi alterada para ${notaNumber.toFixed(1)} e está temporariamente oculta. Aguarde nova liberação do professor.`;
+          icone = '🔒';
+          cor = '#f59e0b';
+        } else {
+          titulo = '🔒 Nota Ocultada';
+          mensagem = `Sua nota em "${prova.titulo}" foi temporariamente ocultada pelo professor. Aguarde nova liberação.`;
+          icone = '🔒';
+          cor = '#f59e0b';
+        }
+
         // Notificação no sistema
+        const notificacao = new Notificacao({
+          usuarioId: alunoId,
+          tipo: 'sistema',
+          titulo: titulo,
+          mensagem: mensagem,
+          icone: icone,
+          cor: cor,
+          link: `/aluno.html`,
+          prioridade: 3,
+          dados: {
+            provaId: prova._id,
+            provaTitulo: prova.titulo,
+            nota: notaNumber,
+            notaAnterior: notaAnterior,
+            motivo: motivo || null,
+            professor: professor?.nome || 'Professor',
+            tipo: 'nota_revogada'
+          }
+        });
+
+        await notificacao.save();
+        console.log(`✅ Aluno ${aluno?.nome || alunoId} notificado sobre REVOGAÇÃO`);
+
+        // Push
+        if (pushAtivado && oneSignal && aluno?.onesignalPlayerId) {
+          await oneSignal.enviarPush(
+            alunoId,
+            titulo,
+            mensagem,
+            {
+              tipo: 'nota_revogada',
+              provaId: prova._id,
+              nota: notaNumber
+            }
+          );
+        }
+      }
+
+      // 🔥 CASO 2: LIBERAÇÃO (não estava liberada e agora está)
+      else if (!estavaLiberada && liberarNota) {
         const notificacao = new Notificacao({
           usuarioId: alunoId,
           tipo: 'prova_corrigida',
           titulo: '✅ Prova Corrigida',
-          mensagem: `Sua nota na prova "${prova.titulo}" foi liberada: ${notaNumber.toFixed(2)}`,
+          mensagem: `Sua nota na prova "${prova.titulo}" foi liberada: ${notaNumber.toFixed(1)}`,
           icone: '✅',
           cor: '#10b981',
           link: `/aluno.html?prova=${provaId}`,
@@ -6932,21 +6992,19 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
             provaId: prova._id,
             provaTitulo: prova.titulo,
             nota: notaNumber,
-            professor: professor?.nome || 'Professor'
+            professor: professor?.nome || 'Professor',
+            tipo: 'nota_liberada'
           }
         });
-        
+
         await notificacao.save();
-        
-        // Push se ativado
-        if (pushAtivado) {
-          const OneSignalService = require('./services/onesignal-service');
-          const oneSignal = new OneSignalService();
-          
+        console.log(`✅ Aluno ${aluno?.nome || alunoId} notificado sobre LIBERAÇÃO`);
+
+        if (pushAtivado && oneSignal && aluno?.onesignalPlayerId) {
           await oneSignal.enviarPush(
             alunoId,
             '✅ Prova Corrigida',
-            `Sua nota em "${prova.titulo}" foi liberada: ${notaNumber.toFixed(2)}`,
+            `Sua nota em "${prova.titulo}" foi liberada: ${notaNumber.toFixed(1)}`,
             {
               tipo: 'prova_corrigida',
               provaId: prova._id,
@@ -6954,18 +7012,69 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
             }
           );
         }
-        
-        console.log(`✅ Aluno ${aluno?.nome || alunoId} notificado sobre correção`);
-      } catch (notifError) {
-        console.error('⚠️ Erro ao notificar aluno:', notifError.message);
       }
+
+      // 🔥 CASO 3: NOTA ALTERADA (já estava liberada e continua, mas mudou o valor)
+      else if (estavaLiberada && liberarNota && notaMudou) {
+        const notificacao = new Notificacao({
+          usuarioId: alunoId,
+          tipo: 'sistema',
+          titulo: '✏️ Nota Atualizada',
+          mensagem: `Sua nota em "${prova.titulo}" foi atualizada: ${notaAnterior.toFixed(1)} → ${notaNumber.toFixed(1)}`,
+          icone: '✏️',
+          cor: '#3b82f6',
+          link: `/aluno.html?prova=${provaId}`,
+          prioridade: 4,
+          dados: {
+            provaId: prova._id,
+            provaTitulo: prova.titulo,
+            nota: notaNumber,
+            notaAnterior: notaAnterior,
+            motivo: motivo || null,
+            professor: professor?.nome || 'Professor',
+            tipo: 'nota_alterada'
+          }
+        });
+
+        await notificacao.save();
+        console.log(`✅ Aluno ${aluno?.nome || alunoId} notificado sobre ALTERAÇÃO`);
+
+        if (pushAtivado && oneSignal && aluno?.onesignalPlayerId) {
+          await oneSignal.enviarPush(
+            alunoId,
+            '✏️ Nota Atualizada',
+            `Sua nota em "${prova.titulo}" foi atualizada: ${notaNumber.toFixed(1)}`,
+            {
+              tipo: 'nota_alterada',
+              provaId: prova._id,
+              nota: notaNumber,
+              notaAnterior: notaAnterior
+            }
+          );
+        }
+      }
+    } catch (notifError) {
+      console.warn('⚠️ Erro ao notificar aluno:', notifError.message);
+      // Não falha a operação por causa da notificação
     }
-    
+
+    // ============================================================
+    // RESPOSTA
+    // ============================================================
+    let mensagemResposta = '';
+    if (!liberarNota && estavaLiberada) {
+      mensagemResposta = notaMudou
+        ? 'Nota alterada e ocultada do aluno com sucesso!'
+        : 'Nota ocultada do aluno com sucesso!';
+    } else if (liberarNota) {
+      mensagemResposta = 'Nota corrigida e liberada para o aluno com sucesso!';
+    } else {
+      mensagemResposta = 'Nota corrigida com sucesso!';
+    }
+
     res.json({
       success: true,
-      message: liberarNota ? 
-        'Nota corrigida e liberada para o aluno com sucesso!' : 
-        'Nota corrigida com sucesso! (ainda não liberada)',
+      message: mensagemResposta,
       nota: notaNumber.toFixed(2),
       notaLiberada: liberarNota,
       aluno: {
@@ -6977,7 +7086,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         titulo: prova.titulo
       }
     });
-    
+
   } catch (error) {
     console.error('❌ Erro ao corrigir prova:', error);
     res.status(500).json({

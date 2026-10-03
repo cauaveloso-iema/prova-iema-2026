@@ -33958,14 +33958,10 @@ class AdminPanel {
      */
     async revogarNotaAdmin(provaId, alunoId, alunoNome, notaAtual) {
         try {
-            // 🔥 ABRIR MODAL DE EDIÇÃO/REVOGAÇÃO
             const resultado = await this.abrirModalRevogarNota(provaId, alunoId, alunoNome, notaAtual);
-
             if (!resultado.confirmado) return;
 
             const { novaNota, motivo } = resultado;
-
-            console.log(`🔒 Revogando nota de ${alunoNome}: ${notaAtual} → ${novaNota}`);
 
             this.showToast(`🔒 Revogando liberação de ${alunoNome}...`, 'info');
 
@@ -33978,25 +33974,21 @@ class AdminPanel {
                 },
                 body: JSON.stringify({
                     alunoId: alunoId,
-                    nota: novaNota,           // 🔥 NOVA NOTA EDITADA
-                    liberarNota: false,        // 🔥 REVOGA
-                    motivo: motivo || null     // Motivo opcional
+                    nota: novaNota,
+                    liberarNota: false,
+                    motivo: motivo || null
                 })
             });
-
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Servidor retornou resposta inválida.');
-            }
 
             const data = await response.json();
 
             if (data.success) {
                 const notaMudou = Math.abs(parseFloat(notaAtual) - novaNota) > 0.001;
-                const mensagem = notaMudou 
-                    ? `✅ Nota de ${alunoNome} alterada para ${novaNota.toFixed(1)} e ocultada!`
-                    : `✅ Nota de ${alunoNome} ocultada!`;
-                
+
+                const mensagem = notaMudou
+                    ? `✅ Nota de ${alunoNome} alterada para ${novaNota.toFixed(1)} e ocultada! 📩 Aluno notificado.`
+                    : `✅ Nota de ${alunoNome} ocultada! 📩 Aluno notificado.`;
+
                 this.showToast(mensagem, 'success');
                 await this.recarregarModalLiberarNotas(provaId);
                 await this.loadProvas();
