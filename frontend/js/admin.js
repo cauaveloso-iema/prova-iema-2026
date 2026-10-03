@@ -17445,6 +17445,11 @@ class AdminPanel {
                                 <i class="fas fa-edit"></i>
                             </button>
 
+                            <!-- 🔥 NOVO BOTÃO: LIBERAR NOTA (INDIVIDUAL OU EM CONJUNTO) -->
+                            <button class="btn-icon" onclick="admin.abrirModalLiberarNotas('${prova.id}', '${(prova.titulo || '').replace(/'/g, "\\'")}')" title="Liberar notas dos alunos" style="color: #10b981;">
+                                <i class="fas fa-check-double"></i>
+                            </button>
+
                             <!-- 🔥 NOVO BOTÃO: CORRIGIR PROVA (QR CODE) -->
                             <button class="btn-icon" onclick="admin.corrigirProvaComQRCode('${prova.id}')" title="Corrigir prova (QR Code)">
                                 <i class="fas fa-qrcode"></i>
@@ -33151,6 +33156,633 @@ class AdminPanel {
         window.open(url, '_blank');
         
         this.showToast('📱 Abrindo página de correção em nova aba...', 'info');
+    }
+
+    // ============================================================================
+    // 🔓 LIBERAR NOTAS - INDIVIDUAL OU EM CONJUNTO (ADMIN)
+    // ============================================================================
+
+    /**
+     * Abre o modal principal de liberação de notas
+     */
+    async abrirModalLiberarNotas(provaId, provaTitulo) {
+        try {
+            console.log(`🔓 Admin abrindo modal de liberação de notas: ${provaId}`);
+            
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                this.showToast('❌ Sessão expirada', 'error');
+                return;
+            }
+            
+            // Criar/reutilizar modal
+            let modal = document.getElementById('modalLiberarNotasAdmin');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'modalLiberarNotasAdmin';
+                modal.style.cssText = `
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.6);
+                    z-index: 100000;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                    box-sizing: border-box;
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            // Loading
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 20px; max-width: 950px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-check-double"></i> Liberar Notas
+                        </h3>
+                    </div>
+                    <div style="padding: 40px; text-align: center;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2.5rem; color: #10b981;"></i>
+                        <p style="color: #6b7280; margin-top: 15px;">Carregando alunos...</p>
+                    </div>
+                </div>
+            `;
+            modal.style.display = 'flex';
+            
+            // Buscar resultados
+            const response = await fetch(`${this.apiBase}/provas/${provaId}/resultados`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar alunos');
+            }
+            
+            const resultados = data.resultados || [];
+            
+            // Salvar no objeto para uso posterior
+            this._provaAtualLiberacao = {
+                provaId,
+                provaTitulo,
+                resultados
+            };
+            
+            // Renderizar
+            this.renderizarModalLiberarNotas(provaId, provaTitulo, resultados);
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast(`❌ ${error.message}`, 'error');
+            
+            const modal = document.getElementById('modalLiberarNotasAdmin');
+            if (modal) {
+                modal.querySelector('div > div:nth-child(2)').innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444;"></i>
+                        <h3 style="color: #7f1d1d; margin: 15px 0;">Erro ao carregar</h3>
+                        <p style="color: #6b7280;">${error.message}</p>
+                        <button onclick="admin.fecharModalLiberarNotas()" style="margin-top: 20px; padding: 10px 25px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                            Fechar
+                        </button>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    /**
+     * Renderiza o modal com lista de alunos e controles
+     */
+    renderizarModalLiberarNotas(provaId, provaTitulo, resultados) {
+        const modal = document.getElementById('modalLiberarNotasAdmin');
+        if (!modal) return;
+        
+        // Estatísticas
+        const total = resultados.length;
+        const pendentes = resultados.filter(r => 
+            r.nota !== null && r.nota !== undefined && 
+            !r.notaLiberada && !r.cancelada
+        ).length;
+        const liberados = resultados.filter(r => r.notaLiberada && !r.cancelada).length;
+        const cancelados = resultados.filter(r => r.cancelada).length;
+        
+        // Ordenar: Pendentes primeiro, depois Liberados, depois Cancelados
+        const resultadosOrdenados = [...resultados].sort((a, b) => {
+            const getPrioridade = (r) => {
+                if (r.cancelada) return 3;
+                if (r.notaLiberada) return 2;
+                if (r.nota !== null && r.nota !== undefined) return 0; // Pendentes primeiro
+                return 4; // Sem nota por último
+            };
+            return getPrioridade(a) - getPrioridade(b);
+        });
+        
+        // Gerar HTML dos alunos
+        let alunosHTML = '';
+        
+        if (resultados.length === 0) {
+            alunosHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: #6b7280;">
+                    <i class="fas fa-users-slash" style="font-size: 3rem; opacity: 0.5; margin-bottom: 15px;"></i>
+                    <h3 style="margin: 0 0 10px; color: #4b5563;">Nenhum aluno realizou esta prova</h3>
+                </div>
+            `;
+        } else {
+            alunosHTML = resultadosOrdenados.map(aluno => {
+                const isCancelado = aluno.cancelada === true;
+                const notaLiberada = aluno.notaLiberada === true;
+                const temNota = aluno.nota !== null && aluno.nota !== undefined;
+                const notaFormatada = temNota ? parseFloat(aluno.nota).toFixed(1) : '—';
+                
+                const nome = aluno.alunoNome || 'Aluno';
+                const partes = nome.split(' ');
+                const iniciais = ((partes[0]?.[0] || '') + (partes[1]?.[0] || '')).toUpperCase() || 'A';
+                
+                // Status visual
+                let statusCor, statusTexto, statusIcon, statusBg;
+                if (isCancelado) {
+                    statusCor = '#dc2626'; statusBg = '#fee2e2';
+                    statusTexto = 'Cancelada'; statusIcon = 'fa-ban';
+                } else if (notaLiberada) {
+                    statusCor = '#10b981'; statusBg = '#d1fae5';
+                    statusTexto = 'Liberada'; statusIcon = 'fa-check-circle';
+                } else if (temNota) {
+                    statusCor = '#f59e0b'; statusBg = '#fef3c7';
+                    statusTexto = 'Pendente'; statusIcon = 'fa-clock';
+                } else {
+                    statusCor = '#6b7280'; statusBg = '#f3f4f6';
+                    statusTexto = 'Sem nota'; statusIcon = 'fa-hourglass-half';
+                }
+                
+                // Checkbox (para liberação em massa) - só mostra para pendentes
+                let checkboxHTML = '';
+                if (temNota && !notaLiberada && !isCancelado) {
+                    checkboxHTML = `
+                        <input type="checkbox" class="check-liberar-nota" data-aluno-id="${aluno.alunoId}" 
+                            style="width: 20px; height: 20px; cursor: pointer; accent-color: #10b981;"
+                            onchange="admin.atualizarSelecaoNotas()">
+                    `;
+                } else {
+                    checkboxHTML = `<div style="width: 20px;"></div>`;
+                }
+                
+                // Botão de ação
+                let botaoHTML = '';
+                if (isCancelado) {
+                    botaoHTML = `
+                        <span style="padding: 6px 12px; background: #f3f4f6; color: #9ca3af; border-radius: 8px; font-weight: 600; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+                            <i class="fas fa-ban"></i> Cancelada
+                        </span>
+                    `;
+                } else if (!temNota) {
+                    botaoHTML = `
+                        <span style="padding: 6px 12px; background: #f3f4f6; color: #9ca3af; border-radius: 8px; font-weight: 600; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+                            <i class="fas fa-hourglass-half"></i> Aguardando
+                        </span>
+                    `;
+                } else if (notaLiberada) {
+                    botaoHTML = `
+                        <button onclick="admin.revogarNotaAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}')" 
+                                style="padding: 6px 12px; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 8px; font-weight: 600; font-size: 0.75rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"
+                                title="Ocultar novamente do aluno">
+                            <i class="fas fa-lock"></i> Revogar
+                        </button>
+                    `;
+                } else {
+                    botaoHTML = `
+                        <button onclick="admin.liberarNotaIndividualAdmin('${provaId}', '${aluno.alunoId}', '${nome.replace(/'/g, "\\'")}', ${aluno.nota})" 
+                                style="padding: 6px 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.75rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 6px rgba(16,185,129,0.3);"
+                                title="Liberar nota para o aluno">
+                            <i class="fas fa-unlock"></i> Liberar
+                        </button>
+                    `;
+                }
+                
+                return `
+                    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 15px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; transition: all 0.2s;"
+                        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.06)'" 
+                        onmouseout="this.style.boxShadow='none'">
+                        
+                        ${checkboxHTML}
+                        
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 0.85rem; flex-shrink: 0;">
+                            ${iniciais}
+                        </div>
+                        
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; color: #1f2937; font-size: 0.9rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${nome}
+                            </div>
+                            <div style="font-size: 0.75rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${aluno.alunoMatricula || 'Sem matrícula'}
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; min-width: 80px;">
+                            <div style="font-size: 1.3rem; font-weight: 700; color: ${statusCor}; line-height: 1;">
+                                ${notaFormatada}
+                            </div>
+                            <div style="font-size: 0.65rem; color: ${statusCor}; background: ${statusBg}; padding: 2px 8px; border-radius: 10px; margin-top: 4px; display: inline-flex; align-items: center; gap: 3px; font-weight: 600;">
+                                <i class="fas ${statusIcon}"></i> ${statusTexto}
+                            </div>
+                        </div>
+                        
+                        <div style="flex-shrink: 0;">
+                            ${botaoHTML}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        modal.innerHTML = `
+            <div style="background: white; border-radius: 20px; max-width: 950px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 25px 50px rgba(0,0,0,0.25);">
+                
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                    <div>
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px; font-size: 1.2rem;">
+                            <i class="fas fa-check-double"></i> Liberar Notas dos Alunos
+                        </h3>
+                        <p style="margin: 5px 0 0; opacity: 0.9; font-size: 0.85rem;">${provaTitulo || ''}</p>
+                    </div>
+                    <button onclick="admin.fecharModalLiberarNotas()" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1;">&times;</button>
+                </div>
+                
+                <!-- Estatísticas -->
+                <div style="padding: 12px 25px; background: #f8fafc; border-bottom: 1px solid #e5e7eb; display: flex; gap: 12px; flex-wrap: wrap; flex-shrink: 0; align-items: center;">
+                    <span style="background: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
+                        <i class="fas fa-users"></i> Total: ${total}
+                    </span>
+                    <span style="background: #d1fae5; color: #065f46; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
+                        <i class="fas fa-check-circle"></i> Liberadas: ${liberados}
+                    </span>
+                    <span style="background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
+                        <i class="fas fa-clock"></i> Pendentes: ${pendentes}
+                    </span>
+                    <span style="background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
+                        <i class="fas fa-ban"></i> Canceladas: ${cancelados}
+                    </span>
+                    
+                    ${pendentes > 0 ? `
+                        <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.8rem; color: #4b5563; font-weight: 600;">
+                                <input type="checkbox" id="checkSelecionarTodos" onchange="admin.toggleSelecionarTodosNotas(this.checked)"
+                                    style="width: 18px; height: 18px; cursor: pointer; accent-color: #10b981;">
+                                Selecionar todos
+                            </label>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <!-- Lista -->
+                <div style="padding: 15px 25px; overflow-y: auto; flex: 1;">
+                    ${alunosHTML}
+                </div>
+                
+                <!-- Footer -->
+                <div style="padding: 15px 25px; background: #f8fafc; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
+                    <div style="font-size: 0.85rem; color: #6b7280;">
+                        <i class="fas fa-info-circle"></i> 
+                        <span id="infoSelecaoNotas">Selecione os alunos para liberar em massa</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button onclick="admin.liberarNotasSelecionadas('${provaId}')" id="btnLiberarSelecionadas"
+                                style="padding: 10px 24px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; opacity: 0.5; pointer-events: none; box-shadow: 0 4px 12px rgba(59,130,246,0.3);">
+                            <i class="fas fa-check-double"></i> Liberar Selecionadas (<span id="countSelecionadas">0</span>)
+                        </button>
+                        
+                        ${pendentes > 0 ? `
+                            <button onclick="admin.liberarTodasNotasAdmin('${provaId}', '${(provaTitulo || '').replace(/'/g, "\\'")}')" 
+                                    style="padding: 10px 24px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">
+                                <i class="fas fa-unlock-alt"></i> Liberar Todas (${pendentes})
+                            </button>
+                        ` : ''}
+                        
+                        <button onclick="admin.fecharModalLiberarNotas()" 
+                                style="padding: 10px 24px; background: #6b7280; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600;">
+                            Fechar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Fecha o modal
+     */
+    fecharModalLiberarNotas() {
+        const modal = document.getElementById('modalLiberarNotasAdmin');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        this._provaAtualLiberacao = null;
+    }
+
+    /**
+     * Atualiza contador de notas selecionadas
+     */
+    atualizarSelecaoNotas() {
+        const checkboxes = document.querySelectorAll('.check-liberar-nota:checked');
+        const count = checkboxes.length;
+        
+        const countEl = document.getElementById('countSelecionadas');
+        const btn = document.getElementById('btnLiberarSelecionadas');
+        const info = document.getElementById('infoSelecaoNotas');
+        
+        if (countEl) countEl.textContent = count;
+        
+        if (btn) {
+            if (count > 0) {
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            } else {
+                btn.style.opacity = '0.5';
+                btn.style.pointerEvents = 'none';
+            }
+        }
+        
+        if (info) {
+            if (count > 0) {
+                info.innerHTML = `<strong style="color: #3b82f6;">${count}</strong> aluno(s) selecionado(s) para liberação`;
+            } else {
+                info.innerHTML = 'Selecione os alunos para liberar em massa';
+            }
+        }
+        
+        // Atualizar checkbox "selecionar todos"
+        const checkTodos = document.getElementById('checkSelecionarTodos');
+        if (checkTodos) {
+            const todos = document.querySelectorAll('.check-liberar-nota').length;
+            const todosMarcados = document.querySelectorAll('.check-liberar-nota:checked').length;
+            checkTodos.checked = todos > 0 && todosMarcados === todos;
+            checkTodos.indeterminate = todosMarcados > 0 && todosMarcados < todos;
+        }
+    }
+
+    /**
+     * Marca/desmarca todos os checkboxes
+     */
+    toggleSelecionarTodosNotas(marcar) {
+        document.querySelectorAll('.check-liberar-nota').forEach(cb => {
+            cb.checked = marcar;
+        });
+        this.atualizarSelecaoNotas();
+    }
+
+    /**
+     * Libera notas das selecionadas (EM CONJUNTO)
+     */
+    async liberarNotasSelecionadas(provaId) {
+        const checkboxes = document.querySelectorAll('.check-liberar-nota:checked');
+        
+        if (checkboxes.length === 0) {
+            this.showToast('⚠️ Nenhum aluno selecionado', 'warning');
+            return;
+        }
+        
+        const alunosIds = Array.from(checkboxes).map(cb => cb.dataset.alunoId);
+        
+        const confirmar = await this.confirmar(
+            '🔓 Liberar Notas Selecionadas',
+            `Deseja liberar as notas de <strong>${alunosIds.length} aluno(s)</strong> selecionado(s)?<br><br>
+            <span style="color: #10b981;">✅ Todos os alunos selecionados poderão visualizar suas notas.</span>`
+        );
+        
+        if (!confirmar) return;
+        
+        // Mostrar loading no botão
+        const btn = document.getElementById('btnLiberarSelecionadas');
+        const textoOriginal = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Liberando...';
+        btn.disabled = true;
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            let sucessos = 0;
+            let erros = 0;
+            
+            // Liberar cada nota individualmente (ou use endpoint em massa se existir)
+            for (const alunoId of alunosIds) {
+                try {
+                    const response = await fetch(`${this.apiBase}/professor/provas/${provaId}/corrigir`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            alunoId: alunoId,
+                            liberarNota: true
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) sucessos++;
+                    else erros++;
+                    
+                } catch (err) {
+                    console.error(`Erro ao liberar ${alunoId}:`, err);
+                    erros++;
+                }
+            }
+            
+            this.showToast(`✅ ${sucessos} notas liberadas${erros > 0 ? ` (${erros} erros)` : ''}!`, 'success');
+            
+            // Recarregar modal com dados atualizados
+            await this.recarregarModalLiberarNotas(provaId);
+            
+            // Recarregar lista de provas
+            await this.loadProvas();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast(`❌ ${error.message}`, 'error');
+        } finally {
+            btn.innerHTML = textoOriginal;
+            btn.disabled = false;
+        }
+    }
+
+    /**
+     * Libera a nota de UM aluno individualmente
+     */
+    async liberarNotaIndividualAdmin(provaId, alunoId, alunoNome, nota) {
+        try {
+            const confirmar = await this.confirmar(
+                '🔓 Liberar Nota',
+                `Deseja liberar a nota <strong>${parseFloat(nota).toFixed(1)}</strong> para o aluno <strong>${alunoNome}</strong>?`
+            );
+            
+            if (!confirmar) return;
+            
+            this.showToast(`🔓 Liberando nota para ${alunoNome}...`, 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${this.apiBase}/professor/provas/${provaId}/corrigir`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    alunoId: alunoId,
+                    nota: nota,
+                    liberarNota: true
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ Nota de ${alunoNome} liberada!`, 'success');
+                
+                // Recarregar modal
+                await this.recarregarModalLiberarNotas(provaId);
+                
+                // Atualizar lista de provas
+                await this.loadProvas();
+            } else {
+                throw new Error(data.error || 'Erro ao liberar nota');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Revoga a liberação (oculta novamente)
+     */
+    async revogarNotaAdmin(provaId, alunoId, alunoNome) {
+        try {
+            const confirmar = await this.confirmar(
+                '🔒 Revogar Liberação',
+                `Deseja <strong>ocultar</strong> a nota do aluno <strong>${alunoNome}</strong>?<br><br>
+                <span style="color: #f59e0b;">⚠️ O aluno deixará de ver a nota até ser liberada novamente.</span>`
+            );
+            
+            if (!confirmar) return;
+            
+            this.showToast(`🔒 Revogando liberação...`, 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${this.apiBase}/professor/provas/${provaId}/corrigir`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    alunoId: alunoId,
+                    liberarNota: false
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ Nota de ${alunoNome} ocultada!`, 'success');
+                
+                await this.recarregarModalLiberarNotas(provaId);
+                await this.loadProvas();
+            } else {
+                throw new Error(data.error || 'Erro ao revogar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Libera TODAS as notas pendentes de uma prova
+     */
+    async liberarTodasNotasAdmin(provaId, provaTitulo) {
+        try {
+            const pendentes = this._provaAtualLiberacao?.resultados.filter(r => 
+                r.nota !== null && r.nota !== undefined && !r.notaLiberada && !r.cancelada
+            ).length || 0;
+            
+            if (pendentes === 0) {
+                this.showToast('ℹ️ Nenhuma nota pendente', 'info');
+                return;
+            }
+            
+            const confirmar = await this.confirmar(
+                '🔓 Liberar TODAS as Notas',
+                `Deseja liberar <strong>TODAS as ${pendentes} notas pendentes</strong> desta prova?<br><br>
+                <strong>Prova:</strong> ${provaTitulo}<br><br>
+                <span style="color: #10b981;">✅ Todos os alunos poderão visualizar suas notas.</span>`
+            );
+            
+            if (!confirmar) return;
+            
+            this.showToast(`🔓 Liberando ${pendentes} notas...`, 'info');
+            
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${this.apiBase}/provas/${provaId}/liberar-notas-todos`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast(`✅ ${data.message || 'Todas as notas liberadas!'}`, 'success');
+                
+                this.fecharModalLiberarNotas();
+                await this.loadProvas();
+            } else {
+                throw new Error(data.error || 'Erro ao liberar notas');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Recarrega os dados do modal
+     */
+    async recarregarModalLiberarNotas(provaId) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${this.apiBase}/provas/${provaId}/resultados`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const { provaTitulo } = this._provaAtualLiberacao || {};
+                const resultados = data.resultados || [];
+                
+                this._provaAtualLiberacao = {
+                    provaId,
+                    provaTitulo,
+                    resultados
+                };
+                
+                this.renderizarModalLiberarNotas(provaId, provaTitulo, resultados);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao recarregar modal:', error);
+        }
     }
 
     // ============ ORDENAR PROVAS POR COLUNA ============
