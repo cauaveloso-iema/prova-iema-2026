@@ -33602,7 +33602,6 @@ class AdminPanel {
 
         const alunosIds = Array.from(checkboxes).map(cb => cb.dataset.alunoId);
 
-        // 🔥 MODAL CUSTOMIZADO - sem window.confirm()
         const confirmar = await this.mostrarConfirmacao(
             'Liberar Notas Selecionadas',
             `Deseja liberar as notas de <strong>${alunosIds.length} aluno(s)</strong> selecionado(s)?<br><br>
@@ -33624,11 +33623,24 @@ class AdminPanel {
 
         try {
             const token = localStorage.getItem('auth_token');
+            const resultados = this._provaAtualLiberacao?.resultados || [];
+
             let sucessos = 0;
             let erros = 0;
 
             for (const alunoId of alunosIds) {
                 try {
+                    // 🔥 BUSCAR A NOTA DO ALUNO NA LISTA ATUAL
+                    const aluno = resultados.find(r =>
+                        (r.alunoId?._id?.toString() || r.alunoId?.toString()) === alunoId.toString()
+                    );
+
+                    if (!aluno || aluno.nota === null || aluno.nota === undefined) {
+                        console.warn(`⚠️ Nota não encontrada para aluno ${alunoId}, pulando...`);
+                        erros++;
+                        continue;
+                    }
+
                     const response = await fetch(`/api/professor/provas/${provaId}/corrigir`, {
                         method: 'POST',
                         headers: {
@@ -33637,6 +33649,7 @@ class AdminPanel {
                         },
                         body: JSON.stringify({
                             alunoId: alunoId,
+                            nota: aluno.nota,     // 🔥 AGORA MANDA A NOTA!
                             liberarNota: true
                         })
                     });
