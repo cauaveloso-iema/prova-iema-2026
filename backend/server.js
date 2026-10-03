@@ -6936,8 +6936,8 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         let titulo, mensagem, icone, cor;
 
         if (notaMudou) {
-          titulo = '🔒 Nota Alterada e Ocultada';
-          mensagem = `Sua nota em "${prova.titulo}" foi alterada para ${notaNumber.toFixed(1)} e está temporariamente oculta. Aguarde nova liberação do professor.`;
+          titulo = '🔒 Nota Alterada';
+          mensagem = `Sua nota em "${prova.titulo}" foi alterada e está temporariamente oculta. Aguarde nova liberação do professor.`;
           icone = '🔒';
           cor = '#f59e0b';
         } else {
