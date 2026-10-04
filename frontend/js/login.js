@@ -652,62 +652,97 @@ async function processarLoginSocial(provider, idToken, accessToken = null) {
 }
 
 // ============================================================
-// 🔥 PULL-TO-REFRESH (AJUSTADO - MENOS SENSÍVEL)
+// 🔥 PULL-TO-REFRESH (VERSÃO RÍGIDA - MUITO MENOS SENSÍVEL)
 // ============================================================
-// IMPORTANTE: Aumentado o threshold para evitar disparar sem querer
-// e adicionada verificação de que o usuário está no TOPO da página
+// Regras para disparar:
+//   1. Estar EXATAMENTE no topo (scrollY <= 5)
+//   2. Arrastar pelo menos 500px para baixo
+//   3. Gesto predominantemente VERTICAL (não pode ter 30%+ de movimento horizontal)
+//   4. Manter o gesto por pelo menos 400ms
+//   5. Não soltar o dedo antes de completar os requisitos
 // ============================================================
 
 let touchStartY = 0;
+let touchStartX = 0;
 let touchCurrentY = 0;
+let touchCurrentX = 0;
 let isPulling = false;
 let pullStartTime = 0;
+let pullValidated = false;
 
-const PULL_THRESHOLD = 300;        // 🔥 Aumentado de 200 para 300 (mais difícil de disparar)
-const TOP_TOLERANCE = 20;          // 🔥 Reduzido de 100 para 20 (só no topo absoluto)
-const MIN_PULL_TIME = 200;         // 🔥 Tempo mínimo (ms) para considerar o gesto válido
-const INDICATOR_THRESHOLD = 100;   // 🔥 Distância mínima para mostrar o indicador
+const PULL_THRESHOLD = 500;        // 🔥 Bem mais exigente (era 300)
+const TOP_TOLERANCE = 5;           // 🔥 Só no topo absoluto (era 20)
+const MIN_PULL_TIME = 400;         // 🔥 Tempo mínimo de gesto (era 200)
+const INDICATOR_THRESHOLD = 150;   // 🔥 Só mostra indicador após 150px
+const MAX_HORIZONTAL_RATIO = 0.3;  // 🔥 Movimento horizontal máximo permitido (30%)
 
 document.addEventListener('touchstart', function (e) {
-    // 🔥 Só ativa se estiver no TOPO ABSOLUTO da página
     const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
 
+    // 🔥 Só ativa se estiver EXATAMENTE no topo
     if (scrollTop <= TOP_TOLERANCE) {
-        touchStartY = e.touches[0].clientY;
+        const touch = e.touches[0];
+        touchStartY = touch.clientY;
+        touchStartX = touch.clientX;
         touchCurrentY = touchStartY;
+        touchCurrentX = touchStartX;
         pullStartTime = Date.now();
         isPulling = true;
+        pullValidated = false;
     } else {
         isPulling = false;
+        pullValidated = false;
     }
 }, { passive: true });
 
 document.addEventListener('touchmove', function (e) {
     if (!isPulling) return;
 
-    // 🔥 Verificar novamente se ainda estamos no topo
+    // 🔥 Se scrollou para longe do topo, cancela
     const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
     if (scrollTop > TOP_TOLERANCE) {
         isPulling = false;
+        pullValidated = false;
         esconderIndicadorPull();
         return;
     }
 
-    touchCurrentY = e.touches[0].clientY;
-    const pullDistance = touchCurrentY - touchStartY;
+    const touch = e.touches[0];
+    touchCurrentY = touch.clientY;
+    touchCurrentX = touch.clientX;
 
-    // 🔥 Só mostra indicador se o pull for grande o suficiente
+    const pullDistance = touchCurrentY - touchStartY;      // vertical
+    const horizontalDistance = Math.abs(touchCurrentX - touchStartX); // horizontal
+
+    // 🔥 Se o movimento horizontal for maior que 30% do vertical, é gesto diagonal → cancela
+    if (pullDistance > 0 && horizontalDistance > (pullDistance * MAX_HORIZONTAL_RATIO)) {
+        isPulling = false;
+        pullValidated = false;
+        esconderIndicadorPull();
+        return;
+    }
+
+    // 🔥 Se o usuário está arrastando para CIMA, cancela (não é pull-to-refresh)
+    if (pullDistance < 0) {
+        isPulling = false;
+        pullValidated = false;
+        esconderIndicadorPull();
+        return;
+    }
+
+    // 🔥 Só mostra indicador visual se o pull for realmente grande
     if (pullDistance > INDICATOR_THRESHOLD) {
         mostrarIndicadorPull(pullDistance);
     }
 
-    // 🔥 Só dispara atualização se:
-    // - pull maior que PULL_THRESHOLD (300px)
-    // - tempo mínimo de pull (evita flick rápido)
-    if (pullDistance > PULL_THRESHOLD) {
+    // 🔥 Só dispara se:
+    // - pull >= PULL_THRESHOLD (500px)
+    // - tempo mínimo de gesto atingido (400ms)
+    if (pullDistance >= PULL_THRESHOLD) {
         const pullTime = Date.now() - pullStartTime;
 
-        if (pullTime >= MIN_PULL_TIME) {
+        if (pullTime >= MIN_PULL_TIME && !pullValidated) {
+            pullValidated = true;
             e.preventDefault();
             atualizarPagina();
             isPulling = false;
@@ -720,9 +755,20 @@ document.addEventListener('touchend', function () {
 
     esconderIndicadorPull();
     isPulling = false;
+    pullValidated = false;
     touchStartY = 0;
+    touchStartX = 0;
     touchCurrentY = 0;
+    touchCurrentX = 0;
     pullStartTime = 0;
+}, { passive: true });
+
+document.addEventListener('touchcancel', function () {
+    if (!isPulling) return;
+
+    esconderIndicadorPull();
+    isPulling = false;
+    pullValidated = false;
 }, { passive: true });
 
 function atualizarPagina() {
@@ -742,6 +788,7 @@ function mostrarIndicadorPull(distancia) {
             background: #4f46e5; color: white; text-align: center;
             padding: 10px; font-size: 14px; z-index: 9999;
             transform: translateY(-100%); transition: transform 0.2s;
+            pointer-events: none;
         `;
         indicador.innerHTML = '↓ Solte para atualizar';
         document.body.appendChild(indicador);
@@ -765,6 +812,7 @@ function mostrarMensagem(texto) {
         padding: 15px 30px; border-radius: 10px;
         font-weight: bold; z-index: 10000;
         box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        pointer-events: none;
     `;
     msg.textContent = texto;
     document.body.appendChild(msg);
