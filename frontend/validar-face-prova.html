@@ -263,16 +263,16 @@
         }
 
         // ============================================
-        // VERIFICAR GEOLOCALIZAÇÃO (CORRIGIDO)
+        // VERIFICAR GEOLOCALIZAÇÃO (VERSÃO WEBVIEW - SEM POPUP)
         // ============================================
         async function verificarGeolocalizacao() {
             return new Promise((resolve) => {
-                console.log('📍 Verificando geolocalização...');
+                console.log('📍 Tentando obter geolocalização diretamente...');
                 
                 const statusEl = document.getElementById('localizacaoTexto');
                 const statusDiv = document.getElementById('localizacaoStatus');
                 
-                if (statusEl) statusEl.innerHTML = '📍 Solicitando permissão...';
+                if (statusEl) statusEl.innerHTML = '📍 Obtendo localização...';
                 
                 if (!navigator.geolocation) {
                     if (statusEl) statusEl.innerHTML = '⚠️ Geolocalização não suportada';
@@ -280,8 +280,10 @@
                     return;
                 }
                 
+                // Tenta pegar a localização sem pedir permissão (o Kodular já liberou)
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
+                        // SUCESSO: Pegou a localização
                         localizacaoAtual = {
                             latitude: position.coords.latitude,
                             longitude: position.coords.longitude,
@@ -298,23 +300,23 @@
                             statusDiv.style.color = '#166534';
                         }
                         
+                        console.log('✅ Localização obtida:', localizacaoAtual);
                         resolve({ success: true, coords: localizacaoAtual });
                     },
                     (error) => {
+                        // ERRO: Não conseguiu pegar (mas não trava o app)
+                        console.warn('⚠️ Erro na geolocalização:', error.message);
+                        
                         let mensagem = '';
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                // MUDANÇA AQUI: Mensagem mais amigável para o WebView
-                                mensagem = '📍 Aguardando permissão de localização...';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                mensagem = '⚠️ Localização indisponível.';
-                                break;
-                            case error.TIMEOUT:
-                                mensagem = '⚠️ Tempo esgotado ao buscar localização.';
-                                break;
-                            default:
-                                mensagem = '⚠️ Erro desconhecido na localização.';
+                        // Tratamento amigável - NÃO mostra "Permissão negada"
+                        if (error.code === error.PERMISSION_DENIED) {
+                            mensagem = '📍 Localização não disponível (continuando...)';
+                        } else if (error.code === error.POSITION_UNAVAILABLE) {
+                            mensagem = '⚠️ Localização indisponível (continuando...)';
+                        } else if (error.code === error.TIMEOUT) {
+                            mensagem = '⚠️ Tempo esgotado (continuando...)';
+                        } else {
+                            mensagem = '⚠️ Localização indisponível (continuando...)';
                         }
                         
                         if (statusEl) statusEl.innerHTML = mensagem;
@@ -323,11 +325,11 @@
                             statusDiv.style.color = '#92400e';
                         }
                         
-                        // Mesmo com erro, permite continuar (não bloqueia a prova)
+                        // IMPORTANTE: Retorna sucesso mesmo com erro, para não travar a prova
                         resolve({ success: false, error: mensagem, podeContinuar: true });
                     },
-                    // MUDANÇA AQUI: Aumentado para 30 segundos e máxima precisão
-                    { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+                    // Configurações: tempo curto e sem cache
+                    { enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }
                 );
             });
         }
