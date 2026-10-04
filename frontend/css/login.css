@@ -230,19 +230,16 @@ body {
     50% { transform: scale(1.05) rotate(-2deg); }
 }
 
-/* 🔥 AJUSTE 1: "EducaPleno" com mais evidência na marca
-   - "Educa" mantém o NEGRITO original (700)
-   - "Pleno" ganha peso ainda maior (800) para destacar a marca */
 .login-header h1 {
     font-size: 29px;
-    font-weight: 700;                  /* ← "Educa" em negrito (como era antes) */
+    font-weight: 700;
     color: var(--gray-900);
     letter-spacing: -0.4px;
 }
 
 .login-header h1 span {
     font-size: inherit !important;
-    font-weight: 800;                  /* ← "Pleno" ainda mais forte = marca em evidência */
+    font-weight: 800;
     color: var(--primary);
     letter-spacing: -0.5px;
     text-shadow: 0 1px 0 rgba(37, 99, 235, 0.08);
@@ -383,24 +380,37 @@ small {
 }
 
 /* ============================================================
-   BOTÃO LOGIN
+   BOTÕES PADRONIZADOS - TODOS CENTRALIZADOS
    ============================================================ */
-.btn-login {
-    width: 100%;
-    padding: 12px;
-    background: linear-gradient(135deg, var(--primary), #6366f1);
-    border: none;
-    border-radius: var(--radius);
-    color: var(--white);
-    font-size: 15px;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
+.btn-login,
+.btn-register,
+.btn-social,
+.whatsapp-link {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    margin-bottom: 0;
+    width: 80%;
+    max-width: 280px;
+    margin-left: auto;
+    margin-right: auto;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius);
+    box-sizing: border-box;
+    text-decoration: none;
+}
+
+/* ============================================================
+   BOTÃO LOGIN
+   ============================================================ */
+.btn-login {
+    padding: 12px;
+    background: linear-gradient(135deg, var(--primary), #6366f1);
+    border: none;
+    color: var(--white);
+    font-size: 15px;
     box-shadow: 0 4px 16px rgba(37, 99, 235, 0.20);
 }
 
@@ -421,20 +431,11 @@ small {
    BOTÃO CADASTRO
    ============================================================ */
 .btn-register {
-    width: 100%;
     padding: 12px;
     background: linear-gradient(135deg, #10b981, #059669);
     border: none;
-    border-radius: var(--radius);
     color: var(--white);
     font-size: 15px;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
     box-shadow: 0 4px 16px rgba(16, 185, 129, 0.20);
 }
 
@@ -452,7 +453,7 @@ small {
 }
 
 /* ============================================================
-   DIVISOR REFINADO (AJUSTE 2: mais perceptível)
+   DIVISOR REFINADO
    ============================================================ */
 .divider {
     display: flex;
@@ -460,9 +461,9 @@ small {
     justify-content: center;
     gap: 14px;
     margin: 18px 0;
-    color: var(--gray-500);            /* mais escuro (era gray-400) */
+    color: var(--gray-500);
     font-size: 11.5px;
-    font-weight: 600;                  /* mais firme */
+    font-weight: 600;
     text-transform: lowercase;
     letter-spacing: 1.2px;
 }
@@ -475,7 +476,7 @@ small {
     background: linear-gradient(
         to right,
         transparent,
-        var(--gray-400),               /* linha central mais visível (era gray-300) */
+        var(--gray-400),
         transparent
     );
 }
@@ -486,25 +487,15 @@ small {
 }
 
 /* ============================================================
-   WHATSAPP - BOTÃO SECUNDÁRIO DISCRETO
+   WHATSAPP - BOTÃO SECUNDÁRIO
    ============================================================ */
 .whatsapp-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
     padding: 8px 16px;
     background: transparent;
     border: 1px solid var(--gray-200);
-    border-radius: var(--radius);
     color: var(--gray-500);
     font-size: 12.5px;
     font-weight: 500;
-    font-family: inherit;
-    text-decoration: none;
-    width: 100%;
-    box-sizing: border-box;
-    cursor: pointer;
     opacity: 0.85;
     transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
@@ -530,6 +521,54 @@ small {
 .whatsapp-link:hover i {
     color: #128c7e;
     opacity: 1;
+}
+
+/* ============================================================
+   LOGIN SOCIAL (GOOGLE / MICROSOFT)
+   ============================================================ */
+.social-login {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.btn-social {
+    padding: 10px 16px;
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    color: var(--gray-700);
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-social:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.btn-social:active {
+    transform: scale(0.99);
+}
+
+.btn-social:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-social svg {
+    flex-shrink: 0;
+}
+
+.btn-google:hover {
+    border-color: #4285f4;
+}
+
+.btn-microsoft:hover {
+    border-color: #00a4ef;
 }
 
 /* ============================================================
@@ -745,10 +784,12 @@ input[type="radio"] {
         font-size: inherit !important;
     }
 
+    /* 🔥 Chapéuzinho MAIOR no mobile */
     .login-header .icon-wrapper {
-        width: 56px;
-        height: 56px;
-        font-size: 24px;
+        width: 72px;
+        height: 72px;
+        font-size: 34px;
+        margin-bottom: 14px;
     }
 
     .form-control {
@@ -756,20 +797,34 @@ input[type="radio"] {
         padding: 10px 12px;
     }
 
+    /* Botões continuam centralizados e proporcionalmente menores */
+    .btn-login,
+    .btn-register,
+    .btn-social,
+    .whatsapp-link {
+        width: 85%;
+        max-width: 260px;
+    }
+
     .btn-login, .btn-register {
         font-size: 14px;
         padding: 11px;
+    }
+
+    .btn-social {
+        font-size: 13px;
+        padding: 10px 14px;
+    }
+
+    .whatsapp-link {
+        font-size: 12.5px;
+        padding: 8px 16px;
     }
 
     .form-options {
         flex-direction: column;
         gap: 8px;
         align-items: flex-start;
-    }
-
-    .whatsapp-link {
-        font-size: 12.5px;
-        padding: 8px 16px;
     }
 
     .role-selection {
@@ -807,14 +862,24 @@ input[type="radio"] {
         font-size: inherit !important;
     }
 
+    /* 🔥 Chapéuzinho grande também no mobile pequeno */
     .login-header .icon-wrapper {
-        width: 48px;
-        height: 48px;
-        font-size: 20px;
+        width: 66px;
+        height: 66px;
+        font-size: 30px;
+        margin-bottom: 12px;
     }
 
     .particle {
         display: none;
+    }
+
+    .btn-login,
+    .btn-register,
+    .btn-social,
+    .whatsapp-link {
+        width: 88%;
+        max-width: 240px;
     }
 
     .role-selection {
@@ -858,13 +923,11 @@ input[type="radio"] {
     line-height: 1;
     -webkit-tap-highlight-color: transparent;
 
-    /* Escondido por padrão */
     opacity: 0;
     pointer-events: none;
     visibility: hidden;
 }
 
-/* Quando o campo tem texto: aparece */
 .password-wrapper.tem-texto .toggle-password {
     opacity: 1;
     pointer-events: auto;
@@ -886,18 +949,15 @@ input[type="radio"] {
     color: #4f46e5;
 }
 
-/* Estado ativo (senha visível) */
 .toggle-password.ativo {
     color: #4f46e5;
 }
 
-/* Remove o ícone de "revelar senha" nativo do Edge/IE */
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
     display: none;
 }
 
-/* Ajuste em mobile */
 @media (max-width: 480px) {
     .toggle-password {
         right: 10px;
@@ -907,60 +967,4 @@ input[type="password"]::-ms-clear {
     .password-wrapper input {
         padding-right: 40px !important;
     }
-}
-
-/* ============================================================
-   LOGIN SOCIAL(GOOGLE / MICROSOFT)
-   ============================================================ */
-.social-login {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 18px;
-}
-
-.btn-social {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 10px 16px;
-    background: var(--white);
-    border: 1.5px solid var(--gray-200);
-    border-radius: var(--radius);
-    color: var(--gray-700);
-    font-size: 13.5px;
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    width: 100%;
-    box-sizing: border-box;
-    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.btn-social:hover {
-    background: var(--gray-50);
-    border-color: var(--gray-300);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.btn-social:active {
-    transform: scale(0.99);
-}
-
-.btn-social:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.btn-social svg {
-    flex-shrink: 0;
-}
-
-.btn-google:hover {
-    border-color: #4285f4;
-}
-
-.btn-microsoft:hover {
-    border-color: #00a4ef;
 }
