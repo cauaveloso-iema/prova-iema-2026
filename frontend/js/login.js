@@ -10,6 +10,7 @@
 // ============================================================
 const IS_LOCALHOST = window.location.hostname === 'localhost' ||
                      window.location.hostname === '127.0.0.1';
+const IS_EDUCAPLENO = window.location.hostname.includes('educapleno.com');
 const IS_RENDER = window.location.hostname.includes('render.com') ||
                   window.location.hostname.includes('sistema-avaliativo');
 
@@ -18,6 +19,10 @@ let API_BASE_URL;
 if (IS_LOCALHOST) {
     API_BASE_URL = 'http://localhost:3000/api';
     console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
+} else if (IS_EDUCAPLENO) {
+    // 🔥 PRODUÇÃO - Backend no mesmo domínio
+    API_BASE_URL = window.location.origin + '/api';
+    console.log('🌐 Modo: PRODUÇÃO (educapleno.com)');
 } else if (IS_RENDER) {
     API_BASE_URL = window.location.origin + '/api';
     console.log('🚀 Modo: PRODUÇÃO (Render)');
@@ -275,6 +280,12 @@ document.getElementById('loginForm').addEventListener('submit', async function (
     const senha = document.getElementById('loginPassword').value;
     const rememberMe = document.getElementById('rememberMe').checked;
 
+    console.log('════════════════════════════════════════');
+    console.log('📤 TENTATIVA DE LOGIN');
+    console.log('   Identificador:', identificador);
+    console.log('   Lembrar:', rememberMe);
+    console.log('════════════════════════════════════════');
+
     if (!identificador || !senha) {
         mostrarAlerta('Preencha todos os campos', 'error');
         return;
@@ -297,16 +308,24 @@ document.getElementById('loginForm').addEventListener('submit', async function (
             dadosLogin.cpf = identificador.replace(/\D/g, '');
         }
 
+        console.log('📤 Enviando dados para:', `${API_BASE_URL}/auth/login`);
+        console.log('📦 Payload:', { ...dadosLogin, password: '***' });
+
         const resposta = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dadosLogin)
         });
 
+        console.log('📊 Status HTTP:', resposta.status);
+
         const dados = await resposta.json();
+        console.log('📦 Resposta do servidor:', dados);
 
         // ---------- 2FA ----------
         if (dados.requiresTwoFactor) {
+            console.log('🔐 2FA necessário - redirecionando para validação');
+
             if (rememberMe) {
                 salvarLembrar(identificador, senha);
             } else {
@@ -327,6 +346,11 @@ document.getElementById('loginForm').addEventListener('submit', async function (
 
         // ---------- LOGIN COM SUCESSO ----------
         if (dados.success) {
+            console.log('✅ Login bem-sucedido!');
+            console.log('   Token recebido:', dados.token ? 'SIM' : 'NÃO');
+            console.log('   User:', dados.user);
+            console.log('   redirectTo do backend:', dados.redirectTo);
+
             if (rememberMe) {
                 salvarLembrar(identificador, senha);
             } else {
@@ -344,13 +368,16 @@ document.getElementById('loginForm').addEventListener('submit', async function (
             }
 
             const destino = dados.redirectTo || obterDestinoPorPerfil(dados.user.role);
+            console.log('🎯 Destino final:', destino);
 
             resetarRedirectCount();
             setTimeout(() => {
+                console.log('🚀 Redirecionando agora para:', destino);
                 window.location.href = destino;
             }, 1000);
 
         } else {
+            console.error('❌ Erro no login:', dados.error);
             mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro no login'), 'error');
             if (dados.error && dados.error.toLowerCase().includes('credenciais')) {
                 limparLembrar();
@@ -359,7 +386,12 @@ document.getElementById('loginForm').addEventListener('submit', async function (
         }
 
     } catch (erro) {
-        console.error('Erro no login:', erro);
+        console.error('════════════════════════════════════════');
+        console.error('❌ ERRO NA REQUISIÇÃO DE LOGIN');
+        console.error('   Nome:', erro.name);
+        console.error('   Mensagem:', erro.message);
+        console.error('   Stack:', erro.stack);
+        console.error('════════════════════════════════════════');
         mostrarAlerta('❌ Erro de conexão com o servidor', 'error');
     } finally {
         btn.innerHTML = originalText;
@@ -392,7 +424,7 @@ function verificarLoginAutomatico() {
     try {
         const userData = JSON.parse(userDataRaw);
         const count = incrementarRedirectCount();
-        console.log(`🔄 Tentativa de redirecionamento #${count}`);
+        console.log(`🔄 Tentativa de redirecionamento automático #${count}`);
 
         fetch(`${API_BASE_URL}/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -579,7 +611,7 @@ async function processarLoginSocial(provider, idToken, accessToken = null) {
         }
 
         // ============================================================
-        // 🔥 REQUER 2FA (super_admin, admin)
+        // 🔥 REQUER 2FA
         // ============================================================
         if (dados.requiresTwoFactor) {
             console.log(`🔐 2FA necessário após login social (motivo: ${dados.motivo2FA || 'não especificado'})`);
@@ -780,6 +812,8 @@ function mostrarMensagem(texto) {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function () {
     console.log('🚀 EducaPleno - Login carregado!');
+    console.log('📍 Hostname:', window.location.hostname);
+    console.log('📍 API Base URL:', API_BASE_URL);
 
     carregarLembrar();
 
