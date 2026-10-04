@@ -22201,7 +22201,6 @@ app.get('*', (req, res) => {
     
     // Se for uma página HTML não encontrada, redirecionar para login
     // (assim evita mostrar o dashboard para quem não está logado)
-    console.log(`🔀 Rota não encontrada: ${req.path} → redirecionando para /login.html`);
     res.redirect('/login.html');
 });
 
