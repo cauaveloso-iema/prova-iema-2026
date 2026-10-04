@@ -20,7 +20,6 @@ if (IS_LOCALHOST) {
     API_BASE_URL = 'http://localhost:3000/api';
     console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
 } else if (IS_EDUCAPLENO) {
-    // 🔥 PRODUÇÃO - Backend no mesmo domínio
     API_BASE_URL = window.location.origin + '/api';
     console.log('🌐 Modo: PRODUÇÃO (educapleno.com)');
 } else if (IS_RENDER) {
@@ -280,12 +279,6 @@ document.getElementById('loginForm').addEventListener('submit', async function (
     const senha = document.getElementById('loginPassword').value;
     const rememberMe = document.getElementById('rememberMe').checked;
 
-    console.log('════════════════════════════════════════');
-    console.log('📤 TENTATIVA DE LOGIN');
-    console.log('   Identificador:', identificador);
-    console.log('   Lembrar:', rememberMe);
-    console.log('════════════════════════════════════════');
-
     if (!identificador || !senha) {
         mostrarAlerta('Preencha todos os campos', 'error');
         return;
@@ -308,24 +301,16 @@ document.getElementById('loginForm').addEventListener('submit', async function (
             dadosLogin.cpf = identificador.replace(/\D/g, '');
         }
 
-        console.log('📤 Enviando dados para:', `${API_BASE_URL}/auth/login`);
-        console.log('📦 Payload:', { ...dadosLogin, password: '***' });
-
         const resposta = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dadosLogin)
         });
 
-        console.log('📊 Status HTTP:', resposta.status);
-
         const dados = await resposta.json();
-        console.log('📦 Resposta do servidor:', dados);
 
         // ---------- 2FA ----------
         if (dados.requiresTwoFactor) {
-            console.log('🔐 2FA necessário - redirecionando para validação');
-
             if (rememberMe) {
                 salvarLembrar(identificador, senha);
             } else {
@@ -346,11 +331,6 @@ document.getElementById('loginForm').addEventListener('submit', async function (
 
         // ---------- LOGIN COM SUCESSO ----------
         if (dados.success) {
-            console.log('✅ Login bem-sucedido!');
-            console.log('   Token recebido:', dados.token ? 'SIM' : 'NÃO');
-            console.log('   User:', dados.user);
-            console.log('   redirectTo do backend:', dados.redirectTo);
-
             if (rememberMe) {
                 salvarLembrar(identificador, senha);
             } else {
@@ -368,16 +348,13 @@ document.getElementById('loginForm').addEventListener('submit', async function (
             }
 
             const destino = dados.redirectTo || obterDestinoPorPerfil(dados.user.role);
-            console.log('🎯 Destino final:', destino);
 
             resetarRedirectCount();
             setTimeout(() => {
-                console.log('🚀 Redirecionando agora para:', destino);
                 window.location.href = destino;
             }, 1000);
 
         } else {
-            console.error('❌ Erro no login:', dados.error);
             mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro no login'), 'error');
             if (dados.error && dados.error.toLowerCase().includes('credenciais')) {
                 limparLembrar();
@@ -386,12 +363,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
         }
 
     } catch (erro) {
-        console.error('════════════════════════════════════════');
-        console.error('❌ ERRO NA REQUISIÇÃO DE LOGIN');
-        console.error('   Nome:', erro.name);
-        console.error('   Mensagem:', erro.message);
-        console.error('   Stack:', erro.stack);
-        console.error('════════════════════════════════════════');
+        console.error('Erro no login:', erro);
         mostrarAlerta('❌ Erro de conexão com o servidor', 'error');
     } finally {
         btn.innerHTML = originalText;
@@ -614,14 +586,12 @@ async function processarLoginSocial(provider, idToken, accessToken = null) {
         // 🔥 REQUER 2FA
         // ============================================================
         if (dados.requiresTwoFactor) {
-            console.log(`🔐 2FA necessário após login social (motivo: ${dados.motivo2FA || 'não especificado'})`);
+            console.log(`🔐 2FA necessário após login social`);
 
             sessionStorage.setItem('2fa_token', dados.token);
             sessionStorage.setItem('2fa_userId', dados.userId);
             sessionStorage.setItem('2fa_message', dados.message || 'Código 2FA necessário');
             sessionStorage.setItem('2fa_from_social', provider);
-            sessionStorage.setItem('2fa_user_nome', dados.user?.nome || '');
-            sessionStorage.setItem('2fa_user_role', dados.user?.role || '');
 
             mostrarAlerta('🔐 ' + (dados.message || 'Código 2FA necessário'), 'info');
 
@@ -682,39 +652,77 @@ async function processarLoginSocial(provider, idToken, accessToken = null) {
 }
 
 // ============================================================
-// PULL-TO-REFRESH
+// 🔥 PULL-TO-REFRESH (AJUSTADO - MENOS SENSÍVEL)
 // ============================================================
+// IMPORTANTE: Aumentado o threshold para evitar disparar sem querer
+// e adicionada verificação de que o usuário está no TOPO da página
+// ============================================================
+
 let touchStartY = 0;
 let touchCurrentY = 0;
 let isPulling = false;
-const PULL_THRESHOLD = 200;
-const TOP_TOLERANCE = 100;
+let pullStartTime = 0;
+
+const PULL_THRESHOLD = 300;        // 🔥 Aumentado de 200 para 300 (mais difícil de disparar)
+const TOP_TOLERANCE = 20;          // 🔥 Reduzido de 100 para 20 (só no topo absoluto)
+const MIN_PULL_TIME = 200;         // 🔥 Tempo mínimo (ms) para considerar o gesto válido
+const INDICATOR_THRESHOLD = 100;   // 🔥 Distância mínima para mostrar o indicador
 
 document.addEventListener('touchstart', function (e) {
-    if (window.scrollY <= TOP_TOLERANCE) {
+    // 🔥 Só ativa se estiver no TOPO ABSOLUTO da página
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+
+    if (scrollTop <= TOP_TOLERANCE) {
         touchStartY = e.touches[0].clientY;
+        touchCurrentY = touchStartY;
+        pullStartTime = Date.now();
         isPulling = true;
+    } else {
+        isPulling = false;
     }
 }, { passive: true });
 
 document.addEventListener('touchmove', function (e) {
     if (!isPulling) return;
+
+    // 🔥 Verificar novamente se ainda estamos no topo
+    const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    if (scrollTop > TOP_TOLERANCE) {
+        isPulling = false;
+        esconderIndicadorPull();
+        return;
+    }
+
     touchCurrentY = e.touches[0].clientY;
     const pullDistance = touchCurrentY - touchStartY;
-    if (pullDistance > 50) mostrarIndicadorPull(pullDistance);
+
+    // 🔥 Só mostra indicador se o pull for grande o suficiente
+    if (pullDistance > INDICATOR_THRESHOLD) {
+        mostrarIndicadorPull(pullDistance);
+    }
+
+    // 🔥 Só dispara atualização se:
+    // - pull maior que PULL_THRESHOLD (300px)
+    // - tempo mínimo de pull (evita flick rápido)
     if (pullDistance > PULL_THRESHOLD) {
-        e.preventDefault();
-        atualizarPagina();
+        const pullTime = Date.now() - pullStartTime;
+
+        if (pullTime >= MIN_PULL_TIME) {
+            e.preventDefault();
+            atualizarPagina();
+            isPulling = false;
+        }
     }
 }, { passive: false });
 
 document.addEventListener('touchend', function () {
     if (!isPulling) return;
-    const pullDistance = touchCurrentY - touchStartY;
-    if (pullDistance < PULL_THRESHOLD) esconderIndicadorPull();
+
+    esconderIndicadorPull();
     isPulling = false;
     touchStartY = 0;
     touchCurrentY = 0;
+    pullStartTime = 0;
 }, { passive: true });
 
 function atualizarPagina() {
@@ -738,7 +746,9 @@ function mostrarIndicadorPull(distancia) {
         indicador.innerHTML = '↓ Solte para atualizar';
         document.body.appendChild(indicador);
     }
-    if (distancia > 50) indicador.style.transform = 'translateY(0)';
+    if (distancia > INDICATOR_THRESHOLD) {
+        indicador.style.transform = 'translateY(0)';
+    }
 }
 
 function esconderIndicadorPull() {

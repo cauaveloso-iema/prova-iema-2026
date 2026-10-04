@@ -332,7 +332,7 @@
         gap: 6px !important;
         transition: all 0.3s !important;
         white-space: nowrap !important;
-        margin: 0 0 0 auto !important; /* margin-left: auto para alinhar à direita */
+        margin: 0 0 0 auto !important;
         min-width: 120px !important;
         max-width: 140px !important;
         position: relative !important;
@@ -342,7 +342,6 @@
         font-size: 13px !important;
     }
 
-    /* Container dos botões do header */
     .aluno-header > div:last-child {
         display: flex !important;
         align-items: center !important;
@@ -352,7 +351,6 @@
         max-width: 100% !important;
     }
 
-    /* Links como o "Baixar App" */
     .aluno-header a[href*="drive.google.com"] {
         padding: 6px 12px !important;
         font-size: 12px !important;
@@ -507,7 +505,6 @@
 
 /* ==================================================
    AJUSTES FINAIS - PROVA (VERSÃO DEFINITIVA)
-   ADICIONADO NO FINAL - NÃO REMOVER NADA ACIMA
    ================================================== */
 
 @media screen and (max-width: 768px) {
@@ -715,25 +712,21 @@
    SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
    ================================================== */
 
-/* Variáveis base - só são aplicadas em mobile */
 @media screen and (max-width: 768px) {
     :root {
-        --base-width: 768; /* Largura de referência para mobile */
+        --base-width: 768;
         --current-width: 768;
         --scale-ratio: 1;
     }
 }
 
-/* Escalonamento apenas para telas menores que 768px */
 @media screen and (max-width: 768px) {
     
-    /* Calcular escala baseado na largura atual */
     :root {
-        --current-width: 768; /* Será atualizado via JS */
+        --current-width: 768;
         --scale-ratio: calc(var(--current-width) / 768);
     }
     
-    /* Ajuste automático para telas menores */
     @media screen and (max-width: 700px) {
         :root { --scale-ratio: 0.95; }
     }
@@ -758,9 +751,6 @@
         :root { --scale-ratio: 0.55; }
     }
     
-    /* APLICAR ESCALA APENAS EM MOBILE */
-    
-    /* Aplicar escala a elementos principais */
     .container,
     .main-content,
     .content-area,
@@ -777,7 +767,6 @@
         border-radius: calc(10px * var(--scale-ratio)) !important;
     }
     
-    /* Ajustar fontes proporcionalmente */
     h1 { font-size: calc(32px * var(--scale-ratio)) !important; }
     h2 { font-size: calc(28px * var(--scale-ratio)) !important; }
     h3 { font-size: calc(24px * var(--scale-ratio)) !important; }
@@ -785,7 +774,6 @@
     p, span, div, li { font-size: calc(16px * var(--scale-ratio)) !important; }
     small { font-size: calc(14px * var(--scale-ratio)) !important; }
     
-    /* Botões e inputs */
     button,
     .btn,
     .button,
@@ -802,19 +790,16 @@
         border-radius: calc(8px * var(--scale-ratio)) !important;
     }
     
-    /* Ícones */
     i, .fas, .far, .fab {
         font-size: calc(18px * var(--scale-ratio)) !important;
     }
     
-    /* Títulos de página */
     .page-title,
     .header-title {
         font-size: calc(28px * var(--scale-ratio)) !important;
         margin-bottom: calc(15px * var(--scale-ratio)) !important;
     }
     
-    /* Cards de estatística */
     .stat-number {
         font-size: calc(32px * var(--scale-ratio)) !important;
     }
@@ -829,20 +814,17 @@
         font-size: calc(24px * var(--scale-ratio)) !important;
     }
     
-    /* Tabelas */
     table th,
     table td {
         padding: calc(12px * var(--scale-ratio)) calc(16px * var(--scale-ratio)) !important;
         font-size: calc(14px * var(--scale-ratio)) !important;
     }
     
-    /* Modais */
     .modal-content {
         width: calc(500px * var(--scale-ratio)) !important;
         max-width: calc(500px * var(--scale-ratio)) !important;
     }
     
-    /* Sidebar */
     .sidebar {
         width: calc(280px * var(--scale-ratio)) !important;
     }
@@ -852,7 +834,6 @@
         font-size: calc(16px * var(--scale-ratio)) !important;
     }
     
-    /* Grids responsivas */
     .stats-grid {
         display: grid !important;
         grid-template-columns: repeat(auto-fit, minmax(calc(250px * var(--scale-ratio)), 1fr)) !important;
@@ -865,7 +846,6 @@
         gap: calc(20px * var(--scale-ratio)) !important;
     }
     
-    /* Espaçamentos */
     .mt-1 { margin-top: calc(4px * var(--scale-ratio)) !important; }
     .mt-2 { margin-top: calc(8px * var(--scale-ratio)) !important; }
     .mt-3 { margin-top: calc(16px * var(--scale-ratio)) !important; }
@@ -885,15 +865,12 @@
     .p-5 { padding: calc(32px * var(--scale-ratio)) !important; }
 }
 
-
 /* ==================================================
-   CORREÇÃO PARA MODO PAISAGEM NA PÁGINA DE PROVA - APENAS MOBILE/TABLET
+   CORREÇÃO PARA MODO PAISAGEM NA PÁGINA DE PROVA
    ================================================== */
 
-/* DISPOSITIVOS MÓVEIS EM PAISAGEM (celulares e tablets pequenos) */
 @media screen and (max-width: 1024px) and (orientation: landscape) {
     
-    /* Garantir que os elementos de acessibilidade e monitoramento continuem OCULTOS */
     html[data-page="realizar-prova"] .monitor-panel,
     html[data-page="realizar-prova"] .acessibilidade-btn-prova,
     html[data-page="realizar-prova"] #monitorHelp,
@@ -903,7 +880,6 @@
         display: none !important;
     }
 
-    /* Garantir que o menu rápido de questões continue OCULTO */
     html[data-page="realizar-prova"] #menuQuestoesRapido,
     html[data-page="realizar-prova"] [id*="menuQuestoes"],
     html[data-page="realizar-prova"] [class*="menu-questoes"],
@@ -914,7 +890,6 @@
         display: none !important;
     }
 
-    /* Garantir que o número do enunciado continue VISÍVEL */
     html[data-page="realizar-prova"] .questao-numero {
         display: flex !important;
         width: 36px !important;
@@ -929,21 +904,18 @@
         font-weight: bold !important;
     }
 
-    /* Ajustar o card das questões para paisagem */
     html[data-page="realizar-prova"] .questao-card {
         padding: 15px !important;
         margin: 8px !important;
         border-radius: 12px !important;
     }
 
-    /* Ajustar o texto da questão */
     html[data-page="realizar-prova"] .questao-texto {
         font-size: 1rem !important;
         line-height: 1.4 !important;
         margin-bottom: 15px !important;
     }
 
-    /* Ajustar as opções */
     html[data-page="realizar-prova"] .opcao {
         padding: 10px 12px !important;
         margin-bottom: 8px !important;
@@ -959,7 +931,6 @@
         font-size: 0.9rem !important;
     }
 
-    /* Ajustar a barra de navegação */
     html[data-page="realizar-prova"] .navegacao-container {
         padding: 8px 10px !important;
     }
@@ -982,7 +953,6 @@
         min-width: 70px !important;
     }
 
-    /* Ajustar o header da prova */
     html[data-page="realizar-prova"] .prova-header {
         padding: 8px 12px !important;
         min-height: 60px !important;
@@ -997,21 +967,18 @@
         margin: 2px 0 !important;
     }
 
-    /* Ajustar badge de período */
     html[data-page="realizar-prova"] #periodoBadge {
         margin: 2px 0 !important;
         padding: 2px 8px !important;
         font-size: 0.7rem !important;
     }
 
-    /* Ajustar informações de horário */
     html[data-page="realizar-prova"] #infoHorario {
         margin: 5px 0 !important;
         padding: 4px 8px !important;
         font-size: 0.7rem !important;
     }
 
-    /* Ajustar meta items */
     html[data-page="realizar-prova"] .meta-item {
         padding: 3px 8px !important;
         font-size: 0.7rem !important;
@@ -1023,12 +990,10 @@
         min-width: 70px !important;
     }
 
-    /* Ajustar container das questões */
     html[data-page="realizar-prova"] .questao-container-wrapper {
         max-height: calc(100vh - 100px) !important;
     }
 
-    /* Ajustar progresso */
     html[data-page="realizar-prova"] .progresso-container {
         padding: 5px 10px !important;
     }
@@ -1037,7 +1002,6 @@
         font-size: 0.75rem !important;
     }
 
-    /* Manter o indicador MONITORADO visível */
     html[data-page="realizar-prova"] .prova-header::after {
         content: "● MONITORADO" !important;
         position: absolute !important;
@@ -1055,7 +1019,6 @@
     }
 }
 
-/* Ajustes para telas muito pequenas em paisagem - apenas mobile/tablet */
 @media screen and (max-width: 1024px) and (orientation: landscape) and (max-height: 500px) {
     
     html[data-page="realizar-prova"] .prova-header {
@@ -1107,9 +1070,7 @@
     }
 }
 
-/* ===== SOBRESCREVER QUALQUER REGRA ANTERIOR - APENAS MOBILE/TABLET ===== */
 @media screen and (max-width: 1024px) and (orientation: landscape) {
-    /* Garantir que nenhuma regra anterior sobreponha estas */
     html[data-page="realizar-prova"] .monitor-panel,
     html[data-page="realizar-prova"] .acessibilidade-btn-prova,
     html[data-page="realizar-prova"] #monitorHelp,
@@ -1121,9 +1082,7 @@
     }
 }
 
-/* ===== MODO RETRATO MOBILE (MANTENDO O QUE JÁ EXISTIA) ===== */
 @media screen and (max-width: 768px) and (orientation: portrait) {
-    /* Suas regras existentes para modo retrato - NÃO MODIFICADO */
     html[data-page="realizar-prova"] .monitor-panel,
     html[data-page="realizar-prova"] .acessibilidade-btn-prova,
     html[data-page="realizar-prova"] #monitorHelp,
@@ -1135,7 +1094,6 @@
     }
 }
 
-/* Garantia de que elementos de monitoramento e menu de questões estão ocultos em QUALQUER mobile/tablet (até 1024px) */
 @media screen and (max-width: 1024px) {
     html[data-page="realizar-prova"] .monitor-panel,
     html[data-page="realizar-prova"] .acessibilidade-btn-prova,
@@ -1154,9 +1112,7 @@
     }
 }
 
-/* ===== RESET PARA DESKTOP - APENAS ACIMA DE 1024px ===== */
 @media screen and (min-width: 1025px) {
-    /* Garantir que todos os elementos voltem ao normal no desktop */
     html[data-page="realizar-prova"] .monitor-panel,
     html[data-page="realizar-prova"] .acessibilidade-btn-prova,
     html[data-page="realizar-prova"] #monitorHelp,
@@ -1177,20 +1133,12 @@
     }
 }
 
-/* ===== RESET PARA TABLETS GRANDES EM PAISAGEM (NÃO SÃO DESKTOP) ===== */
-@media screen and (min-width: 1025px) and (orientation: landscape) {
-    /* Tablets grandes como iPad Pro em paisagem ainda são tablets, não desktop */
-    /* Mantém elementos ocultos se necessário */
-}
-
 /* ==================================================
    MODAL DE CONFIRMAÇÃO - VERSÃO MOBILE
-   MELHOR VISIBILIDADE EM CELULARES E TABLETS
    ================================================== */
 
 @media screen and (max-width: 1024px) {
     
-    /* Modal de confirmação de saída */
     .modal-saida.active {
         display: flex !important;
         align-items: center !important;
@@ -1210,7 +1158,6 @@
         border: 2px solid rgba(255, 255, 255, 0.2) !important;
     }
     
-    /* Header do modal - vermelho mais vibrante */
     .modal-saida .modal-saida-header {
         background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
         padding: 20px !important;
@@ -1232,7 +1179,6 @@
         color: white !important;
     }
     
-    /* Corpo do modal - fundo escuro para contraste */
     .modal-saida .modal-saida-body {
         background: #1f2937 !important;
         padding: 25px 20px !important;
@@ -1270,7 +1216,6 @@
         margin-right: 8px !important;
     }
     
-    /* Footer do modal - com botões */
     .modal-saida .modal-saida-footer {
         background: #111827 !important;
         padding: 20px !important;
@@ -1280,7 +1225,6 @@
         border-top: 2px solid rgba(255, 255, 255, 0.1) !important;
     }
     
-    /* Botão Cancelar - AZUL VISÍVEL */
     .modal-saida .btn-saida-cancelar {
         background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
         color: white !important;
@@ -1310,11 +1254,6 @@
         box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4) !important;
     }
     
-    .modal-saida .btn-saida-cancelar:active {
-        transform: translateY(0) !important;
-    }
-    
-    /* Botão Confirmar - VERMELHO VISÍVEL */
     .modal-saida .btn-saida-confirmar {
         background: linear-gradient(135deg, #ef4444, #dc2626) !important;
         color: white !important;
@@ -1344,11 +1283,6 @@
         box-shadow: 0 6px 15px rgba(239, 68, 68, 0.4) !important;
     }
     
-    .modal-saida .btn-saida-confirmar:active {
-        transform: translateY(0) !important;
-    }
-    
-    /* Ajustes para telas muito pequenas */
     @media screen and (max-width: 480px) {
         .modal-saida .modal-saida-footer {
             flex-direction: column !important;
@@ -1376,7 +1310,6 @@
     }
 }
 
-/* ===== MODAL DE AVISO (WARNING) - MESMO ESTILO ===== */
 @media screen and (max-width: 1024px) {
     
     .modal-warning.active {
@@ -1468,21 +1401,14 @@
     .modal-warning .btn-return i {
         color: white !important;
     }
-    
-    .modal-warning .btn-return:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 15px rgba(16, 185, 129, 0.4) !important;
-    }
 }
 
 /* ==================================================
    MODAL DE RESUMO DA PROVA - VERSÃO VISÍVEL PARA MOBILE/TABLET
    ================================================== */
 
-/* Aplicar para TODOS os dispositivos móveis (até 1024px) */
 @media screen and (max-width: 1024px) {
     
-    /* Modal de resumo da prova */
     #modalResumoProva {
         display: none;
         position: fixed !important;
@@ -1503,13 +1429,12 @@
         display: flex !important;
     }
 
-    /* Conteúdo do modal */
     #modalResumoProva .modal-content {
         width: 90% !important;
         max-width: 500px !important;
         max-height: 80vh !important;
         overflow-y: auto !important;
-        background: #1f2937 !important; /* Fundo escuro */
+        background: #1f2937 !important;
         border-radius: 24px !important;
         border: 2px solid rgba(255, 255, 255, 0.15) !important;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5) !important;
@@ -1527,7 +1452,6 @@
         }
     }
 
-    /* Header do modal */
     #modalResumoProva .modal-header {
         background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
         padding: 20px !important;
@@ -1553,14 +1477,12 @@
         color: white !important;
     }
 
-    /* Corpo do modal */
     #modalResumoProva .modal-body {
         padding: 20px !important;
         background: #1f2937 !important;
         color: white !important;
     }
 
-    /* Estatísticas */
     #modalResumoProva .estatisticas-resumo {
         background: rgba(255, 255, 255, 0.1) !important;
         border-radius: 16px !important;
@@ -1590,7 +1512,6 @@
         margin-left: 5px !important;
     }
 
-    /* Lista de questões */
     #modalResumoProva .questoes-resumo {
         max-height: 300px !important;
         overflow-y: auto !important;
@@ -1632,7 +1553,6 @@
         color: #ef4444 !important;
     }
 
-    /* Footer do modal - BOTÕES VISÍVEIS */
     #modalResumoProva .modal-footer {
         background: #111827 !important;
         padding: 20px !important;
@@ -1645,7 +1565,6 @@
         z-index: 10 !important;
     }
 
-    /* Botão Cancelar (Voltar) - AZUL VISÍVEL */
     #modalResumoProva .btn-cancelar-resumo {
         background: linear-gradient(135deg, #6b7280, #4b5563) !important;
         color: white !important;
@@ -1672,17 +1591,6 @@
         font-size: 1.1rem !important;
     }
 
-    #modalResumoProva .btn-cancelar-resumo:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 15px rgba(75, 85, 99, 0.5) !important;
-        background: linear-gradient(135deg, #4b5563, #374151) !important;
-    }
-
-    #modalResumoProva .btn-cancelar-resumo:active {
-        transform: translateY(0) !important;
-    }
-
-    /* Botão Confirmar (Finalizar) - VERDE VISÍVEL */
     #modalResumoProva .btn-confirmar-resumo {
         background: linear-gradient(135deg, #10b981, #059669) !important;
         color: white !important;
@@ -1709,17 +1617,6 @@
         font-size: 1.1rem !important;
     }
 
-    #modalResumoProva .btn-confirmar-resumo:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 15px rgba(16, 185, 129, 0.5) !important;
-        background: linear-gradient(135deg, #059669, #047857) !important;
-    }
-
-    #modalResumoProva .btn-confirmar-resumo:active {
-        transform: translateY(0) !important;
-    }
-
-    /* Botão Fechar (X) */
     #modalResumoProva .modal-close {
         background: rgba(255, 255, 255, 0.2) !important;
         border: 2px solid rgba(255, 255, 255, 0.3) !important;
@@ -1740,7 +1637,6 @@
         transform: rotate(90deg) !important;
     }
 
-    /* Responsivo para telas muito pequenas */
     @media screen and (max-width: 480px) {
         #modalResumoProva .modal-footer {
             flex-direction: column !important;
@@ -1828,19 +1724,16 @@
    ACOMPANHAMENTO - SETOR BIBLIOTECA
    ============================================ */
 
-/* Card da biblioteca */
 .acompanhamento-card[data-setor="biblioteca"] {
     border-left: 4px solid #0ea5e9;
 }
 
-/* Badge da biblioteca */
 .acompanhamento-card-setor.biblioteca {
     background: #e0f2fe;
     color: #0ea5e9;
     border: 1px solid #0ea5e9;
 }
 
-/* Ícone da biblioteca */
 .acompanhamento-setor-biblioteca {
     background: linear-gradient(135deg, #0ea5e9, #0284c7);
     color: white;
@@ -1853,7 +1746,6 @@
     gap: 6px;
 }
 
-/* Info extra do card (motivo da visita) */
 .acompanhamento-card-extra {
     display: flex;
     align-items: center;
@@ -1871,7 +1763,6 @@
     color: #0ea5e9;
 }
 
-/* Header do grupo de setor */
 .acompanhamento-grupo-header {
     display: flex;
     align-items: center;
@@ -1887,7 +1778,6 @@
     margin-top: 0;
 }
 
-/* Animação de pulse para o ícone da biblioteca */
 @keyframes pulse-biblioteca {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.1); }
@@ -1897,7 +1787,6 @@
     animation: pulse-biblioteca 3s infinite;
 }
 
-/* Responsividade */
 @media (max-width: 768px) {
     .acompanhamento-card-extra {
         flex-direction: column;
@@ -1907,5 +1796,223 @@
     
     .acompanhamento-card-extra span:last-child {
         margin-left: 0 !important;
+    }
+}
+
+/* ==================================================
+   🔥 CORREÇÕES ESPECÍFICAS PARA PÁGINA DE LOGIN
+   ================================================== */
+@media screen and (max-width: 768px) {
+
+    /* Body da página de login — permitir scroll */
+    body:has(.login-container) {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 16px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-height: 100vh !important;
+        height: auto !important;
+    }
+
+    /* Container de login — layout correto no mobile */
+    .login-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: auto !important;
+        height: auto !important;
+        max-height: none !important;
+        border-radius: 20px !important;
+        padding: 28px 22px 24px !important;
+        margin: 0 !important;
+        overflow: visible !important;
+    }
+
+    /* Header do login */
+    .login-header {
+        margin-bottom: 20px !important;
+    }
+
+    .login-header .icon-wrapper {
+        width: 60px !important;
+        height: 60px !important;
+        font-size: 26px !important;
+        min-height: 60px !important;
+        max-height: 60px !important;
+        margin-bottom: 14px !important;
+    }
+
+    .login-header h1 {
+        font-size: 26px !important;
+    }
+
+    .login-header p {
+        font-size: 13px !important;
+    }
+
+    /* Campos do formulário */
+    .login-container .form-control {
+        width: 100% !important;
+        min-height: 44px !important;
+        max-height: 46px !important;
+        height: 46px !important;
+        font-size: 14px !important;
+        padding: 10px 14px !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Botão de login */
+    .login-container .btn-login {
+        width: 100% !important;
+        min-height: 46px !important;
+        max-height: 46px !important;
+        height: 46px !important;
+        font-size: 15px !important;
+        padding: 12px !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Botões sociais */
+    .login-container .btn-social {
+        width: 100% !important;
+        min-height: 44px !important;
+        max-height: 44px !important;
+        height: 44px !important;
+        font-size: 13.5px !important;
+        padding: 10px 16px !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* WhatsApp */
+    .login-container .whatsapp-link {
+        width: 100% !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        height: 40px !important;
+        font-size: 12.5px !important;
+        padding: 8px 16px !important;
+        margin: 0 !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 🔥 CORREÇÃO DO BOTÃO OLHINHO */
+    .login-container .toggle-password,
+    .login-container .password-wrapper .toggle-password,
+    .login-container button.toggle-password {
+        width: auto !important;
+        min-width: auto !important;
+        max-width: auto !important;
+        height: auto !important;
+        min-height: auto !important;
+        max-height: auto !important;
+        padding: 5px 6px !important;
+        margin: 0 !important;
+        position: absolute !important;
+        right: 12px !important;
+        left: auto !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        font-size: 0.95rem !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        background: transparent !important;
+        border: none !important;
+        z-index: 10 !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Wrapper de senha */
+    .login-container .password-wrapper {
+        width: 100% !important;
+        position: relative !important;
+        display: block !important;
+    }
+
+    .login-container .password-wrapper input {
+        width: 100% !important;
+        padding-right: 45px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Opções */
+    .login-container .form-options {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        margin-bottom: 18px !important;
+    }
+
+    .login-container .form-options .remember,
+    .login-container .form-options .forgot-link {
+        font-size: 13px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .login-container .form-options .remember input[type="checkbox"] {
+        width: 16px !important;
+        height: 16px !important;
+        min-height: 16px !important;
+        max-height: 16px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Divisor */
+    .login-container .divider {
+        margin: 16px 0 !important;
+        font-size: 11.5px !important;
+    }
+
+    /* Links */
+    .login-container .register-link {
+        margin-top: 16px !important;
+        font-size: 14px !important;
+    }
+
+    /* Rodapé */
+    .login-container .footer {
+        margin-top: 20px !important;
+        padding-top: 14px !important;
+        font-size: 11px !important;
+    }
+}
+
+/* Telas muito pequenas (< 380px) */
+@media screen and (max-width: 380px) {
+    body:has(.login-container) {
+        padding: 12px !important;
+    }
+
+    .login-container {
+        padding: 24px 18px 20px !important;
+        border-radius: 16px !important;
+    }
+
+    .login-header h1 {
+        font-size: 24px !important;
+    }
+
+    .login-header .icon-wrapper {
+        width: 56px !important;
+        height: 56px !important;
+        font-size: 24px !important;
+    }
+
+    .login-container .form-options {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 10px !important;
     }
 }

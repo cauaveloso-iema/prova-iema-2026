@@ -910,7 +910,7 @@ input[type="password"]::-ms-clear {
 }
 
 /* ============================================================
-   LOGIN SOCIAL (GOOGLE / MICROSOFT)
+   LOGIN SOCIAL(GOOGLE / MICROSOFT)
    ============================================================ */
 .social-login {
     display: flex;
