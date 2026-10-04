@@ -1801,7 +1801,7 @@
 
 /* ==================================================
    🔥 CORREÇÕES ESPECÍFICAS PARA PÁGINA DE LOGIN
-   (TODOS OS BOTÕES CENTRALIZADOS E MAIS ESTREITOS)
+   (BOTÕES ESTICADOS + CHAPÉU GRANDE)
    ================================================== */
 @media screen and (max-width: 768px) {
 
@@ -1836,20 +1836,21 @@
 
     /* 🔥 CHAPÉUZINHO MAIOR no mobile */
     .login-header .icon-wrapper {
-        width: 72px !important;
-        height: 72px !important;
-        min-height: 72px !important;
-        max-height: 72px !important;
-        font-size: 34px !important;
+        width: 76px !important;
+        height: 76px !important;
+        min-height: 76px !important;
+        max-height: 76px !important;
+        font-size: 36px !important;
         margin-bottom: 14px !important;
     }
 
-    /* 🔥 Garantir que o ícone (chapéu) dentro ocupe todo o espaço */
+    /* 🔥 Ícone do chapéu realmente grande (Font Awesome ignora font-size do pai) */
     .login-header .icon-wrapper i,
     .login-header .icon-wrapper .fas,
     .login-header .icon-wrapper .fa-graduation-cap {
-        font-size: 38px !important;
+        font-size: 42px !important;
         line-height: 1 !important;
+        display: inline-block !important;
     }
 
     .login-header h1 {
@@ -1874,65 +1875,65 @@
     }
 
     /* ============================================
-       🔥 BOTÕES PRINCIPAIS - CENTRALIZADOS E ESTREITOS
+       🔥 BOTÕES - VOLTAM A FICAR ESTICADOS (LARGURA TOTAL)
        ============================================ */
 
-    /* Botão de login */
+    /* Botão de login - LARGURA TOTAL */
     .login-container .btn-login {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        width: 80% !important;
-        max-width: 260px !important;
+        width: 100% !important;
+        max-width: 100% !important;
         min-height: 46px !important;
         max-height: 46px !important;
         height: 46px !important;
         font-size: 15px !important;
         padding: 12px !important;
-        margin: 0 auto !important;
+        margin: 0 !important;
         border-radius: 12px !important;
         box-sizing: border-box !important;
     }
 
-    /* Botões sociais (Google / Microsoft) */
+    /* Botões sociais (Google / Microsoft) - LARGURA TOTAL */
     .login-container .btn-social {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        width: 80% !important;
-        max-width: 260px !important;
+        width: 100% !important;
+        max-width: 100% !important;
         min-height: 44px !important;
         max-height: 44px !important;
         height: 44px !important;
         font-size: 13px !important;
         padding: 10px 14px !important;
-        margin: 0 auto !important;
+        margin: 0 !important;
         border-radius: 12px !important;
         box-sizing: border-box !important;
     }
 
-    /* WhatsApp */
+    /* WhatsApp - LARGURA TOTAL */
     .login-container .whatsapp-link {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        width: 70% !important;
-        max-width: 230px !important;
+        width: 100% !important;
+        max-width: 100% !important;
         min-height: 40px !important;
         max-height: 40px !important;
         height: 40px !important;
         font-size: 12.5px !important;
         padding: 8px 16px !important;
-        margin: 0 auto !important;
+        margin: 0 !important;
         border-radius: 12px !important;
         box-sizing: border-box !important;
     }
 
-    /* Container social centralizado */
+    /* Container social em coluna (esticado) */
     .login-container .social-login {
         display: flex !important;
         flex-direction: column !important;
-        align-items: center !important;
+        align-items: stretch !important;
         gap: 8px !important;
         margin-bottom: 18px !important;
     }
@@ -2042,30 +2043,28 @@
 
     /* 🔥 Chapéuzinho grande também em telas pequenas */
     .login-header .icon-wrapper {
-        width: 66px !important;
-        height: 66px !important;
-        min-height: 66px !important;
-        max-height: 66px !important;
-        font-size: 30px !important;
+        width: 70px !important;
+        height: 70px !important;
+        min-height: 70px !important;
+        max-height: 70px !important;
+        font-size: 32px !important;
     }
 
-    /* 🔥 Garantir que o ícone (chapéu) dentro fique grande também */
+    /* 🔥 Ícone do chapéu grande também */
     .login-header .icon-wrapper i,
     .login-header .icon-wrapper .fas,
     .login-header .icon-wrapper .fa-graduation-cap {
-        font-size: 34px !important;
+        font-size: 38px !important;
         line-height: 1 !important;
+        display: inline-block !important;
     }
 
+    /* Botões continuam ESTICADOS (largura total) */
     .login-container .btn-login,
-    .login-container .btn-social {
-        width: 85% !important;
-        max-width: 230px !important;
-    }
-
+    .login-container .btn-social,
     .login-container .whatsapp-link {
-        width: 75% !important;
-        max-width: 210px !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
 
     .login-container .form-options {
