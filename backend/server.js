@@ -1101,6 +1101,14 @@ const bibliotecaPublicaRoutes = require('./routes/biblioteca-publica');
 app.use('/api/biblioteca', bibliotecaRoutes);
 app.use('/api/biblioteca-publica', bibliotecaPublicaRoutes);
 
+// ============================================
+//LOGIN-SOCIAL
+// ============================================
+
+const loginSocialRoutes = require('./routes/login');
+app.use('/api/login-social', loginSocialRoutes);
+console.log('✅ Rotas de login-social registradas');
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26
 // ============================================================================
@@ -1692,447 +1700,435 @@ app.use('/api', rastrearAtividade);
 // ROTAS PÚBLICAS
 // ============================================================================
 
-// ============ ROTA PÚBLICA DE REGISTRO ============
-app.post('/api/auth/register', [
-  check('nome').not().isEmpty().withMessage('Nome é obrigatório'),
-  check('email').isEmail().withMessage('Email inválido'),
-  check('cpf').custom((value) => {
-    if (!value) {
-      throw new Error('CPF é obrigatório');
-    }
-    
-    // Função para validar CPF
-    function validarCPF(cpf) {
-      cpf = cpf.replace(/\D/g, '');
-      
-      if (cpf.length !== 11) return false;
-      if (/^(\d)\1+$/.test(cpf)) return false;
-      
-      let soma = 0;
-      let resto;
-      
-      for (let i = 1; i <= 9; i++) {
-        soma += parseInt(cpf.substring(i-1, i)) * (11 - i);
-      }
-      
-      resto = (soma * 10) % 11;
-      if ((resto === 10) || (resto === 11)) resto = 0;
-      if (resto !== parseInt(cpf.substring(9, 10))) return false;
-      
-      soma = 0;
-      for (let i = 1; i <= 10; i++) {
-        soma += parseInt(cpf.substring(i-1, i)) * (12 - i);
-      }
-      
-      resto = (soma * 10) % 11;
-      if ((resto === 10) || (resto === 11)) resto = 0;
-      if (resto !== parseInt(cpf.substring(10, 11))) return false;
-      
-      return true;
-    }
-    
-    if (!validarCPF(value)) {
-      throw new Error('CPF inválido');
-    }
-    
-    return true;
-  }).withMessage('CPF inválido'),
-  check('password').isLength({ min: 6 }).withMessage('Senha deve ter no mínimo 6 caracteres'),
-  check('role').isIn(['aluno', 'professor']).withMessage('Role inválida')
-], async (req, res) => {
+// ============ ROTA DE LOGIN COM 2FA (VERSÃO CORRIGIDA) ============
+app.post('/api/auth/login', async (req, res) => {
   try {
-    const { 
-      nome, 
-      email, 
-      password, 
-      cpf, 
-      telefone, 
-      matricula, 
-      role, 
-      eixo, 
-      curso, 
-      turma,        
-      periodo, 
-      departamento, 
-      titulacao,
+    const { email, password, cpf, twoFactorCode, token: tempToken } = req.body;
+    
+    // ===== CASO 1: REQUISIÇÃO COM TOKEN TEMPORÁRIO (2FA) =====
+    if (tempToken) {
+      console.log('🔐 Requisição com token temporário recebida');
       
-      // ========== CAMPOS DE ACESSIBILIDADE ==========
-      precisaAcessibilidade,
-      condicaoAcessibilidade,
-      outraCondicao
-      
-    } = req.body;
-    
-    // Validar email institucional
-    if (!email || !email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
-        return res.status(400).json({
-            success: false,
-            error: 'Somente emails institucionais (@iemasaoluiscentro.net) são permitidos'
-        });
-    }
-
-    // Converter para lowercase
-    const emailLower = email.toLowerCase().trim();
-
-    console.log('📝 Dados recebidos no registro:', { 
-      nome, 
-      email, 
-      cpf: cpf ? '***' : 'não informado',
-      telefone: telefone ? '***' : 'não informado',
-      role,
-      curso: curso || 'não informado',
-      turma: turma || 'não informado',  
-      precisaAcessibilidade,
-      condicaoAcessibilidade,
-      outraCondicao
-    });
-    
-    // Validar telefone
-    if (!telefone) {
-        return res.status(400).json({
-            success: false,
-            error: 'Telefone é obrigatório'
-        });
-    }
-
-    // Validar formato do telefone
-    const telefoneNumeros = telefone.replace(/\D/g, '');
-    if (telefoneNumeros.length < 10 || telefoneNumeros.length > 11) {
-        return res.status(400).json({
-            success: false,
-            error: 'Telefone inválido. Deve ter 10 ou 11 dígitos (com DDD)'
-        });
-    }
-
-    // Verificar telefone duplicado
-    const existingTelefone = await User.findOne({ telefone: telefoneNumeros });
-    if (existingTelefone) {
-        return res.status(400).json({
-            success: false,
-            error: 'Telefone já cadastrado'
-        });
-    }
-    
-    // VALIDAÇÃO DE CPF FORMATADO
-    const cpfNumeros = cpf.replace(/\D/g, '');
-    
-    // Verificar email duplicado
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email já cadastrado'
-      });
-    }
-    
-    // Verificar CPF duplicado
-    const existingCPF = await User.findOne({ cpf: cpfNumeros });
-    if (existingCPF) {
-      return res.status(400).json({
-        success: false,
-        error: 'CPF já cadastrado'
-      });
-    }
-    
-    if (matricula) {
-      const existingMatricula = await User.findOne({ matricula });
-      if (existingMatricula) {
-        return res.status(400).json({
+      try {
+        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+        
+        if (decoded.temp && decoded.purpose === '2fa') {
+          console.log(`✅ Token temporário válido para usuário: ${decoded.id}`);
+          
+          const user = await User.findById(decoded.id)
+            .select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +twoFactorTempSecret +nome +email +role +telefone');
+          
+          if (!user) {
+            return res.status(401).json({
+              success: false,
+              error: 'Usuário não encontrado'
+            });
+          }
+          
+          if (!twoFactorCode) {
+            return res.status(400).json({
+              success: false,
+              error: 'Código 2FA não fornecido'
+            });
+          }
+          
+          // ========== VERIFICAÇÃO DE CÓDIGO 2FA ==========
+          let isValid = false;
+          let motivo = '';
+          
+          // 1. Verificar código temporário (SMS atual)
+          if (user.twoFactorTempSecret && user.twoFactorTempSecret === twoFactorCode) {
+            isValid = true;
+            motivo = 'SMS';
+            user.twoFactorTempSecret = null;
+            await user.save();
+            console.log('✅ Código SMS válido');
+          }
+          
+          // 2. Verificar código TOTP (QR Code - Google Authenticator)
+          if (!isValid && (user.twoFactorSecret || user.twoFactorTempSecret)) {
+            try {
+              const speakeasy = require('speakeasy');
+              
+              if (user.twoFactorTempSecret) {
+                const verified = speakeasy.totp.verify({
+                  secret: user.twoFactorTempSecret,
+                  encoding: 'base32',
+                  token: twoFactorCode,
+                  window: 1
+                });
+                
+                if (verified) {
+                  isValid = true;
+                  motivo = 'TOTP (QR Code) - Temporário';
+                  console.log('✅ Código TOTP temporário válido');
+                  
+                  if (!user.twoFactorEnabled) {
+                    const backupCodes = [];
+                    for (let i = 0; i < 10; i++) {
+                      backupCodes.push(generateBackupCode());
+                    }
+                    
+                    user.twoFactorEnabled = true;
+                    user.twoFactorSecret = user.twoFactorTempSecret;
+                    user.twoFactorBackupCodes = backupCodes;
+                    user.twoFactorTempSecret = null;
+                    await user.save();
+                    console.log('✅ 2FA ativado com sucesso via QR Code');
+                  } else {
+                    user.twoFactorTempSecret = null;
+                    await user.save();
+                  }
+                }
+              }
+              
+              if (!isValid && user.twoFactorSecret && user.twoFactorEnabled) {
+                const verified = speakeasy.totp.verify({
+                  secret: user.twoFactorSecret,
+                  encoding: 'base32',
+                  token: twoFactorCode,
+                  window: 1
+                });
+                
+                if (verified) {
+                  isValid = true;
+                  motivo = 'TOTP (QR Code) - Permanente';
+                  console.log('✅ Código TOTP permanente válido');
+                }
+              }
+            } catch (error) {
+              console.error('❌ Erro ao verificar TOTP:', error.message);
+            }
+          }
+          
+          // 3. Verificar código de backup
+          if (!isValid && user.twoFactorBackupCodes && user.twoFactorBackupCodes.includes(twoFactorCode)) {
+            isValid = true;
+            motivo = 'backup';
+            user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(c => c !== twoFactorCode);
+            await user.save();
+            console.log('✅ Código de backup válido');
+          }
+          
+          // 4. Verificar código secreto permanente
+          if (!isValid && user.twoFactorSecret && user.twoFactorSecret === twoFactorCode) {
+            isValid = true;
+            motivo = 'secreto';
+            console.log('✅ Código secreto válido');
+          }
+          
+          if (!isValid) {
+            console.log('❌ Código inválido:', twoFactorCode);
+            return res.status(401).json({
+              success: false,
+              error: 'Código 2FA inválido'
+            });
+          }
+          
+          // Buscar configuração de expiração do JWT
+          const configJwt = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
+          const jwtExpiracaoBruto = configJwt ? configJwt.valor : '24h';
+          const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto);
+          
+          const authToken = jwt.sign(
+            { 
+              id: user._id, 
+              role: user.role,
+              nome: user.nome,
+              twoFactorEnabled: user.twoFactorEnabled
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: jwtExpiracao }
+          );
+          
+          // Definir redirecionamento
+          let redirectTo = '';
+          if (user.forcePasswordChange) {
+            redirectTo = '/trocar-senha.html';
+          } else if (user.role === 'super_admin') {
+            redirectTo = '/admin.html';
+          } else if (user.role === 'admin') {
+            redirectTo = '/admin-simples.html';
+          } else if (user.role === 'professor') {
+            redirectTo = '/index.html';
+          } else if (user.role === 'setor_pedagogico') {
+            redirectTo = '/setor-pedagogico.html';
+          } else if (user.role === 'coordenacao_patio') {
+            redirectTo = '/coordenacao-patio.html';
+          } else if (user.role === 'cozinha') {
+            redirectTo = '/cozinha-dashboard.html';
+          } else if (user.role === 'gestao_geral') {
+            redirectTo = '/gestao-geral.html';
+          } else if (user.role === 'enfermaria') {
+            redirectTo = '/enfermaria.html';
+          } else if (user.role === 'supervisao') {
+            redirectTo = '/supervisao.html';
+          } else if (user.role === 'biblioteca') {
+            redirectTo = '/biblioteca.html';
+          } else if (user.role === 'psicologia') {
+            redirectTo = '/psicologia.html';
+          } else if (user.role === 'protagonismo') {
+            redirectTo = '/protagonismo.html';
+          } else if (user.role === 'assistente-social') {
+            redirectTo = '/assistente-social.html';
+          } else if (user.role === 'aluno') {
+            redirectTo = '/aluno.html';
+          } else {
+            redirectTo = '/login.html';
+          }
+          
+          console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
+          
+          return res.json({
+            success: true,
+            token: authToken,
+            user: {
+              id: user._id,
+              nome: user.nome,
+              email: user.email,
+              role: user.role,
+              twoFactorEnabled: user.twoFactorEnabled,
+              telefone: user.telefone
+            },
+            redirectTo: redirectTo
+          });
+        }
+      } catch (err) {
+        console.error('❌ Erro ao verificar token temporário:', err.message);
+        return res.status(401).json({
           success: false,
-          error: 'Matrícula já cadastrada'
+          error: 'Token temporário inválido ou expirado'
         });
       }
     }
     
-    // ========== VALIDAÇÃO PARA PROFESSORES ==========
-    if (role === 'professor') {
-        // ✅ LISTA COMPLETA DE EIXOS PERMITIDOS
-        const eixosPermitidos = [
-            'natureza',
-            'humanas',
-            'linguagens',
-            'desenvolvimento',
-            'gestao',
-            'producao',
-            'turismo',
-            'ambiente'
-        ];
-        
-        if (!eixo || !eixosPermitidos.includes(eixo)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Professores devem escolher um eixo válido'
-            });
-        }
-        
-        // VALIDAÇÃO DA MATRÍCULA PARA PROFESSORES (OBRIGATÓRIA)
-        if (!matricula) {
-            return res.status(400).json({
-                success: false,
-                error: 'Matrícula é obrigatória para professores'
-            });
-        }
-        
-        // Validar formato da matrícula (6 números)
-        const matriculaNumeros = matricula.replace(/\D/g, '');
-        
-        if (matriculaNumeros.length !== 6) {
-            return res.status(400).json({
-                success: false,
-                error: 'Matrícula inválida. Deve conter exatamente 6 números'
-            });
-        }
-        
-        // 🔴 VALIDAÇÃO DE MATRÍCULA AUTORIZADA USANDO O ARQUIVO JSON
-        console.log('🔍 Verificando matrícula de professor:', matriculaNumeros);
-        
-        // Verificar se a matrícula está na lista de autorizadas
-        const autorizada =  await matriculasManager.verificar(matriculaNumeros);
-        const nomeProfessor = autorizada ? await matriculasManager.obterNome(matriculaNumeros) : null;
-
-        console.log(`🔍 Resultado: ${autorizada ? '✅ AUTORIZADA' : '❌ NÃO AUTORIZADA'} - Nome: ${nomeProfessor || 'Não encontrado'}`);
-        
-        if (!autorizada) {
-            console.log('❌ Matrícula NÃO autorizada:', matriculaNumeros);
-            return res.status(403).json({
-                success: false,
-                error: 'Matrícula não autorizada para cadastro como professor. Entre em contato com a administração.'
-            });
-        }
-        
-        console.log('✅ Matrícula autorizada para professor:', matriculaNumeros, ' - Nome:', nomeProfessor);
-    }
+    // ===== CASO 2: LOGIN NORMAL (SEM TOKEN) =====
+    console.log('📝 Requisição de login normal');
     
-    // ========== VALIDAÇÃO PARA ALUNOS ==========
-    if (role === 'aluno') {
-        if (!curso) {
-            return res.status(400).json({
-                success: false,
-                error: 'Curso é obrigatório para alunos'
-            });
-        }
-        
-        if (!turma) {
-            return res.status(400).json({
-                success: false,
-                error: 'Turma é obrigatória para alunos'
-            });
-        }
-    }
-    
-    // 🔥 ========== VALIDAÇÃO DE POLÍTICA DE SENHAS ========== 🔥
-    // Buscar configurações de senha
-    const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
-        Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
-        Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
-        Config.findOne({ chave: 'seguranca.senha.exigirNumero' }),
-        Config.findOne({ chave: 'seguranca.senha.exigirEspecial' })
+    // Buscar configurações de segurança
+    const [configTentativas, configBloqueio, configJwt, config2FA] = await Promise.all([
+      Config.findOne({ chave: 'seguranca.tentativasLogin' }),
+      Config.findOne({ chave: 'seguranca.bloqueioTempo' }),
+      Config.findOne({ chave: 'seguranca.jwtExpiracao' }),
+      Config.findOne({ chave: 'seguranca.doisFatores' })
     ]);
-
-    const tamanhoMinimo = configSenhaTamanho?.valor || 6;
-    const exigirMaiuscula = configSenhaMaiuscula?.valor || false;
-    const exigirNumero = configSenhaNumero?.valor || false;
-    const exigirEspecial = configSenhaEspecial?.valor || false;
-
-    // Validar tamanho mínimo
-    if (password.length < tamanhoMinimo) {
-        return res.status(400).json({
-            success: false,
-            error: `A senha deve ter no mínimo ${tamanhoMinimo} caracteres`
-        });
-    }
-
-    // Validar letra maiúscula
-    if (exigirMaiuscula && !/[A-Z]/.test(password)) {
-        return res.status(400).json({
-            success: false,
-            error: 'A senha deve conter pelo menos uma letra maiúscula'
-        });
-    }
-
-    // Validar número
-    if (exigirNumero && !/[0-9]/.test(password)) {
-        return res.status(400).json({
-            success: false,
-            error: 'A senha deve conter pelo menos um número'
-        });
-    }
-
-    // Validar caractere especial
-    if (exigirEspecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
-        return res.status(400).json({
-            success: false,
-            error: 'A senha deve conter pelo menos um caractere especial (!@#$%...)'
-        });
+    
+    const maxTentativas = configTentativas ? configTentativas.valor : 5;
+    const tempoBloqueio = configBloqueio ? configBloqueio.valor : 15;
+    const jwtExpiracaoBruto = configJwt ? configJwt.valor : '24h';
+    const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto);
+    const exigir2FA = config2FA ? config2FA.valor : false;
+    
+    console.log(`🔐 Configuração 2FA global: ${exigir2FA ? 'ATIVADO' : 'DESATIVADO'}`);
+    
+    // Buscar usuário por email ou CPF
+    let user;
+    let campoBusca = '';
+    
+    if (email) {
+      user = await User.findOne({ email: email.toLowerCase() })
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome +tokenVersion');
+      campoBusca = 'email';
+    } else if (cpf) {
+      const cpfNumeros = cpf.replace(/\D/g, '');
+      user = await User.findOne({ cpf: cpfNumeros })
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome +tokenVersion');
+      campoBusca = 'CPF';
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email ou CPF é obrigatório' 
+      });
     }
     
-    // ========== CRIAR USUÁRIO ==========
-    const user = new User({
-      nome,
-      email,
-      password,
-      cpf: cpfNumeros,
-      telefone: telefoneNumeros,
-      matricula: matricula || undefined,
-      ativo: true,
-      forcePasswordChange: false,
-      role,
-      eixo: role === 'professor' ? eixo : null,
-      curso: role === 'aluno' ? curso : undefined,
-      turma: role === 'aluno' ? turma : null,     
-      periodo: role === 'aluno' ? periodo : undefined,
-      departamento: role === 'professor' ? departamento : undefined,
-      titulacao: role === 'professor' ? titulacao : undefined,
+    if (!user) {
+      console.log(`❌ Usuário não encontrado com ${campoBusca} fornecido`);
+      return res.status(401).json({ 
+        success: false, 
+        error: `${campoBusca === 'email' ? 'Email' : 'CPF'} ou senha incorretos` 
+      });
+    }
+    
+    // Verificar se usuário está bloqueado
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      const minutosRestantes = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      return res.status(401).json({ 
+        success: false, 
+        error: `Usuário bloqueado. Tente novamente em ${minutosRestantes} minutos.` 
+      });
+    }
+    
+    // Verificar se usuário está ativo
+    if (!user.ativo) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Usuário inativo. Entre em contato com a administração.' 
+      });
+    }
+    
+    // Verificar senha
+    const isMatch = await user.comparePassword(password);
+    
+    if (!isMatch) {
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
       
-      // ========== CAMPOS DE ACESSIBILIDADE ==========
-      precisaAcessibilidade: role === 'aluno' ? (precisaAcessibilidade === true || precisaAcessibilidade === 'true' || precisaAcessibilidade === 'sim') : false,
-      condicaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? condicaoAcessibilidade : null,
-      outraCondicao: role === 'aluno' && precisaAcessibilidade && condicaoAcessibilidade === 'outra' ? outraCondicao : null,
-      dataSolicitacaoAcessibilidade: role === 'aluno' && precisaAcessibilidade ? new Date() : null,
-      
-      twoFactorEnabled: false,
-      twoFactorBackupCodes: [],
-      twoFactorBackupCodesShown: false,
-      twoFactorSecret: null,
-      twoFactorTempSecret: null,
-      telefoneVerificado: false,
-      lastOtpRequest: null,
-      otpRequestCount: 0
-    });
-    
-    await user.save();
-    
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🔥 GERAR QR CODE CORRIGIDO - APENAS O ID DO ALUNO
-    // ═══════════════════════════════════════════════════════════════════════
-    
-    try {
-        const QRCode = require('qrcode');
-        
-        // Detectar ambiente
-        const IS_LOCALHOST = process.env.NODE_ENV === 'development' || 
-                            process.env.HOSTNAME?.includes('localhost');
-        const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : 'https://sistema-avaliativo-iemacentro.onrender.com';
-        
-        let qrCodeDataUrl;
-        let usuarioUrl;
-        
-        // 🔥 GERAR QR CODE DIFERENTE PARA CADA ROLE
-        switch(user.role) {
-            case 'aluno':
-                // ✅ CORREÇÃO: Apenas o ID do aluno (formato SIMPLES)
-                // O corrigir-prova.html vai processar apenas o ID
-                usuarioUrl = `${BASE_URL}/corrigir-prova.html?aluno=${user._id}`;
-                console.log(`📱 QR Code de aluno gerado (correção direta): ${usuarioUrl}`);
-                break;
-                
-            case 'professor':
-                usuarioUrl = `${BASE_URL}/identificar-professor.html?id=${user._id}&tipo=professor`;
-                break;
-                
-            case 'admin':
-            case 'super_admin':
-                usuarioUrl = `${BASE_URL}/identificar-admin.html?id=${user._id}&tipo=admin`;
-                break;
-                
-            case 'setor_pedagogico':
-                usuarioUrl = `${BASE_URL}/identificar-setor.html?id=${user._id}&tipo=setor`;
-                break;
-                
-            default:
-                usuarioUrl = `${BASE_URL}/identificar-usuario.html?id=${user._id}&tipo=usuario`;
-        }
-        
-        // Gerar QR Code
-        qrCodeDataUrl = await QRCode.toDataURL(usuarioUrl, {
-            errorCorrectionLevel: 'H',
-            margin: 1,
-            width: 200,
-            color: {
-                dark: '#000000',
-                light: '#ffffff'
-            }
-        });
-        
-        // Salvar no usuário
-        user.qrCodeUsuario = qrCodeDataUrl;
-        user.qrCodeUsuarioGeradoEm = new Date();
-        user.qrCodeUsuarioTipo = user.role;
+      if (user.loginAttempts >= maxTentativas) {
+        user.lockUntil = Date.now() + (tempoBloqueio * 60 * 1000);
+        user.loginAttempts = 0;
         await user.save();
         
-        console.log(`✅ QR Code gerado para ${user.role}: ${user.nome} (${user.email})`);
-        console.log(`   URL: ${usuarioUrl}`);
-        
-    } catch (qrError) {
-        console.error('❌ Erro ao gerar QR Code:', qrError.message);
-        // Não falha o cadastro se o QR Code falhar
+        return res.status(401).json({ 
+          success: false, 
+          error: `Muitas tentativas. Usuário bloqueado por ${tempoBloqueio} minutos.` 
+        });
+      }
+      
+      await user.save();
+      
+      const tentativasRestantes = maxTentativas - user.loginAttempts;
+      return res.status(401).json({ 
+        success: false, 
+        error: `${campoBusca === 'email' ? 'Email' : 'CPF'} ou senha incorretos. ${tentativasRestantes} tentativa(s) restante(s).` 
+      });
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
+    // Login bem-sucedido
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+    user.lastLogin = new Date();
+    await user.save();
     
-    console.log('✅ Usuário criado com sucesso!');
-    console.log(`   📚 Curso: ${user.curso}`);
-    console.log(`   🏫 Turma: ${user.turma}`);     
-    console.log(`   🎯 Eixo: ${user.eixo}`);
-    console.log(`   ♿ Acessibilidade: ${user.precisaAcessibilidade ? 'Sim' : 'Não'}`);
+    // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
+    // Regras:
+    //   🅰️ super_admin → SEMPRE exige 2FA (fixo)
+    //   🅱️ admin, professor, etc. → só exige se `seguranca.doisFatores = true`
+    // ============================================================
+    let exige2FAAgora = false;
+
+    if (user.role === 'super_admin') {
+      // Super Admin sempre exige
+      exige2FAAgora = true;
+      console.log(`🔐 2FA OBRIGATÓRIO para super_admin ${user.email}`);
+    } else {
+      // Outros perfis seguem a config global
+      exige2FAAgora = exigir2FA;
+      console.log(`${exige2FAAgora ? '🔐 2FA exigido' : '✅ 2FA dispensado'} para ${user.role} ${user.email} (config global: ${exigir2FA})`);
+    }
+
+    if (exige2FAAgora) {
+      // Verificar códigos de backup
+      if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
+        console.log('🆕 Usuário sem códigos de backup - gerando 10 agora...');
+        const backupCodes = [];
+        for (let i = 0; i < 10; i++) {
+          backupCodes.push(generateBackupCode());
+        }
+        user.twoFactorBackupCodes = backupCodes;
+        user.twoFactorBackupCodesShown = false;
+        await user.save();
+        console.log('✅ 10 códigos de backup gerados');
+      }
+      
+      // Gerar token TEMPORÁRIO
+      const tempAuthToken = jwt.sign(
+        { 
+          id: user._id,
+          temp: true,
+          purpose: '2fa',
+          role: user.role,
+          nome: user.nome
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' }
+      );
+      
+      return res.json({
+        success: true,
+        requiresTwoFactor: true,
+        userId: user._id,
+        token: tempAuthToken,
+        message: '2FA necessário'
+      });
+    }
     
-    const token = jwt.sign(
+    // ===== USUÁRIOS SEM 2FA =====
+    console.log(`✅ Login bem-sucedido para usuário ${user.email} (${user.role})`);
+    
+    const authToken = jwt.sign(
       { 
         id: user._id, 
         role: user.role,
-        eixo: user.eixo,
         nome: user.nome,
-        cpf: user.cpf,
-        precisaAcessibilidade: user.precisaAcessibilidade === true,
-        condicaoAcessibilidade: user.condicaoAcessibilidade,
+        twoFactorEnabled: user.twoFactorEnabled,
         tokenVersion: user.tokenVersion || 0
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+      { expiresIn: jwtExpiracao }
     );
     
+    res.cookie('auth_token', authToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: parseJwtExpiration(jwtExpiracao) * 1000
+    });
+    
+    // Definir redirecionamento
     let redirectTo = '';
-    if (user.role === 'super_admin') {
-        redirectTo = '/admin.html';
+    if (user.forcePasswordChange) {
+      redirectTo = '/trocar-senha.html';
+    } else if (user.role === 'super_admin') {
+      redirectTo = '/admin.html';
     } else if (user.role === 'admin') {
-        redirectTo = '/admin-simples.html';
+      redirectTo = '/admin-simples.html';
     } else if (user.role === 'professor') {
-        redirectTo = '/index.html';
+      redirectTo = '/index.html';
+    } else if (user.role === 'setor_pedagogico') {
+      redirectTo = '/setor-pedagogico.html';
+    } else if (user.role === 'coordenacao_patio') {
+      redirectTo = '/coordenacao-patio.html';
+    } else if (user.role === 'cozinha') {
+      redirectTo = '/cozinha-dashboard.html';
+    } else if (user.role === 'gestao_geral') {
+      redirectTo = '/gestao-geral.html';
+    } else if (user.role === 'enfermaria') {
+      redirectTo = '/enfermaria.html';
+    } else if (user.role === 'supervisao') {
+      redirectTo = '/supervisao.html';
+    } else if (user.role === 'biblioteca') {
+      redirectTo = '/biblioteca.html';
+    } else if (user.role === 'psicologia') {
+      redirectTo = '/psicologia.html';
+    } else if (user.role === 'assistente-social') {
+      redirectTo = '/assistente-social.html';
+    } else if (user.role === 'protagonismo') {
+      redirectTo = '/protagonismo.html';
     } else if (user.role === 'aluno') {
-        redirectTo = '/capturar-face.html';
+      redirectTo = '/aluno.html';
     } else {
-        redirectTo = '/aluno.html';
+      redirectTo = '/login.html';
     }
     
-    res.status(201).json({
+    res.json({
       success: true,
-      token,
+      token: authToken,
+      requiresTwoFactor: false,
       user: {
         id: user._id,
         nome: user.nome,
         email: user.email,
-        cpf: user.cpf,
         role: user.role,
-        eixo: user.eixo,
-        matricula: user.matricula,
-        curso: user.curso,
-        turma: user.turma,           
-        periodo: user.periodo,
-        departamento: user.departamento,
-        titulacao: user.titulacao,
-        precisaAcessibilidade: user.precisaAcessibilidade,
-        condicaoAcessibilidade: user.condicaoAcessibilidade,
-        outraCondicao: user.outraCondicao,
-        qrCodeUsuario: user.qrCodeUsuario  // ← Retorna o QR Code na resposta
+        twoFactorEnabled: user.twoFactorEnabled,
+        telefone: user.telefone
       },
       redirectTo: redirectTo
     });
     
   } catch (error) {
-    console.error('❌ Erro no registro:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao registrar usuário: ' + error.message
+    console.error('❌ Erro no login:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro no servidor: ' + error.message 
     });
   }
 });

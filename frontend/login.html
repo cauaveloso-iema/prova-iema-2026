@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- 🔥 CSP - PROTEÇÃO CONTRA XSS -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://vlibras.gov.br blob:; script-src-elem 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://vlibras.gov.br blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://cdn-icons-png.flaticon.com https://cdn.jsdelivr.net https://vlibras.gov.br; connect-src 'self' https://vlibras.gov.br https://cdn.jsdelivr.net https://api.dicionario-aberto.net https://servicos2.dicionario-aberto.net ws: wss:; media-src 'self' blob: data:; frame-src 'self' https://vlibras.gov.br; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;">
+    <!-- 🔥 CSP - PROTEÇÃO CONTRA XSS (com Google e Microsoft liberados) -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://vlibras.gov.br https://accounts.google.com https://alcdn.msauth.net blob:; script-src-elem 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://vlibras.gov.br https://accounts.google.com https://alcdn.msauth.net blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net https://accounts.google.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://cdn-icons-png.flaticon.com https://cdn.jsdelivr.net https://vlibras.gov.br https://lh3.googleusercontent.com; connect-src 'self' https://vlibras.gov.br https://cdn.jsdelivr.net https://api.dicionario-aberto.net https://servicos2.dicionario-aberto.net https://accounts.google.com https://oauth2.googleapis.com https://login.microsoftonline.com https://graph.microsoft.com ws: wss:; media-src 'self' blob: data:; frame-src 'self' https://vlibras.gov.br https://accounts.google.com https://login.microsoftonline.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;">
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
@@ -38,7 +38,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Microsoft MSAL -->
+    <script src="https://alcdn.msauth.net/browser/2.38.1/js/msal-browser.min.js"></script>
 
     <!-- CSS EXTERNO -->
     <link rel="stylesheet" href="css/login.css">
@@ -133,11 +139,37 @@
             </form>
 
             <!-- DIVISOR -->
-            <div class="divider">ou</div>
+            <div class="divider">
+                <span>ou</span>
+            </div>
+
+            <!-- 🔥 LOGIN SOCIAL -->
+            <div class="social-login">
+                <button type="button" class="btn-social btn-google" id="btnGoogleLogin">
+                    <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/>
+                        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/>
+                        <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+                        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.6l6.2 5.2C41.5 35.1 44 30 44 24c0-1.3-.1-2.3-.4-3.5z"/>
+                    </svg>
+                    <span>Continuar com Google</span>
+                </button>
+
+                <button type="button" class="btn-social btn-microsoft" id="btnMicrosoftLogin">
+                    <svg width="18" height="18" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path fill="#f35325" d="M1 1h10v10H1z"/>
+                        <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                        <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                        <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                    </svg>
+                    <span>Continuar com Microsoft</span>
+                </button>
+            </div>
 
             <!-- WHATSAPP -->
-            <a href="https://wa.me/98983086504" target="_blank" class="whatsapp-link">
-                <i class="fab fa-whatsapp"></i> Entrar em contato via WhatsApp
+            <a href="https://wa.me/98983086504" target="_blank" rel="noopener noreferrer" class="whatsapp-link">
+                <i class="fab fa-whatsapp"></i>
+                <span>Falar com o suporte</span>
             </a>
 
             <!-- CADASTRO -->
@@ -148,680 +180,14 @@
 
         <!-- RODAPÉ -->
         <div class="footer">
-            &copy; 2026 EducaPleno
+            &copy; 2026 EducaPleno &mdash; Todos os direitos reservados
         </div>
     </div>
 
     <!-- ================================================================
-    JAVASCRIPT
+    JAVASCRIPT EXTERNO
     ================================================================ -->
-    <script>
-        // ============================================================
-        // VARIÁVEIS GLOBAIS
-        // ============================================================
-        const IS_LOCALHOST = window.location.hostname === 'localhost' || 
-                            window.location.hostname === '127.0.0.1';
-        const IS_RENDER = window.location.hostname.includes('render.com') || 
-                        window.location.hostname.includes('sistema-avaliativo');
-
-        let API_BASE_URL;
-
-        if (IS_LOCALHOST) {
-            API_BASE_URL = 'http://localhost:3000/api';
-            console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
-        } else if (IS_RENDER) {
-            API_BASE_URL = window.location.origin + '/api';
-            console.log('🚀 Modo: PRODUÇÃO (Render)');
-        } else {
-            API_BASE_URL = '/api';
-            console.log('⚙️ Modo: FALLBACK');
-        }
-        console.log('🌐 API URL:', API_BASE_URL);
-
-        // ============================================================
-        // 🔥 MOSTRAR/OCULTAR SENHA (DISCRETO - SÓ APARECE AO DIGITAR)
-        // ============================================================
-        (function() {
-            const wrapper = document.getElementById('passwordWrapper');
-            const toggleBtn = document.getElementById('togglePassword');
-            const passwordInput = document.getElementById('loginPassword');
-            const toggleIcon = document.getElementById('togglePasswordIcon');
-
-            if (!wrapper || !toggleBtn || !passwordInput || !toggleIcon) {
-                console.warn('⚠️ Elementos do toggle de senha não encontrados');
-                return;
-            }
-
-            /**
-             * Mostra o botão se o campo tiver texto, esconde se estiver vazio
-             */
-            function atualizarVisibilidadeBotao() {
-                if (passwordInput.value && passwordInput.value.length > 0) {
-                    wrapper.classList.add('tem-texto');
-                } else {
-                    wrapper.classList.remove('tem-texto');
-                    // Se ficar vazio, força a senha de volta para oculta
-                    if (passwordInput.type === 'text') {
-                        passwordInput.type = 'password';
-                        toggleIcon.classList.remove('fa-eye-slash');
-                        toggleIcon.classList.add('fa-eye');
-                        toggleBtn.classList.remove('ativo');
-                        toggleBtn.setAttribute('aria-label', 'Mostrar senha');
-                        toggleBtn.setAttribute('title', 'Mostrar senha');
-                    }
-                }
-            }
-
-            // Evento: usuário digitou algo
-            passwordInput.addEventListener('input', atualizarVisibilidadeBotao);
-
-            // Evento: campo perdeu foco (verifica novamente)
-            passwordInput.addEventListener('change', atualizarVisibilidadeBotao);
-
-            // Evento: clique no botão olhinho
-            toggleBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const estaOculta = passwordInput.type === 'password';
-
-                if (estaOculta) {
-                    passwordInput.type = 'text';
-                    toggleIcon.classList.remove('fa-eye');
-                    toggleIcon.classList.add('fa-eye-slash');
-                    toggleBtn.classList.add('ativo');
-                    toggleBtn.setAttribute('aria-label', 'Ocultar senha');
-                    toggleBtn.setAttribute('title', 'Ocultar senha');
-                } else {
-                    passwordInput.type = 'password';
-                    toggleIcon.classList.remove('fa-eye-slash');
-                    toggleIcon.classList.add('fa-eye');
-                    toggleBtn.classList.remove('ativo');
-                    toggleBtn.setAttribute('aria-label', 'Mostrar senha');
-                    toggleBtn.setAttribute('title', 'Mostrar senha');
-                }
-
-                passwordInput.focus();
-            });
-
-            // 🔥 Disponibiliza função para ser usada por carregarLembrar()
-            window.atualizarVisibilidadeBotaoSenha = atualizarVisibilidadeBotao;
-
-            // Verifica estado inicial (ex.: autofill do navegador)
-            atualizarVisibilidadeBotao();
-        })();
-
-        // ============================================================
-        // FUNÇÕES DE FORMATAÇÃO
-        // ============================================================
-        function detectarTipoIdentificador(identificador) {
-            identificador = identificador.trim();
-            if (identificador.includes('@')) return 'email';
-            const apenasNumeros = identificador.replace(/\D/g, '');
-            if (apenasNumeros.length === 11) return 'cpf';
-            if (identificador.match(/[a-zA-Z]/)) return 'email';
-            return 'cpf';
-        }
-
-        // ============================================================
-        // ALERTA
-        // ============================================================
-        function mostrarAlerta(mensagem, tipo = 'error') {
-            const alerta = document.getElementById('alert');
-            alerta.textContent = mensagem;
-            alerta.className = `alert alert-${tipo}`;
-            alerta.style.display = 'block';
-            alerta.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            clearTimeout(window.alertTimeout);
-            window.alertTimeout = setTimeout(() => {
-                alerta.style.display = 'none';
-            }, 4000);
-        }
-
-        // ============================================================
-        // 🔥 FUNÇÕES "LEMBRAR DE MIM" - IDENTIFICADOR + SENHA
-        // ============================================================
-        function salvarLembrar(identificador, senha) {
-            try {
-                localStorage.setItem('remembered_identifier', identificador);
-                const senhaCodificada = btoa(senha);
-                localStorage.setItem('remembered_password', senhaCodificada);
-                localStorage.setItem('remember_me', 'true');
-                localStorage.setItem('remember_me_timestamp', Date.now().toString());
-                console.log('✅ "Lembrar de mim" salvo (identificador e senha)');
-                return true;
-            } catch (e) {
-                console.error('❌ Erro ao salvar "Lembrar de mim":', e);
-                return false;
-            }
-        }
-
-        function carregarLembrar() {
-            try {
-                const rememberMe = localStorage.getItem('remember_me');
-                const identifier = localStorage.getItem('remembered_identifier');
-                const senhaCodificada = localStorage.getItem('remembered_password');
-                const timestamp = localStorage.getItem('remember_me_timestamp');
-                
-                if (rememberMe === 'true' && identifier) {
-                    if (timestamp) {
-                        const diasPassados = (Date.now() - parseInt(timestamp)) / (1000 * 60 * 60 * 24);
-                        if (diasPassados > 30) {
-                            console.log('⚠️ "Lembrar de mim" expirado');
-                            limparLembrar();
-                            return false;
-                        }
-                    }
-                    
-                    document.getElementById('loginIdentifier').value = identifier;
-                    
-                    if (senhaCodificada) {
-                        try {
-                            const senha = atob(senhaCodificada);
-                            document.getElementById('loginPassword').value = senha;
-                        } catch (e) {
-                            console.error('❌ Erro ao decodificar senha:', e);
-                            document.getElementById('loginPassword').value = senhaCodificada;
-                        }
-                    }
-                    
-                    document.getElementById('rememberMe').checked = true;
-                    console.log('✅ "Lembrar de mim" carregado (identificador e senha)');
-
-                    // 🔥 MOSTRA O BOTÃO OLHINHO, POIS O CAMPO TEM TEXTO
-                    if (typeof window.atualizarVisibilidadeBotaoSenha === 'function') {
-                        window.atualizarVisibilidadeBotaoSenha();
-                    }
-
-                    return true;
-                }
-                return false;
-            } catch (e) {
-                console.error('❌ Erro ao carregar "Lembrar de mim":', e);
-                return false;
-            }
-        }
-
-        function limparLembrar() {
-            try {
-                localStorage.removeItem('remembered_identifier');
-                localStorage.removeItem('remembered_password');
-                localStorage.removeItem('remember_me');
-                localStorage.removeItem('remember_me_timestamp');
-                // 🔥 Limpa também chaves antigas (higiene)
-                localStorage.removeItem('sdp_remember_identifier');
-                localStorage.removeItem('sdp_remember_flag');
-                localStorage.removeItem('sdp_remember_timestamp');
-                console.log('✅ "Lembrar de mim" removido');
-
-                // 🔥 ESCONDE O BOTÃO OLHINHO SE O CAMPO FICAR VAZIO
-                if (typeof window.atualizarVisibilidadeBotaoSenha === 'function') {
-                    window.atualizarVisibilidadeBotaoSenha();
-                }
-
-                return true;
-            } catch (e) {
-                console.error('❌ Erro ao remover "Lembrar de mim":', e);
-                return false;
-            }
-        }
-
-        // ============================================================
-        // 🔥 CONTROLE DE REDIRECIONAMENTO - EVITA LOOP
-        // ============================================================
-        const REDIRECT_KEY = 'login_redirect_count';
-        const REDIRECT_MAX = 3;
-        const REDIRECT_WINDOW = 5000;
-
-        function incrementarRedirectCount() {
-            const now = Date.now();
-            const lastRedirect = parseInt(sessionStorage.getItem('login_redirect_last') || '0');
-            
-            if (now - lastRedirect > REDIRECT_WINDOW) {
-                sessionStorage.setItem(REDIRECT_KEY, '0');
-            }
-            
-            const count = parseInt(sessionStorage.getItem(REDIRECT_KEY) || '0') + 1;
-            sessionStorage.setItem(REDIRECT_KEY, count.toString());
-            sessionStorage.setItem('login_redirect_last', now.toString());
-            return count;
-        }
-
-        function resetarRedirectCount() {
-            sessionStorage.removeItem(REDIRECT_KEY);
-            sessionStorage.removeItem('login_redirect_last');
-        }
-
-        function isEmLoop() {
-            const count = parseInt(sessionStorage.getItem(REDIRECT_KEY) || '0');
-            const lastRedirect = parseInt(sessionStorage.getItem('login_redirect_last') || '0');
-            const now = Date.now();
-            
-            if (now - lastRedirect > REDIRECT_WINDOW) {
-                resetarRedirectCount();
-                return false;
-            }
-            return count >= REDIRECT_MAX;
-        }
-
-        // ============================================================
-        // 🔥 FUNÇÃO DE LOGIN
-        // ============================================================
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const identificador = document.getElementById('loginIdentifier').value.trim();
-            const senha = document.getElementById('loginPassword').value;
-            const rememberMe = document.getElementById('rememberMe').checked;
-
-            if (!identificador || !senha) {
-                mostrarAlerta('Preencha todos os campos', 'error');
-                return;
-            }
-
-            resetarRedirectCount();
-
-            const btn = document.getElementById('btnLogin');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
-            btn.disabled = true;
-
-            try {
-                const tipo = detectarTipoIdentificador(identificador);
-                let dadosLogin = { 
-                    password: senha,
-                    rememberMe: rememberMe
-                };
-
-                if (tipo === 'email') {
-                    dadosLogin.email = identificador.toLowerCase();
-                } else {
-                    const cpfNumeros = identificador.replace(/\D/g, '');
-                    dadosLogin.cpf = cpfNumeros;
-                }
-
-                console.log('📤 Enviando dados de login:', { ...dadosLogin, password: '***' });
-
-                const resposta = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dadosLogin)
-                });
-
-                const dados = await resposta.json();
-                console.log('📦 Resposta do servidor:', dados);
-
-                // ---------- 2FA ----------
-                if (dados.requiresTwoFactor) {
-                    console.log('🔐 2FA necessário - redirecionando para validação');
-
-                    // 🔥 Salva "Lembrar de mim" somente após confirmar que o login passou
-                    if (rememberMe) {
-                        salvarLembrar(identificador, senha);
-                    } else {
-                        limparLembrar();
-                    }
-
-                    sessionStorage.setItem('2fa_token', dados.token);
-                    sessionStorage.setItem('2fa_userId', dados.userId);
-                    sessionStorage.setItem('2fa_message', dados.message || 'Código 2FA necessário');
-
-                    mostrarAlerta('🔐 ' + (dados.message || 'Código 2FA necessário'), 'info');
-
-                    setTimeout(() => {
-                        window.location.href = '/validar-2fa.html';
-                    }, 1500);
-                    return;
-                }
-
-                // ---------- LOGIN COM SUCESSO ----------
-                if (dados.success) {
-                    // 🔥 Salva "Lembrar de mim" APÓS confirmar sucesso
-                    if (rememberMe) {
-                        salvarLembrar(identificador, senha);
-                    } else {
-                        limparLembrar();
-                    }
-
-                    mostrarAlerta('✅ Login realizado! Redirecionando...', 'success');
-
-                    localStorage.setItem('auth_token', dados.token);
-                    localStorage.setItem('user_data', JSON.stringify(dados.user));
-
-                    if (rememberMe) {
-                        sessionStorage.setItem('auth_token', dados.token);
-                        sessionStorage.setItem('user_data', JSON.stringify(dados.user));
-                    }
-
-                    let destino = dados.redirectTo;
-
-                    if (!destino) {
-                        const redirectMap = {
-                            'super_admin': '/admin.html',
-                            'admin': '/admin-simples.html',
-                            'professor': '/index.html',
-                            'setor_pedagogico': '/setor-pedagogico.html',
-                            'coordenacao_patio': '/coordenacao-patio.html',
-                            'cozinha': '/cozinha-dashboard.html',
-                            'gestao_geral': '/gestao-geral.html',
-                            'enfermaria': '/enfermaria.html',
-                            'supervisao': '/supervisao.html',
-                            'psicologia': '/psicologia.html',
-                            'biblioteca': '/biblioteca.html',
-                            'assistente-social': '/assistente-social.html',
-                            'protagonismo': '/protagonismo.html',
-                            'aluno': '/aluno.html'
-                        };
-                        destino = redirectMap[dados.user.role] || '/login.html';
-                        console.log('📌 Fallback definido:', destino);
-                    }
-
-                    console.log('🔄 Redirecionando para:', destino);
-                    console.log('👤 Perfil:', dados.user.role);
-
-                    resetarRedirectCount();
-
-                    setTimeout(() => {
-                        window.location.href = destino;
-                    }, 1000);
-
-                } else {
-                    // ---------- LOGIN FALHOU ----------
-                    mostrarAlerta('❌ Erro: ' + (dados.error || 'Erro no login'), 'error');
-                    if (dados.error && dados.error.toLowerCase().includes('credenciais')) {
-                        limparLembrar();
-                        document.getElementById('rememberMe').checked = false;
-                    }
-                }
-
-            } catch (erro) {
-                console.error('Erro no login:', erro);
-                mostrarAlerta('❌ Erro de conexão com o servidor', 'error');
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        });
-
-        // ============================================================
-        // 🔥 VERIFICAR LOGIN AUTOMÁTICO (VERSÃO CORRIGIDA)
-        // ============================================================
-        function verificarLoginAutomatico() {
-            console.log('🔍 Verificando login automático...');
-            
-            if (isEmLoop()) {
-                console.warn('⚠️ LOOP DETECTADO! Parando redirecionamento automático.');
-                resetarRedirectCount();
-                mostrarAlerta('⚠️ Detectamos um loop de redirecionamento. Por favor, faça login novamente.', 'error');
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('user_data');
-                sessionStorage.removeItem('auth_token');
-                sessionStorage.removeItem('user_data');
-                return;
-            }
-
-            const token = localStorage.getItem('auth_token');
-            const userDataRaw = localStorage.getItem('user_data');
-
-            if (!token || !userDataRaw) {
-                console.log('ℹ️ Nenhum token encontrado, exibindo login');
-                carregarLembrar();
-                return;
-            }
-
-            try {
-                const userData = JSON.parse(userDataRaw);
-                console.log('👤 Token encontrado para:', userData.nome, '(' + userData.role + ')');
-
-                const count = incrementarRedirectCount();
-                console.log(`🔄 Tentativa de redirecionamento #${count}`);
-
-                fetch('/api/auth/me', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
-                .then(response => {
-                    if (response.status === 200) {
-                        console.log('✅ Token válido!');
-                        const destino = obterDestinoPorPerfil(userData.role);
-                        console.log(`🔄 Redirecionando para: ${destino}`);
-                        resetarRedirectCount();
-                        window.location.href = destino;
-                    } else {
-                        // 🔥 CORREÇÃO: Token inválido/expirado - LIMPAR TUDO E QUEBRAR O LOOP
-                        console.log('❌ Token inválido (status ' + response.status + '), limpando dados...');
-                        
-                        localStorage.removeItem('auth_token');
-                        localStorage.removeItem('user_data');
-                        sessionStorage.removeItem('auth_token');
-                        sessionStorage.removeItem('user_data');
-                        
-                        resetarRedirectCount();
-                        carregarLembrar();
-                        
-                        // Opcional: mostrar mensagem
-                        // mostrarAlerta('Sessão expirada. Faça login novamente.', 'info');
-                    }
-                })
-                .catch((error) => {
-                    // 🔥 CORREÇÃO CRÍTICA: Erro de rede também limpa os tokens
-                    console.error('❌ Erro ao verificar token:', error);
-                    
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('user_data');
-                    sessionStorage.removeItem('auth_token');
-                    sessionStorage.removeItem('user_data');
-                    
-                    resetarRedirectCount();
-                    carregarLembrar();
-                    
-                    // Opcional: mostrar mensagem
-                    // mostrarAlerta('Não foi possível verificar sua sessão. Faça login.', 'error');
-                });
-
-            } catch (e) {
-                console.error('❌ Erro ao processar dados:', e);
-                localStorage.removeItem('user_data');
-                localStorage.removeItem('auth_token');
-                sessionStorage.removeItem('auth_token');
-                sessionStorage.removeItem('user_data');
-                resetarRedirectCount();
-                carregarLembrar();
-            }
-        }
-
-        function obterDestinoPorPerfil(role) {
-            const redirectMap = {
-                'super_admin': '/admin.html',
-                'admin': '/admin-simples.html',
-                'professor': '/index.html',
-                'setor_pedagogico': '/setor-pedagogico.html',
-                'coordenacao_patio': '/coordenacao-patio.html',
-                'cozinha': '/cozinha-dashboard.html',
-                'gestao_geral': '/gestao-geral.html',
-                'enfermaria': '/enfermaria.html',
-                'supervisao': '/supervisao.html',
-                'biblioteca': '/biblioteca.html',
-                'psicologia': '/psicologia.html',
-                'assistente-social': '/assistente-social.html',
-                'protagonismo': '/protagonismo.html',
-                'aluno': '/aluno.html'
-            };
-            return redirectMap[role] || '/login.html';
-        }
-
-        // ============================================================
-        // PULL-TO-REFRESH
-        // ============================================================
-        let touchStartY = 0;
-        let touchCurrentY = 0;
-        let isPulling = false;
-        const PULL_THRESHOLD = 200;
-        const TOP_TOLERANCE = 100;
-
-        document.addEventListener('touchstart', function(e) {
-            if (window.scrollY <= TOP_TOLERANCE) {
-                touchStartY = e.touches[0].clientY;
-                isPulling = true;
-            }
-        }, { passive: true });
-
-        document.addEventListener('touchmove', function(e) {
-            if (!isPulling) return;
-            touchCurrentY = e.touches[0].clientY;
-            const pullDistance = touchCurrentY - touchStartY;
-            if (pullDistance > 50) {
-                mostrarIndicadorPull(pullDistance);
-            }
-            if (pullDistance > PULL_THRESHOLD) {
-                e.preventDefault();
-                atualizarPagina();
-            }
-        }, { passive: false });
-
-        document.addEventListener('touchend', function(e) {
-            if (!isPulling) return;
-            const pullDistance = touchCurrentY - touchStartY;
-            if (pullDistance < PULL_THRESHOLD) {
-                esconderIndicadorPull();
-            }
-            isPulling = false;
-            touchStartY = 0;
-            touchCurrentY = 0;
-        }, { passive: true });
-
-        function atualizarPagina() {
-            mostrarMensagem('Atualizando página...');
-            document.body.style.opacity = '0.7';
-            document.body.style.transition = 'opacity 0.3s';
-            setTimeout(() => {
-                location.reload();
-            }, 500);
-        }
-
-        function mostrarIndicadorPull(distancia) {
-            let indicador = document.getElementById('pull-indicator');
-            if (!indicador) {
-                indicador = document.createElement('div');
-                indicador.id = 'pull-indicator';
-                indicador.style.cssText = `
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    background: #4f46e5;
-                    color: white;
-                    text-align: center;
-                    padding: 10px;
-                    font-size: 14px;
-                    z-index: 9999;
-                    transform: translateY(-100%);
-                    transition: transform 0.2s;
-                `;
-                indicador.innerHTML = '↓ Solte para atualizar';
-                document.body.appendChild(indicador);
-            }
-            if (distancia > 50) {
-                indicador.style.transform = 'translateY(0)';
-            }
-        }
-
-        function esconderIndicadorPull() {
-            const indicador = document.getElementById('pull-indicator');
-            if (indicador) {
-                indicador.style.transform = 'translateY(-100%)';
-            }
-        }
-
-        function mostrarMensagem(texto) {
-            const msg = document.createElement('div');
-            msg.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: #10b981;
-                color: white;
-                padding: 15px 30px;
-                border-radius: 10px;
-                font-weight: bold;
-                z-index: 10000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            `;
-            msg.textContent = texto;
-            document.body.appendChild(msg);
-            setTimeout(() => msg.remove(), 1500);
-        }
-
-        // ============================================================
-        // ESCALONAMENTO MOBILE
-        // ============================================================
-        (function() {
-            if (window.innerWidth > 768) return;
-            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-
-            function calcularEscalaMobile() {
-                const width = window.innerWidth;
-                if (width <= 320) return 0.55;
-                if (width <= 360) return 0.6;
-                if (width <= 400) return 0.65;
-                if (width <= 500) return 0.75;
-                if (width <= 600) return 0.85;
-                if (width <= 700) return 0.95;
-                return 1;
-            }
-
-            function aplicarEscalaMobile() {
-                if (window.innerWidth > 768) return;
-                const escala = calcularEscalaMobile();
-                document.documentElement.style.setProperty('--scale-ratio', escala);
-                document.documentElement.style.setProperty('--current-width', window.innerWidth);
-                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-            }
-
-            aplicarEscalaMobile();
-
-            let timeout;
-            window.addEventListener('resize', function() {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    } else {
-                        document.documentElement.style.setProperty('--scale-ratio', '1');
-                    }
-                }, 100);
-            });
-
-            window.addEventListener('orientationchange', function() {
-                setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    }
-                }, 200);
-            });
-        })();
-
-        // ============================================================
-        // INICIALIZAÇÃO
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 EducaPleno - Login carregado!');
-            
-            // 🔥 CARREGAR "LEMBRAR DE MIM" (IDENTIFICADOR E SENHA)
-            carregarLembrar();
-
-            // 🔥 GARANTIR QUE O BOTÃO OLHINHO SEJA AVALIADO
-            setTimeout(() => {
-                if (typeof window.atualizarVisibilidadeBotaoSenha === 'function') {
-                    window.atualizarVisibilidadeBotaoSenha();
-                }
-            }, 100);
-
-            setTimeout(function() {
-                verificarLoginAutomatico();
-            }, 300);
-        });
-    </script>
+    <script src="js/login.js"></script>
 
     <!-- VLibras Oficial -->
     <script src="js/vlibras-oficial.js"></script>

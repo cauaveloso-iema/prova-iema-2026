@@ -5,6 +5,7 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
@@ -41,7 +42,39 @@
     <link rel="stylesheet" href="css/cadastro.css">
     <script src="js/dialog-helper.js"></script>
 
-
+    <style>
+        /* ============================================================
+           BANNER DE CADASTRO SOCIAL
+           ============================================================ */
+        .social-signup-banner {
+            display: none;
+            background: linear-gradient(135deg, #dbeafe, #eff6ff);
+            border-left: 4px solid #2563eb;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            font-size: 13px;
+            color: #1e40af;
+            align-items: center;
+            gap: 10px;
+        }
+        .social-signup-banner.visible {
+            display: flex;
+        }
+        .social-signup-banner i {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .form-control[readonly] {
+            background: #f1f5f9;
+            color: #64748b;
+            cursor: not-allowed;
+        }
+        .form-control[readonly]:focus {
+            border-color: var(--gray-200);
+            box-shadow: none;
+        }
+    </style>
 </head>
 <body>
 
@@ -51,15 +84,26 @@
             <div class="icon-wrapper">
                 <i class="fas fa-graduation-cap"></i>
             </div>
-            <h1>Cadastro em <span>4 etapas</span></h1>
+            <h1>Cadastro em <span id="headerSteps">4 etapas</span></h1>
             <p>Experiência simples, rápida e personalizada para Alunos e Professores.</p>
+        </div>
+
+        <!-- 🔥 BANNER DE CADASTRO SOCIAL -->
+        <div id="socialBanner" class="social-signup-banner">
+            <i class="fas fa-check-circle"></i>
+            <div>
+                <strong id="socialBannerTitle">Conta conectada!</strong>
+                <div id="socialBannerText" style="font-size: 12px; margin-top: 2px;">
+                    Complete as informações abaixo para finalizar seu cadastro.
+                </div>
+            </div>
         </div>
 
         <!-- ALERTA -->
         <div id="alert" class="alert"></div>
 
         <!-- STEP INDICATOR -->
-        <div class="step-indicator">
+        <div class="step-indicator" id="stepIndicator">
             <div class="step-dot active" data-step="1"></div>
             <div class="step-line" data-step="1"></div>
             <div class="step-dot" data-step="2"></div>
@@ -70,7 +114,7 @@
         </div>
 
         <div class="step-label">
-            Etapa <span id="currentStepLabel">1</span> de 4
+            Etapa <span id="currentStepLabel">1</span> de <span id="totalStepsLabel">4</span>
         </div>
 
         <!-- ============================================================
@@ -138,6 +182,10 @@
                     placeholder="seu.nome@iemasaoluiscentro.net"
                     pattern=".+@iemasaoluiscentro\.net$"
                     title="Somente emails institucionais (@iemasaoluiscentro.net)">
+                <small id="emailSocialHint" style="display: none; color: #2563eb;">
+                    <i class="fas fa-info-circle"></i> 
+                    Email vinculado à sua conta social. Se necessário, entre em contato com a secretaria para alterá-lo.
+                </small>
             </div>
 
             <div class="step-buttons">
@@ -290,7 +338,7 @@
                 <button class="btn-prev" onclick="prevStep()">
                     <i class="fas fa-arrow-left"></i> Voltar
                 </button>
-                <button class="btn-next" onclick="nextStep()">
+                <button class="btn-next" id="btnNextStep3" onclick="nextStep()">
                     Continuar <i class="fas fa-arrow-right"></i>
                 </button>
             </div>
@@ -346,19 +394,28 @@
     </div>
 
     <!-- ================================================================
-    JAVASCRIPT - TODAS AS FUNÇÕES DO SEU CÓDIGO ORIGINAL
+    JAVASCRIPT
     ================================================================ -->
     <script>
         // ============================================================
-        // VARIÁVEIS GLOBAIS (COPIADAS DO SEU CÓDIGO ORIGINAL)
+        // VARIÁVEIS GLOBAIS
         // ============================================================
         let cursosDoBanco = [];
         let currentStep = 1;
-        const totalSteps = 4;
+        let totalSteps = 4;
         let selectedRole = 'aluno';
 
+        // 🔥 Dados do cadastro social
+        let socialSignup = {
+            isSocial: false,
+            email: null,
+            nome: null,
+            provider: null,
+            picture: null
+        };
+
         // ============================================================
-        // DETECTAR AMBIENTE (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // DETECTAR AMBIENTE
         // ============================================================
         const IS_LOCALHOST = window.location.hostname === 'localhost' || 
                             window.location.hostname === '127.0.0.1';
@@ -380,7 +437,120 @@
         console.log('🌐 API URL:', API_BASE_URL);
 
         // ============================================================
-        // FUNÇÕES DE FORMATAÇÃO (COPIADAS DO SEU CÓDIGO ORIGINAL)
+        // 🔥 DETECTAR CADASTRO SOCIAL (URL PARAMS)
+        // ============================================================
+        function detectarCadastroSocial() {
+            const params = new URLSearchParams(window.location.search);
+            const isSocial = params.get('social') === 'true';
+            const email = params.get('email');
+            const nome = params.get('nome');
+            const provider = params.get('provider');
+
+            if (!isSocial) {
+                console.log('ℹ️ Cadastro tradicional (sem login social)');
+                return false;
+            }
+
+            socialSignup.isSocial = true;
+            socialSignup.email = email || sessionStorage.getItem('social_signup_email');
+            socialSignup.nome = nome || sessionStorage.getItem('social_signup_nome') || '';
+            socialSignup.provider = provider || sessionStorage.getItem('social_signup_provider') || 'google';
+            socialSignup.picture = sessionStorage.getItem('social_signup_picture') || null;
+
+            if (!socialSignup.email) {
+                console.warn('⚠️ Cadastro social detectado mas sem email');
+                socialSignup.isSocial = false;
+                return false;
+            }
+
+            console.log('✅ Cadastro social detectado:', {
+                email: socialSignup.email,
+                nome: socialSignup.nome,
+                provider: socialSignup.provider
+            });
+
+            return true;
+        }
+
+        // ============================================================
+        // 🔥 APLICAR MODO SOCIAL
+        // ============================================================
+        function aplicarModoSocial() {
+            if (!socialSignup.isSocial) return;
+
+            // 1. Banner no topo
+            const banner = document.getElementById('socialBanner');
+            const bannerTitle = document.getElementById('socialBannerTitle');
+            const bannerText = document.getElementById('socialBannerText');
+
+            if (banner && bannerTitle && bannerText) {
+                const providerNome = socialSignup.provider === 'google' ? 'Google' : 'Microsoft';
+                bannerTitle.textContent = `Conta ${providerNome} conectada!`;
+                bannerText.textContent = `Complete as informações abaixo para finalizar seu cadastro.`;
+
+                const icone = banner.querySelector('i');
+                if (icone) {
+                    if (socialSignup.provider === 'google') {
+                        icone.className = 'fab fa-google';
+                    } else {
+                        icone.className = 'fab fa-microsoft';
+                    }
+                }
+
+                banner.classList.add('visible');
+            }
+
+            // 2. Reduzir para 3 etapas (sem senha)
+            totalSteps = 3;
+            const totalStepsLabel = document.getElementById('totalStepsLabel');
+            const headerSteps = document.getElementById('headerSteps');
+            if (totalStepsLabel) totalStepsLabel.textContent = '3';
+            if (headerSteps) headerSteps.textContent = '3 etapas';
+
+            // 3. Remover o step 4 (senha)
+            const step4 = document.querySelector('.step-content[data-step="4"]');
+            if (step4) step4.remove();
+
+            // 4. Remover o 4º dot e a última linha do indicador
+            const dots = document.querySelectorAll('.step-dot');
+            const lines = document.querySelectorAll('.step-line');
+            if (dots[3]) dots[3].remove();
+            if (lines[2]) lines[2].remove();
+
+            // 5. Pré-preencher email e nome (bloqueados)
+            setTimeout(() => {
+                const inputEmail = document.getElementById('registerEmail');
+                const inputNome = document.getElementById('registerNome');
+                const emailHint = document.getElementById('emailSocialHint');
+
+                if (inputEmail && socialSignup.email) {
+                    inputEmail.value = socialSignup.email;
+                    inputEmail.setAttribute('readonly', 'true');
+                    inputEmail.style.background = '#f1f5f9';
+                    inputEmail.style.cursor = 'not-allowed';
+                    if (emailHint) emailHint.style.display = 'block';
+                }
+
+                if (inputNome && socialSignup.nome) {
+                    inputNome.value = socialSignup.nome;
+                }
+            }, 100);
+
+            // 6. Trocar o botão "Continuar" do Step 3 para "Criar Conta"
+            const btnNext3 = document.getElementById('btnNextStep3');
+            if (btnNext3) {
+                btnNext3.innerHTML = '<i class="fas fa-user-plus"></i> Criar Conta';
+                btnNext3.classList.remove('btn-next');
+                btnNext3.classList.add('btn-submit');
+                btnNext3.setAttribute('id', 'btnRegister');
+                btnNext3.setAttribute('onclick', 'enviarCadastro()');
+            }
+
+            console.log('✅ Modo social aplicado (3 etapas, sem senha)');
+        }
+
+        // ============================================================
+        // FUNÇÕES DE FORMATAÇÃO
         // ============================================================
         function formatarCPF(input) {
             let cpf = input.value.replace(/\D/g, '');
@@ -444,13 +614,11 @@
         }
 
         // ============================================================
-        // FUNÇÕES DE NAVEGAÇÃO DOS STEPS
+        // NAVEGAÇÃO DOS STEPS
         // ============================================================
         function nextStep() {
             if (currentStep < totalSteps) {
-                if (!validarStepAtual()) {
-                    return;
-                }
+                if (!validarStepAtual()) return;
                 currentStep++;
                 atualizarStep();
             }
@@ -467,7 +635,8 @@
             document.querySelectorAll('.step-content').forEach(el => {
                 el.classList.remove('active');
             });
-            document.querySelector(`.step-content[data-step="${currentStep}"]`).classList.add('active');
+            const stepContent = document.querySelector(`.step-content[data-step="${currentStep}"]`);
+            if (stepContent) stepContent.classList.add('active');
 
             document.querySelectorAll('.step-dot').forEach((dot, index) => {
                 const step = index + 1;
@@ -487,8 +656,11 @@
                 }
             });
 
-            document.getElementById('currentStepLabel').textContent = currentStep;
-            document.querySelector('.register-container').scrollTop = 0;
+            const currentStepLabel = document.getElementById('currentStepLabel');
+            if (currentStepLabel) currentStepLabel.textContent = currentStep;
+
+            const container = document.querySelector('.register-container');
+            if (container) container.scrollTop = 0;
         }
 
         function validarStepAtual() {
@@ -545,6 +717,12 @@
                         return false;
                     }
                 }
+
+                // Se for social e estamos no step 3 (último), envia direto
+                if (socialSignup.isSocial) {
+                    enviarCadastro();
+                    return false;
+                }
                 return true;
             }
 
@@ -552,7 +730,7 @@
         }
 
         // ============================================================
-        // SELEÇÃO DE ROLE (COPIADA DO SEU CÓDIGO ORIGINAL)
+        // SELEÇÃO DE ROLE
         // ============================================================
         function selecionarRole(role) {
             selectedRole = role;
@@ -560,19 +738,18 @@
             document.querySelectorAll('.role-option').forEach(opt => {
                 opt.classList.remove('active');
             });
-            document.querySelector(`.role-option[data-role="${role}"]`).classList.add('active');
+            const roleOpt = document.querySelector(`.role-option[data-role="${role}"]`);
+            if (roleOpt) roleOpt.classList.add('active');
 
             const alunoFields = document.getElementById('alunoFields');
             const professorFields = document.getElementById('professorFields');
 
             if (role === 'aluno') {
-                // Mostrar campos de ALUNO, esconder de PROFESSOR
                 alunoFields.style.display = 'block';
                 alunoFields.classList.add('active');
                 professorFields.style.display = 'none';
                 professorFields.classList.remove('active');
 
-                // Radio de acessibilidade obrigatório
                 document.querySelectorAll('input[name="acessibilidade"]').forEach(r => {
                     r.setAttribute('required', 'true');
                 });
@@ -581,18 +758,15 @@
                 document.getElementById('step3Subtitle').textContent = 'Agora, suas informações acadêmicas.';
 
             } else {
-                // Mostrar campos de PROFESSOR, esconder de ALUNO
                 alunoFields.style.display = 'none';
                 alunoFields.classList.remove('active');
                 professorFields.style.display = 'block';
                 professorFields.classList.add('active');
 
-                // Radio de acessibilidade NÃO obrigatório
                 document.querySelectorAll('input[name="acessibilidade"]').forEach(r => {
                     r.removeAttribute('required');
                 });
 
-                // Carregar eixos
                 carregarEixosParaProfessor();
 
                 document.getElementById('step3Title').textContent = 'Informações profissionais';
@@ -601,7 +775,7 @@
         }
 
         // ============================================================
-        // CARREGAR CURSOS DO BANCO (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // CARREGAR CURSOS DO BANCO
         // ============================================================
         async function carregarCursosDoBanco() {
             try {
@@ -637,7 +811,7 @@
         }
 
         // ============================================================
-        // ATUALIZAR TURMAS POR CURSO (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ATUALIZAR TURMAS POR CURSO
         // ============================================================
         function atualizarTurmasPorCurso() {
             const cursoSelect = document.getElementById('registerCurso');
@@ -684,7 +858,7 @@
         }
 
         // ============================================================
-        // CARREGAR EIXOS PARA PROFESSOR (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // CARREGAR EIXOS PARA PROFESSOR
         // ============================================================
         async function carregarEixosParaProfessor() {
             try {
@@ -695,7 +869,7 @@
                 eixoSelect.innerHTML = '<option value="">Carregando eixos...</option>';
                 eixoSelect.disabled = true;
 
-                const response = await fetch('/api/eixos');
+                const response = await fetch(`${API_BASE_URL}/eixos`);
                 const data = await response.json();
 
                 if (data.success && data.eixos) {
@@ -735,7 +909,7 @@
         }
 
         // ============================================================
-        // INICIALIZAR CAMPOS DE ACESSIBILIDADE (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // CAMPOS DE ACESSIBILIDADE
         // ============================================================
         function inicializarCamposAcessibilidade() {
             console.log('🔧 Inicializando campos de acessibilidade...');
@@ -752,13 +926,7 @@
                 return;
             }
 
-            radioSim.removeEventListener('change', handleAcessibilidadeSim);
-            radioNao.removeEventListener('change', handleAcessibilidadeNao);
-
-            radioSim.addEventListener('change', handleAcessibilidadeSim);
-            radioNao.addEventListener('change', handleAcessibilidadeNao);
-
-            function handleAcessibilidadeSim() {
+            radioSim.addEventListener('change', function() {
                 if (this.checked) {
                     console.log('✅ Aluno SELECIONOU acessibilidade');
                     if (condicaoDiv) {
@@ -767,9 +935,9 @@
                     }
                     if (selectCondicao) selectCondicao.setAttribute('required', 'true');
                 }
-            }
+            });
 
-            function handleAcessibilidadeNao() {
+            radioNao.addEventListener('change', function() {
                 if (this.checked) {
                     console.log('❌ Aluno NÃO selecionou acessibilidade');
                     if (condicaoDiv) {
@@ -780,20 +948,13 @@
                         selectCondicao.removeAttribute('required');
                         selectCondicao.value = '';
                     }
-                    if (registerOutraCondicao) {
-                        registerOutraCondicao.value = '';
-                    }
-                    if (outraCondicaoField) {
-                        outraCondicaoField.style.display = 'none';
-                    }
+                    if (registerOutraCondicao) registerOutraCondicao.value = '';
+                    if (outraCondicaoField) outraCondicaoField.style.display = 'none';
                 }
-            }
+            });
 
             if (selectCondicao) {
-                selectCondicao.removeEventListener('change', handleCondicaoChange);
-                selectCondicao.addEventListener('change', handleCondicaoChange);
-
-                function handleCondicaoChange() {
+                selectCondicao.addEventListener('change', function() {
                     if (this.value === 'outra') {
                         if (outraCondicaoField) outraCondicaoField.style.display = 'block';
                         if (registerOutraCondicao) registerOutraCondicao.setAttribute('required', 'true');
@@ -804,14 +965,14 @@
                             registerOutraCondicao.value = '';
                         }
                     }
-                }
+                });
             }
 
             console.log('✅ Campos de acessibilidade inicializados');
         }
 
         // ============================================================
-        // ALERTA (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // ALERTA
         // ============================================================
         function mostrarAlerta(mensagem, tipo = 'error') {
             const alerta = document.getElementById('alert');
@@ -824,11 +985,11 @@
             clearTimeout(window.alertTimeout);
             window.alertTimeout = setTimeout(() => {
                 alerta.style.display = 'none';
-            }, 4000);
+            }, 5000);
         }
 
         // ============================================================
-        // ENVIAR CADASTRO (COPIADO DO SEU CÓDIGO ORIGINAL)
+        // 🔥 ENVIAR CADASTRO (AJUSTADO PARA SUPORTAR SOCIAL)
         // ============================================================
         async function enviarCadastro() {
             const role = selectedRole;
@@ -836,11 +997,18 @@
             const cpf = document.getElementById('registerCPF').value;
             const telefone = document.getElementById('registerTelefone').value;
             const email = document.getElementById('registerEmail').value.trim();
-            const senha = document.getElementById('registerPassword').value;
-            const confirmarSenha = document.getElementById('registerConfirmPassword').value;
+
+            // 🔥 Senha só se NÃO for social
+            let senha = null;
+            let confirmarSenha = null;
+
+            if (!socialSignup.isSocial) {
+                senha = document.getElementById('registerPassword')?.value;
+                confirmarSenha = document.getElementById('registerConfirmPassword')?.value;
+            }
 
             // Validações básicas
-            if (!nome || !cpf || !telefone || !email || !senha || !confirmarSenha) {
+            if (!nome || !cpf || !telefone || !email) {
                 mostrarAlerta('Preencha todos os campos obrigatórios');
                 return;
             }
@@ -855,14 +1023,22 @@
                 return;
             }
 
-            if (senha.length < 6) {
-                mostrarAlerta('A senha deve ter no mínimo 6 caracteres');
+            // Validar email institucional (fallback no client-side)
+            if (!email.toLowerCase().endsWith('@iemasaoluiscentro.net')) {
+                mostrarAlerta('⚠️ Apenas emails institucionais (@iemasaoluiscentro.net) são permitidos');
                 return;
             }
 
-            if (senha !== confirmarSenha) {
-                mostrarAlerta('As senhas não coincidem');
-                return;
+            // Validação de senha (só se NÃO for social)
+            if (!socialSignup.isSocial) {
+                if (!senha || senha.length < 6) {
+                    mostrarAlerta('A senha deve ter no mínimo 6 caracteres');
+                    return;
+                }
+                if (senha !== confirmarSenha) {
+                    mostrarAlerta('As senhas não coincidem');
+                    return;
+                }
             }
 
             // Preparar objeto de dados
@@ -871,9 +1047,20 @@
                 cpf: cpf.replace(/\D/g, ''),
                 telefone: telefone.replace(/\D/g, ''),
                 email: email,
-                password: senha,
                 role: role
             };
+
+            // Só manda senha se não for social
+            if (!socialSignup.isSocial) {
+                dadosCadastro.password = senha;
+            } else {
+                // 🔥 Marca como cadastro social
+                dadosCadastro.socialProvider = socialSignup.provider;
+                dadosCadastro.socialEmail = socialSignup.email;
+                if (socialSignup.picture) {
+                    dadosCadastro.socialPicture = socialSignup.picture;
+                }
+            }
 
             if (role === 'aluno') {
                 const curso = document.getElementById('registerCurso').value;
@@ -935,15 +1122,23 @@
                 }
             });
 
-            console.log('📤 Enviando dados de cadastro:', dadosCadastro);
+            console.log('📤 Enviando dados de cadastro:', {
+                ...dadosCadastro,
+                password: dadosCadastro.password ? '***' : undefined
+            });
 
             const btn = document.getElementById('btnRegister');
+            if (!btn) {
+                console.error('❌ Botão btnRegister não encontrado');
+                return;
+            }
+
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando conta...';
             btn.disabled = true;
 
             try {
-                const resposta = await fetch('/api/auth/register', {
+                const resposta = await fetch(`${API_BASE_URL}/auth/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(dadosCadastro)
@@ -954,20 +1149,22 @@
                 if (dados.success) {
                     mostrarAlerta('✅ Conta criada com sucesso! Redirecionando...', 'success');
 
+                    // Limpar dados de cadastro social
+                    sessionStorage.removeItem('social_signup_email');
+                    sessionStorage.removeItem('social_signup_nome');
+                    sessionStorage.removeItem('social_signup_provider');
+                    sessionStorage.removeItem('social_signup_picture');
+
                     localStorage.setItem('auth_token', dados.token);
                     localStorage.setItem('user_data', JSON.stringify(dados.user));
 
                     setTimeout(() => {
-                        if (dados.user.role === 'super_admin') {
-                            window.location.href = 'admin.html';
-                        } else if (dados.user.role === 'admin') {
-                            window.location.href = 'admin-simples.html';
-                        } else if (dados.user.role === 'professor') {
-                            window.location.href = 'index.html';
-                        } else if (dados.user.role === 'setor_pedagogico') {
-                            window.location.href = 'setor-pedagogico.html';
+                        if (dados.redirectTo) {
+                            window.location.href = dados.redirectTo;
                         } else if (dados.user.role === 'aluno') {
                             window.location.href = 'capturar-face.html';
+                        } else if (dados.user.role === 'professor') {
+                            window.location.href = 'index.html';
                         } else {
                             window.location.href = 'index.html';
                         }
@@ -990,13 +1187,21 @@
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Cadastro em 4 etapas carregado!');
+
+            // 🔥 1. Detecta se é cadastro social
+            detectarCadastroSocial();
+
+            // 🔥 2. Inicializa componentes
             inicializarCamposAcessibilidade();
             carregarCursosDoBanco();
 
-            // Configurar role inicial (ALUNO)
+            // 🔥 3. Configura role inicial (ALUNO)
             selecionarRole('aluno');
 
-            // Configurar data mínima para inputs date
+            // 🔥 4. Aplica modo social (remove etapa 4, preenche email/nome)
+            aplicarModoSocial();
+
+            // 🔥 5. Configura data mínima para inputs date
             const hoje = new Date().toISOString().split('T')[0];
             document.querySelectorAll('input[type="date"]').forEach(input => {
                 input.min = hoje;
@@ -1004,13 +1209,12 @@
         });
     </script>
 
-        <!-- VLibras Oficial -->
+    <!-- VLibras Oficial -->
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/chatbot-frontend.js"></script>
     <script src="js/toggle-buttons.js"></script>
     <script src="js/draggable.js"></script>
-
 
 </body>
 </html>

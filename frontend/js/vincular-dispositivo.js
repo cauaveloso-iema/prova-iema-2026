@@ -97,41 +97,135 @@
     }
     
     // Tentar detectar de várias fontes
+    // Tentar detectar de várias fontes (VERSÃO SEGURA - NÃO TRAVA O APP)
     async function tentarDetectar() {
-        // 1. Tentar via OneSignal SDK (Web)
+        console.log('🔍 [Tentativa ' + tentativasDeteccao + '] Detectando playerId...');
+        
+        // ============================================================
+        // TENTATIVA 1: OneSignal SDK (Web) — COM VERIFICAÇÕES DE SEGURANÇA
+        // ============================================================
         try {
-            if (window.OneSignal && window.OneSignal.User && window.OneSignal.User.PushSubscription) {
-                const osPlayerId = await window.OneSignal.User.PushSubscription.getId();
+            // 🔥 VERIFICAR SE O ONESIGNAL EXISTE E ESTÁ PRONTO
+            if (typeof window.OneSignal !== 'undefined' && 
+                window.OneSignal !== null &&
+                typeof window.OneSignal.User !== 'undefined' &&
+                window.OneSignal.User !== null &&
+                typeof window.OneSignal.User.PushSubscription !== 'undefined' &&
+                window.OneSignal.User.PushSubscription !== null &&
+                typeof window.OneSignal.User.PushSubscription.getId === 'function') {
                 
-                if (osPlayerId) {
+                console.log('   ✓ OneSignal SDK detectado, tentando pegar ID...');
+                
+                // 🔥 TIMEOUT DE 2 SEGUNDOS PARA NÃO TRAVAR
+                const osPlayerId = await Promise.race([
+                    window.OneSignal.User.PushSubscription.getId(),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Timeout')), 2000)
+                    )
+                ]);
+                
+                if (osPlayerId && typeof osPlayerId === 'string' && osPlayerId.length > 0) {
                     playerId = osPlayerId;
-                    console.log('✅ [OPÇÃO B] PlayerId via OneSignal SDK:', playerId.substring(0, 30) + '...');
+                    console.log('   ✅ [Opção B] PlayerId via OneSignal SDK:', playerId.substring(0, 30) + '...');
+                    atualizarUIComPlayerId();
+                    return true;
+                } else {
+                    console.log('   ⚠️ OneSignal retornou ID vazio');
+                }
+            } else {
+                console.log('   ℹ️ OneSignal SDK não disponível (normal no WebView)');
+            }
+        } catch (e) {
+            // 🔥 SILENCIAR ERRO - NÃO DEIXA O APP TRAVAR
+            console.log('   ℹ️ Não foi possível usar OneSignal SDK:', e.message);
+        }
+        
+        // ============================================================
+        // TENTATIVA 2: localStorage (funciona no WebView do Kodular)
+        // ============================================================
+        try {
+            const playerIdLocalStorage = localStorage.getItem('onesignal_player_id');
+            
+            if (playerIdLocalStorage && 
+                typeof playerIdLocalStorage === 'string' && 
+                playerIdLocalStorage.length > 0 &&
+                playerIdLocalStorage !== 'null' &&
+                playerIdLocalStorage !== 'undefined') {
+                
+                playerId = playerIdLocalStorage;
+                console.log('   ✅ [Opção B] PlayerId via localStorage:', playerId.substring(0, 30) + '...');
+                atualizarUIComPlayerId();
+                return true;
+            }
+        } catch (e) {
+            console.log('   ℹ️ localStorage não acessível:', e.message);
+        }
+        
+        // ============================================================
+        // TENTATIVA 3: sessionStorage
+        // ============================================================
+        try {
+            const playerIdSessionStorage = sessionStorage.getItem('onesignal_player_id');
+            
+            if (playerIdSessionStorage && 
+                typeof playerIdSessionStorage === 'string' && 
+                playerIdSessionStorage.length > 0) {
+                
+                playerId = playerIdSessionStorage;
+                console.log('   ✅ [Opção B] PlayerId via sessionStorage:', playerId.substring(0, 30) + '...');
+                atualizarUIComPlayerId();
+                return true;
+            }
+        } catch (e) {
+            console.log('   ℹ️ sessionStorage não acessível:', e.message);
+        }
+        
+        // ============================================================
+        // TENTATIVA 4: window.playerId (injetado pelo Kodular via JS)
+        // ============================================================
+        try {
+            if (typeof window.playerId !== 'undefined' && 
+                window.playerId !== null && 
+                typeof window.playerId === 'string' &&
+                window.playerId.length > 0) {
+                
+                playerId = window.playerId;
+                console.log('   ✅ [Opção B] PlayerId via window.playerId:', playerId.substring(0, 30) + '...');
+                atualizarUIComPlayerId();
+                return true;
+            }
+        } catch (e) {
+            // Silenciar
+        }
+        
+        // ============================================================
+        // TENTATIVA 5: window.AppInventor (Kodular WebView)
+        // ============================================================
+        try {
+            if (typeof window.AppInventor !== 'undefined' && 
+                window.AppInventor !== null &&
+                typeof window.AppInventor.getWebViewString === 'function') {
+                
+                const playerIdAppInventor = window.AppInventor.getWebViewString();
+                
+                if (playerIdAppInventor && 
+                    typeof playerIdAppInventor === 'string' && 
+                    playerIdAppInventor.length > 0 &&
+                    playerIdAppInventor !== 'null' &&
+                    playerIdAppInventor !== 'undefined') {
+                    
+                    playerId = playerIdAppInventor;
+                    console.log('   ✅ [Opção B] PlayerId via AppInventor:', playerId.substring(0, 30) + '...');
                     atualizarUIComPlayerId();
                     return true;
                 }
             }
         } catch (e) {
-            // Silenciar erro
+            // Silenciar
         }
         
-        // 2. Tentar via localStorage (salvo pelo Kodular/WebView)
-        const playerIdLocalStorage = localStorage.getItem('onesignal_player_id');
-        if (playerIdLocalStorage) {
-            playerId = playerIdLocalStorage;
-            console.log('✅ [OPÇÃO B] PlayerId via localStorage:', playerId.substring(0, 30) + '...');
-            atualizarUIComPlayerId();
-            return true;
-        }
-        
-        // 3. Tentar via TinyDB (Kodular - se estiver salvo via WebView)
-        const playerIdTinyDB = sessionStorage.getItem('onesignal_player_id');
-        if (playerIdTinyDB) {
-            playerId = playerIdTinyDB;
-            console.log('✅ [OPÇÃO B] PlayerId via sessionStorage:', playerId.substring(0, 30) + '...');
-            atualizarUIComPlayerId();
-            return true;
-        }
-        
+        // Nada funcionou
+        console.log('   ⏳ Nenhum playerId detectado ainda...');
         return false;
     }
     

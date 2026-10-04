@@ -146,7 +146,7 @@ body {
 }
 
 /* ============================================================
-   CONTAINER - SEM ANIMAÇÕES DE HOVER
+   CONTAINER
    ============================================================ */
 .login-container {
     width: 100%;
@@ -155,7 +155,7 @@ body {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-radius: var(--radius-lg);
-    padding: 40px 32px 32px;
+    padding: 32px 32px 26px;
     box-shadow: 
         0 25px 60px rgba(0, 0, 0, 0.3),
         inset 0 1px 1px rgba(255, 255, 255, 0.2);
@@ -207,7 +207,7 @@ body {
    ============================================================ */
 .login-header {
     text-align: center;
-    margin-bottom: 28px;
+    margin-bottom: 22px;
 }
 
 .login-header .icon-wrapper {
@@ -230,16 +230,22 @@ body {
     50% { transform: scale(1.05) rotate(-2deg); }
 }
 
+/* 🔥 AJUSTE 1: "EducaPleno" com mais evidência na marca
+   - "Educa" mantém o NEGRITO original (700)
+   - "Pleno" ganha peso ainda maior (800) para destacar a marca */
 .login-header h1 {
-    font-size: 28px;
-    font-weight: 700;
+    font-size: 29px;
+    font-weight: 700;                  /* ← "Educa" em negrito (como era antes) */
     color: var(--gray-900);
-    letter-spacing: -0.3px;
+    letter-spacing: -0.4px;
 }
 
 .login-header h1 span {
     font-size: inherit !important;
+    font-weight: 800;                  /* ← "Pleno" ainda mais forte = marca em evidência */
     color: var(--primary);
+    letter-spacing: -0.5px;
+    text-shadow: 0 1px 0 rgba(37, 99, 235, 0.08);
 }
 
 .login-header p {
@@ -260,7 +266,7 @@ body {
 }
 
 /* ============================================================
-   FORMULÁRIO - SEM EFEITOS VISUAIS QUE CAUSAM MOVIMENTO
+   FORMULÁRIO
    ============================================================ */
 .form-group {
     margin-bottom: 16px;
@@ -290,16 +296,13 @@ body {
     font-family: inherit;
     color: var(--gray-800);
     outline: none;
-    /* REMOVIDO: transition, transform, animation */
 }
 
 .form-control::placeholder {
     color: var(--gray-400);
 }
 
-/* REMOVIDO: .form-control:focus - SEM MUDANÇA DE COR */
 .form-control:focus {
-    /* NADA MUDA - mantém a mesma cor */
     border-color: var(--gray-200);
     background: var(--gray-50);
     box-shadow: none;
@@ -344,7 +347,7 @@ small {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 24px;
+    margin-bottom: 18px;
 }
 
 .form-options .remember {
@@ -397,7 +400,7 @@ small {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    margin-bottom: 20px;
+    margin-bottom: 0;
     box-shadow: 0 4px 16px rgba(37, 99, 235, 0.20);
 }
 
@@ -449,18 +452,19 @@ small {
 }
 
 /* ============================================================
-   DIVISOR
+   DIVISOR REFINADO (AJUSTE 2: mais perceptível)
    ============================================================ */
 .divider {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin: 20px 0;
-    color: var(--gray-400);
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    justify-content: center;
+    gap: 14px;
+    margin: 18px 0;
+    color: var(--gray-500);            /* mais escuro (era gray-400) */
+    font-size: 11.5px;
+    font-weight: 600;                  /* mais firme */
+    text-transform: lowercase;
+    letter-spacing: 1.2px;
 }
 
 .divider::before,
@@ -468,35 +472,64 @@ small {
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--gray-200);
+    background: linear-gradient(
+        to right,
+        transparent,
+        var(--gray-400),               /* linha central mais visível (era gray-300) */
+        transparent
+    );
+}
+
+.divider span {
+    padding: 0 2px;
+    white-space: nowrap;
 }
 
 /* ============================================================
-   WHATSAPP
+   WHATSAPP - BOTÃO SECUNDÁRIO DISCRETO
    ============================================================ */
 .whatsapp-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 10px 20px;
-    background: linear-gradient(135deg, #059669, #10b981);
-    border: none;
+    gap: 7px;
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid var(--gray-200);
     border-radius: var(--radius);
-    color: var(--white);
-    font-size: 14px;
+    color: var(--gray-500);
+    font-size: 12.5px;
     font-weight: 500;
+    font-family: inherit;
     text-decoration: none;
     width: 100%;
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.20);
+    box-sizing: border-box;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
 .whatsapp-link:hover {
-    box-shadow: 0 8px 28px rgba(16, 185, 129, 0.30);
+    background: var(--gray-50);
+    border-color: #25d366;
+    color: #128c7e;
+    opacity: 1;
+}
+
+.whatsapp-link:active {
+    transform: scale(0.99);
 }
 
 .whatsapp-link i {
-    font-size: 20px;
+    font-size: 15px;
+    color: #25d366;
+    opacity: 0.9;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.whatsapp-link:hover i {
+    color: #128c7e;
+    opacity: 1;
 }
 
 /* ============================================================
@@ -504,7 +537,7 @@ small {
    ============================================================ */
 .register-link {
     text-align: center;
-    margin-top: 24px;
+    margin-top: 18px;
     font-size: 14px;
     color: var(--gray-600);
 }
@@ -522,15 +555,22 @@ small {
 }
 
 /* ============================================================
-   RODAPÉ
+   RODAPÉ - DISCRETO
    ============================================================ */
 .footer {
     text-align: center;
-    margin-top: 28px;
-    padding-top: 20px;
+    margin-top: 20px;
+    padding-top: 14px;
     border-top: 1px solid var(--gray-200);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--gray-400);
+    opacity: 0.7;
+    letter-spacing: 0.2px;
+    transition: opacity 0.3s ease;
+}
+
+.footer:hover {
+    opacity: 1;
 }
 
 /* ============================================================
@@ -698,7 +738,7 @@ input[type="radio"] {
     }
 
     .login-header h1 {
-        font-size: 24px;
+        font-size: 25px;
     }
 
     .login-header h1 span {
@@ -728,8 +768,8 @@ input[type="radio"] {
     }
 
     .whatsapp-link {
-        font-size: 13px;
-        padding: 9px 16px;
+        font-size: 12.5px;
+        padding: 8px 16px;
     }
 
     .role-selection {
@@ -760,7 +800,7 @@ input[type="radio"] {
     }
 
     .login-header h1 {
-        font-size: 20px;
+        font-size: 21px;
     }
 
     .login-header h1 span {
@@ -867,4 +907,60 @@ input[type="password"]::-ms-clear {
     .password-wrapper input {
         padding-right: 40px !important;
     }
+}
+
+/* ============================================================
+   LOGIN SOCIAL (GOOGLE / MICROSOFT)
+   ============================================================ */
+.social-login {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.btn-social {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius);
+    color: var(--gray-700);
+    font-size: 13.5px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-social:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.btn-social:active {
+    transform: scale(0.99);
+}
+
+.btn-social:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-social svg {
+    flex-shrink: 0;
+}
+
+.btn-google:hover {
+    border-color: #4285f4;
+}
+
+.btn-microsoft:hover {
+    border-color: #00a4ef;
 }
