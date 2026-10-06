@@ -3,6 +3,38 @@
 <head>
     <!-- 🔥 CSP - PROTEÇÃO CONTRA XSS (com Google e Microsoft liberados) -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://vlibras.gov.br https://accounts.google.com https://alcdn.msauth.net blob:; script-src-elem 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://vlibras.gov.br https://accounts.google.com https://alcdn.msauth.net blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net https://accounts.google.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://cdn-icons-png.flaticon.com https://cdn.jsdelivr.net https://vlibras.gov.br https://lh3.googleusercontent.com; connect-src 'self' https://vlibras.gov.br https://cdn.jsdelivr.net https://api.dicionario-aberto.net https://servicos2.dicionario-aberto.net https://accounts.google.com https://oauth2.googleapis.com https://login.microsoftonline.com https://graph.microsoft.com ws: wss:; media-src 'self' blob: data:; frame-src 'self' https://vlibras.gov.br https://accounts.google.com https://login.microsoftonline.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;">
+
+    <!-- ============================================================
+         ✅ CORREÇÃO #1 — SEO: Meta Description
+         Aparece embaixo do link no Google
+    ============================================================ -->
+    <meta name="description" content="Acesse sua conta EducaPleno e continue seus estudos com questões, simulados e planos personalizados. Plataforma inteligente de gestão educacional.">
+
+    <!-- ✅ CORREÇÃO #2 — Canonical: evita conteúdo duplicado no Google -->
+    <link rel="canonical" href="https://educapleno.com/login.html">
+
+    <!-- ✅ CORREÇÃO #3 — Open Graph: cartão bonito no WhatsApp/Facebook/LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="EducaPleno">
+    <meta property="og:title" content="Login - EducaPleno">
+    <meta property="og:description" content="Acesse sua conta EducaPleno e continue seus estudos com questões, simulados e planos personalizados.">
+    <meta property="og:url" content="https://educapleno.com/login.html">
+    <meta property="og:image" content="https://educapleno.com/icons/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="pt_BR">
+
+    <!-- ✅ CORREÇÃO #4 — Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Login - EducaPleno">
+    <meta name="twitter:description" content="Acesse sua conta EducaPleno e continue seus estudos.">
+    <meta name="twitter:image" content="https://educapleno.com/icons/og-image.png">
+
+    <!-- ✅ CORREÇÃO #5 — Performance: preconnect para fontes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
@@ -15,7 +47,7 @@
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
-    
+
     <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -49,8 +81,36 @@
     <!-- CSS EXTERNO -->
     <link rel="stylesheet" href="css/login.css">
     <link rel="stylesheet" href="css/mobile.css">
+
+    <!-- ============================================================
+         ✅ CORREÇÃO #6 — Skip Link: aparece no TAB, ajuda acessibilidade
+    ============================================================ -->
+    <style>
+        .skip-link {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            background: #0d6efd;
+            color: #fff;
+            padding: 12px 20px;
+            z-index: 99999;
+            text-decoration: none;
+            font-weight: bold;
+            font-family: 'Inter', sans-serif;
+            border-radius: 0 0 6px 0;
+            transition: left 0.2s;
+        }
+        .skip-link:focus {
+            left: 0;
+            outline: 3px solid #ffc107;
+            outline-offset: 2px;
+        }
+    </style>
 </head>
 <body>
+
+    <!-- ✅ Skip Link (para acessibilidade - aparece só quando aperta TAB) -->
+    <a href="#main-content" class="skip-link">Pular para o conteúdo principal</a>
 
     <!-- ============================================================
     FUNDO ANIMADO
@@ -78,7 +138,7 @@
     <!-- ============================================================
     CONTAINER PRINCIPAL
     ============================================================ -->
-    <div class="login-container">
+    <div class="login-container" id="main-content" role="main">
 
         <!-- HEADER -->
         <div class="login-header">
@@ -96,7 +156,7 @@
         LOGIN
         ============================================================ -->
         <div id="login-tab" class="tab-content active">
-            <form id="loginForm">
+            <form id="loginForm" method="POST" action="/api/auth/login">
                 <div class="form-group">
                     <label for="loginIdentifier">
                         <i class="fas fa-user-circle"></i> Email ou CPF
@@ -185,7 +245,7 @@
     </div>
 
     <!-- ================================================================
-    JAVASCRIPTEXTERNO
+    JAVASCRIPT EXTERNO (mantido igual ao original)
     ================================================================ -->
     <script src="js/login.js"></script>
 
