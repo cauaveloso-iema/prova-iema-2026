@@ -1366,17 +1366,21 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
             /* ========== QR CODE (compacto) ========== */
             .qr-code {
                 text-align: center;
-                margin-top: 4px;
+                margin-top: 6px;
             }
             .qr-code img {
-                width: 15mm; height: 15mm;   /* 🔥 Reduzido de 22mm */
-                border: 1px solid #000;
-                padding: 1px;
+                width: 25mm;
+                height: 25mm;
+                border: 1.5px solid #000;
+                padding: 2px;
+                display: block;
+                margin: 0 auto;
             }
             .qr-code p {
-                font-size: 6.5pt;
-                margin: 1px 0 0 0;
+                font-size: 8pt;
+                margin: 3px 0 0 0;
                 color: #444;
+                font-weight: bold;
             }
             
             /* ========== RODAPÉ ========== */

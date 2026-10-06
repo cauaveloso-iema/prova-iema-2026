@@ -1399,9 +1399,24 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; }
             .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
             
-            .qr-code { text-align: center; margin-top: 4px; }
-            .qr-code img { width: 15mm; height: 15mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 6.5pt; margin: 1px 0 0 0; color: #444; }
+            .qr-code {
+                text-align: center;
+                margin-top: 6px;
+            }
+            .qr-code img {
+                width: 25mm;
+                height: 25mm;
+                border: 1.5px solid #000;
+                padding: 2px;
+                display: block;
+                margin: 0 auto;
+            }
+            .qr-code p {
+                font-size: 8pt;
+                margin: 3px 0 0 0;
+                color: #444;
+                font-weight: bold;
+            }
             
             .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
             .footer p { margin: 1px 0; }
@@ -4120,10 +4135,25 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
             .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
             .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; position: relative; z-index: 2; }
             .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
-            
-            .qr-code { text-align: center; margin-top: 4px; }
-            .qr-code img { width: 15mm; height: 15mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 6.5pt; margin: 1px 0 0 0; color: #444; }
+                        
+            .qr-code {
+                text-align: center;
+                margin-top: 6px;
+            }
+            .qr-code img {
+                width: 25mm;
+                height: 25mm;
+                border: 1.5px solid #000;
+                padding: 2px;
+                display: block;
+                margin: 0 auto;
+            }
+            .qr-code p {
+                font-size: 8pt;
+                margin: 3px 0 0 0;
+                color: #444;
+                font-weight: bold;
+            }
             
             .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
             .footer p { margin: 1px 0; }
