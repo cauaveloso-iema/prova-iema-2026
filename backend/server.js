@@ -6686,21 +6686,20 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
     
     console.log(`📋 Professor ${professorId} solicitando provas pendentes de correção`);
 
-    // Buscar todas as provas criadas pelo professor
-    const provas = await Prova.find({
-      turmaId: { $in: turmaIds },
-      status: 'ativa',
-      publicada: true // SÓ MOSTRAR PROVAS PUBLICADAS
-    })
-    .populate('turmaId', 'nome disciplina')
-    .populate('userId', 'nome')
-    .sort({ createdAt: -1 });
+    // 🔥 CORREÇÃO: Buscar provas pelo professor (era `turmaId: { $in: turmaIds }`)
+    const query = isAdmin ? { publicada: true } : { userId: professorId, publicada: true };
+    
+    const provas = await Prova.find(query)
+      .populate('turmaId', 'nome disciplina')
+      .populate('userId', 'nome')
+      .sort({ createdAt: -1 });
 
     if (provas.length === 0) {
       return res.json({
         success: true,
-        mensagem: 'Você ainda não criou nenhuma prova',
-        provasPendentes: []
+        mensagem: 'Você ainda não criou nenhuma prova publicada',
+        provasPendentes: [],
+        total: 0
       });
     }
 
@@ -6708,7 +6707,7 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
     const provasPendentesCorrecao = [];
 
     for (const prova of provas) {
-      // Buscar provas realizadas desta prova que estão com nota null ou status 'finalizada'
+      // Buscar provas realizadas desta prova
       const provasRealizadas = await ProvaRealizada.find({
         provaId: prova._id,
         $or: [
@@ -6719,7 +6718,7 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
       .populate('alunoId', 'nome email matricula')
       .sort({ dataRealizacao: 1 });
 
-      // Buscar resultados também (para compatibilidade)
+      // Buscar resultados pendentes
       const resultadosPendentes = await Resultado.find({
         provaId: prova._id,
         $or: [
@@ -6733,6 +6732,7 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
       const todasRealizacoes = [];
 
       provasRealizadas.forEach(pr => {
+        if (!pr.alunoId) return; // 🔥 proteção contra dados órfãos
         todasRealizacoes.push({
           id: pr._id,
           alunoId: pr.alunoId._id,
@@ -6748,7 +6748,8 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
       });
 
       resultadosPendentes.forEach(r => {
-        // Verificar se já não foi adicionado
+        if (!r.userId) return; // 🔥 proteção
+
         const jaExiste = todasRealizacoes.some(tr => 
           tr.alunoId.toString() === r.userId._id.toString()
         );
@@ -6779,7 +6780,7 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
             nome: prova.turmaId.nome,
             disciplina: prova.turmaId.disciplina
           } : null,
-          quantidadeQuestoes: prova.questoes.length,
+          quantidadeQuestoes: prova.questoes?.length || 0,
           totalPendentes: todasRealizacoes.length,
           realizacoes: todasRealizacoes
         });
@@ -6794,7 +6795,8 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
     });
 
   } catch (error) {
-    console.error('Erro ao buscar provas pendentes de correção:', error);
+    console.error('❌ Erro ao buscar provas pendentes de correção:', error);
+    console.error('   Stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor: ' + error.message

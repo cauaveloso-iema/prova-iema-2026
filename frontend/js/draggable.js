@@ -360,9 +360,7 @@
     // ============================================
     // PROCURAR E CONFIGURAR TODOS
     // ============================================
-    function configurarTodos() {
-        console.log('🔍 Procurando botões...');
-        
+    function configurarTodos() {        
         botoes.forEach(botao => {
             if (botao.configurado) return;
             
