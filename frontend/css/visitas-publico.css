@@ -946,3 +946,37 @@ body {
         flex: 1 1 auto;
     }
 }
+
+/* Badges de status dos termos */
+.badge-termo {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.badge-termo.autorizado {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #10b981;
+}
+
+.badge-termo.recusado {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #ef4444;
+}
+
+.badge-termo.pendente {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+}
+
+.badge-termo.parcial {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+}

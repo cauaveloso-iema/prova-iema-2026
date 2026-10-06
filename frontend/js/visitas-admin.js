@@ -2131,7 +2131,10 @@ class VisitasAdmin {
                         </div>
                     </div>
                     <div class="assinatura">
-                        ${t.assinaturaGestor?.base64 ? `<img src="${t.assinaturaGestor.base64}" class="assinatura-img">` : ''}
+                        ${t.assinaturaGestor?.base64 
+                            ? `<img src="${t.assinaturaGestor.base64}" class="assinatura-img">` 
+                            : `<img src="/icons/assinatura_gpeda.ico" class="assinatura-img" alt="Assinatura Gestor">`
+                        }
                         <div class="assinatura-linha">
                             <strong>${t.assinaturaGestor?.nome || 'Gestor Pedagógico'}</strong><br>
                             <small>Gestor Pedagógico</small>

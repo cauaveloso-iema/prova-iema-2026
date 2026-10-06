@@ -8,6 +8,7 @@ class VisitasPublico {
         this.cursos = [];
         this.alunos = [];
         this.termos = [];
+        this.termosPorCodigo = [];
         
         this.alunoSelecionado = null;
         this.termoAtual = null;
@@ -158,6 +159,24 @@ class VisitasPublico {
             });
         }
         
+        // 🔎 Busca por código do termo
+        const buscaCodigoInput = document.getElementById('buscaCodigoPublico');
+        if (buscaCodigoInput) {
+            let timeout;
+            buscaCodigoInput.addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                const valor = e.target.value.trim();
+                if (valor.length < 4) return;
+                timeout = setTimeout(() => this.buscarPorCodigo(), 500);
+            });
+            buscaCodigoInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.buscarPorCodigo();
+                }
+            });
+        }
+        
         // Máscara CPF
         const cpfInput = document.getElementById('respCPF');
         if (cpfInput) {
@@ -224,6 +243,115 @@ class VisitasPublico {
         }
     }
 
+    // ============================================
+    // 🔎 BUSCAR POR CÓDIGO DO TERMO
+    // ============================================
+    async buscarPorCodigo() {
+        const codigo = document.getElementById('buscaCodigoPublico')?.value?.trim();
+        
+        if (!codigo || codigo.length < 4) {
+            this.showToast('Digite pelo menos 4 caracteres do código', 'error');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${this.apiBase}/termos-por-codigo/${encodeURIComponent(codigo)}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.termosPorCodigo = data.termos || [];
+                this.renderizarTermosPorCodigo();
+            } else {
+                throw new Error(data.error || 'Erro na busca');
+            }
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    renderizarTermosPorCodigo() {
+        const container = document.getElementById('listaTermosCodigoPublico');
+        if (!container) return;
+        
+        if (this.termosPorCodigo.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 30px; color: #9ca3af;">
+                    <i class="fas fa-search" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+                    <p style="margin: 0;">Nenhum termo encontrado com este código</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = this.termosPorCodigo.map(t => {
+            const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+            
+            let badgeStatus = '';
+            if (t.status === 'autorizado') {
+                badgeStatus = '<span class="badge-termo autorizado">✓ Totalmente Autorizado</span>';
+            } else if (t.status === 'parcialmente_autorizado') {
+                badgeStatus = '<span class="badge-termo parcial">🔶 Parcialmente Autorizado</span>';
+            } else if (t.status === 'recusado') {
+                badgeStatus = '<span class="badge-termo recusado">✗ Recusado</span>';
+            } else {
+                badgeStatus = '<span class="badge-termo pendente">⏳ Pendente</span>';
+            }
+            
+            const alunosHTML = (t.alunos || []).map(a => `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f9fafb; border-radius: 8px; margin-top: 6px; font-size: 12px;">
+                    <span><i class="fas fa-user-graduate" style="color: #667eea;"></i> ${this.escapeHtml(a.nome)}</span>
+                    <span style="color: #6b7280; font-size: 11px;">${a.turma || 'N/A'}</span>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="termo-publico-card" style="cursor: default;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
+                        <h4 style="margin: 0;">${this.escapeHtml(t.atividade)}</h4>
+                        ${badgeStatus}
+                    </div>
+                    
+                    <div class="info"><i class="fas fa-barcode"></i> <strong>Código:</strong> <code>${t.codigo}</code></div>
+                    <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
+                    <div class="info"><i class="fas fa-calendar-alt"></i> ${dataVisita}</div>
+                    <div class="info"><i class="fas fa-clock"></i> ${t.horario}</div>
+                    <div class="info"><i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(t.local)}</div>
+                    
+                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e5e7eb;">
+                        <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">
+                            <strong>Alunos (${t.totalAlunos}):</strong>
+                        </div>
+                        ${alunosHTML}
+                    </div>
+                    
+                    <div style="margin-top: 12px; padding: 10px; background: #f0fdf4; border-radius: 8px; font-size: 12px; display: flex; justify-content: space-around; text-align: center;">
+                        <div>
+                            <div style="color: #10b981; font-weight: 700; font-size: 16px;">${t.responsaveis.autorizados}</div>
+                            <div style="color: #6b7280; font-size: 10px;">Autorizados</div>
+                        </div>
+                        <div>
+                            <div style="color: #f59e0b; font-weight: 700; font-size: 16px;">${t.responsaveis.pendentes}</div>
+                            <div style="color: #6b7280; font-size: 10px;">Pendentes</div>
+                        </div>
+                        <div>
+                            <div style="color: #ef4444; font-weight: 700; font-size: 16px;">${t.responsaveis.recusados}</div>
+                            <div style="color: #6b7280; font-size: 10px;">Recusados</div>
+                        </div>
+                    </div>
+                    
+                    ${t.responsaveis.autorizados > 0 ? `
+                        <div style="margin-top: 12px; text-align: right;">
+                            <button class="btn-filter" onclick="visitasPublico.imprimirTermoOficial('${t.id}')" style="padding: 8px 16px; font-size: 12px;">
+                                <i class="fas fa-print"></i> Imprimir Termo
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
     renderizarAlunos() {
         const container = document.getElementById('listaAlunosPublico');
         if (!container) return;
@@ -253,6 +381,9 @@ class VisitasPublico {
         `).join('');
     }
 
+    // ============================================
+    // SELECIONAR ALUNO (com debug)
+    // ============================================
     async selecionarAluno(alunoId) {
         const aluno = this.alunos.find(a => a.id === alunoId);
         if (!aluno) return;
@@ -263,11 +394,19 @@ class VisitasPublico {
             const response = await fetch(`${this.apiBase}/termos/${alunoId}`);
             const data = await response.json();
             
+            console.log(`🔍 [FRONTEND] Termos do aluno ${aluno.nome}:`, data);
+            
             if (data.success && data.termos.length > 0) {
                 this.termos = data.termos;
+                
+                // Debug: mostra status de cada termo
+                data.termos.forEach(t => {
+                    console.log(`   → ${t.codigo}: status=${t.statusResponsavel} jaAutorizou=${t.jaAutorizou} jaRecusou=${t.jaRecusou}`);
+                });
+                
                 this.mostrarTermos();
             } else {
-                this.showToast('Nenhum termo pendente para este aluno', 'info');
+                this.showToast('Nenhum termo encontrado para este aluno', 'info');
             }
         } catch (error) {
             console.error('❌ Erro:', error);
@@ -275,24 +414,65 @@ class VisitasPublico {
         }
     }
 
+    // ============================================
+    // 📋 MOSTRAR TERMOS DO ALUNO (COM STATUS)
+    // ============================================
     mostrarTermos() {
         const container = document.getElementById('listaTermosPublico');
         if (!container) return;
         
-        container.innerHTML = this.termos.map(t => `
-            <div class="termo-publico-card" onclick="visitasPublico.abrirTermo('${t.id}')">
-                <h4>${this.escapeHtml(t.atividade)}</h4>
-                <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
-                <div class="info"><i class="fas fa-calendar-alt"></i> ${new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
-                <div class="info"><i class="fas fa-clock"></i> ${t.horario}</div>
-                <div class="info"><i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(t.local)}</div>
-                <div style="margin-top: 12px; text-align: right;">
-                    <span style="color: #667eea; font-weight: 600; font-size: 13px;">
-                        Ver e autorizar <i class="fas fa-arrow-right"></i>
+        container.innerHTML = this.termos.map(t => {
+            const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+            
+            let badgeStatus = '';
+            let acoesHTML = '';
+            
+            if (t.jaAutorizou) {
+                badgeStatus = '<span class="badge-termo autorizado">✓ Você já autorizou</span>';
+                acoesHTML = `
+                    <button class="btn-filter" onclick="event.stopPropagation(); visitasPublico.imprimirTermoOficial('${t.id}')" 
+                            style="padding: 8px 16px; font-size: 12px; background: #3b82f6;">
+                        <i class="fas fa-print"></i> Imprimir Termo
+                    </button>
+                `;
+            } else if (t.jaRecusou) {
+                badgeStatus = '<span class="badge-termo recusado">✗ Você recusou</span>';
+                acoesHTML = `
+                    <span style="color: #9ca3af; font-size: 12px;">
+                        <i class="fas fa-info-circle"></i> Nenhuma ação disponível
                     </span>
+                `;
+            } else {
+                badgeStatus = '<span class="badge-termo pendente">⏳ Aguardando sua autorização</span>';
+                acoesHTML = `
+                    <span style="color: #667eea; font-weight: 600; font-size: 13px;">
+                        Autorizar <i class="fas fa-arrow-right"></i>
+                    </span>
+                `;
+            }
+            
+            const clicavel = t.pendente;
+            const onclickAttr = clicavel ? `onclick="visitasPublico.abrirTermo('${t.id}')"` : '';
+            const cursorStyle = clicavel ? 'cursor: pointer;' : 'cursor: default;';
+            
+            return `
+                <div class="termo-publico-card" ${onclickAttr} style="${cursorStyle}">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; gap: 8px; flex-wrap: wrap;">
+                        <h4 style="margin: 0;">${this.escapeHtml(t.atividade)}</h4>
+                        ${badgeStatus}
+                    </div>
+                    <div class="info"><i class="fas fa-barcode"></i> <code style="font-size: 11px;">${t.codigo}</code></div>
+                    <div class="info"><i class="fas fa-chalkboard-teacher"></i> ${this.escapeHtml(t.professor)}</div>
+                    <div class="info"><i class="fas fa-calendar-alt"></i> ${dataVisita}</div>
+                    <div class="info"><i class="fas fa-clock"></i> ${t.horario}</div>
+                    <div class="info"><i class="fas fa-map-marker-alt"></i> ${this.escapeHtml(t.local)}</div>
+                    
+                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e5e7eb; text-align: right;">
+                        ${acoesHTML}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         
         document.getElementById('passoBusca').style.display = 'none';
         document.getElementById('secaoTermos').style.display = 'block';
@@ -314,10 +494,17 @@ class VisitasPublico {
     }
 
     // ============================================
-    // PASSO 2: ABRIR TERMO
+    // PASSO 2: ABRIR TERMO (APENAS SE PENDENTE)
     // ============================================
     async abrirTermo(termoId) {
         try {
+            const termoEncontrado = this.termos.find(t => t.id === termoId);
+            
+            if (termoEncontrado && (termoEncontrado.jaAutorizou || termoEncontrado.jaRecusou)) {
+                this.showToast('Este termo já foi respondido por você', 'info');
+                return;
+            }
+            
             const response = await fetch(`${this.apiBase}/termo/${termoId}`);
             const data = await response.json();
             
@@ -661,6 +848,15 @@ class VisitasPublico {
             return this.showToast('Assine o documento antes de continuar', 'error');
         }
         
+        // 🔥 PEGAR O ALUNO CORRETO DO TERMO ATUAL
+        const alunoId = this.termoAtual.alunos?.[0]?.alunoId 
+            || this.termoAtual.alunos?.[0]?._id 
+            || this.alunoSelecionado?.id;
+        
+        if (!alunoId) {
+            return this.showToast('Erro: aluno não identificado no termo', 'error');
+        }
+        
         const assinaturaBase64 = this.assinatura.canvas.toDataURL('image/png');
         
         try {
@@ -677,7 +873,8 @@ class VisitasPublico {
                     email: email || '',
                     lgpdAceito: true,
                     assinaturaBase64,
-                    localizacao: this.localizacao
+                    localizacao: this.localizacao,
+                    alunoId: alunoId.toString()  // 🔥 Envia o ID do aluno
                 })
             });
             
@@ -703,13 +900,19 @@ class VisitasPublico {
         const confirmar = confirm('Tem certeza que deseja RECUSAR a participação?');
         if (!confirmar) return;
         
+        // 🔥 Envia o alunoId também na recusa
+        const alunoId = this.termoAtual.alunos?.[0]?.alunoId 
+            || this.termoAtual.alunos?.[0]?._id 
+            || this.alunoSelecionado?.id;
+        
         try {
             const response = await fetch(`${this.apiBase}/recusar/${this.termoAtual.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     motivo: motivo || 'Não informado',
-                    nome: 'Responsável'
+                    nome: 'Responsável',
+                    alunoId: alunoId ? alunoId.toString() : undefined
                 })
             });
             
@@ -761,6 +964,10 @@ class VisitasPublico {
                             style="max-width: 320px; padding: 15px 30px;">
                         <i class="fas fa-file-pdf"></i> Imprimir Termo Assinado
                     </button>
+                    <button class="btn-filter" onclick="location.reload()" 
+                            style="padding: 15px 30px;">
+                        <i class="fas fa-home"></i> Nova Consulta
+                    </button>
                 </div>
                 
                 <p style="margin-top: 25px; font-size: 12px; color: #9ca3af;">
@@ -787,7 +994,6 @@ class VisitasPublico {
                 throw new Error(data.error || 'Erro ao gerar termo');
             }
             
-            // Abrir em nova janela para impressão
             const win = window.open('', '_blank');
             win.document.write(data.html);
             win.document.close();

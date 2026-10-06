@@ -1,11 +1,11 @@
 // ============================================
 // ENFERMARIA - SISTEMA DE ATENDIMENTOS
 // Modo Automático (QR) + Modo Manual (Clique direto no aluno)
+// ============================================
 
 // ============================================
 // 🚫 BLOQUEAR ALERTS NATIVOS (KODULAR/WEBVIEW)
 // ============================================
-// Sobrescreve window.alert para usar toast customizado
 window.alert = function(mensagem) {
     console.warn('⚠️ alert() nativo bloqueado. Use mostrarToast()');
     if (typeof mostrarToast === 'function') {
@@ -13,11 +13,8 @@ window.alert = function(mensagem) {
     }
 };
 
-// Sobrescreve window.confirm (assíncrono)
 window.confirm = function(mensagem) {
     console.warn('⚠️ confirm() nativo bloqueado. Use await confirmar()');
-    // Retorna true automaticamente para não quebrar o fluxo
-    // (melhor trocar por confirmar() manualmente)
     return true;
 };
 
@@ -25,7 +22,6 @@ window.prompt = function(mensagem, valorPadrao) {
     console.warn('⚠️ prompt() nativo bloqueado.');
     return null;
 };
-// ============================================
 
 let token = localStorage.getItem('auth_token');
 let currentAluno = null;
@@ -41,6 +37,7 @@ let scannerAutoAtivo = false;
 let modoAtual = 'automatico';
 let turmasDisponiveis = [];
 let alunosPorTurma = [];
+let __atendimentosRecentes = [];
 
 // ============================================
 // UTILITÁRIOS
@@ -55,17 +52,33 @@ function escapeHTML(str) {
               .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function gerarAvatarSVG(nome) {
+    const inicial = (nome || '?').charAt(0).toUpperCase();
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+            <defs>
+                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="50" fill="url(#grad)"/>
+            <text x="50" y="50" font-family="Arial, sans-serif" font-size="45" font-weight="bold" 
+                  fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text>
+        </svg>
+    `;
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Verificar se tem token
     if (!token) { 
         window.location.href = '/login.html'; 
         return; 
     }
     
-    // 2. Verificar se o usuário tem permissão
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     const allowedRoles = ['enfermaria', 'super_admin', 'admin'];
     
@@ -78,11 +91,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.log('✅ Enfermaria autenticada:', userData.nome);
     
-    // 3. Preencher dados do usuário na tela
     safeSetText('userName', userData.nome || 'Usuário');
     safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
     
-    // 4. Carregar dados iniciais em paralelo
     try {
         await Promise.allSettled([
             carregarFotoPerfil(),
@@ -95,10 +106,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Erro ao carregar dados iniciais:', error);
     }
     
-    // 5. Iniciar scanner automático (padrão)
     await iniciarScannerAutomatico();
     
-    // 6. Atualização automática a cada 30 segundos
     setInterval(() => {
         if (safeGet('ativos')?.classList.contains('active')) {
             carregarAtendimentosAtivos();
@@ -108,20 +117,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 30000);
     
-    // 7. Eventos das tabs
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
+        configurarFiltrosAtendimentosRecentes();
+        carregarAtendimentosRecentes(1);
     });
     
-    // 8. Eventos de mudança de modo
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
     safeGet('modoManualBtn')?.addEventListener('click', () => setModo('manual'));
-    
-    // 9. Eventos do modo manual
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
     
-    // 10. Atalho ESC para fechar tela do aluno
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             if (currentAluno) {
@@ -220,14 +226,12 @@ async function setModo(modo) {
         safeGet('modoManualBtn').classList.remove('active');
         safeGet('modoAutomatico').style.display = 'block';
         safeGet('modoManual').style.display = 'none';
-        
         await iniciarScannerAutomatico();
     } else {
         safeGet('modoManualBtn').classList.add('active');
         safeGet('modoAutomaticoBtn').classList.remove('active');
         safeGet('modoAutomatico').style.display = 'none';
         safeGet('modoManual').style.display = 'block';
-        
         await pararScannerAutomatico();
         
         const turmaSelecionada = safeGet('filtroTurmaManual').value;
@@ -334,7 +338,6 @@ function filtrarAlunosManual() {
     
     container.innerHTML = html;
     
-    // Adicionar listeners (mais seguro que onclick inline)
     container.querySelectorAll('.list-group-item').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.getAttribute('data-aluno-id');
@@ -344,13 +347,7 @@ function filtrarAlunosManual() {
     });
 }
 
-// ============================================
-// CLICAR NO ALUNO PROCESSA DIRETO (SEM QR CODE)
-// ============================================
 async function selecionarAluno(alunoId, alunoNome, itemEl) {
-    console.log(`🎯 Aluno selecionado: ${alunoNome} (${alunoId})`);
-    
-    // Feedback visual
     if (itemEl) {
         itemEl.style.background = '#d1fae5';
         itemEl.style.borderColor = '#10b981';
@@ -363,8 +360,6 @@ async function selecionarAluno(alunoId, alunoNome, itemEl) {
             <i class="fas fa-spinner fa-spin fa-2x text-success"></i>
         `;
     }
-    
-    // Processar direto (como se tivesse escaneado o QR Code)
     await buscarAluno(alunoId);
 }
 
@@ -411,16 +406,10 @@ function exibirAluno(data) {
     
     const fotoEl = safeGet('alunoFoto');
     if (fotoEl) {
-        // Remove o onerror antes de definir
         fotoEl.onerror = null;
-        
-        // Se não tem foto, usa um SVG local (não depende de servidor externo)
-        const fotoUrl = aluno.fotoPerfil || gerarAvatarSVG(aluno.nome);
-        fotoEl.src = fotoUrl;
-        
-        // onerror com trava para não entrar em loop
+        fotoEl.src = aluno.fotoPerfil || gerarAvatarSVG(aluno.nome);
         fotoEl.onerror = function() {
-            this.onerror = null; // Remove o onerror imediatamente
+            this.onerror = null;
             this.src = gerarAvatarSVG(aluno.nome);
         };
     }
@@ -453,25 +442,6 @@ function exibirAluno(data) {
     safeGet('alunoInfo').scrollIntoView({ behavior: 'smooth' });
 }
 
-// Gera um avatar SVG local (não depende de servidor externo)
-function gerarAvatarSVG(nome) {
-    const inicial = (nome || '?').charAt(0).toUpperCase();
-    const svg = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-            <defs>
-                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
-                </linearGradient>
-            </defs>
-            <circle cx="50" cy="50" r="50" fill="url(#grad)"/>
-            <text x="50" y="50" font-family="Arial, sans-serif" font-size="45" font-weight="bold" 
-                  fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text>
-        </svg>
-    `;
-    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-}
-
 // ============================================
 // FORMULÁRIOS
 // ============================================
@@ -481,15 +451,12 @@ function mostrarFormEntrada() {
     safeGet('queixa').value = '';
     safeGet('observacoesEntrada').value = '';
     
-    // Preencher data/hora atual no campo (formato datetime-local)
     const agora = new Date();
-    // Ajustar para timezone local (datetime-local precisa formato YYYY-MM-DDTHH:MM)
     const offset = agora.getTimezoneOffset() * 60000;
     const dataLocal = new Date(agora.getTime() - offset);
     safeGet('dataEntrada').value = dataLocal.toISOString().slice(0, 16);
 }
 
-// ✅ FUNÇÃO QUE ESTAVA FALTANDO — ADICIONADA AQUI
 function mostrarFormSaida() {
     safeGet('formEntrada').style.display = 'none';
     safeGet('formSaida').style.display = 'block';
@@ -500,7 +467,6 @@ function mostrarFormSaida() {
     safeGet('campoCoordenador').style.display = 'none';
     safeGet('campoOutros').style.display = 'none';
     
-    // Preencher data/hora atual no campo dataSaida
     const agora = new Date();
     const offset = agora.getTimezoneOffset() * 60000;
     const dataLocal = new Date(agora.getTime() - offset);
@@ -514,17 +480,14 @@ async function registrarEntrada() {
     const queixa = (safeGet('queixa')?.value || '').trim();
     if (!queixa) { mostrarToast('Por favor, descreva a queixa do aluno'); return; }
     
-    // Validar e capturar a data escolhida
     const dataEntradaInput = safeGet('dataEntrada')?.value;
     if (!dataEntradaInput) {
         mostrarToast('Por favor, informe a data/hora do atendimento');
         return;
     }
     
-    // Converter para Date (datetime-local vem no formato YYYY-MM-DDTHH:MM)
     const dataEntrada = new Date(dataEntradaInput);
     
-    // Validação: não permitir data futura
     if (dataEntrada > new Date()) {
         mostrarToast('⚠️ A data do atendimento não pode ser no futuro');
         return;
@@ -574,7 +537,6 @@ async function registrarSaida() {
         return; 
     }
     
-    // Validar e capturar data/hora da saída
     const dataSaidaInput = safeGet('dataSaida')?.value;
     if (!dataSaidaInput) {
         mostrarToast('Por favor, informe a data/hora da saída');
@@ -583,13 +545,11 @@ async function registrarSaida() {
     
     const dataSaida = new Date(dataSaidaInput);
     
-    // Validação: não pode ser no futuro
     if (dataSaida > new Date()) {
         mostrarToast('⚠️ A data da saída não pode ser no futuro');
         return;
     }
     
-    // Validação: não pode ser anterior à entrada
     if (currentAtendimento && currentAtendimento.dataHoraEntrada) {
         const dataEntrada = new Date(currentAtendimento.dataHoraEntrada);
         if (dataSaida < dataEntrada) {
@@ -618,7 +578,7 @@ async function registrarSaida() {
             desfechoOutrosTexto: safeGet('outrosTexto').value,
             coordenadorPatioNome: safeGet('coordenadorPatioNome').value,
             observacoes: safeGet('observacoesSaida').value,
-            dataSaida: dataSaida.toISOString() // Enviar data personalizada
+            dataSaida: dataSaida.toISOString()
         };
         
         const response = await fetch('/api/enfermaria/saida', {
@@ -656,7 +616,6 @@ function finalizarAposSucesso() {
     if (modoAtual === 'automatico') {
         reiniciarScannerAutomatico();
     } else {
-        // Recarregar a lista de alunos da turma
         carregarAlunosPorTurma();
     }
     
@@ -695,7 +654,7 @@ async function carregarAtendimentosAtivos() {
         
         if (data.success && Array.isArray(data.atendimentos) && data.atendimentos.length > 0) {
             container.innerHTML = data.atendimentos.map(a => `
-                <div class="list-group-item">
+                <div class="list-group-item" data-id="${a.id}">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                         <div class="d-flex align-items-center gap-3">
                             <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
@@ -788,6 +747,8 @@ async function imprimirAtendimentosAtivos() {
 
 function gerarHTMLAtendimentosAtivos(atendimentos) {
     const logoIema = '/uploads/logo-iema.png';
+    const carimboEnfermaria = '/icons/assinatura_enfermaria.ico';
+    const carimboGestao = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
     
     return `<!DOCTYPE html>
@@ -826,8 +787,16 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
             .tempo.medio { background: #fef3c7; color: #92400e; }
             .queixa-cell { max-width: 280px; }
             .assinaturas { display: flex; justify-content: space-around; margin-top: 50px; gap: 40px; }
-            .assinatura { flex: 1; text-align: center; }
-            .assinatura-linha { border-top: 1px solid #000; padding-top: 5px; font-size: 10pt; }
+            .assinatura { flex: 1; text-align: center; position: relative; }
+            .assinatura-container {
+                position: relative; border-bottom: 1px solid #000; min-height: 18mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+            }
+            .carimbo-overlay {
+                max-height: 16mm; max-width: 60%; object-fit: contain;
+                opacity: 0.9; position: relative; z-index: 1;
+            }
+            .assinatura-linha { padding-top: 5px; font-size: 10pt; }
             .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
             .footer p { margin: 2px 0; }
             .btn-print {
@@ -882,9 +851,7 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
                     return `
                         <tr>
                             <td><strong>${i + 1}</strong></td>
-                            <td>
-                                <strong>${escapeHTML(a.alunoNome || '')}</strong>
-                            </td>
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                             <td>${escapeHTML(a.alunoTurma || '-')}</td>
                             <td class="queixa-cell">${escapeHTML((a.queixa || '').substring(0, 120))}${(a.queixa || '').length > 120 ? '...' : ''}</td>
                             <td><span class="tempo ${classeTempo}">${tempo} min</span></td>
@@ -897,9 +864,15 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
         
         <div class="assinaturas">
             <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimboEnfermaria}" alt="Enfermaria" onerror="this.style.display='none'">
+                </div>
                 <div class="assinatura-linha">Enfermaria</div>
             </div>
             <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimboGestao}" alt="Gestão" onerror="this.style.display='none'">
+                </div>
                 <div class="assinatura-linha">Coordenação / Gestão</div>
             </div>
         </div>
@@ -913,7 +886,7 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
 }
 
 // ============================================
-// 🆕 VER ATENDIMENTO (MODAL DE DETALHES)
+// 👁️ VER ATENDIMENTO (MODAL)
 // ============================================
 async function verAtendimento(atendimentoId) {
     if (!atendimentoId) return;
@@ -931,7 +904,6 @@ async function verAtendimento(atendimentoId) {
         
         const a = data.atendimento;
         
-        // Montar HTML das informações de saída (se houver)
         let saidaHTML = '';
         if (a.saida) {
             saidaHTML = `
@@ -957,7 +929,6 @@ async function verAtendimento(atendimentoId) {
             `;
         }
         
-        // Info sobre edição
         let editadoHTML = '';
         if (a.entrada.editadoEm) {
             editadoHTML = `
@@ -1063,7 +1034,7 @@ function fecharVerAtendimento() {
 }
 
 // ============================================
-// 🆕 EDITAR ATENDIMENTO
+// ✏️ EDITAR ATENDIMENTO
 // ============================================
 async function editarAtendimento(atendimentoId) {
     if (!atendimentoId) return;
@@ -1081,13 +1052,11 @@ async function editarAtendimento(atendimentoId) {
         
         const a = data.atendimento;
         
-        // Preparar valor do campo datetime-local (ENTRADA)
         const dataEntradaObj = new Date(a.entrada.dataHora);
         const offsetEntrada = dataEntradaObj.getTimezoneOffset() * 60000;
         const dataEntradaLocal = new Date(dataEntradaObj.getTime() - offsetEntrada);
         const dataEntradaValue = dataEntradaLocal.toISOString().slice(0, 16);
         
-        // Preparar valor do campo datetime-local (SAÍDA) — só se já finalizado
         let dataSaidaValue = '';
         if (a.saida && a.saida.dataHora) {
             const dataSaidaObj = new Date(a.saida.dataHora);
@@ -1099,7 +1068,6 @@ async function editarAtendimento(atendimentoId) {
         const oldModal = safeGet('modalEditarAtendimento');
         if (oldModal) oldModal.remove();
         
-        // Bloco de saída (só aparece se já estiver finalizado)
         const blocoSaida = a.status === 'finalizado' ? `
             <hr>
             <h6 class="mb-3"><i class="fas fa-sign-out-alt"></i> Dados da Saída</h6>
@@ -1147,7 +1115,6 @@ async function editarAtendimento(atendimentoId) {
                             
                             <h6 class="mb-3"><i class="fas fa-sign-in-alt"></i> Dados da Entrada</h6>
                             
-                            <!-- CAMPO DE DATA DE ENTRADA EDITÁVEL -->
                             <div class="mb-3">
                                 <label class="form-label">
                                     <i class="fas fa-calendar-alt me-1"></i> Data/Hora da Entrada <span class="text-danger">*</span>
@@ -1199,7 +1166,6 @@ async function salvarEdicaoAtendimento() {
     const observacoes = safeGet('editarObservacoes')?.value || '';
     const dataEntradaInput = safeGet('editarDataEntrada')?.value;
     
-    // Campos de saída (podem não existir se não estiver finalizado)
     const dataSaidaInput = safeGet('editarDataSaida')?.value || null;
     const observacoesSaida = safeGet('editarObservacoesSaida')?.value || null;
     
@@ -1220,7 +1186,6 @@ async function salvarEdicaoAtendimento() {
         return;
     }
     
-    // Validar data de saída (se fornecida)
     let dataSaidaISO = null;
     if (dataSaidaInput) {
         const dataSaida = new Date(dataSaidaInput);
@@ -1242,7 +1207,6 @@ async function salvarEdicaoAtendimento() {
             dataEntrada: dataEntrada.toISOString()
         };
         
-        // Só envia campos de saída se existirem
         if (dataSaidaISO) body.dataSaida = dataSaidaISO;
         if (observacoesSaida !== null) body.observacoesSaida = observacoesSaida;
         
@@ -1261,6 +1225,8 @@ async function salvarEdicaoAtendimento() {
             setTimeout(() => safeGet('modalEditarAtendimento')?.remove(), 300);
             
             carregarAtendimentosAtivos();
+            carregarAtendimentosRecentes();
+            carregarDashboard();
         } else {
             mostrarToast('❌ ' + (data.error || 'Erro ao salvar'));
         }
@@ -1287,7 +1253,6 @@ async function imprimirAtendimentoIndividual(atendimentoId) {
             return;
         }
         
-        // Enfermaria NÃO usa QR Code na impressão
         const html = gerarHTMLAtendimentoIndividual(data.atendimento);
         
         const win = window.open('', '_blank');
@@ -1301,9 +1266,10 @@ async function imprimirAtendimentoIndividual(atendimentoId) {
     }
 }
 
-function gerarHTMLAtendimentoIndividual(a) {
+function gerarHTMLAtendimentoIndividual(a, qrCodeUrl = '') {
     const logoIema = '/uploads/logo-iema.png';
-    const carimbo = '/icons/assinatura_gestao.ico';
+    const carimboEnfermaria = '/icons/assinatura_enfermaria.ico';
+    const carimboGestao = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
     
     const entrada = new Date(a.entrada.dataHora);
@@ -1312,7 +1278,6 @@ function gerarHTMLAtendimentoIndividual(a) {
     });
     const horaEntrada = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    // Bloco de saída (se houver)
     let saidaHTML = '';
     if (a.saida) {
         const saida = new Date(a.saida.dataHora);
@@ -1356,7 +1321,6 @@ function gerarHTMLAtendimentoIndividual(a) {
         `;
     }
     
-    // Auditoria de edição
     let editadoHTML = '';
     if (a.entrada.editadoEm) {
         editadoHTML = `
@@ -1378,174 +1342,225 @@ function gerarHTMLAtendimentoIndividual(a) {
         <meta charset="UTF-8">
         <title>Ficha de Atendimento - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 10mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body { 
                 font-family: 'Times New Roman', Times, serif; 
-                font-size: 11pt; 
-                line-height: 1.5; 
+                font-size: 10pt; 
+                line-height: 1.35; 
                 color: #000;
             }
+            
             .header { 
                 text-align: center; 
                 border-bottom: 2px double #000; 
-                padding-bottom: 10px; 
-                margin-bottom: 15px; 
+                padding-bottom: 6px; 
+                margin-bottom: 10px; 
             }
             .header img { 
                 max-width: 100%; 
-                max-height: 25mm; 
+                max-height: 18mm; 
                 object-fit: contain;
                 display: block;
-                margin: 0 auto 5px;
+                margin: 0 auto 3px;
             }
             .header h1 { 
-                font-size: 13pt; 
+                font-size: 11pt; 
                 text-transform: uppercase; 
                 font-weight: bold;
-                margin: 5px 0 0;
+                margin: 2px 0 0;
             }
+            .header p {
+                font-size: 8pt;
+                margin: 1px 0 0;
+            }
+            
             .titulo { 
                 text-align: center; 
-                font-size: 14pt; 
+                font-size: 12pt; 
                 font-weight: bold; 
                 background: #d1fae5; 
-                padding: 10px; 
-                border: 2px solid #000; 
-                margin: 15px 0;
+                padding: 6px; 
+                border: 1.5px solid #000; 
+                margin: 8px 0 4px;
                 text-transform: uppercase;
                 letter-spacing: 1px;
             }
             .status-badge {
                 text-align: center;
-                margin: -10px 0 20px;
+                margin: 0 0 10px;
             }
             .badge-finalizado {
                 background: #d1fae5; color: #065f46;
-                padding: 4px 14px; border-radius: 20px;
-                font-size: 10pt; font-weight: bold;
+                padding: 3px 12px; border-radius: 12px;
+                font-size: 9pt; font-weight: bold;
                 border: 1px solid #10b981;
             }
             .badge-andamento {
                 background: #fef3c7; color: #92400e;
-                padding: 4px 14px; border-radius: 20px;
-                font-size: 10pt; font-weight: bold;
+                padding: 3px 12px; border-radius: 12px;
+                font-size: 9pt; font-weight: bold;
                 border: 1px solid #f59e0b;
             }
             
             .aluno-box {
                 display: flex;
                 align-items: center;
-                gap: 15px;
-                padding: 15px;
+                gap: 10px;
+                padding: 8px 10px;
                 background: #f0fdf4;
                 border: 1px solid #86efac;
-                border-radius: 10px;
-                margin-bottom: 20px;
+                border-radius: 6px;
+                margin-bottom: 10px;
             }
             .aluno-foto {
-                width: 70px; height: 70px;
+                width: 50px; height: 50px;
                 border-radius: 50%;
                 object-fit: cover;
                 border: 2px solid #10b981;
+                flex-shrink: 0;
             }
             .aluno-info { flex: 1; }
             .aluno-nome {
-                font-size: 14pt; font-weight: bold;
-                color: #065f46; margin-bottom: 4px;
+                font-size: 11pt; font-weight: bold;
+                color: #065f46; margin-bottom: 2px;
             }
             .aluno-detalhes {
-                font-size: 10pt; color: #374151;
+                font-size: 8.5pt; color: #374151;
+                line-height: 1.3;
             }
             
             .section-title { 
-                font-size: 11pt; 
+                font-size: 9.5pt; 
                 font-weight: bold; 
                 background: #e8e8e8; 
-                padding: 6px 10px; 
-                border-left: 4px solid #059669; 
-                margin: 20px 0 10px;
+                padding: 3px 8px; 
+                border-left: 3px solid #059669; 
+                margin: 8px 0 5px;
             }
             
             .info-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 10px 20px;
-                margin: 10px 0 15px;
+                gap: 4px 20px;
+                margin: 5px 0 8px;
             }
-            .info-item { display: flex; gap: 8px; font-size: 10pt; }
-            .info-label { font-weight: bold; min-width: 120px; }
+            .info-item { display: flex; gap: 6px; font-size: 9pt; }
+            .info-label { font-weight: bold; min-width: 110px; }
             .info-value { flex: 1; }
             
             .queixa-box, .observacoes-box {
                 background: #f9fafb;
                 border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 10.5pt;
-                line-height: 1.5;
-                min-height: 50px;
+                border-radius: 5px;
+                padding: 8px;
+                font-size: 9.5pt;
+                line-height: 1.4;
+                min-height: 35px;
+                max-height: 60px;
+                overflow: hidden;
             }
             
             .alerta-andamento {
                 background: #fef3c7;
-                border-left: 4px solid #f59e0b;
-                padding: 12px 15px;
+                border-left: 3px solid #f59e0b;
+                padding: 8px 10px;
                 border-radius: 4px;
-                font-size: 10pt;
+                font-size: 9pt;
             }
             
             .editado-info {
                 background: #eff6ff;
-                border-left: 4px solid #3b82f6;
-                padding: 8px 12px;
+                border-left: 3px solid #3b82f6;
+                padding: 5px 10px;
                 border-radius: 4px;
-                font-size: 9pt;
-                margin-top: 10px;
+                font-size: 8pt;
+                margin-top: 8px;
                 color: #1e40af;
             }
             
+            /* ✅ ASSINATURAS COMPACTAS (igual à Gestão Geral) */
             .assinaturas { 
                 display: flex; 
                 justify-content: space-around; 
-                margin-top: 50px; 
-                gap: 40px; 
+                margin-top: 25px; 
+                gap: 30px; 
+                page-break-inside: avoid;
             }
             .assinatura { 
                 flex: 1; 
-                text-align: center; 
+                text-align: center;
+                position: relative;
+                max-width: 45%;
+            }
+            .assinatura-container {
+                position: relative;
+                border-bottom: 1px solid #000;
+                min-height: 12mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 2px;
+            }
+            .carimbo-overlay {
+                max-height: 11mm;
+                max-width: 55%;
+                object-fit: contain;
+                opacity: 0.9;
+                position: relative;
+                z-index: 1;
             }
             .assinatura-linha { 
-                border-top: 1px solid #000; 
-                padding-top: 5px; 
-                font-size: 10pt; 
+                padding-top: 3px; 
+                font-size: 9pt; 
+            }
+            
+            /* ✅ QR CODE */
+            .qr-code {
+                text-align: center;
+                margin-top: 8px;
+                page-break-inside: avoid;
+            }
+            .qr-code img {
+                width: 22mm;
+                height: 22mm;
+                border: 1.5px solid #000;
+                padding: 2px;
+                display: block;
+                margin: 0 auto;
+            }
+            .qr-code p {
+                font-size: 7.5pt;
+                margin: 3px 0 0 0;
+                color: #444;
+                font-weight: bold;
             }
             
             .footer { 
                 text-align: center; 
-                margin-top: 30px; 
-                padding-top: 10px; 
+                margin-top: 10px; 
+                padding-top: 6px; 
                 border-top: 1px solid #ccc; 
-                font-size: 8pt; 
+                font-size: 7pt; 
                 color: #666; 
             }
-            .footer p { margin: 2px 0; }
+            .footer p { margin: 1px 0; }
             
             .btn-print { 
                 display: block; 
-                margin: 20px auto; 
-                padding: 12px 30px; 
+                margin: 15px auto; 
+                padding: 10px 24px; 
                 background: #059669; 
                 color: white; 
                 border: none; 
                 border-radius: 8px; 
                 font-weight: bold; 
                 cursor: pointer; 
-                font-size: 14px;
+                font-size: 13px;
                 font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #047857; }
-            @media print { .no-print { display: none !important; } }
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -1554,7 +1569,7 @@ function gerarHTMLAtendimentoIndividual(a) {
         <div class="header">
             <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Enfermaria</p>
+            <p>Sistema de Atendimentos — Enfermaria</p>
         </div>
         
         <div class="titulo">🏥 Ficha de Atendimento</div>
@@ -1603,12 +1618,25 @@ function gerarHTMLAtendimentoIndividual(a) {
         
         <div class="assinaturas">
             <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimboEnfermaria}" alt="Enfermaria" onerror="this.style.display='none'">
+                </div>
                 <div class="assinatura-linha">Enfermaria</div>
             </div>
             <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimboGestao}" alt="Gestão" onerror="this.style.display='none'">
+                </div>
                 <div class="assinatura-linha">Coordenação / Gestão</div>
             </div>
         </div>
+        
+        ${qrCodeUrl ? `
+            <div class="qr-code">
+                <img src="${qrCodeUrl}" alt="QR Code do Aluno">
+                <p>Identificação do Aluno</p>
+            </div>
+        ` : ''}
         
         <div class="footer">
             <p>Ficha gerada em <strong>${dataGeracao}</strong></p>
@@ -1618,8 +1646,53 @@ function gerarHTMLAtendimentoIndividual(a) {
     </html>`;
 }
 
+async function imprimirAtendimentoIndividual(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            mostrarToast('Erro ao carregar atendimento', 'error');
+            return;
+        }
+        
+        const a = data.atendimento;
+        
+        // 🔥 BUSCAR QR CODE DO ALUNO
+        let qrCodeUrl = '';
+        try {
+            const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (qrR.ok) {
+                const qrD = await qrR.json();
+                if (qrD.success && qrD.qrCode) qrCodeUrl = qrD.qrCode;
+            } else {
+                console.info(`ℹ️ QR Code não disponível (status ${qrR.status})`);
+            }
+        } catch (e) {
+            console.info('ℹ️ QR Code não pôde ser carregado');
+        }
+        
+        const html = gerarHTMLAtendimentoIndividual(a, qrCodeUrl);
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+        
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarToast('Erro ao gerar PDF', 'error');
+    }
+}
+
 // ============================================
-// 🆕 EXCLUIR ATENDIMENTO
+// 🗑️ EXCLUIR ATENDIMENTO
 // ============================================
 async function excluirAtendimento(atendimentoId, alunoNome) {
     if (!atendimentoId) return;
@@ -1643,7 +1716,6 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
         if (data.success) {
             mostrarToast('✅ Atendimento excluído com sucesso!');
             
-            // Remover linha com animação
             const row = document.querySelector(`[data-id="${atendimentoId}"]`);
             if (row) {
                 row.style.transition = 'all 0.3s';
@@ -1653,6 +1725,7 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
             }
             
             carregarAtendimentosAtivos();
+            carregarAtendimentosRecentes();
             carregarDashboard();
         } else {
             mostrarToast('❌ ' + (data.error || 'Erro ao excluir'));
@@ -1664,12 +1737,11 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
 }
 
 // ============================================
-// 🆕 FINALIZAR ATENDIMENTO ATIVO (a partir do botão)
+// FINALIZAR ATENDIMENTO ATIVO
 // ============================================
 async function finalizarAtendimentoAtivo(alunoId) {
     if (!alunoId) return;
     
-    // Buscar o aluno para pegar seus dados
     try {
         const response = await fetch(`/api/enfermaria/aluno/${alunoId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -1678,17 +1750,14 @@ async function finalizarAtendimentoAtivo(alunoId) {
         
         if (data.success && data.aluno) {
             currentAluno = data.aluno;
-            // Fechar modal se estiver aberto
             const modalVer = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
             if (modalVer) modalVer.hide();
             
-            // Ir para a aba de atendimento
             const tabAtendimento = safeGet('atendimento-tab');
             if (tabAtendimento) {
                 new bootstrap.Tab(tabAtendimento).show();
             }
             
-            // Exibir aluno e formulário de saída
             exibirAluno(data);
             mostrarFormSaida();
         } else {
@@ -1705,7 +1774,6 @@ async function finalizarAtendimentoAtivo(alunoId) {
 // ============================================
 function confirmar(mensagem) {
     return new Promise((resolve) => {
-        // Remove modal anterior se existir
         const oldModal = document.getElementById('modalConfirmacao');
         if (oldModal) oldModal.remove();
         
@@ -1747,7 +1815,6 @@ function confirmar(mensagem) {
         document.getElementById('btnConfirmarConfirmacao').addEventListener('click', () => finalizar(true));
         document.getElementById('btnCancelarConfirmacao').addEventListener('click', () => finalizar(false));
         
-        // Fechar com ESC = cancelar
         modalEl.addEventListener('hidden.bs.modal', () => {
             if (!modalEl.dataset.resolvido) {
                 resolve(false);
@@ -1772,7 +1839,6 @@ async function carregarDashboard() {
             safeSetText('totalMes', data.metricas.mes);
             safeSetText('totalGeral', data.metricas.total);
             
-            // Gráfico Atendimentos por Dia
             const ctxAtendimentos = safeGet('chartAtendimentos');
             if (ctxAtendimentos && data.tendencias?.ultimos7Dias) {
                 if (dashboardCharts.atendimentos) try { dashboardCharts.atendimentos.destroy(); } catch(e){}
@@ -1791,7 +1857,6 @@ async function carregarDashboard() {
                 });
             }
             
-            // Gráfico Desfechos
             const ctxDesfechos = safeGet('chartDesfechos');
             if (ctxDesfechos && data.desfechos) {
                 if (dashboardCharts.desfechos) try { dashboardCharts.desfechos.destroy(); } catch(e){}
@@ -1808,7 +1873,6 @@ async function carregarDashboard() {
                 });
             }
             
-            // Gráfico Turmas
             const ctxTurmas = safeGet('chartTurmas');
             if (ctxTurmas && data.tendencias?.porTurma) {
                 if (dashboardCharts.turmas) try { dashboardCharts.turmas.destroy(); } catch(e){}
@@ -1827,7 +1891,6 @@ async function carregarDashboard() {
                 });
             }
             
-            // Gráfico Horário
             const ctxHorario = safeGet('chartHorario');
             if (ctxHorario && data.tendencias?.distribuicaoHoraria) {
                 if (dashboardCharts.horario) try { dashboardCharts.horario.destroy(); } catch(e){}
@@ -1849,7 +1912,6 @@ async function carregarDashboard() {
                 });
             }
             
-            // Queixas Comuns
             const queixasContainer = safeGet('queixasComuns');
             if (queixasContainer && data.tendencias?.queixasComuns) {
                 if (data.tendencias.queixasComuns.length > 0) {
@@ -1870,6 +1932,159 @@ async function carregarDashboard() {
         }
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
+    }
+}
+
+// ============================================
+// 🆕 DASHBOARD - ATENDIMENTOS RECENTES
+// ============================================
+async function carregarAtendimentosRecentes(pagina = 1) {
+    const container = safeGet('listaAtendimentosRecentes');
+    if (!container) return;
+    
+    const busca = (safeGet('filtroAtendimentosRecentesBusca')?.value || '').trim().toLowerCase();
+    const turma = safeGet('filtroAtendimentosRecentesTurma')?.value || '';
+    
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <p class="text-muted mt-2 mb-0">Carregando atendimentos...</p>
+        </div>`;
+    
+    try {
+        const params = new URLSearchParams();
+        params.append('limit', '20');
+        params.append('page', pagina);
+        if (turma) params.append('turma', turma);
+        
+        const response = await fetch(`/api/enfermaria/listar?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !Array.isArray(data.atendimentos)) {
+            container.innerHTML = `<div class="alert alert-warning">Nenhum atendimento encontrado</div>`;
+            return;
+        }
+        
+        let lista = data.atendimentos;
+        
+        if (busca) {
+            lista = lista.filter(a =>
+                (a.alunoNome || '').toLowerCase().includes(busca) ||
+                (a.alunoMatricula || '').toLowerCase().includes(busca)
+            );
+        }
+        
+        __atendimentosRecentes = lista;
+        atualizarContadorAtendimentosRecentes(lista.length);
+        renderizarListaAtendimentosRecentes(lista);
+    } catch (error) {
+        console.error('Erro ao carregar atendimentos:', error);
+        container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
+    }
+}
+
+function atualizarContadorAtendimentosRecentes(total) {
+    const el = safeGet('contadorAtendimentosRecentes');
+    if (el) el.textContent = total;
+}
+
+function renderizarListaAtendimentosRecentes(lista) {
+    const container = safeGet('listaAtendimentosRecentes');
+    if (!container) return;
+    
+    if (lista.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
+                <p>Nenhum atendimento corresponde aos filtros</p>
+            </div>`;
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle">
+                <thead style="background: #e8f5e9;">
+                    <tr>
+                        <th style="width: 25%;">Aluno</th>
+                        <th style="width: 12%;">Turma</th>
+                        <th style="width: 20%;">Entrada</th>
+                        <th style="width: 13%;">Status</th>
+                        <th style="width: 30%; text-align: center;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lista.map(a => {
+                        const badge = a.status === 'finalizado'
+                            ? '<span class="badge bg-success">✅ Finalizado</span>'
+                            : '<span class="badge bg-warning text-dark">⏳ Em Atendimento</span>';
+                        
+                        const dataEntrada = a.entrada?.dataHoraFormatada || '-';
+                        
+                        return `
+                            <tr data-id="${a.id}">
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
+                                             style="width: 32px; height: 32px; border-radius: 50%;" alt=""
+                                             onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome || '?')}'">
+                                        <div>
+                                            <strong style="font-size: 13px;">${escapeHTML(a.alunoNome || '')}</strong>
+                                            <br><small class="text-muted" style="font-size: 11px;">${escapeHTML(a.alunoMatricula || '')}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><small>${escapeHTML(a.alunoTurma || '-')}</small></td>
+                                <td><small>${dataEntrada}</small></td>
+                                <td>${badge}</td>
+                                <td class="text-center">
+                                    <div class="d-flex gap-1 justify-content-center flex-wrap">
+                                        <button class="btn btn-sm btn-info" 
+                                                onclick="verAtendimento('${a.id}')" 
+                                                title="Ver detalhes">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" 
+                                                onclick="editarAtendimento('${a.id}')" 
+                                                title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-success" 
+                                                onclick="imprimirAtendimentoIndividual('${a.id}')" 
+                                                title="Imprimir">
+                                            <i class="fas fa-print"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" 
+                                                onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+function configurarFiltrosAtendimentosRecentes() {
+    const busca = safeGet('filtroAtendimentosRecentesBusca');
+    if (busca && !busca.dataset.listenerAttached) {
+        busca.dataset.listenerAttached = 'true';
+        let timeout;
+        busca.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => carregarAtendimentosRecentes(1), 300);
+        });
+    }
+    
+    const turma = safeGet('filtroAtendimentosRecentesTurma');
+    if (turma && !turma.dataset.listenerAttached) {
+        turma.dataset.listenerAttached = 'true';
+        turma.addEventListener('change', () => carregarAtendimentosRecentes(1));
     }
 }
 
@@ -1975,7 +2190,6 @@ function exibirRelatorio(data, tipo) {
     const container = safeGet('resultadoRelatorio');
     if (!container) return;
     
-    // ✅ HABILITAR BOTÕES DE EXPORTAÇÃO
     const btnCSV = safeGet('btnExportarCSVPsicologia');
     const btnPDF = safeGet('btnExportarPDFPsicologia');
     if (btnCSV) btnCSV.disabled = false;
@@ -2102,7 +2316,7 @@ function exportarCSV() {
 }
 
 // ============================================
-// 📄 EXPORTAR PDF (padrão Setor Pedagógico)
+// 📄 EXPORTAR PDF
 // ============================================
 function exportarPDF() {
     if (!relatorioData) { 
@@ -2119,15 +2333,15 @@ function exportarPDF() {
 }
 
 // ============================================
-// 🎨 GERAR HTML DO RELATÓRIO (padrão Setor Pedagógico)
+// 🎨 GERAR HTML DO RELATÓRIO (com assinaturas fixas)
 // ============================================
 function gerarHTMLRelatorioEnfermaria(data) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
     const logoIema = '/uploads/logo-iema.png';
-    const carimbo = '/icons/assinatura_gestao.ico';
+    const carimboEnfermaria = '/icons/assinatura_enfermaria.ico';
+    const carimboGestao = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
     
-    // ========== TÍTULO DINÂMICO ==========
     let titulo = 'Relatório de Atendimentos - Enfermaria';
     let subtitulo = '';
     if (tipo === 'turma') {
@@ -2140,7 +2354,6 @@ function gerarHTMLRelatorioEnfermaria(data) {
         subtitulo = 'Relatório Geral';
     }
     
-    // ========== ESTATÍSTICAS ==========
     let statsHTML = '';
     if (tipo === 'geral') {
         statsHTML = `
@@ -2191,10 +2404,8 @@ function gerarHTMLRelatorioEnfermaria(data) {
         `;
     }
     
-    // ========== TABELA DE DADOS ==========
     let tabelaHTML = '';
     
-    // ---- GERAL ----
     if (tipo === 'geral') {
         tabelaHTML = `
             <div class="section-title">📊 Resumo por Turma</div>
@@ -2245,10 +2456,7 @@ function gerarHTMLRelatorioEnfermaria(data) {
                 </tbody>
             </table>
         `;
-    }
-    
-    // ---- TURMA ----
-    else if (tipo === 'turma') {
+    } else if (tipo === 'turma') {
         tabelaHTML = `
             <div class="section-title">👥 Atendimentos por Aluno</div>
             <table>
@@ -2296,10 +2504,7 @@ function gerarHTMLRelatorioEnfermaria(data) {
                 </table>
             ` : ''}
         `;
-    }
-    
-    // ---- ALUNO ----
-    else if (tipo === 'aluno') {
+    } else if (tipo === 'aluno') {
         tabelaHTML = `
             <div class="section-title">📋 Histórico de Atendimentos</div>
             <table>
@@ -2327,7 +2532,6 @@ function gerarHTMLRelatorioEnfermaria(data) {
         `;
     }
     
-    // ========== HTML FINAL ==========
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
@@ -2450,10 +2654,27 @@ function gerarHTMLRelatorioEnfermaria(data) {
             }
             .assinatura { 
                 flex: 1; 
-                text-align: center; 
+                text-align: center;
+                position: relative;
+            }
+            .assinatura-container {
+                position: relative;
+                border-bottom: 1px solid #000;
+                min-height: 20mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 3px;
+            }
+            .carimbo-overlay {
+                max-height: 18mm;
+                max-width: 60%;
+                object-fit: contain;
+                opacity: 0.9;
+                position: relative;
+                z-index: 1;
             }
             .assinatura-linha { 
-                border-top: 1px solid #000; 
                 padding-top: 5px; 
                 font-size: 10pt; 
             }
@@ -2509,9 +2730,15 @@ function gerarHTMLRelatorioEnfermaria(data) {
         
         <div class="assinaturas">
             <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimboEnfermaria}" alt="Enfermaria" onerror="this.style.display='none'">
+                </div>
                 <div class="assinatura-linha">Enfermaria</div>
             </div>
             <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimboGestao}" alt="Gestão" onerror="this.style.display='none'">
+                </div>
                 <div class="assinatura-linha">Coordenação / Gestão</div>
             </div>
         </div>
@@ -2531,12 +2758,8 @@ function gerarHTMLRelatorioEnfermaria(data) {
 // ============================================
 // 🔔 SISTEMA DE NOTIFICAÇÕES
 // ============================================
-
 let notificacoesAbertas = false;
 
-/**
- * Abre/fecha o dropdown de notificações
- */
 function abrirNotificacoes() {
     const dropdown = safeGet('notificacoesDropdown');
     if (!dropdown) return;
@@ -2546,13 +2769,10 @@ function abrirNotificacoes() {
     } else {
         dropdown.style.display = 'block';
         notificacoesAbertas = true;
-        carregarNotificacoes(); // Carrega ao abrir
+        carregarNotificacoes();
     }
 }
 
-/**
- * Fecha o dropdown
- */
 function fecharNotificacoes() {
     const dropdown = safeGet('notificacoesDropdown');
     if (dropdown) {
@@ -2561,12 +2781,8 @@ function fecharNotificacoes() {
     }
 }
 
-/**
- * Carrega notificações do backend
- */
 async function carregarNotificacoes() {
     try {
-        // Buscar contador de não lidas
         const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -2576,7 +2792,6 @@ async function carregarNotificacoes() {
             atualizarBadgeNotificacoes(countData.count || 0);
         }
         
-        // Buscar lista de notificações
         const res = await fetch('/api/notificacoes?limite=20', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -2591,9 +2806,6 @@ async function carregarNotificacoes() {
     }
 }
 
-/**
- * Atualiza o badge com o número de não lidas
- */
 function atualizarBadgeNotificacoes(total) {
     const badge = safeGet('notificacoesBadge');
     const btn = safeGet('notificacoesBtn');
@@ -2611,10 +2823,9 @@ function atualizarBadgeNotificacoes(total) {
 }
 
 // ============================================
-// TOAST CUSTOMIZADO (substitui mostrarToast)
+// TOAST CUSTOMIZADO
 // ============================================
 function mostrarToast(mensagem, tipo = 'info', duracao = 3000) {
-    // Remove toast anterior
     const anterior = document.getElementById('toastCustom');
     if (anterior) anterior.remove();
     
@@ -2657,12 +2868,10 @@ function mostrarToast(mensagem, tipo = 'info', duracao = 3000) {
     
     document.body.appendChild(toast);
     
-    // Animação de entrada
     setTimeout(() => {
         toast.style.transform = 'translateX(-50%) translateY(0)';
     }, 50);
     
-    // Remover após X segundos
     setTimeout(() => {
         toast.style.transform = 'translateX(-50%) translateY(-100px)';
         setTimeout(() => toast.remove(), 300);
@@ -2671,9 +2880,6 @@ function mostrarToast(mensagem, tipo = 'info', duracao = 3000) {
 
 window.mostrarToast = mostrarToast;
 
-/**
- * Renderiza a lista de notificações no dropdown
- */
 function renderizarNotificacoes(lista) {
     const container = safeGet('notificacoesLista');
     if (!container) return;
@@ -2741,9 +2947,6 @@ function renderizarNotificacoes(lista) {
     }).join('');
 }
 
-/**
- * Marca uma notificação como lida
- */
 async function marcarNotificacaoLida(id) {
     try {
         await fetch(`/api/notificacoes/${id}/lida`, {
@@ -2756,9 +2959,6 @@ async function marcarNotificacaoLida(id) {
     }
 }
 
-/**
- * Marca todas as notificações como lidas
- */
 async function marcarTodasLidas() {
     try {
         await fetch('/api/notificacoes/marcar-todas-lidas', {
@@ -2771,9 +2971,6 @@ async function marcarTodasLidas() {
     }
 }
 
-/**
- * Limpa todas as notificações do usuário
- */
 async function limparMinhasNotificacoes(event) {
     if (event) event.stopPropagation();
     
@@ -2802,7 +2999,6 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
-// ===== FECHAR AO CLICAR FORA =====
 document.addEventListener('click', (e) => {
     const dropdown = safeGet('notificacoesDropdown');
     const btn = safeGet('notificacoesBtn');
@@ -2815,7 +3011,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// ===== CARREGAR AO INICIAR + A CADA 30s =====
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => carregarNotificacoes(), 1500);
     setInterval(carregarNotificacoes, 30000);
@@ -2848,9 +3043,6 @@ window.excluirAtendimento = excluirAtendimento;
 window.finalizarAtendimentoAtivo = finalizarAtendimentoAtivo;
 window.logout = logout;
 
-// ============================================
-// EXPORTAR FUNÇÕES GLOBAIS (NOTIFICAÇÕES)
-// ============================================
 window.abrirNotificacoes = abrirNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.marcarNotificacaoLida = marcarNotificacaoLida;
@@ -2859,3 +3051,10 @@ window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 
 window.imprimirAtendimentosAtivos = imprimirAtendimentosAtivos;
 window.imprimirAtendimentoIndividual = imprimirAtendimentoIndividual;
+
+// Dashboard - atendimentos recentes
+window.carregarAtendimentosRecentes = carregarAtendimentosRecentes;
+window.verAtendimento = verAtendimento;
+window.editarAtendimento = editarAtendimento;
+window.imprimirAtendimentoIndividual = imprimirAtendimentoIndividual;
+window.excluirAtendimento = excluirAtendimento;

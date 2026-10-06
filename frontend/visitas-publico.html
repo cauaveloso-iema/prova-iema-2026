@@ -169,7 +169,7 @@
         </div>
 
         <!-- ============================================ -->
-        <!-- PASSO 1: LOCALIZAR ALUNO                     -->
+        <!-- PASSO 1: LOCALIZAR ALUNO OU CONSULTAR TERMO  -->
         <!-- ============================================ -->
         <div class="form-public" id="passoBusca">
             <div class="form-header">
@@ -200,6 +200,33 @@
 
             <div id="listaAlunosPublico" class="termos-disponiveis-grid">
                 <!-- Alunos aparecem aqui -->
+            </div>
+
+            <!-- 🔎 CONSULTA POR CÓDIGO DO TERMO -->
+            <div style="margin-top: 30px; padding-top: 25px; border-top: 2px dashed #e5e7eb;">
+                <div class="form-header" style="margin-bottom: 15px;">
+                    <h3 style="font-size: 1.05rem;">
+                        <i class="fas fa-barcode" style="color: #8b5cf6;"></i> 
+                        Consultar por Código do Termo
+                    </h3>
+                    <p style="font-size: 0.85rem;">Já autorizou? Consulte o status pelo código (ex: VIS-2026-0001)</p>
+                </div>
+
+                <div class="form-group">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="buscaCodigoPublico" class="form-input" 
+                            placeholder="Ex: VIS-2026-0001" autocomplete="off"
+                            style="flex: 1; text-transform: uppercase;">
+                        <button class="btn-submit" onclick="visitasPublico.buscarPorCodigo()" 
+                                style="width: auto; padding: 12px 22px; white-space: nowrap;">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+
+                <div id="listaTermosCodigoPublico" class="termos-disponiveis-grid">
+                    <!-- Resultados da busca por código -->
+                </div>
             </div>
         </div>
 

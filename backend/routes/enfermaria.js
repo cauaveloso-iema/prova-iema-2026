@@ -758,6 +758,97 @@ router.get('/relatorio/geral', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
+// 📋 LISTAR ATENDIMENTOS (com filtros e paginação)
+// Usado pelo dashboard para exibir os atendimentos recentes
+// ============================================
+router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) => {
+  try {
+    const { turma, status, dataInicio, dataFim, page = 1, limit = 20 } = req.query;
+    
+    let query = {};
+    
+    if (turma && turma.trim() !== '') {
+      query.alunoTurma = turma;
+    }
+    
+    if (status && status !== 'todos') {
+      query.status = status;
+    }
+    
+    if (dataInicio || dataFim) {
+      query['entrada.dataHora'] = {};
+      if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
+      if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+    }
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const [atendimentos, total] = await Promise.all([
+      AtendimentoEnfermaria.find(query)
+        .sort({ 'entrada.dataHora': -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      AtendimentoEnfermaria.countDocuments(query)
+    ]);
+    
+    const desfechoLabel = {
+      'retornou_sala': 'Retornou à Sala',
+      'encaminhado_gestao': 'Encaminhado à Gestão',
+      'liberado_responsavel': 'Liberado com Responsável',
+      'liberado_coordenador': 'Liberado com Coordenador',
+      'outros': 'Outros'
+    };
+    
+    res.json({
+      success: true,
+      total,
+      paginacao: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / parseInt(limit))
+      },
+      atendimentos: atendimentos.map(a => ({
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoCurso: a.alunoCurso,
+        alunoFoto: a.alunoFoto,
+        status: a.status,
+        entrada: {
+          dataHora: a.entrada?.dataHora,
+          dataHoraFormatada: a.entrada?.dataHora 
+            ? new Date(a.entrada.dataHora).toLocaleString('pt-BR') 
+            : '-',
+          queixa: a.entrada?.queixa || '',
+          observacoes: a.entrada?.observacoes || '',
+          registradoPorNome: a.entrada?.registradoPorNome || '-'
+        },
+        saida: a.saida ? {
+          dataHora: a.saida.dataHora,
+          dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
+          desfecho: a.saida.desfecho,
+          desfechoTexto: desfechoLabel[a.saida.desfecho] || a.saida.desfecho,
+          observacoes: a.saida.observacoes || ''
+        } : null,
+        tempoAtendimento: a.saida?.dataHora 
+          ? Math.floor((new Date(a.saida.dataHora) - new Date(a.entrada.dataHora)) / 60000)
+          : (a.status === 'em_atendimento' 
+              ? Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000) 
+              : 0),
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt
+      }))
+    });
+  } catch (error) {
+    console.error('Erro ao listar atendimentos:', error);
+    res.status(500).json({ success: false, error: 'Erro ao listar atendimentos: ' + error.message });
+  }
+});
+
+// ============================================
 // 📋 LISTAR ATENDIMENTOS ATIVOS
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarEnfermaria, async (req, res) => {

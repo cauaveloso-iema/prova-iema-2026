@@ -1749,29 +1749,29 @@ class SetorPedagogico {
                     </div>
 
                     <div class="tab-pane fade" id="segundaChamada-dashboard">
-                        <div class="row mb-4">
-                            <div class="col-md-3 mb-3">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
                                 <div class="metric-card">
                                     <i class="fas fa-calendar-day fa-2x text-primary mb-2"></i>
                                     <div class="metric-value" id="SegundaChamadaTotalHoje">0</div>
                                     <div class="metric-label">Hoje</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3">
                                 <div class="metric-card">
                                     <i class="fas fa-calendar-week fa-2x text-success mb-2"></i>
                                     <div class="metric-value" id="SegundaChamadaTotalSemana">0</div>
                                     <div class="metric-label">Esta Semana</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3">
                                 <div class="metric-card">
                                     <i class="fas fa-calendar-alt fa-2x text-info mb-2"></i>
                                     <div class="metric-value" id="SegundaChamadaTotalMes">0</div>
                                     <div class="metric-label">Este Mês</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3">
                                 <div class="metric-card">
                                     <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
                                     <div class="metric-value" id="SegundaChamadaTotalGeral">0</div>
@@ -1779,32 +1779,44 @@ class SetorPedagogico {
                                 </div>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
                                 <div class="card h-100">
                                     <div class="card-body">
-                                        <h6 class="card-title"><i class="fas fa-chart-pie"></i> Por Motivo</h6>
-                                        <canvas id="SegundaChamadaChartMotivos"></canvas>
+                                        <h6 class="card-title">
+                                            <i class="fas fa-chart-pie text-primary"></i> Por Motivo
+                                        </h6>
+                                        <div style="height: 280px; position: relative;">
+                                            <canvas id="SegundaChamadaChartMotivos"></canvas>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 mb-4">
+                            <div class="col-md-6">
                                 <div class="card h-100">
                                     <div class="card-body">
-                                        <h6 class="card-title"><i class="fas fa-chart-bar"></i> Registros por Dia</h6>
-                                        <canvas id="SegundaChamadaChartAtrasos"></canvas>
+                                        <h6 class="card-title">
+                                            <i class="fas fa-chart-bar text-success"></i> Registros por Dia
+                                        </h6>
+                                        <div style="height: 280px; position: relative;">
+                                            <canvas id="SegundaChamadaChartAtrasos"></canvas>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 mb-4">
+                            <div class="col-md-6">
                                 <div class="card h-100">
                                     <div class="card-body">
-                                        <h6 class="card-title"><i class="fas fa-users"></i> Por Turma</h6>
-                                        <canvas id="SegundaChamadaChartTurmas"></canvas>
+                                        <h6 class="card-title">
+                                            <i class="fas fa-users text-info"></i> Por Turma
+                                        </h6>
+                                        <div style="height: 280px; position: relative;">
+                                            <canvas id="SegundaChamadaChartTurmas"></canvas>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 mb-4">
+                            <div class="col-md-6">
                                 <div class="card h-100">
                                     <div class="card-body">
                                         <h6 class="card-title">
@@ -1812,7 +1824,10 @@ class SetorPedagogico {
                                             Alunos Reincidentes (3+ registros)
                                         </h6>
                                         <div id="SegundaChamadaAlunosReincidentes" class="mt-3">
-                                            <div class="text-center py-3">Carregando...</div>
+                                            <div class="text-center py-3">
+                                                <div class="loading-spinner"></div>
+                                                <p class="text-muted mb-0">Carregando...</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -3130,7 +3145,7 @@ class SetorPedagogico {
     }
     
     // ============================================
-    // 🎨 GERAR HTML DO RELATÓRIO - 2ª CHAMADA
+    // 🎨 GERAR HTML DO RELATÓRIO - 2ª CHAMADA (COMPACTO / FORMAL)
     // ============================================
     gerarHTMLRelatorio2Chamada(data) {
         const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
@@ -3150,24 +3165,25 @@ class SetorPedagogico {
             if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
         }
         
-        // ========== HELPER PARA FORMATAR DATA DE CADASTRO ==========
+        // ========== HELPER: FORMATAR DATA ==========
         const formatarDataCadastro = (item) => {
             if (!item.createdAt) return '-';
             try {
-                return new Date(item.createdAt).toLocaleString('pt-BR');
+                return new Date(item.createdAt).toLocaleString('pt-BR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
             } catch (e) {
                 return '-';
             }
         };
         
-        // ========== TÍTULO ==========
-        let titulo = 'Relatório de 2ª Chamada';
+        // ========== TÍTULO E SUBTÍTULO ==========
+        let titulo = 'RELATÓRIO DE 2ª CHAMADA';
         let subtitulo = '';
         if (tipo === 'turma') {
-            titulo = '2ª Chamada - Turma';
             subtitulo = `Turma: ${data.turma || ''}`;
         } else if (tipo === 'aluno') {
-            titulo = '2ª Chamada - Aluno';
             subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
         } else {
             subtitulo = 'Relatório Geral';
@@ -3177,122 +3193,100 @@ class SetorPedagogico {
         let statsHTML = '';
         if (tipo === 'geral') {
             statsHTML = `
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value">${data.totalRegistros || 0}</div>
-                        <div class="stat-label">Total de Registros</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${(data.porMotivo || []).length}</div>
-                        <div class="stat-label">Motivos Diferentes</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${(data.porTurma || []).length}</div>
-                        <div class="stat-label">Turmas Envolvidas</div>
-                    </div>
-                </div>
-            `;
+                <table class="stats-table">
+                    <tr>
+                        <td><strong>${data.totalRegistros || 0}</strong><br><span>Total</span></td>
+                        <td><strong>${(data.porMotivo || []).length}</strong><br><span>Motivos</span></td>
+                        <td><strong>${(data.porTurma || []).length}</strong><br><span>Turmas</span></td>
+                    </tr>
+                </table>`;
         } else if (tipo === 'turma') {
             statsHTML = `
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div>
-                        <div class="stat-label">Total de Registros</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${data.estatisticas?.totalAlunos || (data.porAluno || []).length}</div>
-                        <div class="stat-label">Alunos Atendidos</div>
-                    </div>
-                </div>
-            `;
-        } else if (tipo === 'aluno') {
+                <table class="stats-table">
+                    <tr>
+                        <td><strong>${data.estatisticas?.totalRegistros || 0}</strong><br><span>Total</span></td>
+                        <td><strong>${data.estatisticas?.totalAlunos || (data.porAluno || []).length}</strong><br><span>Alunos</span></td>
+                    </tr>
+                </table>`;
+        } else {
             statsHTML = `
-                <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div>
-                        <div class="stat-label">Total de Registros</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">${(data.porMotivo || []).length}</div>
-                        <div class="stat-label">Motivos Diferentes</div>
-                    </div>
-                </div>
-            `;
+                <table class="stats-table">
+                    <tr>
+                        <td><strong>${data.estatisticas?.totalRegistros || 0}</strong><br><span>Total</span></td>
+                        <td><strong>${(data.porMotivo || []).length}</strong><br><span>Motivos</span></td>
+                    </tr>
+                </table>`;
         }
         
         // ========== TABELAS ==========
         let tabelaHTML = '';
         
-        // ---- GERAL ----
         if (tipo === 'geral') {
             const porMotivo = Array.isArray(data.porMotivo) ? data.porMotivo : [];
             const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
             const registros = Array.isArray(data.registros) ? data.registros : [];
             
             tabelaHTML = `
-                <div class="section-title">📊 Distribuição por Motivo</div>
+                <div class="section-title">DISTRIBUIÇÃO POR MOTIVO</div>
                 <table>
-                    <thead><tr><th>Motivo</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                    <thead><tr><th>Motivo</th><th style="width:80px;text-align:center;">Qtd</th></tr></thead>
                     <tbody>
                         ${porMotivo.map(m => `
                             <tr>
-                                <td><strong>${this.escapeHtml(m.label || '')}</strong></td>
+                                <td>${this.escapeHtml(m.label || '')}</td>
                                 <td style="text-align:center;">${m.count || 0}</td>
                             </tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
                     </tbody>
                 </table>
                 
-                <div class="section-title">🏫 Distribuição por Turma</div>
+                <div class="section-title">DISTRIBUIÇÃO POR TURMA</div>
                 <table>
-                    <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
+                    <thead><tr><th>Turma</th><th style="width:70px;text-align:center;">Total</th><th style="width:70px;text-align:center;">Alunos</th></tr></thead>
                     <tbody>
                         ${porTurma.map(t => `
                             <tr>
-                                <td><strong>${this.escapeHtml(t.turma || '')}</strong></td>
+                                <td>${this.escapeHtml(t.turma || '')}</td>
                                 <td style="text-align:center;">${t.total || 0}</td>
                                 <td style="text-align:center;">${t.totalAlunos || 0}</td>
                             </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
                     </tbody>
                 </table>
                 
-                <div class="section-title">📋 Últimos Registros</div>
+                <div class="section-title">ÚLTIMOS REGISTROS</div>
                 <table>
                     <thead>
                         <tr>
-                            <th>Data da 2ª Chamada</th>
-                            <th>Data de Cadastro</th>
+                            <th>Data</th>
+                            <th>Cadastro</th>
                             <th>Aluno</th>
                             <th>Turma</th>
                             <th>Motivo</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${registros.slice(0, 30).map(a => `
+                        ${registros.slice(0, 40).map(a => `
                             <tr>
                                 <td>${a.dataFormatada || '-'}</td>
-                                <td><small>${formatarDataCadastro(a)}</small></td>
-                                <td><strong>${this.escapeHtml(a.alunoNome || '')}</strong></td>
+                                <td>${formatarDataCadastro(a)}</td>
+                                <td>${this.escapeHtml(a.alunoNome || '')}</td>
                                 <td>${this.escapeHtml(a.alunoTurma || '')}</td>
                                 <td>${this.escapeHtml(a.motivoLabel || '')}</td>
                             </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum registro</td></tr>'}
                     </tbody>
                 </table>
             `;
-        }
-        
-        // ---- TURMA ----
-        else if (tipo === 'turma') {
+        } else if (tipo === 'turma') {
             const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
             const registros = Array.isArray(data.registros) ? data.registros : [];
             
             tabelaHTML = `
-                <div class="section-title">👥 Registros por Aluno</div>
+                <div class="section-title">REGISTROS POR ALUNO</div>
                 <table>
-                    <thead><tr><th>Aluno</th><th>Matrícula</th><th style="width:100px;text-align:center;">Total</th></tr></thead>
+                    <thead><tr><th>Aluno</th><th>Matrícula</th><th style="width:70px;text-align:center;">Total</th></tr></thead>
                     <tbody>
                         ${porAluno.map(a => `
                             <tr>
-                                <td><strong>${this.escapeHtml(a.alunoNome || '')}</strong></td>
+                                <td>${this.escapeHtml(a.alunoNome || '')}</td>
                                 <td>${this.escapeHtml(a.alunoMatricula || '-')}</td>
                                 <td style="text-align:center;">${a.total || 0}</td>
                             </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
@@ -3300,41 +3294,38 @@ class SetorPedagogico {
                 </table>
                 
                 ${registros.length > 0 ? `
-                    <div class="section-title">📋 Últimos Registros</div>
+                    <div class="section-title">ÚLTIMOS REGISTROS</div>
                     <table>
                         <thead>
                             <tr>
-                                <th>Data da 2ª Chamada</th>
-                                <th>Data de Cadastro</th>
+                                <th>Data</th>
+                                <th>Cadastro</th>
                                 <th>Aluno</th>
                                 <th>Motivo</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${registros.slice(0, 30).map(a => `
+                            ${registros.slice(0, 40).map(a => `
                                 <tr>
                                     <td>${a.dataFormatada || '-'}</td>
-                                    <td><small>${formatarDataCadastro(a)}</small></td>
-                                    <td><strong>${this.escapeHtml(a.alunoNome || '')}</strong></td>
+                                    <td>${formatarDataCadastro(a)}</td>
+                                    <td>${this.escapeHtml(a.alunoNome || '')}</td>
                                     <td>${this.escapeHtml(a.motivoLabel || '')}</td>
                                 </tr>`).join('')}
                         </tbody>
                     </table>
                 ` : ''}
             `;
-        }
-        
-        // ---- ALUNO ----
-        else if (tipo === 'aluno') {
+        } else {
             const registros = Array.isArray(data.registros) ? data.registros : [];
             
             tabelaHTML = `
-                <div class="section-title">📋 Histórico de Registros</div>
+                <div class="section-title">HISTÓRICO DE REGISTROS</div>
                 <table>
                     <thead>
                         <tr>
-                            <th>Data da 2ª Chamada</th>
-                            <th>Data de Cadastro</th>
+                            <th>Data</th>
+                            <th>Cadastro</th>
                             <th>Motivo</th>
                             <th>Observações</th>
                         </tr>
@@ -3343,76 +3334,232 @@ class SetorPedagogico {
                         ${registros.map(a => `
                             <tr>
                                 <td>${a.dataFormatada || '-'}</td>
-                                <td><small>${formatarDataCadastro(a)}</small></td>
+                                <td>${formatarDataCadastro(a)}</td>
                                 <td>${this.escapeHtml(a.motivoLabel || '')}</td>
-                                <td>${this.escapeHtml((a.observacoes || '').substring(0, 80))}${(a.observacoes || '').length > 80 ? '...' : ''}</td>
+                                <td>${this.escapeHtml((a.observacoes || '').substring(0, 100))}</td>
                             </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum registro</td></tr>'}
                     </tbody>
                 </table>
             `;
         }
         
-        // ========== HTML FINAL ==========
+        // ========== HTML FINAL (COMPACTO / FORMAL) ==========
         return `<!DOCTYPE html>
         <html lang="pt-BR">
         <head>
             <meta charset="UTF-8">
             <title>${titulo}</title>
             <style>
-                @page { size: A4 portrait; margin: 12mm; }
+                /* ====== CONFIGURAÇÃO DE PÁGINA ====== */
+                @page { 
+                    size: A4 portrait; 
+                    margin: 10mm 12mm;  /* Reduzido */
+                }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
-                body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
-                .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
-                .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
-                .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+                
+                body {
+                    font-family: 'Times New Roman', Times, serif;
+                    font-size: 9pt;        /* Reduzido de 11pt */
+                    line-height: 1.25;     /* Reduzido de 1.4 */
+                    color: #000;
+                }
+                
+                /* ====== CABEÇALHO COMPACTO ====== */
+                .header {
+                    text-align: center;
+                    border-bottom: 1.5px solid #000;  /* Fina em vez de dupla */
+                    padding-bottom: 5px;
+                    margin-bottom: 8px;
+                }
+                .header img {
+                    max-width: 100%;
+                    max-height: 16mm;   /* Reduzido */
+                    object-fit: contain;
+                    display: block;
+                    margin: 0 auto 3px;
+                }
+                .header h1 {
+                    font-size: 11pt;
+                    text-transform: uppercase;
+                    font-weight: bold;
+                    letter-spacing: 0.5px;
+                }
+                .header p {
+                    font-size: 8pt;
+                    margin-top: 2px;
+                    color: #333;
+                }
+                
+                /* ====== TÍTULO ====== */
                 .titulo {
-                    text-align: center; font-size: 14pt; font-weight: bold;
-                    background: #e0f2fe; padding: 10px; border: 2px solid #000;
-                    margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+                    text-align: center;
+                    font-size: 11pt;
+                    font-weight: bold;
+                    background: #e8e8e8;         /* Cinza em vez de azul */
+                    padding: 4px 8px;
+                    border: 1px solid #000;      /* Fina */
+                    margin: 8px 0 4px;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
                 }
-                .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
-                .stats {
-                    display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
-                    background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;
+                .subtitulo {
+                    text-align: center;
+                    font-size: 9pt;
+                    margin: 0 0 8px;
+                    font-style: italic;
                 }
-                .stat { text-align: center; flex: 1; border-right: 1px solid #bae6fd; }
-                .stat:last-child { border-right: none; }
-                .stat-value { font-size: 22pt; font-weight: bold; color: #0284c7; line-height: 1; }
-                .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+                
+                /* ====== ESTATÍSTICAS (compactas, sem cor) ====== */
+                .stats-table {
+                    width: 100%;
+                    margin: 8px 0 12px;
+                    border: 1px solid #000;
+                    border-collapse: collapse;
+                }
+                .stats-table td {
+                    text-align: center;
+                    padding: 6px 4px;
+                    border-right: 1px solid #ccc;
+                }
+                .stats-table td:last-child { border-right: none; }
+                .stats-table td strong {
+                    font-size: 14pt;
+                    font-weight: bold;
+                    display: block;
+                    color: #000;
+                }
+                .stats-table td span {
+                    font-size: 7.5pt;
+                    color: #333;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                
+                /* ====== TÍTULOS DE SEÇÃO ====== */
                 .section-title {
-                    font-size: 11pt; font-weight: bold; background: #e8e8e8;
-                    padding: 6px 10px; border-left: 4px solid #0ea5e9; margin: 20px 0 10px;
+                    font-size: 8.5pt;
+                    font-weight: bold;
+                    background: #e8e8e8;
+                    padding: 3px 8px;
+                    border-left: 3px solid #000;  /* Preto em vez de azul */
+                    margin: 10px 0 5px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
                 }
-                table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
+                
+                /* ====== TABELAS COMPACTAS ====== */
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 7.5pt;   /* Reduzido de 9.5pt */
+                    margin-bottom: 10px;
+                }
                 th {
-                    background: #0ea5e9; color: white; padding: 8px 6px; text-align: left;
-                    border: 1px solid #0284c7; font-size: 9pt;
+                    background: #333;   /* Cinza escuro em vez de azul */
+                    color: white;
+                    padding: 4px 5px;
+                    text-align: left;
+                    border: 1px solid #000;
+                    font-size: 7.5pt;
+                    text-transform: uppercase;
+                    letter-spacing: 0.3px;
+                    font-weight: bold;
                 }
-                td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
-                tr:nth-child(even) { background: #f9fafb; }
-                .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
-                .assinatura { flex: 0 0 60%; text-align: center; }
+                td {
+                    padding: 3px 5px;
+                    border: 1px solid #ccc;
+                    vertical-align: top;
+                }
+                tr:nth-child(even) { background: #f5f5f5; }
+                
+                /* ====== ASSINATURA COMPACTA ====== */
+                .assinaturas {
+                    display: flex;
+                    justify-content: center;
+                    margin-top: 25px;   /* Reduzido de 50px */
+                    gap: 30px;
+                }
+                .assinatura {
+                    flex: 0 0 55%;
+                    text-align: center;
+                }
                 .assinatura-container-relatorio {
-                    position: relative; border-bottom: 1px solid #000; min-height: 22mm;
-                    display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+                    position: relative;
+                    border-bottom: 1px solid #000;
+                    min-height: 15mm;    /* Reduzido de 22mm */
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: center;
+                    padding-bottom: 2px;
                 }
-                .assinatura-img { max-height: 18mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+                .assinatura-img {
+                    max-height: 13mm;    /* Reduzido */
+                    max-width: 100%;
+                    object-fit: contain;
+                    position: relative;
+                    z-index: 1;
+                }
                 .carimbo-overlay {
-                    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                    max-height: 20mm; max-width: 60%; object-fit: contain;
-                    opacity: 0.85; pointer-events: none; z-index: 2;
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    max-height: 14mm;
+                    max-width: 55%;
+                    object-fit: contain;
+                    opacity: 0.85;
+                    pointer-events: none;
+                    z-index: 2;
                 }
-                .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
-                .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
-                .footer p { margin: 2px 0; }
-                .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
+                .assinatura-linha {
+                    padding-top: 3px;
+                    font-size: 8pt;
+                    margin-top: 2px;
+                }
+                
+                /* ====== RODAPÉ ====== */
+                .footer {
+                    text-align: center;
+                    margin-top: 15px;
+                    padding-top: 5px;
+                    border-top: 1px solid #000;  /* Fina em vez de cinza */
+                    font-size: 7pt;
+                    color: #333;
+                }
+                .footer p { margin: 1px 0; }
+                .registro-info {
+                    font-size: 8pt;
+                    color: #333;
+                    margin-top: 10px;
+                    text-align: center;
+                }
+                
+                /* ====== BOTÃO IMPRIMIR (não aparece no PDF) ====== */
                 .btn-print {
-                    display: block; margin: 20px auto; padding: 12px 30px;
-                    background: #0ea5e9; color: white; border: none; border-radius: 8px;
-                    font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+                    display: block;
+                    margin: 15px auto;
+                    padding: 10px 28px;
+                    background: #333;    /* Cinza escuro em vez de azul */
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-family: Arial, sans-serif;
                 }
-                .btn-print:hover { background: #0284c7; }
-                @media print { .no-print { display: none !important; } body { padding: 0; } }
+                .btn-print:hover { background: #000; }
+                
+                @media print {
+                    .no-print { display: none !important; }
+                    body { padding: 0; }
+                    .section-title { 
+                        page-break-after: avoid; 
+                        page-break-inside: avoid;
+                    }
+                    table { page-break-inside: auto; }
+                    tr { page-break-inside: avoid; page-break-after: auto; }
+                }
             </style>
         </head>
         <body>
@@ -3420,11 +3567,11 @@ class SetorPedagogico {
             
             <div class="header">
                 <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
-                <h1>IEMA Pleno: São Luís - Centro</h1>
-                <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Registros — Setor Pedagógico</p>
+                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
+                <p>Sistema de Registros — Setor Pedagógico</p>
             </div>
             
-            <div class="titulo">📋 ${titulo}</div>
+            <div class="titulo">${titulo}</div>
             ${subtitulo ? `<div class="subtitulo">${this.escapeHtml(subtitulo)}</div>` : ''}
             
             ${statsHTML}
@@ -3576,177 +3723,379 @@ class SetorPedagogico {
         }
     }
     
+    // ============================================
+    // 🖨️ GERAR HTML DA IMPRESSÃO 2ª CHAMADA (PADRÃO GESTÃO GERAL)
+    // ============================================
     gerarHTMLImpressaoSegundaChamada(a, qrCodeUrl) {
         const logo = '/uploads/logo-iema.png';
         const carimbo = '/icons/assinatura_gestao.ico';
-        const dataExt = new Date(a.data).toLocaleDateString('pt-BR', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        
+        const entrada = new Date(a.data);
+        const dataExt = entrada.toLocaleDateString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric'
         });
-        const horaExt = new Date(a.data).toLocaleTimeString('pt-BR', {
-            hour: '2-digit', minute: '2-digit'
+        const horaExt = entrada.toLocaleTimeString('pt-BR', { 
+            hour: '2-digit', minute: '2-digit' 
         });
         
+        // ========== DETALHE DO MOTIVO ==========
         let detalheMotivo = '';
         if (a.motivo === 'outros' && a.motivoOutros) {
-            detalheMotivo = ` <strong>(Especificação: ${a.motivoOutros})</strong>`;
+            detalheMotivo = ` <strong>(Especificação: ${this.escapeHtml(a.motivoOutros)})</strong>`;
         }
         
+        // ========== ASSINATURA DIGITAL ==========
         const assinaturaHTML = a.assinaturaBase64 
-            ? `<div class="assinatura-digital"><img src="${a.assinaturaBase64}" alt="Assinatura"></div>`
-            : '<div class="assinatura-vazia">_____________________________________</div>';
+            ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura">`
+            : '';
         
-        const carimboHTML = `
-            <div class="carimbo-gestao">
-                <img src="${carimbo}" alt="Carimbo Gestão Geral">
-            </div>`;
+        // ========== RESPONSÁVEL (compacto) ==========
+        const temResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
+        const responsavelHTML = temResponsavel ? `
+            <div class="section-title">👤 Responsável</div>
+            <div class="detalhes-compactos">
+                ${a.responsavelNome ? `<span class="det-item"><strong>Nome:</strong> ${this.escapeHtml(a.responsavelNome)}</span>` : ''}
+                ${a.responsavelCPF ? `<span class="det-item"><strong>CPF:</strong> ${this.escapeHtml(a.responsavelCPF)}</span>` : ''}
+                ${a.responsavelTelefone ? `<span class="det-item"><strong>Telefone:</strong> ${this.escapeHtml(a.responsavelTelefone)}</span>` : ''}
+            </div>
+        ` : '';
         
+        // ========== HORÁRIO DE ENTRADA (se houver) ==========
+        const horariosHTML = a.horarioEntrada ? `
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Entrada:</span>
+                    <span class="info-value">${a.horarioEntrada}</span>
+                </div>
+            </div>` : '';
+        
+        // ========== HTML FINAL (OTIMIZADO PARA 1 PÁGINA) ==========
         return `<!DOCTYPE html>
         <html lang="pt-BR">
         <head>
             <meta charset="UTF-8">
-            <title>2ª Chamada - ${a.alunoNome}</title>
+            <title>2ª Chamada - ${this.escapeHtml(a.alunoNome)}</title>
             <style>
-                @page { size: A4 portrait; margin: 15mm; }
+                @page { 
+                    size: A4 portrait; 
+                    margin: 8mm;
+                }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
-                html, body {
-                    width: 210mm; min-height: 297mm;
+                body {
                     font-family: 'Times New Roman', Times, serif;
-                    background: #f0f0f0;
-                    display: flex; justify-content: center; align-items: flex-start;
+                    font-size: 9.5pt;
+                    line-height: 1.25;
+                    color: #000;
                 }
-                .folha {
-                    width: 180mm; min-height: 267mm; padding: 10mm;
-                    background: white; margin: 0 auto;
-                    font-size: 10pt; line-height: 1.4;
-                    display: flex; flex-direction: column;
+                
+                /* ========== CABEÇALHO COMPACTO ========== */
+                .header {
+                    text-align: center;
+                    border-bottom: 1.5px double #000;
+                    padding-bottom: 4px;
+                    margin-bottom: 6px;
                 }
+                .header img {
+                    max-width: 100%;
+                    max-height: 14mm;
+                    object-fit: contain;
+                    display: block;
+                    margin: 0 auto 2px;
+                }
+                .header h1 {
+                    font-size: 10pt;
+                    text-transform: uppercase;
+                    font-weight: bold;
+                    margin: 2px 0 0;
+                }
+                .header p {
+                    font-size: 8pt;
+                    margin: 1px 0 0;
+                }
+                
+                /* ========== TÍTULO ========== */
+                .titulo {
+                    text-align: center;
+                    font-size: 11pt;
+                    font-weight: bold;
+                    background: #eef2ff;
+                    padding: 4px 8px;
+                    border: 1.5px solid #000;
+                    margin: 6px 0 3px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                
+                /* ========== CARD DO ALUNO ========== */
+                .aluno-box {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 5px 8px;
+                    background: #eef2ff;
+                    border: 1px solid #c7d2fe;
+                    border-radius: 5px;
+                    margin-bottom: 6px;
+                }
+                .aluno-foto {
+                    width: 38px;
+                    height: 38px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    border: 1.5px solid #1e3c72;
+                    flex-shrink: 0;
+                }
+                .aluno-info { flex: 1; }
+                .aluno-nome {
+                    font-size: 10pt;
+                    font-weight: bold;
+                    color: #1e3c72;
+                    margin-bottom: 1px;
+                }
+                .aluno-detalhes {
+                    font-size: 8pt;
+                    color: #374151;
+                }
+                
+                /* ========== TÍTULOS DE SEÇÃO ========== */
+                .section-title {
+                    font-size: 9pt;
+                    font-weight: bold;
+                    background: #e8e8e8;
+                    padding: 2px 6px;
+                    border-left: 3px solid #1e3c72;
+                    margin: 5px 0 3px;
+                }
+                
+                /* ========== INFO GRID ========== */
+                .info-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 3px 12px;
+                    margin: 3px 0 5px;
+                    font-size: 8.5pt;
+                }
+                .info-item { display: flex; gap: 4px; }
+                .info-label { font-weight: bold; white-space: nowrap; }
+                .info-value { flex: 1; }
+                
+                /* ========== DETALHES COMPACTOS ========== */
+                .detalhes-compactos {
+                    background: #f9fafb;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 4px;
+                    padding: 4px 6px;
+                    font-size: 8pt;
+                    line-height: 1.35;
+                }
+                .det-item {
+                    display: inline-block;
+                    margin-right: 10px;
+                    margin-bottom: 2px;
+                }
+                
+                /* ========== MOTIVO BOX ========== */
+                .motivo-box {
+                    background: #f5f5f5;
+                    border: 1px solid #000;
+                    padding: 5px 8px;
+                    margin: 5px 0;
+                    border-radius: 4px;
+                }
+                .motivo-box strong { font-size: 9pt; }
+                .motivo-box p { margin: 3px 0 0; font-size: 9.5pt; font-weight: bold; }
+                
+                /* ========== DESCRIÇÃO / OBSERVAÇÕES ========== */
+                .descricao-box {
+                    background: #f9fafb;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 4px;
+                    padding: 5px 8px;
+                    font-size: 8.5pt;
+                    line-height: 1.3;
+                    min-height: 30px;
+                    max-height: 80px;
+                    overflow: hidden;
+                    word-wrap: break-word;
+                }
+                
+                /* ========== ASSINATURA COM CARIMBO SOBREPOSTO ========== */
+                .assinaturas {
+                    display: flex;
+                    justify-content: space-around;
+                    margin-top: 15px;
+                    gap: 15px;
+                }
+                .assinatura {
+                    flex: 1;
+                    text-align: center;
+                    font-size: 8pt;
+                    position: relative;
+                }
+                .assinatura-container {
+                    position: relative;
+                    border-bottom: 1px solid #000;
+                    min-height: 14mm;
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: center;
+                    padding-bottom: 2px;
+                }
+                .assinatura-img {
+                    max-height: 12mm;
+                    max-width: 100%;
+                    object-fit: contain;
+                    position: relative;
+                    z-index: 1;
+                }
+                .carimbo-overlay {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    max-height: 13mm;
+                    max-width: 55%;
+                    object-fit: contain;
+                    opacity: 0.85;
+                    pointer-events: none;
+                    z-index: 2;
+                }
+                .assinatura-linha {
+                    padding-top: 2px;
+                    font-size: 8pt;
+                    margin-top: 2px;
+                }
+                
+                /* ========== QR CODE ========== */
+                .qr-code {
+                    text-align: center;
+                    margin-top: 6px;
+                }
+                .qr-code img {
+                    width: 25mm;
+                    height: 25mm;
+                    border: 1.5px solid #000;
+                    padding: 2px;
+                    display: block;
+                    margin: 0 auto;
+                }
+                .qr-code p {
+                    font-size: 8pt;
+                    margin: 3px 0 0 0;
+                    color: #444;
+                    font-weight: bold;
+                }
+                
+                /* ========== RODAPÉ ========== */
+                .footer {
+                    text-align: center;
+                    margin-top: 5px;
+                    padding-top: 3px;
+                    border-top: 1px solid #ccc;
+                    font-size: 6.5pt;
+                    color: #666;
+                }
+                .footer p { margin: 1px 0; }
+                
+                /* ========== BOTÃO IMPRIMIR ========== */
+                .btn-print {
+                    display: block;
+                    margin: 10px auto;
+                    padding: 8px 20px;
+                    background: #1e3c72;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    font-size: 12px;
+                    font-family: Arial, sans-serif;
+                }
+                .btn-print:hover { background: #2a5298; }
+                
                 @media print {
-                    html, body { width: 210mm; height: 297mm; background: white; display: block; }
-                    .folha { width: 100%; min-height: auto; padding: 0; margin: 0 auto; }
-                    .btn-print { display: none !important; }
+                    .no-print { display: none !important; }
+                    body { padding: 0; }
+                    .footer { page-break-after: avoid; }
                 }
-                .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
-                .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
-                .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
-                .titulo { text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase; margin: 10px 0; background: #e8e8e8; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px; }
-                .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
-                .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
-                .info-row:last-child { margin-bottom: 0; }
-                .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-                .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
-                .underline { border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px; font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
-                .motivo-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
-                .motivo-box p { margin: 0; font-size: 10pt; font-weight: bold; }
-                .responsavel-box { background: #eef3fb; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; font-size: 9.5pt; }
-                .responsavel-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
-                .responsavel-box p { margin: 3px 0; font-size: 9.5pt; }
-                .observacoes { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
-                .observacoes strong { display: block; margin-bottom: 5px; font-size: 10pt; }
-                .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
-                .assinatura { text-align: center; flex: 1; font-size: 9pt; }
-                .assinatura-digital { border-bottom: 1px solid #000; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; }
-                .assinatura-digital img { max-height: 16mm; max-width: 100%; object-fit: contain; }
-                .assinatura-vazia { border-bottom: 1px solid #000; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; color: #999; font-size: 9pt; padding-bottom: 3px; }
-                .assinatura-linha { padding-top: 5px; font-size: 9pt; }
-                .carimbo-gestao {
-                    border-bottom: 1px solid #000; min-height: 18mm;
-                    display: flex; align-items: flex-end; justify-content: center;
-                    padding-bottom: 3px;
-                }
-                .carimbo-gestao img { max-height: 16mm; max-width: 100%; object-fit: contain; opacity: 0.9; }
-                .qr-code { text-align: center; margin-top: 8px; }
-                .qr-code img { width: 22mm; height: 22mm; border: 1px solid #000; padding: 1px; }
-                .qr-code p { font-size: 8pt; margin: 3px 0 0 0; }
-                .footer { text-align: center; margin-top: auto; padding-top: 8px; border-top: 1px solid #000; font-size: 8pt; color: #444; }
-                .footer p { margin: 2px 0; }
-                .btn-print { display: block; margin: 15px auto; padding: 10px 30px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif; }
-                .btn-print:hover { background: #4338ca; }
             </style>
         </head>
         <body>
             <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-            <div class="folha">
-                <div class="header">
-                    <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
-                    <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
-                </div>
-                <div class="titulo">📋 2ª CHAMADA</div>
-                <div class="info-section">
-                    <div class="info-row">
-                        <div class="info-item">
-                            <span class="label">Estudante:</span>
-                            <span class="underline">${a.alunoNome || ''}</span>
-                        </div>
+            
+            <div class="header">
+                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+                <h1>IEMA Pleno: São Luís - Centro</h1>
+                <p>Sistema de Atendimentos — Setor Pedagógico</p>
+            </div>
+            
+            <div class="titulo">📋 2ª CHAMADA</div>
+            
+            <div class="aluno-box">
+                <img class="aluno-foto" src="${this.gerarAvatarSVG(a.alunoNome)}" 
+                     alt="${this.escapeHtml(a.alunoNome)}"
+                     onerror="this.onerror=null; this.src='${this.gerarAvatarSVG(a.alunoNome)}'">
+                <div class="aluno-info">
+                    <div class="aluno-nome">${this.escapeHtml(a.alunoNome)}</div>
+                    <div class="aluno-detalhes">
+                        <strong>Matrícula:</strong> ${this.escapeHtml(a.alunoMatricula || 'Não informada')} • 
+                        <strong>Turma:</strong> ${this.escapeHtml(a.alunoTurma || '-')}
+                        ${a.alunoCurso ? ` • <strong>Curso:</strong> ${this.escapeHtml(a.alunoCurso)}` : ''}
                     </div>
-                    <div class="info-row">
-                        <div class="info-item">
-                            <span class="label">Matrícula:</span>
-                            <span class="underline">${a.alunoMatricula || ''}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Turma:</span>
-                            <span class="underline">${a.alunoTurma || ''}</span>
-                        </div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-item">
-                            <span class="label">Curso:</span>
-                            <span class="underline">${a.alunoCurso || ''}</span>
-                        </div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-item">
-                            <span class="label">Data:</span>
-                            <span class="underline">${dataExt}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="label">Horário:</span>
-                            <span class="underline">${horaExt}</span>
-                        </div>
-                    </div>
-                    ${a.horarioEntrada ? `
-                        <div class="info-row">
-                            <div class="info-item">
-                                <span class="label">Entrada:</span>
-                                <span class="underline">${a.horarioEntrada}</span>
-                            </div>
-                        </div>` : ''}
                 </div>
-                <div class="motivo-box">
-                    <h3>📌 Motivo:</h3>
-                    <p>☑ ${a.motivoLabel}${detalheMotivo}</p>
+            </div>
+            
+            <div class="section-title">📌 Dados do Registro</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Data:</span>
+                    <span class="info-value">${dataExt}</span>
                 </div>
-                ${(a.responsavelNome || a.responsavelCPF || a.responsavelTelefone) ? `
-                    <div class="responsavel-box">
-                        <h3>👤 Responsável:</h3>
-                        ${a.responsavelNome ? `<p><strong>Nome:</strong> ${a.responsavelNome}</p>` : ''}
-                        ${a.responsavelCPF ? `<p><strong>CPF:</strong> ${a.responsavelCPF}</p>` : ''}
-                        ${a.responsavelTelefone ? `<p><strong>Telefone:</strong> ${a.responsavelTelefone}</p>` : ''}
-                    </div>` : ''}
-                <div class="observacoes">
-                    <strong>📝 Observações:</strong>
-                    ${(a.observacoes || '___________________________________________________________________').replace(/\n/g, '<br>')}
+                <div class="info-item">
+                    <span class="info-label">Hora:</span>
+                    <span class="info-value">${horaExt}</span>
                 </div>
-                <div class="assinaturas">
-                    <div class="assinatura">
+                <div class="info-item">
+                    <span class="info-label">Registrado por:</span>
+                    <span class="info-value">${this.escapeHtml(a.registradoPorNome || a.registradoPor || '-')}</span>
+                </div>
+            </div>
+            ${horariosHTML}
+            
+            <div class="motivo-box">
+                <strong>📌 Motivo:</strong>
+                <p>☑ ${this.escapeHtml(a.motivoLabel || a.motivo || '-')}${detalheMotivo}</p>
+            </div>
+            
+            ${responsavelHTML}
+            
+            ${a.observacoes ? `
+                <div class="section-title">💬 Observações</div>
+                <div class="descricao-box" style="min-height: 20px; max-height: 60px;">
+                    ${this.escapeHtml(a.observacoes).replace(/\n/g, '<br>')}
+                </div>
+            ` : ''}
+            
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-container">
                         ${assinaturaHTML}
-                        <div class="assinatura-linha">Assinatura do Responsável</div>
+                        <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
                     </div>
-                    <div class="assinatura">
-                        ${carimboHTML}
-                        <div class="assinatura-linha">Coordenação / Gestão Geral</div>
-                    </div>
+                    <div class="assinatura-linha">Assinatura do Responsável / Setor Pedagógico</div>
                 </div>
-                ${qrCodeUrl ? `
-                    <div class="qr-code">
-                        <img src="${qrCodeUrl}" alt="QR Code">
-                        <p>Identificação do Aluno</p>
-                    </div>` : ''}
-                <div class="footer">
-                    <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.registradoPorNome || 'Setor Pedagógico'}</p>
-                    <p>EducaPleno</p>
+            </div>
+            
+            ${qrCodeUrl ? `
+                <div class="qr-code">
+                    <img src="${qrCodeUrl}" alt="QR Code">
+                    <p>Identificação do Aluno</p>
                 </div>
+            ` : ''}
+            
+            <div class="footer">
+                <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Setor Pedagógico</p>
             </div>
         </body>
         </html>`;
@@ -5693,107 +6042,382 @@ class SetorPedagogico {
         }
     }
     
+    // ============================================================================
+    // 🎨 RENDERIZAR GRÁFICOS - COM PALETA DE CORES VARIADA
+    // ============================================================================
     renderizarGraficosSubstituicoes(data, mes) {
+        // ==========================================
+        // 🎨 PALETAS DE CORES
+        // ==========================================
+        
+        // 🔴 Cores semânticas para MOTIVOS (doughnut)
         const MOTIVOS_CORES = {
-            'falta_professor': '#ef4444',
-            'licenca_medica': '#f59e0b',
-            'licenca_maternidade_paternidade': '#8b5cf6',
-            'capacitacao_formacao': '#3b82f6',
-            'reuniao_externa': '#10b981',
-            'problema_pessoal': '#f97316',
-            'atestado': '#6b7280',
-            'outros': '#64748b'
+            'falta_professor': '#ef4444',                    // Vermelho - Urgência
+            'licenca_medica': '#f59e0b',                     // Âmbar - Saúde
+            'licenca_maternidade_paternidade': '#8b5cf6',    // Roxo - Família
+            'capacitacao_formacao': '#3b82f6',               // Azul - Desenvolvimento
+            'reuniao_externa': '#10b981',                    // Verde - Institucional
+            'problema_pessoal': '#f97316',                   // Laranja - Pessoal
+            'atestado': '#06b6d4',                           // Ciano - Documento
+            'sem_substituto': '#dc2626',                     // Vermelho escuro - Crítico
+            'outros': '#64748b'                              // Cinza - Neutro
         };
         
+        // 🌈 Gradiente para HORÁRIOS (1º ao 9º - do índigo ao amarelo)
+        const HORARIOS_CORES = [
+            '#6366f1',  // 1º - Índigo
+            '#7c3aed',  // 2º - Roxo
+            '#8b5cf6',  // 3º - Púrpura
+            '#a855f7',  // 4º - Violeta
+            '#d946ef',  // 5º - Fúcsia
+            '#ec4899',  // 6º - Rosa
+            '#f43f5e',  // 7º - Rosa escuro
+            '#f97316',  // 8º - Laranja
+            '#f59e0b'   // 9º - Âmbar
+        ];
+        
+        // 🌈 Arco-íris para TURMAS (rotação)
+        const TURMAS_CORES = [
+            '#0ea5e9',  // Azul céu
+            '#06b6d4',  // Ciano
+            '#14b8a6',  // Teal
+            '#10b981',  // Verde esmeralda
+            '#22c55e',  // Verde
+            '#84cc16',  // Verde limão
+            '#eab308',  // Amarelo
+            '#f59e0b',  // Âmbar
+            '#f97316',  // Laranja
+            '#ef4444',  // Vermelho
+            '#ec4899',  // Rosa
+            '#d946ef',  // Fúcsia
+            '#a855f7',  // Púrpura
+            '#8b5cf6',  // Roxo
+            '#6366f1'   // Índigo
+        ];
+        
+        // ==========================================
+        // 📊 GRÁFICO 1: POR MOTIVO (DOUGHNUT)
+        // ==========================================
         const ctxMotivos = document.getElementById('spChartMotivos');
         if (ctxMotivos) {
-            if (this.substituicaoState.charts.motivos) this.substituicaoState.charts.motivos.destroy();
+            if (this.substituicaoState.charts.motivos) {
+                try { this.substituicaoState.charts.motivos.destroy(); } catch(e){}
+            }
+            
             this.substituicaoState.charts.motivos = new Chart(ctxMotivos.getContext('2d'), {
                 type: 'doughnut',
                 data: {
                     labels: data.porMotivo.map(d => d.label),
                     datasets: [{
                         data: data.porMotivo.map(d => d.count),
-                        backgroundColor: data.porMotivo.map(d => MOTIVOS_CORES[d.motivo] || '#64748b')
+                        backgroundColor: data.porMotivo.map(d => MOTIVOS_CORES[d.motivo] || '#64748b'),
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 8
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 12,
+                                usePointStyle: true,
+                                pointStyle: 'rect',
+                                boxWidth: 12,
+                                boxHeight: 12,
+                                font: { size: 11, family: 'Arial' }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            padding: 10,
+                            cornerRadius: 8,
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const pct = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
+                                    return ` ${context.label}: ${context.parsed} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
             });
         }
         
+        // ==========================================
+        // 📊 GRÁFICO 2: POR HORÁRIO (BARRAS COLORIDAS)
+        // ==========================================
         const ctxHorarios = document.getElementById('spChartHorarios');
         if (ctxHorarios) {
-            if (this.substituicaoState.charts.horarios) this.substituicaoState.charts.horarios.destroy();
+            if (this.substituicaoState.charts.horarios) {
+                try { this.substituicaoState.charts.horarios.destroy(); } catch(e){}
+            }
+            
             const horarios = [];
             for (let i = 1; i <= 9; i++) {
                 const enc = data.porHorario.find(d => d.horario === i);
                 horarios.push(enc ? enc.count : 0);
             }
+            
+            // 🔥 Cada barra recebe uma cor diferente
+            const coresBarras = horarios.map((_, i) => HORARIOS_CORES[i] || '#6366f1');
+            
             this.substituicaoState.charts.horarios = new Chart(ctxHorarios.getContext('2d'), {
                 type: 'bar',
                 data: {
                     labels: ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º'],
-                    datasets: [{ label: 'Substituições', data: horarios, backgroundColor: '#1e3c72', borderRadius: 8 }]
+                    datasets: [{
+                        label: 'Substituições',
+                        data: horarios,
+                        backgroundColor: coresBarras,        // ✅ Cores variadas
+                        borderColor: coresBarras,             // ✅ Borda igual
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        maxBarThickness: 42,
+                        hoverBackgroundColor: coresBarras.map(c => c + 'dd')  // hover mais claro
+                    }]
                 },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            padding: 10,
+                            cornerRadius: 8,
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            displayColors: false,
+                            callbacks: {
+                                title: (items) => `${items[0].label} Horário`,
+                                label: function(context) {
+                                    return `${context.parsed.y} substituição(ões)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                precision: 0,
+                                font: { size: 11 }
+                            },
+                            grid: { color: '#f3f4f6', drawBorder: false }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { size: 11, weight: 'bold' },
+                                color: '#374151'
+                            }
+                        }
+                    }
+                }
             });
         }
         
+        // ==========================================
+        // 📊 GRÁFICO 3: POR DIA (LINHA COM GRADIENTE)
+        // ==========================================
         const ctxDias = document.getElementById('spChartDias');
         if (ctxDias) {
-            if (this.substituicaoState.charts.dias) this.substituicaoState.charts.dias.destroy();
+            if (this.substituicaoState.charts.dias) {
+                try { this.substituicaoState.charts.dias.destroy(); } catch(e){}
+            }
+            
             const [ano, mesNum] = mes.split('-').map(Number);
             const ultimoDia = new Date(ano, mesNum, 0).getDate();
             const labels = [], valores = [];
+            
             for (let i = 1; i <= ultimoDia; i++) {
                 labels.push(i);
                 const diaStr = `${mes}-${String(i).padStart(2, '0')}`;
                 const enc = data.substituicoesPorDia.find(d => d.data === diaStr);
                 valores.push(enc ? enc.count : 0);
             }
+            
+            // 🔥 Gradiente vertical para o preenchimento
+            const gradiente = ctxDias.getContext('2d').createLinearGradient(0, 0, 0, 300);
+            gradiente.addColorStop(0, 'rgba(99, 102, 241, 0.4)');    // Índigo no topo
+            gradiente.addColorStop(0.5, 'rgba(139, 92, 246, 0.2)');  // Roxo no meio
+            gradiente.addColorStop(1, 'rgba(236, 72, 153, 0.02)');   // Rosa embaixo
+            
             this.substituicaoState.charts.dias = new Chart(ctxDias.getContext('2d'), {
                 type: 'line',
                 data: {
                     labels,
                     datasets: [{
-                        label: 'Substituições', data: valores,
-                        borderColor: '#1e3c72', backgroundColor: 'rgba(30, 60, 114, 0.1)',
-                        fill: true, tension: 0.4
+                        label: 'Substituições',
+                        data: valores,
+                        borderColor: '#6366f1',              // Índigo
+                        backgroundColor: gradiente,          // ✅ Gradiente
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        // 🔥 Pontos maiores onde há substituição
+                        pointRadius: valores.map(v => v > 0 ? 5 : 2),
+                        pointBackgroundColor: valores.map(v => v > 0 ? '#ef4444' : '#cbd5e1'),
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 8,
+                        pointHoverBackgroundColor: '#dc2626'
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            padding: 10,
+                            cornerRadius: 8,
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            displayColors: false,
+                            callbacks: {
+                                title: (items) => `📅 Dia ${items[0].label}`,
+                                label: function(context) {
+                                    const valor = context.parsed.y;
+                                    return valor > 0 
+                                        ? `${valor} substituição(ões)` 
+                                        : 'Nenhuma substituição';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                precision: 0,
+                                font: { size: 11 }
+                            },
+                            grid: { color: '#f3f4f6', drawBorder: false }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { size: 10 },
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 15
+                            }
+                        }
+                    }
+                }
             });
         }
         
+        // ==========================================
+        // 📊 GRÁFICO 4: POR TURMA (BARRAS HORIZONTAIS COLORIDAS)
+        // ==========================================
         const ctxTurmas = document.getElementById('spChartTurmas');
         if (ctxTurmas) {
-            if (this.substituicaoState.charts.turmas) this.substituicaoState.charts.turmas.destroy();
+            if (this.substituicaoState.charts.turmas) {
+                try { this.substituicaoState.charts.turmas.destroy(); } catch(e){}
+            }
+            
+            // 🔥 Cada turma recebe uma cor diferente (rotação da paleta)
+            const coresTurmas = data.porTurma.map((_, i) => TURMAS_CORES[i % TURMAS_CORES.length]);
+            
             this.substituicaoState.charts.turmas = new Chart(ctxTurmas.getContext('2d'), {
                 type: 'bar',
                 data: {
                     labels: data.porTurma.map(d => d.turma),
-                    datasets: [{ label: 'Substituições', data: data.porTurma.map(d => d.count), backgroundColor: '#8b5cf6', borderRadius: 8 }]
+                    datasets: [{
+                        label: 'Substituições',
+                        data: data.porTurma.map(d => d.count),
+                        backgroundColor: coresTurmas,        // ✅ Cores variadas
+                        borderColor: coresTurmas,             // ✅ Borda igual
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        maxBarThickness: 28,
+                        hoverBackgroundColor: coresTurmas.map(c => c + 'dd')
+                    }]
                 },
-                options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y', plugins: { legend: { display: false } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    indexAxis: 'y',                          // Horizontal
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            padding: 10,
+                            cornerRadius: 8,
+                            titleFont: { size: 12, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            displayColors: false,
+                            callbacks: {
+                                title: (items) => `🏫 ${items[0].label}`,
+                                label: function(context) {
+                                    return `${context.parsed.x} substituição(ões)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                precision: 0,
+                                font: { size: 11 }
+                            },
+                            grid: { color: '#f3f4f6', drawBorder: false }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { size: 11, weight: 'bold' },
+                                color: '#374151'
+                            }
+                        }
+                    }
+                }
             });
         }
     }
     
+    // ============================================================================
+    // 🏆 RENDERIZAR RANKINGS
+    // ============================================================================
     renderizarRankingsSubstituicoes(data) {
         const render = (containerId, dados) => {
             const container = document.getElementById(containerId);
             if (!container) return;
             
             if (dados.length === 0) {
-                container.innerHTML = '<p style="text-align:center;color:#6b7280;">Nenhum dado</p>';
+                container.innerHTML = `
+                    <div class="empty-state" style="text-align: center; padding: 30px; color: #9ca3af;">
+                        <i class="fas fa-trophy" style="font-size: 32px; margin-bottom: 10px; opacity: 0.5;"></i>
+                        <p style="margin: 0;">Nenhum dado disponível</p>
+                    </div>
+                `;
                 return;
             }
             
             container.innerHTML = dados.map((p, i) => {
                 const posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+                const medalha = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+                
                 return `
                     <div class="ranking-item">
-                        <div class="ranking-position ${posClass}">${i + 1}</div>
+                        <div class="ranking-position ${posClass}">
+                            ${medalha || (i + 1)}
+                        </div>
                         <div class="ranking-info">
                             <div class="ranking-nome">${this.escapeHtml(p.nome)}</div>
                             <div class="ranking-detalhes">${this.escapeHtml(p.eixo || 'Sem eixo')}</div>
@@ -5808,12 +6432,20 @@ class SetorPedagogico {
         render('spRankingSubstitutos', data.professoresMaisSubstituiram);
     }
     
+    // ============================================================================
+    // 📋 RENDERIZAR ÚLTIMAS SUBSTITUIÇÕES
+    // ============================================================================
     renderizarUltimasSubstituicoes(lista) {
         const container = document.getElementById('spUltimasSubstituicoes');
         if (!container) return;
         
-        if (lista.length === 0) {
-            container.innerHTML = '<p style="text-align:center;color:#6b7280;">Nenhuma substituição recente</p>';
+        if (!lista || lista.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 30px; color: #9ca3af;">
+                    <i class="fas fa-history" style="font-size: 32px; margin-bottom: 10px; opacity: 0.5;"></i>
+                    <p style="margin: 0;">Nenhuma substituição recente</p>
+                </div>
+            `;
             return;
         }
         
@@ -5821,18 +6453,36 @@ class SetorPedagogico {
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
-                        <tr><th>Data</th><th>Horário</th><th>Ausente</th><th>Substituto</th><th>Turma</th></tr>
+                        <tr>
+                            <th>Data</th>
+                            <th>Horário</th>
+                            <th>Ausente</th>
+                            <th>Substituto</th>
+                            <th>Turma</th>
+                        </tr>
                     </thead>
                     <tbody>
-                        ${lista.map(s => `
-                            <tr>
-                                <td>${new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                <td>${(s.horarios && s.horarios.length > 0 ? s.horarios : (s.horario ? [s.horario] : [])).map(h => `${h}º`).join(', ') || '-'}</td>
-                                <td>${this.escapeHtml(s.professorAusenteNome)}</td>
-                                <td>${this.escapeHtml(s.professorSubstitutoNome)}</td>
-                                <td>${this.escapeHtml(s.turma)}</td>
-                            </tr>
-                        `).join('')}
+                        ${lista.map(s => {
+                            const horariosList = (s.horarios && s.horarios.length > 0) 
+                                ? s.horarios 
+                                : (s.horario ? [s.horario] : []);
+                            
+                            const horariosHTML = horariosList.length > 0
+                                ? horariosList.map(h => `<span class="badge-custom badge-primary" style="margin-right:3px;">${h}º</span>`).join('')
+                                : '<span class="text-muted">-</span>';
+                            
+                            return `
+                                <tr>
+                                    <td>
+                                        <strong>${new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>
+                                    </td>
+                                    <td>${horariosHTML}</td>
+                                    <td>${this.escapeHtml(s.professorAusenteNome)}</td>
+                                    <td>${this.escapeHtml(s.professorSubstitutoNome)}</td>
+                                    <td><span class="badge-custom badge-gray">${this.escapeHtml(s.turma)}</span></td>
+                                </tr>
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>

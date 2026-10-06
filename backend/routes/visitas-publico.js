@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const User = require('../models/User');
 const Turma = require('../models/Turma');
@@ -13,6 +15,55 @@ const ConsentimentoLGPD = require('../models/ConsentimentoLGPD');
 
 // 🔐 Criptografia explícita
 const { encrypt, decrypt, hash, mascararCPF } = require('../utils/crypto-utils');
+
+// ============================================
+// 🔥 UTILITÁRIOS
+// ============================================
+const normalizarId = (id) => {
+  if (!id) return '';
+  if (typeof id === 'string') return id.trim();
+  if (id._id) return id._id.toString().trim();
+  if (id.toString) return id.toString().trim();
+  return '';
+};
+
+const paraObjectId = (id) => {
+  if (!id) return null;
+  try {
+    const str = id.toString().trim();
+    if (mongoose.Types.ObjectId.isValid(str)) {
+      return new mongoose.Types.ObjectId(str);
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+};
+
+// ============================================
+// 🔥 ASSINATURA PADRÃO DO GESTOR (FALLBACK)
+// ============================================
+let ASSINATURA_GESTOR_PADRAO_BASE64 = '';
+try {
+  const caminhoIcone = path.join(__dirname, '..', '..', 'frontend', 'icons', 'assinatura_gpeda.ico');
+  
+  if (fs.existsSync(caminhoIcone)) {
+    const buffer = fs.readFileSync(caminhoIcone);
+    ASSINATURA_GESTOR_PADRAO_BASE64 = `data:image/x-icon;base64,${buffer.toString('base64')}`;
+    console.log('✅ Assinatura padrão do gestor carregada');
+  } else {
+    const caminhoAlternativo = path.join(__dirname, '..', 'frontend', 'icons', 'assinatura_gpeda.ico');
+    if (fs.existsSync(caminhoAlternativo)) {
+      const buffer = fs.readFileSync(caminhoAlternativo);
+      ASSINATURA_GESTOR_PADRAO_BASE64 = `data:image/x-icon;base64,${buffer.toString('base64')}`;
+      console.log('✅ Assinatura padrão do gestor carregada (alt)');
+    } else {
+      console.warn('⚠️ Assinatura padrão do gestor não encontrada');
+    }
+  }
+} catch (err) {
+  console.warn('⚠️ Erro ao carregar assinatura padrão:', err.message);
+}
 
 // ============================================
 // RATE LIMITING
@@ -84,7 +135,7 @@ router.get('/status', async (req, res) => {
 });
 
 // ============================================
-// BUSCAR TURMAS (PÚBLICO)
+// BUSCAR TURMAS
 // ============================================
 router.get('/turmas', async (req, res) => {
   try {
@@ -98,8 +149,6 @@ router.get('/turmas', async (req, res) => {
         turmas: []
       });
     }
-    
-    console.log('🔍 [PÚBLICO] Buscando turmas...');
     
     const turmas = await User.distinct('turma', {
       role: 'aluno',
@@ -116,8 +165,6 @@ router.get('/turmas', async (req, res) => {
     }
     
     const todasTurmas = [...new Set([...turmas, ...turmasDaCollection])].sort();
-    
-    console.log(`✅ [PÚBLICO] ${todasTurmas.length} turmas encontradas`);
     
     res.json({
       success: true,
@@ -137,7 +184,7 @@ router.get('/turmas', async (req, res) => {
 });
 
 // ============================================
-// BUSCAR CURSOS (PÚBLICO)
+// BUSCAR CURSOS
 // ============================================
 router.get('/cursos', async (req, res) => {
   try {
@@ -203,31 +250,79 @@ router.get('/alunos', async (req, res) => {
 });
 
 // ============================================
-// BUSCAR TERMOS DO ALUNO
+// BUSCAR TERMOS DO ALUNO (TODOS OS STATUS)
 // ============================================
 router.get('/termos/:alunoId', async (req, res) => {
   try {
     const { alunoId } = req.params;
     
-    const termos = await TermoVisita.find({
-      'alunos.alunoId': alunoId,
-      status: { $in: ['pendente', 'parcialmente_autorizado'] },
-      ativo: true
-    })
-    .select('codigo atividade professores periodo horario local dataVisita alunos status responsaveis')
-    .sort({ createdAt: -1 })
-    .lean();
+    if (!alunoId) {
+      return res.status(400).json({ success: false, error: 'alunoId é obrigatório' });
+    }
+    
+    const objectIdAluno = paraObjectId(alunoId);
+    
+    const queryBusca = objectIdAluno
+      ? {
+          $or: [
+            { 'alunos.alunoId': objectIdAluno },
+            { 'alunos.alunoId': alunoId },
+            { 'alunos._id': objectIdAluno }
+          ],
+          ativo: true
+        }
+      : {
+          $or: [
+            { 'alunos.alunoId': alunoId },
+            { 'alunos._id': alunoId }
+          ],
+          ativo: true
+        };
+    
+    const termos = await TermoVisita.find(queryBusca)
+      .select('codigo atividade professores periodo horario local dataVisita alunos status responsaveis createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
     
     const termosFormatados = termos.map(t => {
-      const responsavelDoAluno = t.responsaveis?.find(r => 
-        (r.alunoId?._id || r.alunoId || '').toString() === alunoId.toString()
-      );
+      const responsavelDoAluno = (t.responsaveis || []).find(r => {
+        const rId = normalizarId(r.alunoId);
+        const aId = normalizarId(alunoId);
+        return rId && aId && rId === aId;
+      });
       
-      const jaAutorizou = responsavelDoAluno?.status === 'autorizado';
-      const jaRecusou = responsavelDoAluno?.status === 'recusado';
+      let statusResponsavel = responsavelDoAluno?.status || 'pendente';
+      let nomeResponsavel = responsavelDoAluno?.nome || '';
+      
+      if (!responsavelDoAluno && t.alunos?.length === 1 && t.responsaveis?.length === 1) {
+        statusResponsavel = t.responsaveis[0].status || 'pendente';
+        nomeResponsavel = t.responsaveis[0].nome || '';
+      }
+      
+      if (!responsavelDoAluno && !nomeResponsavel) {
+        const primeiroAutorizado = (t.responsaveis || []).find(r => r.status === 'autorizado');
+        if (primeiroAutorizado && t.alunos?.length === 1) {
+          statusResponsavel = primeiroAutorizado.status;
+          nomeResponsavel = primeiroAutorizado.nome || '';
+        }
+      }
+      
+      if (!responsavelDoAluno && !nomeResponsavel) {
+        const idxAluno = (t.alunos || []).findIndex(a => 
+          normalizarId(a.alunoId) === normalizarId(alunoId)
+        );
+        if (idxAluno >= 0 && t.responsaveis?.[idxAluno]) {
+          statusResponsavel = t.responsaveis[idxAluno].status || 'pendente';
+          nomeResponsavel = t.responsaveis[idxAluno].nome || '';
+        }
+      }
+      
+      const jaAutorizou = statusResponsavel === 'autorizado';
+      const jaRecusou = statusResponsavel === 'recusado';
       
       return {
         id: t._id,
+        _id: t._id,
         codigo: t.codigo,
         atividade: t.atividade,
         professor: t.professores?.[0]?.nome || 'Professor',
@@ -236,21 +331,111 @@ router.get('/termos/:alunoId', async (req, res) => {
         horario: t.horario,
         local: t.local,
         dataVisita: t.dataVisita,
+        status: t.status,
+        statusResponsavel,
+        nomeResponsavel,
         jaAutorizou,
-        jaRecusou
+        jaRecusou,
+        pendente: !jaAutorizou && !jaRecusou,
+        criadoEm: t.createdAt
       };
     });
     
-    const termosPendentes = termosFormatados.filter(t => !t.jaAutorizou && !t.jaRecusou);
+    termosFormatados.sort((a, b) => {
+      const ordem = { pendente: 0, autorizado: 1, recusado: 2 };
+      const aOrdem = ordem[a.statusResponsavel] ?? 3;
+      const bOrdem = ordem[b.statusResponsavel] ?? 3;
+      if (aOrdem !== bOrdem) return aOrdem - bOrdem;
+      return new Date(b.criadoEm) - new Date(a.criadoEm);
+    });
     
     res.json({
       success: true,
-      termos: termosPendentes,
-      total: termosPendentes.length,
+      termos: termosFormatados,
+      total: termosFormatados.length,
       alunoId
     });
   } catch (error) {
     console.error('❌ Erro ao buscar termos do aluno:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🔎 BUSCAR TERMOS POR CÓDIGO
+// ============================================
+router.get('/termos-por-codigo/:codigo', async (req, res) => {
+  try {
+    const { codigo } = req.params;
+    
+    if (!codigo || codigo.trim().length < 4) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Digite pelo menos 4 caracteres do código' 
+      });
+    }
+    
+    const codigoBusca = codigo.trim().toUpperCase();
+    
+    const termos = await TermoVisita.find({
+      codigo: { $regex: codigoBusca, $options: 'i' },
+      ativo: true
+    })
+    .select('codigo atividade professores periodo horario local dataVisita alunos status responsaveis createdAt')
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .lean();
+    
+    if (termos.length === 0) {
+      return res.json({
+        success: true,
+        termos: [],
+        total: 0,
+        mensagem: 'Nenhum termo encontrado com este código'
+      });
+    }
+    
+    const termosFormatados = termos.map(t => {
+      const responsaveis = (t.responsaveis || []);
+      
+      return {
+        id: t._id,
+        _id: t._id,
+        codigo: t.codigo,
+        atividade: t.atividade,
+        professor: t.professores?.[0]?.nome || 'Professor',
+        totalProfessores: t.professores?.length || 0,
+        periodo: t.periodo,
+        horario: t.horario,
+        local: t.local,
+        dataVisita: t.dataVisita,
+        status: t.status,
+        totalAlunos: t.alunos?.length || 1,
+        alunos: (t.alunos || []).map(a => ({
+          alunoId: a.alunoId,
+          nome: a.nome,
+          turma: a.turma,
+          curso: a.curso,
+          matricula: a.matricula
+        })),
+        responsaveis: {
+          total: responsaveis.length,
+          autorizados: responsaveis.filter(r => r.status === 'autorizado').length,
+          recusados: responsaveis.filter(r => r.status === 'recusado').length,
+          pendentes: responsaveis.filter(r => r.status === 'pendente' || !r.status).length
+        },
+        criadoEm: t.createdAt
+      };
+    });
+    
+    res.json({
+      success: true,
+      termos: termosFormatados,
+      total: termosFormatados.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar termos por código:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -380,8 +565,6 @@ router.post('/gerar-qrcode-totp', rateLimit(10, 5), async (req, res) => {
       color: { dark: '#1e40af', light: '#ffffff' }
     });
     
-    console.log(`🔐 QR Code TOTP gerado para termo ${termo.codigo}`);
-    
     res.json({
       success: true,
       qrCode: qrCodeDataUrl,
@@ -435,7 +618,6 @@ router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
     });
     
     if (!verified) {
-      console.log(`❌ Código TOTP inválido para termo ${termo.codigo}`);
       return res.status(400).json({ 
         success: false, 
         error: 'Código inválido. Verifique no Google Authenticator e tente novamente.' 
@@ -445,8 +627,6 @@ router.post('/verificar-totp', rateLimit(10, 5), async (req, res) => {
     termo.totpVerified = true;
     termo.totpVerifiedAt = new Date();
     await termo.save();
-    
-    console.log(`✅ TOTP verificado com sucesso para termo ${termo.codigo}`);
     
     res.json({
       success: true,
@@ -474,12 +654,9 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       lgpdAceito,
       assinaturaBase64,
       localizacao,
-      alunoId  // 🔥 NOVO: qual aluno este responsável está autorizando
+      alunoId
     } = req.body;
     
-    console.log(`📝 [AUTORIZAR] Termo: ${termoId}, Aluno: ${alunoId || 'todos'}`);
-    
-    // ============ VALIDAÇÕES ============
     if (!nome || !rg || !cpf || !telefone) {
       return res.status(400).json({ success: false, error: 'Nome, RG, CPF e telefone são obrigatórios' });
     }
@@ -505,39 +682,64 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       return res.status(400).json({ success: false, error: 'CPF inválido' });
     }
     
-    // 🔥 NOVO: Encontrar o índice do responsável
-    // Se alunoId foi enviado, procura o responsável DAQUELE aluno
-    // Senão, procura o primeiro pendente
+    // Encontrar o índice do responsável
     let responsavelIndex = -1;
+    const alunoIdNorm = normalizarId(alunoId);
     
-    if (alunoId) {
+    if (alunoIdNorm) {
       responsavelIndex = termo.responsaveis.findIndex(r => 
-        (r.alunoId?._id || r.alunoId || '').toString() === alunoId.toString()
+        normalizarId(r.alunoId) === alunoIdNorm
       );
     }
     
     if (responsavelIndex === -1) {
-      // Fallback: primeiro pendente
       responsavelIndex = termo.responsaveis.findIndex(r => 
         !r.nome || r.status === 'pendente'
       );
     }
     
-    if (responsavelIndex === -1) {
-      responsavelIndex = 0;
+    if (responsavelIndex === -1) responsavelIndex = 0;
+    
+    // 🔥 Garantir alunoId como ObjectId válido
+    let alunoIdParaSalvar = paraObjectId(alunoIdNorm);
+    
+    if (!alunoIdParaSalvar) {
+      const alunoCorrespondente = termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+      alunoIdParaSalvar = paraObjectId(alunoCorrespondente?.alunoId || alunoCorrespondente?._id);
     }
     
-    // 🔐 CRIPTOGRAFIA EXPLÍCITA
+    if (!alunoIdParaSalvar) {
+      alunoIdParaSalvar = paraObjectId(termo.responsaveis[responsavelIndex]?.alunoId);
+    }
+    
+    if (!alunoIdParaSalvar && termo.alunos?.[0]) {
+      alunoIdParaSalvar = paraObjectId(termo.alunos[0].alunoId || termo.alunos[0]._id);
+    }
+    
+    if (!alunoIdParaSalvar) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Não foi possível identificar o aluno no termo' 
+      });
+    }
+    
+    const alunoCorrespondente = termo.alunos?.find(a => 
+      normalizarId(a.alunoId) === alunoIdParaSalvar.toString()
+    ) || termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+    
+    const alunoNomeParaSalvar = alunoCorrespondente?.nome || '';
+    
+    // 🔐 CRIPTOGRAFIA + alunoId garantido
     termo.responsaveis[responsavelIndex] = {
       ...termo.responsaveis[responsavelIndex],
+      alunoId: alunoIdParaSalvar,
+      alunoNome: alunoNomeParaSalvar,
       nome: nome.trim(),
       
-      // 🔐 Criptografados explicitamente
       rg: encrypt(rg.trim()),
       cpf: encrypt(cpfLimpo),
       telefone: encrypt(telefone.replace(/\D/g, '')),
       
-      // 🔍 Hash para busca
       cpfHash: hash(cpfLimpo),
       
       email: email ? email.toLowerCase().trim() : '',
@@ -546,18 +748,15 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       autenticacaoData: new Date(),
       autenticacaoMetodo: 'totp',
       
-      // 🔐 Assinatura criptografada
       assinaturaBase64: encrypt(assinaturaBase64),
       assinaturaData: new Date(),
       
-      // LGPD - Consentimento
       lgpdAceito: true,
       lgpdAceitoData: new Date(),
       lgpdVersao: process.env.LGPD_VERSAO || '1.0',
       lgpdIp: req.ip || req.headers['x-forwarded-for'] || 'unknown',
       lgpdUserAgent: req.headers['user-agent'],
       
-      // Geolocalização
       localizacaoAssinatura: {
         latitude: localizacao?.latitude || null,
         longitude: localizacao?.longitude || null,
@@ -575,7 +774,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     
     console.log(`✅ Termo ${termo.codigo} autorizado por ${nome}`);
     
-    // 🔐 REGISTRAR CONSENTIMENTO LGPD
+    // Registrar consentimento LGPD
     try {
       await ConsentimentoLGPD.create({
         titular: {
@@ -600,7 +799,6 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         expiraEm: termo.expiraEm,
         assinaturaBase64: encrypt(assinaturaBase64)
       });
-      console.log(`✅ Consentimento LGPD registrado`);
     } catch (lgpdErr) {
       console.warn('⚠️ Erro ao registrar consentimento LGPD:', lgpdErr.message);
     }
@@ -611,7 +809,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         usuarioId: termo.criadoPor,
         tipo: 'autorizacao',
         titulo: '✅ Visita Autorizada',
-        mensagem: `${nome} autorizou a visita de ${termo.alunos?.[0]?.nome || 'Aluno'} - ${termo.codigo}`,
+        mensagem: `${nome} autorizou a visita de ${alunoNomeParaSalvar || 'Aluno'} - ${termo.codigo}`,
         termoId: termo._id
       });
       await notificacao.save();
@@ -622,7 +820,7 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         await oneSignal.enviarPush(
           termo.criadoPor,
           '✅ Visita Autorizada',
-          `${termo.alunos?.[0]?.nome || 'Aluno'} - ${termo.codigo}`,
+          `${alunoNomeParaSalvar || 'Aluno'} - ${termo.codigo}`,
           { tipo: 'visita_autorizada', termoId: termo._id, codigo: termo.codigo }
         );
       } catch (pushError) {
@@ -639,9 +837,9 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
         id: termo._id,
         codigo: termo.codigo,
         atividade: termo.atividade,
-        alunoNome: termo.alunos?.[0]?.nome || 'Aluno',
-        alunoTurma: termo.alunos?.[0]?.turma || 'N/A',
-        alunoCurso: termo.alunos?.[0]?.curso || 'N/A',
+        alunoNome: alunoNomeParaSalvar || 'Aluno',
+        alunoTurma: alunoCorrespondente?.turma || 'N/A',
+        alunoCurso: alunoCorrespondente?.curso || 'N/A',
         professorNome: termo.professores?.[0]?.nome || 'Professor',
         periodo: termo.periodo,
         horario: termo.horario,
@@ -675,10 +873,11 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
     if (!termo) return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     
     let responsavelIndex = -1;
+    const alunoIdNorm = normalizarId(alunoId);
     
-    if (alunoId) {
+    if (alunoIdNorm) {
       responsavelIndex = termo.responsaveis.findIndex(r => 
-        (r.alunoId?._id || r.alunoId || '').toString() === alunoId.toString()
+        normalizarId(r.alunoId) === alunoIdNorm
       );
     }
     
@@ -690,6 +889,24 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
     
     if (responsavelIndex === -1) responsavelIndex = 0;
     
+    // Garantir alunoId válido
+    let alunoIdParaSalvar = paraObjectId(alunoIdNorm);
+    
+    if (!alunoIdParaSalvar) {
+      const alunoCorrespondente = termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+      alunoIdParaSalvar = paraObjectId(alunoCorrespondente?.alunoId || alunoCorrespondente?._id);
+    }
+    
+    if (!alunoIdParaSalvar) {
+      alunoIdParaSalvar = paraObjectId(termo.responsaveis[responsavelIndex]?.alunoId);
+    }
+    
+    const alunoCorrespondente = termo.alunos?.find(a => 
+      normalizarId(a.alunoId) === normalizarId(alunoIdParaSalvar)
+    ) || termo.alunos?.[responsavelIndex] || termo.alunos?.[0];
+    
+    termo.responsaveis[responsavelIndex].alunoId = alunoIdParaSalvar;
+    termo.responsaveis[responsavelIndex].alunoNome = alunoCorrespondente?.nome || termo.responsaveis[responsavelIndex].alunoNome || '';
     termo.responsaveis[responsavelIndex].status = 'recusado';
     termo.responsaveis[responsavelIndex].recusaData = new Date();
     termo.responsaveis[responsavelIndex].motivoRecusa = motivo || 'Não informado';
@@ -703,7 +920,7 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
         usuarioId: termo.criadoPor,
         tipo: 'recusa',
         titulo: '❌ Visita Recusada',
-        mensagem: `A visita de ${termo.alunos?.[0]?.nome || 'Aluno'} foi recusada. Motivo: ${motivo || 'Não informado'}`,
+        mensagem: `A visita de ${alunoCorrespondente?.nome || 'Aluno'} foi recusada. Motivo: ${motivo || 'Não informado'}`,
         termoId: termo._id
       });
       await notificacao.save();
@@ -719,7 +936,6 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
 
 // ============================================
 // 📄 GERAR TERMO OFICIAL (INDIVIDUAL)
-// ⚠️ IMPORTANTE: Retorna 1 PÁGINA POR ALUNO
 // ============================================
 router.get('/termo-oficial/:id', async (req, res) => {
   try {
@@ -738,7 +954,6 @@ router.get('/termo-oficial/:id', async (req, res) => {
       });
     }
     
-    // 🔥 Gera HTML com 1 página por aluno
     const html = gerarHTMLTermoOficial(termo);
     
     res.json({
@@ -760,7 +975,6 @@ router.get('/termo-oficial/:id', async (req, res) => {
 
 // ============================================
 // 📄 GERAR MÚLTIPLOS TERMOS (LOTE)
-// ⚠️ Cada termo gera N páginas (1 por aluno)
 // ============================================
 router.post('/termos-oficiais-lote', async (req, res) => {
   try {
@@ -776,8 +990,6 @@ router.post('/termos-oficiais-lote', async (req, res) => {
         error: 'Limite de 100 termos por impressão. Refine os filtros.' 
       });
     }
-    
-    console.log(`📄 [LOTE] Gerando ${termoIds.length} termo(s)...`);
     
     const termos = await TermoVisita.find({ 
       _id: { $in: termoIds } 
@@ -835,7 +1047,7 @@ router.post('/termos-oficiais-lote', async (req, res) => {
     
     const htmlCombinado = combinarHTMLsTermos(htmlsGerados.map(h => h.html));
     
-    console.log(`✅ [LOTE] ${htmlsGerados.length} termo(s) / ${totalPaginas} página(s) geradas`);
+    console.log(`✅ [LOTE] ${htmlsGerados.length} termo(s) / ${totalPaginas} página(s)`);
     
     res.json({
       success: true,
@@ -859,28 +1071,21 @@ router.post('/termos-oficiais-lote', async (req, res) => {
 });
 
 // ============================================
-// 🎨 GERAR HTML DO TERMO OFICIAL
-// ⚠️ IMPORTANTE: Gera 1 PÁGINA POR ALUNO
+// 🎨 GERAR HTML DO TERMO OFICIAL (1 PÁGINA POR ALUNO)
 // ============================================
 function gerarHTMLTermoOficial(termo) {
   const alunos = termo.alunos || [];
   
-  if (alunos.length === 0) {
-    console.warn('⚠️ Termo sem alunos:', termo.codigo);
-    return '';
-  }
+  if (alunos.length === 0) return '';
 
-  // Gera 1 página por aluno
   const paginasHTML = alunos.map((aluno, index) => {
     return gerarPaginaTermoOficial(termo, aluno, index + 1, alunos.length);
   });
 
-  // Se é só 1 aluno, retorna direto
   if (paginasHTML.length === 1) {
     return paginasHTML[0];
   }
 
-  // Se tem múltiplos, combina todas as páginas
   return combinarPaginasTermo(paginasHTML, termo);
 }
 
@@ -892,19 +1097,58 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
     day: '2-digit', month: 'long', year: 'numeric'
   });
 
-  // ✅ Buscar responsável DESSE aluno específico
-  const alunoIdStr = (aluno.alunoId?._id || aluno.alunoId || '').toString();
-  const responsavelDoAluno = (termo.responsaveis || []).find(r => 
-    (r.alunoId?._id || r.alunoId || '').toString() === alunoIdStr
-  );
+  const alunoIdStr = normalizarId(aluno.alunoId);
+  
+  // Buscar responsável (com fallbacks)
+  let responsavelFinal = (termo.responsaveis || []).find(r => {
+    const rId = normalizarId(r.alunoId);
+    return rId && alunoIdStr && rId === alunoIdStr;
+  });
+  
+  if (!responsavelFinal && (termo.alunos || []).length === 1 && (termo.responsaveis || []).length === 1) {
+    responsavelFinal = termo.responsaveis[0];
+  }
+  
+  if (!responsavelFinal) {
+    responsavelFinal = (termo.responsaveis || []).find(r => r.status === 'autorizado');
+  }
+  
+  if (!responsavelFinal) {
+    const idxAluno = (termo.alunos || []).findIndex(a => 
+      normalizarId(a.alunoId) === alunoIdStr
+    );
+    if (idxAluno >= 0 && termo.responsaveis?.[idxAluno]) {
+      responsavelFinal = termo.responsaveis[idxAluno];
+    }
+  }
+  
+  if (!responsavelFinal && (termo.responsaveis || []).length > 0) {
+    responsavelFinal = termo.responsaveis[0];
+  }
 
-  // ✅ Dados do responsável DESTE aluno
-  const assinaturaResponsavel = responsavelDoAluno?.assinaturaBase64 || '';
-  const nomeResponsavel = responsavelDoAluno?.nome || 'Aguardando responsável';
-  const cpfResponsavel = responsavelDoAluno?.cpf || '';
-  const statusResponsavel = responsavelDoAluno?.status || 'pendente';
+  const nomeResponsavel = responsavelFinal?.nome || 'Aguardando responsável';
+  const statusResponsavel = responsavelFinal?.status || 'pendente';
 
-  // Formatar CPF
+  // Descriptografar assinatura
+  let assinaturaResponsavel = '';
+  try {
+    if (responsavelFinal?.assinaturaBase64) {
+      assinaturaResponsavel = decrypt(responsavelFinal.assinaturaBase64);
+    }
+  } catch (err) {
+    console.warn('⚠️ Erro ao descriptografar assinatura:', err.message);
+  }
+
+  // Descriptografar CPF
+  let cpfResponsavel = '';
+  try {
+    if (responsavelFinal?.cpf) {
+      cpfResponsavel = decrypt(responsavelFinal.cpf);
+    }
+  } catch (err) {
+    console.warn('⚠️ Erro ao descriptografar CPF:', err.message);
+  }
+
   const cpfFormatado = cpfResponsavel 
     ? String(cpfResponsavel).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
     : '—';
@@ -926,16 +1170,23 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
   }
 
   // Assinatura do gestor
-  const assinaturaGestor = termo.assinaturaGestor?.base64 || '';
-  const nomeGestor = termo.assinaturaGestor?.nome || 'Gestor Pedagógico';
+  let assinaturaGestorDigital = '';
+  try {
+    if (termo.assinaturaGestor?.base64) {
+      assinaturaGestorDigital = decrypt(termo.assinaturaGestor.base64);
+    }
+  } catch (err) {
+    console.warn('⚠️ Erro ao descriptografar assinatura do gestor:', err.message);
+  }
+  
+  const assinaturaGestor = assinaturaGestorDigital || ASSINATURA_GESTOR_PADRAO_BASE64;
+  const nomeGestor = termo.assinaturaGestor?.nome || 'Cristovam Araújo da Silva';
   const cargoGestor = termo.assinaturaGestor?.cargo || 'Gestor Pedagógico';
 
-  // Indicador de página (só se tiver múltiplas)
   const indicadorPagina = totalPaginas > 1 
     ? `<div class="page-indicator">Página ${numeroPagina} de ${totalPaginas}</div>`
     : '';
 
-  // Status badge
   let statusBadge = '';
   if (statusResponsavel === 'autorizado') {
     statusBadge = '<span class="badge autorizado">✓ Autorizado</span>';
@@ -954,23 +1205,19 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
       <style>
         @page { size: A4 portrait; margin: 15mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body {
-          height: 100%;
-          width: 100%;
-        }
+        html, body { height: 100%; width: 100%; }
         body {
           font-family: 'Times New Roman', Times, serif;
           font-size: 11pt;
           line-height: 1.5;
           color: #000;
-          /* Layout flex para empurrar o rodapé para o fim da página sem sobrepor */
           display: flex;
           flex-direction: column;
-          min-height: 100vh; /* Garante que o body ocupe a altura total da folha */
+          min-height: 100vh;
         }
         .page-content {
-          flex: 1 0 auto; /* Ocupa todo o espaço disponível */
-          padding: 15mm 15mm 0 15mm; /* Margem superior/lateral, sem margem inferior */
+          flex: 1 0 auto;
+          padding: 15mm 15mm 0 15mm;
           display: flex;
           flex-direction: column;
         }
@@ -1016,7 +1263,7 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
           font-size: 11pt;
           line-height: 1.8;
           margin: 15px 0;
-          flex: 1 0 auto; /* Permite que o conteúdo cresça */
+          flex: 1 0 auto;
         }
         .conteudo p { margin-bottom: 12px; }
         .destaque {
@@ -1061,8 +1308,8 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
           display: flex;
           justify-content: space-between;
           gap: 40px;
-          margin-top: auto; /* Empurra as assinaturas para o fim do conteúdo */
-          padding-top: 40px; /* Espaço mínimo acima das assinaturas */
+          margin-top: auto;
+          padding-top: 40px;
           page-break-inside: avoid;
         }
         .assinatura { flex: 1; text-align: center; }
@@ -1076,20 +1323,19 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
           border-top: 1px solid #000;
           padding-top: 6px;
           font-size: 10pt;
-          margin-top: 55px; /* Reduzido para caber melhor */
+          margin-top: 55px;
         }
         .assinatura-linha.com-assinatura { margin-top: 3px; }
         .assinatura-linha strong { display: block; margin-bottom: 1px; }
         .assinatura-linha small { font-size: 8pt; color: #666; display: block; }
         
-        /* 🔥 RODAPÉ CORRIGIDO: Não é mais fixed, flui no final do flex */
         .rodape {
-          flex-shrink: 0; /* Impede que o rodapé seja encolhido */
+          flex-shrink: 0;
           text-align: center;
           font-size: 7.5pt;
           color: #666;
           border-top: 1px solid #ccc;
-          padding: 8px 15mm 10mm 15mm; /* Respeita a margem inferior da página */
+          padding: 8px 15mm 10mm 15mm;
           margin-top: 10px;
           width: 100%;
         }
@@ -1099,22 +1345,15 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
             display: flex; 
             flex-direction: column;
             min-height: 100vh;
-            height: 100vh; /* Força altura total na impressão */
+            height: 100vh;
           }
-          .page-content { 
-            flex: 1 0 auto; 
-            padding: 0; 
-          }
-          .rodape {
-            position: relative; /* Volta ao fluxo normal */
-            margin-top: auto;
-          }
+          .page-content { flex: 1 0 auto; padding: 0; }
+          .rodape { position: relative; margin-top: auto; }
           .no-print { display: none !important; }
         }
       </style>
     </head>
     <body>
-      <!-- Conteúdo Principal -->
       <div class="page-content">
         <div class="header">
           <h1>IEMA Pleno: São Luís - Centro</h1>
@@ -1195,7 +1434,6 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
         </div>
       </div>
       
-      <!-- Rodapé -->
       <div class="rodape">
         <p>Documento gerado em ${new Date().toLocaleString('pt-BR')} - EducaPleno</p>
         <p>Este documento é válido como autorização oficial de visita técnica</p>
@@ -1213,15 +1451,11 @@ function combinarPaginasTermo(paginas, termo) {
     return '<!DOCTYPE html><html><body><p>Nenhuma página para exibir</p></body></html>';
   }
 
-  if (paginas.length === 1) {
-    return paginas[0];
-  }
+  if (paginas.length === 1) return paginas[0];
 
-  // Extrair <head> do primeiro
   const headMatch = paginas[0].match(/<head[^>]*>([\s\S]*?)<\/head>/i);
   const headOriginal = headMatch ? headMatch[1] : '';
 
-  // Extrair <body> de cada página
   const bodies = paginas.map((html, index) => {
     const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
     const conteudo = bodyMatch ? bodyMatch[1] : html;
@@ -1233,27 +1467,6 @@ function combinarPaginasTermo(paginas, termo) {
     `;
   });
 
-  const cssMultiplasPaginas = `
-    <style>
-      .termo-aluno-pagina {
-        page-break-after: always;
-        page-break-inside: avoid;
-        position: relative;
-      }
-      .termo-aluno-pagina:last-child {
-        page-break-after: auto;
-      }
-      @media print {
-        .termo-aluno-pagina {
-          page-break-after: always;
-        }
-        .termo-aluno-pagina:last-child {
-          page-break-after: auto;
-        }
-      }
-    </style>
-  `;
-
   return `
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -1261,7 +1474,18 @@ function combinarPaginasTermo(paginas, termo) {
       <meta charset="UTF-8">
       <title>Termo ${termo.codigo} - ${paginas.length} aluno(s)</title>
       ${headOriginal}
-      ${cssMultiplasPaginas}
+      <style>
+        .termo-aluno-pagina {
+          page-break-after: always;
+          page-break-inside: avoid;
+          position: relative;
+        }
+        .termo-aluno-pagina:last-child { page-break-after: auto; }
+        @media print {
+          .termo-aluno-pagina { page-break-after: always; }
+          .termo-aluno-pagina:last-child { page-break-after: auto; }
+        }
+      </style>
     </head>
     <body>
       ${bodies.join('\n')}
@@ -1272,7 +1496,6 @@ function combinarPaginasTermo(paginas, termo) {
 
 // ============================================
 // 🎨 COMBINAR HTMLs DE MÚLTIPLOS TERMOS (IMPRESSÃO EM LOTE)
-// Cada termo já traz suas N páginas internamente
 // ============================================
 function combinarHTMLsTermos(htmls) {
   if (!htmls || htmls.length === 0) {
@@ -1293,68 +1516,6 @@ function combinarHTMLsTermos(htmls) {
     `;
   });
   
-  const cssLote = `
-    <style>
-      .termo-lote-page {
-        page-break-after: always;
-        page-break-inside: avoid;
-        position: relative;
-      }
-      .termo-lote-page:last-child {
-        page-break-after: auto;
-      }
-      
-      /* Mantém a quebra de página entre alunos dentro do mesmo termo */
-      .termo-aluno-pagina {
-        page-break-after: always;
-        page-break-inside: avoid;
-      }
-      .termo-aluno-pagina:last-child {
-        page-break-after: auto;
-      }
-      
-      .lote-info {
-        position: fixed;
-        top: 5mm;
-        right: 15mm;
-        font-size: 8pt;
-        color: #999;
-        font-family: Arial, sans-serif;
-        z-index: 9999;
-      }
-      
-      @media print {
-        .lote-info { display: none; }
-        .termo-lote-page {
-          page-break-after: always;
-          page-break-inside: avoid;
-        }
-        .termo-lote-page:last-child {
-          page-break-after: auto;
-        }
-        .termo-aluno-pagina {
-          page-break-after: always;
-          page-break-inside: avoid;
-        }
-        .termo-aluno-pagina:last-child {
-          page-break-after: auto;
-        }
-      }
-      
-      @media screen {
-        body { background: #e5e7eb; padding: 20px; }
-        .termo-lote-page {
-          background: white;
-          padding: 15mm;
-          margin: 0 auto 20px;
-          max-width: 210mm;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-          border-radius: 4px;
-        }
-      }
-    </style>
-  `;
-  
   return `
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -1363,7 +1524,50 @@ function combinarHTMLsTermos(htmls) {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Termos de Visita - Impressão em Lote (${htmls.length} termos)</title>
       ${headOriginal}
-      ${cssLote}
+      <style>
+        .termo-lote-page {
+          page-break-after: always;
+          page-break-inside: avoid;
+          position: relative;
+        }
+        .termo-lote-page:last-child { page-break-after: auto; }
+        
+        .termo-aluno-pagina {
+          page-break-after: always;
+          page-break-inside: avoid;
+        }
+        .termo-aluno-pagina:last-child { page-break-after: auto; }
+        
+        .lote-info {
+          position: fixed;
+          top: 5mm;
+          right: 15mm;
+          font-size: 8pt;
+          color: #999;
+          font-family: Arial, sans-serif;
+          z-index: 9999;
+        }
+        
+        @media print {
+          .lote-info { display: none; }
+          .termo-lote-page { page-break-after: always; page-break-inside: avoid; }
+          .termo-lote-page:last-child { page-break-after: auto; }
+          .termo-aluno-pagina { page-break-after: always; page-break-inside: avoid; }
+          .termo-aluno-pagina:last-child { page-break-after: auto; }
+        }
+        
+        @media screen {
+          body { background: #e5e7eb; padding: 20px; }
+          .termo-lote-page {
+            background: white;
+            padding: 15mm;
+            margin: 0 auto 20px;
+            max-width: 210mm;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            border-radius: 4px;
+          }
+        }
+      </style>
     </head>
     <body>
       <div class="lote-info">📄 ${htmls.length} termo(s) • Impressão em lote</div>
