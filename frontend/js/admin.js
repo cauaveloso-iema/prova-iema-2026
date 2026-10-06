@@ -3331,7 +3331,7 @@ class AdminPanel {
         }
     }
 
-        // ============ ABRIR MODAL DE USUÁRIOS COM APP ============
+    // ============ ABRIR MODAL DE USUÁRIOS COM APP ============
     async abrirModalUsuariosApp() {
         console.log('📱 Abrindo modal de usuários do app...');
         
