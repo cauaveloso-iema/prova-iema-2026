@@ -1312,8 +1312,21 @@ async function imprimirAtraso(atrasoId) {
         }
         
         const a = data.atraso;
+        
+        // 🔥 BUSCAR QR CODE
+        let qr = '';
+        try {
+            const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (qrR.ok) {
+                const qrD = await qrR.json();
+                if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+            }
+        } catch (e) { console.info('Sem QR'); }
+        
         const win = window.open('', '_blank');
-        win.document.write(gerarHTMLImpressaoAtraso(a));
+        win.document.write(gerarHTMLImpressaoAtraso(a, qr));
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
     } catch (error) {
@@ -1322,22 +1335,15 @@ async function imprimirAtraso(atrasoId) {
     }
 }
 
-function gerarHTMLImpressaoAtraso(a) {
+function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
     const logo = '/uploads/logo-iema.png';
-    const carimboGestao = '/icons/assinatura_gestao.ico';
-    const dataExt = new Date(a.dataHora).toLocaleDateString('pt-BR', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
-    const horaExt = new Date(a.dataHora).toLocaleTimeString('pt-BR', {
-        hour: '2-digit', minute: '2-digit'
-    });
-
-    const carimboGestaoHTML = `
-        <div class="carimbo-gestao">
-            <img src="${carimboGestao}" alt="Carimbo Gestão Geral">
-        </div>`;
-
-    // 🔥 NOVO: Mostra horários apenas se preenchidos
+    const carimbo = '/icons/assinatura_gestao.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    const entrada = new Date(a.dataHora);
+    const dataExt = entrada.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
     const horarioPrevisto = a.detalhes?.horarioPrevisto || '';
     const horarioChegada = a.detalhes?.horarioChegada || '';
     const mostrarHorarios = horarioPrevisto || horarioChegada;
@@ -1345,195 +1351,135 @@ function gerarHTMLImpressaoAtraso(a) {
     let horariosHTML = '';
     if (mostrarHorarios) {
         horariosHTML = `
-            <div class="info-row">
-                ${horarioPrevisto ? `
-                    <div class="info-item">
-                        <span class="label">Horário Previsto:</span>
-                        <span class="underline">${horarioPrevisto}</span>
-                    </div>` : ''}
-                ${horarioChegada ? `
-                    <div class="info-item">
-                        <span class="label">Horário de Chegada:</span>
-                        <span class="underline">${horarioChegada}</span>
-                    </div>` : ''}
+            <div class="info-grid">
+                ${horarioPrevisto ? `<div class="info-item"><span class="info-label">Horário Previsto:</span><span class="info-value">${horarioPrevisto}</span></div>` : ''}
+                ${horarioChegada ? `<div class="info-item"><span class="info-label">Horário Chegada:</span><span class="info-value">${horarioChegada}</span></div>` : ''}
             </div>`;
     }
-
+    
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Atraso - ${a.alunoNome}</title>
+        <title>Registro de Atraso - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { size: A4 portrait; margin: 15mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body {
-                width: 210mm;
-                min-height: 297mm;
-                font-family: 'Times New Roman', Times, serif;
-                background: #f0f0f0;
-                display: flex;
-                justify-content: center;
-                align-items: flex-start;
-            }
-            .folha {
-                width: 180mm;
-                min-height: 267mm;
-                padding: 10mm;
-                background: white;
-                margin: 0 auto;
-                font-size: 10pt;
-                line-height: 1.4;
-                display: flex;
-                flex-direction: column;
-            }
-            @media print {
-                html, body { 
-                    width: 210mm; 
-                    height: 297mm; 
-                    background: white;
-                    display: block;
-                }
-                .folha { 
-                    width: 100%; 
-                    min-height: auto;
-                    padding: 0;
-                    margin: 0 auto;
-                }
-                .btn-print { display: none !important; }
-            }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
-            .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
-            .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
-            .titulo {
-                text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase;
-                margin: 10px 0; background: #eef2ff; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px;
-            }
-            .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
-            .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
-            .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-            .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
-            .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px;
-                font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            }
-            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
-            .motivo-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
-            .motivo-box p { margin: 0; font-size: 10pt; font-weight: bold; }
-            .observacoes { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
-            .observacoes strong { display: block; margin-bottom: 5px; font-size: 10pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 9pt; position: relative; }
-            .assinatura-vazia {
-                border-bottom: 1px solid #000;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                color: #999;
-                font-size: 9pt;
-                padding-bottom: 3px;
-            }
-            .assinatura-linha { padding-top: 5px; font-size: 9pt; }
-            .carimbo-gestao {
-                border-bottom: 1px solid #000;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 3px;
-            }
-            .carimbo-gestao img {
-                max-height: 16mm;
-                max-width: 100%;
-                object-fit: contain;
-                opacity: 0.9;
-            }
-            .footer {
-                text-align: center; margin-top: auto; padding-top: 8px;
-                border-top: 1px solid #000; font-size: 8pt; color: #444;
-            }
-            .footer p { margin: 2px 0; }
-            .btn-print {
-                display: block; margin: 15px auto; padding: 10px 30px;
-                background: #1e3c72; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
-            }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #eef2ff; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            
+            .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 5px; margin-bottom: 6px; }
+            .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #1e3c72; flex-shrink: 0; }
+            .aluno-info { flex: 1; }
+            .aluno-nome { font-size: 10pt; font-weight: bold; color: #1e3c72; margin-bottom: 1px; }
+            .aluno-detalhes { font-size: 8pt; color: #374151; }
+            
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #1e3c72; margin: 5px 0 3px; }
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
+            .info-item { display: flex; gap: 4px; }
+            .info-label { font-weight: bold; white-space: nowrap; }
+            .info-value { flex: 1; }
+            
+            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 5px 8px; margin: 5px 0; border-radius: 4px; }
+            .motivo-box strong { font-size: 9pt; }
+            .motivo-box p { margin: 3px 0 0; font-size: 9.5pt; font-weight: bold; }
+            
+            .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
+            
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 15px; gap: 15px; }
+            .assinatura { flex: 1; text-align: center; font-size: 8pt; position: relative; }
+            .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+            .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; }
+            .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
+            
+            .qr-code { text-align: center; margin-top: 4px; }
+            .qr-code img { width: 15mm; height: 15mm; border: 1px solid #000; padding: 1px; }
+            .qr-code p { font-size: 6.5pt; margin: 1px 0 0 0; color: #444; }
+            
+            .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #1e3c72; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
             .btn-print:hover { background: #2a5298; }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="folha">
-            <div class="header">
-                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
-                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
-            </div>
-            <div class="titulo">📋 REGISTRO DE ATRASO</div>
-            <div class="info-section">
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Estudante:</span>
-                        <span class="underline">${a.alunoNome || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Matrícula:</span>
-                        <span class="underline">${a.alunoMatricula || ''}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Turma:</span>
-                        <span class="underline">${a.alunoTurma || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Curso:</span>
-                        <span class="underline">${a.alunoCurso || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Data:</span>
-                        <span class="underline">${dataExt}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Horário:</span>
-                        <span class="underline">${horaExt}</span>
-                    </div>
-                </div>
-                ${horariosHTML}
-            </div>
-            <div class="motivo-box">
-                <h3>📌 Motivo:</h3>
-                <p>☑ ${a.motivoLabel || a.motivo || '-'}</p>
-            </div>
-            <div class="observacoes">
-                <strong>📝 Descrição:</strong>
-                ${a.descricao || '___________________________________________________________________'}
-            </div>
-            ${a.observacoes ? `
-                <div class="observacoes" style="min-height: 18mm;">
-                    <strong>💬 Observações:</strong>
-                    ${a.observacoes}
-                </div>
-            ` : ''}
-            <div class="assinaturas">
-                <div class="assinatura">
-                    <div class="assinatura-vazia">_____________________________________</div>
-                    <div class="assinatura-linha">Assinatura do Responsável</div>
-                </div>
-                <div class="assinatura">
-                    ${carimboGestaoHTML}
-                    <div class="assinatura-linha">Coordenação / Gestão Geral</div>
+        
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p>Sistema de Atendimentos — Gestão Geral</p>
+        </div>
+        
+        <div class="titulo">📋 Registro de Atraso</div>
+        
+        <div class="aluno-box">
+            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
+            <div class="aluno-info">
+                <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
+                <div class="aluno-detalhes">
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')} • 
+                    <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
+                    ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
                 </div>
             </div>
-            <div class="footer">
-                <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.registradoPor || 'Gestão Geral'}</p>
-                <p>EducaPleno</p>
+        </div>
+        
+        <div class="section-title">📌 Dados do Atraso</div>
+        <div class="info-grid">
+            <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
+            <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
+            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.registradoPor || '-')}</span></div>
+        </div>
+        ${horariosHTML}
+        
+        <div class="motivo-box">
+            <strong>📌 Motivo:</strong>
+            <p>☑ ${escapeHTML(a.motivoLabel || a.motivo || '-')}</p>
+        </div>
+        
+        <div class="section-title">📝 Descrição</div>
+        <div class="descricao-box">${escapeHTML(a.descricao || '-').replace(/\n/g, '<br>')}</div>
+        
+        ${a.observacoes ? `
+            <div class="section-title">💬 Observações</div>
+            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.observacoes).replace(/\n/g, '<br>')}</div>
+        ` : ''}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container" style="display: flex; align-items: flex-end; justify-content: center;">
+                    <span style="color: #999; font-size: 8pt; padding-bottom: 2px;">_________________________________</span>
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável</div>
             </div>
+            <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Coordenação / Gestão Geral</div>
+            </div>
+        </div>
+        
+        ${qrCodeUrl ? `
+            <div class="qr-code">
+                <img src="${qrCodeUrl}" alt="QR Code">
+                <p>Identificação do Aluno</p>
+            </div>
+        ` : ''}
+        
+        <div class="footer">
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Gestão Geral</p>
         </div>
     </body>
     </html>`;
@@ -4058,14 +4004,23 @@ async function imprimirModulo(modulo, id) {
         if (!d.success) { notificar('Erro ao carregar'); return; }
         
         const a = d.autorizacao;
+        
+        // 🔥 TENTAR BUSCAR QR CODE SEM QUEBRAR SE DER 403
         let qr = '';
         try {
             const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const qrD = await qrR.json();
-            if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
-        } catch (e) { console.warn('Sem QR Code'); }
+            
+            if (qrR.ok) {
+                const qrD = await qrR.json();
+                if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+            } else {
+                console.info(`ℹ️ QR Code não disponível (status ${qrR.status})`);
+            }
+        } catch (e) {
+            console.info('ℹ️ QR Code não pôde ser carregado');
+        }
         
         const win = window.open('', '_blank');
         win.document.write(gerarHTMLImpressao(modulo, a, qr));
@@ -4082,9 +4037,11 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
     const titulo = cfg.nomeAmigavel.toUpperCase();
     const logo = '/uploads/logo-iema.png';
     const carimboGestao = '/icons/assinatura_gestao.ico';
-    const dataExt = new Date(a.data).toLocaleDateString('pt-BR', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    const entrada = new Date(a.data);
+    const dataExt = entrada.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const horaExt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
     let detalheMotivo = '';
     if (a.motivo === 'outros' && a.motivoOutros) {
@@ -4094,234 +4051,156 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
         detalheMotivo = ` <strong>(Ausência: ${a.horarioAusencia} | Retorno: ${a.horarioRetorno})</strong>`;
     }
     
-    // 🔥 NOVO: Mostra horários de entrada/saída APENAS se preenchidos
     const mostrarHorariosEntradaSaida = cfg.tipo === 'autorizacao' && (a.horarioEntrada || a.horarioSaida);
-    
     let horariosHTML = '';
     if (mostrarHorariosEntradaSaida) {
         horariosHTML = `
-            <div class="info-row">
-                ${a.horarioEntrada ? `
-                    <div class="info-item">
-                        <span class="label">Entrada:</span>
-                        <span class="underline">${a.horarioEntrada}</span>
-                    </div>` : ''}
-                ${a.horarioSaida ? `
-                    <div class="info-item">
-                        <span class="label">Saída:</span>
-                        <span class="underline">${a.horarioSaida}</span>
-                    </div>` : ''}
+            <div class="info-grid">
+                ${a.horarioEntrada ? `<div class="info-item"><span class="info-label">Entrada:</span><span class="info-value">${a.horarioEntrada}</span></div>` : ''}
+                ${a.horarioSaida ? `<div class="info-item"><span class="info-label">Saída:</span><span class="info-value">${a.horarioSaida}</span></div>` : ''}
             </div>`;
     }
     
     const assinaturaHTML = a.assinaturaBase64 
-        ? `<div class="assinatura-digital"><img src="${a.assinaturaBase64}" alt="Assinatura"></div>`
-        : '<div class="assinatura-vazia">_____________________________________</div>';
+        ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura">`
+        : '';
     
-    const carimboGestaoHTML = `
-        <div class="carimbo-gestao">
-            <img src="${carimboGestao}" alt="Carimbo Gestão Geral">
-        </div>`;
+    const temResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
+    const responsavelHTML = temResponsavel ? `
+        <div class="section-title">👤 Responsável</div>
+        <div class="detalhes-compactos">
+            ${a.responsavelNome ? `<span class="det-item"><strong>Nome:</strong> ${escapeHTML(a.responsavelNome)}</span>` : ''}
+            ${a.responsavelCPF ? `<span class="det-item"><strong>CPF:</strong> ${escapeHTML(a.responsavelCPF)}</span>` : ''}
+            ${a.responsavelTelefone ? `<span class="det-item"><strong>Telefone:</strong> ${escapeHTML(a.responsavelTelefone)}</span>` : ''}
+        </div>
+    ` : '';
     
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>${titulo} - ${a.alunoNome}</title>
+        <title>${titulo} - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { size: A4 portrait; margin: 15mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body {
-                width: 210mm;
-                min-height: 297mm;
-                font-family: 'Times New Roman', Times, serif;
-                background: #f0f0f0;
-                display: flex;
-                justify-content: center;
-                align-items: flex-start;
-            }
-            .folha {
-                width: 180mm;
-                min-height: 267mm;
-                padding: 10mm;
-                background: white;
-                margin: 0 auto;
-                font-size: 10pt;
-                line-height: 1.4;
-                display: flex;
-                flex-direction: column;
-            }
-            @media print {
-                html, body { 
-                    width: 210mm; 
-                    height: 297mm; 
-                    background: white;
-                    display: block;
-                }
-                .folha { 
-                    width: 100%; 
-                    min-height: auto;
-                    padding: 0;
-                    margin: 0 auto;
-                }
-                .btn-print { display: none !important; }
-            }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
-            .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
-            .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
-            .titulo {
-                text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase;
-                margin: 10px 0; background: #e8e8e8; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px;
-            }
-            .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
-            .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
-            .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-            .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
-            .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px;
-                font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            }
-            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
-            .motivo-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
-            .motivo-box p { margin: 0; font-size: 10pt; font-weight: bold; }
-            .responsavel-box { background: #eef3fb; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; font-size: 9.5pt; }
-            .responsavel-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
-            .responsavel-box p { margin: 3px 0; font-size: 9.5pt; }
-            .observacoes { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
-            .observacoes strong { display: block; margin-bottom: 5px; font-size: 10pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 9pt; position: relative; }
-            .assinatura-digital { 
-                border-bottom: 1px solid #000;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 3px;
-            }
-            .assinatura-digital img {
-                max-height: 16mm;
-                max-width: 100%;
-                object-fit: contain;
-            }
-            .assinatura-vazia {
-                border-bottom: 1px solid #000;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                color: #999;
-                font-size: 9pt;
-                padding-bottom: 3px;
-            }
-            .assinatura-linha {
-                padding-top: 5px;
-                font-size: 9pt;
-            }
-            .carimbo-gestao {
-                border-bottom: 1px solid #000;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 3px;
-            }
-            .carimbo-gestao img {
-                max-height: 16mm;
-                max-width: 100%;
-                object-fit: contain;
-                opacity: 0.9;
-            }
-            .qr-code { text-align: center; margin-top: 8px; }
-            .qr-code img { width: 22mm; height: 22mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 8pt; margin: 3px 0 0 0; }
-            .footer {
-                text-align: center; margin-top: auto; padding-top: 8px;
-                border-top: 1px solid #000; font-size: 8pt; color: #444;
-            }
-            .footer p { margin: 2px 0; }
-            .btn-print {
-                display: block; margin: 15px auto; padding: 10px 30px;
-                background: #4f46e5; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
-            }
-            .btn-print:hover { background: #4338ca; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #eef2ff; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            
+            .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 5px; margin-bottom: 6px; }
+            .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #1e3c72; flex-shrink: 0; }
+            .aluno-info { flex: 1; }
+            .aluno-nome { font-size: 10pt; font-weight: bold; color: #1e3c72; margin-bottom: 1px; }
+            .aluno-detalhes { font-size: 8pt; color: #374151; }
+            
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #1e3c72; margin: 5px 0 3px; }
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
+            .info-item { display: flex; gap: 4px; }
+            .info-label { font-weight: bold; white-space: nowrap; }
+            .info-value { flex: 1; }
+            
+            .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 5px 8px; margin: 5px 0; border-radius: 4px; }
+            .motivo-box strong { font-size: 9pt; }
+            .motivo-box p { margin: 3px 0 0; font-size: 9.5pt; font-weight: bold; }
+            
+            .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
+            
+            .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
+            .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
+            
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 15px; gap: 15px; }
+            .assinatura { flex: 1; text-align: center; font-size: 8pt; position: relative; }
+            .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+            .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; position: relative; z-index: 2; }
+            .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
+            
+            .qr-code { text-align: center; margin-top: 4px; }
+            .qr-code img { width: 15mm; height: 15mm; border: 1px solid #000; padding: 1px; }
+            .qr-code p { font-size: 6.5pt; margin: 1px 0 0 0; color: #444; }
+            
+            .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #1e3c72; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
+            .btn-print:hover { background: #2a5298; }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="folha">
-            <div class="header">
-                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
-                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
-            </div>
-            <div class="titulo">📋 ${titulo}</div>
-            <div class="info-section">
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Estudante:</span>
-                        <span class="underline">${a.alunoNome || ''}</span>
-                    </div>
+        
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p>Sistema de Atendimentos — Gestão Geral</p>
+        </div>
+        
+        <div class="titulo">📋 ${titulo}</div>
+        
+        <div class="aluno-box">
+            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
+            <div class="aluno-info">
+                <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
+                <div class="aluno-detalhes">
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')} • 
+                    <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
+                    ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
                 </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Matrícula:</span>
-                        <span class="underline">${a.alunoMatricula || ''}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Turma:</span>
-                        <span class="underline">${a.alunoTurma || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Curso:</span>
-                        <span class="underline">${a.alunoCurso || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Data:</span>
-                        <span class="underline">${dataExt}</span>
-                    </div>
-                </div>
-                ${horariosHTML}
             </div>
-            <div class="motivo-box">
-                <h3>📌 Motivo:</h3>
-                <p>☑ ${a.motivoLabel}${detalheMotivo}</p>
-            </div>
-            ${(a.responsavelNome || a.responsavelCPF || a.responsavelTelefone) ? `
-                <div class="responsavel-box">
-                    <h3>👤 Responsável:</h3>
-                    ${a.responsavelNome ? `<p><strong>Nome:</strong> ${a.responsavelNome}</p>` : ''}
-                    ${a.responsavelCPF ? `<p><strong>CPF:</strong> ${a.responsavelCPF}</p>` : ''}
-                    ${a.responsavelTelefone ? `<p><strong>Telefone:</strong> ${a.responsavelTelefone}</p>` : ''}
-                </div>` : ''}
-            <div class="observacoes">
-                <strong>📝 Observações:</strong>
-                ${a.observacoes || '___________________________________________________________________'}
-            </div>
-            <div class="assinaturas">
-                <div class="assinatura">
+        </div>
+        
+        <div class="section-title">📌 Dados do Registro</div>
+        <div class="info-grid">
+            <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
+            <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
+            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.registradoPorNome || '-')}</span></div>
+        </div>
+        ${horariosHTML}
+        
+        <div class="motivo-box">
+            <strong>📌 Motivo:</strong>
+            <p>☑ ${escapeHTML(a.motivoLabel || '-')}${detalheMotivo}</p>
+        </div>
+        
+        ${responsavelHTML}
+        
+        ${a.observacoes ? `
+            <div class="section-title">💬 Observações</div>
+            <div class="descricao-box" style="min-height: 20px; max-height: 60px;">${escapeHTML(a.observacoes).replace(/\n/g, '<br>')}</div>
+        ` : ''}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container">
                     ${assinaturaHTML}
-                    <div class="assinatura-linha">Assinatura do Responsável</div>
                 </div>
-                <div class="assinatura">
-                    ${carimboGestaoHTML}
-                    <div class="assinatura-linha">Coordenação / Gestão Geral</div>
+                <div class="assinatura-linha">Assinatura do Responsável</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimboGestao}" alt="Carimbo" onerror="this.style.display='none'">
                 </div>
+                <div class="assinatura-linha">Coordenação / Gestão Geral</div>
             </div>
-            ${qrCodeUrl ? `
-                <div class="qr-code">
-                    <img src="${qrCodeUrl}" alt="QR Code">
-                    <p>Identificação do Aluno</p>
-                </div>` : ''}
-            <div class="footer">
-                <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.registradoPorNome || 'Gestão Geral'}</p>
-                <p>EducaPleno</p>
+        </div>
+        
+        ${qrCodeUrl ? `
+            <div class="qr-code">
+                <img src="${qrCodeUrl}" alt="QR Code">
+                <p>Identificação do Aluno</p>
             </div>
+        ` : ''}
+        
+        <div class="footer">
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Gestão Geral — ${cfg.nomeAmigavel}</p>
         </div>
     </body>
     </html>`;

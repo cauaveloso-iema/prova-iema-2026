@@ -589,7 +589,7 @@ async function carregarLembretes() {
 // ============================================
 async function verAtendimento(atendimentoId) {
     if (!atendimentoId) return;
-    fecharSino();
+    fecharNotificacoes();
     
     try {
         const response = await fetch(`/api/supervisao/atendimento/${atendimentoId}`, {
@@ -970,8 +970,10 @@ async function imprimirAtendimento(atendimentoId) {
             const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const qrD = await qrR.json();
-            if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+            if (qrR.ok) {
+                const qrD = await qrR.json();
+                if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+            }
         } catch (e) { console.warn('Sem QR Code'); }
         
         const win = window.open('', '_blank');
@@ -985,7 +987,7 @@ async function imprimirAtendimento(atendimentoId) {
 }
 
 // ============================================
-// 🖨️ GERAR HTML DA IMPRESSÃO
+// 🖨️ GERAR HTML DA IMPRESSÃO (OTIMIZADO PARA 1 PÁGINA)
 // ============================================
 function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
     const logo = '/uploads/logo-iema.png';
@@ -994,7 +996,7 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
     
     const entrada = new Date(a.entrada.dataHora);
     const dataExt = entrada.toLocaleDateString('pt-BR', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        day: '2-digit', month: '2-digit', year: 'numeric'
     });
     const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
@@ -1004,35 +1006,31 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
     
     // ========== ASSINATURA DIGITAL ==========
-    const assinaturaHTML = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64
-        ? `<div class="assinatura-digital"><img src="${a.entrada.assinaturaBase64}" alt="Assinatura"></div>`
-        : '<div class="assinatura-vazia">_____________________________________</div>';
+    const temAssinaturaDigital = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64;
+    const assinaturaHTML = temAssinaturaDigital
+        ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
+        : '';
     
-const carimboHTML = `
-    <div class="carimbo-gestao">
-        <img src="${carimbo}" alt="Carimbo Supervisão" onerror="this.style.display='none'">
-    </div>`;
-    
-    // ========== DETALHES ADICIONAIS ==========
+    // ========== DETALHES ADICIONAIS (compactos) ==========
     let detalhesHTML = '';
     if (a.entrada?.detalhes && Object.keys(a.entrada.detalhes).length > 0) {
         const mapaDetalhes = {
             testemunhas: 'Testemunhas',
-            descricaoOcorrido: 'Descrição do Ocorrido',
-            nomeResponsavel: 'Nome do Responsável',
+            descricaoOcorrido: 'Descrição',
+            nomeResponsavel: 'Responsável',
             parentescoResponsavel: 'Parentesco',
             telefoneResponsavel: 'Telefone',
             compareceu: 'Compareceu',
-            nomeProfessor: 'Nome do Professor',
+            nomeProfessor: 'Professor',
             disciplina: 'Disciplina',
-            dataInicioSuspensao: 'Início Suspensão',
-            dataFimSuspensao: 'Fim Suspensão',
-            diasSuspensao: 'Dias de Suspensão',
-            encaminhadoPara: 'Encaminhado Para',
-            motivoEncaminhamento: 'Motivo do Encaminhamento',
-            agendadoPara: 'Agendado Para',
+            dataInicioSuspensao: 'Início Susp.',
+            dataFimSuspensao: 'Fim Susp.',
+            diasSuspensao: 'Dias Susp.',
+            encaminhadoPara: 'Encaminhado',
+            motivoEncaminhamento: 'Motivo Encam.',
+            agendadoPara: 'Agendado',
             tipoTarefaOutros: 'Especificação',
-            providenciasTomadas: 'Providências Tomadas',
+            providenciasTomadas: 'Providências',
             proximosPassos: 'Próximos Passos'
         };
         
@@ -1046,320 +1044,371 @@ const carimboHTML = `
             if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
                 try { valor = new Date(value).toLocaleDateString('pt-BR'); } catch(e){}
             }
-            linhas.push(`<p><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</p>`);
+            linhas.push(`<span class="det-item"><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</span>`);
         });
         
         if (linhas.length > 0) {
             detalhesHTML = `
                 <div class="section-title">📋 Detalhes</div>
-                <div class="info-block">
+                <div class="detalhes-compactos">
                     ${linhas.join('')}
                 </div>`;
         }
     }
     
-    // ========== BLOCO DE SAÍDA (se finalizado) ==========
+    // ========== SAÍDA (compacta) ==========
     let saidaHTML = '';
     if (a.saida) {
         saidaHTML = `
             <div class="section-title">✅ Resultado Final</div>
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-label">Resultado:</div>
-                    <div class="info-value"><strong>${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</strong></div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Data de Saída:</div>
-                    <div class="info-value">${a.saida.dataHoraFormatada || (a.saida.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : '-')}</div>
-                </div>
-                ${a.saida.observacoesFinais ? `
-                    <div class="info-item" style="grid-column: 1 / -1;">
-                        <div class="info-label">Observações finais:</div>
-                        <div class="info-value">${escapeHTML(a.saida.observacoesFinais)}</div>
-                    </div>
-                ` : ''}
-            </div>`;
+            <div class="linha-compacta">
+                <span><strong>Resultado:</strong> ${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</span>
+                <span><strong>Data:</strong> ${a.saida.dataHoraFormatada || (a.saida.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : '-')}</span>
+            </div>
+            ${a.saida.observacoesFinais ? `
+                <div class="obs-compacta"><strong>Obs:</strong> ${escapeHTML(a.saida.observacoesFinais)}</div>
+            ` : ''}`;
     }
     
-    // ========== REMARCAÇÕES ==========
+    // ========== REMARCAÇÕES (tabela compacta) ==========
     let remarcacoesHTML = '';
     if (a.remarcacoes && a.remarcacoes.length > 0) {
         remarcacoesHTML = `
-            <div class="section-title">📅 Histórico de Remarcações</div>
+            <div class="section-title">📅 Remarcações</div>
             <table class="tabela-remarcacoes">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Data</th>
-                        <th>Horário</th>
-                        <th>Status</th>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 15%;">Data</th>
+                        <th style="width: 10%;">Hora</th>
+                        <th style="width: 15%;">Status</th>
                         <th>Motivo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${a.remarcacoes.map((r, i) => `
+                    ${a.remarcacoes.slice(0, 5).map((r, i) => `
                         <tr>
                             <td><strong>${i + 1}</strong></td>
                             <td>${formatarDataBR(r.dataRemarcacao)}</td>
                             <td>${r.horarioRemarcacao || '-'}</td>
                             <td>
                                 <span class="status-remarcacao status-${r.status}">
-                                    ${r.status === 'pendente' ? '⏳ Pendente' : r.status === 'realizado' ? '✅ Realizado' : '❌ Cancelado'}
+                                    ${r.status === 'pendente' ? '⏳' : r.status === 'realizado' ? '✅' : '❌'}
                                 </span>
                             </td>
-                            <td>${escapeHTML(r.motivoRemarcacao || '-')}</td>
+                            <td>${escapeHTML((r.motivoRemarcacao || '-').substring(0, 60))}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>`;
     }
     
-    // ========== HTML FINAL ==========
+    // ========== HTML FINAL OTIMIZADO ==========
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
         <title>Atendimento Supervisão - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { 
+                size: A4 portrait; 
+                margin: 8mm;  /* 🔥 Reduzido de 12mm para 8mm */
+            }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body {
                 font-family: 'Times New Roman', Times, serif;
-                font-size: 11pt;
-                line-height: 1.5;
+                font-size: 9.5pt;   /* 🔥 Reduzido de 11pt para 9.5pt */
+                line-height: 1.25;  /* 🔥 Reduzido de 1.5 para 1.25 */
                 color: #000;
             }
+            
+            /* ========== CABEÇALHO COMPACTO ========== */
             .header {
                 text-align: center;
-                border-bottom: 2px double #000;
-                padding-bottom: 10px;
-                margin-bottom: 15px;
+                border-bottom: 1.5px double #000;
+                padding-bottom: 4px;
+                margin-bottom: 6px;
             }
             .header img {
                 max-width: 100%;
-                max-height: 25mm;
+                max-height: 14mm;   /* 🔥 Reduzido de 25mm para 14mm */
                 object-fit: contain;
                 display: block;
-                margin: 0 auto 5px;
+                margin: 0 auto 2px;
             }
             .header h1 {
-                font-size: 13pt;
+                font-size: 10pt;
                 text-transform: uppercase;
                 font-weight: bold;
-                margin: 5px 0 0;
+                margin: 2px 0 0;
             }
+            .header p {
+                font-size: 8pt;
+                margin: 1px 0 0;
+            }
+            
+            /* ========== TÍTULO ========== */
             .titulo {
                 text-align: center;
-                font-size: 14pt;
+                font-size: 11pt;
                 font-weight: bold;
                 background: #e0f2fe;
-                padding: 10px;
-                border: 2px solid #000;
-                margin: 15px 0;
+                padding: 4px 8px;    /* 🔥 Reduzido de 10px */
+                border: 1.5px solid #000;
+                margin: 6px 0 3px;   /* 🔥 Reduzido de 15px */
                 text-transform: uppercase;
-                letter-spacing: 1px;
+                letter-spacing: 0.5px;
             }
             .status-badge {
                 text-align: center;
-                margin: -10px 0 20px;
+                margin: 0 0 5px;     /* 🔥 Reduzido */
             }
             .badge-finalizado {
                 background: #d1fae5; color: #065f46;
-                padding: 4px 14px; border-radius: 20px;
-                font-size: 10pt; font-weight: bold;
+                padding: 2px 10px;    /* 🔥 Reduzido */
+                border-radius: 12px;
+                font-size: 8pt;
+                font-weight: bold;
                 border: 1px solid #10b981;
                 display: inline-block;
             }
             .badge-andamento {
                 background: #fef3c7; color: #92400e;
-                padding: 4px 14px; border-radius: 20px;
-                font-size: 10pt; font-weight: bold;
+                padding: 2px 10px;
+                border-radius: 12px;
+                font-size: 8pt;
+                font-weight: bold;
                 border: 1px solid #f59e0b;
                 display: inline-block;
             }
             
+            /* ========== CARD DO ALUNO (compacto) ========== */
             .aluno-box {
                 display: flex;
                 align-items: center;
-                gap: 15px;
-                padding: 15px;
+                gap: 8px;
+                padding: 5px 8px;    /* 🔥 Reduzido de 15px */
                 background: #f0f9ff;
                 border: 1px solid #bae6fd;
-                border-radius: 10px;
-                margin-bottom: 20px;
+                border-radius: 5px;
+                margin-bottom: 6px;
             }
             .aluno-foto {
-                width: 70px; height: 70px;
+                width: 38px; height: 38px;   /* 🔥 Reduzido de 70px */
                 border-radius: 50%;
                 object-fit: cover;
-                border: 2px solid #0ea5e9;
+                border: 1.5px solid #0ea5e9;
+                flex-shrink: 0;
             }
             .aluno-info { flex: 1; }
             .aluno-nome {
-                font-size: 14pt; font-weight: bold;
-                color: #075985; margin-bottom: 4px;
+                font-size: 10pt;
+                font-weight: bold;
+                color: #075985;
+                margin-bottom: 1px;
             }
             .aluno-detalhes {
-                font-size: 10pt; color: #374151;
+                font-size: 8pt;
+                color: #374151;
             }
             
+            /* ========== TÍTULOS DE SEÇÃO (compactos) ========== */
             .section-title {
-                font-size: 11pt;
+                font-size: 9pt;
                 font-weight: bold;
                 background: #e8e8e8;
-                padding: 6px 10px;
-                border-left: 4px solid #0ea5e9;
-                margin: 20px 0 10px;
+                padding: 2px 6px;    /* 🔥 Reduzido de 6px 10px */
+                border-left: 3px solid #0ea5e9;
+                margin: 5px 0 3px;   /* 🔥 Reduzido de 20px 0 10px */
             }
             
+            /* ========== INFO GRID COMPACTO ========== */
             .info-grid {
                 display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 10px 20px;
-                margin: 10px 0 15px;
+                grid-template-columns: 1fr 1fr 1fr;  /* 🔥 3 colunas em vez de 2 */
+                gap: 3px 12px;       /* 🔥 Reduzido de 10px 20px */
+                margin: 3px 0 5px;
+                font-size: 8.5pt;
             }
-            .info-item { display: flex; gap: 8px; font-size: 10pt; }
-            .info-label { font-weight: bold; min-width: 120px; }
+            .info-item { 
+                display: flex; 
+                gap: 4px; 
+            }
+            .info-label { 
+                font-weight: bold; 
+                white-space: nowrap;
+            }
             .info-value { flex: 1; }
             
-            .info-block {
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 10.5pt;
-                line-height: 1.6;
-            }
-            .info-block p { margin: 4px 0; }
-            
+            /* ========== DESCRIÇÃO ========== */
             .descricao-box {
                 background: #f9fafb;
                 border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 10.5pt;
-                line-height: 1.5;
-                min-height: 50px;
+                border-radius: 4px;
+                padding: 5px 8px;    /* 🔥 Reduzido */
+                font-size: 8.5pt;
+                line-height: 1.3;
+                min-height: 30px;    /* 🔥 Reduzido de 50px */
+                max-height: 80px;    /* 🔥 NOVO: limita altura */
+                overflow: hidden;
+                word-wrap: break-word;
             }
             
+            /* ========== DETALHES EM LINHA ========== */
+            .detalhes-compactos {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+                padding: 4px 6px;
+                font-size: 8pt;
+                line-height: 1.35;
+            }
+            .det-item {
+                display: inline-block;
+                margin-right: 10px;
+                margin-bottom: 2px;
+            }
+            
+            /* ========== LINHA COMPACTA (resultado) ========== */
+            .linha-compacta {
+                display: flex;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 3px 6px;
+                background: #f9fafb;
+                border-radius: 4px;
+                font-size: 8.5pt;
+                margin-bottom: 3px;
+            }
+            .obs-compacta {
+                padding: 3px 6px;
+                background: #f9fafb;
+                border-radius: 4px;
+                font-size: 8pt;
+                font-style: italic;
+            }
+            
+            /* ========== TABELA DE REMARCAÇÕES (compacta) ========== */
             .tabela-remarcacoes {
                 width: 100%;
                 border-collapse: collapse;
-                font-size: 9.5pt;
-                margin-top: 10px;
+                font-size: 7.5pt;    /* 🔥 Reduzido de 9.5pt */
+                margin-top: 2px;
             }
             .tabela-remarcacoes th {
                 background: #0ea5e9;
                 color: white;
-                padding: 8px 6px;
+                padding: 2px 4px;    /* 🔥 Reduzido de 8px 6px */
                 text-align: left;
                 border: 1px solid #0284c7;
-                font-size: 9pt;
+                font-size: 7.5pt;
             }
             .tabela-remarcacoes td {
-                padding: 6px;
+                padding: 2px 4px;
                 border: 1px solid #ddd;
             }
             .tabela-remarcacoes tr:nth-child(even) { background: #f9fafb; }
             .status-remarcacao {
-                padding: 2px 8px;
-                border-radius: 10px;
-                font-size: 8.5pt;
+                padding: 1px 5px;
+                border-radius: 8px;
+                font-size: 7pt;
                 font-weight: bold;
             }
             .status-pendente { background: #fef3c7; color: #92400e; }
             .status-realizado { background: #d1fae5; color: #065f46; }
             .status-cancelado { background: #fee2e2; color: #991b1b; }
             
+            /* ========== ASSINATURA (compacta) ========== */
             .assinaturas {
                 display: flex;
-                justify-content: space-around;
-                margin-top: 50px;
-                gap: 40px;
+                justify-content: center;
+                margin-top: 15px;    /* 🔥 Reduzido de 50px */
+                gap: 20px;
             }
             .assinatura {
-                flex: 1;
+                flex: 0 0 55%;
                 text-align: center;
             }
-            .assinatura-digital {
+            .assinatura-container-relatorio {
+                position: relative;
                 border-bottom: 1px solid #000;
-                min-height: 18mm;
+                min-height: 14mm;    /* 🔥 Reduzido de 22mm */
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 3px;
+                padding-bottom: 2px;
             }
-            .assinatura-digital img {
-                max-height: 16mm; max-width: 100%; object-fit: contain;
+            .assinatura-img {
+                max-height: 12mm;    /* 🔥 Reduzido de 18mm */
+                max-width: 100%;
+                object-fit: contain;
+                position: relative;
+                z-index: 1;
             }
-            .assinatura-vazia {
-                border-bottom: 1px solid #000;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                color: #999;
-                font-size: 9pt;
-                padding-bottom: 3px;
+            .carimbo-overlay {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                max-height: 13mm;
+                max-width: 55%;
+                object-fit: contain;
+                opacity: 0.85;
+                pointer-events: none;
+                z-index: 2;
             }
             .assinatura-linha {
-                padding-top: 5px;
-                font-size: 10pt;
-            }
-            .carimbo-gestao {
-                border-bottom: 1px solid #000;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 3px;
-            }
-            .carimbo-gestao img {
-                max-height: 16mm; max-width: 100%; object-fit: contain; opacity: 0.9;
+                padding-top: 2px;
+                font-size: 8pt;
+                margin-top: 2px;
             }
             
+            /* ========== QR CODE (compacto) ========== */
             .qr-code {
                 text-align: center;
-                margin-top: 15px;
+                margin-top: 4px;
             }
             .qr-code img {
-                width: 22mm; height: 22mm;
+                width: 15mm; height: 15mm;   /* 🔥 Reduzido de 22mm */
                 border: 1px solid #000;
                 padding: 1px;
             }
             .qr-code p {
-                font-size: 8pt;
-                margin: 3px 0 0 0;
+                font-size: 6.5pt;
+                margin: 1px 0 0 0;
                 color: #444;
             }
             
+            /* ========== RODAPÉ ========== */
             .footer {
                 text-align: center;
-                margin-top: 30px;
-                padding-top: 10px;
+                margin-top: 5px;
+                padding-top: 3px;
                 border-top: 1px solid #ccc;
-                font-size: 8pt;
+                font-size: 6.5pt;
                 color: #666;
             }
-            .footer p { margin: 2px 0; }
+            .footer p { margin: 1px 0; }
             
             .btn-print {
                 display: block;
-                margin: 20px auto;
-                padding: 12px 30px;
+                margin: 10px auto;
+                padding: 8px 20px;
                 background: #0ea5e9;
                 color: white;
                 border: none;
-                border-radius: 8px;
+                border-radius: 6px;
                 font-weight: bold;
                 cursor: pointer;
-                font-size: 14px;
+                font-size: 12px;
                 font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #0284c7; }
+            
             @media print {
                 .no-print { display: none !important; }
                 body { padding: 0; }
+                .footer { page-break-after: avoid; }
             }
         </style>
     </head>
@@ -1369,7 +1418,7 @@ const carimboHTML = `
         <div class="header">
             <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Supervisão</p>
+            <p>Sistema de Atendimentos — Supervisão</p>
         </div>
         
         <div class="titulo">🛡️ Atendimento Supervisão</div>
@@ -1382,7 +1431,7 @@ const carimboHTML = `
             <div class="aluno-info">
                 <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
                 <div class="aluno-detalhes">
-                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')}<br>
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')} • 
                     <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
                     ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
                 </div>
@@ -1392,28 +1441,28 @@ const carimboHTML = `
         <div class="section-title">📌 Dados do Atendimento</div>
         <div class="info-grid">
             <div class="info-item">
-                <div class="info-label">Tipo:</div>
-                <div class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></div>
+                <span class="info-label">Tipo:</span>
+                <span class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></span>
             </div>
             <div class="info-item">
-                <div class="info-label">Data:</div>
-                <div class="info-value">${dataExt}</div>
+                <span class="info-label">Data:</span>
+                <span class="info-value">${dataExt}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Horário:</div>
-                <div class="info-value">${horaExt}</div>
+                <span class="info-label">Hora:</span>
+                <span class="info-value">${horaExt}</span>
             </div>
             <div class="info-item">
-                <div class="info-label">Gravidade:</div>
-                <div class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></div>
+                <span class="info-label">Gravidade:</span>
+                <span class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></span>
             </div>
             <div class="info-item">
-                <div class="info-label">Prioridade:</div>
-                <div class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></div>
+                <span class="info-label">Prioridade:</span>
+                <span class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></span>
             </div>
             <div class="info-item">
-                <div class="info-label">Registrado por:</div>
-                <div class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</div>
+                <span class="info-label">Registrado por:</span>
+                <span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span>
             </div>
         </div>
         
@@ -1424,7 +1473,7 @@ const carimboHTML = `
         
         ${a.entrada?.observacoes ? `
             <div class="section-title">💬 Observações</div>
-            <div class="descricao-box" style="min-height: 30px;">
+            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">
                 ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
             </div>
         ` : ''}
@@ -1436,9 +1485,7 @@ const carimboHTML = `
         <div class="assinaturas">
             <div class="assinatura">
                 <div class="assinatura-container-relatorio">
-                    ${assinaturaDigital 
-                        ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` 
-                        : ''}
+                    ${assinaturaHTML}
                     <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
                 </div>
                 <div class="assinatura-linha">Assinatura do Responsável / Supervisão</div>
@@ -1453,8 +1500,7 @@ const carimboHTML = `
         ` : ''}
         
         <div class="footer">
-            <p>Documento gerado em <strong>${dataGeracao}</strong></p>
-            <p>EducaPleno — Sistema de Supervisão</p>
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Sistema de Supervisão</p>
         </div>
     </body>
     </html>`;
@@ -2166,19 +2212,33 @@ function abrirFinalizacao(atendimentoId) {
 }
 
 async function confirmarFinalizacao(atendimentoId, resultado) {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizar'));
-    if (modal) modal.hide();
-    
-    if (resultado === 'em_acompanhamento') {
-        const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
-        if (querRemarcar) {
-            await finalizarAtendimento(atendimentoId, resultado, true);
-            setTimeout(() => abrirRemarcar(atendimentoId), 500);
-            return;
-        }
+    if (document.activeElement && document.activeElement.blur) {
+        document.activeElement.blur();
     }
     
-    await finalizarAtendimento(atendimentoId, resultado, false);
+    const modalEl = safeGet('modalFinalizar');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    
+    if (modal) {
+        modalEl.addEventListener('hidden.bs.modal', async function handler() {
+            modalEl.removeEventListener('hidden.bs.modal', handler);
+            
+            if (resultado === 'em_acompanhamento') {
+                const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
+                if (querRemarcar) {
+                    await finalizarAtendimento(atendimentoId, resultado, true);
+                    setTimeout(() => abrirRemarcar(atendimentoId), 500);
+                    return;
+                }
+            }
+            
+            await finalizarAtendimento(atendimentoId, resultado, false);
+        }, { once: true });
+        
+        modal.hide();
+    } else {
+        await finalizarAtendimento(atendimentoId, resultado, false);
+    }
 }
 
 async function finalizarAtendimento(atendimentoId, resultado, pularAlerta) {
@@ -2614,19 +2674,39 @@ async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
 // 🍞 TOAST
 // ============================================
 function mostrarToastConcluido(mensagem, tipo = 'info') {
-    const cores = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#0ea5e9' };
-    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    // 🔥 DETECTA AUTOMATICAMENTE pelo emoji no início da mensagem
+    const msg = String(mensagem || '');
+    let tipoFinal = tipo;
+    
+    if (msg.trim().startsWith('✅')) {
+        tipoFinal = 'success';
+    } else if (msg.trim().startsWith('❌') || msg.trim().startsWith('⚠️')) {
+        tipoFinal = msg.trim().startsWith('⚠️') ? 'warning' : 'error';
+    }
+    
+    const cores = {
+        success: '#10b981',
+        error: '#ef4444',
+        warning: '#f59e0b',
+        info: '#8b5cf6'
+    };
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-times-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
     
     const toast = document.createElement('div');
     toast.style.cssText = `
         position: fixed; bottom: 20px; right: 20px;
-        background: ${cores[tipo] || cores.info}; color: white;
+        background: ${cores[tipoFinal] || cores.info}; color: white;
         padding: 12px 20px; border-radius: 10px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 99999;
         font-size: 14px; font-weight: 600;
         display: flex; align-items: center; gap: 10px;
         animation: slideInRight 0.3s ease-out; max-width: 400px;`;
-    toast.innerHTML = `<i class="fas ${icons[tipo] || icons.info}"></i> ${mensagem}`;
+    toast.innerHTML = `<i class="fas ${icons[tipoFinal] || icons.info}"></i> ${msg}`;
     
     if (!document.getElementById('toastAnimation')) {
         const style = document.createElement('style');

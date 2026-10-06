@@ -961,15 +961,22 @@ async function imprimirAtendimento(atendimentoId) {
         
         const a = data.atendimento;
         
-        // QR Code (opcional)
+        // 🔥 TENTAR BUSCAR QR CODE SEM QUEBRAR SE DER 403
         let qr = '';
         try {
             const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const qrD = await qrR.json();
-            if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
-        } catch (e) { console.warn('Sem QR Code'); }
+            
+            if (qrR.ok) {
+                const qrD = await qrR.json();
+                if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+            } else {
+                console.info(`ℹ️ QR Code não disponível (status ${qrR.status}) - continuando sem QR`);
+            }
+        } catch (e) {
+            console.info('ℹ️ QR Code não pôde ser carregado, imprimindo sem ele');
+        }
         
         const win = window.open('', '_blank');
         win.document.write(gerarHTMLImpressaoAS(a, qr));
@@ -983,41 +990,33 @@ async function imprimirAtendimento(atendimentoId) {
 
 function gerarHTMLImpressaoAS(a, qrCodeUrl) {
     const logo = '/uploads/logo-iema.png';
-    const carimboAS = '/icons/assinatura_assistente_social.ico';
-    const dataExt = new Date(a.entrada.dataHora).toLocaleDateString('pt-BR', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
-    const horaExt = new Date(a.entrada.dataHora).toLocaleTimeString('pt-BR', {
-        hour: '2-digit', minute: '2-digit'
-    });
+    const carimbo = '/icons/assinatura_assistente_social.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
     
-    const assinaturaHTML = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64
-        ? `<div class="assinatura-digital"><img src="${a.entrada.assinaturaBase64}" alt="Assinatura"></div>`
-        : '<div class="assinatura-vazia">_____________________________________</div>';
+    const entrada = new Date(a.entrada.dataHora);
+    const dataExt = entrada.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    const carimboHTML = `
-        <div class="carimbo-as">
-            <img src="${carimboAS}" alt="Carimbo Assistente Social">
-        </div>`;
+    const badgeStatus = a.status === 'finalizado'
+        ? '<span class="badge-finalizado">✅ FINALIZADO</span>'
+        : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
     
-    // 🔥 NOVO: Detalhes dinâmicos se existirem
+    const temAssinaturaDigital = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64;
+    const assinaturaHTML = temAssinaturaDigital
+        ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
+        : '';
+    
+    // Detalhes
     let detalhesHTML = '';
     if (a.detalhes && Object.keys(a.detalhes).length > 0) {
         const mapaDetalhes = {
-            contextoFamiliar: 'Contexto Familiar',
-            historicoAnterior: 'Histórico Anterior',
-            profissionaisEnvolvidos: 'Profissionais Envolvidos',
-            condicaoSocial: 'Condição Social',
-            encaminhadoPara: 'Encaminhado Para',
-            motivoEncaminhamento: 'Motivo do Encaminhamento',
-            agendadoPara: 'Agendado Para',
-            tipoIntervencao: 'Tipo de Intervenção',
-            metodosUtilizados: 'Métodos Utilizados',
-            duracaoSessao: 'Duração da Sessão (min)',
-            modalidadeAtendimento: 'Modalidade',
-            participantesAtendimento: 'Participantes',
-            tipoTarefaOutros: 'Especificação',
-            providenciasTomadas: 'Providências Tomadas',
+            contextoFamiliar: 'Contexto Familiar', historicoAnterior: 'Histórico Anterior',
+            profissionaisEnvolvidos: 'Profissionais Envolvidos', condicaoSocial: 'Condição Social',
+            encaminhadoPara: 'Encaminhado Para', motivoEncaminhamento: 'Motivo do Encaminhamento',
+            agendadoPara: 'Agendado Para', tipoIntervencao: 'Tipo de Intervenção',
+            metodosUtilizados: 'Métodos Utilizados', duracaoSessao: 'Duração da Sessão (min)',
+            modalidadeAtendimento: 'Modalidade', participantesAtendimento: 'Participantes',
+            tipoTarefaOutros: 'Especificação', providenciasTomadas: 'Providências',
             proximosPassos: 'Próximos Passos'
         };
         
@@ -1031,188 +1030,179 @@ function gerarHTMLImpressaoAS(a, qrCodeUrl) {
             if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
                 try { valor = new Date(value).toLocaleDateString('pt-BR'); } catch(e){}
             }
-            linhas.push(`<p><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</p>`);
+            linhas.push(`<span class="det-item"><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</span>`);
         });
         
         if (linhas.length > 0) {
             detalhesHTML = `
-                <div class="section-box">
-                    <h3>📋 Detalhes</h3>
-                    ${linhas.join('')}
-                </div>`;
+                <div class="section-title">📋 Detalhes</div>
+                <div class="detalhes-compactos">${linhas.join('')}</div>`;
         }
+    }
+    
+    let saidaHTML = '';
+    if (a.saida) {
+        saidaHTML = `
+            <div class="section-title">✅ Resultado Final</div>
+            <div class="linha-compacta">
+                <span><strong>Resultado:</strong> ${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</span>
+                <span><strong>Data:</strong> ${a.saida.dataHoraFormatada || '-'}</span>
+            </div>`;
+    }
+    
+    let remarcacoesHTML = '';
+    if (a.remarcacoes && a.remarcacoes.length > 0) {
+        remarcacoesHTML = `
+            <div class="section-title">📅 Remarcações</div>
+            <table class="tabela-remarcacoes">
+                <thead><tr><th style="width:5%;">#</th><th style="width:15%;">Data</th><th style="width:10%;">Hora</th><th style="width:15%;">Status</th><th>Motivo</th></tr></thead>
+                <tbody>
+                    ${a.remarcacoes.slice(0, 5).map((r, i) => `
+                        <tr>
+                            <td><strong>${i + 1}</strong></td>
+                            <td>${formatarDataBR(r.dataRemarcacao)}</td>
+                            <td>${r.horarioRemarcacao || '-'}</td>
+                            <td><span class="status-remarcacao status-${r.status}">${r.status === 'pendente' ? '⏳' : r.status === 'realizado' ? '✅' : '❌'}</span></td>
+                            <td>${escapeHTML((r.motivoRemarcacao || '-').substring(0, 60))}</td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>`;
     }
     
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Atendimento Assistente Social - ${a.alunoNome}</title>
+        <title>Atendimento Assistente Social - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { size: A4 portrait; margin: 15mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body {
-                width: 210mm; min-height: 297mm;
-                font-family: 'Times New Roman', Times, serif;
-                background: #f0f0f0;
-                display: flex; justify-content: center; align-items: flex-start;
-            }
-            .folha {
-                width: 180mm; min-height: 267mm; padding: 10mm;
-                background: white; margin: 0 auto;
-                font-size: 10pt; line-height: 1.4;
-                display: flex; flex-direction: column;
-            }
-            @media print {
-                html, body { width: 210mm; height: 297mm; background: white; display: block; }
-                .folha { width: 100%; min-height: auto; padding: 0; margin: 0 auto; }
-                .btn-print { display: none !important; }
-            }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 8px; margin-bottom: 10px; }
-            .header img { max-width: 100%; height: auto; max-height: 25mm; object-fit: contain; }
-            .header h1 { font-size: 10pt; margin: 5px 0 0 0; text-transform: uppercase; font-weight: bold; }
-            .titulo {
-                text-align: center; font-size: 13pt; font-weight: bold; text-transform: uppercase;
-                margin: 10px 0; background: #ede9fe; padding: 8px; border: 1.5px solid #000; letter-spacing: 1px;
-            }
-            .info-section { border: 1px solid #000; padding: 10px 12px; margin-bottom: 10px; }
-            .info-row { display: flex; margin-bottom: 6px; gap: 15px; align-items: baseline; }
-            .info-row:last-child { margin-bottom: 0; }
-            .info-item { flex: 1; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-            .label { font-weight: bold; font-size: 9pt; white-space: nowrap; }
-            .underline {
-                border-bottom: 1px dotted #000; flex: 1; height: 18px; min-height: 18px;
-                font-size: 10pt; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            }
-            .section-box { background: #f5f5f5; border: 1px solid #000; padding: 10px 12px; margin: 10px 0; }
-            .section-box h3 { margin: 0 0 5px 0; font-size: 10pt; text-transform: uppercase; }
-            .section-box p { margin: 3px 0; font-size: 9.5pt; }
-            .descricao-box { border: 1px solid #000; padding: 10px 12px; min-height: 25mm; margin: 10px 0; font-size: 9.5pt; }
-            .descricao-box strong { display: block; margin-bottom: 5px; font-size: 10pt; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 15mm; gap: 15mm; }
-            .assinatura { text-align: center; flex: 1; font-size: 9pt; }
-            .assinatura-digital {
-                border-bottom: 1px solid #000; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
-            }
-            .assinatura-digital img { max-height: 16mm; max-width: 100%; object-fit: contain; }
-            .assinatura-vazia {
-                border-bottom: 1px solid #000; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center;
-                color: #999; font-size: 9pt; padding-bottom: 3px;
-            }
-            .assinatura-linha { padding-top: 5px; font-size: 9pt; }
-            .carimbo-as {
-                border-bottom: 1px solid #000; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
-            }
-            .carimbo-as img { max-height: 16mm; max-width: 100%; object-fit: contain; opacity: 0.9; }
-            .qr-code { text-align: center; margin-top: 8px; }
-            .qr-code img { width: 22mm; height: 22mm; border: 1px solid #000; padding: 1px; }
-            .qr-code p { font-size: 8pt; margin: 3px 0 0 0; }
-            .footer {
-                text-align: center; margin-top: auto; padding-top: 8px;
-                border-top: 1px solid #000; font-size: 8pt; color: #444;
-            }
-            .footer p { margin: 2px 0; }
-            .btn-print {
-                display: block; margin: 15px auto; padding: 10px 30px;
-                background: #8b5cf6; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
-            }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #ede9fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .status-badge { text-align: center; margin: 0 0 5px; }
+            .badge-finalizado { background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #10b981; display: inline-block; }
+            .badge-andamento { background: #fef3c7; color: #92400e; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #f59e0b; display: inline-block; }
+            
+            .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 5px; margin-bottom: 6px; }
+            .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #8b5cf6; flex-shrink: 0; }
+            .aluno-info { flex: 1; }
+            .aluno-nome { font-size: 10pt; font-weight: bold; color: #5b21b6; margin-bottom: 1px; }
+            .aluno-detalhes { font-size: 8pt; color: #374151; }
+            
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #8b5cf6; margin: 5px 0 3px; }
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
+            .info-item { display: flex; gap: 4px; }
+            .info-label { font-weight: bold; white-space: nowrap; }
+            .info-value { flex: 1; }
+            
+            .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
+            
+            .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
+            .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
+            
+            .linha-compacta { display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8.5pt; margin-bottom: 3px; }
+            
+            .tabela-remarcacoes { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 2px; }
+            .tabela-remarcacoes th { background: #8b5cf6; color: white; padding: 2px 4px; text-align: left; border: 1px solid #7c3aed; font-size: 7.5pt; }
+            .tabela-remarcacoes td { padding: 2px 4px; border: 1px solid #ddd; }
+            .tabela-remarcacoes tr:nth-child(even) { background: #f9fafb; }
+            .status-remarcacao { padding: 1px 5px; border-radius: 8px; font-size: 7pt; font-weight: bold; }
+            .status-pendente { background: #fef3c7; color: #92400e; }
+            .status-realizado { background: #d1fae5; color: #065f46; }
+            .status-cancelado { background: #fee2e2; color: #991b1b; }
+            
+            .assinaturas { display: flex; justify-content: center; margin-top: 15px; gap: 20px; }
+            .assinatura { flex: 0 0 55%; text-align: center; }
+            .assinatura-container-relatorio { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+            .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            .carimbo-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; pointer-events: none; z-index: 2; }
+            .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
+            
+            .qr-code { text-align: center; margin-top: 4px; }
+            .qr-code img { width: 15mm; height: 15mm; border: 1px solid #000; padding: 1px; }
+            .qr-code p { font-size: 6.5pt; margin: 1px 0 0 0; color: #444; }
+            
+            .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
             .btn-print:hover { background: #7c3aed; }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        <div class="folha">
-            <div class="header">
-                <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
-                <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
-            </div>
-            <div class="titulo">🤝 ATENDIMENTO ASSISTENTE SOCIAL</div>
-            
-            <div class="info-section">
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Estudante:</span>
-                        <span class="underline">${a.alunoNome || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Matrícula:</span>
-                        <span class="underline">${a.alunoMatricula || ''}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Turma:</span>
-                        <span class="underline">${a.alunoTurma || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Curso:</span>
-                        <span class="underline">${a.alunoCurso || ''}</span>
-                    </div>
-                </div>
-                <div class="info-row">
-                    <div class="info-item">
-                        <span class="label">Data:</span>
-                        <span class="underline">${dataExt}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="label">Horário:</span>
-                        <span class="underline">${horaExt}</span>
-                    </div>
+        
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p>Sistema de Atendimentos — Assistente Social</p>
+        </div>
+        
+        <div class="titulo">🤝 Atendimento Assistente Social</div>
+        <div class="status-badge">${badgeStatus}</div>
+        
+        <div class="aluno-box">
+            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
+            <div class="aluno-info">
+                <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
+                <div class="aluno-detalhes">
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')} • 
+                    <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
+                    ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
                 </div>
             </div>
-            
-            <div class="section-box">
-                <h3>📌 Tipo de Tarefa:</h3>
-                <p><strong>${a.tipoTarefaLabel || '-'}</strong></p>
-            </div>
-            
-            <div class="section-box">
-                <h3>⚠️ Gravidade / Prioridade:</h3>
-                <p>Gravidade: <strong>${(a.entrada?.gravidade || 'media').toUpperCase()}</strong> | 
-                   Prioridade: <strong>${(a.prioridade || 'normal').toUpperCase()}</strong></p>
-            </div>
-            
-            <div class="descricao-box">
-                <strong>📝 Descrição do Ocorrido:</strong>
-                ${(a.entrada?.descricao || '_______________________________________________________________').replace(/\n/g, '<br>')}
-            </div>
-            
-            ${a.entrada?.observacoes ? `
-                <div class="descricao-box" style="min-height: 18mm;">
-                    <strong>💬 Observações:</strong>
-                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
-                </div>
-            ` : ''}
-            
-            ${detalhesHTML}
-            
-            <div class="assinaturas">
-                <div class="assinatura">
+        </div>
+        
+        <div class="section-title">📌 Dados do Atendimento</div>
+        <div class="info-grid">
+            <div class="info-item"><span class="info-label">Tipo:</span><span class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></span></div>
+            <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
+            <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
+            <div class="info-item"><span class="info-label">Gravidade:</span><span class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Prioridade:</span><span class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span></div>
+        </div>
+        
+        <div class="section-title">📝 Descrição do Ocorrido</div>
+        <div class="descricao-box">${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}</div>
+        
+        ${a.entrada?.observacoes ? `
+            <div class="section-title">💬 Observações</div>
+            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}</div>
+        ` : ''}
+        
+        ${detalhesHTML}
+        ${saidaHTML}
+        ${remarcacoesHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
                     ${assinaturaHTML}
-                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
                 </div>
-                <div class="assinatura">
-                    ${carimboHTML}
-                    <div class="assinatura-linha">Assistente Social</div>
-                </div>
+                <div class="assinatura-linha">Assinatura do Responsável / Assistente Social</div>
             </div>
-            
-            ${qrCodeUrl ? `
-                <div class="qr-code">
-                    <img src="${qrCodeUrl}" alt="QR Code">
-                    <p>Identificação do Aluno</p>
-                </div>` : ''}
-            
-            <div class="footer">
-                <p>Gerado em ${new Date().toLocaleString('pt-BR')} por ${a.entrada?.registradoPor || 'Assistente Social'}</p>
-                <p>EducaPleno</p>
+        </div>
+        
+        ${qrCodeUrl ? `
+            <div class="qr-code">
+                <img src="${qrCodeUrl}" alt="QR Code">
+                <p>Identificação do Aluno</p>
             </div>
+        ` : ''}
+        
+        <div class="footer">
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Assistente Social</p>
         </div>
     </body>
     </html>`;
@@ -1872,17 +1862,35 @@ function abrirFinalizacao(atendimentoId) {
 }
 
 async function confirmarFinalizacao(atendimentoId, resultado) {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizar'));
-    if (modal) modal.hide();
-    if (resultado === 'em_acompanhamento') {
-        const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
-        if (querRemarcar) {
-            await finalizarAtendimento(atendimentoId, resultado, true);
-            setTimeout(() => abrirRemarcar(atendimentoId), 500);
-            return;
-        }
+    // 🔥 Remove o foco antes de fechar o modal (evita aviso de aria-hidden)
+    if (document.activeElement && document.activeElement.blur) {
+        document.activeElement.blur();
     }
-    await finalizarAtendimento(atendimentoId, resultado, false);
+    
+    const modalEl = safeGet('modalFinalizar');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    
+    if (modal) {
+        modalEl.addEventListener('hidden.bs.modal', async function handler() {
+            modalEl.removeEventListener('hidden.bs.modal', handler);
+            
+            if (resultado === 'em_acompanhamento') {
+                const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
+                if (querRemarcar) {
+                    await finalizarAtendimento(atendimentoId, resultado, true);
+                    setTimeout(() => abrirRemarcar(atendimentoId), 500);
+                    return;
+                }
+            }
+            
+            await finalizarAtendimento(atendimentoId, resultado, false);
+        }, { once: true });
+        
+        modal.hide();
+    } else {
+        // Fallback se o modal já foi fechado
+        await finalizarAtendimento(atendimentoId, resultado, false);
+    }
 }
 
 async function finalizarAtendimento(atendimentoId, resultado, pularAlerta) {
@@ -2286,19 +2294,39 @@ async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
 // 🍞 TOAST
 // ============================================
 function mostrarToastConcluido(mensagem, tipo = 'info') {
-    const cores = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#8b5cf6' };
-    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    // 🔥 DETECTA AUTOMATICAMENTE pelo emoji no início da mensagem
+    const msg = String(mensagem || '');
+    let tipoFinal = tipo;
+    
+    if (msg.trim().startsWith('✅')) {
+        tipoFinal = 'success';
+    } else if (msg.trim().startsWith('❌') || msg.trim().startsWith('⚠️')) {
+        tipoFinal = msg.trim().startsWith('⚠️') ? 'warning' : 'error';
+    }
+    
+    const cores = {
+        success: '#10b981',
+        error: '#ef4444',
+        warning: '#f59e0b',
+        info: '#8b5cf6'
+    };
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-times-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
     
     const toast = document.createElement('div');
     toast.style.cssText = `
         position: fixed; bottom: 20px; right: 20px;
-        background: ${cores[tipo] || cores.info}; color: white;
+        background: ${cores[tipoFinal] || cores.info}; color: white;
         padding: 12px 20px; border-radius: 10px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 99999;
         font-size: 14px; font-weight: 600;
         display: flex; align-items: center; gap: 10px;
         animation: slideInRight 0.3s ease-out; max-width: 400px;`;
-    toast.innerHTML = `<i class="fas ${icons[tipo] || icons.info}"></i> ${mensagem}`;
+    toast.innerHTML = `<i class="fas ${icons[tipoFinal] || icons.info}"></i> ${msg}`;
     
     if (!document.getElementById('toastAnimation')) {
         const style = document.createElement('style');

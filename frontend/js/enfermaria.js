@@ -1287,6 +1287,7 @@ async function imprimirAtendimentoIndividual(atendimentoId) {
             return;
         }
         
+        // Enfermaria NÃO usa QR Code na impressão
         const html = gerarHTMLAtendimentoIndividual(data.atendimento);
         
         const win = window.open('', '_blank');

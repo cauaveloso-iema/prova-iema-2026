@@ -1979,25 +1979,33 @@ function abrirFinalizacao(atendimentoId) {
 }
 
 async function confirmarFinalizacao(atendimentoId, resultado) {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalFinalizar'));
-    if (modal) modal.hide();
-    
-    if (resultado === 'em_acompanhamento') {
-        const querRemarcar = await confirm(
-            '✅ Atendimento marcado como "Em Acompanhamento".\n\n' +
-            '🔄 Deseja REMARCAR este atendimento para uma nova data?\n\n' +
-            '• Sim → Abre formulário de remarcação\n' +
-            '• Não → Apenas finaliza'
-        );
-        
-        if (querRemarcar) {
-            await finalizarAtendimento(atendimentoId, resultado, true);
-            setTimeout(() => abrirRemarcar(atendimentoId), 500);
-            return;
-        }
+    if (document.activeElement && document.activeElement.blur) {
+        document.activeElement.blur();
     }
     
-    await finalizarAtendimento(atendimentoId, resultado, false);
+    const modalEl = safeGet('modalFinalizar');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    
+    if (modal) {
+        modalEl.addEventListener('hidden.bs.modal', async function handler() {
+            modalEl.removeEventListener('hidden.bs.modal', handler);
+            
+            if (resultado === 'em_acompanhamento') {
+                const querRemarcar = await confirm('✅ Atendimento marcado como "Em Acompanhamento".\n\n🔄 Deseja REMARCAR este atendimento?\n\n• Sim → Abre formulário de remarcação\n• Não → Apenas finaliza');
+                if (querRemarcar) {
+                    await finalizarAtendimento(atendimentoId, resultado, true);
+                    setTimeout(() => abrirRemarcar(atendimentoId), 500);
+                    return;
+                }
+            }
+            
+            await finalizarAtendimento(atendimentoId, resultado, false);
+        }, { once: true });
+        
+        modal.hide();
+    } else {
+        await finalizarAtendimento(atendimentoId, resultado, false);
+    }
 }
 
 async function finalizarAtendimento(atendimentoId, resultado, pularAlerta) {
@@ -2571,65 +2579,55 @@ async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
 // 🍞 TOAST DE NOTIFICAÇÃO
 // ============================================
 function mostrarToastConcluido(mensagem, tipo = 'info') {
+    // 🔥 DETECTA AUTOMATICAMENTE pelo emoji no início da mensagem
+    const msg = String(mensagem || '');
+    let tipoFinal = tipo;
+    
+    if (msg.trim().startsWith('✅')) {
+        tipoFinal = 'success';
+    } else if (msg.trim().startsWith('❌') || msg.trim().startsWith('⚠️')) {
+        tipoFinal = msg.trim().startsWith('⚠️') ? 'warning' : 'error';
+    }
+    
     const cores = {
         success: '#10b981',
         error: '#ef4444',
         warning: '#f59e0b',
-        info: '#3b82f6'
+        info: '#8b5cf6'
     };
-
     const icons = {
         success: 'fa-check-circle',
         error: 'fa-times-circle',
         warning: 'fa-exclamation-triangle',
         info: 'fa-info-circle'
     };
-
+    
     const toast = document.createElement('div');
     toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: ${cores[tipo] || cores.info};
-        color: white;
-        padding: 12px 20px;
-        border-radius: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-        z-index: 99999;
-        font-size: 14px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        animation: slideInRight 0.3s ease-out;
-        max-width: 400px;
-    `;
-    toast.innerHTML = `<i class="fas ${icons[tipo] || icons.info}"></i> ${mensagem}`;
-
+        position: fixed; bottom: 20px; right: 20px;
+        background: ${cores[tipoFinal] || cores.info}; color: white;
+        padding: 12px 20px; border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 99999;
+        font-size: 14px; font-weight: 600;
+        display: flex; align-items: center; gap: 10px;
+        animation: slideInRight 0.3s ease-out; max-width: 400px;`;
+    toast.innerHTML = `<i class="fas ${icons[tipoFinal] || icons.info}"></i> ${msg}`;
+    
     if (!document.getElementById('toastAnimation')) {
         const style = document.createElement('style');
         style.id = 'toastAnimation';
         style.textContent = `
-            @keyframes slideInRight {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            @keyframes slideOutRight {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-        `;
+            @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+            @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }`;
         document.head.appendChild(style);
     }
-
+    
     document.body.appendChild(toast);
-
     setTimeout(() => {
         toast.style.animation = 'slideOutRight 0.3s ease-in';
         setTimeout(() => toast.remove(), 300);
     }, 3500);
 }
-
 // ============================================
 // ⚠️ EXCLUSÃO EM MASSA
 // ============================================
@@ -3350,14 +3348,22 @@ async function imprimirAtendimento(atendimentoId) {
         
         const a = data.atendimento;
         
+        // 🔥 TENTAR BUSCAR QR CODE SEM QUEBRAR SE DER 403
         let qr = '';
         try {
             const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const qrD = await qrR.json();
-            if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
-        } catch (e) { console.warn('Sem QR Code'); }
+            
+            if (qrR.ok) {
+                const qrD = await qrR.json();
+                if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+            } else {
+                console.info(`ℹ️ QR Code não disponível (status ${qrR.status}) - continuando sem QR`);
+            }
+        } catch (e) {
+            console.info('ℹ️ QR Code não pôde ser carregado, imprimindo sem ele');
+        }
         
         const win = window.open('', '_blank');
         win.document.write(gerarHTMLImpressaoPsicologia(a, qr));
@@ -3379,45 +3385,33 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
     
     const entrada = new Date(a.entrada.dataHora);
     const dataExt = entrada.toLocaleDateString('pt-BR', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        day: '2-digit', month: '2-digit', year: 'numeric'
     });
     const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    // ========== BADGE DE STATUS ==========
     const badgeStatus = a.status === 'finalizado'
         ? '<span class="badge-finalizado">✅ FINALIZADO</span>'
         : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
     
-    // ========== ASSINATURA DIGITAL (com carimbo sobreposto) ==========
+    // ========== ASSINATURA DIGITAL ==========
     const temAssinaturaDigital = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64;
-    
     const assinaturaHTML = temAssinaturaDigital
         ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
         : '';
     
-    // ========== DETALHES ADICIONAIS ==========
+    // ========== DETALHES ==========
     let detalhesHTML = '';
     if (a.entrada?.detalhes && Object.keys(a.entrada.detalhes).length > 0) {
         const mapaDetalhes = {
-            tipoEscuta: 'Tipo de Escuta',
-            duracaoEscuta: 'Duração (min)',
-            tipoCrise: 'Tipo de Crise',
-            acoesTomadas: 'Ações Tomadas',
-            encaminhamentoEmergencial: 'Encaminhamento',
-            nomeAtividade: 'Nome da Atividade',
-            participantesAtividade: 'Participantes',
-            localAtividade: 'Local',
-            duracaoAtividade: 'Duração (min)',
-            temaAcao: 'Tema',
-            publicoAlvo: 'Público Alvo',
-            localAcao: 'Local',
-            temaSocioemocional: 'Tema Socioemocional',
-            tipoAtividadeCultural: 'Tipo Cultural',
-            parceria: 'Parcerias',
-            tipoTarefaOutros: 'Especificação',
-            providenciasTomadas: 'Providências',
-            proximosPassos: 'Próximos Passos',
-            contextoFamiliar: 'Contexto Familiar',
+            tipoEscuta: 'Tipo de Escuta', duracaoEscuta: 'Duração (min)',
+            tipoCrise: 'Tipo de Crise', acoesTomadas: 'Ações Tomadas',
+            encaminhamentoEmergencial: 'Encaminhamento', nomeAtividade: 'Atividade',
+            participantesAtividade: 'Participantes', localAtividade: 'Local',
+            duracaoAtividade: 'Duração (min)', temaAcao: 'Tema', publicoAlvo: 'Público',
+            localAcao: 'Local', temaSocioemocional: 'Tema Socio.',
+            tipoAtividadeCultural: 'Tipo Cultural', parceria: 'Parcerias',
+            tipoTarefaOutros: 'Especificação', providenciasTomadas: 'Providências',
+            proximosPassos: 'Próximos Passos', contextoFamiliar: 'Contexto Familiar',
             historicoAnterior: 'Histórico Anterior'
         };
         
@@ -3431,70 +3425,52 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
             if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
                 try { valor = new Date(value).toLocaleDateString('pt-BR'); } catch(e){}
             }
-            linhas.push(`<p><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</p>`);
+            linhas.push(`<span class="det-item"><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</span>`);
         });
         
         if (linhas.length > 0) {
             detalhesHTML = `
                 <div class="section-title">📋 Detalhes</div>
-                <div class="info-block">
-                    ${linhas.join('')}
-                </div>`;
+                <div class="detalhes-compactos">${linhas.join('')}</div>`;
         }
     }
     
-    // ========== BLOCO DE SAÍDA (se finalizado) ==========
+    // ========== SAÍDA ==========
     let saidaHTML = '';
     if (a.saida) {
         saidaHTML = `
             <div class="section-title">✅ Resultado Final</div>
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-label">Resultado:</div>
-                    <div class="info-value"><strong>${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</strong></div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Data de Saída:</div>
-                    <div class="info-value">${a.saida.dataHoraFormatada || (a.saida.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : '-')}</div>
-                </div>
-                ${a.saida.observacoesFinais ? `
-                    <div class="info-item" style="grid-column: 1 / -1;">
-                        <div class="info-label">Observações finais:</div>
-                        <div class="info-value">${escapeHTML(a.saida.observacoesFinais)}</div>
-                    </div>
-                ` : ''}
-            </div>`;
+            <div class="linha-compacta">
+                <span><strong>Resultado:</strong> ${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</span>
+                <span><strong>Data:</strong> ${a.saida.dataHoraFormatada || (a.saida.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : '-')}</span>
+            </div>
+            ${a.saida.observacoesFinais ? `<div class="obs-compacta"><strong>Obs:</strong> ${escapeHTML(a.saida.observacoesFinais)}</div>` : ''}`;
     }
     
     // ========== REMARCAÇÕES ==========
     let remarcacoesHTML = '';
     if (a.remarcacoes && a.remarcacoes.length > 0) {
         remarcacoesHTML = `
-            <div class="section-title">📅 Histórico de Remarcações</div>
+            <div class="section-title">📅 Remarcações</div>
             <table class="tabela-remarcacoes">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Data</th>
-                        <th>Horário</th>
-                        <th>Status</th>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 15%;">Data</th>
+                        <th style="width: 10%;">Hora</th>
+                        <th style="width: 15%;">Status</th>
                         <th>Motivo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${a.remarcacoes.map((r, i) => `
+                    ${a.remarcacoes.slice(0, 5).map((r, i) => `
                         <tr>
                             <td><strong>${i + 1}</strong></td>
                             <td>${formatarDataBR(r.dataRemarcacao)}</td>
                             <td>${r.horarioRemarcacao || '-'}</td>
-                            <td>
-                                <span class="status-remarcacao status-${r.status}">
-                                    ${r.status === 'pendente' ? '⏳ Pendente' : r.status === 'realizado' ? '✅ Realizado' : '❌ Cancelado'}
-                                </span>
-                            </td>
-                            <td>${escapeHTML(r.motivoRemarcacao || '-')}</td>
-                        </tr>
-                    `).join('')}
+                            <td><span class="status-remarcacao status-${r.status}">${r.status === 'pendente' ? '⏳' : r.status === 'realizado' ? '✅' : '❌'}</span></td>
+                            <td>${escapeHTML((r.motivoRemarcacao || '-').substring(0, 60))}</td>
+                        </tr>`).join('')}
                 </tbody>
             </table>`;
     }
@@ -3506,245 +3482,70 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
         <meta charset="UTF-8">
         <title>Atendimento Psicologia - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body {
-                font-family: 'Times New Roman', Times, serif;
-                font-size: 11pt;
-                line-height: 1.5;
-                color: #000;
-            }
-            .header {
-                text-align: center;
-                border-bottom: 2px double #000;
-                padding-bottom: 10px;
-                margin-bottom: 15px;
-            }
-            .header img {
-                max-width: 100%;
-                max-height: 25mm;
-                object-fit: contain;
-                display: block;
-                margin: 0 auto 5px;
-            }
-            .header h1 {
-                font-size: 13pt;
-                text-transform: uppercase;
-                font-weight: bold;
-                margin: 5px 0 0;
-            }
-            .titulo {
-                text-align: center;
-                font-size: 14pt;
-                font-weight: bold;
-                background: #ccfbf1;
-                padding: 10px;
-                border: 2px solid #000;
-                margin: 15px 0;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            .status-badge {
-                text-align: center;
-                margin: -10px 0 20px;
-            }
-            .badge-finalizado {
-                background: #d1fae5; color: #065f46;
-                padding: 4px 14px; border-radius: 20px;
-                font-size: 10pt; font-weight: bold;
-                border: 1px solid #10b981;
-                display: inline-block;
-            }
-            .badge-andamento {
-                background: #fef3c7; color: #92400e;
-                padding: 4px 14px; border-radius: 20px;
-                font-size: 10pt; font-weight: bold;
-                border: 1px solid #f59e0b;
-                display: inline-block;
-            }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
             
-            .aluno-box {
-                display: flex;
-                align-items: center;
-                gap: 15px;
-                padding: 15px;
-                background: #f0fdfa;
-                border: 1px solid #99f6e4;
-                border-radius: 10px;
-                margin-bottom: 20px;
-            }
-            .aluno-foto {
-                width: 70px; height: 70px;
-                border-radius: 50%;
-                object-fit: cover;
-                border: 2px solid #14b8a6;
-            }
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #ccfbf1; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .status-badge { text-align: center; margin: 0 0 5px; }
+            .badge-finalizado { background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #10b981; display: inline-block; }
+            .badge-andamento { background: #fef3c7; color: #92400e; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #f59e0b; display: inline-block; }
+            
+            .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 5px; margin-bottom: 6px; }
+            .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #14b8a6; flex-shrink: 0; }
             .aluno-info { flex: 1; }
-            .aluno-nome {
-                font-size: 14pt; font-weight: bold;
-                color: #115e59; margin-bottom: 4px;
-            }
-            .aluno-detalhes {
-                font-size: 10pt; color: #374151;
-            }
+            .aluno-nome { font-size: 10pt; font-weight: bold; color: #115e59; margin-bottom: 1px; }
+            .aluno-detalhes { font-size: 8pt; color: #374151; }
             
-            .section-title {
-                font-size: 11pt;
-                font-weight: bold;
-                background: #e8e8e8;
-                padding: 6px 10px;
-                border-left: 4px solid #14b8a6;
-                margin: 20px 0 10px;
-            }
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #14b8a6; margin: 5px 0 3px; }
             
-            .info-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 10px 20px;
-                margin: 10px 0 15px;
-            }
-            .info-item { display: flex; gap: 8px; font-size: 10pt; }
-            .info-label { font-weight: bold; min-width: 120px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
+            .info-item { display: flex; gap: 4px; }
+            .info-label { font-weight: bold; white-space: nowrap; }
             .info-value { flex: 1; }
             
-            .info-block {
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 10.5pt;
-                line-height: 1.6;
-            }
-            .info-block p { margin: 4px 0; }
+            .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
             
-            .descricao-box {
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 10.5pt;
-                line-height: 1.5;
-                min-height: 50px;
-            }
+            .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
+            .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
             
-            .tabela-remarcacoes {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 9.5pt;
-                margin-top: 10px;
-            }
-            .tabela-remarcacoes th {
-                background: #14b8a6;
-                color: white;
-                padding: 8px 6px;
-                text-align: left;
-                border: 1px solid #0d9488;
-                font-size: 9pt;
-            }
-            .tabela-remarcacoes td {
-                padding: 6px;
-                border: 1px solid #ddd;
-            }
+            .linha-compacta { display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8.5pt; margin-bottom: 3px; }
+            .obs-compacta { padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8pt; font-style: italic; }
+            
+            .tabela-remarcacoes { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 2px; }
+            .tabela-remarcacoes th { background: #14b8a6; color: white; padding: 2px 4px; text-align: left; border: 1px solid #0d9488; font-size: 7.5pt; }
+            .tabela-remarcacoes td { padding: 2px 4px; border: 1px solid #ddd; }
             .tabela-remarcacoes tr:nth-child(even) { background: #f9fafb; }
-            .status-remarcacao {
-                padding: 2px 8px;
-                border-radius: 10px;
-                font-size: 8.5pt;
-                font-weight: bold;
-            }
+            .status-remarcacao { padding: 1px 5px; border-radius: 8px; font-size: 7pt; font-weight: bold; }
             .status-pendente { background: #fef3c7; color: #92400e; }
             .status-realizado { background: #d1fae5; color: #065f46; }
             .status-cancelado { background: #fee2e2; color: #991b1b; }
             
-            /* ===== ASSINATURA COM CARIMBO SOBREPOSTO ===== */
-            .assinaturas {
-                display: flex;
-                justify-content: center;
-                margin-top: 50px;
-                gap: 40px;
-            }
-            .assinatura {
-                flex: 0 0 60%;
-                text-align: center;
-            }
-            .assinatura-container-relatorio {
-                position: relative;
-                border-bottom: 1px solid #000;
-                min-height: 22mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 3px;
-            }
-            .assinatura-img {
-                max-height: 18mm;
-                max-width: 100%;
-                object-fit: contain;
-                position: relative;
-                z-index: 1;
-            }
-            .carimbo-overlay {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                max-height: 20mm;
-                max-width: 60%;
-                object-fit: contain;
-                opacity: 0.85;
-                pointer-events: none;
-                z-index: 2;
-            }
-            .assinatura-linha {
-                border-top: none;
-                padding-top: 5px;
-                font-size: 10pt;
-                margin-top: 4px;
-            }
+            /* ===== ASSINATURA + CARIMBO SOBREPOSTO ===== */
+            .assinaturas { display: flex; justify-content: center; margin-top: 15px; gap: 20px; }
+            .assinatura { flex: 0 0 55%; text-align: center; }
+            .assinatura-container-relatorio { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+            .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            .carimbo-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; pointer-events: none; z-index: 2; }
+            .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
             
-            .qr-code {
-                text-align: center;
-                margin-top: 15px;
-            }
-            .qr-code img {
-                width: 22mm; height: 22mm;
-                border: 1px solid #000;
-                padding: 1px;
-            }
-            .qr-code p {
-                font-size: 8pt;
-                margin: 3px 0 0 0;
-                color: #444;
-            }
+            /* ===== QR CODE (COMPACTO) ===== */
+            .qr-code { text-align: center; margin-top: 4px; }
+            .qr-code img { width: 15mm; height: 15mm; border: 1px solid #000; padding: 1px; }
+            .qr-code p { font-size: 6.5pt; margin: 1px 0 0 0; color: #444; }
             
-            .footer {
-                text-align: center;
-                margin-top: 30px;
-                padding-top: 10px;
-                border-top: 1px solid #ccc;
-                font-size: 8pt;
-                color: #666;
-            }
-            .footer p { margin: 2px 0; }
+            .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
             
-            .btn-print {
-                display: block;
-                margin: 20px auto;
-                padding: 12px 30px;
-                background: #14b8a6;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-weight: bold;
-                cursor: pointer;
-                font-size: 14px;
-                font-family: Arial, sans-serif;
-            }
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #14b8a6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
             .btn-print:hover { background: #0d9488; }
-            @media print {
-                .no-print { display: none !important; }
-                body { padding: 0; }
-            }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -3753,20 +3554,18 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
         <div class="header">
             <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Psicologia</p>
+            <p>Sistema de Atendimentos — Psicologia</p>
         </div>
         
         <div class="titulo">🧠 Atendimento Psicologia</div>
         <div class="status-badge">${badgeStatus}</div>
         
         <div class="aluno-box">
-            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" 
-                 alt="${escapeHTML(a.alunoNome)}"
-                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
             <div class="aluno-info">
                 <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
                 <div class="aluno-detalhes">
-                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')}<br>
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')} • 
                     <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
                     ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
                 </div>
@@ -3775,42 +3574,20 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
         
         <div class="section-title">📌 Dados do Atendimento</div>
         <div class="info-grid">
-            <div class="info-item">
-                <div class="info-label">Tipo:</div>
-                <div class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Data:</div>
-                <div class="info-value">${dataExt}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Horário:</div>
-                <div class="info-value">${horaExt}</div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Gravidade:</div>
-                <div class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Prioridade:</div>
-                <div class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></div>
-            </div>
-            <div class="info-item">
-                <div class="info-label">Registrado por:</div>
-                <div class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</div>
-            </div>
+            <div class="info-item"><span class="info-label">Tipo:</span><span class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></span></div>
+            <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
+            <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
+            <div class="info-item"><span class="info-label">Gravidade:</span><span class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Prioridade:</span><span class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span></div>
         </div>
         
         <div class="section-title">📝 Descrição do Ocorrido</div>
-        <div class="descricao-box">
-            ${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}
-        </div>
+        <div class="descricao-box">${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}</div>
         
         ${a.entrada?.observacoes ? `
             <div class="section-title">💬 Observações</div>
-            <div class="descricao-box" style="min-height: 30px;">
-                ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
-            </div>
+            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}</div>
         ` : ''}
         
         ${detalhesHTML}
@@ -3835,8 +3612,7 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
         ` : ''}
         
         <div class="footer">
-            <p>Documento gerado em <strong>${dataGeracao}</strong></p>
-            <p>EducaPleno — Sistema de Psicologia</p>
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Psicologia</p>
         </div>
     </body>
     </html>`;

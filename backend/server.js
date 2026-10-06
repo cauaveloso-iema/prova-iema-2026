@@ -21450,28 +21450,42 @@ app.get('/api/identificar-usuario/:id', async (req, res) => {
     }
 });
 
-// ============ ROTA PARA OBTER QR CODE DE UM ALUNO ESPECÍFICO (PARA IMPRESSÃO) ============
 // ============ ROTA PARA OBTER QR CODE DE UM ALUNO ============
 app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
     try {
         const { alunoId } = req.params;
         
         console.log(`📱 Buscando QR Code do aluno: ${alunoId}`);
+        console.log(`   Solicitado por: ${req.userRole} (${req.userId})`);
         
-        // Verificar permissão
-        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
-        const isProfessor = req.userRole === 'professor';
-        const isSetorPedagogico = req.userRole === 'setor_pedagogico';
+        // 🔥 PERFIS AUTORIZADOS A VISUALIZAR O QR CODE DE ALUNOS
+        const perfisAutorizados = [
+            'admin',
+            'super_admin',
+            'professor',
+            'setor_pedagogico',
+            'supervisao',        
+            'psicologia',         
+            'assistente-social',  
+            'enfermaria',         
+            'coordenacao_patio',  
+            'biblioteca',         
+            'protagonismo',      
+            'gestao_geral',      
+            'cozinha'            
+        ];
         
-        if (!isAdmin && !isProfessor && !isSetorPedagogico) {
+        if (!perfisAutorizados.includes(req.userRole)) {
+            console.warn(`⚠️ [QRCODE] Acesso negado para role: ${req.userRole}`);
             return res.status(403).json({
                 success: false,
-                error: 'Acesso negado'
+                error: 'Acesso negado. Seu perfil não tem permissão para visualizar QR Codes de alunos.'
             });
         }
         
         // 🔥 IMPORTANTE: Usar '+qrCodeUsuario' para incluir o campo que tem select:false
-        const aluno = await User.findById(alunoId).select('+qrCodeUsuario qrCodeUsuarioGeradoEm nome email matricula role');
+        const aluno = await User.findById(alunoId)
+            .select('+qrCodeUsuario qrCodeUsuarioGeradoEm nome email matricula role ativo');
         
         if (!aluno) {
             return res.status(404).json({
@@ -21498,21 +21512,28 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
             
             const QRCode = require('qrcode');
             const IS_LOCALHOST = process.env.NODE_ENV === 'development';
-            const BASE_URL = IS_LOCALHOST ? 'http://localhost:3000' : (process.env.BASE_URL || 'https://seu-dominio.com');
+            const BASE_URL = IS_LOCALHOST 
+                ? 'http://localhost:3000' 
+                : (process.env.BASE_URL || 'https://seu-dominio.com');
             
             const alunoUrl = `${BASE_URL}/identificar-aluno.html?id=${aluno._id}`;
             
             const qrCodeDataUrl = await QRCode.toDataURL(alunoUrl, {
                 errorCorrectionLevel: 'H',
                 margin: 1,
-                width: 200
+                width: 200,
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                }
             });
             
             aluno.qrCodeUsuario = qrCodeDataUrl;
             aluno.qrCodeUsuarioGeradoEm = new Date();
+            aluno.qrCodeUsuarioTipo = 'aluno';
             await aluno.save();
             
-            console.log(`✅ QR Code gerado e salvo`);
+            console.log(`✅ QR Code gerado e salvo no banco`);
         }
         
         res.json({
@@ -21528,7 +21549,7 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        console.error('❌ Erro ao buscar QR Code:', error);
         res.status(500).json({
             success: false,
             error: error.message
