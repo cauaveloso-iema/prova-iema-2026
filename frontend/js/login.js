@@ -10,7 +10,6 @@
 // ============================================================
 const IS_LOCALHOST = window.location.hostname === 'localhost' ||
                      window.location.hostname === '127.0.0.1';
-const IS_EDUCAPLENO = window.location.hostname.includes('educapleno.com');
 const IS_RENDER = window.location.hostname.includes('render.com') ||
                   window.location.hostname.includes('sistema-avaliativo');
 
@@ -19,9 +18,6 @@ let API_BASE_URL;
 if (IS_LOCALHOST) {
     API_BASE_URL = 'http://localhost:3000/api';
     console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
-} else if (IS_EDUCAPLENO) {
-    API_BASE_URL = window.location.origin + '/api';
-    console.log('🌐 Modo: PRODUÇÃO (educapleno.com)');
 } else if (IS_RENDER) {
     API_BASE_URL = window.location.origin + '/api';
     console.log('🚀 Modo: PRODUÇÃO (Render)');
@@ -396,7 +392,7 @@ function verificarLoginAutomatico() {
     try {
         const userData = JSON.parse(userDataRaw);
         const count = incrementarRedirectCount();
-        console.log(`🔄 Tentativa de redirecionamento automático #${count}`);
+        console.log(`🔄 Tentativa de redirecionamento #${count}`);
 
         fetch(`${API_BASE_URL}/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -583,15 +579,17 @@ async function processarLoginSocial(provider, idToken, accessToken = null) {
         }
 
         // ============================================================
-        // 🔥 REQUER 2FA
+        // 🔥 REQUER 2FA (super_admin, admin)
         // ============================================================
         if (dados.requiresTwoFactor) {
-            console.log(`🔐 2FA necessário após login social`);
+            console.log(`🔐 2FA necessário após login social (motivo: ${dados.motivo2FA || 'não especificado'})`);
 
             sessionStorage.setItem('2fa_token', dados.token);
             sessionStorage.setItem('2fa_userId', dados.userId);
             sessionStorage.setItem('2fa_message', dados.message || 'Código 2FA necessário');
             sessionStorage.setItem('2fa_from_social', provider);
+            sessionStorage.setItem('2fa_user_nome', dados.user?.nome || '');
+            sessionStorage.setItem('2fa_user_role', dados.user?.role || '');
 
             mostrarAlerta('🔐 ' + (dados.message || 'Código 2FA necessário'), 'info');
 
@@ -652,123 +650,39 @@ async function processarLoginSocial(provider, idToken, accessToken = null) {
 }
 
 // ============================================================
-// 🔥 PULL-TO-REFRESH (VERSÃO RÍGIDA - MUITO MENOS SENSÍVEL)
+// PULL-TO-REFRESH
 // ============================================================
-// Regras para disparar:
-//   1. Estar EXATAMENTE no topo (scrollY <= 5)
-//   2. Arrastar pelo menos 500px para baixo
-//   3. Gesto predominantemente VERTICAL (não pode ter 30%+ de movimento horizontal)
-//   4. Manter o gesto por pelo menos 400ms
-//   5. Não soltar o dedo antes de completar os requisitos
-// ============================================================
-
 let touchStartY = 0;
-let touchStartX = 0;
 let touchCurrentY = 0;
-let touchCurrentX = 0;
 let isPulling = false;
-let pullStartTime = 0;
-let pullValidated = false;
-
-const PULL_THRESHOLD = 500;        // 🔥 Bem mais exigente (era 300)
-const TOP_TOLERANCE = 5;           // 🔥 Só no topo absoluto (era 20)
-const MIN_PULL_TIME = 400;         // 🔥 Tempo mínimo de gesto (era 200)
-const INDICATOR_THRESHOLD = 150;   // 🔥 Só mostra indicador após 150px
-const MAX_HORIZONTAL_RATIO = 0.3;  // 🔥 Movimento horizontal máximo permitido (30%)
+const PULL_THRESHOLD = 200;
+const TOP_TOLERANCE = 100;
 
 document.addEventListener('touchstart', function (e) {
-    const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-
-    // 🔥 Só ativa se estiver EXATAMENTE no topo
-    if (scrollTop <= TOP_TOLERANCE) {
-        const touch = e.touches[0];
-        touchStartY = touch.clientY;
-        touchStartX = touch.clientX;
-        touchCurrentY = touchStartY;
-        touchCurrentX = touchStartX;
-        pullStartTime = Date.now();
+    if (window.scrollY <= TOP_TOLERANCE) {
+        touchStartY = e.touches[0].clientY;
         isPulling = true;
-        pullValidated = false;
-    } else {
-        isPulling = false;
-        pullValidated = false;
     }
 }, { passive: true });
 
 document.addEventListener('touchmove', function (e) {
     if (!isPulling) return;
-
-    // 🔥 Se scrollou para longe do topo, cancela
-    const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-    if (scrollTop > TOP_TOLERANCE) {
-        isPulling = false;
-        pullValidated = false;
-        esconderIndicadorPull();
-        return;
-    }
-
-    const touch = e.touches[0];
-    touchCurrentY = touch.clientY;
-    touchCurrentX = touch.clientX;
-
-    const pullDistance = touchCurrentY - touchStartY;      // vertical
-    const horizontalDistance = Math.abs(touchCurrentX - touchStartX); // horizontal
-
-    // 🔥 Se o movimento horizontal for maior que 30% do vertical, é gesto diagonal → cancela
-    if (pullDistance > 0 && horizontalDistance > (pullDistance * MAX_HORIZONTAL_RATIO)) {
-        isPulling = false;
-        pullValidated = false;
-        esconderIndicadorPull();
-        return;
-    }
-
-    // 🔥 Se o usuário está arrastando para CIMA, cancela (não é pull-to-refresh)
-    if (pullDistance < 0) {
-        isPulling = false;
-        pullValidated = false;
-        esconderIndicadorPull();
-        return;
-    }
-
-    // 🔥 Só mostra indicador visual se o pull for realmente grande
-    if (pullDistance > INDICATOR_THRESHOLD) {
-        mostrarIndicadorPull(pullDistance);
-    }
-
-    // 🔥 Só dispara se:
-    // - pull >= PULL_THRESHOLD (500px)
-    // - tempo mínimo de gesto atingido (400ms)
-    if (pullDistance >= PULL_THRESHOLD) {
-        const pullTime = Date.now() - pullStartTime;
-
-        if (pullTime >= MIN_PULL_TIME && !pullValidated) {
-            pullValidated = true;
-            e.preventDefault();
-            atualizarPagina();
-            isPulling = false;
-        }
+    touchCurrentY = e.touches[0].clientY;
+    const pullDistance = touchCurrentY - touchStartY;
+    if (pullDistance > 50) mostrarIndicadorPull(pullDistance);
+    if (pullDistance > PULL_THRESHOLD) {
+        e.preventDefault();
+        atualizarPagina();
     }
 }, { passive: false });
 
 document.addEventListener('touchend', function () {
     if (!isPulling) return;
-
-    esconderIndicadorPull();
+    const pullDistance = touchCurrentY - touchStartY;
+    if (pullDistance < PULL_THRESHOLD) esconderIndicadorPull();
     isPulling = false;
-    pullValidated = false;
     touchStartY = 0;
-    touchStartX = 0;
     touchCurrentY = 0;
-    touchCurrentX = 0;
-    pullStartTime = 0;
-}, { passive: true });
-
-document.addEventListener('touchcancel', function () {
-    if (!isPulling) return;
-
-    esconderIndicadorPull();
-    isPulling = false;
-    pullValidated = false;
 }, { passive: true });
 
 function atualizarPagina() {
@@ -788,14 +702,11 @@ function mostrarIndicadorPull(distancia) {
             background: #4f46e5; color: white; text-align: center;
             padding: 10px; font-size: 14px; z-index: 9999;
             transform: translateY(-100%); transition: transform 0.2s;
-            pointer-events: none;
         `;
         indicador.innerHTML = '↓ Solte para atualizar';
         document.body.appendChild(indicador);
     }
-    if (distancia > INDICATOR_THRESHOLD) {
-        indicador.style.transform = 'translateY(0)';
-    }
+    if (distancia > 50) indicador.style.transform = 'translateY(0)';
 }
 
 function esconderIndicadorPull() {
@@ -812,7 +723,6 @@ function mostrarMensagem(texto) {
         padding: 15px 30px; border-radius: 10px;
         font-weight: bold; z-index: 10000;
         box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        pointer-events: none;
     `;
     msg.textContent = texto;
     document.body.appendChild(msg);
@@ -870,8 +780,6 @@ function mostrarMensagem(texto) {
 // ============================================================
 document.addEventListener('DOMContentLoaded', function () {
     console.log('🚀 EducaPleno - Login carregado!');
-    console.log('📍 Hostname:', window.location.hostname);
-    console.log('📍 API Base URL:', API_BASE_URL);
 
     carregarLembrar();
 
