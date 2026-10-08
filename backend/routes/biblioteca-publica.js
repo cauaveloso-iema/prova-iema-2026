@@ -297,4 +297,62 @@ router.post('/saida', rateLimit(10, 5), async (req, res) => {
   }
 });
 
+// ============================================
+// 🔧 ROTA TEMPORÁRIA - CORRIGIR CURSO IMPORTADO
+// ⚠️ REMOVER DEPOIS DE USAR
+// ============================================
+router.post('/admin/corrigir-curso', async (req, res) => {
+  try {
+    const { cursoErrado, cursoCorreto, confirmar } = req.body;
+
+    if (!cursoErrado || !cursoCorreto) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Parâmetros cursoErrado e cursoCorreto são obrigatórios' 
+      });
+    }
+
+    // 1) Lista quem será afetado
+    const alunosAfetados = await User.find(
+      { role: 'aluno', curso: cursoErrado },
+      { nome: 1, matricula: 1, turma: 1, curso: 1 }
+    ).sort({ turma: 1, nome: 1 });
+
+    // 2) Modo simulação (só mostra o que seria feito)
+    if (!confirmar) {
+      return res.json({
+        success: true,
+        modo: '🔍 SIMULAÇÃO (nada foi alterado)',
+        cursoErrado,
+        cursoCorreto,
+        total: alunosAfetados.length,
+        alunos: alunosAfetados.map(a => ({
+          nome: a.nome,
+          matricula: a.matricula,
+          turma: a.turma
+        }))
+      });
+    }
+
+    // 3) Executa a correção
+    const resultado = await User.updateMany(
+      { role: 'aluno', curso: cursoErrado },
+      { $set: { curso: cursoCorreto } }
+    );
+
+    res.json({
+      success: true,
+      modo: '⚡ CORREÇÃO EXECUTADA',
+      cursoErrado,
+      cursoCorreto,
+      totalEncontrados: alunosAfetados.length,
+      totalModificados: resultado.modifiedCount
+    });
+
+  } catch (e) {
+    console.error('Erro ao corrigir curso:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 module.exports = router;

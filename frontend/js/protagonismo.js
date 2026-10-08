@@ -1846,7 +1846,7 @@ async function copiarLinkDoQR() {
 // ============================================================================
 
 // ============================================
-// 🎨 TEMPLATE COMUM DE RELATÓRIO
+// 🎨 TEMPLATE COMUM DE RELATÓRIO (PADRONIZADO)
 // ============================================
 function montarHTMLRelatorioProtagonismo({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, dataGeracao }) {
     const logo = '/uploads/logo-iema.png';
@@ -1858,62 +1858,70 @@ function montarHTMLRelatorioProtagonismo({ titulo, subtitulo, statsHTML, tabelaH
         <meta charset="UTF-8">
         <title>${titulo}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
-            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
-            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
             .titulo {
-                text-align: center; font-size: 14pt; font-weight: bold;
-                background: #fed7aa; padding: 10px; border: 2px solid #000;
-                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #fed7aa; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
             .stats {
-                display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
-                background: #fff7ed; border-radius: 8px; border: 1px solid #fdba74;
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #fff7ed; border-radius: 5px; border: 1px solid #fdba74;
             }
             .stat { text-align: center; flex: 1; border-right: 1px solid #fdba74; }
             .stat:last-child { border-right: none; }
-            .stat-value { font-size: 22pt; font-weight: bold; color: #ea580c; line-height: 1; }
-            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #ea580c; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
             .section-title {
-                font-size: 11pt; font-weight: bold; background: #e8e8e8;
-                padding: 6px 10px; border-left: 4px solid #f97316; margin: 20px 0 10px;
+                font-size: 9pt; font-weight: bold; background: #e8e8e8;
+                padding: 2px 6px; border-left: 3px solid #f97316; margin: 6px 0 3px;
             }
-            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
-            th { background: #f97316; color: white; padding: 8px 6px; text-align: left; border: 1px solid #ea580c; font-size: 9pt; }
-            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #f97316; color: white; padding: 4px 5px; text-align: left; border: 1px solid #ea580c; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #fff7ed; }
-            .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
-            .assinatura { flex: 0 0 60%; text-align: center; }
-            .assinatura-container-relatorio {
-                position: relative; border-bottom: 1px solid #000; min-height: 22mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
-            }
-            .assinatura-img { max-height: 18mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
-            .carimbo-overlay {
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                max-height: 20mm; max-width: 60%; object-fit: contain;
-                opacity: 0.85; pointer-events: none; z-index: 2;
-            }
-            .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
-            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
-            .footer p { margin: 2px 0; }
-            .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
-            .btn-print {
-                display: block; margin: 20px auto; padding: 12px 30px;
-                background: #f97316; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
-            }
-            .btn-print:hover { background: #ea580c; }
-            .badge {
-                display: inline-block; padding: 2px 8px; border-radius: 10px;
-                font-size: 8.5pt; font-weight: bold;
-            }
+            
+            .badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 7.5pt; font-weight: bold; }
             .badge-ativo { background: #d1fae5; color: #065f46; }
             .badge-inativo { background: #fee2e2; color: #991b1b; }
+            
+            .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            .assinatura-container-relatorio {
+                position: relative; border-bottom: 1px solid #000; min-height: 14mm;
+                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px;
+            }
+            .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            .carimbo-overlay {
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                max-height: 13mm; max-width: 55%; object-fit: contain;
+                opacity: 0.85; pointer-events: none; z-index: 2;
+            }
+            .assinatura-linha { border-top: none; padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
+            
+            .btn-print {
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #f97316; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #ea580c; }
+            
             @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
@@ -1923,7 +1931,7 @@ function montarHTMLRelatorioProtagonismo({ titulo, subtitulo, statsHTML, tabelaH
         <div class="header">
             <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Gestão — Protagonismo Estudantil</p>
+            <p>Sistema de Gestão — Protagonismo Estudantil</p>
         </div>
         
         <div class="titulo">⭐ ${titulo}</div>
@@ -2001,9 +2009,9 @@ async function exportarPDFDashboard() {
             <table>
                 <thead>
                     <tr>
-                        <th style="width:60px;text-align:center;">#</th>
+                        <th style="width:50px;text-align:center;">#</th>
                         <th>Clube</th>
-                        <th style="width:150px;text-align:center;">Inscrições</th>
+                        <th style="width:120px;text-align:center;">Inscrições</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -2022,7 +2030,7 @@ async function exportarPDFDashboard() {
                 <thead>
                     <tr>
                         <th>Funcionalidade</th>
-                        <th style="width:150px;text-align:center;">Status</th>
+                        <th style="width:130px;text-align:center;">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -2118,9 +2126,9 @@ async function exportarPDFClubes() {
                     <tr>
                         <th>Clube</th>
                         <th>Líder / Vice</th>
-                        <th style="width:100px;text-align:center;">Vagas</th>
-                        <th style="width:100px;text-align:center;">Inscritos</th>
-                        <th style="width:80px;text-align:center;">Status</th>
+                        <th style="width:70px;text-align:center;">Vagas</th>
+                        <th style="width:80px;text-align:center;">Inscritos</th>
+                        <th style="width:70px;text-align:center;">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -2128,7 +2136,7 @@ async function exportarPDFClubes() {
                         <tr>
                             <td>
                                 <strong>${escapeHTML(c.nome)}</strong><br>
-                                <small style="color:#666;">${escapeHTML((c.descricao || '').substring(0, 80))}${(c.descricao || '').length > 80 ? '...' : ''}</small>
+                                <small style="color:#666;">${escapeHTML((c.descricao || '').substring(0, 70))}${(c.descricao || '').length > 70 ? '...' : ''}</small>
                                 ${c.local || c.diaSemana ? `
                                     <br><small style="color:#888;">📍 ${escapeHTML(c.local || '-')} • ${escapeHTML(c.diaSemana || '-')} ${c.horario ? 'às ' + c.horario : ''}</small>
                                 ` : ''}
@@ -2142,7 +2150,7 @@ async function exportarPDFClubes() {
                             <td style="text-align:center;">${c.vagas || 0}</td>
                             <td style="text-align:center;">
                                 <strong>${c.inscricoesAtivas || 0}</strong><br>
-                                <small style="color:#888;">${c.vagasRestantes || 0} restantes</small>
+                                <small style="color:#888;">${c.vagasRestantes || 0} rest.</small>
                             </td>
                             <td style="text-align:center;">
                                 <span class="badge ${c.ativo ? (c.inscricoesAbertas ? 'badge-ativo' : 'badge-inativo') : 'badge-inativo'}">
@@ -2243,11 +2251,11 @@ async function exportarPDFInscricoes() {
                 <thead>
                     <tr>
                         <th>Nome</th>
-                        <th style="width:100px;">Nasc.</th>
-                        <th style="width:80px;">Turma</th>
+                        <th style="width:80px;">Nasc.</th>
+                        <th style="width:60px;">Turma</th>
                         <th>Curso</th>
                         <th>Clube</th>
-                        <th style="width:110px;">Data Inscrição</th>
+                        <th style="width:90px;">Data Insc.</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -2335,7 +2343,7 @@ async function exportarPDFTutores() {
         
         let tabelaHTML = '';
         if (turmas.length === 0) {
-            tabelaHTML = '<div class="section-title">📋 Tutores</div><p style="text-align:center;padding:20px;">Nenhum tutor cadastrado</p>';
+            tabelaHTML = '<div class="section-title">📋 Tutores</div><p style="text-align:center;padding:15px;">Nenhum tutor cadastrado</p>';
         } else {
             tabelaHTML = turmas.map(t => {
                 const lista = porTurma[t] || [];
@@ -2345,8 +2353,8 @@ async function exportarPDFTutores() {
                         <thead>
                             <tr>
                                 <th>Professor</th>
-                                <th style="width:180px;">Área/Disciplina</th>
-                                <th style="width:180px;">Curso</th>
+                                <th style="width:150px;">Área/Disciplina</th>
+                                <th style="width:150px;">Curso</th>
                                 <th>Observações</th>
                             </tr>
                         </thead>
@@ -2438,7 +2446,7 @@ async function exportarPDFCandidatos() {
         
         let tabelaHTML = '';
         if (turmas.length === 0) {
-            tabelaHTML = '<div class="section-title">📋 Candidatos</div><p style="text-align:center;padding:20px;">Nenhum candidato cadastrado</p>';
+            tabelaHTML = '<div class="section-title">📋 Candidatos</div><p style="text-align:center;padding:15px;">Nenhum candidato cadastrado</p>';
         } else {
             tabelaHTML = turmas.map(t => {
                 const { lider = [], vice_lider = [] } = porTurma[t] || {};
@@ -2449,9 +2457,9 @@ async function exportarPDFCandidatos() {
                         <thead>
                             <tr>
                                 <th>Nome</th>
-                                <th style="width:100px;text-align:center;">Cargo</th>
+                                <th style="width:80px;text-align:center;">Cargo</th>
                                 <th>Slogan / Proposta</th>
-                                <th style="width:70px;text-align:center;">Votos</th>
+                                <th style="width:60px;text-align:center;">Votos</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2465,7 +2473,7 @@ async function exportarPDFCandidatos() {
                                     </td>
                                     <td>
                                         ${c.slogan ? `<em style="color:#ea580c;">"${escapeHTML(c.slogan)}"</em><br>` : ''}
-                                        ${c.proposta ? `<small>${escapeHTML(c.proposta.substring(0, 120))}${c.proposta.length > 120 ? '...' : ''}</small>` : ''}
+                                        ${c.proposta ? `<small>${escapeHTML(c.proposta.substring(0, 100))}${c.proposta.length > 100 ? '...' : ''}</small>` : ''}
                                     </td>
                                     <td style="text-align:center;"><strong>${c.votos || 0}</strong></td>
                                 </tr>
@@ -2540,7 +2548,7 @@ async function exportarPDFEleicao() {
         
         let tabelaHTML = '';
         if (porTurma.length === 0) {
-            tabelaHTML = '<div class="section-title">🏆 Resultados</div><p style="text-align:center;padding:20px;">Nenhum voto registrado ainda</p>';
+            tabelaHTML = '<div class="section-title">🏆 Resultados</div><p style="text-align:center;padding:15px;">Nenhum voto registrado ainda</p>';
         } else {
             tabelaHTML = porTurma.map(t => {
                 const liderRank = (t.lider || []).slice(0, 5);
@@ -2550,36 +2558,36 @@ async function exportarPDFEleicao() {
                     <div class="section-title">🏫 Turma: ${escapeHTML(t.turma)}</div>
                     
                     ${t.vencedorLider ? `
-                        <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                            <strong style="color: #92400e;">👑 Líder Eleito:</strong>
-                            <span style="font-size: 12pt; font-weight: bold; color: #78350f; margin-left: 8px;">
+                        <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 5px; padding: 5px 10px; margin-bottom: 5px;">
+                            <strong style="color: #92400e; font-size: 9pt;">👑 Líder Eleito:</strong>
+                            <span style="font-size: 9.5pt; font-weight: bold; color: #78350f; margin-left: 6px;">
                                 ${escapeHTML(t.vencedorLider.nome)}
                             </span>
-                            <span style="margin-left: 12px; background: #f59e0b; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10pt;">
+                            <span style="margin-left: 10px; background: #f59e0b; color: white; padding: 1px 8px; border-radius: 10px; font-size: 8pt;">
                                 ${t.vencedorLider.votos} votos
                             </span>
                         </div>
                     ` : ''}
                     
                     ${t.vencedorVice ? `
-                        <div style="background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                            <strong style="color: #1e40af;">🎖️ Vice-Líder Eleito:</strong>
-                            <span style="font-size: 12pt; font-weight: bold; color: #1e3a8a; margin-left: 8px;">
+                        <div style="background: #dbeafe; border: 1px solid #93c5fd; border-radius: 5px; padding: 5px 10px; margin-bottom: 5px;">
+                            <strong style="color: #1e40af; font-size: 9pt;">🎖️ Vice-Líder Eleito:</strong>
+                            <span style="font-size: 9.5pt; font-weight: bold; color: #1e3a8a; margin-left: 6px;">
                                 ${escapeHTML(t.vencedorVice.nome)}
                             </span>
-                            <span style="margin-left: 12px; background: #3b82f6; color: white; padding: 2px 10px; border-radius: 12px; font-size: 10pt;">
+                            <span style="margin-left: 10px; background: #3b82f6; color: white; padding: 1px 8px; border-radius: 10px; font-size: 8pt;">
                                 ${t.vencedorVice.votos} votos
                             </span>
                         </div>
                     ` : ''}
                     
                     ${liderRank.length > 1 ? `
-                        <table style="margin-top: 8px;">
+                        <table style="margin-top: 4px;">
                             <thead>
                                 <tr>
-                                    <th style="width:50px;text-align:center;">#</th>
+                                    <th style="width:40px;text-align:center;">#</th>
                                     <th>Candidato a Líder</th>
-                                    <th style="width:100px;text-align:center;">Votos</th>
+                                    <th style="width:80px;text-align:center;">Votos</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2595,12 +2603,12 @@ async function exportarPDFEleicao() {
                     ` : ''}
                     
                     ${viceRank.length > 1 ? `
-                        <table style="margin-top: 8px;">
+                        <table style="margin-top: 4px;">
                             <thead>
                                 <tr>
-                                    <th style="width:50px;text-align:center;">#</th>
+                                    <th style="width:40px;text-align:center;">#</th>
                                     <th>Candidato a Vice-Líder</th>
-                                    <th style="width:100px;text-align:center;">Votos</th>
+                                    <th style="width:80px;text-align:center;">Votos</th>
                                 </tr>
                             </thead>
                             <tbody>
