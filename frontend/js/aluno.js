@@ -1359,7 +1359,7 @@ async function carregarProvasConcluidas() {
     }
 }
 
-// ========== CONFIGURAR FILTROS COM DADOS DO BANCO - COM DISCIPLINAS DO CURSO ==========
+// ========== CONFIGURAR FILTROS COM DADOS DO BANCO - VERSÃO SIMPLIFICADA ==========
 async function configurarFiltrosProvasBanco() {
     const filtroSelect = document.getElementById('filtroEixoProvasConcluidas');
     if (!filtroSelect) return;
@@ -1403,7 +1403,7 @@ async function configurarFiltrosProvasBanco() {
         optionTodos.textContent = 'Todas as disciplinas';
         novoSelect.appendChild(optionTodos);
         
-        // ========== EIXOS DA BNCC (sempre aparecem) ==========
+        // ========== EIXOS DA BNCC ==========
         const eixosBNCC = [
             { nome: 'natureza', label: '🔬 Natureza e Matemática' },
             { nome: 'humanas', label: '🏛️ Humanas' },
@@ -1418,107 +1418,25 @@ async function configurarFiltrosProvasBanco() {
             novoSelect.appendChild(optionEixo);
         });
         
-        // ========== EIXOS TÉCNICOS + DISCIPLINAS DO CURSO DO ALUNO ==========
-        
-        // Mapeamento: eixo técnico → lista de disciplinas
-        const DISCIPLINAS_POR_EIXO = {
-            'desenvolvimento': {
-                label: '💻 Desenvolvimento de Sistemas',
-                disciplinas: [
-                    { nome: 'programacao',     label: '💻 Programação' },
-                    { nome: 'banco_dados',     label: '🗄️ Banco de Dados' },
-                    { nome: 'engenharia_software', label: '⚙️ Engenharia de Software' },
-                    { nome: 'desenvolvimento_web', label: '🌐 Desenvolvimento Web' },
-                    { nome: 'algoritmos',      label: '🧮 Algoritmos' }
-                ]
-            },
-            'redes': {
-                label: '🌐 Redes de Computadores',
-                disciplinas: [
-                    { nome: 'redes',         label: '🌐 Redes de Computadores' },
-                    { nome: 'seguranca',     label: '🔒 Segurança da Informação' },
-                    { nome: 'infraestrutura',label: '🖥️ Infraestrutura de TI' },
-                    { nome: 'protocolos',    label: '📡 Protocolos de Rede' }
-                ]
-            },
-            'turismo': {
-                label: '✈️ Turismo, Eventos e Gastronomia',
-                disciplinas: [
-                    { nome: 'eventos',       label: '🎉 Eventos' },
-                    { nome: 'turismo',       label: '✈️ Turismo' },
-                    { nome: 'gastronomia',   label: '🍽️ Gastronomia' },
-                    { nome: 'hospitalidade', label: '🏨 Hospitalidade' },
-                    { nome: 'lazer',         label: '🎭 Lazer e Recreação' }
-                ]
-            },
-            'gestao': {
-                label: '📊 Gestão e Negócios',
-                disciplinas: [
-                    { nome: 'administracao', label: '📊 Administração' },
-                    { nome: 'marketing',     label: '📈 Marketing' },
-                    { nome: 'contabilidade', label: '💰 Contabilidade' },
-                    { nome: 'rh',            label: '👥 Recursos Humanos' },
-                    { nome: 'juridico',      label: '⚖️ Jurídico' }
-                ]
-            },
-            'producao': {
-                label: '🎬 Produção Cultural e Design',
-                disciplinas: [
-                    { nome: 'audio',         label: '🎵 Áudio' },
-                    { nome: 'video',         label: '🎬 Vídeo' },
-                    { nome: 'publicidade',   label: '📢 Publicidade' },
-                    { nome: 'design',        label: '🎨 Design' },
-                    { nome: 'producao_cultural', label: '🎭 Produção Cultural' }
-                ]
-            },
-            'ambiente': {
-                label: '🌱 Ambiente e Saúde',
-                disciplinas: [
-                    { nome: 'meio_ambiente', label: '🌱 Meio Ambiente' },
-                    { nome: 'saude',         label: '🏥 Saúde' },
-                    { nome: 'sustentabilidade', label: '♻️ Sustentabilidade' },
-                    { nome: 'seguranca_trabalho', label: '⛑️ Segurança do Trabalho' }
-                ]
-            }
-        };
-        
-        // Adicionar SEPARADOR visual
-        const separator = document.createElement('option');
-        separator.disabled = true;
-        separator.textContent = '──────────';
-        novoSelect.appendChild(separator);
-        
-        // Adicionar eixo técnico do aluno COM suas disciplinas
-        if (eixoDoAluno && DISCIPLINAS_POR_EIXO[eixoDoAluno]) {
-            const config = DISCIPLINAS_POR_EIXO[eixoDoAluno];
+        // ========== ADICIONAR APENAS O EIXO TÉCNICO DO ALUNO ==========
+        if (eixoDoAluno && !eixosBNCC.some(e => e.nome === eixoDoAluno)) {
+            const labels = {
+                'desenvolvimento': '💻 Desenvolvimento de Sistemas',
+                'redes': '🌐 Redes de Computadores',
+                'turismo': '✈️ Turismo, Eventos e Gastronomia',
+                'gestao': '📊 Gestão e Negócios',
+                'producao': '🎬 Produção Cultural e Design',
+                'ambiente': '🌱 Ambiente e Saúde'
+            };
             
-            // 1. Opção do EIXO (agrupador)
             const optionEixoAluno = document.createElement('option');
             optionEixoAluno.value = eixoDoAluno;
-            optionEixoAluno.textContent = config.label;
+            optionEixoAluno.textContent = labels[eixoDoAluno] || data.eixo?.label || 'Eixo Técnico';
             optionEixoAluno.style.fontWeight = '600';
             optionEixoAluno.style.backgroundColor = '#f0f9ff';
             novoSelect.appendChild(optionEixoAluno);
             
-            // 2. Disciplinas do eixo (indentadas)
-            config.disciplinas.forEach(disc => {
-                const optionDisc = document.createElement('option');
-                optionDisc.value = disc.nome;
-                optionDisc.textContent = '\u00A0\u00A0\u00A0\u00A0' + disc.label;
-                novoSelect.appendChild(optionDisc);
-            });
-            
-            console.log(`✅ Eixo técnico "${eixoDoAluno}" adicionado com ${config.disciplinas.length} disciplinas`);
-            
-        } else if (eixoDoAluno) {
-            // Fallback: se o eixo não está mapeado, adiciona apenas ele
-            const optionEixoAluno = document.createElement('option');
-            optionEixoAluno.value = eixoDoAluno;
-            optionEixoAluno.textContent = data.eixo?.label || eixoDoAluno;
-            optionEixoAluno.style.fontWeight = '600';
-            optionEixoAluno.style.backgroundColor = '#f0f9ff';
-            novoSelect.appendChild(optionEixoAluno);
-            console.log(`✅ Eixo técnico adicionado (sem mapeamento): ${eixoDoAluno}`);
+            console.log(`✅ Eixo técnico adicionado: ${eixoDoAluno}`);
         }
         
         // ========== EVENTO DE MUDANÇA DO FILTRO ==========
@@ -1528,12 +1446,12 @@ async function configurarFiltrosProvasBanco() {
             aplicarFiltroEStatus(backup);
         });
         
-        console.log('✅ Filtros configurados: BNCC + disciplinas do curso');
+        console.log('✅ Filtros configurados: BNCC + eixo do aluno');
         
     } catch (error) {
         console.error('❌ Erro ao configurar filtros:', error);
         
-        // Fallback - recriar select com opções básicas
+        // Fallback
         const filtroSelect = document.getElementById('filtroEixoProvasConcluidas');
         if (filtroSelect) {
             const novoSelect = filtroSelect.cloneNode(true);
