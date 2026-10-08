@@ -3376,7 +3376,7 @@ async function imprimirAtendimento(atendimentoId) {
 }
 
 // ============================================
-// 🖨️ GERAR HTML DA IMPRESSÃO (padrão unificado)
+// 🖨️ GERAR HTML DA IMPRESSÃO (PADRONIZADO)
 // ============================================
 function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
     const logo = '/uploads/logo-iema.png';
@@ -3526,35 +3526,58 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
             .status-realizado { background: #d1fae5; color: #065f46; }
             .status-cancelado { background: #fee2e2; color: #991b1b; }
             
-            /* ===== ASSINATURA + CARIMBO SOBREPOSTO ===== */
-            .assinaturas { display: flex; justify-content: center; margin-top: 15px; gap: 20px; }
-            .assinatura { flex: 0 0 55%; text-align: center; }
-            .assinatura-container-relatorio { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
-            .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
-            .carimbo-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; pointer-events: none; z-index: 2; }
-            .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
+            /* 🖋️ DUAS ASSINATURAS LADO A LADO (CARIMBO COLADO NA LINHA) */
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 20px; }
+            .assinatura { flex: 0 0 42%; text-align: center; }
             
-            /* ===== QR CODE (COMPACTO) ===== */
-            .qr-code {
-                text-align: center;
-                margin-top: 6px;
-            }
-            .qr-code img {
-                width: 25mm;
-                height: 25mm;
-                border: 1.5px solid #000;
-                padding: 2px;
-                display: block;
-                margin: 0 auto;
-            }
-            .qr-code p {
-                font-size: 8pt;
-                margin: 3px 0 0 0;
-                color: #444;
-                font-weight: bold;
+            .assinatura-container-relatorio {
+                position: relative;
+                min-height: 18mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 0;
             }
             
-            .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .assinatura-container-relatorio::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+            
+            .assinatura-img {
+                max-height: 14mm;
+                max-width: 100%;
+                object-fit: contain;
+                position: relative;
+                z-index: 2;
+                margin-bottom: 1mm;
+            }
+            
+            .carimbo-overlay {
+                position: absolute;
+                bottom: 1mm;
+                left: 50%;
+                transform: translateX(-50%);
+                max-height: 15mm;
+                max-width: 45mm;
+                object-fit: contain;
+                opacity: 0.95;
+                pointer-events: none;
+                z-index: 1;
+            }
+            
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            /* QR Code */
+            .qr-code { text-align: center; margin-top: 10px; }
+            .qr-code img { width: 22mm; height: 22mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
+            .qr-code p { font-size: 7.5pt; margin: 2px 0 0 0; color: #444; font-weight: bold; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
             .footer p { margin: 1px 0; }
             
             .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #14b8a6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
@@ -3613,9 +3636,14 @@ function gerarHTMLImpressaoPsicologia(a, qrCodeUrl) {
             <div class="assinatura">
                 <div class="assinatura-container-relatorio">
                     ${assinaturaHTML}
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
                     <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
                 </div>
-                <div class="assinatura-linha">Assinatura do Responsável / Psicologia</div>
+                <div class="assinatura-linha">Psicologia</div>
             </div>
         </div>
         
@@ -3661,7 +3689,7 @@ function habilitarBotoesRelatorio() {
 }
 
 // ============================================
-// 🎨 GERAR HTML DO RELATÓRIO (padrão Setor Pedagógico)
+// 🎨 GERAR HTML DO RELATÓRIO (PADRONIZADO)
 // ============================================
 function gerarHTMLRelatorioPsicologia(data) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
@@ -3751,7 +3779,7 @@ function gerarHTMLRelatorioPsicologia(data) {
         `;
     }
     
-    // ========== TABELA DE DADOS ==========
+    // ========== TABELAS ==========
     let tabelaHTML = '';
     
     // ---- GERAL ----
@@ -3950,200 +3978,113 @@ function gerarHTMLRelatorioPsicologia(data) {
         `;
     }
     
-    // ========== HTML FINAL ==========
+    // ========== HTML FINAL (PADRONIZADO + CARIMBO COLADO NA LINHA) ==========
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
         <title>${titulo}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body {
-                font-family: 'Times New Roman', Times, serif;
-                font-size: 11pt;
-                line-height: 1.4;
-                color: #000;
-            }
-            .header {
-                text-align: center;
-                border-bottom: 2px double #000;
-                padding-bottom: 10px;
-                margin-bottom: 15px;
-            }
-            .header img {
-                max-width: 100%;
-                max-height: 25mm;
-                object-fit: contain;
-                display: block;
-                margin: 0 auto 5px;
-            }
-            .header h1 {
-                font-size: 13pt;
-                text-transform: uppercase;
-                font-weight: bold;
-                margin: 5px 0 0;
-            }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
             .titulo {
-                text-align: center;
-                font-size: 14pt;
-                font-weight: bold;
-                background: #ccfbf1;
-                padding: 10px;
-                border: 2px solid #000;
-                margin: 15px 0;
-                text-transform: uppercase;
-                letter-spacing: 1px;
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #ccfbf1; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            .subtitulo {
-                text-align: center;
-                font-size: 12pt;
-                margin: -10px 0 15px;
-                font-style: italic;
-            }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
             .stats {
-                display: flex;
-                gap: 15px;
-                margin: 15px 0 20px;
-                padding: 15px;
-                background: #f0fdfa;
-                border-radius: 8px;
-                border: 1px solid #99f6e4;
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #f0fdfa; border-radius: 5px; border: 1px solid #99f6e4;
             }
-            .stat {
-                text-align: center;
-                flex: 1;
-                border-right: 1px solid #99f6e4;
-            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #99f6e4; }
             .stat:last-child { border-right: none; }
-            .stat-value {
-                font-size: 22pt;
-                font-weight: bold;
-                color: #0d9488;
-                line-height: 1;
-            }
-            .stat-label {
-                font-size: 9pt;
-                color: #666;
-                margin-top: 5px;
-            }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #0d9488; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
             .section-title {
-                font-size: 11pt;
-                font-weight: bold;
-                background: #e8e8e8;
-                padding: 6px 10px;
-                border-left: 4px solid #14b8a6;
-                margin: 20px 0 10px;
+                font-size: 9pt; font-weight: bold; background: #e8e8e8;
+                padding: 2px 6px; border-left: 3px solid #14b8a6; margin: 6px 0 3px;
             }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 9.5pt;
-                margin-bottom: 15px;
-            }
-            th {
-                background: #14b8a6;
-                color: white;
-                padding: 8px 6px;
-                text-align: left;
-                border: 1px solid #0d9488;
-                font-size: 9pt;
-            }
-            td {
-                padding: 6px;
-                border: 1px solid #ddd;
-                vertical-align: top;
-            }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #14b8a6; color: white; padding: 4px 5px; text-align: left; border: 1px solid #0d9488; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #f9fafb; }
+            
             .badge-status {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 10px;
-                font-size: 8.5pt;
-                font-weight: bold;
+                display: inline-block; padding: 1px 6px; border-radius: 8px;
+                font-size: 7.5pt; font-weight: bold;
             }
             .badge-status.finalizado { background: #d1fae5; color: #065f46; }
             .badge-status.andamento { background: #fef3c7; color: #92400e; }
             
-            /* ===== ASSINATURA COM CARIMBO SOBREPOSTO ===== */
-            .assinaturas {
-                display: flex;
-                justify-content: center;
-                margin-top: 50px;
-                gap: 40px;
-            }
-            .assinatura {
-                flex: 0 0 60%;
-                text-align: center;
-            }
+            /* 🖋️ Assinatura com carimbo colado na linha */
+            .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            
             .assinatura-container-relatorio {
                 position: relative;
-                border-bottom: 1px solid #000;
-                min-height: 22mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 3px;
+                padding-bottom: 0;
             }
+            
+            .assinatura-container-relatorio::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+            
             .assinatura-img {
-                max-height: 18mm;
+                max-height: 14mm;
                 max-width: 100%;
                 object-fit: contain;
                 position: relative;
-                z-index: 1;
-            }
-            .carimbo-overlay {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                max-height: 20mm;
-                max-width: 60%;
-                object-fit: contain;
-                opacity: 0.85;
-                pointer-events: none;
                 z-index: 2;
-            }
-            .assinatura-linha {
-                border-top: none;
-                padding-top: 5px;
-                font-size: 10pt;
-                margin-top: 4px;
+                margin-bottom: 1mm;
             }
             
-            .footer {
-                text-align: center;
-                margin-top: 30px;
-                padding-top: 10px;
-                border-top: 1px solid #ccc;
-                font-size: 8pt;
-                color: #666;
+            .carimbo-overlay {
+                position: absolute;
+                bottom: 1mm;
+                left: 50%;
+                transform: translateX(-50%);
+                max-height: 15mm;
+                max-width: 55mm;
+                object-fit: contain;
+                opacity: 0.95;
+                pointer-events: none;
+                z-index: 1;
             }
-            .footer p { margin: 2px 0; }
-            .registro-info {
-                font-size: 9pt;
-                color: #666;
-                margin-top: 20px;
-                text-align: center;
-            }
+            
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
+            
             .btn-print {
-                display: block;
-                margin: 20px auto;
-                padding: 12px 30px;
-                background: #14b8a6;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-weight: bold;
-                cursor: pointer;
-                font-size: 14px;
-                font-family: Arial, sans-serif;
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #14b8a6; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #0d9488; }
-            @media print {
-                .no-print { display: none !important; }
-                body { padding: 0; }
-            }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -4152,7 +4093,7 @@ function gerarHTMLRelatorioPsicologia(data) {
         <div class="header">
             <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Psicologia</p>
+            <p>Sistema de Atendimentos — Psicologia</p>
         </div>
         
         <div class="titulo">🧠 ${titulo}</div>

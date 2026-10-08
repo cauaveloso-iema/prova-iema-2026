@@ -3724,7 +3724,7 @@ class SetorPedagogico {
     }
     
     // ============================================
-    // 🖨️ GERAR HTML DA IMPRESSÃO 2ª CHAMADA (PADRÃO GESTÃO GERAL)
+    // 🖨️ GERAR HTML DA IMPRESSÃO 2ª CHAMADA (PADRÃO UNIFICADO)
     // ============================================
     gerarHTMLImpressaoSegundaChamada(a, qrCodeUrl) {
         const logo = '/uploads/logo-iema.png';
@@ -3761,7 +3761,7 @@ class SetorPedagogico {
             </div>
         ` : '';
         
-        // ========== HORÁRIO DE ENTRADA (se houver) ==========
+        // ========== HORÁRIO DE ENTRADA ==========
         const horariosHTML = a.horarioEntrada ? `
             <div class="info-grid">
                 <div class="info-item">
@@ -3770,7 +3770,7 @@ class SetorPedagogico {
                 </div>
             </div>` : '';
         
-        // ========== HTML FINAL (OTIMIZADO PARA 1 PÁGINA) ==========
+        // ========== HTML FINAL ==========
         return `<!DOCTYPE html>
         <html lang="pt-BR">
         <head>
@@ -3789,7 +3789,7 @@ class SetorPedagogico {
                     color: #000;
                 }
                 
-                /* ========== CABEÇALHO COMPACTO ========== */
+                /* ========== CABEÇALHO ========== */
                 .header {
                     text-align: center;
                     border-bottom: 1.5px double #000;
@@ -3920,49 +3920,60 @@ class SetorPedagogico {
                     word-wrap: break-word;
                 }
                 
-                /* ========== ASSINATURA COM CARIMBO SOBREPOSTO ========== */
+                /* 🖋️ DUAS ASSINATURAS LADO A LADO */
                 .assinaturas {
                     display: flex;
                     justify-content: space-around;
-                    margin-top: 15px;
-                    gap: 15px;
+                    margin-top: 25px;
+                    gap: 20px;
                 }
                 .assinatura {
-                    flex: 1;
+                    flex: 0 0 42%;
                     text-align: center;
-                    font-size: 8pt;
-                    position: relative;
                 }
-                .assinatura-container {
+                
+                .assinatura-container-relatorio {
                     position: relative;
-                    border-bottom: 1px solid #000;
-                    min-height: 14mm;
+                    min-height: 18mm;
                     display: flex;
                     align-items: flex-end;
                     justify-content: center;
-                    padding-bottom: 2px;
+                    padding-bottom: 0;
                 }
+                
+                .assinatura-container-relatorio::after {
+                    content: '';
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    border-bottom: 1px solid #000;
+                }
+                
                 .assinatura-img {
-                    max-height: 12mm;
+                    max-height: 14mm;
                     max-width: 100%;
                     object-fit: contain;
                     position: relative;
-                    z-index: 1;
+                    z-index: 2;
+                    margin-bottom: 1mm;
                 }
+                
                 .carimbo-overlay {
                     position: absolute;
-                    top: 50%;
+                    bottom: 1mm;
                     left: 50%;
-                    transform: translate(-50%, -50%);
-                    max-height: 13mm;
-                    max-width: 55%;
+                    transform: translateX(-50%);
+                    max-height: 15mm;
+                    max-width: 45mm;
                     object-fit: contain;
-                    opacity: 0.85;
+                    opacity: 0.95;
                     pointer-events: none;
-                    z-index: 2;
+                    z-index: 1;
                 }
+                
                 .assinatura-linha {
-                    padding-top: 2px;
+                    padding-top: 3px;
                     font-size: 8pt;
                     margin-top: 2px;
                 }
@@ -4034,8 +4045,8 @@ class SetorPedagogico {
             
             <div class="aluno-box">
                 <img class="aluno-foto" src="${this.gerarAvatarSVG(a.alunoNome)}" 
-                     alt="${this.escapeHtml(a.alunoNome)}"
-                     onerror="this.onerror=null; this.src='${this.gerarAvatarSVG(a.alunoNome)}'">
+                    alt="${this.escapeHtml(a.alunoNome)}"
+                    onerror="this.onerror=null; this.src='${this.gerarAvatarSVG(a.alunoNome)}'">
                 <div class="aluno-info">
                     <div class="aluno-nome">${this.escapeHtml(a.alunoNome)}</div>
                     <div class="aluno-detalhes">
@@ -4077,13 +4088,19 @@ class SetorPedagogico {
                 </div>
             ` : ''}
             
+            <!-- 🖋️ DUAS ASSINATURAS LADO A LADO -->
             <div class="assinaturas">
                 <div class="assinatura">
-                    <div class="assinatura-container">
+                    <div class="assinatura-container-relatorio">
                         ${assinaturaHTML}
+                    </div>
+                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                </div>
+                <div class="assinatura">
+                    <div class="assinatura-container-relatorio">
                         <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
                     </div>
-                    <div class="assinatura-linha">Assinatura do Responsável / Setor Pedagógico</div>
+                    <div class="assinatura-linha">Setor Pedagógico</div>
                 </div>
             </div>
             

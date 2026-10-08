@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AtendimentoBiblioteca = require('../models/AtendimentoBiblioteca');
+const ConfiguracaoBiblioteca = require('../models/ConfiguracaoBiblioteca');
 
 // ============================================
 // MIDDLEWARES
@@ -40,15 +41,10 @@ const verificarBiblioteca = (req, res, next) => {
 // ============================================
 // HELPER: FILTRO DE DATA COM TIMEZONE DE BRASÍLIA
 // ============================================
-/**
- * Monta o filtro de data considerando o timezone de Brasília (GMT-3).
- * Evita o bug de `new Date('YYYY-MM-DD')` que é interpretado como UTC.
- */
 function montarFiltroData(dataInicio, dataFim) {
   const filtro = {};
 
   if (dataInicio) {
-    // Se já vier com T (ISO completo), usa direto. Senão, força 00:00:00 de Brasília
     const inicioFormatado = dataInicio.includes('T')
       ? dataInicio
       : `${dataInicio}T00:00:00.000-03:00`;
@@ -56,7 +52,6 @@ function montarFiltroData(dataInicio, dataFim) {
   }
 
   if (dataFim) {
-    // Se já vier com T (ISO completo), usa direto. Senão, força 23:59:59.999 de Brasília
     const fimFormatado = dataFim.includes('T')
       ? dataFim
       : `${dataFim}T23:59:59.999-03:00`;
@@ -71,6 +66,67 @@ function montarFiltroData(dataInicio, dataFim) {
 // ============================================
 router.get('/health', (req, res) => {
   res.json({ success: true, status: 'online', service: 'Biblioteca' });
+});
+
+// ============================================
+// ⚙️ CONFIGURAÇÃO DA BIBLIOTECA
+// ============================================
+router.get('/configuracao', authenticateToken, verificarBiblioteca, async (req, res) => {
+  try {
+    const config = await ConfiguracaoBiblioteca.getConfig();
+    res.json({
+      success: true,
+      configuracao: {
+        visitasAbertas: config.visitasAbertas,
+        mensagemFechado: config.mensagemFechado,
+        horarioAbertura: config.horarioAbertura,
+        horarioFechamento: config.horarioFechamento,
+        atualizadoPor: config.atualizadoPorNome || '',
+        updatedAt: config.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/configuracao', authenticateToken, verificarBiblioteca, async (req, res) => {
+  try {
+    const {
+      visitasAbertas,
+      mensagemFechado,
+      horarioAbertura,
+      horarioFechamento
+    } = req.body;
+
+    const config = await ConfiguracaoBiblioteca.getConfig();
+
+    if (typeof visitasAbertas === 'boolean') config.visitasAbertas = visitasAbertas;
+    if (typeof mensagemFechado === 'string') config.mensagemFechado = mensagemFechado;
+    if (typeof horarioAbertura === 'string') config.horarioAbertura = horarioAbertura;
+    if (typeof horarioFechamento === 'string') config.horarioFechamento = horarioFechamento;
+
+    config.atualizadoPor = req.userId;
+    config.atualizadoPorNome = req.userNome || 'Biblioteca';
+    config.updatedAt = new Date();
+
+    await config.save();
+
+    res.json({
+      success: true,
+      message: 'Configuração atualizada com sucesso!',
+      configuracao: {
+        visitasAbertas: config.visitasAbertas,
+        mensagemFechado: config.mensagemFechado,
+        horarioAbertura: config.horarioAbertura,
+        horarioFechamento: config.horarioFechamento,
+        atualizadoPor: config.atualizadoPorNome,
+        updatedAt: config.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ============================================
@@ -178,6 +234,16 @@ router.get('/aluno/:id', authenticateToken, verificarBiblioteca, async (req, res
 // ============================================
 router.post('/entrada', authenticateToken, verificarBiblioteca, async (req, res) => {
   try {
+    // 🔒 VALIDA SE AS VISITAS ESTÃO ABERTAS
+    const config = await ConfiguracaoBiblioteca.getConfig();
+    if (!config.visitasAbertas) {
+      return res.status(403).json({
+        success: false,
+        error: config.mensagemFechado || 'A biblioteca está fechada para novas visitas.',
+        fechado: true
+      });
+    }
+
     const {
       alunoId,
       motivoVisita,

@@ -5,7 +5,6 @@
 // ============================================
 // 🚫 BLOQUEAR ALERTS NATIVOS (KODULAR/WEBVIEW)
 // ============================================
-// Sobrescreve window.alert para usar toast customizado
 window.alert = function(mensagem) {
     console.warn('⚠️ alert() nativo bloqueado. Use mostrarToast()');
     if (typeof mostrarToast === 'function') {
@@ -13,11 +12,8 @@ window.alert = function(mensagem) {
     }
 };
 
-// Sobrescreve window.confirm (assíncrono)
 window.confirm = function(mensagem) {
     console.warn('⚠️ confirm() nativo bloqueado. Use await confirmar()');
-    // Retorna true automaticamente para não quebrar o fluxo
-    // (melhor trocar por confirmar() manualmente)
     return true;
 };
 
@@ -25,7 +21,6 @@ window.prompt = function(mensagem, valorPadrao) {
     console.warn('⚠️ prompt() nativo bloqueado.');
     return null;
 };
-
 
 let token = localStorage.getItem('auth_token');
 let currentAluno = null;
@@ -106,7 +101,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   safeSetText('userName', userData.nome || 'Biblioteca');
   safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
   
-  // Data de hoje no formulário
   const agora = new Date();
   const offset = agora.getTimezoneOffset() * 60000;
   const dataLocal = new Date(agora.getTime() - offset);
@@ -117,7 +111,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([
     carregarFotoPerfil(),
     carregarTurmasManual(),
-    carregarTurmasRelatorio()
+    carregarTurmasRelatorio(),
+    carregarConfiguracaoBiblioteca()
   ]);
   
   await iniciarScannerAutomatico();
@@ -130,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   safeGet('registro-tab')?.addEventListener('shown.bs.tab', () => {
     if (modoAtual === 'automatico') iniciarScannerAutomatico();
   });
+  safeGet('config-tab')?.addEventListener('shown.bs.tab', carregarConfiguracaoBiblioteca);
   
   // Eventos
   safeGet('filtroTurmaManual')?.addEventListener('change', carregarAlunosPorTurma);
@@ -139,7 +135,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (safeGet('ativos-tab')?.classList.contains('active')) carregarAtendimentosAtivos();
   }, 30000);
   
-  // 🔥 INICIAR SISTEMA DE NOTIFICAÇÕES (IGUAL AO PROTAGONISMO)
   if (safeGet('notificacoesBtn')) {
     iniciarNotificacoes();
   }
@@ -327,7 +322,6 @@ async function buscarAluno(id) {
     
     currentAluno = d.aluno;
     
-    // Foto
     const foto = safeGet('alunoFoto');
     if (foto) {
       foto.onerror = null;
@@ -427,7 +421,11 @@ async function registrarEntrada() {
       if (modoAtual === 'automatico') reiniciarScanner();
       carregarAtendimentosAtivos();
     } else {
-      mostrarToast('❌ ' + d.error, 'error');
+      if (d.fechado) {
+        mostrarToast('🔒 ' + d.error, 'warning');
+      } else {
+        mostrarToast('❌ ' + d.error, 'error');
+      }
     }
   } catch (e) {
     mostrarToast('Erro ao registrar', 'error');
@@ -558,7 +556,6 @@ async function carregarDashboard() {
     safeSetText('totalMes', d.metricas.mes);
     safeSetText('totalGeral', d.metricas.total);
     
-    // Chart Visitas
     const ctxV = safeGet('chartVisitas');
     if (ctxV && d.tendencias.ultimos7Dias) {
       if (dashboardCharts.visitas) try { dashboardCharts.visitas.destroy(); } catch(e){}
@@ -577,7 +574,6 @@ async function carregarDashboard() {
       });
     }
     
-    // Chart Motivos
     const ctxM = safeGet('chartMotivos');
     if (ctxM && d.tendencias.porMotivo) {
       if (dashboardCharts.motivos) try { dashboardCharts.motivos.destroy(); } catch(e){}
@@ -594,7 +590,6 @@ async function carregarDashboard() {
       });
     }
     
-    // Chart Horário
     const ctxH = safeGet('chartHorario');
     if (ctxH && d.tendencias.distribuicaoHoraria) {
       if (dashboardCharts.horario) try { dashboardCharts.horario.destroy(); } catch(e){}
@@ -615,7 +610,6 @@ async function carregarDashboard() {
       });
     }
     
-    // Alunos Frequentes
     const af = safeGet('alunosFrequentes');
     if (af && d.tendencias.alunosFrequentes) {
       if (d.tendencias.alunosFrequentes.length > 0) {
@@ -648,7 +642,6 @@ async function carregarAlunosRelatorio() {
     const r = await fetch('/api/biblioteca/turmas', { headers: { 'Authorization': `Bearer ${token}` } });
     const d = await r.json();
     if (!d.success) return;
-    // Aqui poderíamos carregar todos os alunos — simplificado
     safeGet('filtroAluno').innerHTML = '<option value="">Use o QR Code para buscar</option>';
   } catch (e) {}
 }
@@ -742,7 +735,7 @@ function exportarCSV() {
   link.click();
 }
 
-// ============ EXPORTAR PDF (VERSÃO COMPLETA COM DADOS) ============
+// ============ EXPORTAR PDF (PADRONIZADO + CARIMBO) ============
 function exportarPDF() {
     if (!relatorioData) { 
         mostrarToast('⚠️ Gere um relatório primeiro', 'warning'); 
@@ -754,9 +747,6 @@ function exportarPDF() {
     const d = relatorioData;
     const tipo = d.aluno ? 'aluno' : (d.turma ? 'turma' : 'geral');
     
-    // ============================================
-    // TÍTULO DINÂMICO
-    // ============================================
     let titulo = 'Relatório Geral de Atendimentos';
     let subtitulo = '';
     if (tipo === 'turma') {
@@ -771,10 +761,8 @@ function exportarPDF() {
     
     const dataGeracao = new Date().toLocaleString('pt-BR');
     const logoIema = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_gpeda.ico';
     
-    // ============================================
-    // ESTATÍSTICAS
-    // ============================================
     let statsHTML = '';
     if (tipo === 'geral') {
         statsHTML = `
@@ -821,12 +809,9 @@ function exportarPDF() {
         `;
     }
     
-    // ============================================
-    // TABELAS COM DADOS
-    // ============================================
     let tabelaHTML = '';
     
-    // ---- RELATÓRIO GERAL ----
+    // ---- GERAL ----
     if (tipo === 'geral') {
         tabelaHTML = `
             <div class="section-title">📊 Distribuição por Motivo</div>
@@ -899,7 +884,7 @@ function exportarPDF() {
         `;
     }
     
-    // ---- RELATÓRIO POR TURMA ----
+    // ---- TURMA ----
     else if (tipo === 'turma') {
         tabelaHTML = `
             <div class="section-title">👥 Atendimentos por Aluno</div>
@@ -950,7 +935,7 @@ function exportarPDF() {
         `;
     }
     
-    // ---- RELATÓRIO POR ALUNO ----
+    // ---- ALUNO ----
     else if (tipo === 'aluno') {
         tabelaHTML = `
             <div class="section-title">📊 Distribuição por Motivo</div>
@@ -1001,9 +986,6 @@ function exportarPDF() {
         `;
     }
     
-    // ============================================
-    // MONTAR HTML FINAL
-    // ============================================
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html>
     <html lang="pt-BR">
@@ -1011,95 +993,89 @@ function exportarPDF() {
         <meta charset="UTF-8">
         <title>${titulo}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
             
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
-            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
-            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
             
-            .titulo { 
-                text-align: center; 
-                font-size: 14pt; 
-                font-weight: bold; 
-                background: #e0f2fe; 
-                padding: 10px; 
-                border: 2px solid #000; 
-                margin: 15px 0; 
-                text-transform: uppercase; 
-                letter-spacing: 1px; 
+            .titulo {
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #e0f2fe; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
             
-            .stats { 
-                display: flex; 
-                gap: 15px; 
-                margin: 15px 0 20px; 
-                padding: 15px; 
-                background: #f0f9ff; 
-                border-radius: 8px; 
-                border: 1px solid #bae6fd; 
+            .stats {
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #f0f9ff; border-radius: 5px; border: 1px solid #bae6fd;
             }
             .stat { text-align: center; flex: 1; border-right: 1px solid #bae6fd; }
             .stat:last-child { border-right: none; }
-            .stat-value { font-size: 22pt; font-weight: bold; color: #0ea5e9; line-height: 1; }
-            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #0ea5e9; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
             
-            .section-title { 
-                font-size: 11pt; 
-                font-weight: bold; 
-                background: #e8e8e8; 
-                padding: 6px 10px; 
-                border-left: 4px solid #0ea5e9; 
-                margin: 20px 0 10px; 
+            .section-title {
+                font-size: 9pt; font-weight: bold; background: #e8e8e8;
+                padding: 2px 6px; border-left: 3px solid #0ea5e9; margin: 6px 0 3px;
             }
             
-            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
-            th { 
-                background: #0ea5e9; 
-                color: white; 
-                padding: 8px 6px; 
-                text-align: left; 
-                border: 1px solid #0284c7; 
-                font-size: 9pt; 
-            }
-            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
-            tr:nth-child(even) { background: #f9fafb; }
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #0ea5e9; color: white; padding: 4px 5px; text-align: left; border: 1px solid #0284c7; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
+            tr:nth-child(even) { background: #f0f9ff; }
             
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 50px; gap: 40px; }
+            /* 🖋️ Assinaturas com carimbo — CORRIGIDO */
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 30px; }
             .assinatura { flex: 1; text-align: center; }
-            .assinatura-linha { border-top: 1px solid #000; padding-top: 5px; font-size: 10pt; }
-            
-            .footer { 
-                text-align: center; 
-                margin-top: 30px; 
-                padding-top: 10px; 
-                border-top: 1px solid #ccc; 
-                font-size: 8pt; 
-                color: #666; 
+
+            .assinatura-container-relatorio {
+                position: relative;
+                min-height: 14mm;         
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 2px;
             }
-            .footer p { margin: 2px 0; }
+
+            .assinatura-container-relatorio::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+
+            .carimbo-overlay {
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                max-height: 11mm;         
+                max-width: 42mm;          
+                object-fit: contain;
+                opacity: 0.9;
+                pointer-events: none;
+                z-index: 1;
+            }
+
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
             
-            .btn-print { 
-                display: block; 
-                margin: 20px auto; 
-                padding: 12px 30px; 
-                background: #0ea5e9; 
-                color: white; 
-                border: none; 
-                border-radius: 8px; 
-                font-weight: bold; 
-                cursor: pointer; 
-                font-size: 14px; 
-                font-family: Arial, sans-serif; 
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            
+            .btn-print {
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #0ea5e9; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #0284c7; }
             
-            @media print { 
-                .no-print { display: none !important; } 
-                body { padding: 0; } 
-            }
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -1108,7 +1084,7 @@ function exportarPDF() {
         <div class="header">
             <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Biblioteca</p>
+            <p>Sistema de Atendimentos — Biblioteca</p>
         </div>
         
         <div class="titulo">📚 ${titulo}</div>
@@ -1119,9 +1095,13 @@ function exportarPDF() {
         
         <div class="assinaturas">
             <div class="assinatura">
+                <div class="assinatura-container-relatorio"></div>
                 <div class="assinatura-linha">Biblioteca</div>
             </div>
             <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
                 <div class="assinatura-linha">Coordenação / Gestão</div>
             </div>
         </div>
@@ -1136,47 +1116,218 @@ function exportarPDF() {
     win.onload = () => setTimeout(() => win.print(), 500);
 }
 
-// ========== IMPRIMIR ATIVOS ==========
+// ========== IMPRIMIR ATIVOS (PADRONIZADO + CARIMBO) ==========
 async function imprimirAtendimentosAtivos() {
   try {
-    const r = await fetch('/api/biblioteca/atendimentos-ativos', { headers: { 'Authorization': `Bearer ${token}` } });
+    const r = await fetch('/api/biblioteca/atendimentos-ativos', { 
+      headers: { 'Authorization': `Bearer ${token}` } 
+    });
     const d = await r.json();
+    
     if (!d.success || d.atendimentos.length === 0) {
-      mostrarToast('Nenhum aluno em visita', 'warning'); return;
+      mostrarToast('⚠️ Nenhum aluno em visita no momento', 'warning'); 
+      return;
     }
     
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    const logoIema = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_gpeda.ico';
+    const total = d.atendimentos.length;
+    
+    const tempoMedio = Math.round(
+      d.atendimentos.reduce((acc, a) => acc + (a.tempoAtendimento || 0), 0) / total
+    );
+    
     const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Alunos em Visita</title>
-      <style>
-        @page { size: A4; margin: 12mm; }
-        body { font-family: 'Times New Roman', serif; }
-        .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
-        .header h1 { font-size: 13pt; text-transform: uppercase; }
-        .titulo { text-align: center; font-size: 14pt; background: #fef3c7; padding: 10px; border: 2px solid #000; margin: 15px 0; text-transform: uppercase; }
-        table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-        th { background: #f59e0b; color: white; padding: 8px; text-align: left; border: 1px solid #d97706; }
-        td { padding: 8px; border: 1px solid #ddd; }
-        .btn-print { display: block; margin: 20px auto; padding: 12px 30px; background: #059669; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        @media print { .btn-print { display: none; } }
-      </style></head><body>
-      <button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
-      <div class="header"><h1>IEMA Pleno: São Luís - Centro</h1><p>Biblioteca</p></div>
-      <div class="titulo">⏳ Alunos em Visita — ${new Date().toLocaleDateString('pt-BR')}</div>
-      <table>
-        <thead><tr><th>#</th><th>Aluno</th><th>Turma</th><th>Motivo</th><th>Tempo</th></tr></thead>
-        <tbody>${d.atendimentos.map((a,i) => `
-          <tr>
-            <td>${i+1}</td>
-            <td><strong>${escapeHTML(a.alunoNome)}</strong></td>
-            <td>${escapeHTML(a.alunoTurma||'')}</td>
-            <td>${escapeHTML(a.motivoLabel)}</td>
-            <td>${a.tempoAtendimento} min</td>
-          </tr>`).join('')}</tbody>
-      </table>
-      </body></html>`);
+    win.document.write(`<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Alunos em Visita - Biblioteca</title>
+        <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo {
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #fef3c7; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
+            }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
+            .stats {
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #fffbeb; border-radius: 5px; border: 1px solid #fcd34d;
+            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #fcd34d; }
+            .stat:last-child { border-right: none; }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #d97706; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
+            .section-title {
+                font-size: 9pt; font-weight: bold; background: #e8e8e8;
+                padding: 2px 6px; border-left: 3px solid #f59e0b; margin: 6px 0 3px;
+            }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #f59e0b; color: white; padding: 4px 5px; text-align: left; border: 1px solid #d97706; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: middle; }
+            tr:nth-child(even) { background: #fffbeb; }
+            
+            .badge-tempo {
+                display: inline-block; padding: 1px 6px; border-radius: 8px;
+                font-size: 7.5pt; font-weight: bold;
+            }
+            .badge-ok { background: #d1fae5; color: #065f46; }
+            .badge-medio { background: #fef3c7; color: #92400e; }
+            .badge-alto { background: #fee2e2; color: #991b1b; }
+            
+            /* 🖋️ Assinaturas com carimbo — CORRIGIDO */
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 30px; }
+            .assinatura { flex: 1; text-align: center; }
+
+            .assinatura-container-relatorio {
+                position: relative;
+                min-height: 14mm;        
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 2px;
+            }
+
+            .assinatura-container-relatorio::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+
+            .carimbo-overlay {
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                max-height: 11mm;         
+                max-width: 42mm;          
+                object-fit: contain;
+                opacity: 0.9;
+                pointer-events: none;
+                z-index: 1;
+            }
+
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            
+            .btn-print {
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #f59e0b; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
+            }
+            .btn-print:hover { background: #d97706; }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p>Sistema de Atendimentos — Biblioteca</p>
+        </div>
+        
+        <div class="titulo">⏳ Alunos em Visita</div>
+        <div class="subtitulo">Consulta em tempo real — ${new Date().toLocaleDateString('pt-BR')}</div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">${total}</div>
+                <div class="stat-label">Alunos em Visita</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">${tempoMedio}</div>
+                <div class="stat-label">Tempo Médio (min)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="stat-label">Horário do Relatório</div>
+            </div>
+        </div>
+        
+        <div class="section-title">📋 Lista de Alunos na Biblioteca</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:30px;text-align:center;">#</th>
+                    <th>Aluno</th>
+                    <th style="width:70px;">Turma</th>
+                    <th>Motivo</th>
+                    <th style="width:80px;text-align:center;">Entrada</th>
+                    <th style="width:70px;text-align:center;">Tempo</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${d.atendimentos.map((a, i) => {
+                    const tempo = a.tempoAtendimento || 0;
+                    let badgeClass = 'badge-ok';
+                    if (tempo >= 60 && tempo < 120) badgeClass = 'badge-medio';
+                    else if (tempo >= 120) badgeClass = 'badge-alto';
+                    
+                    const horarioEntrada = a.dataHoraEntrada 
+                        ? new Date(a.dataHoraEntrada).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                        : '-';
+                    
+                    return `
+                        <tr>
+                            <td style="text-align:center;"><strong>${i + 1}</strong></td>
+                            <td><strong>${escapeHTML(a.alunoNome)}</strong></td>
+                            <td>${escapeHTML(a.alunoTurma || '-')}</td>
+                            <td>${escapeHTML(a.motivoLabel || '-')}</td>
+                            <td style="text-align:center;">${horarioEntrada}</td>
+                            <td style="text-align:center;">
+                                <span class="badge-tempo ${badgeClass}">${tempo} min</span>
+                            </td>
+                        </tr>`;
+                }).join('')}
+            </tbody>
+        </table>
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio"></div>
+                <div class="assinatura-linha">Biblioteca</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Coordenação / Gestão</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Relatório gerado em <strong>${dataGeracao}</strong></p>
+            <p>EducaPleno — Sistema de Atendimentos Biblioteca</p>
+        </div>
+    </body>
+    </html>`);
     win.document.close();
     win.onload = () => setTimeout(() => win.print(), 500);
-  } catch (e) {}
+  } catch (e) {
+    console.error('Erro ao imprimir ativos:', e);
+    mostrarToast('❌ Erro ao gerar PDF', 'error');
+  }
 }
 
 // ========== QR CODE ==========
@@ -1213,18 +1364,160 @@ function imprimirQRCode() {
 }
 
 // ============================================
-// 🔔 SISTEMA DE NOTIFICAÇÕES INTERNAS (CORRIGIDO)
+// ⚙️ CONFIGURAÇÃO DA BIBLIOTECA
+// ============================================
+
+let __configBiblioteca = {
+    visitasAbertas: true,
+    mensagemFechado: '',
+    horarioAbertura: '07:00',
+    horarioFechamento: '17:00'
+};
+
+async function carregarConfiguracaoBiblioteca() {
+    try {
+        const r = await fetch('/api/biblioteca/configuracao', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const d = await r.json();
+
+        if (d.success) {
+            __configBiblioteca = d.configuracao;
+
+            const chk = safeGet('configVisitasAbertas');
+            if (chk) chk.checked = d.configuracao.visitasAbertas;
+
+            const msg = safeGet('configMensagemFechado');
+            if (msg) msg.value = d.configuracao.mensagemFechado || '';
+
+            const hab = safeGet('configHorarioAbertura');
+            if (hab) hab.value = d.configuracao.horarioAbertura || '07:00';
+
+            const hfe = safeGet('configHorarioFechamento');
+            if (hfe) hfe.value = d.configuracao.horarioFechamento || '17:00';
+
+            atualizarStatusBibliotecaVisual(d.configuracao.visitasAbertas);
+        }
+    } catch (e) {
+        console.error('Erro ao carregar configuração:', e);
+    }
+}
+
+function atualizarStatusBibliotecaVisual(aberta) {
+    const badge = safeGet('statusConfigBadge');
+    if (badge) {
+        if (aberta) {
+            badge.style.background = '#d1fae5';
+            badge.style.color = '#065f46';
+            badge.innerHTML = '<i class="fas fa-check-circle"></i> Biblioteca ABERTA para visitas';
+        } else {
+            badge.style.background = '#fee2e2';
+            badge.style.color = '#991b1b';
+            badge.innerHTML = '<i class="fas fa-times-circle"></i> Biblioteca FECHADA para visitas';
+        }
+    }
+
+    const alerta = safeGet('statusBibliotecaAlerta');
+    if (alerta) {
+        if (aberta) {
+            alerta.style.display = 'none';
+        } else {
+            alerta.style.display = 'block';
+            alerta.innerHTML = `
+                <div class="alert alert-warning" style="border-radius: 12px; border-left: 5px solid #f59e0b;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Biblioteca fechada para novas visitas</strong><br>
+                    <small>Alunos não conseguem registrar entrada na página pública no momento.</small>
+                    <br><br>
+                    <button class="btn btn-sm btn-warning" onclick="document.getElementById('config-tab').click()">
+                        <i class="fas fa-cog"></i> Abrir Configurações
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+async function atualizarConfiguracaoBiblioteca() {
+    const aberta = safeGet('configVisitasAbertas')?.checked;
+
+    try {
+        const r = await fetch('/api/biblioteca/configuracao', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ visitasAbertas: aberta })
+        });
+        const d = await r.json();
+
+        if (d.success) {
+            __configBiblioteca = d.configuracao;
+            atualizarStatusBibliotecaVisual(aberta);
+
+            mostrarToast(
+                aberta
+                    ? '✅ Biblioteca ABERTA para visitas'
+                    : '🔒 Biblioteca FECHADA para visitas',
+                aberta ? 'success' : 'warning'
+            );
+        } else {
+            mostrarToast('❌ ' + (d.error || 'Erro ao atualizar'), 'error');
+            const chk = safeGet('configVisitasAbertas');
+            if (chk) chk.checked = !aberta;
+        }
+    } catch (e) {
+        console.error(e);
+        mostrarToast('❌ Erro de conexão', 'error');
+        const chk = safeGet('configVisitasAbertas');
+        if (chk) chk.checked = !aberta;
+    }
+}
+
+async function salvarConfiguracaoBiblioteca() {
+    try {
+        const dados = {
+            visitasAbertas: safeGet('configVisitasAbertas')?.checked,
+            mensagemFechado: safeGet('configMensagemFechado')?.value || '',
+            horarioAbertura: safeGet('configHorarioAbertura')?.value || '07:00',
+            horarioFechamento: safeGet('configHorarioFechamento')?.value || '17:00'
+        };
+
+        const r = await fetch('/api/biblioteca/configuracao', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(dados)
+        });
+        const d = await r.json();
+
+        if (d.success) {
+            __configBiblioteca = d.configuracao;
+            atualizarStatusBibliotecaVisual(d.configuracao.visitasAbertas);
+            mostrarToast('✅ Configurações salvas!', 'success');
+        } else {
+            mostrarToast('❌ ' + (d.error || 'Erro'), 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        mostrarToast('❌ Erro de conexão', 'error');
+    }
+}
+
+// ============================================
+// 🔔 SISTEMA DE NOTIFICAÇÕES INTERNAS
 // ============================================
 
 let notificacoesInterval;
 
-// Detectar WebView (Kodular)
 function isWebView() {
     return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
            (typeof window.AppInventor !== 'undefined');
 }
 
-// Mostrar notificação customizada (não trava o WebView)
 function mostrarNotificacao(mensagem, tipo = 'info') {
     if (!isWebView()) {
         mostrarToast(mensagem);
@@ -1278,9 +1571,6 @@ function mostrarNotificacao(mensagem, tipo = 'info') {
     document.body.appendChild(modal);
 }
 
-// ============================================
-// MODAL DE CONFIRMAÇÃO (SEM BOOTSTRAP - KODULAR SAFE)
-// ============================================
 function confirmar(mensagem) {
     return new Promise((resolve) => {
         const oldModal = document.getElementById('modalConfirmacaoCustom');
@@ -1332,7 +1622,6 @@ function confirmar(mensagem) {
 
         document.body.appendChild(modal);
 
-        // 🔥 Listeners diretos via onclick (mais confiável no WebView)
         modal.querySelector('#btn-confirmar-conf').onclick = function() {
             modal.remove();
             resolve(true);
@@ -1343,7 +1632,6 @@ function confirmar(mensagem) {
             resolve(false);
         };
 
-        // Fechar clicando fora
         modal.onclick = function(e) {
             if (e.target === modal) {
                 modal.remove();
@@ -1353,12 +1641,10 @@ function confirmar(mensagem) {
     });
 }
 
-// Inicializar sistema de notificações
 function iniciarNotificacoes() {
     carregarNotificacoes();
     notificacoesInterval = setInterval(carregarNotificacoes, 30000);
     
-    // Fechar dropdown ao clicar fora
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('notificacoesDropdown');
         const btn = document.getElementById('notificacoesBtn');
@@ -1455,7 +1741,6 @@ function renderizarNotificacoes(notificacoes) {
         const linkSeguro = escapeHTML(notif.link || '#');
         const idSeguro = String(notif._id);
 
-        // 🔥 onclick inline — mais confiável no WebView do Kodular
         html += `
             <div class="notificacao-item ${classeLida}" 
                  data-notif-id="${idSeguro}" 
@@ -1487,25 +1772,13 @@ function renderizarNotificacoes(notificacoes) {
                     ${notif.icone || '📋'}
                 </div>
                 <div class="notificacao-conteudo" style="flex: 1; min-width: 0;">
-                    <div class="notificacao-titulo" style="
-                        font-weight: 600;
-                        margin-bottom: 3px;
-                        font-size: 0.9rem;
-                        color: #1f2937;
-                    ">${escapeHTML(notif.titulo || '')}</div>
-                    <div class="notificacao-mensagem" style="
-                        font-size: 0.8rem;
-                        color: #6b7280;
-                        margin-bottom: 4px;
-                        line-height: 1.4;
-                    ">${escapeHTML(notif.mensagem || '')}</div>
-                    <div class="notificacao-tempo" style="
-                        font-size: 0.65rem;
-                        color: #9ca3af;
-                        display: flex;
-                        align-items: center;
-                        gap: 4px;
-                    ">
+                    <div class="notificacao-titulo" style="font-weight: 600; margin-bottom: 3px; font-size: 0.9rem; color: #1f2937;">
+                        ${escapeHTML(notif.titulo || '')}
+                    </div>
+                    <div class="notificacao-mensagem" style="font-size: 0.8rem; color: #6b7280; margin-bottom: 4px; line-height: 1.4;">
+                        ${escapeHTML(notif.mensagem || '')}
+                    </div>
+                    <div class="notificacao-tempo" style="font-size: 0.65rem; color: #9ca3af; display: flex; align-items: center; gap: 4px;">
                         <i class="far fa-clock"></i> ${tempoTexto}
                     </div>
                 </div>
@@ -1534,9 +1807,7 @@ function renderizarNotificacoes(notificacoes) {
                             transition: all 0.2s;
                             font-size: 12px;
                             z-index: 10;
-                        "
-                        onmouseover="this.style.opacity='1'; this.style.background='#fecaca';"
-                        onmouseout="this.style.opacity='0.7'; this.style.background='#fee2e2';">
+                        ">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -1546,11 +1817,8 @@ function renderizarNotificacoes(notificacoes) {
     lista.innerHTML = html;
 }
 
-// ========== EXCLUIR NOTIFICAÇÃO INDIVIDUAL ==========
-// ========== EXCLUIR NOTIFICAÇÃO INDIVIDUAL ==========
 async function excluirNotificacao(id, btnElement = null) {
     try {
-        // 🔥 Confirmação com modal HTML puro (funciona no Kodular)
         const confirmacao = await confirmar('🗑️ Deseja excluir esta notificação?');
         if (!confirmacao) return;
 
@@ -1560,7 +1828,6 @@ async function excluirNotificacao(id, btnElement = null) {
             return;
         }
 
-        // Feedback visual no botão
         if (btnElement) {
             btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             btnElement.disabled = true;
@@ -1574,7 +1841,6 @@ async function excluirNotificacao(id, btnElement = null) {
         const data = await response.json();
 
         if (data.success) {
-            // Remove o item da lista com animação
             const item = btnElement?.closest('.notificacao-item');
             if (item) {
                 item.style.transition = 'all 0.3s ease';
@@ -1583,7 +1849,6 @@ async function excluirNotificacao(id, btnElement = null) {
                 setTimeout(() => item.remove(), 300);
             }
 
-            // Atualiza o contador (badge)
             const badge = document.getElementById('notificacoesBadge');
             if (badge && badge.style.display !== 'none') {
                 const currentCount = parseInt(badge.textContent) || 0;
@@ -1597,7 +1862,6 @@ async function excluirNotificacao(id, btnElement = null) {
 
             mostrarToast('✅ Notificação excluída', 'success');
 
-            // Se a lista ficar vazia, recarrega
             const lista = document.getElementById('notificacoesLista');
             if (lista && lista.children.length === 0) {
                 carregarListaNotificacoes();
@@ -1610,7 +1874,6 @@ async function excluirNotificacao(id, btnElement = null) {
         console.error('❌ Erro ao excluir notificação:', error);
         mostrarToast('❌ ' + error.message, 'error');
         
-        // Restaura o botão em caso de erro
         if (btnElement) {
             btnElement.innerHTML = '<i class="fas fa-times"></i>';
             btnElement.disabled = false;
@@ -1622,7 +1885,6 @@ function abrirNotificacoes() {
     const dropdown = document.getElementById('notificacoesDropdown');
     if (!dropdown) return;
     
-    // Alternar entre display: block/none
     if (dropdown.style.display === 'block') {
         dropdown.style.display = 'none';
         dropdown.classList.remove('show');
@@ -1707,7 +1969,6 @@ async function limparMinhasNotificacoes(event) {
             return;
         }
 
-        // 🔥 USA confirmar() customizado (Kodular safe)
         const confirmacao = await confirmar('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
         if (!confirmacao) return;
 
@@ -1757,7 +2018,6 @@ function fecharNotificacoes() {
     }
 }
 
-// Limpar interval ao sair
 window.addEventListener('beforeunload', function() {
     if (notificacoesInterval) {
         clearInterval(notificacoesInterval);
@@ -1794,7 +2054,13 @@ window.abrirNotificacoes = abrirNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.logout = logout;
 
-// Exportar funções de notificações
+// 🔧 CONFIGURAÇÕES
+window.carregarConfiguracaoBiblioteca = carregarConfiguracaoBiblioteca;
+window.atualizarConfiguracaoBiblioteca = atualizarConfiguracaoBiblioteca;
+window.salvarConfiguracaoBiblioteca = salvarConfiguracaoBiblioteca;
+window.atualizarStatusBibliotecaVisual = atualizarStatusBibliotecaVisual;
+
+// Notificações
 window.excluirNotificacao = excluirNotificacao;
 window.abrirNotificacao = abrirNotificacao;
 window.limparMinhasNotificacoes = limparMinhasNotificacoes;

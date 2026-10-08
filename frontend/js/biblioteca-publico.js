@@ -5,7 +5,6 @@
 // ============================================
 // 🚫 BLOQUEAR ALERTS NATIVOS (KODULAR/WEBVIEW)
 // ============================================
-// Sobrescreve window.alert para usar toast customizado
 window.alert = function(mensagem) {
     console.warn('⚠️ alert() nativo bloqueado. Use mostrarToast()');
     if (typeof mostrarToast === 'function') {
@@ -13,11 +12,8 @@ window.alert = function(mensagem) {
     }
 };
 
-// Sobrescreve window.confirm (assíncrono)
 window.confirm = function(mensagem) {
     console.warn('⚠️ confirm() nativo bloqueado. Use await confirmar()');
-    // Retorna true automaticamente para não quebrar o fluxo
-    // (melhor trocar por confirmar() manualmente)
     return true;
 };
 
@@ -25,7 +21,6 @@ window.prompt = function(mensagem, valorPadrao) {
     console.warn('⚠️ prompt() nativo bloqueado.');
     return null;
 };
-
 
 let statusSistema = {};
 let cursos = [];
@@ -36,6 +31,9 @@ let motivoSelecionado = null;
 let scannerEntrada = null;
 let scannerSaida = null;
 let alunosLista = { entrada: [], saida: [] };
+
+// 🚦 Controle de status da biblioteca
+let __bibliotecaAberta = true;
 
 // ========== HELPERS ==========
 function safeGet(id) { return document.getElementById(id); }
@@ -53,7 +51,11 @@ function gerarAvatarSVG(nome) {
 document.addEventListener('DOMContentLoaded', async () => {
   await carregarStatus();
   await carregarCursosTurmas();
+  await verificarStatusAbertura();  // 🚦 Verifica se a biblioteca está aberta
   preencherSelects();
+  
+  // Verifica a cada 60 segundos
+  setInterval(verificarStatusAbertura, 60000);
 });
 
 async function carregarStatus() {
@@ -69,6 +71,66 @@ async function carregarStatus() {
       }
     }
   } catch (e) {}
+}
+
+// ============================================
+// 🚦 STATUS DE ABERTURA (visitas abertas/fechadas)
+// ============================================
+async function verificarStatusAbertura() {
+    try {
+        const r = await fetch('/api/biblioteca-publica/status-aberto');
+        const d = await r.json();
+
+        if (d.success) {
+            __bibliotecaAberta = d.visitasAbertas;
+
+            const aviso = safeGet('avisoStatusPublico');
+            if (aviso) {
+                if (!d.visitasAbertas) {
+                    aviso.style.display = 'block';
+                    aviso.innerHTML = `
+                        <div style="
+                            background: #fee2e2;
+                            border: 2px solid #dc2626;
+                            border-radius: 12px;
+                            padding: 16px;
+                            color: #991b1b;
+                            text-align: center;
+                        ">
+                            <i class="fas fa-lock" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+                            <strong style="font-size: 16px;">Biblioteca Fechada</strong>
+                            <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.4;">
+                                ${escapeHTML(d.mensagemFechado || 'A biblioteca está temporariamente fechada para novas visitas.')}
+                            </p>
+                            ${d.horarioAbertura && d.horarioFechamento ? `
+                                <p style="margin-top: 10px; font-size: 13px; color: #7f1d1d;">
+                                    <i class="fas fa-clock"></i> Funcionamento: ${d.horarioAbertura} às ${d.horarioFechamento}
+                                </p>
+                            ` : ''}
+                        </div>
+                    `;
+                } else {
+                    aviso.style.display = 'none';
+                }
+            }
+
+            // Bloqueia o botão de ENTRADA se estiver fechado
+            const btnEntrada = document.getElementById('btnRegistrarEntrada');
+            if (btnEntrada) {
+                if (!d.visitasAbertas) {
+                    btnEntrada.style.opacity = '0.5';
+                    btnEntrada.style.pointerEvents = 'none';
+                    btnEntrada.style.cursor = 'not-allowed';
+                } else {
+                    btnEntrada.style.opacity = '1';
+                    btnEntrada.style.pointerEvents = 'auto';
+                    btnEntrada.style.cursor = 'pointer';
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao verificar status:', e);
+    }
 }
 
 async function carregarCursosTurmas() {
@@ -95,6 +157,12 @@ function preencherSelects() {
 
 // ========== NAVEGAÇÃO ==========
 function mostrarSecao(secao) {
+  // 🚦 Bloqueia entrada se estiver fechada
+  if (secao === 'entrada' && !__bibliotecaAberta) {
+    mostrarErro('Biblioteca Fechada', 'A biblioteca está fechada para novas visitas no momento.');
+    return;
+  }
+
   document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
   safeGet('actionGrid').style.display = 'none';
   document.querySelector('.hero-section').style.display = 'none';
@@ -114,11 +182,9 @@ function voltarHome() {
   safeGet('actionGrid').style.display = 'grid';
   document.querySelector('.hero-section').style.display = 'block';
   
-  // Parar scanners
   pararScanner('entrada');
   pararScanner('saida');
   
-  // Reset
   resetEntrada();
   resetSaida();
   
@@ -378,6 +444,12 @@ function selecionarMotivoPublico(motivo) {
 
 // ========== CONFIRMAR ENTRADA ==========
 async function confirmarEntradaPublico() {
+  // 🚦 Verifica status antes de enviar
+  if (!__bibliotecaAberta) {
+    mostrarErro('Biblioteca Fechada', 'A biblioteca está fechada para novas visitas no momento.');
+    return;
+  }
+
   if (!motivoSelecionado) { mostrarErro('Atenção', 'Selecione o motivo da visita'); return; }
   if (motivoSelecionado === 'outros' && !safeGet('motivoOutrosPublico').value.trim()) {
     mostrarErro('Atenção', 'Especifique o motivo'); return;
@@ -401,7 +473,12 @@ async function confirmarEntradaPublico() {
     if (d.success) {
       mostrarSucesso('Entrada Registrada!', `Bem-vindo(a), ${alunoSelecionado.entrada.nome}!`);
     } else {
-      mostrarErro('Erro', d.error);
+      if (d.fechado) {
+        mostrarErro('Biblioteca Fechada', d.error);
+        await verificarStatusAbertura();
+      } else {
+        mostrarErro('Erro', d.error);
+      }
     }
   } catch (e) {
     mostrarErro('Erro', 'Erro de conexão');
@@ -466,3 +543,4 @@ window.confirmarEntradaPublico = confirmarEntradaPublico;
 window.confirmarSaidaPublico = confirmarSaidaPublico;
 window.fecharModalSucesso = fecharModalSucesso;
 window.fecharModalErro = fecharModalErro;
+window.verificarStatusAbertura = verificarStatusAbertura;

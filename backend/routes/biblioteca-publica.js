@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const AtendimentoBiblioteca = require('../models/AtendimentoBiblioteca');
+const ConfiguracaoBiblioteca = require('../models/ConfiguracaoBiblioteca');
 
 // ============================================
 // RATE LIMITING SIMPLES (por IP)
@@ -47,7 +48,7 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// STATUS
+// STATUS GERAL (visitas do dia)
 // ============================================
 router.get('/status', async (req, res) => {
   try {
@@ -66,6 +67,25 @@ router.get('/status', async (req, res) => {
         visitasHoje,
         emVisita
       }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🚦 STATUS DE ABERTURA (PÚBLICO)
+// ============================================
+router.get('/status-aberto', async (req, res) => {
+  try {
+    const config = await ConfiguracaoBiblioteca.getConfig();
+
+    res.json({
+      success: true,
+      visitasAbertas: config.visitasAbertas,
+      mensagemFechado: config.mensagemFechado,
+      horarioAbertura: config.horarioAbertura,
+      horarioFechamento: config.horarioFechamento
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -175,10 +195,20 @@ router.get('/aluno/:id', async (req, res) => {
 });
 
 // ============================================
-// REGISTRAR ENTRADA
+// REGISTRAR ENTRADA (PÚBLICO)
 // ============================================
 router.post('/entrada', rateLimit(10, 5), async (req, res) => {
   try {
+    // 🔒 VALIDA SE AS VISITAS ESTÃO ABERTAS
+    const config = await ConfiguracaoBiblioteca.getConfig();
+    if (!config.visitasAbertas) {
+      return res.status(403).json({
+        success: false,
+        error: config.mensagemFechado || 'A biblioteca está fechada para novas visitas no momento.',
+        fechado: true
+      });
+    }
+
     const {
       alunoId,
       motivoVisita,
@@ -259,7 +289,7 @@ router.post('/entrada', rateLimit(10, 5), async (req, res) => {
 });
 
 // ============================================
-// REGISTRAR SAÍDA
+// REGISTRAR SAÍDA (PÚBLICO)
 // ============================================
 router.post('/saida', rateLimit(10, 5), async (req, res) => {
   try {
@@ -294,64 +324,6 @@ router.post('/saida', rateLimit(10, 5), async (req, res) => {
   } catch (error) {
     console.error('Erro ao registrar saída (público):', error);
     res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================
-// 🔧 ROTA TEMPORÁRIA - CORRIGIR CURSO IMPORTADO
-// ⚠️ REMOVER DEPOIS DE USAR
-// ============================================
-router.post('/admin/corrigir-curso', async (req, res) => {
-  try {
-    const { cursoErrado, cursoCorreto, confirmar } = req.body;
-
-    if (!cursoErrado || !cursoCorreto) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Parâmetros cursoErrado e cursoCorreto são obrigatórios' 
-      });
-    }
-
-    // 1) Lista quem será afetado
-    const alunosAfetados = await User.find(
-      { role: 'aluno', curso: cursoErrado },
-      { nome: 1, matricula: 1, turma: 1, curso: 1 }
-    ).sort({ turma: 1, nome: 1 });
-
-    // 2) Modo simulação (só mostra o que seria feito)
-    if (!confirmar) {
-      return res.json({
-        success: true,
-        modo: '🔍 SIMULAÇÃO (nada foi alterado)',
-        cursoErrado,
-        cursoCorreto,
-        total: alunosAfetados.length,
-        alunos: alunosAfetados.map(a => ({
-          nome: a.nome,
-          matricula: a.matricula,
-          turma: a.turma
-        }))
-      });
-    }
-
-    // 3) Executa a correção
-    const resultado = await User.updateMany(
-      { role: 'aluno', curso: cursoErrado },
-      { $set: { curso: cursoCorreto } }
-    );
-
-    res.json({
-      success: true,
-      modo: '⚡ CORREÇÃO EXECUTADA',
-      cursoErrado,
-      cursoCorreto,
-      totalEncontrados: alunosAfetados.length,
-      totalModificados: resultado.modifiedCount
-    });
-
-  } catch (e) {
-    console.error('Erro ao corrigir curso:', e);
-    res.status(500).json({ success: false, error: e.message });
   }
 });
 

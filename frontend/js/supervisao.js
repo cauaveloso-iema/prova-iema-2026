@@ -987,7 +987,7 @@ async function imprimirAtendimento(atendimentoId) {
 }
 
 // ============================================
-// 🖨️ GERAR HTML DA IMPRESSÃO (OTIMIZADO PARA 1 PÁGINA)
+// 🖨️ GERAR HTML DA IMPRESSÃO (PADRONIZADO)
 // ============================================
 function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
     const logo = '/uploads/logo-iema.png';
@@ -1000,7 +1000,6 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
     });
     const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    // ========== BADGE DE STATUS ==========
     const badgeStatus = a.status === 'finalizado'
         ? '<span class="badge-finalizado">✅ FINALIZADO</span>'
         : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
@@ -1011,7 +1010,7 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
         : '';
     
-    // ========== DETALHES ADICIONAIS (compactos) ==========
+    // ========== DETALHES ==========
     let detalhesHTML = '';
     if (a.entrada?.detalhes && Object.keys(a.entrada.detalhes).length > 0) {
         const mapaDetalhes = {
@@ -1050,13 +1049,11 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         if (linhas.length > 0) {
             detalhesHTML = `
                 <div class="section-title">📋 Detalhes</div>
-                <div class="detalhes-compactos">
-                    ${linhas.join('')}
-                </div>`;
+                <div class="detalhes-compactos">${linhas.join('')}</div>`;
         }
     }
     
-    // ========== SAÍDA (compacta) ==========
+    // ========== SAÍDA ==========
     let saidaHTML = '';
     if (a.saida) {
         saidaHTML = `
@@ -1065,12 +1062,10 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
                 <span><strong>Resultado:</strong> ${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</span>
                 <span><strong>Data:</strong> ${a.saida.dataHoraFormatada || (a.saida.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : '-')}</span>
             </div>
-            ${a.saida.observacoesFinais ? `
-                <div class="obs-compacta"><strong>Obs:</strong> ${escapeHTML(a.saida.observacoesFinais)}</div>
-            ` : ''}`;
+            ${a.saida.observacoesFinais ? `<div class="obs-compacta"><strong>Obs:</strong> ${escapeHTML(a.saida.observacoesFinais)}</div>` : ''}`;
     }
     
-    // ========== REMARCAÇÕES (tabela compacta) ==========
+    // ========== REMARCAÇÕES ==========
     let remarcacoesHTML = '';
     if (a.remarcacoes && a.remarcacoes.length > 0) {
         remarcacoesHTML = `
@@ -1091,329 +1086,120 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
                             <td><strong>${i + 1}</strong></td>
                             <td>${formatarDataBR(r.dataRemarcacao)}</td>
                             <td>${r.horarioRemarcacao || '-'}</td>
-                            <td>
-                                <span class="status-remarcacao status-${r.status}">
-                                    ${r.status === 'pendente' ? '⏳' : r.status === 'realizado' ? '✅' : '❌'}
-                                </span>
-                            </td>
+                            <td><span class="status-remarcacao status-${r.status}">${r.status === 'pendente' ? '⏳' : r.status === 'realizado' ? '✅' : '❌'}</span></td>
                             <td>${escapeHTML((r.motivoRemarcacao || '-').substring(0, 60))}</td>
-                        </tr>
-                    `).join('')}
+                        </tr>`).join('')}
                 </tbody>
             </table>`;
     }
     
-    // ========== HTML FINAL OTIMIZADO ==========
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
         <title>Atendimento Supervisão - ${escapeHTML(a.alunoNome)}</title>
         <style>
-            @page { 
-                size: A4 portrait; 
-                margin: 8mm;  /* 🔥 Reduzido de 12mm para 8mm */
-            }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body {
-                font-family: 'Times New Roman', Times, serif;
-                font-size: 9.5pt;   /* 🔥 Reduzido de 11pt para 9.5pt */
-                line-height: 1.25;  /* 🔥 Reduzido de 1.5 para 1.25 */
-                color: #000;
-            }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
             
-            /* ========== CABEÇALHO COMPACTO ========== */
-            .header {
-                text-align: center;
-                border-bottom: 1.5px double #000;
-                padding-bottom: 4px;
-                margin-bottom: 6px;
-            }
-            .header img {
-                max-width: 100%;
-                max-height: 14mm;   /* 🔥 Reduzido de 25mm para 14mm */
-                object-fit: contain;
-                display: block;
-                margin: 0 auto 2px;
-            }
-            .header h1 {
-                font-size: 10pt;
-                text-transform: uppercase;
-                font-weight: bold;
-                margin: 2px 0 0;
-            }
-            .header p {
-                font-size: 8pt;
-                margin: 1px 0 0;
-            }
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
             
-            /* ========== TÍTULO ========== */
-            .titulo {
-                text-align: center;
-                font-size: 11pt;
-                font-weight: bold;
-                background: #e0f2fe;
-                padding: 4px 8px;    /* 🔥 Reduzido de 10px */
-                border: 1.5px solid #000;
-                margin: 6px 0 3px;   /* 🔥 Reduzido de 15px */
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            .status-badge {
-                text-align: center;
-                margin: 0 0 5px;     /* 🔥 Reduzido */
-            }
-            .badge-finalizado {
-                background: #d1fae5; color: #065f46;
-                padding: 2px 10px;    /* 🔥 Reduzido */
-                border-radius: 12px;
-                font-size: 8pt;
-                font-weight: bold;
-                border: 1px solid #10b981;
-                display: inline-block;
-            }
-            .badge-andamento {
-                background: #fef3c7; color: #92400e;
-                padding: 2px 10px;
-                border-radius: 12px;
-                font-size: 8pt;
-                font-weight: bold;
-                border: 1px solid #f59e0b;
-                display: inline-block;
-            }
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #e0f2fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .status-badge { text-align: center; margin: 0 0 5px; }
+            .badge-finalizado { background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #10b981; display: inline-block; }
+            .badge-andamento { background: #fef3c7; color: #92400e; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #f59e0b; display: inline-block; }
             
-            /* ========== CARD DO ALUNO (compacto) ========== */
-            .aluno-box {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 5px 8px;    /* 🔥 Reduzido de 15px */
-                background: #f0f9ff;
-                border: 1px solid #bae6fd;
-                border-radius: 5px;
-                margin-bottom: 6px;
-            }
-            .aluno-foto {
-                width: 38px; height: 38px;   /* 🔥 Reduzido de 70px */
-                border-radius: 50%;
-                object-fit: cover;
-                border: 1.5px solid #0ea5e9;
-                flex-shrink: 0;
-            }
+            .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 5px; margin-bottom: 6px; }
+            .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #0ea5e9; flex-shrink: 0; }
             .aluno-info { flex: 1; }
-            .aluno-nome {
-                font-size: 10pt;
-                font-weight: bold;
-                color: #075985;
-                margin-bottom: 1px;
-            }
-            .aluno-detalhes {
-                font-size: 8pt;
-                color: #374151;
-            }
+            .aluno-nome { font-size: 10pt; font-weight: bold; color: #075985; margin-bottom: 1px; }
+            .aluno-detalhes { font-size: 8pt; color: #374151; }
             
-            /* ========== TÍTULOS DE SEÇÃO (compactos) ========== */
-            .section-title {
-                font-size: 9pt;
-                font-weight: bold;
-                background: #e8e8e8;
-                padding: 2px 6px;    /* 🔥 Reduzido de 6px 10px */
-                border-left: 3px solid #0ea5e9;
-                margin: 5px 0 3px;   /* 🔥 Reduzido de 20px 0 10px */
-            }
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #0ea5e9; margin: 5px 0 3px; }
             
-            /* ========== INFO GRID COMPACTO ========== */
-            .info-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;  /* 🔥 3 colunas em vez de 2 */
-                gap: 3px 12px;       /* 🔥 Reduzido de 10px 20px */
-                margin: 3px 0 5px;
-                font-size: 8.5pt;
-            }
-            .info-item { 
-                display: flex; 
-                gap: 4px; 
-            }
-            .info-label { 
-                font-weight: bold; 
-                white-space: nowrap;
-            }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
+            .info-item { display: flex; gap: 4px; }
+            .info-label { font-weight: bold; white-space: nowrap; }
             .info-value { flex: 1; }
             
-            /* ========== DESCRIÇÃO ========== */
-            .descricao-box {
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 4px;
-                padding: 5px 8px;    /* 🔥 Reduzido */
-                font-size: 8.5pt;
-                line-height: 1.3;
-                min-height: 30px;    /* 🔥 Reduzido de 50px */
-                max-height: 80px;    /* 🔥 NOVO: limita altura */
-                overflow: hidden;
-                word-wrap: break-word;
-            }
+            .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
             
-            /* ========== DETALHES EM LINHA ========== */
-            .detalhes-compactos {
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 4px;
-                padding: 4px 6px;
-                font-size: 8pt;
-                line-height: 1.35;
-            }
-            .det-item {
-                display: inline-block;
-                margin-right: 10px;
-                margin-bottom: 2px;
-            }
+            .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
+            .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
             
-            /* ========== LINHA COMPACTA (resultado) ========== */
-            .linha-compacta {
-                display: flex;
-                justify-content: space-between;
-                gap: 10px;
-                padding: 3px 6px;
-                background: #f9fafb;
-                border-radius: 4px;
-                font-size: 8.5pt;
-                margin-bottom: 3px;
-            }
-            .obs-compacta {
-                padding: 3px 6px;
-                background: #f9fafb;
-                border-radius: 4px;
-                font-size: 8pt;
-                font-style: italic;
-            }
+            .linha-compacta { display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8.5pt; margin-bottom: 3px; }
+            .obs-compacta { padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8pt; font-style: italic; }
             
-            /* ========== TABELA DE REMARCAÇÕES (compacta) ========== */
-            .tabela-remarcacoes {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 7.5pt;    /* 🔥 Reduzido de 9.5pt */
-                margin-top: 2px;
-            }
-            .tabela-remarcacoes th {
-                background: #0ea5e9;
-                color: white;
-                padding: 2px 4px;    /* 🔥 Reduzido de 8px 6px */
-                text-align: left;
-                border: 1px solid #0284c7;
-                font-size: 7.5pt;
-            }
-            .tabela-remarcacoes td {
-                padding: 2px 4px;
-                border: 1px solid #ddd;
-            }
+            .tabela-remarcacoes { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 2px; }
+            .tabela-remarcacoes th { background: #0ea5e9; color: white; padding: 2px 4px; text-align: left; border: 1px solid #0284c7; font-size: 7.5pt; }
+            .tabela-remarcacoes td { padding: 2px 4px; border: 1px solid #ddd; }
             .tabela-remarcacoes tr:nth-child(even) { background: #f9fafb; }
-            .status-remarcacao {
-                padding: 1px 5px;
-                border-radius: 8px;
-                font-size: 7pt;
-                font-weight: bold;
-            }
+            .status-remarcacao { padding: 1px 5px; border-radius: 8px; font-size: 7pt; font-weight: bold; }
             .status-pendente { background: #fef3c7; color: #92400e; }
             .status-realizado { background: #d1fae5; color: #065f46; }
             .status-cancelado { background: #fee2e2; color: #991b1b; }
             
-            /* ========== ASSINATURA (compacta) ========== */
-            .assinaturas {
-                display: flex;
-                justify-content: center;
-                margin-top: 15px;    /* 🔥 Reduzido de 50px */
-                gap: 20px;
-            }
-            .assinatura {
-                flex: 0 0 55%;
-                text-align: center;
-            }
+            /* 🖋️ DUAS ASSINATURAS LADO A LADO (CARIMBO COLADO NA LINHA) */
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 20px; }
+            .assinatura { flex: 0 0 42%; text-align: center; }
+            
             .assinatura-container-relatorio {
                 position: relative;
-                border-bottom: 1px solid #000;
-                min-height: 14mm;    /* 🔥 Reduzido de 22mm */
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 2px;
+                padding-bottom: 0;
             }
+            
+            .assinatura-container-relatorio::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+            
             .assinatura-img {
-                max-height: 12mm;    /* 🔥 Reduzido de 18mm */
+                max-height: 14mm;
                 max-width: 100%;
                 object-fit: contain;
                 position: relative;
-                z-index: 1;
+                z-index: 2;
+                margin-bottom: 1mm;
             }
+            
             .carimbo-overlay {
                 position: absolute;
-                top: 50%;
+                bottom: 1mm;
                 left: 50%;
-                transform: translate(-50%, -50%);
-                max-height: 13mm;
-                max-width: 55%;
+                transform: translateX(-50%);
+                max-height: 15mm;
+                max-width: 45mm;
                 object-fit: contain;
-                opacity: 0.85;
+                opacity: 0.95;
                 pointer-events: none;
-                z-index: 2;
-            }
-            .assinatura-linha {
-                padding-top: 2px;
-                font-size: 8pt;
-                margin-top: 2px;
+                z-index: 1;
             }
             
-            /* ========== QR CODE (compacto) ========== */
-            .qr-code {
-                text-align: center;
-                margin-top: 6px;
-            }
-            .qr-code img {
-                width: 25mm;
-                height: 25mm;
-                border: 1.5px solid #000;
-                padding: 2px;
-                display: block;
-                margin: 0 auto;
-            }
-            .qr-code p {
-                font-size: 8pt;
-                margin: 3px 0 0 0;
-                color: #444;
-                font-weight: bold;
-            }
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
             
-            /* ========== RODAPÉ ========== */
-            .footer {
-                text-align: center;
-                margin-top: 5px;
-                padding-top: 3px;
-                border-top: 1px solid #ccc;
-                font-size: 6.5pt;
-                color: #666;
-            }
+            .qr-code { text-align: center; margin-top: 10px; }
+            .qr-code img { width: 22mm; height: 22mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
+            .qr-code p { font-size: 7.5pt; margin: 2px 0 0 0; color: #444; font-weight: bold; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
             .footer p { margin: 1px 0; }
             
-            .btn-print {
-                display: block;
-                margin: 10px auto;
-                padding: 8px 20px;
-                background: #0ea5e9;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-weight: bold;
-                cursor: pointer;
-                font-size: 12px;
-                font-family: Arial, sans-serif;
-            }
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #0ea5e9; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
             .btn-print:hover { background: #0284c7; }
             
-            @media print {
-                .no-print { display: none !important; }
-                body { padding: 0; }
-                .footer { page-break-after: avoid; }
-            }
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -1429,9 +1215,7 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         <div class="status-badge">${badgeStatus}</div>
         
         <div class="aluno-box">
-            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" 
-                 alt="${escapeHTML(a.alunoNome)}"
-                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
             <div class="aluno-info">
                 <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
                 <div class="aluno-detalhes">
@@ -1444,42 +1228,20 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         
         <div class="section-title">📌 Dados do Atendimento</div>
         <div class="info-grid">
-            <div class="info-item">
-                <span class="info-label">Tipo:</span>
-                <span class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Data:</span>
-                <span class="info-value">${dataExt}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Hora:</span>
-                <span class="info-value">${horaExt}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Gravidade:</span>
-                <span class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Prioridade:</span>
-                <span class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Registrado por:</span>
-                <span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span>
-            </div>
+            <div class="info-item"><span class="info-label">Tipo:</span><span class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></span></div>
+            <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
+            <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
+            <div class="info-item"><span class="info-label">Gravidade:</span><span class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Prioridade:</span><span class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span></div>
         </div>
         
         <div class="section-title">📝 Descrição do Ocorrido</div>
-        <div class="descricao-box">
-            ${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}
-        </div>
+        <div class="descricao-box">${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}</div>
         
         ${a.entrada?.observacoes ? `
             <div class="section-title">💬 Observações</div>
-            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">
-                ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
-            </div>
+            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}</div>
         ` : ''}
         
         ${detalhesHTML}
@@ -1490,9 +1252,14 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
             <div class="assinatura">
                 <div class="assinatura-container-relatorio">
                     ${assinaturaHTML}
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
                     <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
                 </div>
-                <div class="assinatura-linha">Assinatura do Responsável / Supervisão</div>
+                <div class="assinatura-linha">Supervisão</div>
             </div>
         </div>
         
@@ -1504,7 +1271,7 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         ` : ''}
         
         <div class="footer">
-            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Sistema de Supervisão</p>
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Supervisão</p>
         </div>
     </body>
     </html>`;
@@ -3191,7 +2958,7 @@ function exportarPDF() {
 }
 
 // ============================================
-// 🎨 GERAR HTML DO RELATÓRIO (padrão Setor Pedagógico)
+// 🎨 GERAR HTML DO RELATÓRIO (PADRONIZADO)
 // ============================================
 function gerarHTMLRelatorioSupervisao(data) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
@@ -3202,13 +2969,11 @@ function gerarHTMLRelatorioSupervisao(data) {
     // ========== BUSCAR ASSINATURA DIGITAL ==========
     let assinaturaDigital = null;
     
-    // Se for relatório de aluno, pega a assinatura do último atendimento que tiver
     if (tipo === 'aluno' && Array.isArray(data.atendimentos)) {
         const comAssinatura = data.atendimentos.find(a => a.temAssinatura && a.assinaturaBase64);
         if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
     }
     
-    // Fallback: se algum atendimento na lista tiver assinatura, usa
     if (!assinaturaDigital) {
         const lista = data.atendimentos || data.registros || [];
         const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
@@ -3231,22 +2996,18 @@ function gerarHTMLRelatorioSupervisao(data) {
     // ========== ESTATÍSTICAS ==========
     let statsHTML = '';
     if (tipo === 'geral') {
-        const totalAtend = data.totalAtendimentos || 0;
-        const totalTipos = (data.porTipo || []).length;
-        const totalTurmas = (data.porTurma || []).length;
-        
         statsHTML = `
             <div class="stats">
                 <div class="stat">
-                    <div class="stat-value">${totalAtend}</div>
+                    <div class="stat-value">${data.totalAtendimentos || 0}</div>
                     <div class="stat-label">Total de Atendimentos</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-value">${totalTipos}</div>
+                    <div class="stat-value">${(data.porTipo || []).length}</div>
                     <div class="stat-label">Tipos Diferentes</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-value">${totalTurmas}</div>
+                    <div class="stat-value">${(data.porTurma || []).length}</div>
                     <div class="stat-label">Turmas Atendidas</div>
                 </div>
             </div>
@@ -3287,7 +3048,7 @@ function gerarHTMLRelatorioSupervisao(data) {
         `;
     }
     
-    // ========== TABELA DE DADOS ==========
+    // ========== TABELAS ==========
     let tabelaHTML = '';
     
     // ---- GERAL ----
@@ -3493,193 +3254,106 @@ function gerarHTMLRelatorioSupervisao(data) {
         <meta charset="UTF-8">
         <title>${titulo}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body {
-                font-family: 'Times New Roman', Times, serif;
-                font-size: 11pt;
-                line-height: 1.4;
-                color: #000;
-            }
-            .header {
-                text-align: center;
-                border-bottom: 2px double #000;
-                padding-bottom: 10px;
-                margin-bottom: 15px;
-            }
-            .header img {
-                max-width: 100%;
-                max-height: 25mm;
-                object-fit: contain;
-                display: block;
-                margin: 0 auto 5px;
-            }
-            .header h1 {
-                font-size: 13pt;
-                text-transform: uppercase;
-                font-weight: bold;
-                margin: 5px 0 0;
-            }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
             .titulo {
-                text-align: center;
-                font-size: 14pt;
-                font-weight: bold;
-                background: #e0f2fe;
-                padding: 10px;
-                border: 2px solid #000;
-                margin: 15px 0;
-                text-transform: uppercase;
-                letter-spacing: 1px;
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #e0f2fe; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            .subtitulo {
-                text-align: center;
-                font-size: 12pt;
-                margin: -10px 0 15px;
-                font-style: italic;
-            }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
             .stats {
-                display: flex;
-                gap: 15px;
-                margin: 15px 0 20px;
-                padding: 15px;
-                background: #f0f9ff;
-                border-radius: 8px;
-                border: 1px solid #bae6fd;
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #f0f9ff; border-radius: 5px; border: 1px solid #bae6fd;
             }
-            .stat {
-                text-align: center;
-                flex: 1;
-                border-right: 1px solid #bae6fd;
-            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #bae6fd; }
             .stat:last-child { border-right: none; }
-            .stat-value {
-                font-size: 22pt;
-                font-weight: bold;
-                color: #0284c7;
-                line-height: 1;
-            }
-            .stat-label {
-                font-size: 9pt;
-                color: #666;
-                margin-top: 5px;
-            }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #0284c7; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
             .section-title {
-                font-size: 11pt;
-                font-weight: bold;
-                background: #e8e8e8;
-                padding: 6px 10px;
-                border-left: 4px solid #0ea5e9;
-                margin: 20px 0 10px;
+                font-size: 9pt; font-weight: bold; background: #e8e8e8;
+                padding: 2px 6px; border-left: 3px solid #0ea5e9; margin: 6px 0 3px;
             }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 9.5pt;
-                margin-bottom: 15px;
-            }
-            th {
-                background: #0ea5e9;
-                color: white;
-                padding: 8px 6px;
-                text-align: left;
-                border: 1px solid #0284c7;
-                font-size: 9pt;
-            }
-            td {
-                padding: 6px;
-                border: 1px solid #ddd;
-                vertical-align: top;
-            }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #0ea5e9; color: white; padding: 4px 5px; text-align: left; border: 1px solid #0284c7; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #f9fafb; }
+            
             .badge-status {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 10px;
-                font-size: 8.5pt;
-                font-weight: bold;
+                display: inline-block; padding: 1px 6px; border-radius: 8px;
+                font-size: 7.5pt; font-weight: bold;
             }
             .badge-status.finalizado { background: #d1fae5; color: #065f46; }
             .badge-status.andamento { background: #fef3c7; color: #92400e; }
             
-            /* ===== ASSINATURA COM CARIMBO SOBREPOSTO ===== */
-            .assinaturas {
-                display: flex;
-                justify-content: center;
-                margin-top: 50px;
-                gap: 40px;
-            }
-            .assinatura {
-                flex: 0 0 60%;
-                text-align: center;
-            }
+            /* 🖋️ Assinatura com carimbo colado na linha */
+            .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            
             .assinatura-container-relatorio {
                 position: relative;
-                border-bottom: 1px solid #000;
-                min-height: 22mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 3px;
+                padding-bottom: 0;
             }
+            
+            .assinatura-container-relatorio::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+            
             .assinatura-img {
-                max-height: 18mm;
+                max-height: 14mm;
                 max-width: 100%;
                 object-fit: contain;
                 position: relative;
-                z-index: 1;
-            }
-            .carimbo-overlay {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                max-height: 20mm;
-                max-width: 60%;
-                object-fit: contain;
-                opacity: 0.85;
-                pointer-events: none;
                 z-index: 2;
-            }
-            .assinatura-linha {
-                border-top: none;
-                padding-top: 5px;
-                font-size: 10pt;
-                margin-top: 4px;
+                margin-bottom: 1mm;
             }
             
-            .footer {
-                text-align: center;
-                margin-top: 30px;
-                padding-top: 10px;
-                border-top: 1px solid #ccc;
-                font-size: 8pt;
-                color: #666;
+            .carimbo-overlay {
+                position: absolute;
+                bottom: 1mm;
+                left: 50%;
+                transform: translateX(-50%);
+                max-height: 15mm;
+                max-width: 55mm;
+                object-fit: contain;
+                opacity: 0.95;
+                pointer-events: none;
+                z-index: 1;
             }
-            .footer p { margin: 2px 0; }
-            .registro-info {
-                font-size: 9pt;
-                color: #666;
-                margin-top: 20px;
-                text-align: center;
-            }
+            
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
+            
             .btn-print {
-                display: block;
-                margin: 20px auto;
-                padding: 12px 30px;
-                background: #0ea5e9;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-weight: bold;
-                cursor: pointer;
-                font-size: 14px;
-                font-family: Arial, sans-serif;
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #0ea5e9; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #0284c7; }
-            @media print {
-                .no-print { display: none !important; }
-                body { padding: 0; }
-            }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -3688,7 +3362,7 @@ function gerarHTMLRelatorioSupervisao(data) {
         <div class="header">
             <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Supervisão</p>
+            <p>Sistema de Atendimentos — Supervisão</p>
         </div>
         
         <div class="titulo">🛡️ ${titulo}</div>

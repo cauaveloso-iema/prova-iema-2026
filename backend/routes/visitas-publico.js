@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const QRCode = require('qrcode');
 
 const User = require('../models/User');
 const Turma = require('../models/Turma');
@@ -534,7 +535,6 @@ router.post('/gerar-qrcode-totp', rateLimit(10, 5), async (req, res) => {
     }
     
     const speakeasy = require('speakeasy');
-    const QRCode = require('qrcode');
     
     let secret = termo.totpSecret;
     if (!secret) {
@@ -682,7 +682,6 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       return res.status(400).json({ success: false, error: 'CPF inválido' });
     }
     
-    // Encontrar o índice do responsável
     let responsavelIndex = -1;
     const alunoIdNorm = normalizarId(alunoId);
     
@@ -700,7 +699,6 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     
     if (responsavelIndex === -1) responsavelIndex = 0;
     
-    // 🔥 Garantir alunoId como ObjectId válido
     let alunoIdParaSalvar = paraObjectId(alunoIdNorm);
     
     if (!alunoIdParaSalvar) {
@@ -729,7 +727,6 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     
     const alunoNomeParaSalvar = alunoCorrespondente?.nome || '';
     
-    // 🔐 CRIPTOGRAFIA + alunoId garantido
     termo.responsaveis[responsavelIndex] = {
       ...termo.responsaveis[responsavelIndex],
       alunoId: alunoIdParaSalvar,
@@ -774,7 +771,6 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
     
     console.log(`✅ Termo ${termo.codigo} autorizado por ${nome}`);
     
-    // Registrar consentimento LGPD
     try {
       await ConsentimentoLGPD.create({
         titular: {
@@ -803,7 +799,6 @@ router.post('/autorizar/:termoId', rateLimit(3, 10), async (req, res) => {
       console.warn('⚠️ Erro ao registrar consentimento LGPD:', lgpdErr.message);
     }
     
-    // Notificar criador
     try {
       const notificacao = new NotificacaoVisita({
         usuarioId: termo.criadoPor,
@@ -889,7 +884,6 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
     
     if (responsavelIndex === -1) responsavelIndex = 0;
     
-    // Garantir alunoId válido
     let alunoIdParaSalvar = paraObjectId(alunoIdNorm);
     
     if (!alunoIdParaSalvar) {
@@ -935,6 +929,33 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
 });
 
 // ============================================
+// 📱 GERAR QR CODE EM BASE64 (SEM CHAMAR API)
+// ============================================
+async function gerarQRCodeAlunoBase64(alunoId) {
+  try {
+    if (!alunoId) return '';
+    
+    // URL que será codificada no QR Code (pode ser ajustada)
+    const url = `${process.env.BASE_URL || 'https://sistema-avaliativo.onrender.com'}/aluno.html?aluno=${alunoId}`;
+    
+    const qrCodeDataUrl = await QRCode.toDataURL(url, {
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 250,
+      color: { 
+        dark: '#000000', 
+        light: '#ffffff' 
+      }
+    });
+    
+    return qrCodeDataUrl;
+  } catch (error) {
+    console.error('❌ Erro ao gerar QR Code:', error);
+    return '';
+  }
+}
+
+// ============================================
 // 📄 GERAR TERMO OFICIAL (INDIVIDUAL)
 // ============================================
 router.get('/termo-oficial/:id', async (req, res) => {
@@ -954,7 +975,7 @@ router.get('/termo-oficial/:id', async (req, res) => {
       });
     }
     
-    const html = gerarHTMLTermoOficial(termo);
+    const html = await gerarHTMLTermoOficial(termo);
     
     res.json({
       success: true,
@@ -1026,7 +1047,7 @@ router.post('/termos-oficiais-lote', async (req, res) => {
     
     for (const termo of termosParaImprimir) {
       try {
-        const html = gerarHTMLTermoOficial(termo);
+        const html = await gerarHTMLTermoOficial(termo);
         const numAlunos = termo.alunos?.length || 1;
         totalPaginas += numAlunos;
         
@@ -1073,14 +1094,16 @@ router.post('/termos-oficiais-lote', async (req, res) => {
 // ============================================
 // 🎨 GERAR HTML DO TERMO OFICIAL (1 PÁGINA POR ALUNO)
 // ============================================
-function gerarHTMLTermoOficial(termo) {
+async function gerarHTMLTermoOficial(termo) {
   const alunos = termo.alunos || [];
   
   if (alunos.length === 0) return '';
 
-  const paginasHTML = alunos.map((aluno, index) => {
-    return gerarPaginaTermoOficial(termo, aluno, index + 1, alunos.length);
-  });
+  const paginasHTML = await Promise.all(
+    alunos.map((aluno, index) => 
+      gerarPaginaTermoOficial(termo, aluno, index + 1, alunos.length)
+    )
+  );
 
   if (paginasHTML.length === 1) {
     return paginasHTML[0];
@@ -1090,16 +1113,15 @@ function gerarHTMLTermoOficial(termo) {
 }
 
 // ============================================
-// 📄 GERAR UMA PÁGINA PARA UM ALUNO ESPECÍFICO
+// 📄 GERAR UMA PÁGINA PARA UM ALUNO ESPECÍFICO (COM QR CODE)
 // ============================================
-function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
+async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
   const dataVisita = new Date(termo.dataVisita).toLocaleDateString('pt-BR', {
     day: '2-digit', month: 'long', year: 'numeric'
   });
 
   const alunoIdStr = normalizarId(aluno.alunoId);
   
-  // Buscar responsável (com fallbacks)
   let responsavelFinal = (termo.responsaveis || []).find(r => {
     const rId = normalizarId(r.alunoId);
     return rId && alunoIdStr && rId === alunoIdStr;
@@ -1196,6 +1218,25 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
     statusBadge = '<span class="badge pendente">⏳ Pendente</span>';
   }
 
+  // 🔥 GERAR QR CODE EM BASE64 DIRETO NO BACKEND
+  const alunoIdParaQR = aluno.alunoId || aluno._id;
+  let qrCodeAlunoBase64 = '';
+  
+  if (alunoIdParaQR) {
+    qrCodeAlunoBase64 = await gerarQRCodeAlunoBase64(alunoIdParaQR);
+  }
+  
+  const qrCodeHTML = qrCodeAlunoBase64 ? `
+    <div class="qr-code-container">
+      <img 
+        src="${qrCodeAlunoBase64}" 
+        alt="QR Code do Aluno"
+        class="qr-code-img"
+      >
+      <p class="qr-code-label">Identificação do Aluno</p>
+    </div>
+  ` : '';
+
   return `
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -1203,158 +1244,204 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
       <meta charset="UTF-8">
       <title>Termo de Visita - ${termo.codigo} - ${aluno.nome}</title>
       <style>
-        @page { size: A4 portrait; margin: 15mm; }
+        @page { size: A4 portrait; margin: 8mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; width: 100%; }
         body {
           font-family: 'Times New Roman', Times, serif;
-          font-size: 11pt;
-          line-height: 1.5;
+          font-size: 9.5pt;
+          line-height: 1.35;
           color: #000;
+          padding: 0;
+        }
+        
+        .page-wrapper {
+          max-width: 190mm;
+          margin: 0 auto;
+          padding: 4mm 0;
           display: flex;
           flex-direction: column;
-          min-height: 100vh;
+          min-height: auto;
         }
-        .page-content {
-          flex: 1 0 auto;
-          padding: 15mm 15mm 0 15mm;
-          display: flex;
-          flex-direction: column;
-        }
+        
         .header {
           text-align: center;
-          border-bottom: 3px double #000;
-          padding-bottom: 10px;
-          margin-bottom: 15px;
+          border-bottom: 1.5px double #000;
+          padding-bottom: 3px;
+          margin-bottom: 5px;
         }
-        .header h1 { font-size: 13pt; text-transform: uppercase; margin-bottom: 3px; }
-        .header h2 { font-size: 11pt; font-weight: normal; }
+        .header h1 { 
+          font-size: 10pt; 
+          text-transform: uppercase; 
+          font-weight: bold;
+          margin-bottom: 1px; 
+        }
+        .header h2 { 
+          font-size: 7.5pt; 
+          font-weight: normal; 
+        }
+        
         .codigo-topo { 
-          text-align: right; 
-          font-size: 9pt; 
-          margin-bottom: 10px;
           display: flex;
           justify-content: space-between;
           align-items: center;
+          font-size: 7pt; 
+          margin-bottom: 4px;
+          color: #555;
         }
         .codigo-topo code {
           background: #f0f0f0;
-          padding: 2px 8px;
-          border-radius: 3px;
+          padding: 1px 5px;
+          border-radius: 2px;
           font-family: monospace;
+          font-size: 6.5pt;
+          color: #000;
         }
-        .page-indicator {
-          font-size: 8pt;
-          color: #666;
-          font-style: italic;
-        }
+        
         .titulo {
           text-align: center;
-          font-size: 14pt;
+          font-size: 10.5pt;
           font-weight: bold;
           text-transform: uppercase;
-          margin: 15px 0;
-          padding: 10px;
-          background: #f0f0f0;
-          border: 2px solid #000;
+          margin: 5px 0;
+          padding: 3px 8px;
+          background: #e8e8e8;
+          border: 1.5px solid #000;
+          letter-spacing: 0.5px;
         }
-        .conteudo {
-          text-align: justify;
-          font-size: 11pt;
-          line-height: 1.8;
-          margin: 15px 0;
-          flex: 1 0 auto;
-        }
-        .conteudo p { margin-bottom: 12px; }
-        .destaque {
-          background: #f9f9f9;
-          padding: 2px 6px;
-          border-bottom: 1px solid #333;
-          font-weight: bold;
-        }
-        .aluno-destaque {
-          background: #fff3cd;
-          padding: 12px;
-          border-left: 5px solid #ffc107;
-          margin: 15px 0;
-          font-size: 11pt;
-        }
-        .aluno-destaque strong {
-          font-size: 13pt;
-          color: #856404;
-        }
-        .aluno-info {
-          font-size: 10pt;
-          color: #333;
-          margin-top: 5px;
-        }
+        
         .status-badge-container {
           text-align: center;
-          margin: 10px 0;
+          margin: 3px 0 5px;
         }
         .badge {
           display: inline-block;
-          padding: 4px 12px;
-          border-radius: 15px;
-          font-size: 9pt;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-size: 7pt;
           font-weight: bold;
         }
         .badge.autorizado { background: #d1fae5; color: #065f46; border: 1px solid #10b981; }
         .badge.recusado { background: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
         .badge.pendente { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
-        .cidade-data { text-align: right; margin: 25px 0 15px; font-size: 11pt; }
+        
+        .conteudo {
+          text-align: justify;
+          font-size: 9.5pt;
+          line-height: 1.4;
+          margin: 5px 0;
+        }
+        .conteudo p { 
+          margin-bottom: 5px; 
+          text-indent: 8mm;
+        }
+        .conteudo p:first-child { text-indent: 0; }
+        
+        .destaque {
+          font-weight: bold;
+          background: #f5f5f5;
+          padding: 0 3px;
+        }
+        
+        .aluno-destaque {
+          background: #fff9e6;
+          padding: 5px 8px;
+          border-left: 3px solid #ffc107;
+          margin: 6px 0;
+          font-size: 8.5pt;
+        }
+        .aluno-destaque strong {
+          font-size: 9pt;
+          color: #856404;
+        }
+        .aluno-info {
+          font-size: 8pt;
+          color: #333;
+          margin-top: 2px;
+        }
+        
+        .cidade-data { 
+          text-align: right; 
+          margin: 8px 0 4px; 
+          font-size: 9pt; 
+        }
         
         .assinaturas {
           display: flex;
-          justify-content: space-between;
-          gap: 40px;
-          margin-top: auto;
-          padding-top: 40px;
-          page-break-inside: avoid;
+          justify-content: center;
+          gap: 20mm;
+          margin-top: 15px;
+          padding-top: 5px;
         }
-        .assinatura { flex: 1; text-align: center; }
+        
+        .assinatura { 
+          flex: 0 0 65mm;
+          text-align: center; 
+        }
+        
         .assinatura-img {
-          max-height: 60px;
+          max-height: 18mm;
           max-width: 100%;
           display: block;
-          margin: 0 auto 3px;
+          margin: 0 auto 2px;
         }
+        
         .assinatura-linha {
           border-top: 1px solid #000;
-          padding-top: 6px;
-          font-size: 10pt;
-          margin-top: 55px;
+          padding-top: 3px;
+          font-size: 8pt;
+          margin-top: 15mm;
         }
         .assinatura-linha.com-assinatura { margin-top: 3px; }
-        .assinatura-linha strong { display: block; margin-bottom: 1px; }
-        .assinatura-linha small { font-size: 8pt; color: #666; display: block; }
-        
-        .rodape {
-          flex-shrink: 0;
-          text-align: center;
-          font-size: 7.5pt;
-          color: #666;
-          border-top: 1px solid #ccc;
-          padding: 8px 15mm 10mm 15mm;
-          margin-top: 10px;
-          width: 100%;
+        .assinatura-linha strong { 
+          display: block; 
+          margin-bottom: 1px; 
+          font-size: 8pt; 
+        }
+        .assinatura-linha small { 
+          font-size: 6.5pt; 
+          color: #666; 
+          display: block; 
         }
         
+        .qr-code-container {
+          text-align: center;
+          margin-top: 8px;
+          margin-bottom: 4px;
+        }
+        .qr-code-img {
+          width: 22mm;
+          height: 22mm;
+          border: 1px solid #000;
+          padding: 2px;
+          display: block;
+          margin: 0 auto;
+          background: #fff;
+        }
+        .qr-code-label {
+          font-size: 6.5pt;
+          color: #444;
+          font-weight: bold;
+          margin-top: 2px;
+        }
+        
+        .rodape {
+          text-align: center;
+          font-size: 6.5pt;
+          color: #666;
+          border-top: 1px solid #ccc;
+          padding: 3px 0 0;
+          margin-top: 8px;
+        }
+        .rodape p { margin: 1px 0; }
+        
         @media print {
-          body { 
-            display: flex; 
-            flex-direction: column;
-            min-height: 100vh;
-            height: 100vh;
-          }
-          .page-content { flex: 1 0 auto; padding: 0; }
-          .rodape { position: relative; margin-top: auto; }
           .no-print { display: none !important; }
         }
       </style>
     </head>
     <body>
-      <div class="page-content">
+      <div class="page-wrapper">
+        
         <div class="header">
           <h1>IEMA Pleno: São Luís - Centro</h1>
           <h2>Termo de Autorização de Visita Técnica</h2>
@@ -1375,8 +1462,8 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
           <p>
             <strong>AUTORIZO</strong> a participação do(a) aluno(a) 
             <span class="destaque">${aluno.nome}</span>, 
-            ${aluno.turma ? `da turma <span class="destaque">${aluno.turma}</span>,` : ''}
-            ${aluno.curso ? `do curso <span class="destaque">${aluno.curso}</span>,` : ''}
+            ${aluno.turma ? `da turma <span class="destaque">${aluno.turma}</span>, ` : ''}
+            ${aluno.curso ? `do curso <span class="destaque">${aluno.curso}</span>, ` : ''}
             na atividade <span class="destaque">${termo.atividade}</span>, 
             sob coordenação do(a) ${professoresTexto}, 
             a ser realizada no dia <span class="destaque">${dataVisita}</span>, 
@@ -1386,7 +1473,7 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
           </p>
           
           ${termo.localizacao?.enderecoCompleto ? `
-            <p style="font-size: 9pt; color: #555; margin-top: 8px;">
+            <p style="font-size: 8pt; color: #555; text-indent: 0;">
               <strong>Endereço:</strong> ${termo.localizacao.enderecoCompleto}
             </p>
           ` : ''}
@@ -1401,14 +1488,16 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
             </div>
           </div>
           
-          <p style="margin-top: 15px;">
+          <p>
             Declaro estar ciente das normas e responsabilidades referentes a esta atividade, 
             bem como das medidas de segurança adotadas pela instituição.
           </p>
         </div>
         
         <div class="cidade-data">
-          ${termo.cidade || 'São Luís'} - MA, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+          ${termo.cidade || 'São Luís'} - MA, ${new Date().toLocaleDateString('pt-BR', { 
+            day: '2-digit', month: 'long', year: 'numeric' 
+          })}
         </div>
         
         <div class="assinaturas">
@@ -1418,7 +1507,7 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
             ` : ''}
             <div class="assinatura-linha ${assinaturaResponsavel ? 'com-assinatura' : ''}">
               <strong>${nomeResponsavel}</strong>
-              <small>Responsável Legal do(a) aluno(a) ${aluno.nome}${cpfResponsavel ? ` • CPF: ${cpfFormatado}` : ''}</small>
+              <small>Responsável Legal${cpfResponsavel ? ` • CPF: ${cpfFormatado}` : ''}</small>
             </div>
           </div>
           
@@ -1432,11 +1521,14 @@ function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas) {
             </div>
           </div>
         </div>
-      </div>
-      
-      <div class="rodape">
-        <p>Documento gerado em ${new Date().toLocaleString('pt-BR')} - EducaPleno</p>
-        <p>Este documento é válido como autorização oficial de visita técnica</p>
+        
+        ${qrCodeHTML}
+        
+        <div class="rodape">
+          <p>Documento gerado em ${new Date().toLocaleString('pt-BR')} - EducaPleno</p>
+          <p>Este documento é válido como autorização oficial de visita técnica</p>
+        </div>
+        
       </div>
     </body>
     </html>

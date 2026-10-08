@@ -39,11 +39,14 @@
                     <i class="fas fa-circle"></i> Carregando...
                 </span>
             </div>
+
+            <!-- 🚦 Aviso de Status (Fechado/Aberto) -->
+            <div id="avisoStatusPublico" style="display: none; margin-top: 15px;"></div>
         </div>
 
         <!-- Menu de Ações -->
         <div class="action-grid" id="actionGrid">
-            <button class="action-card" onclick="mostrarSecao('entrada')">
+            <button class="action-card" id="btnRegistrarEntrada" onclick="mostrarSecao('entrada')">
                 <div class="action-icon entrada"><i class="fas fa-sign-in-alt"></i></div>
                 <h3>Registrar Entrada</h3>
                 <p>Entrar na biblioteca</p>

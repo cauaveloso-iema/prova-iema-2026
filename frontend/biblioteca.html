@@ -87,12 +87,20 @@
                             <i class="fas fa-file-alt"></i> Relatórios
                         </button>
                     </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#tab-config" type="button">
+                            <i class="fas fa-cog"></i> Configurações
+                        </button>
+                    </li>
                 </ul>
                 
                 <div class="tab-content mt-3">
                     
                     <!-- ABA REGISTRO -->
                     <div class="tab-pane fade show active" id="tab-registro">
+                        <!-- 🚦 Status da Biblioteca -->
+                        <div id="statusBibliotecaAlerta" style="display: none; margin-bottom: 15px;"></div>
+                        
                         <!-- Toggle Modo -->
                         <div class="mode-toggle mb-3">
                             <button class="mode-btn active" id="modoAutomaticoBtn" onclick="setModo('automatico')">
@@ -358,6 +366,71 @@
                         </div>
                         
                         <div id="resultadoRelatorio"></div>
+                    </div>
+                    
+                    <!-- ================================
+                         ABA CONFIGURAÇÕES
+                    ================================= -->
+                    <div class="tab-pane fade" id="tab-config">
+                        <h5><i class="fas fa-cog me-2"></i> Configurações da Biblioteca</h5>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white;">
+                                        <i class="fas fa-toggle-on me-2"></i> Controle de Visitas
+                                    </div>
+                                    <div class="card-body">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
+                                            <div>
+                                                <strong>Visitas Abertas</strong>
+                                                <p class="text-muted small mb-0">Permite que alunos registrem entrada na página pública</p>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="configVisitasAbertas" 
+                                                       style="width: 50px; height: 25px; cursor: pointer;"
+                                                       onchange="atualizarConfiguracaoBiblioteca()">
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="statusConfigBadge" style="margin-top: 15px; padding: 12px; border-radius: 8px; text-align: center; font-weight: 600;">
+                                            <!-- Preenchido via JS -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white;">
+                                        <i class="fas fa-comment-alt me-2"></i> Mensagem quando Fechado
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Mensagem exibida na página pública</label>
+                                            <textarea id="configMensagemFechado" class="form-control" rows="4" 
+                                                      placeholder="Ex: A biblioteca está temporariamente fechada para novas visitas."></textarea>
+                                            <small class="text-muted">Esta mensagem aparece quando as visitas estão desativadas</small>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <label class="form-label">Abre às</label>
+                                                <input type="time" id="configHorarioAbertura" class="form-control">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label">Fecha às</label>
+                                                <input type="time" id="configHorarioFechamento" class="form-control">
+                                            </div>
+                                        </div>
+                                        
+                                        <button class="btn btn-primary w-100 mt-3" onclick="salvarConfiguracaoBiblioteca()">
+                                            <i class="fas fa-save"></i> Salvar Configurações
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -3430,9 +3430,6 @@ function exportarPDFModulo(modulo) {
     win.onload = () => setTimeout(() => win.print(), 500);
 }
 
-// ============================================
-// 🎨 GERAR HTML DO RELATÓRIO - MÓDULOS
-// ============================================
 function gerarHTMLRelatorioModulo(modulo, data, cfg) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
     const logoIema = '/uploads/logo-iema.png';
@@ -3648,108 +3645,21 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
         `;
     }
     
-    // ========== HTML FINAL ==========
-    return `<!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <title>${titulo}</title>
-        <style>
-            @page { size: A4 portrait; margin: 12mm; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
-            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
-            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
-            .titulo {
-                text-align: center; font-size: 14pt; font-weight: bold;
-                background: #dbeafe; padding: 10px; border: 2px solid #000;
-                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
-            }
-            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
-            .stats {
-                display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
-                background: #eef2ff; border-radius: 8px; border: 1px solid #c7d2fe;
-            }
-            .stat { text-align: center; flex: 1; border-right: 1px solid #c7d2fe; }
-            .stat:last-child { border-right: none; }
-            .stat-value { font-size: 22pt; font-weight: bold; color: #1e3c72; line-height: 1; }
-            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
-            .section-title {
-                font-size: 11pt; font-weight: bold; background: #e8e8e8;
-                padding: 6px 10px; border-left: 4px solid #1e3c72; margin: 20px 0 10px;
-            }
-            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
-            th {
-                background: #1e3c72; color: white; padding: 8px 6px; text-align: left;
-                border: 1px solid #152a52; font-size: 9pt;
-            }
-            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
-            tr:nth-child(even) { background: #f9fafb; }
-            .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
-            .assinatura { flex: 0 0 60%; text-align: center; }
-            .assinatura-container-relatorio {
-                position: relative; border-bottom: 1px solid #000; min-height: 22mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
-            }
-            .assinatura-img { max-height: 18mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
-            .carimbo-overlay {
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                max-height: 20mm; max-width: 60%; object-fit: contain;
-                opacity: 0.85; pointer-events: none; z-index: 2;
-            }
-            .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
-            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
-            .footer p { margin: 2px 0; }
-            .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
-            .btn-print {
-                display: block; margin: 20px auto; padding: 12px 30px;
-                background: #1e3c72; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
-            }
-            .btn-print:hover { background: #2a5298; }
-            @media print { .no-print { display: none !important; } body { padding: 0; } }
-        </style>
-    </head>
-    <body>
-        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        
-        <div class="header">
-            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
-            <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Gestão Geral</p>
-        </div>
-        
-        <div class="titulo">📋 ${titulo}</div>
-        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
-        
-        ${statsHTML}
-        ${tabelaHTML}
-        
-        <div class="assinaturas">
-            <div class="assinatura">
-                <div class="assinatura-container-relatorio">
-                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
-                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
-                </div>
-                <div class="assinatura-linha">Assinatura do Responsável / Gestão Geral</div>
-            </div>
-        </div>
-        
-        <div class="registro-info">
-            Relatório gerado em <strong>${dataGeracao}</strong>
-        </div>
-        
-        <div class="footer">
-            <p>Documento gerado automaticamente pelo EducaPleno</p>
-            <p>Setor: Gestão Geral — ${cfg.nomeAmigavel}</p>
-        </div>
-    </body>
-    </html>`;
+    return montarHTMLRelatorio({
+        titulo,
+        subtitulo,
+        statsHTML,
+        tabelaHTML,
+        assinaturaDigital,
+        logo: logoIema,
+        carimbo,
+        dataGeracao,
+        nomeSetor: 'Gestão Geral'
+    });
 }
 
 // ============================================
-// 🎨 TEMPLATE COMUM DE RELATÓRIO
+// 🎨 TEMPLATE COMUM DE RELATÓRIO (PADRONIZADO)
 // ============================================
 function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor }) {
     return `<!DOCTYPE html>
@@ -3758,56 +3668,98 @@ function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinat
         <meta charset="UTF-8">
         <title>${titulo}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
-            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
-            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
             .titulo {
-                text-align: center; font-size: 14pt; font-weight: bold;
-                background: #dbeafe; padding: 10px; border: 2px solid #000;
-                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #dbeafe; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            .subtitulo { text-align: center; font-size: 12pt; margin: -10px 0 15px; font-style: italic; }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
             .stats {
-                display: flex; gap: 15px; margin: 15px 0 20px; padding: 15px;
-                background: #eef2ff; border-radius: 8px; border: 1px solid #c7d2fe;
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #eef2ff; border-radius: 5px; border: 1px solid #c7d2fe;
             }
             .stat { text-align: center; flex: 1; border-right: 1px solid #c7d2fe; }
             .stat:last-child { border-right: none; }
-            .stat-value { font-size: 22pt; font-weight: bold; color: #1e3c72; line-height: 1; }
-            .stat-label { font-size: 9pt; color: #666; margin-top: 5px; }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #1e3c72; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
             .section-title {
-                font-size: 11pt; font-weight: bold; background: #e8e8e8;
-                padding: 6px 10px; border-left: 4px solid #1e3c72; margin: 20px 0 10px;
+                font-size: 9pt; font-weight: bold; background: #e8e8e8;
+                padding: 2px 6px; border-left: 3px solid #1e3c72; margin: 6px 0 3px;
             }
-            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
-            th { background: #1e3c72; color: white; padding: 8px 6px; text-align: left; border: 1px solid #152a52; font-size: 9pt; }
-            td { padding: 6px; border: 1px solid #ddd; vertical-align: top; }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #1e3c72; color: white; padding: 4px 5px; text-align: left; border: 1px solid #152a52; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #f9fafb; }
-            .assinaturas { display: flex; justify-content: center; margin-top: 50px; gap: 40px; }
+            
+            /* 🖋️ Assinatura com carimbo colado na linha */
+            .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
             .assinatura { flex: 0 0 60%; text-align: center; }
+            
             .assinatura-container-relatorio {
-                position: relative; border-bottom: 1px solid #000; min-height: 22mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+                position: relative;
+                min-height: 18mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 0;
             }
-            .assinatura-img { max-height: 18mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
+            
+            .assinatura-container-relatorio::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+            
+            .assinatura-img {
+                max-height: 14mm;
+                max-width: 100%;
+                object-fit: contain;
+                position: relative;
+                z-index: 2;
+                margin-bottom: 1mm;
+            }
+            
             .carimbo-overlay {
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                max-height: 20mm; max-width: 60%; object-fit: contain;
-                opacity: 0.85; pointer-events: none; z-index: 2;
+                position: absolute;
+                bottom: 1mm;
+                left: 50%;
+                transform: translateX(-50%);
+                max-height: 15mm;
+                max-width: 55mm;
+                object-fit: contain;
+                opacity: 0.95;
+                pointer-events: none;
+                z-index: 1;
             }
-            .assinatura-linha { border-top: none; padding-top: 5px; font-size: 10pt; margin-top: 4px; }
-            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
-            .footer p { margin: 2px 0; }
-            .registro-info { font-size: 9pt; color: #666; margin-top: 20px; text-align: center; }
+            
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
+            
             .btn-print {
-                display: block; margin: 20px auto; padding: 12px 30px;
-                background: #1e3c72; color: white; border: none; border-radius: 8px;
-                font-weight: bold; cursor: pointer; font-size: 14px; font-family: Arial, sans-serif;
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #1e3c72; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #2a5298; }
+            
             @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
@@ -3816,7 +3768,7 @@ function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinat
         <div class="header">
             <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — ${nomeSetor}</p>
+            <p>Sistema de Atendimentos — ${nomeSetor}</p>
         </div>
         <div class="titulo">📋 ${titulo}</div>
         ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}

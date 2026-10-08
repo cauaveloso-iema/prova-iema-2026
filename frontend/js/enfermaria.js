@@ -720,36 +720,16 @@ async function carregarAtendimentosAtivos() {
 // ============================================
 // 📄 IMPRIMIR LISTA DE ATENDIMENTOS ATIVOS
 // ============================================
-async function imprimirAtendimentosAtivos() {
-    try {
-        const response = await fetch('/api/enfermaria/atendimentos-ativos', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        
-        if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
-            mostrarToast('⚠️ Nenhum atendimento ativo para imprimir', 'warning');
-            return;
-        }
-        
-        const html = gerarHTMLAtendimentosAtivos(data.atendimentos);
-        
-        const win = window.open('', '_blank');
-        win.document.write(html);
-        win.document.close();
-        win.onload = () => setTimeout(() => win.print(), 500);
-        
-    } catch (error) {
-        console.error('Erro:', error);
-        mostrarToast('Erro ao gerar PDF', 'error');
-    }
-}
-
 function gerarHTMLAtendimentosAtivos(atendimentos) {
     const logoIema = '/uploads/logo-iema.png';
     const carimboEnfermaria = '/icons/assinatura_enfermaria.ico';
     const carimboGestao = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    // Calcular tempo médio
+    const tempoMedio = atendimentos.length > 0
+        ? Math.round(atendimentos.reduce((acc, a) => acc + (a.tempoAtendimento || 0), 0) / atendimentos.length)
+        : 0;
     
     return `<!DOCTYPE html>
     <html lang="pt-BR">
@@ -757,56 +737,95 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
         <meta charset="UTF-8">
         <title>Atendimentos em Andamento</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 10px; margin-bottom: 15px; }
-            .header img { max-width: 100%; max-height: 25mm; object-fit: contain; display: block; margin: 0 auto 5px; }
-            .header h1 { font-size: 13pt; text-transform: uppercase; font-weight: bold; margin: 5px 0 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
             .titulo {
-                text-align: center; font-size: 14pt; font-weight: bold;
-                background: #fff3cd; padding: 10px; border: 2px solid #000;
-                margin: 15px 0; text-transform: uppercase; letter-spacing: 1px;
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #fef3c7; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            .subtitulo { text-align: center; font-size: 11pt; margin: -10px 0 15px; font-style: italic; }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
+            .stats {
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #fffbeb; border-radius: 5px; border: 1px solid #fcd34d;
+            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #fcd34d; }
+            .stat:last-child { border-right: none; }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #d97706; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
             .alerta {
-                background: #fef3c7; border-left: 4px solid #f59e0b;
-                padding: 10px 15px; margin-bottom: 15px; border-radius: 4px;
-                font-size: 10pt;
+                background: #fef3c7; border-left: 3px solid #f59e0b;
+                padding: 4px 8px; margin-bottom: 6px; border-radius: 4px;
+                font-size: 8.5pt;
             }
-            table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 15px; }
-            th { background: #f59e0b; color: white; padding: 8px 6px; text-align: left; border: 1px solid #d97706; font-size: 9pt; }
-            td { padding: 8px 6px; border: 1px solid #ddd; vertical-align: top; }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #f59e0b; color: white; padding: 4px 5px; text-align: left; border: 1px solid #d97706; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #fffbeb; }
+            
             .tempo {
-                display: inline-block; padding: 2px 8px; border-radius: 10px;
-                font-size: 8.5pt; font-weight: bold;
+                display: inline-block; padding: 1px 6px; border-radius: 8px;
+                font-size: 7.5pt; font-weight: bold;
                 background: #fee2e2; color: #991b1b;
             }
             .tempo.ok { background: #d1fae5; color: #065f46; }
             .tempo.medio { background: #fef3c7; color: #92400e; }
-            .queixa-cell { max-width: 280px; }
-            .assinaturas { display: flex; justify-content: space-around; margin-top: 50px; gap: 40px; }
-            .assinatura { flex: 1; text-align: center; position: relative; }
+            
+            /* 🖋️ Assinaturas com carimbo colado na linha */
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 30px; }
+            .assinatura { flex: 1; text-align: center; position: relative; max-width: 45%; }
+            
             .assinatura-container {
-                position: relative; border-bottom: 1px solid #000; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+                position: relative;
+                min-height: 18mm;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 0;
             }
+            
+            .assinatura-container::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+            
             .carimbo-overlay {
-                max-height: 16mm; max-width: 60%; object-fit: contain;
-                opacity: 0.9; position: relative; z-index: 1;
+                max-height: 15mm;
+                max-width: 55mm;
+                object-fit: contain;
+                opacity: 0.95;
+                position: relative;
+                z-index: 1;
+                margin-bottom: 1mm;
             }
-            .assinatura-linha { padding-top: 5px; font-size: 10pt; }
-            .footer { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
-            .footer p { margin: 2px 0; }
+            
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            
             .btn-print {
-                display: block; margin: 20px auto; padding: 12px 30px;
-                background: #059669; color: white; border: none;
-                border-radius: 8px; font-weight: bold; cursor: pointer;
-                font-size: 14px; font-family: Arial, sans-serif;
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #059669; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #047857; }
-            @media print { .no-print { display: none !important; } }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -815,11 +834,26 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
         <div class="header">
             <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Enfermaria</p>
+            <p>Sistema de Atendimentos — Enfermaria</p>
         </div>
         
         <div class="titulo">⏳ Atendimentos em Andamento</div>
         <div class="subtitulo">Relatório de alunos que estão atualmente em atendimento</div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">${atendimentos.length}</div>
+                <div class="stat-label">Alunos em Atendimento</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">${tempoMedio}</div>
+                <div class="stat-label">Tempo Médio (min)</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="stat-label">Horário do Relatório</div>
+            </div>
+        </div>
         
         <div class="alerta">
             <strong>⚠️ Atenção:</strong> Estes alunos estão aguardando finalização do atendimento.
@@ -829,12 +863,12 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
         <table>
             <thead>
                 <tr>
-                    <th style="width: 35px;">#</th>
+                    <th style="width:30px;text-align:center;">#</th>
                     <th>Aluno</th>
-                    <th>Turma</th>
+                    <th style="width:60px;">Turma</th>
                     <th>Queixa</th>
-                    <th style="width: 100px;">Tempo</th>
-                    <th style="width: 110px;">Entrada</th>
+                    <th style="width:80px;text-align:center;">Tempo</th>
+                    <th style="width:70px;text-align:center;">Entrada</th>
                 </tr>
             </thead>
             <tbody>
@@ -850,12 +884,12 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
                     
                     return `
                         <tr>
-                            <td><strong>${i + 1}</strong></td>
+                            <td style="text-align:center;"><strong>${i + 1}</strong></td>
                             <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                             <td>${escapeHTML(a.alunoTurma || '-')}</td>
-                            <td class="queixa-cell">${escapeHTML((a.queixa || '').substring(0, 120))}${(a.queixa || '').length > 120 ? '...' : ''}</td>
-                            <td><span class="tempo ${classeTempo}">${tempo} min</span></td>
-                            <td>${horaEntrada}</td>
+                            <td>${escapeHTML((a.queixa || '').substring(0, 120))}${(a.queixa || '').length > 120 ? '...' : ''}</td>
+                            <td style="text-align:center;"><span class="tempo ${classeTempo}">${tempo} min</span></td>
+                            <td style="text-align:center;">${horaEntrada}</td>
                         </tr>
                     `;
                 }).join('')}
@@ -878,8 +912,7 @@ function gerarHTMLAtendimentosAtivos(atendimentos) {
         </div>
         
         <div class="footer">
-            <p>Documento gerado em <strong>${dataGeracao}</strong></p>
-            <p>EducaPleno — Sistema de Atendimentos</p>
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Enfermaria</p>
         </div>
     </body>
     </html>`;
@@ -2333,7 +2366,7 @@ function exportarPDF() {
 }
 
 // ============================================
-// 🎨 GERAR HTML DO RELATÓRIO (com assinaturas fixas)
+// 🎨 GERAR HTML DO RELATÓRIO (PADRONIZADO)
 // ============================================
 function gerarHTMLRelatorioEnfermaria(data) {
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
@@ -2413,22 +2446,22 @@ function gerarHTMLRelatorioEnfermaria(data) {
                 <thead>
                     <tr>
                         <th>Turma</th>
-                        <th>Total de Atendimentos</th>
-                        <th>Alunos Atendidos</th>
+                        <th style="width:140px;text-align:center;">Total de Atendimentos</th>
+                        <th style="width:120px;text-align:center;">Alunos Atendidos</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${(data.porTurma || []).map(t => `
                         <tr>
                             <td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td>
-                            <td>${t.total || 0}</td>
-                            <td>${t.totalAlunos || 0}</td>
+                            <td style="text-align:center;">${t.total || 0}</td>
+                            <td style="text-align:center;">${t.totalAlunos || 0}</td>
                         </tr>
                     `).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado disponível</td></tr>'}
                 </tbody>
             </table>
             
-            <div class="section-title" style="margin-top: 25px;">📋 Últimos Atendimentos</div>
+            <div class="section-title">📋 Últimos Atendimentos</div>
             <table>
                 <thead>
                     <tr>
@@ -2436,7 +2469,7 @@ function gerarHTMLRelatorioEnfermaria(data) {
                         <th>Aluno</th>
                         <th>Turma</th>
                         <th>Queixa</th>
-                        <th>Status</th>
+                        <th style="width:110px;text-align:center;">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -2446,9 +2479,9 @@ function gerarHTMLRelatorioEnfermaria(data) {
                             <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                             <td>${escapeHTML(a.alunoTurma || '')}</td>
                             <td>${escapeHTML((a.queixa || '').substring(0, 80))}${(a.queixa || '').length > 80 ? '...' : ''}</td>
-                            <td>
+                            <td style="text-align:center;">
                                 <span class="badge-status ${a.status === 'finalizado' ? 'aprovada' : 'pendente'}">
-                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Atendimento'}
+                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Atend.'}
                                 </span>
                             </td>
                         </tr>
@@ -2464,7 +2497,7 @@ function gerarHTMLRelatorioEnfermaria(data) {
                     <tr>
                         <th>Aluno</th>
                         <th>Matrícula</th>
-                        <th>Total</th>
+                        <th style="width:80px;text-align:center;">Total</th>
                         <th>Desfechos</th>
                     </tr>
                 </thead>
@@ -2473,7 +2506,7 @@ function gerarHTMLRelatorioEnfermaria(data) {
                         <tr>
                             <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                             <td>${escapeHTML(a.alunoMatricula || '-')}</td>
-                            <td>${a.total || 0}</td>
+                            <td style="text-align:center;">${a.total || 0}</td>
                             <td>${Object.entries(a.desfechos || {}).map(([k, v]) => `${escapeHTML(k)}: ${v}`).join('<br>')}</td>
                         </tr>
                     `).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum dado</td></tr>'}
@@ -2481,7 +2514,7 @@ function gerarHTMLRelatorioEnfermaria(data) {
             </table>
             
             ${(data.ultimosAtendimentos && data.ultimosAtendimentos.length > 0) ? `
-                <div class="section-title" style="margin-top: 25px;">📋 Últimos Atendimentos</div>
+                <div class="section-title">📋 Últimos Atendimentos</div>
                 <table>
                     <thead>
                         <tr>
@@ -2538,179 +2571,94 @@ function gerarHTMLRelatorioEnfermaria(data) {
         <meta charset="UTF-8">
         <title>${titulo}</title>
         <style>
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { 
-                font-family: 'Times New Roman', Times, serif; 
-                font-size: 11pt; 
-                line-height: 1.4;
-                color: #000;
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo {
+                text-align: center; font-size: 11pt; font-weight: bold;
+                background: #d1fae5; padding: 4px 8px; border: 1.5px solid #000;
+                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            .header { 
-                text-align: center; 
-                border-bottom: 2px double #000; 
-                padding-bottom: 10px; 
-                margin-bottom: 15px; 
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
+            .stats {
+                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
+                background: #f0fdf4; border-radius: 5px; border: 1px solid #86efac;
             }
-            .header img { 
-                max-width: 100%; 
-                max-height: 25mm; 
-                object-fit: contain;
-                display: block;
-                margin: 0 auto 5px;
-            }
-            .header h1 { 
-                font-size: 13pt; 
-                text-transform: uppercase; 
-                font-weight: bold;
-                margin: 5px 0 0;
-            }
-            .titulo { 
-                text-align: center; 
-                font-size: 14pt; 
-                font-weight: bold; 
-                background: #e8e8e8; 
-                padding: 10px; 
-                border: 2px solid #000; 
-                margin: 15px 0;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            .subtitulo {
-                text-align: center;
-                font-size: 12pt;
-                margin: -10px 0 15px;
-                font-style: italic;
-            }
-            .stats { 
-                display: flex; 
-                gap: 15px; 
-                margin: 15px 0 20px; 
-                padding: 15px; 
-                background: #f0f4ff; 
-                border-radius: 8px; 
-                border: 1px solid #cbd5e1;
-            }
-            .stat { 
-                text-align: center; 
-                flex: 1;
-                border-right: 1px solid #cbd5e1;
-            }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #86efac; }
             .stat:last-child { border-right: none; }
-            .stat-value { 
-                font-size: 22pt; 
-                font-weight: bold; 
-                color: #059669;
-                line-height: 1;
+            .stat-value { font-size: 13pt; font-weight: bold; color: #059669; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
+            .section-title {
+                font-size: 9pt; font-weight: bold; background: #e8e8e8;
+                padding: 2px 6px; border-left: 3px solid #059669; margin: 6px 0 3px;
             }
-            .stat-label { 
-                font-size: 9pt; 
-                color: #666; 
-                margin-top: 5px;
-            }
-            .section-title { 
-                font-size: 11pt; 
-                font-weight: bold; 
-                background: #e8e8e8; 
-                padding: 6px 10px; 
-                border-left: 4px solid #059669; 
-                margin: 20px 0 10px;
-            }
-            table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                font-size: 9.5pt; 
-                margin-bottom: 15px;
-            }
-            th { 
-                background: #059669; 
-                color: white; 
-                padding: 8px 6px; 
-                text-align: left; 
-                border: 1px solid #047857;
-                font-size: 9pt;
-            }
-            td { 
-                padding: 6px; 
-                border: 1px solid #ddd; 
-                vertical-align: top;
-            }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #059669; color: white; padding: 4px 5px; text-align: left; border: 1px solid #047857; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #f9fafb; }
+            
             .badge-status {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 10px;
-                font-size: 8.5pt;
-                font-weight: bold;
+                display: inline-block; padding: 1px 6px; border-radius: 8px;
+                font-size: 7.5pt; font-weight: bold;
             }
             .badge-status.aprovada { background: #d1fae5; color: #065f46; }
             .badge-status.pendente { background: #fef3c7; color: #92400e; }
             
-            .assinaturas { 
-                display: flex; 
-                justify-content: space-around; 
-                margin-top: 50px; 
-                gap: 40px; 
-            }
-            .assinatura { 
-                flex: 1; 
-                text-align: center;
-                position: relative;
-            }
+            /* 🖋️ Assinaturas com carimbo colado na linha */
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 30px; }
+            .assinatura { flex: 1; text-align: center; position: relative; max-width: 45%; }
+            
             .assinatura-container {
                 position: relative;
-                border-bottom: 1px solid #000;
-                min-height: 20mm;
+                min-height: 18mm;
                 display: flex;
                 align-items: flex-end;
                 justify-content: center;
-                padding-bottom: 3px;
+                padding-bottom: 0;
             }
+            
+            .assinatura-container::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-bottom: 1px solid #000;
+            }
+            
             .carimbo-overlay {
-                max-height: 18mm;
-                max-width: 60%;
+                max-height: 15mm;
+                max-width: 55mm;
                 object-fit: contain;
-                opacity: 0.9;
+                opacity: 0.95;
                 position: relative;
                 z-index: 1;
+                margin-bottom: 1mm;
             }
-            .assinatura-linha { 
-                padding-top: 5px; 
-                font-size: 10pt; 
-            }
-            .footer { 
-                text-align: center; 
-                margin-top: 30px; 
-                padding-top: 10px; 
-                border-top: 1px solid #ccc; 
-                font-size: 8pt; 
-                color: #666; 
-            }
-            .footer p { margin: 2px 0; }
-            .registro-info { 
-                font-size: 9pt; 
-                color: #666; 
-                margin-top: 20px; 
-                text-align: center; 
-            }
-            .btn-print { 
-                display: block; 
-                margin: 20px auto; 
-                padding: 12px 30px; 
-                background: #059669; 
-                color: white; 
-                border: none; 
-                border-radius: 8px; 
-                font-weight: bold; 
-                cursor: pointer; 
-                font-size: 14px;
-                font-family: Arial, sans-serif;
+            
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
+            
+            .btn-print {
+                display: block; margin: 10px auto; padding: 8px 20px;
+                background: #059669; color: white; border: none; border-radius: 6px;
+                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
             }
             .btn-print:hover { background: #047857; }
-            @media print { 
-                .no-print { display: none !important; } 
-                body { padding: 0; }
-            }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
@@ -2719,7 +2667,7 @@ function gerarHTMLRelatorioEnfermaria(data) {
         <div class="header">
             <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p style="font-size: 10pt; margin: 5px 0 0;">Sistema de Atendimentos — Enfermaria</p>
+            <p>Sistema de Atendimentos — Enfermaria</p>
         </div>
         
         <div class="titulo">🏥 ${titulo}</div>
