@@ -1523,3 +1523,455 @@ select.form-control {
         max-width: none !important;
     }
 }
+
+/* ============================================ */
+/* ESTILOS EXTRAÍDOS DO INDEX.HTML - NÃO MODIFICAR */
+/* ============================================ */
+
+/* Animação de pulso para a seta */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+    }
+    50% {
+        transform: scale(1.1);
+        box-shadow: 0 8px 25px rgba(79, 70, 229, 0.7);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+    }
+}
+
+#btnScrollToBottom {
+    position: fixed;
+    bottom: 50px;
+    right: 100px;
+    z-index: 9999;
+    background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+    font-size: 20px;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: pulse 2s infinite;
+}
+
+#btnScrollToBottom:hover {
+    transform: scale(1.15) !important;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    animation: none !important;
+}
+
+@media (max-width: 768px) {
+    #btnScrollToBottom {
+        bottom: 140px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    #btnScrollToBottom {
+        bottom: 130px;
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+}
+
+/* ===== NOTIFICAÇÕES ===== */
+.notificacoes-container {
+    position: relative;
+    display: inline-block;
+}
+
+.notificacoes-btn:hover {
+    background: #e5e7eb !important;
+    color: #4f46e5 !important;
+}
+
+.notificacoes-btn.tem-notificacao {
+    animation: pulse-notification 2s infinite;
+}
+
+@keyframes pulse-notification {
+    0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+}
+
+.notificacoes-dropdown.show {
+    display: block !important;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notificacao-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    gap: 12px;
+    background: white;
+}
+
+.notificacao-item:hover {
+    background: #f1f5f9;
+    transform: translateX(5px);
+}
+
+.notificacao-item.nao-lida {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+}
+
+.notificacao-icone {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+.notificacao-conteudo {
+    flex: 1;
+}
+
+.notificacao-titulo {
+    font-weight: 600;
+    margin-bottom: 3px;
+    font-size: 0.9rem;
+    color: #1f2937;
+}
+
+.notificacao-mensagem {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.notificacao-tempo {
+    font-size: 0.65rem;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.notificacao-footer {
+    padding: 10px 15px;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+}
+
+.notificacao-footer a {
+    color: #667eea;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.notificacao-footer a:hover {
+    color: #764ba2;
+}
+
+/* ===== INDICADOR DE PUSH COR VERDE ===== */
+.push-indicator-container {
+    margin-right: 5px;
+    animation: fadeIn 0.3s ease;
+}
+
+.push-indicator {
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    border: 2px solid white;
+    border-radius: 30px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    transition: all 0.3s;
+    cursor: help;
+}
+
+.push-indicator i {
+    font-size: 1rem;
+    color: white;
+}
+
+.push-indicator:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(16, 185, 129, 0.4);
+    background: linear-gradient(135deg, #059669, #047857) !important;
+}
+
+.push-indicator i.fa-bell-slash {
+    animation: gentle-shake 3s infinite;
+}
+
+@keyframes gentle-shake {
+    0%, 100% { transform: rotate(0); }
+    5% { transform: rotate(5deg); }
+    10% { transform: rotate(-5deg); }
+    15% { transform: rotate(3deg); }
+    20% { transform: rotate(-3deg); }
+    25% { transform: rotate(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 768px) {
+    .push-indicator .push-text {
+        display: none;
+    }
+    
+    .push-indicator {
+        padding: 8px 12px;
+    }
+}
+
+/* ===== MENU MOBILE PROFESSOR ===== */
+.professor-mobile-menu-toggle {
+    display: none;
+}
+
+@media screen and (max-width: 768px) {
+    .professor-mobile-menu-toggle {
+        display: block !important;
+        position: fixed;
+        bottom: 100px;
+        left: 20px;
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        border: 3px solid white;
+        border-radius: 16px;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 10001;
+        box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        animation: pulse-mobile 2s infinite;
+    }
+
+    @keyframes pulse-mobile {
+        0% { transform: scale(1); box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4); }
+        50% { transform: scale(1.05); box-shadow: 0 8px 25px rgba(79, 70, 229, 0.7); }
+        100% { transform: scale(1); box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4); }
+    }
+
+    .professor-mobile-menu-toggle:hover {
+        transform: scale(1.1) !important;
+        background: linear-gradient(135deg, #10b981, #059669) !important;
+    }
+
+    .professor-mobile-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px);
+        z-index: 10002;
+    }
+
+    .professor-mobile-overlay.active {
+        display: block !important;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .professor-mobile-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        height: 100vh;
+        background: linear-gradient(180deg, #1e1e2f 0%, #2d2d44 100%);
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 10003;
+        overflow-y: auto;
+        box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .professor-mobile-sidebar.active {
+        transform: translateX(0);
+    }
+
+    .professor-mobile-sidebar-header {
+        padding: 25px 20px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        position: relative;
+        color: white;
+    }
+
+    .professor-mobile-avatar {
+        width: 60px;
+        height: 60px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        margin-bottom: 15px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .professor-mobile-info h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .professor-mobile-info p {
+        margin: 5px 0 0;
+        font-size: 0.8rem;
+        opacity: 0.9;
+    }
+
+    .professor-mobile-close {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        width: 36px;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        color: white;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .professor-mobile-close:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.1);
+    }
+
+    .professor-mobile-menu-items {
+        padding: 15px 0;
+    }
+
+    .mobile-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 15px 20px;
+        color: rgba(255, 255, 255, 0.8);
+        text-decoration: none;
+        transition: all 0.2s;
+        font-size: 1rem;
+        border-left: 3px solid transparent;
+    }
+
+    .mobile-menu-item i {
+        width: 24px;
+        font-size: 1.2rem;
+    }
+
+    .mobile-menu-item:hover,
+    .mobile-menu-item.active {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        border-left-color: #10b981;
+    }
+
+    .mobile-menu-item.active {
+        background: linear-gradient(90deg, rgba(79, 70, 229, 0.2), transparent);
+    }
+
+    .professor-mobile-sidebar-footer {
+        padding: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .mobile-logout-btn {
+        width: 100%;
+        padding: 15px;
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 12px;
+        color: #ef4444;
+        font-size: 1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        transition: all 0.2s;
+        font-weight: 600;
+    }
+
+    .mobile-logout-btn:hover {
+        background: rgba(239, 68, 68, 0.3);
+        transform: translateY(-2px);
+    }
+
+    body.menu-aberto {
+        overflow: hidden;
+    }
+}
+
+@media screen and (min-width: 769px) {
+    .professor-mobile-menu-toggle,
+    .professor-mobile-overlay,
+    .professor-mobile-sidebar {
+        display: none !important;
+    }
+}

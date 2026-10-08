@@ -627,3 +627,180 @@
         display: none !important;
     }
 }
+
+/* ============================================================================
+   ESTILOS QUE ESTAVAM INLINE NO ALUNO.HTML
+   (Adicionados aqui sem alterar nenhuma regra existente)
+   ============================================================================ */
+
+/* ============================================
+   ESTILOS DE NOTIFICAÇÕES (criados via JS)
+   ============================================ */
+.notificacoes-container {
+    position: relative;
+    display: inline-block;
+}
+
+.notificacoes-btn:hover {
+    background: rgba(255,255,255,0.25) !important;
+    transform: scale(1.05);
+}
+
+.notificacoes-btn.tem-notificacao {
+    animation: pulse-notification 2s infinite;
+}
+
+@keyframes pulse-notification {
+    0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255,255,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+}
+
+.notificacoes-dropdown.show {
+    display: block !important;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notificacao-item:hover {
+    background: #f1f5f9 !important;
+    transform: translateX(5px);
+}
+
+.notificacao-footer button:hover {
+    color: #b91c1c !important;
+    text-decoration: underline;
+}
+
+.notificacao-footer button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Responsividade do botão calendário */
+@media (max-width: 768px) {
+    .btn-calendario span {
+        display: none;
+    }
+    
+    .btn-calendario {
+        padding: 8px 12px !important;
+    }
+    
+    .btn-calendario i {
+        margin: 0 !important;
+    }
+}
+
+/* ============================================
+   ESTILOS DE NOTIFICAÇÕES MOBILE
+   ============================================ */
+@keyframes slideUpModal {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* 🔥 FAB MENU FIXO À DIREITA */
+.fab-menu {
+    position: fixed !important;
+    bottom: 25px !important;
+    right: 25px !important;
+    left: auto !important;
+    top: auto !important;
+    z-index: 9999 !important;
+}
+
+.fab-menu .fab-button {
+    position: relative;
+}
+
+.fab-notification-badge {
+    animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.menu-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.menu-item .menu-notification-badge {
+    animation: pulse-badge 2s infinite;
+}
+
+/* Notificação item mobile */
+.notificacao-item-mobile {
+    padding: 15px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+    align-items: flex-start;
+}
+
+.notificacao-item-mobile:active {
+    background: #f1f5f9;
+}
+
+.notificacao-item-mobile.nao-lida {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .modal-notificacoes-mobile {
+        display: none;
+    }
+    
+    .modal-notificacoes-mobile.show {
+        display: flex !important;
+    }
+    
+    /* Garantir FAB à direita no mobile */
+    .fab-menu {
+        right: 20px !important;
+        left: auto !important;
+        bottom: 20px !important;
+    }
+    
+    .fab-menu .fab-button {
+        width: 58px !important;
+        height: 58px !important;
+    }
+}
+
+/* ============================================
+   ANIMAÇÕES DE NOTIFICAÇÃO
+   ============================================ */
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
