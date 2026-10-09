@@ -4,6 +4,7 @@
 // Somente Leitura - Modelo Gestão Geral
 // + Sistema de Notificações Integrado
 // + Busca por Data (🆕)
+// + Período da Falta + Tipo de Prova (🆕)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -81,6 +82,58 @@ function getMotivoLabel(motivo) {
         'outros': 'Outros'
     };
     return labels[motivo] || motivo;
+}
+
+// 🔥 Formata período da falta (helpers)
+function getPeriodoFaltaFormatado(j) {
+    if (!j) return null;
+    if (j.periodoFaltaFormatado) return j.periodoFaltaFormatado;
+    if (!j.periodoFaltaInicio) return null;
+    
+    const ini = new Date(j.periodoFaltaInicio);
+    const fim = j.periodoFaltaFim ? new Date(j.periodoFaltaFim) : ini;
+    
+    const fmt = (d) => d.toLocaleDateString('pt-BR');
+    const iniDia = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
+    const fimDia = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate());
+    
+    if (iniDia.getTime() === fimDia.getTime()) return fmt(iniDia);
+    return `${fmt(iniDia)} a ${fmt(fimDia)}`;
+}
+
+function getTipoProvaFormatado(j) {
+    if (!j) return null;
+    if (j.tipoProvaPerdidaFormatado) return j.tipoProvaPerdidaFormatado;
+    if (!j.tipoProvaPerdida) return null;
+    if (j.tipoProvaPerdida === 'Outros' && j.tipoProvaPerdidaOutros) {
+        return `Outros (${j.tipoProvaPerdidaOutros})`;
+    }
+    return j.tipoProvaPerdida;
+}
+
+// 🔥 Limpa cache do Service Worker (força atualização)
+async function limparCacheSecretaria() {
+    if ('caches' in window) {
+        try {
+            const names = await caches.keys();
+            await Promise.all(names.map(name => caches.delete(name)));
+            console.log('✅ Cache limpo');
+        } catch (e) {
+            console.warn('Erro ao limpar cache:', e);
+        }
+    }
+    
+    if ('serviceWorker' in navigator) {
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (const reg of registrations) {
+                await reg.update();
+            }
+            console.log('✅ Service Worker atualizado');
+        } catch (e) {
+            console.warn('Erro ao atualizar SW:', e);
+        }
+    }
 }
 
 function notificar(mensagem, tipo = 'success', duracao = 3500) {
@@ -841,7 +894,8 @@ async function buscarAluno(alunoId) {
         await pararScannerAutomatico();
 
         const response = await fetch(`/api/secretaria/justificativa/aluno/${alunoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
         });
         const data = await response.json();
 
@@ -963,7 +1017,10 @@ async function buscarJustificativasDoAluno() {
 
         const response = await fetch(
             `/api/secretaria/justificativa/por-aluno/${currentAluno.id}?${params.toString()}`,
-            { headers: { 'Authorization': `Bearer ${token}` } }
+            { 
+                headers: { 'Authorization': `Bearer ${token}` },
+                cache: 'no-store'  // 🔥 ignora cache
+            }
         );
 
         const data = await response.json();
@@ -988,26 +1045,48 @@ async function buscarJustificativasDoAluno() {
 
         container.innerHTML = `
             <div class="justificativas-lista">
-                ${data.registros.map(j => `
+                ${data.registros.map(j => {
+                    const periodoFalta = getPeriodoFaltaFormatado(j);
+                    const tipoProva = getTipoProvaFormatado(j);
+                    const dataFormatada = j.dataFormatada || (j.data ? new Date(j.data).toLocaleDateString('pt-BR') : '-');
+                    
+                    return `
                     <div class="justificativa-item">
                         <div class="justificativa-header-item">
                             <span class="badge-motivo-item">${escapeHTML(j.motivoLabel)}</span>
                             <span class="justificativa-data-item">
-                                <i class="fas fa-calendar"></i> ${j.dataFormatada}
+                                <i class="fas fa-calendar"></i> ${dataFormatada}
                             </span>
                         </div>
+                        
+                        ${periodoFalta ? `
+                            <div class="justificativa-resp-item" style="background: #dbeafe; padding: 6px 10px; border-radius: 6px; margin-top: 6px;">
+                                <i class="fas fa-calendar-times" style="color: #1e3c72;"></i>
+                                <span><strong>Período da Falta:</strong> ${escapeHTML(periodoFalta)}</span>
+                            </div>
+                        ` : ''}
+                        
+                        ${tipoProva ? `
+                            <div class="justificativa-resp-item" style="background: #fef3c7; padding: 6px 10px; border-radius: 6px; margin-top: 6px;">
+                                <i class="fas fa-file-alt" style="color: #92400e;"></i>
+                                <span><strong>Tipo de Prova:</strong> ${escapeHTML(tipoProva)}</span>
+                            </div>
+                        ` : ''}
+                        
                         ${j.observacoes ? `
                             <div class="justificativa-obs-item">
                                 <i class="fas fa-comment"></i>
                                 <span>${escapeHTML(j.observacoes.substring(0, 150))}${j.observacoes.length > 150 ? '...' : ''}</span>
                             </div>
                         ` : ''}
+                        
                         ${j.responsavelNome ? `
                             <div class="justificativa-resp-item">
                                 <i class="fas fa-user-shield"></i>
                                 <span><strong>${escapeHTML(j.responsavelNome)}</strong></span>
                             </div>
                         ` : ''}
+                        
                         <div class="justificativa-footer-item">
                             <span class="badge-assinatura-item ${j.temAssinatura ? 'assinado' : 'pendente'}">
                                 <i class="fas fa-signature"></i>
@@ -1023,7 +1102,7 @@ async function buscarJustificativasDoAluno() {
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `}).join('')}
             </div>`;
     } catch (error) {
         console.error('Erro:', error);
@@ -1061,7 +1140,8 @@ async function verJustificativa(id) {
 
     try {
         const response = await fetch(`/api/secretaria/justificativa/${id}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
         });
         const data = await response.json();
 
@@ -1071,6 +1151,8 @@ async function verJustificativa(id) {
         }
 
         const a = data.autorizacao;
+        const periodoFalta = getPeriodoFaltaFormatado(a);
+        const tipoProva = getTipoProvaFormatado(a);
 
         const old = safeGet('modalVerJustificativa');
         if (old) old.remove();
@@ -1100,9 +1182,23 @@ async function verJustificativa(id) {
                             </div>
 
                             <div class="modal-detail-row">
-                                <strong><i class="fas fa-calendar"></i> Data:</strong>
+                                <strong><i class="fas fa-calendar"></i> Data do Registro:</strong>
                                 <span>${a.dataFormatada || '-'}</span>
                             </div>
+
+                            ${periodoFalta ? `
+                                <div class="modal-detail-row" style="background: #dbeafe; padding: 10px; border-radius: 8px; margin-top: 8px;">
+                                    <strong><i class="fas fa-calendar-times"></i> Período da Falta:</strong>
+                                    <span style="font-weight: 600; color: #1e3c72;">${escapeHTML(periodoFalta)}</span>
+                                </div>
+                            ` : ''}
+
+                            ${tipoProva ? `
+                                <div class="modal-detail-row" style="background: #fef3c7; padding: 10px; border-radius: 8px; margin-top: 8px;">
+                                    <strong><i class="fas fa-file-alt"></i> Tipo de Prova Perdida:</strong>
+                                    <span style="font-weight: 600; color: #92400e;">${escapeHTML(tipoProva)}</span>
+                                </div>
+                            ` : ''}
 
                             ${a.observacoes ? `
                                 <div class="modal-section">
@@ -1168,7 +1264,8 @@ async function imprimirJustificativa(id) {
 
     try {
         const response = await fetch(`/api/secretaria/justificativa/${id}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
         });
         const data = await response.json();
 
@@ -1205,6 +1302,10 @@ function gerarHTMLImpressao(a, qrCodeUrl) {
     const carimbo = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
 
+    const periodoFalta = getPeriodoFaltaFormatado(a);
+    const tipoProva = getTipoProvaFormatado(a);
+    const dataFormatada = a.dataFormatada || (a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '-');
+
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
@@ -1237,6 +1338,14 @@ function gerarHTMLImpressao(a, qrCodeUrl) {
             .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 5px 8px; margin: 5px 0; border-radius: 4px; }
             .motivo-box strong { font-size: 9pt; }
             .motivo-box p { margin: 3px 0 0; font-size: 9.5pt; font-weight: bold; }
+
+            .destaque-box { background: #dbeafe; border: 1px solid #1e3c72; padding: 6px 10px; margin: 5px 0; border-radius: 4px; text-align: center; }
+            .destaque-box .label { font-size: 8pt; color: #1e3c72; text-transform: uppercase; font-weight: bold; }
+            .destaque-box .value { font-size: 11pt; color: #1e3c72; font-weight: bold; margin-top: 2px; }
+
+            .destaque-box-prova { background: #fef3c7; border: 1px solid #f59e0b; padding: 6px 10px; margin: 5px 0; border-radius: 4px; text-align: center; }
+            .destaque-box-prova .label { font-size: 8pt; color: #92400e; text-transform: uppercase; font-weight: bold; }
+            .destaque-box-prova .value { font-size: 11pt; color: #92400e; font-weight: bold; margin-top: 2px; }
 
             .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
 
@@ -1285,9 +1394,25 @@ function gerarHTMLImpressao(a, qrCodeUrl) {
 
         <div class="section-title">📌 Dados do Registro</div>
         <div class="info-grid">
-            <div class="info-item"><span class="info-label">Data:</span><span>${a.dataFormatada || '-'}</span></div>
+            <div class="info-item"><span class="info-label">Data:</span><span>${dataFormatada}</span></div>
             <div class="info-item"><span class="info-label">Registrado por:</span><span>${escapeHTML(a.registradoPorNome || '-')}</span></div>
         </div>
+
+        ${periodoFalta ? `
+            <div class="section-title">📆 Período da Falta</div>
+            <div class="destaque-box">
+                <div class="label">Período da Falta Justificada</div>
+                <div class="value">${escapeHTML(periodoFalta)}</div>
+            </div>
+        ` : ''}
+
+        ${tipoProva ? `
+            <div class="section-title">📝 Tipo de Prova Perdida</div>
+            <div class="destaque-box-prova">
+                <div class="label">Tipo de Prova</div>
+                <div class="value">${escapeHTML(tipoProva)}</div>
+            </div>
+        ` : ''}
 
         <div class="motivo-box">
             <strong>📌 Motivo:</strong>
@@ -1372,8 +1497,10 @@ async function buscarPorData() {
         if (turma) params.append('turma', turma);
         if (motivo) params.append('motivo', motivo);
 
+        // 🔥 cache: 'no-store' = ignora cache do Service Worker
         const response = await fetch(`/api/secretaria/justificativa/por-data?${params.toString()}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
         });
         const data = await response.json();
 
@@ -1404,15 +1531,22 @@ async function buscarPorData() {
         // Agrupa por data para exibir bonitinho
         const porData = {};
         resultadosPorData.forEach(r => {
-            const key = r.dataFormatada;
+            // 🔥 Prioriza periodoFaltaInicio como data de agrupamento
+            const periodoFalta = getPeriodoFaltaFormatado(r);
+            const key = periodoFalta || r.dataFormatada || 'Sem data';
+            
             if (!porData[key]) porData[key] = [];
             porData[key].push(r);
         });
 
         const datasOrdenadas = Object.keys(porData).sort((a, b) => {
-            const [d1, m1, y1] = a.split('/');
-            const [d2, m2, y2] = b.split('/');
-            return new Date(`${y2}-${m2}-${d2}`) - new Date(`${y1}-${m1}-${d1}`);
+            // Tenta ordenar por data real (se for formato dd/mm/yyyy ou range)
+            const extrairData = (s) => {
+                const match = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+                if (match) return new Date(`${match[3]}-${match[2]}-${match[1]}`);
+                return new Date(0);
+            };
+            return extrairData(b) - extrairData(a);
         });
 
         let html = '';
@@ -1422,11 +1556,15 @@ async function buscarPorData() {
                 <div class="data-group">
                     <div class="data-group-header">
                         <i class="fas fa-calendar-check"></i>
-                        <strong>${dataKey}</strong>
+                        <strong>${escapeHTML(dataKey)}</strong>
                         <span class="badge-count-verde">${registros.length}</span>
                     </div>
                     <div class="justificativas-lista">
-                        ${registros.map(j => `
+                        ${registros.map(j => {
+                            const dataFormatada = j.dataFormatada || (j.data ? new Date(j.data).toLocaleDateString('pt-BR') : '-');
+                            const tipoProva = getTipoProvaFormatado(j);
+                            
+                            return `
                             <div class="justificativa-item">
                                 <div class="justificativa-header-item">
                                     <span class="badge-motivo-item">${escapeHTML(j.motivoLabel)}</span>
@@ -1434,23 +1572,34 @@ async function buscarPorData() {
                                         <i class="fas fa-user-graduate"></i> ${escapeHTML(j.alunoNome)}
                                     </span>
                                 </div>
+                                
                                 <div class="justificativa-resp-item">
                                     <i class="fas fa-graduation-cap"></i>
                                     <span><strong>${escapeHTML(j.alunoTurma || '-')}</strong> 
                                     ${j.alunoCurso ? ' • ' + escapeHTML(j.alunoCurso) : ''}</span>
                                 </div>
+                                
+                                ${tipoProva ? `
+                                    <div class="justificativa-resp-item" style="background: #fef3c7; padding: 4px 8px; border-radius: 6px; margin-top: 4px; font-size: 0.85em;">
+                                        <i class="fas fa-file-alt" style="color: #92400e;"></i>
+                                        <span><strong>Tipo:</strong> ${escapeHTML(tipoProva)}</span>
+                                    </div>
+                                ` : ''}
+                                
                                 ${j.observacoes ? `
                                     <div class="justificativa-obs-item">
                                         <i class="fas fa-comment"></i>
                                         <span>${escapeHTML(j.observacoes.substring(0, 150))}${j.observacoes.length > 150 ? '...' : ''}</span>
                                     </div>
                                 ` : ''}
+                                
                                 ${j.responsavelNome ? `
                                     <div class="justificativa-resp-item">
                                         <i class="fas fa-user-shield"></i>
                                         <span><strong>${escapeHTML(j.responsavelNome)}</strong></span>
                                     </div>
                                 ` : ''}
+                                
                                 <div class="justificativa-footer-item">
                                     <span class="badge-assinatura-item ${j.temAssinatura ? 'assinado' : 'pendente'}">
                                         <i class="fas fa-signature"></i>
@@ -1466,7 +1615,7 @@ async function buscarPorData() {
                                     </div>
                                 </div>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             `;
@@ -1487,10 +1636,15 @@ function exportarCSVData() {
         return;
     }
 
-    let csv = "Data,Aluno,Matrícula,Turma,Curso,Motivo,Observações,Responsável\n";
+    let csv = "Data Registro,Período da Falta,Tipo de Prova,Aluno,Matrícula,Turma,Curso,Motivo,Observações,Responsável\n";
     resultadosPorData.forEach(a => {
+        const periodoFalta = getPeriodoFaltaFormatado(a) || '';
+        const tipoProva = getTipoProvaFormatado(a) || '';
+        
         csv += [
             a.dataFormatada || '',
+            `"${periodoFalta.replace(/"/g, '""')}"`,
+            `"${tipoProva.replace(/"/g, '""')}"`,
             `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
             `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
             `"${(a.alunoTurma || '').replace(/"/g, '""')}"`,
@@ -1579,22 +1733,31 @@ function exportarPDFData() {
         <table>
             <thead>
                 <tr>
-                    <th style="width:80px;">Data</th>
+                    <th style="width:70px;">Data Reg.</th>
+                    <th style="width:90px;">Período Falta</th>
+                    <th style="width:70px;">Tipo Prova</th>
                     <th>Aluno</th>
-                    <th style="width:80px;">Turma</th>
-                    <th style="width:110px;">Motivo</th>
+                    <th style="width:60px;">Turma</th>
+                    <th style="width:100px;">Motivo</th>
                     <th>Observações</th>
                 </tr>
             </thead>
             <tbody>
-                ${resultadosPorData.map(a => `
+                ${resultadosPorData.map(a => {
+                    const periodoFalta = getPeriodoFaltaFormatado(a) || '-';
+                    const tipoProva = getTipoProvaFormatado(a) || '-';
+                    
+                    return `
                     <tr>
                         <td>${a.dataFormatada || '-'}</td>
+                        <td><strong style="color: #1e3c72;">${escapeHTML(periodoFalta)}</strong></td>
+                        <td>${escapeHTML(tipoProva)}</td>
                         <td><strong>${escapeHTML(a.alunoNome || '')}</strong><br><small>${escapeHTML(a.alunoMatricula || '')}</small></td>
                         <td>${escapeHTML(a.alunoTurma || '-')}</td>
                         <td>${escapeHTML(a.motivoLabel || '')}</td>
                         <td>${escapeHTML((a.observacoes || '').substring(0, 100))}</td>
-                    </tr>`).join('')}
+                    </tr>`;
+                }).join('')}
             </tbody>
         </table>
         <div class="assinaturas">
@@ -1767,7 +1930,8 @@ async function carregarRelatorio() {
 
     try {
         const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
         });
         const data = await response.json();
 
@@ -1858,14 +2022,21 @@ function exibirRelatorio(data, tipo) {
                 <h5><i class="fas fa-history"></i> Histórico</h5>
                 <div class="table-responsive">
                     <table class="table table-sm">
-                        <thead><tr><th>Data</th><th>Motivo</th><th>Observações</th></tr></thead>
+                        <thead><tr><th>Data</th><th>Período Falta</th><th>Tipo Prova</th><th>Motivo</th><th>Observações</th></tr></thead>
                         <tbody>
-                            ${(data.registros || []).map(a => `
+                            ${(data.registros || []).map(a => {
+                                const periodoFalta = getPeriodoFaltaFormatado(a);
+                                const tipoProva = getTipoProvaFormatado(a);
+                                
+                                return `
                                 <tr>
                                     <td>${a.dataFormatada}</td>
+                                    <td><strong>${escapeHTML(periodoFalta || '-')}</strong></td>
+                                    <td>${escapeHTML(tipoProva || '-')}</td>
                                     <td>${escapeHTML(a.motivoLabel)}</td>
                                     <td>${escapeHTML((a.observacoes || '').substring(0, 100))}</td>
-                                </tr>`).join('')}
+                                </tr>`;
+                            }).join('')}
                         </tbody>
                     </table>
                 </div>
@@ -1885,11 +2056,16 @@ function exportarCSV() {
         return;
     }
 
-    let csv = "Data,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
+    let csv = "Data,Período da Falta,Tipo de Prova,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
 
     registros.forEach(a => {
+        const periodoFalta = getPeriodoFaltaFormatado(a) || '';
+        const tipoProva = getTipoProvaFormatado(a) || '';
+        
         csv += [
             a.dataFormatada || '',
+            `"${periodoFalta.replace(/"/g, '""')}"`,
+            `"${tipoProva.replace(/"/g, '""')}"`,
             `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
             `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
             `"${(a.alunoTurma || '').replace(/"/g, '""')}"`,
@@ -1977,15 +2153,22 @@ function gerarHTMLRelatorio(data, tipo) {
             <div class="section-title">📋 Histórico de Justificativas</div>
             <table>
                 <thead>
-                    <tr><th>Data</th><th>Motivo</th><th>Observações</th></tr>
+                    <tr><th>Data</th><th>Período Falta</th><th>Tipo Prova</th><th>Motivo</th><th>Observações</th></tr>
                 </thead>
                 <tbody>
-                    ${(data.registros || []).map(a => `
+                    ${(data.registros || []).map(a => {
+                        const periodoFalta = getPeriodoFaltaFormatado(a);
+                        const tipoProva = getTipoProvaFormatado(a);
+                        
+                        return `
                         <tr>
                             <td>${a.dataFormatada || '-'}</td>
+                            <td><strong>${escapeHTML(periodoFalta || '-')}</strong></td>
+                            <td>${escapeHTML(tipoProva || '-')}</td>
                             <td>${escapeHTML(a.motivoLabel || '')}</td>
                             <td>${escapeHTML((a.observacoes || '').substring(0, 80))}</td>
-                        </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum registro</td></tr>'}
+                        </tr>`;
+                    }).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum registro</td></tr>'}
                 </tbody>
             </table>`;
     }
@@ -2082,6 +2265,9 @@ window.notificar = notificar;
 window.buscarPorData = buscarPorData;
 window.exportarCSVData = exportarCSVData;
 window.exportarPDFData = exportarPDFData;
+
+// 🆕 Limpar cache
+window.limparCacheSecretaria = limparCacheSecretaria;
 
 // Notificações
 window.abrirNotificacoes = abrirNotificacoes;

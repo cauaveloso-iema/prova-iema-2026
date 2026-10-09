@@ -84,7 +84,6 @@ function validarCPF(cpf) {
         return { valido: false, erro: 'CPF deve conter 11 dígitos' };
     }
     
-    // Rejeita sequências repetidas (000.000.000-00, 111.111.111-11, etc)
     if (/^(\d)\1{10}$/.test(cpfLimpo)) {
         return { valido: false, erro: 'CPF inválido' };
     }
@@ -743,7 +742,7 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 });
 
 // ============================================
-// 11. REGISTRAR (com assinatura pendente)
+// 11. REGISTRAR
 // ============================================
 router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -881,7 +880,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             }
         }
 
-        // 🆕 Detecta status de assinatura
         const statusAssinatura = precisaAssinatura && !assinaturaValida
             ? 'pendente'
             : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
@@ -904,6 +902,15 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             dataFinal = new Date();
         }
 
+        // ==========================================
+        // 🔥 CORREÇÃO: para justificativa e 2ª chamada,
+        // a "data" deve ser a data da FALTA (periodoFaltaInicio)
+        // ==========================================
+        let dataParaSalvar = dataFinal;
+        if ((tipo === 'justificativa' || tipo === 'segunda_chamada') && periodoFaltaInicio) {
+            dataParaSalvar = periodoFaltaInicio;
+        }
+
         const autorizacao = new Autorizacao({
             tipo,
             alunoId: aluno._id,
@@ -912,7 +919,10 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             alunoTurma: aluno.turma || 'Não informada',
             alunoCurso: aluno.curso || 'Não informado',
             alunoFoto: aluno.fotoPerfil,
-            data: dataFinal,
+            
+            // 🔥 CORRIGIDO: usa a data da falta quando for justificativa/2ª chamada
+            data: dataParaSalvar,
+            
             periodoFaltaInicio,
             periodoFaltaFim,
             horarioEntrada, horarioSaida,
@@ -939,6 +949,8 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         });
 
         await autorizacao.save();
+
+        console.log(`✅ ${tipo} registrado: ${aluno.nome} - data: ${dataParaSalvar.toLocaleDateString('pt-BR')}${periodoFaltaInicio ? ` (falta: ${periodoFaltaInicio.toLocaleDateString('pt-BR')})` : ''}`);
 
         res.json({
             success: true,
@@ -1066,7 +1078,10 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.motivo = motivo;
         }
 
-        if (data) {
+        // 🔥 Se for justificativa ou 2ª chamada, a data é controlada pelo periodoFaltaInicio
+        const ehJustificativaOuSegundaChamada = a.tipo === 'justificativa' || a.tipo === 'segunda_chamada';
+
+        if (data && !ehJustificativaOuSegundaChamada) {
             let dataFinal;
             if (data.length === 10) {
                 dataFinal = new Date(data + 'T12:00:00.000-03:00');
@@ -1080,7 +1095,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
         }
 
         // Período da falta
-        if (a.tipo === 'justificativa' || a.tipo === 'segunda_chamada') {
+        if (ehJustificativaOuSegundaChamada) {
             if (periodoFaltaInicio !== undefined || periodoFaltaFim !== undefined) {
                 const iniStr = periodoFaltaInicio !== undefined 
                     ? periodoFaltaInicio 
@@ -1101,6 +1116,9 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 
                 a.periodoFaltaInicio = resultado.dataInicio;
                 a.periodoFaltaFim = resultado.dataFim;
+                
+                // 🔥 CORREÇÃO: atualiza data também
+                a.data = resultado.dataInicio;
             }
         }
 
@@ -1246,6 +1264,9 @@ router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) 
 
         const a = await Autorizacao.findByIdAndDelete(req.params.id);
         if (!a) return res.status(404).json({ success: false, error: 'Registro não encontrado' });
+        
+        console.log(`🗑️ ${a.tipo} excluído: ${a.alunoNome} (${a._id}) por ${req.userNome}`);
+        
         res.json({ success: true, message: 'Registro excluído com sucesso' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });

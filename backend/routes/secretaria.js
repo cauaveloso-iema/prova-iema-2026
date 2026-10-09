@@ -45,6 +45,11 @@ const getMotivoLabel = (motivo) => {
   const labels = {
     'problemas_pessoais': 'Problemas Pessoais',
     'problemas_saude': 'Problemas de Saúde',
+    'problemas_saude_responsavel_buscou': 'Problemas de Saúde (Responsável veio buscar)',
+    'problemas_saude_responsavel_whatsapp': 'Problemas de Saúde (Responsável via WhatsApp)',
+    'necessita_ausentar_retornar': 'Necessita se ausentar e retornar',
+    'viagens': 'Viagens',
+    'consultas': 'Consultas',
     'viagem': 'Viagem',
     'outros': 'Outros'
   };
@@ -57,6 +62,78 @@ function construirRangeData(dataInicio, dataFim) {
   const fimStr = dataFim || dataInicio;
   const fim = new Date(fimStr + 'T23:59:59.999-03:00');
   return { inicio, fim, fimStr };
+}
+
+// 🔥 Formata período da falta
+function getPeriodoFaltaFormatado(doc) {
+  if (!doc || !doc.periodoFaltaInicio) return null;
+  
+  const ini = new Date(doc.periodoFaltaInicio);
+  const fim = doc.periodoFaltaFim ? new Date(doc.periodoFaltaFim) : ini;
+  
+  const iniDia = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
+  const fimDia = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate());
+  
+  const fmt = (d) => d.toLocaleDateString('pt-BR');
+  
+  if (iniDia.getTime() === fimDia.getTime()) return fmt(iniDia);
+  return `${fmt(iniDia)} a ${fmt(fimDia)}`;
+}
+
+// 🔥 Formata tipo de prova
+function getTipoProvaPerdidaFormatado(doc) {
+  if (!doc || !doc.tipoProvaPerdida) return null;
+  if (doc.tipoProvaPerdida === 'Outros' && doc.tipoProvaPerdidaOutros) {
+    return `Outros (${doc.tipoProvaPerdidaOutros})`;
+  }
+  return doc.tipoProvaPerdida;
+}
+
+// 🔥 Formata registro COMPLETO com todos os campos
+function formatarRegistro(a) {
+  // 🔥 Prioriza periodoFaltaInicio como data principal (data real da falta)
+  const dataPrincipal = a.periodoFaltaInicio || a.data;
+  
+  return {
+    id: a._id,
+    alunoId: a.alunoId,
+    alunoNome: a.alunoNome,
+    alunoMatricula: a.alunoMatricula,
+    alunoTurma: a.alunoTurma,
+    alunoCurso: a.alunoCurso,
+    
+    // 🔥 Datas
+    data: a.data,
+    dataFormatada: a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '-',
+    
+    dataFalta: dataPrincipal,
+    dataFaltaFormatada: dataPrincipal ? new Date(dataPrincipal).toLocaleDateString('pt-BR') : '-',
+    
+    // 🔥 Campos novos
+    periodoFaltaInicio: a.periodoFaltaInicio || null,
+    periodoFaltaFim: a.periodoFaltaFim || null,
+    periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
+    
+    tipoProvaPerdida: a.tipoProvaPerdida || null,
+    tipoProvaPerdidaOutros: a.tipoProvaPerdidaOutros || null,
+    tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+    
+    // Dados do registro
+    motivo: a.motivo,
+    motivoLabel: getMotivoLabel(a.motivo),
+    motivoOutros: a.motivoOutros,
+    observacoes: a.observacoes,
+    responsavelNome: a.responsavelNome,
+    responsavelCPF: a.responsavelCPF,
+    responsavelTelefone: a.responsavelTelefone,
+    temAssinatura: !!(a.assinaturaBase64 && a.assinaturaBase64.length > 50),
+    origemTipo: a.origemTipo || null,
+    origemId: a.origemId || null,
+    registradoPor: a.registradoPorNome,
+    registradoPorNome: a.registradoPorNome,
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt
+  };
 }
 
 // ============================================
@@ -75,7 +152,6 @@ router.get('/health', (req, res) => {
 // 📋 CONSULTA DE JUSTIFICATIVAS
 // ============================================
 
-// Turmas disponíveis
 router.get('/justificativa/turmas', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', {
@@ -89,7 +165,6 @@ router.get('/justificativa/turmas', authenticateToken, verificarSecretaria, asyn
   }
 });
 
-// Alunos por turma
 router.get('/justificativa/alunos-por-turma', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -103,7 +178,8 @@ router.get('/justificativa/alunos-por-turma', authenticateToken, verificarSecret
       turma
     })
       .select('nome matricula turma curso fotoPerfil')
-      .sort({ nome: 1 });
+      .sort({ nome: 1 })
+      .lean();
 
     res.json({
       success: true,
@@ -122,11 +198,11 @@ router.get('/justificativa/alunos-por-turma', authenticateToken, verificarSecret
   }
 });
 
-// Buscar aluno por ID (QR Code)
 router.get('/justificativa/aluno/:id', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
-      .select('nome email matricula curso turma fotoPerfil role');
+      .select('nome email matricula curso turma fotoPerfil role')
+      .lean();
 
     if (!aluno) {
       return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
@@ -135,7 +211,6 @@ router.get('/justificativa/aluno/:id', authenticateToken, verificarSecretaria, a
       return res.status(400).json({ success: false, error: 'Usuário não é aluno' });
     }
 
-    // Estatísticas de justificativas
     const totalJustificativas = await Autorizacao.countDocuments({
       tipo: 'justificativa',
       alunoId: aluno._id
@@ -169,7 +244,7 @@ router.get('/justificativa/aluno/:id', authenticateToken, verificarSecretaria, a
   }
 });
 
-// Buscar justificativas de um aluno específico (com filtros adicionais)
+// 🔥 Buscar justificativas de um aluno (filtro por periodoFaltaInicio)
 router.get('/justificativa/por-aluno/:alunoId', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const { dataInicio, dataFim, motivo } = req.query;
@@ -183,38 +258,27 @@ router.get('/justificativa/por-aluno/:alunoId', authenticateToken, verificarSecr
       query.motivo = motivo;
     }
 
+    // 🔥 Filtra por periodoFaltaInicio SE EXISTIR, senão por data
     if (dataInicio || dataFim) {
-      query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      const { inicio, fim } = construirRangeData(dataInicio, dataFim);
+      
+      query.$or = [
+        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
+      ];
     }
 
-    const registros = await Autorizacao.find(query).sort({ data: -1 });
+    const registros = await Autorizacao.find(query)
+      .sort({ periodoFaltaInicio: -1, data: -1, createdAt: -1 })
+      .lean();
+
+    console.log(`🔍 [SECRETARIA] Justificativas do aluno ${req.params.alunoId}: ${registros.length} registros`);
 
     res.json({
       success: true,
       total: registros.length,
-      registros: registros.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        data: a.data,
-        dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
-        motivo: a.motivo,
-        motivoLabel: getMotivoLabel(a.motivo),
-        motivoOutros: a.motivoOutros,
-        observacoes: a.observacoes,
-        responsavelNome: a.responsavelNome,
-        responsavelCPF: a.responsavelCPF,
-        responsavelTelefone: a.responsavelTelefone,
-        temAssinatura: !!(a.assinaturaBase64 && a.assinaturaBase64.length > 50),
-        origemTipo: a.origemTipo || null,
-        registradoPor: a.registradoPorNome,
-        createdAt: a.createdAt
-      }))
+      registros: registros.map(formatarRegistro)
     });
   } catch (error) {
     console.error('Erro ao buscar justificativas do aluno:', error);
@@ -222,7 +286,6 @@ router.get('/justificativa/por-aluno/:alunoId', authenticateToken, verificarSecr
   }
 });
 
-// Listar justificativas com filtros (para relatórios)
 router.get('/justificativa/listar', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const {
@@ -246,48 +309,35 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
     if (motivo && motivo !== 'todos') {
       query.motivo = motivo;
     }
+
     if (dataInicio || dataFim) {
-      query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      const { inicio, fim } = construirRangeData(dataInicio, dataFim);
+      query.$or = [
+        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
+      ];
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [registros, total] = await Promise.all([
       Autorizacao.find(query)
-        .sort({ data: -1, createdAt: -1 })
+        .sort({ periodoFaltaInicio: -1, data: -1, createdAt: -1 })
         .skip(skip)
-        .limit(parseInt(limit)),
+        .limit(parseInt(limit))
+        .lean(),
       Autorizacao.countDocuments(query)
     ]);
+
+    console.log(`📋 [SECRETARIA] Listando: ${total} registros`);
 
     res.json({
       success: true,
       total,
       page: parseInt(page),
       totalPages: Math.ceil(total / parseInt(limit)),
-      registros: registros.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        data: a.data,
-        dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
-        motivo: a.motivo,
-        motivoLabel: getMotivoLabel(a.motivo),
-        motivoOutros: a.motivoOutros,
-        observacoes: a.observacoes,
-        responsavelNome: a.responsavelNome,
-        responsavelCPF: a.responsavelCPF,
-        responsavelTelefone: a.responsavelTelefone,
-        temAssinatura: !!(a.assinaturaBase64 && a.assinaturaBase64.length > 50),
-        origemTipo: a.origemTipo || null,
-        registradoPor: a.registradoPorNome,
-        createdAt: a.createdAt
-      }))
+      registros: registros.map(formatarRegistro)
     });
   } catch (error) {
     console.error('Erro ao listar justificativas:', error);
@@ -296,7 +346,7 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
 });
 
 // ============================================
-// 🆕 BUSCAR JUSTIFICATIVAS POR DATA (período)
+// 🆕 BUSCAR JUSTIFICATIVAS POR DATA (principal!)
 // ============================================
 router.get('/justificativa/por-data', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
@@ -319,10 +369,17 @@ router.get('/justificativa/por-data', authenticateToken, verificarSecretaria, as
       });
     }
 
-    let query = {
-      tipo: 'justificativa',
-      data: { $gte: inicio, $lte: fim }
-    };
+    let query = { tipo: 'justificativa' };
+
+    // 🔥 CORREÇÃO PRINCIPAL: Filtra por periodoFaltaInicio SE EXISTIR
+    // Senão, cai pra data (compatibilidade com registros antigos)
+    query.$or = [
+      // Registros novos: filtram por periodoFaltaInicio
+      { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
+      // Registros antigos (sem periodoFaltaInicio): filtram por data
+      { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
+      { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
+    ];
 
     if (turma && turma !== 'todas' && turma !== '') {
       query.alunoTurma = turma;
@@ -332,34 +389,20 @@ router.get('/justificativa/por-data', authenticateToken, verificarSecretaria, as
       query.motivo = motivo;
     }
 
+    // 🔥 .lean() = SEMPRE dados frescos do banco (sem cache do Mongoose)
     const registros = await Autorizacao.find(query)
-      .sort({ data: -1, createdAt: -1 })
-      .limit(500);
+      .sort({ periodoFaltaInicio: -1, data: -1, createdAt: -1 })
+      .limit(500)
+      .lean();
+
+    console.log(`📅 [SECRETARIA] Busca por data: ${dataInicio} a ${fimStr}`);
+    console.log(`   → Encontrados: ${registros.length} registros`);
 
     res.json({
       success: true,
       total: registros.length,
       filtros: { dataInicio, dataFim: fimStr, turma: turma || null, motivo: motivo || null },
-      registros: registros.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        data: a.data,
-        dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
-        motivo: a.motivo,
-        motivoLabel: getMotivoLabel(a.motivo),
-        motivoOutros: a.motivoOutros,
-        observacoes: a.observacoes,
-        responsavelNome: a.responsavelNome,
-        responsavelCPF: a.responsavelCPF,
-        responsavelTelefone: a.responsavelTelefone,
-        temAssinatura: !!(a.assinaturaBase64 && a.assinaturaBase64.length > 50),
-        registradoPor: a.registradoPorNome,
-        createdAt: a.createdAt
-      }))
+      registros: registros.map(formatarRegistro)
     });
   } catch (error) {
     console.error('Erro ao buscar por data:', error);
@@ -370,7 +413,6 @@ router.get('/justificativa/por-data', authenticateToken, verificarSecretaria, as
 // Buscar justificativa por ID
 router.get('/justificativa/:id', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
-    // Bloqueia rotas que não são IDs (por segurança)
     const rotasReservadas = ['listar', 'turmas', 'dashboard', 'alunos-por-turma', 'por-data', 'buscar-alunos', 'relatorio'];
     if (rotasReservadas.includes(req.params.id)) {
       return res.status(404).json({ success: false, error: 'Rota não encontrada' });
@@ -380,7 +422,7 @@ router.get('/justificativa/:id', authenticateToken, verificarSecretaria, async (
       return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
-    const registro = await Autorizacao.findById(req.params.id);
+    const registro = await Autorizacao.findById(req.params.id).lean();
 
     if (!registro) {
       return res.status(404).json({ success: false, error: 'Justificativa não encontrada' });
@@ -404,8 +446,18 @@ router.get('/justificativa/:id', authenticateToken, verificarSecretaria, async (
         alunoTurma: registro.alunoTurma,
         alunoCurso: registro.alunoCurso,
         alunoFoto: registro.alunoFoto,
+        
         data: registro.data,
         dataFormatada: new Date(registro.data).toLocaleDateString('pt-BR'),
+        
+        periodoFaltaInicio: registro.periodoFaltaInicio || null,
+        periodoFaltaFim: registro.periodoFaltaFim || null,
+        periodoFaltaFormatado: getPeriodoFaltaFormatado(registro),
+        
+        tipoProvaPerdida: registro.tipoProvaPerdida || null,
+        tipoProvaPerdidaOutros: registro.tipoProvaPerdidaOutros || null,
+        tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(registro),
+        
         motivo: registro.motivo,
         motivoLabel: getMotivoLabel(registro.motivo),
         motivoOutros: registro.motivoOutros,
@@ -428,7 +480,6 @@ router.get('/justificativa/:id', authenticateToken, verificarSecretaria, async (
   }
 });
 
-// Buscar alunos (autocomplete para relatórios)
 router.get('/justificativa/buscar-alunos', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -446,7 +497,8 @@ router.get('/justificativa/buscar-alunos', authenticateToken, verificarSecretari
     })
       .select('nome matricula turma curso fotoPerfil')
       .limit(20)
-      .sort({ nome: 1 });
+      .sort({ nome: 1 })
+      .lean();
 
     res.json({
       success: true,
@@ -476,13 +528,17 @@ router.get('/justificativa/relatorio/geral', authenticateToken, verificarSecreta
     let query = { tipo: 'justificativa' };
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     if (motivo && motivo !== 'todos') query.motivo = motivo;
+
     if (dataInicio || dataFim) {
-      query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      const { inicio, fim } = construirRangeData(dataInicio, dataFim);
+      query.$or = [
+        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
+      ];
     }
 
-    const registros = await Autorizacao.find(query).sort({ data: -1 });
+    const registros = await Autorizacao.find(query).sort({ data: -1 }).lean();
 
     const porTurma = {};
     const porMotivo = {};
@@ -514,18 +570,7 @@ router.get('/justificativa/relatorio/geral', authenticateToken, verificarSecreta
         label: getMotivoLabel(m),
         count: c
       })).sort((a, b) => b.count - a.count),
-      registros: registros.slice(0, 100).map(a => ({
-        id: a._id,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        data: a.data,
-        dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
-        motivo: a.motivo,
-        motivoLabel: getMotivoLabel(a.motivo),
-        observacoes: a.observacoes,
-        createdAt: a.createdAt
-      }))
+      registros: registros.slice(0, 100).map(formatarRegistro)
     });
   } catch (error) {
     console.error('Erro no relatório geral:', error);
@@ -543,12 +588,15 @@ router.get('/justificativa/relatorio/turma/:turma', authenticateToken, verificar
     };
 
     if (dataInicio || dataFim) {
-      query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      const { inicio, fim } = construirRangeData(dataInicio, dataFim);
+      query.$or = [
+        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
+      ];
     }
 
-    const registros = await Autorizacao.find(query).sort({ data: -1 });
+    const registros = await Autorizacao.find(query).sort({ data: -1 }).lean();
 
     const porAluno = {};
     const porMotivo = {};
@@ -583,18 +631,7 @@ router.get('/justificativa/relatorio/turma/:turma', authenticateToken, verificar
         label: getMotivoLabel(m),
         count: c
       })).sort((a, b) => b.count - a.count),
-      registros: registros.slice(0, 100).map(a => ({
-        id: a._id,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        data: a.data,
-        dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
-        motivo: a.motivo,
-        motivoLabel: getMotivoLabel(a.motivo),
-        observacoes: a.observacoes,
-        createdAt: a.createdAt
-      }))
+      registros: registros.slice(0, 100).map(formatarRegistro)
     });
   } catch (error) {
     console.error('Erro no relatório por turma:', error);
@@ -612,13 +649,18 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
     };
 
     if (dataInicio || dataFim) {
-      query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+      const { inicio, fim } = construirRangeData(dataInicio, dataFim);
+      query.$or = [
+        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
+        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
+      ];
     }
 
-    const registros = await Autorizacao.find(query).sort({ data: -1 });
-    const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
+    const registros = await Autorizacao.find(query).sort({ data: -1 }).lean();
+    const aluno = await User.findById(req.params.alunoId)
+      .select('nome matricula turma curso')
+      .lean();
 
     if (!aluno) {
       return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
@@ -648,19 +690,7 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
         label: getMotivoLabel(m),
         count: c
       })).sort((a, b) => b.count - a.count),
-      registros: registros.map(a => ({
-        id: a._id,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        data: a.data,
-        dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
-        motivo: a.motivo,
-        motivoLabel: getMotivoLabel(a.motivo),
-        observacoes: a.observacoes,
-        responsavelNome: a.responsavelNome,
-        createdAt: a.createdAt
-      }))
+      registros: registros.map(formatarRegistro)
     });
   } catch (error) {
     console.error('Erro no relatório por aluno:', error);
