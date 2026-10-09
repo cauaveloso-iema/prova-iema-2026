@@ -3,6 +3,7 @@
 // SECRETARIA - CONSULTA DE JUSTIFICATIVAS
 // Somente Leitura - Modelo Gestão Geral
 // + Sistema de Notificações Integrado
+// + Busca por Data (🆕)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -15,6 +16,9 @@ let scannerAutoAtivo = false;
 let turmasDisponiveis = [];
 let alunosPorTurma = [];
 let motivoConsulta = 'todos';
+
+// 🆕 Estado da busca por data
+let resultadosPorData = [];
 
 // Estado do autocomplete de relatórios
 const autocompleteState = {
@@ -495,9 +499,18 @@ async function carregarFotoPerfil() {
 function configurarEventos() {
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
     safeGet('modoManualBtn')?.addEventListener('click', () => setModo('manual'));
+    safeGet('modoDataBtn')?.addEventListener('click', () => setModo('data'));
 
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
+
+    // Botão "Buscar por Data"
+    safeGet('btnBuscarPorData')?.addEventListener('click', () => buscarPorData());
+    safeGet('filtroDataInicio')?.addEventListener('change', () => {
+        const ini = safeGet('filtroDataInicio')?.value;
+        const fim = safeGet('filtroDataFim')?.value;
+        if (ini && !fim) safeGet('filtroDataFim').value = ini;
+    });
 
     safeGet('btnBuscarJustificativas')?.addEventListener('click', () => buscarJustificativasDoAluno());
 
@@ -535,7 +548,7 @@ function configurarEventos() {
 }
 
 // ============================================
-// MODO (AUTO / MANUAL)
+// MODO (AUTO / MANUAL / DATA)
 // ============================================
 async function setModo(modo) {
     modoAtual = modo;
@@ -543,20 +556,40 @@ async function setModo(modo) {
     if (infoEl) infoEl.style.display = 'none';
     currentAluno = null;
 
+    // Esconde todos os modos
+    if (safeGet('modoAutomatico')) safeGet('modoAutomatico').style.display = 'none';
+    if (safeGet('modoManual')) safeGet('modoManual').style.display = 'none';
+    if (safeGet('modoData')) safeGet('modoData').style.display = 'none';
+
+    // Remove active de todos os botões
+    safeGet('modoAutomaticoBtn')?.classList.remove('active');
+    safeGet('modoManualBtn')?.classList.remove('active');
+    safeGet('modoDataBtn')?.classList.remove('active');
+
     if (modo === 'automatico') {
         safeGet('modoAutomaticoBtn')?.classList.add('active');
-        safeGet('modoManualBtn')?.classList.remove('active');
         safeGet('modoAutomatico').style.display = 'block';
-        safeGet('modoManual').style.display = 'none';
         await iniciarScannerAutomatico();
-    } else {
+    } else if (modo === 'manual') {
         safeGet('modoManualBtn')?.classList.add('active');
-        safeGet('modoAutomaticoBtn')?.classList.remove('active');
-        safeGet('modoAutomatico').style.display = 'none';
         safeGet('modoManual').style.display = 'block';
         await pararScannerAutomatico();
         const turmaSelecionada = safeGet('filtroTurmaManual')?.value;
         if (turmaSelecionada) await carregarAlunosPorTurma();
+    } else if (modo === 'data') {
+        safeGet('modoDataBtn')?.classList.add('active');
+        safeGet('modoData').style.display = 'block';
+        await pararScannerAutomatico();
+
+        // Preenche data de hoje por padrão
+        const hoje = new Date().toISOString().split('T')[0];
+        if (!safeGet('filtroDataInicio')?.value) {
+            safeGet('filtroDataInicio').value = hoje;
+            safeGet('filtroDataFim').value = hoje;
+        }
+
+        // Popula select de turmas
+        popularSelectTurmasData();
     }
 }
 
@@ -672,10 +705,27 @@ async function carregarTurmasParaManual() {
                     selectRelatorio.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
                 });
             }
+
+            // Popula o select do modo Data
+            popularSelectTurmasData();
         }
     } catch (error) {
         console.error('Erro ao carregar turmas:', error);
     }
+}
+
+// Popula o select de turmas do modo Data
+function popularSelectTurmasData() {
+    const select = safeGet('filtroDataTurma');
+    if (!select) return;
+    if (select.options.length > 1) return; // já populado
+
+    const valorAtual = select.value;
+    select.innerHTML = '<option value="">Todas as turmas</option>';
+    turmasDisponiveis.forEach(turma => {
+        select.innerHTML += `<option value="${escapeHTML(turma)}">${escapeHTML(turma)}</option>`;
+    });
+    if (valorAtual) select.value = valorAtual;
 }
 
 async function carregarAlunosPorTurma() {
@@ -989,7 +1039,7 @@ function limparAlunoSelecionado() {
 
     if (modoAtual === 'automatico') {
         reiniciarScannerAutomatico();
-    } else {
+    } else if (modoAtual === 'manual') {
         const selectTurma = safeGet('filtroTurmaManual');
         const inputBusca = safeGet('filtroBuscaManual');
         if (selectTurma) selectTurma.value = '';
@@ -1285,6 +1335,286 @@ function gerarHTMLImpressao(a, qrCodeUrl) {
         </div>
     </body>
     </html>`;
+}
+
+// ============================================
+// 🆕 BUSCA POR DATA
+// ============================================
+async function buscarPorData() {
+    const dataInicio = safeGet('filtroDataInicio')?.value || '';
+    const dataFim = safeGet('filtroDataFim')?.value || dataInicio;
+    const turma = safeGet('filtroDataTurma')?.value || '';
+    const motivo = safeGet('filtroDataMotivo')?.value || '';
+
+    if (!dataInicio) {
+        notificar('Informe a data de início', 'warning');
+        return;
+    }
+
+    if (dataFim && dataFim < dataInicio) {
+        notificar('Data final não pode ser anterior à inicial', 'warning');
+        return;
+    }
+
+    const container = safeGet('listaJustificativasData');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="text-center py-3">
+            <div class="loading-spinner"></div>
+            <p>Buscando justificativas...</p>
+        </div>`;
+
+    try {
+        const params = new URLSearchParams();
+        params.append('dataInicio', dataInicio);
+        if (dataFim) params.append('dataFim', dataFim);
+        if (turma) params.append('turma', turma);
+        if (motivo) params.append('motivo', motivo);
+
+        const response = await fetch(`/api/secretaria/justificativa/por-data?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            container.innerHTML = `<div class="alert alert-danger">Erro ao buscar</div>`;
+            return;
+        }
+
+        resultadosPorData = data.registros || [];
+
+        const countEl = safeGet('countJustificativasData');
+        if (countEl) countEl.textContent = data.total || 0;
+
+        // Habilita botões de exportação se houver dados
+        const acoes = safeGet('acoesData');
+        if (acoes) acoes.style.display = resultadosPorData.length > 0 ? 'flex' : 'none';
+
+        if (resultadosPorData.length === 0) {
+            container.innerHTML = `
+                <div class="empty-relatorio" style="padding: 40px 20px;">
+                    <i class="fas fa-inbox"></i>
+                    <h5>Nenhuma justificativa encontrada</h5>
+                    <p>Não há registros no período selecionado.</p>
+                </div>`;
+            return;
+        }
+
+        // Agrupa por data para exibir bonitinho
+        const porData = {};
+        resultadosPorData.forEach(r => {
+            const key = r.dataFormatada;
+            if (!porData[key]) porData[key] = [];
+            porData[key].push(r);
+        });
+
+        const datasOrdenadas = Object.keys(porData).sort((a, b) => {
+            const [d1, m1, y1] = a.split('/');
+            const [d2, m2, y2] = b.split('/');
+            return new Date(`${y2}-${m2}-${d2}`) - new Date(`${y1}-${m1}-${d1}`);
+        });
+
+        let html = '';
+        datasOrdenadas.forEach(dataKey => {
+            const registros = porData[dataKey];
+            html += `
+                <div class="data-group">
+                    <div class="data-group-header">
+                        <i class="fas fa-calendar-check"></i>
+                        <strong>${dataKey}</strong>
+                        <span class="badge-count-verde">${registros.length}</span>
+                    </div>
+                    <div class="justificativas-lista">
+                        ${registros.map(j => `
+                            <div class="justificativa-item">
+                                <div class="justificativa-header-item">
+                                    <span class="badge-motivo-item">${escapeHTML(j.motivoLabel)}</span>
+                                    <span class="justificativa-data-item">
+                                        <i class="fas fa-user-graduate"></i> ${escapeHTML(j.alunoNome)}
+                                    </span>
+                                </div>
+                                <div class="justificativa-resp-item">
+                                    <i class="fas fa-graduation-cap"></i>
+                                    <span><strong>${escapeHTML(j.alunoTurma || '-')}</strong> 
+                                    ${j.alunoCurso ? ' • ' + escapeHTML(j.alunoCurso) : ''}</span>
+                                </div>
+                                ${j.observacoes ? `
+                                    <div class="justificativa-obs-item">
+                                        <i class="fas fa-comment"></i>
+                                        <span>${escapeHTML(j.observacoes.substring(0, 150))}${j.observacoes.length > 150 ? '...' : ''}</span>
+                                    </div>
+                                ` : ''}
+                                ${j.responsavelNome ? `
+                                    <div class="justificativa-resp-item">
+                                        <i class="fas fa-user-shield"></i>
+                                        <span><strong>${escapeHTML(j.responsavelNome)}</strong></span>
+                                    </div>
+                                ` : ''}
+                                <div class="justificativa-footer-item">
+                                    <span class="badge-assinatura-item ${j.temAssinatura ? 'assinado' : 'pendente'}">
+                                        <i class="fas fa-signature"></i>
+                                        ${j.temAssinatura ? 'Assinado' : 'Sem assinatura'}
+                                    </span>
+                                    <div class="justificativa-actions-item">
+                                        <button class="btn-action-item btn-view-item" onclick="verJustificativa('${j.id}')" title="Visualizar">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn-action-item btn-print-item" onclick="imprimirJustificativa('${j.id}')" title="Imprimir">
+                                            <i class="fas fa-print"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error('Erro:', error);
+        container.innerHTML = `<div class="alert alert-danger">Erro ao buscar</div>`;
+    }
+}
+
+// 🆕 Exportar CSV do modo Data
+function exportarCSVData() {
+    if (!resultadosPorData || resultadosPorData.length === 0) {
+        notificar('Nenhum dado para exportar', 'warning');
+        return;
+    }
+
+    let csv = "Data,Aluno,Matrícula,Turma,Curso,Motivo,Observações,Responsável\n";
+    resultadosPorData.forEach(a => {
+        csv += [
+            a.dataFormatada || '',
+            `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
+            `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
+            `"${(a.alunoTurma || '').replace(/"/g, '""')}"`,
+            `"${(a.alunoCurso || '').replace(/"/g, '""')}"`,
+            `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
+            `"${(a.observacoes || '').replace(/"/g, '""')}"`,
+            `"${(a.responsavelNome || '').replace(/"/g, '""')}"`
+        ].join(',') + '\n';
+    });
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `justificativas-data_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    notificar('✅ CSV exportado!', 'success');
+}
+
+// 🆕 Exportar PDF do modo Data
+function exportarPDFData() {
+    if (!resultadosPorData || resultadosPorData.length === 0) {
+        notificar('Nenhum dado para exportar', 'warning');
+        return;
+    }
+
+    const dataInicio = safeGet('filtroDataInicio')?.value || '';
+    const dataFim = safeGet('filtroDataFim')?.value || dataInicio;
+    const turma = safeGet('filtroDataTurma')?.value || 'Todas';
+    const motivo = safeGet('filtroDataMotivo')?.value || 'Todos';
+
+    const fmtBR = (s) => {
+        if (!s) return '-';
+        const [y, m, d] = s.split('-');
+        return `${d}/${m}/${y}`;
+    };
+
+    const logo = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_gestao.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+
+    const html = `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Justificativas por Data</title>
+        <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', serif; font-size: 10pt; line-height: 1.3; }
+            .header { text-align: center; border-bottom: 1.5px solid #000; padding-bottom: 5px; margin-bottom: 10px; }
+            .header img { max-height: 16mm; object-fit: contain; display: block; margin: 0 auto 3px; }
+            .header h1 { font-size: 12pt; text-transform: uppercase; }
+            .header p { font-size: 9pt; margin-top: 3px; }
+            .titulo { text-align: center; font-size: 12pt; font-weight: bold; background: #d1fae5; padding: 6px; border: 1.5px solid #000; margin: 10px 0; text-transform: uppercase; }
+            .filtros { text-align: center; font-size: 9pt; margin-bottom: 12px; color: #333; }
+            .filtros span { margin: 0 10px; }
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+            th { background: #10b981; color: white; padding: 5px; text-align: left; border: 1px solid #059669; }
+            td { padding: 4px 5px; border: 1px solid #ccc; vertical-align: top; }
+            tr:nth-child(even) { background: #f5f5f5; }
+            .assinaturas { display: flex; justify-content: center; margin-top: 30px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 15mm; display: flex; align-items: flex-end; justify-content: center; }
+            .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 55mm; opacity: 0.9; }
+            .assinatura-linha { padding-top: 3px; font-size: 9pt; }
+            .footer { text-align: center; margin-top: 15px; padding-top: 5px; border-top: 1px solid #ccc; font-size: 7.5pt; color: #555; }
+            .btn-print { display: block; margin: 15px auto; padding: 10px 24px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: Arial; }
+            @media print { .no-print { display: none !important; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p>Sistema de Atendimentos — Secretaria</p>
+        </div>
+        <div class="titulo">📋 Justificativas por Data</div>
+        <div class="filtros">
+            <span><strong>Período:</strong> ${fmtBR(dataInicio)}${dataFim && dataFim !== dataInicio ? ' a ' + fmtBR(dataFim) : ''}</span>
+            <span><strong>Turma:</strong> ${escapeHTML(turma)}</span>
+            <span><strong>Motivo:</strong> ${escapeHTML(motivo)}</span>
+            <span><strong>Total:</strong> ${resultadosPorData.length}</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:80px;">Data</th>
+                    <th>Aluno</th>
+                    <th style="width:80px;">Turma</th>
+                    <th style="width:110px;">Motivo</th>
+                    <th>Observações</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${resultadosPorData.map(a => `
+                    <tr>
+                        <td>${a.dataFormatada || '-'}</td>
+                        <td><strong>${escapeHTML(a.alunoNome || '')}</strong><br><small>${escapeHTML(a.alunoMatricula || '')}</small></td>
+                        <td>${escapeHTML(a.alunoTurma || '-')}</td>
+                        <td>${escapeHTML(a.motivoLabel || '')}</td>
+                        <td>${escapeHTML((a.observacoes || '').substring(0, 100))}</td>
+                    </tr>`).join('')}
+            </tbody>
+        </table>
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container">
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Secretaria</div>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Relatório gerado em <strong>${dataGeracao}</strong> — EducaPleno — Secretaria</p>
+        </div>
+    </body>
+    </html>`;
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
 }
 
 // ============================================
@@ -1747,6 +2077,11 @@ window.exportarCSV = exportarCSV;
 window.exportarPDF = exportarPDF;
 window.logout = logout;
 window.notificar = notificar;
+
+// 🆕 Busca por data
+window.buscarPorData = buscarPorData;
+window.exportarCSVData = exportarCSVData;
+window.exportarPDFData = exportarPDFData;
 
 // Notificações
 window.abrirNotificacoes = abrirNotificacoes;

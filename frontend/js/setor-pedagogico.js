@@ -213,7 +213,7 @@ class SetorPedagogico {
             }
 
             // ============================================
-            // 3. 🔥 NOVO: VERIFICAR PERMISSÃO - AUTORIZAÇÃO DE VISITAS
+            // 3. VERIFICAR PERMISSÃO - AUTORIZAÇÃO DE VISITAS
             // ============================================
             try {
                 const responseVisitas = await fetch('/api/admin/permissoes-modulos/verificar/autorizacao_visitas', {
@@ -408,7 +408,6 @@ class SetorPedagogico {
             this.showToast('❌ Você não tem permissão para acessar Substituição de Professores', 'error');
             return;
         }
-        // 🔥 NOVO: Verificar permissão de visitas
         if (section === 'visitas' && !this.temPermissaoVisitas) {
             this.showToast('❌ Você não tem permissão para acessar Autorização de Visitas', 'error');
             return;
@@ -446,7 +445,7 @@ class SetorPedagogico {
             relatorios: 'Relatórios',
             'segunda-chamada': '2ª Chamada',
             'substituicao-professores': 'Substituição de Professores',
-            'visitas': 'Autorização de Visitas'  // 🔥 NOVO
+            'visitas': 'Autorização de Visitas'
         };
         
         const icons = {
@@ -456,7 +455,7 @@ class SetorPedagogico {
             relatorios: 'fa-chart-bar',
             'segunda-chamada': 'fa-redo',
             'substituicao-professores': 'fa-people-arrows',
-            'visitas': 'fa-map-marked-alt'  // 🔥 NOVO
+            'visitas': 'fa-map-marked-alt'
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -479,7 +478,7 @@ class SetorPedagogico {
             this.loadSegundaChamada();
         } else if (section === 'substituicao-professores') {
             this.loadSubstituicaoProfessores();
-        } else if (section === 'visitas') {  // 🔥 NOVO
+        } else if (section === 'visitas') {
             this.loadVisitas();
         }
     }
@@ -1535,7 +1534,8 @@ class SetorPedagogico {
             if (modal) modal.style.display = 'none';
         });
     }
-        // ============================================================================
+
+    // ============================================================================
     // 🔥 2ª CHAMADA
     // ============================================================================
     
@@ -1646,10 +1646,57 @@ class SetorPedagogico {
                             <h5><i class="fas fa-redo"></i> Registrar 2ª Chamada</h5>
 
                             <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Data da 2ª Chamada <span class="text-danger">*</span></label>
-                                    <input type="date" id="segundaChamadaData" class="form-control" required>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Data da Falta (Início) <span class="text-danger">*</span></label>
+                                    <input type="date" id="segundaChamadaPeriodoFaltaInicio" class="form-control" required>
+                                    <small class="text-muted">Primeiro dia da falta</small>
                                 </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Data da Falta (Fim)</label>
+                                    <input type="date" id="segundaChamadaPeriodoFaltaFim" class="form-control">
+                                    <small class="text-muted">Deixe vazio se for 1 dia só</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Data do Registro <span class="text-danger">*</span></label>
+                                    <input type="date" id="segundaChamadaData" class="form-control" required>
+                                    <small class="text-muted">Quando está sendo registrado</small>
+                                </div>
+                            </div>
+
+                            <!-- 🆕 TIPO DE PROVA PERDIDA -->
+                            <div class="mb-3" id="campoSegundaChamadaTipoProva">
+                                <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
+                                <div class="tipos-tarefa-grid">
+                                    <div class="tipo-card" data-prova="AV1" onclick="setorPedagogico.selecionarTipoProvaPerdida('AV1')">
+                                        <i class="fas fa-file-alt"></i><span>AV1</span>
+                                    </div>
+                                    <div class="tipo-card" data-prova="AV2" onclick="setorPedagogico.selecionarTipoProvaPerdida('AV2')">
+                                        <i class="fas fa-file-alt"></i><span>AV2</span>
+                                    </div>
+                                    <div class="tipo-card" data-prova="AV3" onclick="setorPedagogico.selecionarTipoProvaPerdida('AV3')">
+                                        <i class="fas fa-file-alt"></i><span>AV3</span>
+                                    </div>
+                                    <div class="tipo-card" data-prova="AV4" onclick="setorPedagogico.selecionarTipoProvaPerdida('AV4')">
+                                        <i class="fas fa-file-alt"></i><span>AV4</span>
+                                    </div>
+                                    <div class="tipo-card" data-prova="Recuperação" onclick="setorPedagogico.selecionarTipoProvaPerdida('Recuperação')">
+                                        <i class="fas fa-redo"></i><span>Recuperação</span>
+                                    </div>
+                                    <div class="tipo-card" data-prova="Outros" onclick="setorPedagogico.selecionarTipoProvaPerdida('Outros')">
+                                        <i class="fas fa-ellipsis-h"></i><span>Outros</span>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="segundaChamadaTipoProvaPerdida">
+                            </div>
+
+                            <div id="campoSegundaChamadaTipoProvaOutros" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Especifique o Tipo de Prova <span class="text-danger">*</span></label>
+                                    <input type="text" id="segundaChamadaTipoProvaOutros" class="form-control" placeholder="Ex: Avaliação Prática, Trabalho...">
+                                </div>
+                            </div>
+
+                            <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Horário (opcional)</label>
                                     <input type="time" id="segundaChamadaHorario" class="form-control">
@@ -1693,8 +1740,8 @@ class SetorPedagogico {
                                             <input type="text" id="segundaChamadaResponsavelNome" class="form-control" placeholder="Nome completo do responsável">
                                         </div>
                                         <div class="col-md-3 mb-3">
-                                            <label class="form-label">CPF</label>
-                                            <input type="text" id="segundaChamadaResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="setorPedagogico.formatarCPF(this)">
+                                            <label class="form-label">CPF <span class="text-danger">*</span></label>
+                                            <input type="text" id="segundaChamadaResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="setorPedagogico.formatarCPF(this)" required>
                                         </div>
                                         <div class="col-md-3 mb-3">
                                             <label class="form-label">Telefone</label>
@@ -1856,7 +1903,7 @@ class SetorPedagogico {
                                     <label class="form-label">Aluno</label>
                                     <div class="autocomplete-aluno-wrapper">
                                         <input type="text" id="SegundaChamadaBuscaAlunoRelatorio" class="form-control" 
-                                               placeholder="Digite o nome do aluno..." autocomplete="off">
+                                            placeholder="Digite o nome do aluno..." autocomplete="off">
                                         <input type="hidden" id="SegundaChamadaFiltroAluno" value="">
                                         <div id="SegundaChamadaAutocompleteAlunoList" class="autocomplete-aluno-list" style="display: none;"></div>
                                     </div>
@@ -1869,6 +1916,18 @@ class SetorPedagogico {
                                 <div class="col-md-3">
                                     <label class="form-label">Data Fim</label>
                                     <input type="date" id="SegundaChamadaDataFim" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Tipo de Prova Perdida</label>
+                                    <select id="SegundaChamadaFiltroTipoProva" class="form-select">
+                                        <option value="todos">Todos os tipos</option>
+                                        <option value="AV1">AV1</option>
+                                        <option value="AV2">AV2</option>
+                                        <option value="AV3">AV3</option>
+                                        <option value="AV4">AV4</option>
+                                        <option value="Recuperação">Recuperação</option>
+                                        <option value="Outros">Outros</option>
+                                    </select>
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label">&nbsp;</label>
@@ -1921,9 +1980,20 @@ class SetorPedagogico {
                                 </select>
                             </div>
                             <div class="col-md-2">
+                                <select id="filtroListaSegundaChamadaTipoProva" class="form-select form-select-sm">
+                                    <option value="">Todos os tipos</option>
+                                    <option value="AV1">AV1</option>
+                                    <option value="AV2">AV2</option>
+                                    <option value="AV3">AV3</option>
+                                    <option value="AV4">AV4</option>
+                                    <option value="Recuperação">Recuperação</option>
+                                    <option value="Outros">Outros</option>
+                                </select>
+                            </div>
+                            <div class="col-md-1">
                                 <input type="date" id="filtroListaSegundaChamadaDataInicio" class="form-control form-control-sm">
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-1">
                                 <input type="date" id="filtroListaSegundaChamadaDataFim" class="form-control form-control-sm">
                             </div>
                             <div class="col-md-1">
@@ -1998,6 +2068,7 @@ class SetorPedagogico {
         }
         
         ['filtroListaSegundaChamadaTurma', 'filtroListaSegundaChamadaMotivo', 
+         'filtroListaSegundaChamadaTipoProva',
          'filtroListaSegundaChamadaDataInicio', 'filtroListaSegundaChamadaDataFim'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.onchange = () => this.carregarListaSegundaChamada();
@@ -2277,15 +2348,31 @@ class SetorPedagogico {
         this.estadoSegundaChamada.motivoSelecionado = null;
         document.querySelectorAll('#formSegundaChamada .tipo-card').forEach(c => c.classList.remove('selected'));
         
-        ['segundaChamadaData', 'segundaChamadaHorario', 'segundaChamadaMotivoOutros',
-         'segundaChamadaResponsavelNome', 'segundaChamadaResponsavelCPF',
-         'segundaChamadaResponsavelTelefone', 'segundaChamadaObservacoes'].forEach(id => {
+        [
+            'segundaChamadaData',
+            'segundaChamadaHorario',
+            'segundaChamadaMotivoOutros',
+            'segundaChamadaResponsavelNome',
+            'segundaChamadaResponsavelCPF',
+            'segundaChamadaResponsavelTelefone',
+            'segundaChamadaObservacoes',
+            'segundaChamadaPeriodoFaltaInicio',
+            'segundaChamadaPeriodoFaltaFim',
+            'segundaChamadaTipoProvaPerdida',
+            'segundaChamadaTipoProvaOutros'
+        ].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
         
         const campoOutros = document.getElementById('campoSegundaChamadaOutros');
         if (campoOutros) campoOutros.style.display = 'none';
+        
+        // 🆕 Limpa tipo de prova perdida
+        document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
+        
+        const campoProvaOutros = document.getElementById('campoSegundaChamadaTipoProvaOutros');
+        if (campoProvaOutros) campoProvaOutros.style.display = 'none';
         
         const dataEl = document.getElementById('segundaChamadaData');
         if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
@@ -2299,12 +2386,25 @@ class SetorPedagogico {
         const el = document.getElementById('segundaChamadaMotivoSelecionado');
         if (el) el.value = motivo;
         
-        document.querySelectorAll('#formSegundaChamada .tipo-card').forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll('#formSegundaChamada .tipo-card[data-tipo]').forEach(c => c.classList.remove('selected'));
         const card = document.querySelector(`#formSegundaChamada .tipo-card[data-tipo="${motivo}"]`);
         if (card) card.classList.add('selected');
         
         const campoOutros = document.getElementById('campoSegundaChamadaOutros');
         if (campoOutros) campoOutros.style.display = motivo === 'outros' ? 'block' : 'none';
+    }
+
+    // 🆕 TIPO DE PROVA PERDIDA (2ª Chamada)
+    selecionarTipoProvaPerdida(tipo) {
+        const input = document.getElementById('segundaChamadaTipoProvaPerdida');
+        if (input) input.value = tipo;
+        
+        document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
+        const card = document.querySelector(`#campoSegundaChamadaTipoProva .tipo-card[data-prova="${tipo}"]`);
+        if (card) card.classList.add('selected');
+        
+        const campoOutros = document.getElementById('campoSegundaChamadaTipoProvaOutros');
+        if (campoOutros) campoOutros.style.display = tipo === 'Outros' ? 'block' : 'none';
     }
     
     inicializarAssinaturaSegundaChamada() {
@@ -2447,6 +2547,47 @@ class SetorPedagogico {
         else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
         input.value = v;
     }
+
+    // 🆕 VALIDAÇÃO DE CPF (dígitos verificadores)
+    validarCPFCliente(cpf) {
+        if (!cpf || typeof cpf !== 'string') {
+            return { valido: false, erro: 'CPF não informado' };
+        }
+        
+        const cpfLimpo = cpf.replace(/\D/g, '');
+        
+        if (cpfLimpo.length !== 11) {
+            return { valido: false, erro: 'CPF deve conter 11 dígitos' };
+        }
+        
+        if (/^(\d)\1{10}$/.test(cpfLimpo)) {
+            return { valido: false, erro: 'CPF inválido (dígitos repetidos)' };
+        }
+        
+        // 1º dígito verificador
+        let soma = 0;
+        for (let i = 0; i < 9; i++) {
+            soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+        }
+        let resto = (soma * 10) % 11;
+        if (resto === 10 || resto === 11) resto = 0;
+        if (resto !== parseInt(cpfLimpo.charAt(9))) {
+            return { valido: false, erro: 'CPF inválido (1º dígito verificador)' };
+        }
+        
+        // 2º dígito verificador
+        soma = 0;
+        for (let i = 0; i < 10; i++) {
+            soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+        }
+        resto = (soma * 10) % 11;
+        if (resto === 10 || resto === 11) resto = 0;
+        if (resto !== parseInt(cpfLimpo.charAt(10))) {
+            return { valido: false, erro: 'CPF inválido (2º dígito verificador)' };
+        }
+        
+        return { valido: true, cpfLimpo };
+    }
     
     async registrarSegundaChamada() {
         const est = this.estadoSegundaChamada;
@@ -2458,8 +2599,35 @@ class SetorPedagogico {
         
         const data = document.getElementById('segundaChamadaData')?.value;
         if (!data) { 
-            this.showToast('Preencha a data', 'error'); 
+            this.showToast('Preencha a data do registro', 'error'); 
             return; 
+        }
+        
+        const periodoFaltaInicio = document.getElementById('segundaChamadaPeriodoFaltaInicio')?.value || '';
+        const periodoFaltaFim = document.getElementById('segundaChamadaPeriodoFaltaFim')?.value || '';
+        
+        if (!periodoFaltaInicio) {
+            this.showToast('Informe a data da falta (início)', 'error');
+            return;
+        }
+        
+        if (periodoFaltaFim && periodoFaltaFim < periodoFaltaInicio) {
+            this.showToast('Data final não pode ser anterior à data inicial', 'error');
+            return;
+        }
+        
+        // 🆕 TIPO DE PROVA PERDIDA
+        const tipoProvaPerdida = document.getElementById('segundaChamadaTipoProvaPerdida')?.value || '';
+        const tipoProvaPerdidaOutros = document.getElementById('segundaChamadaTipoProvaOutros')?.value || '';
+        
+        if (!tipoProvaPerdida) {
+            this.showToast('⚠️ Informe o tipo de prova perdida', 'error');
+            return;
+        }
+        
+        if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
+            this.showToast('⚠️ Especifique o tipo de prova perdida', 'error');
+            return;
         }
         
         if (est.motivoSelecionado === 'outros') {
@@ -2473,6 +2641,24 @@ class SetorPedagogico {
         if (!est.currentAluno) { 
             this.showToast('Nenhum aluno selecionado', 'error'); 
             return; 
+        }
+        
+        // ==========================================
+        // 🆕 VALIDAÇÃO DE CPF DO RESPONSÁVEL (OBRIGATÓRIO)
+        // ==========================================
+        const responsavelCPF = document.getElementById('segundaChamadaResponsavelCPF')?.value || '';
+        
+        if (!responsavelCPF || responsavelCPF.trim() === '') {
+            this.showToast('⚠️ CPF do responsável é obrigatório!\n\nPreencha o CPF antes de registrar.', 'error');
+            document.getElementById('segundaChamadaResponsavelCPF')?.focus();
+            return;
+        }
+        
+        const validacaoCPF = this.validarCPFCliente(responsavelCPF);
+        if (!validacaoCPF.valido) {
+            this.showToast(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}`, 'error');
+            document.getElementById('segundaChamadaResponsavelCPF')?.focus();
+            return;
         }
         
         const assinaturaBase64 = this.obterAssinaturaBase64();
@@ -2489,10 +2675,14 @@ class SetorPedagogico {
                 tipo: 'segunda_chamada',
                 alunoId: est.currentAluno.id,
                 data,
+                periodoFaltaInicio: periodoFaltaInicio || undefined,
+                periodoFaltaFim: periodoFaltaFim || periodoFaltaInicio,
+                tipoProvaPerdida: tipoProvaPerdida,
+                tipoProvaPerdidaOutros: tipoProvaPerdida === 'Outros' ? tipoProvaPerdidaOutros.trim() : undefined,
                 horarioEntrada: document.getElementById('segundaChamadaHorario')?.value || '08:00',
                 horarioSaida: document.getElementById('segundaChamadaHorario')?.value || '08:00',
                 responsavelNome: document.getElementById('segundaChamadaResponsavelNome')?.value || '',
-                responsavelCPF: document.getElementById('segundaChamadaResponsavelCPF')?.value || '',
+                responsavelCPF: responsavelCPF,
                 responsavelTelefone: document.getElementById('segundaChamadaResponsavelTelefone')?.value || '',
                 motivo: est.motivoSelecionado,
                 motivoOutros: document.getElementById('segundaChamadaMotivoOutros')?.value || '',
@@ -2509,6 +2699,20 @@ class SetorPedagogico {
                 body: JSON.stringify(body)
             });
             const d = await r.json();
+            
+            // 🆕 TRATAMENTO DO 409 (DUPLICIDADE)
+            if (r.status === 409 || (d.error && d.error.includes('Já existe'))) {
+                let msg = '⚠️ Registro duplicado detectado!\n\n';
+                msg += d.error || 'Já existe um registro com os mesmos dados.';
+                if (d.duplicado) {
+                    msg += `\n\n📌 Registrado por: ${d.duplicado.registradoPor || 'N/D'}`;
+                    msg += `\n📅 Data: ${d.duplicado.data ? new Date(d.duplicado.data).toLocaleDateString('pt-BR') : 'N/D'}`;
+                    msg += `\n👤 CPF: ${d.duplicado.responsavelCPF || 'N/D'}`;
+                }
+                this.showToast(msg, 'error');
+                if (btn) btn.disabled = false;
+                return;
+            }
             
             if (!d.success) {
                 this.showToast('❌ ' + (d.error || 'Erro'), 'error');
@@ -2530,12 +2734,14 @@ class SetorPedagogico {
                     tipo: 'justificativa',
                     alunoId: est.currentAluno.id,
                     data,
+                    periodoFaltaInicio,
+                    periodoFaltaFim: periodoFaltaFim || periodoFaltaInicio,
                     motivo: motivosMap[est.motivoSelecionado] || 'outros',
                     motivoOutros: document.getElementById('segundaChamadaMotivoOutros')?.value || '',
                     responsavelNome: document.getElementById('segundaChamadaResponsavelNome')?.value || '',
-                    responsavelCPF: document.getElementById('segundaChamadaResponsavelCPF')?.value || '',
+                    responsavelCPF: responsavelCPF,
                     responsavelTelefone: document.getElementById('segundaChamadaResponsavelTelefone')?.value || '',
-                    observacoes: `Gerada automaticamente a partir de 2ª Chamada | ${document.getElementById('segundaChamadaObservacoes')?.value || ''}`.trim(),
+                    observacoes: `Gerada automaticamente a partir de 2ª Chamada (${tipoProvaPerdida}) | ${document.getElementById('segundaChamadaObservacoes')?.value || ''}`.trim(),
                     origemTipo: 'segunda_chamada',
                     origemId: d.autorizacao.id,
                     assinaturaBase64: assinaturaBase64
@@ -2552,6 +2758,7 @@ class SetorPedagogico {
                 const justD = await justR.json();
                 if (justD.success) {
                     justificativaCriada = true;
+                    console.log('✅ Justificativa automática criada:', justD.autorizacao.id);
                 }
             } catch (e) {
                 console.warn('⚠️ Erro ao criar justificativa:', e);
@@ -2596,13 +2803,15 @@ class SetorPedagogico {
             }
         }, 1000);
     }
-        async carregarListaSegundaChamada() {
+
+    async carregarListaSegundaChamada() {
         const container = document.getElementById('listaSegundaChamada');
         if (!container) return;
         
         const alunoNome = document.getElementById('filtroListaSegundaChamadaAluno')?.value || '';
         const turma = document.getElementById('filtroListaSegundaChamadaTurma')?.value || '';
         const motivo = document.getElementById('filtroListaSegundaChamadaMotivo')?.value || '';
+        const tipoProvaPerdida = document.getElementById('filtroListaSegundaChamadaTipoProva')?.value || '';
         const dataInicio = document.getElementById('filtroListaSegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('filtroListaSegundaChamadaDataFim')?.value || '';
         
@@ -2610,6 +2819,7 @@ class SetorPedagogico {
         if (alunoNome) url += `&alunoNome=${encodeURIComponent(alunoNome)}`;
         if (turma) url += `&turma=${encodeURIComponent(turma)}`;
         if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
+        if (tipoProvaPerdida) url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
         if (dataInicio) url += `&dataInicio=${dataInicio}`;
         if (dataFim) url += `&dataFim=${dataFim}`;
         
@@ -2650,14 +2860,24 @@ class SetorPedagogico {
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Data</th><th>Aluno</th><th>Turma</th><th>Horário</th>
-                                <th>Motivo</th><th>Responsável</th><th>Assinatura</th><th>Ações</th>
+                                <th>Data Registro</th>
+                                <th>Período da Falta</th>
+                                <th>Tipo de Prova</th>
+                                <th>Aluno</th>
+                                <th>Turma</th>
+                                <th>Horário</th>
+                                <th>Motivo</th>
+                                <th>Responsável</th>
+                                <th>Assinatura</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${d.autorizacoes.map(a => `
                                 <tr>
                                     <td>${a.dataFormatada}</td>
+                                    <td><strong style="color: #1e3c72;">${a.periodoFaltaFormatado || '-'}</strong></td>
+                                    <td><span class="badge bg-warning text-dark">${this.escapeHtml(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</span></td>
                                     <td><strong>${this.escapeHtml(a.alunoNome)}</strong></td>
                                     <td>${this.escapeHtml(a.alunoTurma)}</td>
                                     <td>${a.horarioEntrada || '-'}</td>
@@ -3078,24 +3298,28 @@ class SetorPedagogico {
         const tipo = document.getElementById('SegundaChamadaTipoRelatorio')?.value || 'geral';
         const dataInicio = document.getElementById('SegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('SegundaChamadaDataFim')?.value || '';
+        const tipoProvaPerdida = document.getElementById('SegundaChamadaFiltroTipoProva')?.value || '';
         
         let url = '';
         if (tipo === 'geral') {
             url = `/api/gestao-geral/autorizacao/relatorio/geral?tipo=segunda_chamada&`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
+            if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
         } else if (tipo === 'turma') {
             const turma = document.getElementById('SegundaChamadaFiltroTurma')?.value;
             if (!turma) { this.mostrarNotificacao('Selecione uma turma', 'error'); return; }
             url = `/api/gestao-geral/autorizacao/relatorio/turma/${encodeURIComponent(turma)}?tipo=segunda_chamada&`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
+            if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
         } else if (tipo === 'aluno') {
             const alunoId = document.getElementById('SegundaChamadaFiltroAluno')?.value;
             if (!alunoId) { this.mostrarNotificacao('Selecione um aluno', 'error'); return; }
             url = `/api/gestao-geral/autorizacao/relatorio/aluno/${alunoId}?tipo=segunda_chamada&`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
+            if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
         }
         
         try {
@@ -3153,7 +3377,6 @@ class SetorPedagogico {
         const carimbo = '/icons/assinatura_gestao.ico';
         const dataGeracao = new Date().toLocaleString('pt-BR');
         
-        // ========== BUSCAR ASSINATURA DIGITAL ==========
         let assinaturaDigital = null;
         if (tipo === 'aluno' && Array.isArray(data.registros)) {
             const comAssinatura = data.registros.find(a => a.assinaturaBase64);
@@ -3165,7 +3388,6 @@ class SetorPedagogico {
             if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
         }
         
-        // ========== HELPER: FORMATAR DATA ==========
         const formatarDataCadastro = (item) => {
             if (!item.createdAt) return '-';
             try {
@@ -3178,7 +3400,6 @@ class SetorPedagogico {
             }
         };
         
-        // ========== TÍTULO E SUBTÍTULO ==========
         let titulo = 'RELATÓRIO DE 2ª CHAMADA';
         let subtitulo = '';
         if (tipo === 'turma') {
@@ -3189,7 +3410,6 @@ class SetorPedagogico {
             subtitulo = 'Relatório Geral';
         }
         
-        // ========== ESTATÍSTICAS ==========
         let statsHTML = '';
         if (tipo === 'geral') {
             statsHTML = `
@@ -3218,7 +3438,6 @@ class SetorPedagogico {
                 </table>`;
         }
         
-        // ========== TABELAS ==========
         let tabelaHTML = '';
         
         if (tipo === 'geral') {
@@ -3239,6 +3458,20 @@ class SetorPedagogico {
                     </tbody>
                 </table>
                 
+                ${(data.porTipoProva || []).length > 0 ? `
+                    <div class="section-title">DISTRIBUIÇÃO POR TIPO DE PROVA PERDIDA</div>
+                    <table>
+                        <thead><tr><th>Tipo de Prova</th><th style="width:80px;text-align:center;">Qtd</th></tr></thead>
+                        <tbody>
+                            ${(data.porTipoProva || []).map(t => `
+                                <tr>
+                                    <td>${this.escapeHtml(t.tipoProva || t.label || '')}</td>
+                                    <td style="text-align:center;">${t.count || 0}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
+                
                 <div class="section-title">DISTRIBUIÇÃO POR TURMA</div>
                 <table>
                     <thead><tr><th>Turma</th><th style="width:70px;text-align:center;">Total</th><th style="width:70px;text-align:center;">Alunos</th></tr></thead>
@@ -3256,8 +3489,9 @@ class SetorPedagogico {
                 <table>
                     <thead>
                         <tr>
-                            <th>Data</th>
-                            <th>Cadastro</th>
+                            <th>Data Registro</th>
+                            <th>Período da Falta</th>
+                            <th>Tipo de Prova</th>
                             <th>Aluno</th>
                             <th>Turma</th>
                             <th>Motivo</th>
@@ -3267,11 +3501,12 @@ class SetorPedagogico {
                         ${registros.slice(0, 40).map(a => `
                             <tr>
                                 <td>${a.dataFormatada || '-'}</td>
-                                <td>${formatarDataCadastro(a)}</td>
+                                <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
+                                <td>${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</td>
                                 <td>${this.escapeHtml(a.alunoNome || '')}</td>
                                 <td>${this.escapeHtml(a.alunoTurma || '')}</td>
                                 <td>${this.escapeHtml(a.motivoLabel || '')}</td>
-                            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum registro</td></tr>'}
+                            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;">Nenhum registro</td></tr>'}
                     </tbody>
                 </table>
             `;
@@ -3298,8 +3533,9 @@ class SetorPedagogico {
                     <table>
                         <thead>
                             <tr>
-                                <th>Data</th>
-                                <th>Cadastro</th>
+                                <th>Data Registro</th>
+                                <th>Período da Falta</th>
+                                <th>Tipo de Prova</th>
                                 <th>Aluno</th>
                                 <th>Motivo</th>
                             </tr>
@@ -3308,7 +3544,8 @@ class SetorPedagogico {
                             ${registros.slice(0, 40).map(a => `
                                 <tr>
                                     <td>${a.dataFormatada || '-'}</td>
-                                    <td>${formatarDataCadastro(a)}</td>
+                                    <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
+                                    <td>${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</td>
                                     <td>${this.escapeHtml(a.alunoNome || '')}</td>
                                     <td>${this.escapeHtml(a.motivoLabel || '')}</td>
                                 </tr>`).join('')}
@@ -3324,8 +3561,9 @@ class SetorPedagogico {
                 <table>
                     <thead>
                         <tr>
-                            <th>Data</th>
-                            <th>Cadastro</th>
+                            <th>Data Registro</th>
+                            <th>Período da Falta</th>
+                            <th>Tipo de Prova</th>
                             <th>Motivo</th>
                             <th>Observações</th>
                         </tr>
@@ -3334,46 +3572,41 @@ class SetorPedagogico {
                         ${registros.map(a => `
                             <tr>
                                 <td>${a.dataFormatada || '-'}</td>
-                                <td>${formatarDataCadastro(a)}</td>
+                                <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
+                                <td>${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</td>
                                 <td>${this.escapeHtml(a.motivoLabel || '')}</td>
                                 <td>${this.escapeHtml((a.observacoes || '').substring(0, 100))}</td>
-                            </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum registro</td></tr>'}
+                            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum registro</td></tr>'}
                     </tbody>
                 </table>
             `;
         }
         
-        // ========== HTML FINAL (COMPACTO / FORMAL) ==========
         return `<!DOCTYPE html>
         <html lang="pt-BR">
         <head>
             <meta charset="UTF-8">
             <title>${titulo}</title>
             <style>
-                /* ====== CONFIGURAÇÃO DE PÁGINA ====== */
-                @page { 
-                    size: A4 portrait; 
-                    margin: 10mm 12mm;  /* Reduzido */
-                }
+                @page { size: A4 portrait; margin: 10mm 12mm; }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 
                 body {
                     font-family: 'Times New Roman', Times, serif;
-                    font-size: 9pt;        /* Reduzido de 11pt */
-                    line-height: 1.25;     /* Reduzido de 1.4 */
+                    font-size: 9pt;
+                    line-height: 1.25;
                     color: #000;
                 }
                 
-                /* ====== CABEÇALHO COMPACTO ====== */
                 .header {
                     text-align: center;
-                    border-bottom: 1.5px solid #000;  /* Fina em vez de dupla */
+                    border-bottom: 1.5px solid #000;
                     padding-bottom: 5px;
                     margin-bottom: 8px;
                 }
                 .header img {
                     max-width: 100%;
-                    max-height: 16mm;   /* Reduzido */
+                    max-height: 16mm;
                     object-fit: contain;
                     display: block;
                     margin: 0 auto 3px;
@@ -3390,14 +3623,13 @@ class SetorPedagogico {
                     color: #333;
                 }
                 
-                /* ====== TÍTULO ====== */
                 .titulo {
                     text-align: center;
                     font-size: 11pt;
                     font-weight: bold;
-                    background: #e8e8e8;         /* Cinza em vez de azul */
+                    background: #e8e8e8;
                     padding: 4px 8px;
-                    border: 1px solid #000;      /* Fina */
+                    border: 1px solid #000;
                     margin: 8px 0 4px;
                     text-transform: uppercase;
                     letter-spacing: 1px;
@@ -3409,7 +3641,6 @@ class SetorPedagogico {
                     font-style: italic;
                 }
                 
-                /* ====== ESTATÍSTICAS (compactas, sem cor) ====== */
                 .stats-table {
                     width: 100%;
                     margin: 8px 0 12px;
@@ -3435,27 +3666,25 @@ class SetorPedagogico {
                     letter-spacing: 0.5px;
                 }
                 
-                /* ====== TÍTULOS DE SEÇÃO ====== */
                 .section-title {
                     font-size: 8.5pt;
                     font-weight: bold;
                     background: #e8e8e8;
                     padding: 3px 8px;
-                    border-left: 3px solid #000;  /* Preto em vez de azul */
+                    border-left: 3px solid #000;
                     margin: 10px 0 5px;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
                 }
                 
-                /* ====== TABELAS COMPACTAS ====== */
                 table {
                     width: 100%;
                     border-collapse: collapse;
-                    font-size: 7.5pt;   /* Reduzido de 9.5pt */
+                    font-size: 7.5pt;
                     margin-bottom: 10px;
                 }
                 th {
-                    background: #333;   /* Cinza escuro em vez de azul */
+                    background: #333;
                     color: white;
                     padding: 4px 5px;
                     text-align: left;
@@ -3472,11 +3701,10 @@ class SetorPedagogico {
                 }
                 tr:nth-child(even) { background: #f5f5f5; }
                 
-                /* ====== ASSINATURA COMPACTA ====== */
                 .assinaturas {
                     display: flex;
                     justify-content: center;
-                    margin-top: 25px;   /* Reduzido de 50px */
+                    margin-top: 25px;
                     gap: 30px;
                 }
                 .assinatura {
@@ -3486,14 +3714,14 @@ class SetorPedagogico {
                 .assinatura-container-relatorio {
                     position: relative;
                     border-bottom: 1px solid #000;
-                    min-height: 15mm;    /* Reduzido de 22mm */
+                    min-height: 15mm;
                     display: flex;
                     align-items: flex-end;
                     justify-content: center;
                     padding-bottom: 2px;
                 }
                 .assinatura-img {
-                    max-height: 13mm;    /* Reduzido */
+                    max-height: 13mm;
                     max-width: 100%;
                     object-fit: contain;
                     position: relative;
@@ -3517,12 +3745,11 @@ class SetorPedagogico {
                     margin-top: 2px;
                 }
                 
-                /* ====== RODAPÉ ====== */
                 .footer {
                     text-align: center;
                     margin-top: 15px;
                     padding-top: 5px;
-                    border-top: 1px solid #000;  /* Fina em vez de cinza */
+                    border-top: 1px solid #000;
                     font-size: 7pt;
                     color: #333;
                 }
@@ -3534,12 +3761,11 @@ class SetorPedagogico {
                     text-align: center;
                 }
                 
-                /* ====== BOTÃO IMPRIMIR (não aparece no PDF) ====== */
                 .btn-print {
                     display: block;
                     margin: 15px auto;
                     padding: 10px 28px;
-                    background: #333;    /* Cinza escuro em vez de azul */
+                    background: #333;
                     color: white;
                     border: none;
                     border-radius: 6px;
@@ -3615,6 +3841,15 @@ class SetorPedagogico {
                                 <strong>${this.escapeHtml(m.label)}</strong>: ${m.count}
                             </div>
                         </div>`).join('')}</div>
+                    ${(data.porTipoProva || []).length > 0 ? `
+                        <h6 class="mt-4">Por Tipo de Prova Perdida</h6>
+                        <div class="row">${(data.porTipoProva || []).map(t => `
+                            <div class="col-md-4 mb-2">
+                                <div class="p-2" style="background:#fef3c7;border-radius:8px;">
+                                    <strong>${this.escapeHtml(t.tipoProva || t.label)}</strong>: ${t.count}
+                                </div>
+                            </div>`).join('')}</div>
+                    ` : ''}
                     <h6 class="mt-4">Por Turma</h6>
                     <div class="table-responsive">
                         <table class="table table-sm">
@@ -3653,10 +3888,20 @@ class SetorPedagogico {
                     <h6 class="mt-4">Histórico</h6>
                     <div class="table-responsive">
                         <table class="table table-sm">
-                            <thead><tr><th>Data</th><th>Motivo</th><th>Observações</th></tr></thead>
+                            <thead>
+                                <tr>
+                                    <th>Data Registro</th>
+                                    <th>Período da Falta</th>
+                                    <th>Tipo de Prova</th>
+                                    <th>Motivo</th>
+                                    <th>Observações</th>
+                                </tr>
+                            </thead>
                             <tbody>${(data.registros || []).map(a => `
                                 <tr>
                                     <td>${a.dataFormatada}</td>
+                                    <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
+                                    <td>${this.escapeHtml(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>
                                     <td>${this.escapeHtml(a.motivoLabel)}</td>
                                     <td>${this.escapeHtml((a.observacoes || '').substring(0, 100))}</td>
                                 </tr>`).join('')}
@@ -3674,10 +3919,22 @@ class SetorPedagogico {
         const registros = data.registros || [];
         if (registros.length === 0) { this.mostrarNotificacao('Nenhum dado para exportar', 'error'); return; }
         
-        let csv = "Data,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
+        let csv = "Data do Registro,Data de Cadastro,Período da Falta,Tipo de Prova Perdida,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
         registros.forEach(a => {
+            let dataCadastro = '';
+            if (a.createdAt) {
+                try {
+                    dataCadastro = new Date(a.createdAt).toLocaleString('pt-BR');
+                } catch (e) {
+                    dataCadastro = '';
+                }
+            }
+            
             csv += [
                 a.dataFormatada || '',
+                `"${dataCadastro}"`,
+                `"${(a.periodoFaltaFormatado || '').replace(/"/g, '""')}"`,
+                `"${(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '').replace(/"/g, '""')}"`,
                 `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
                 `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
                 `"${(a.alunoTurma || data.turma || data.aluno?.turma || '').replace(/"/g, '""')}"`,
@@ -3694,7 +3951,6 @@ class SetorPedagogico {
         link.click();
         URL.revokeObjectURL(link.href);
     }
-    
     async imprimirSegundaChamada(id) {
         try {
             const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
@@ -3739,18 +3995,51 @@ class SetorPedagogico {
             hour: '2-digit', minute: '2-digit' 
         });
         
-        // ========== DETALHE DO MOTIVO ==========
         let detalheMotivo = '';
         if (a.motivo === 'outros' && a.motivoOutros) {
             detalheMotivo = ` <strong>(Especificação: ${this.escapeHtml(a.motivoOutros)})</strong>`;
         }
         
-        // ========== ASSINATURA DIGITAL ==========
+        // 🆕 BLOCO DE PERÍODO DA FALTA
+        let periodoFaltaHTML = '';
+        if (a.periodoFaltaInicio) {
+            const ini = new Date(a.periodoFaltaInicio);
+            const fim = a.periodoFaltaFim ? new Date(a.periodoFaltaFim) : ini;
+            const iniFmt = ini.toLocaleDateString('pt-BR');
+            const fimFmt = fim.toLocaleDateString('pt-BR');
+            const texto = iniFmt === fimFmt ? iniFmt : `${iniFmt} a ${fimFmt}`;
+            
+            periodoFaltaHTML = `
+                <div class="section-title">📆 Período da Falta Justificada</div>
+                <div class="motivo-box" style="background: #dbeafe; border-color: #1e3c72;">
+                    <p style="margin: 0; font-size: 11pt; text-align: center;">
+                        <strong>${texto}</strong>
+                    </p>
+                </div>
+            `;
+        }
+        
+        // 🆕 BLOCO DE TIPO DE PROVA PERDIDA
+        let tipoProvaHTML = '';
+        if (a.tipoProvaPerdida) {
+            const textoProva = a.tipoProvaPerdida === 'Outros' && a.tipoProvaPerdidaOutros
+                ? `Outros (${this.escapeHtml(a.tipoProvaPerdidaOutros)})`
+                : this.escapeHtml(a.tipoProvaPerdida);
+            
+            tipoProvaHTML = `
+                <div class="section-title">📝 Tipo de Prova Perdida</div>
+                <div class="motivo-box" style="background: #fef3c7; border-color: #f59e0b;">
+                    <p style="margin: 0; font-size: 11pt; text-align: center;">
+                        <strong>${textoProva}</strong>
+                    </p>
+                </div>
+            `;
+        }
+        
         const assinaturaHTML = a.assinaturaBase64 
             ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura">`
             : '';
         
-        // ========== RESPONSÁVEL (compacto) ==========
         const temResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
         const responsavelHTML = temResponsavel ? `
             <div class="section-title">👤 Responsável</div>
@@ -3761,7 +4050,6 @@ class SetorPedagogico {
             </div>
         ` : '';
         
-        // ========== HORÁRIO DE ENTRADA ==========
         const horariosHTML = a.horarioEntrada ? `
             <div class="info-grid">
                 <div class="info-item">
@@ -3770,17 +4058,13 @@ class SetorPedagogico {
                 </div>
             </div>` : '';
         
-        // ========== HTML FINAL ==========
         return `<!DOCTYPE html>
         <html lang="pt-BR">
         <head>
             <meta charset="UTF-8">
             <title>2ª Chamada - ${this.escapeHtml(a.alunoNome)}</title>
             <style>
-                @page { 
-                    size: A4 portrait; 
-                    margin: 8mm;
-                }
+                @page { size: A4 portrait; margin: 8mm; }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
                 body {
                     font-family: 'Times New Roman', Times, serif;
@@ -3789,7 +4073,6 @@ class SetorPedagogico {
                     color: #000;
                 }
                 
-                /* ========== CABEÇALHO ========== */
                 .header {
                     text-align: center;
                     border-bottom: 1.5px double #000;
@@ -3814,7 +4097,6 @@ class SetorPedagogico {
                     margin: 1px 0 0;
                 }
                 
-                /* ========== TÍTULO ========== */
                 .titulo {
                     text-align: center;
                     font-size: 11pt;
@@ -3827,7 +4109,6 @@ class SetorPedagogico {
                     letter-spacing: 0.5px;
                 }
                 
-                /* ========== CARD DO ALUNO ========== */
                 .aluno-box {
                     display: flex;
                     align-items: center;
@@ -3858,7 +4139,6 @@ class SetorPedagogico {
                     color: #374151;
                 }
                 
-                /* ========== TÍTULOS DE SEÇÃO ========== */
                 .section-title {
                     font-size: 9pt;
                     font-weight: bold;
@@ -3868,7 +4148,6 @@ class SetorPedagogico {
                     margin: 5px 0 3px;
                 }
                 
-                /* ========== INFO GRID ========== */
                 .info-grid {
                     display: grid;
                     grid-template-columns: 1fr 1fr 1fr;
@@ -3880,7 +4159,6 @@ class SetorPedagogico {
                 .info-label { font-weight: bold; white-space: nowrap; }
                 .info-value { flex: 1; }
                 
-                /* ========== DETALHES COMPACTOS ========== */
                 .detalhes-compactos {
                     background: #f9fafb;
                     border: 1px solid #e5e7eb;
@@ -3895,7 +4173,6 @@ class SetorPedagogico {
                     margin-bottom: 2px;
                 }
                 
-                /* ========== MOTIVO BOX ========== */
                 .motivo-box {
                     background: #f5f5f5;
                     border: 1px solid #000;
@@ -3906,7 +4183,6 @@ class SetorPedagogico {
                 .motivo-box strong { font-size: 9pt; }
                 .motivo-box p { margin: 3px 0 0; font-size: 9.5pt; font-weight: bold; }
                 
-                /* ========== DESCRIÇÃO / OBSERVAÇÕES ========== */
                 .descricao-box {
                     background: #f9fafb;
                     border: 1px solid #e5e7eb;
@@ -3920,7 +4196,6 @@ class SetorPedagogico {
                     word-wrap: break-word;
                 }
                 
-                /* 🖋️ DUAS ASSINATURAS LADO A LADO */
                 .assinaturas {
                     display: flex;
                     justify-content: space-around;
@@ -3978,7 +4253,6 @@ class SetorPedagogico {
                     margin-top: 2px;
                 }
                 
-                /* ========== QR CODE ========== */
                 .qr-code {
                     text-align: center;
                     margin-top: 6px;
@@ -3998,7 +4272,6 @@ class SetorPedagogico {
                     font-weight: bold;
                 }
                 
-                /* ========== RODAPÉ ========== */
                 .footer {
                     text-align: center;
                     margin-top: 5px;
@@ -4009,7 +4282,6 @@ class SetorPedagogico {
                 }
                 .footer p { margin: 1px 0; }
                 
-                /* ========== BOTÃO IMPRIMIR ========== */
                 .btn-print {
                     display: block;
                     margin: 10px auto;
@@ -4057,6 +4329,9 @@ class SetorPedagogico {
                 </div>
             </div>
             
+            ${periodoFaltaHTML}
+            ${tipoProvaHTML}
+            
             <div class="section-title">📌 Dados do Registro</div>
             <div class="info-grid">
                 <div class="info-item">
@@ -4088,7 +4363,6 @@ class SetorPedagogico {
                 </div>
             ` : ''}
             
-            <!-- 🖋️ DUAS ASSINATURAS LADO A LADO -->
             <div class="assinaturas">
                 <div class="assinatura">
                     <div class="assinatura-container-relatorio">
@@ -4169,10 +4443,18 @@ class SetorPedagogico {
                 `<option value="${m.valor}" ${a.motivo === m.valor ? 'selected' : ''}>${m.label}</option>`
             ).join('');
             
-            let dataInput = '';
+            let periodoInicioInput = '';
+            let periodoFimInput = '';
+            if (a.periodoFaltaInicio) {
+                periodoInicioInput = new Date(a.periodoFaltaInicio).toISOString().split('T')[0];
+            }
+            if (a.periodoFaltaFim) {
+                periodoFimInput = new Date(a.periodoFaltaFim).toISOString().split('T')[0];
+            }
+            
+            let dataRegistroInput = '';
             if (a.data) {
-                const dObj = new Date(a.data);
-                dataInput = dObj.toISOString().split('T')[0];
+                dataRegistroInput = new Date(a.data).toISOString().split('T')[0];
             }
             
             const modalHtml = `
@@ -4200,10 +4482,42 @@ class SetorPedagogico {
                                 </div>
                                 
                                 <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Data <span class="text-danger">*</span></label>
-                                        <input type="date" id="edit2ChamadaData" class="form-control" value="${dataInput}">
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Data da Falta (Início) <span class="text-danger">*</span></label>
+                                        <input type="date" id="edit2ChamadaPeriodoFaltaInicio" class="form-control" value="${periodoInicioInput}" required>
                                     </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Data da Falta (Fim)</label>
+                                        <input type="date" id="edit2ChamadaPeriodoFaltaFim" class="form-control" value="${periodoFimInput}">
+                                        <small class="text-muted">Deixe vazio se for 1 dia só</small>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Data do Registro</label>
+                                        <input type="date" id="edit2ChamadaData" class="form-control" value="${dataRegistroInput}" disabled>
+                                        <small class="text-muted">Data em que foi cadastrado</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
+                                    <select id="edit2ChamadaTipoProva" class="form-select" onchange="setorPedagogico.toggleEdit2ChamadaTipoProvaOutros()">
+                                        <option value="">Selecione...</option>
+                                        <option value="AV1" ${a.tipoProvaPerdida === 'AV1' ? 'selected' : ''}>AV1</option>
+                                        <option value="AV2" ${a.tipoProvaPerdida === 'AV2' ? 'selected' : ''}>AV2</option>
+                                        <option value="AV3" ${a.tipoProvaPerdida === 'AV3' ? 'selected' : ''}>AV3</option>
+                                        <option value="AV4" ${a.tipoProvaPerdida === 'AV4' ? 'selected' : ''}>AV4</option>
+                                        <option value="Recuperação" ${a.tipoProvaPerdida === 'Recuperação' ? 'selected' : ''}>Recuperação</option>
+                                        <option value="Outros" ${a.tipoProvaPerdida === 'Outros' ? 'selected' : ''}>Outros</option>
+                                    </select>
+                                </div>
+                                <div id="edit2ChamadaCampoTipoProvaOutros" style="display: ${a.tipoProvaPerdida === 'Outros' ? 'block' : 'none'};">
+                                    <div class="mb-3">
+                                        <label class="form-label">Especifique o Tipo de Prova</label>
+                                        <input type="text" id="edit2ChamadaTipoProvaOutros" class="form-control" value="${this.escapeHtml(a.tipoProvaPerdidaOutros || '')}">
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Horário</label>
                                         <input type="time" id="edit2ChamadaHorario" class="form-control" value="${a.horarioEntrada || ''}">
@@ -4236,11 +4550,11 @@ class SetorPedagogico {
                                             </div>
                                             <div class="col-md-3 mb-3">
                                                 <label class="form-label">CPF</label>
-                                                <input type="text" id="edit2ChamadaResponsavelCPF" class="form-control" value="${this.escapeHtml(a.responsavelCPF || '')}" maxlength="14">
+                                                <input type="text" id="edit2ChamadaResponsavelCPF" class="form-control" value="${this.escapeHtml(a.responsavelCPF || '')}" maxlength="14" oninput="setorPedagogico.formatarCPF(this)">
                                             </div>
                                             <div class="col-md-3 mb-3">
                                                 <label class="form-label">Telefone</label>
-                                                <input type="text" id="edit2ChamadaResponsavelTelefone" class="form-control" value="${this.escapeHtml(a.responsavelTelefone || '')}" maxlength="15">
+                                                <input type="text" id="edit2ChamadaResponsavelTelefone" class="form-control" value="${this.escapeHtml(a.responsavelTelefone || '')}" maxlength="15" oninput="setorPedagogico.formatarTelefone(this)">
                                             </div>
                                         </div>
                                     </div>
@@ -4277,24 +4591,66 @@ class SetorPedagogico {
         if (campo) campo.style.display = motivo === 'outros' ? 'block' : 'none';
     }
 
+    toggleEdit2ChamadaTipoProvaOutros() {
+        const tipo = document.getElementById('edit2ChamadaTipoProva')?.value;
+        const campo = document.getElementById('edit2ChamadaCampoTipoProvaOutros');
+        if (campo) campo.style.display = tipo === 'Outros' ? 'block' : 'none';
+    }
+
     async salvarEdicaoSegundaChamada() {
         const id = document.getElementById('edit2ChamadaId')?.value;
-        const data = document.getElementById('edit2ChamadaData')?.value;
         const horario = document.getElementById('edit2ChamadaHorario')?.value || '';
         const motivo = document.getElementById('edit2ChamadaMotivo')?.value;
         const motivoOutros = document.getElementById('edit2ChamadaMotivoOutros')?.value || '';
+        const tipoProvaPerdida = document.getElementById('edit2ChamadaTipoProva')?.value || '';
+        const tipoProvaPerdidaOutros = document.getElementById('edit2ChamadaTipoProvaOutros')?.value || '';
         const responsavelNome = document.getElementById('edit2ChamadaResponsavelNome')?.value || '';
         const responsavelCPF = document.getElementById('edit2ChamadaResponsavelCPF')?.value || '';
         const responsavelTelefone = document.getElementById('edit2ChamadaResponsavelTelefone')?.value || '';
         const observacoes = document.getElementById('edit2ChamadaObservacoes')?.value || '';
         
-        if (!data || !motivo) {
-            this.showToast('Preencha os campos obrigatórios', 'warning');
+        const periodoFaltaInicio = document.getElementById('edit2ChamadaPeriodoFaltaInicio')?.value || '';
+        const periodoFaltaFim = document.getElementById('edit2ChamadaPeriodoFaltaFim')?.value || '';
+        
+        if (!motivo) {
+            this.showToast('Preencha o motivo', 'warning');
+            return;
+        }
+        
+        if (!tipoProvaPerdida) {
+            this.showToast('Informe o tipo de prova perdida', 'warning');
+            return;
+        }
+        
+        if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
+            this.showToast('Especifique o tipo de prova perdida', 'warning');
+            return;
+        }
+        
+        if (!periodoFaltaInicio) {
+            this.showToast('Informe a data da falta (início)', 'warning');
+            return;
+        }
+        
+        if (periodoFaltaFim && periodoFaltaFim < periodoFaltaInicio) {
+            this.showToast('Data final não pode ser anterior à data inicial', 'warning');
             return;
         }
         
         if (motivo === 'outros' && !motivoOutros.trim()) {
             this.showToast('Especifique o motivo "Outros"', 'warning');
+            return;
+        }
+        
+        // Validação CPF
+        if (responsavelCPF) {
+            const validacaoCPF = this.validarCPFCliente(responsavelCPF);
+            if (!validacaoCPF.valido) {
+                this.showToast(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}`, 'error');
+                return;
+            }
+        } else {
+            this.showToast('⚠️ CPF do responsável é obrigatório!', 'error');
             return;
         }
         
@@ -4306,18 +4662,28 @@ class SetorPedagogico {
                     'Authorization': `Bearer ${this.token}`
                 },
                 body: JSON.stringify({
-                    data,
                     horarioEntrada: horario,
                     horarioSaida: horario,
                     motivo,
                     motivoOutros,
+                    tipoProvaPerdida,
+                    tipoProvaPerdidaOutros,
                     responsavelNome,
                     responsavelCPF,
                     responsavelTelefone,
-                    observacoes
+                    observacoes,
+                    periodoFaltaInicio,
+                    periodoFaltaFim: periodoFaltaFim || periodoFaltaInicio
                 })
             });
             const result = await response.json();
+            
+            if (response.status === 409 || (result.error && result.error.includes('Já existe'))) {
+                let msg = '⚠️ Registro duplicado detectado!\n\n';
+                msg += result.error || 'Já existe outro registro com os mesmos dados.';
+                this.showToast(msg, 'error');
+                return;
+            }
             
             if (result.success) {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditar2Chamada'));
@@ -4334,8 +4700,8 @@ class SetorPedagogico {
             this.showToast('Erro ao salvar alterações', 'error');
         }
     }
-    
-    // ============================================================================
+
+        // ============================================================================
     // 🔥 SUBSTITUIÇÃO DE PROFESSORES - PARTE 1 (LOAD + ESTRUTURA)
     // ============================================================================
 
@@ -4417,7 +4783,6 @@ class SetorPedagogico {
                                     <div class="text-center py-3"><div class="loading"></div><p>Carregando professores...</p></div>
                                 </div>
 
-                                <!-- ⭐ Checkbox "Não há substituto" ABAIXO da lista -->
                                 <div class="mt-3">
                                     <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 15px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
@@ -4939,7 +5304,6 @@ class SetorPedagogico {
                     campos.style.opacity = '1'; 
                 }, 10);
                 
-                // ⭐ Esconder o bloco de motivo (não houve substituição)
                 if (blocoMotivo) blocoMotivo.style.display = 'none';
                 const selectMotivo = document.getElementById('selectMotivoSubstituicao');
                 if (selectMotivo) selectMotivo.value = '';
@@ -4948,7 +5312,6 @@ class SetorPedagogico {
                 const inputDet = document.getElementById('inputMotivoDetalhesSubstituicao');
                 if (inputDet) inputDet.value = '';
                 
-                // Limpar substituto selecionado
                 this.substituicaoState.formData.professorSubstituto = null;
                 document.querySelectorAll('#listaProfessoresSubstitutos .professor-item')
                     .forEach(el => el.classList.remove('selected'));
@@ -4966,7 +5329,6 @@ class SetorPedagogico {
                 if (selectMotivoSemSub) selectMotivoSemSub.value = '';
                 if (inputObsSemSub) inputObsSemSub.value = '';
                 
-                // ⭐ Reexibir o bloco de motivo
                 if (blocoMotivo) blocoMotivo.style.display = 'block';
                 
                 if (!this.substituicaoState.formData.professorSubstituto) {
@@ -4983,13 +5345,11 @@ class SetorPedagogico {
         if (!professor) return;
         
         if (tipo === 'ausente') {
-            // ... (mesma lógica de antes)
             this.substituicaoState.formData.professorAusente = professor;
             document.querySelectorAll('#listaProfessoresAusentes .professor-item').forEach(el => {
                 el.classList.toggle('selected', el.dataset.id === id);
             });
             
-            // Resetar substituto e checkbox
             this.substituicaoState.formData.professorSubstituto = null;
             const checkSemSub = document.getElementById('checkSemSubstituto');
             if (checkSemSub) checkSemSub.checked = false;
@@ -5008,7 +5368,6 @@ class SetorPedagogico {
             this.filtrarProfessoresSubstituicao(busca, 'listaProfessoresSubstitutos', 'substituto');
             document.getElementById('cardProfessorSubstituto').scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
-            // ⭐ Se selecionar um substituto, desmarcar "sem substituto"
             const checkSemSub = document.getElementById('checkSemSubstituto');
             if (checkSemSub && checkSemSub.checked) {
                 checkSemSub.checked = false;
@@ -5309,7 +5668,6 @@ class SetorPedagogico {
         const inputHorarios = document.getElementById('inputHorariosSubstituicao');
         if (inputHorarios) inputHorarios.value = '';
         
-        // Reset "sem substituto"
         const checkSemSub = document.getElementById('checkSemSubstituto');
         if (checkSemSub) checkSemSub.checked = false;
         
@@ -5551,7 +5909,6 @@ class SetorPedagogico {
                 'outros': 'Outros'
             };
             
-            // ⭐ NOVO: Bloco de alerta para substituto ausente
             const alertaSubstitutoAusente = s.substitutoAusente ? `
                 <div style="background: #fef2f2; border: 2px solid #fecaca; padding: 15px; border-radius: 12px; margin-top: 20px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -5652,7 +6009,6 @@ class SetorPedagogico {
                 `<option value="${key}" ${s.motivo === key ? 'selected' : ''}>${label}</option>`
             ).join('');
             
-            // ⭐ Lista de horários atuais
             const horariosAtuais = (s.horarios && s.horarios.length > 0) 
                 ? s.horarios 
                 : (s.horario ? [s.horario] : []);
@@ -5927,7 +6283,6 @@ class SetorPedagogico {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
         
-        // ⭐ NOVO: Bloco de alerta de substituto ausente no documento impresso
         const alertaSubstitutoAusenteImpressao = s.substitutoAusente ? `
             <div style="margin-top: 15px; padding: 12px; background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
@@ -6067,49 +6422,46 @@ class SetorPedagogico {
         // 🎨 PALETAS DE CORES
         // ==========================================
         
-        // 🔴 Cores semânticas para MOTIVOS (doughnut)
         const MOTIVOS_CORES = {
-            'falta_professor': '#ef4444',                    // Vermelho - Urgência
-            'licenca_medica': '#f59e0b',                     // Âmbar - Saúde
-            'licenca_maternidade_paternidade': '#8b5cf6',    // Roxo - Família
-            'capacitacao_formacao': '#3b82f6',               // Azul - Desenvolvimento
-            'reuniao_externa': '#10b981',                    // Verde - Institucional
-            'problema_pessoal': '#f97316',                   // Laranja - Pessoal
-            'atestado': '#06b6d4',                           // Ciano - Documento
-            'sem_substituto': '#dc2626',                     // Vermelho escuro - Crítico
-            'outros': '#64748b'                              // Cinza - Neutro
+            'falta_professor': '#ef4444',
+            'licenca_medica': '#f59e0b',
+            'licenca_maternidade_paternidade': '#8b5cf6',
+            'capacitacao_formacao': '#3b82f6',
+            'reuniao_externa': '#10b981',
+            'problema_pessoal': '#f97316',
+            'atestado': '#06b6d4',
+            'sem_substituto': '#dc2626',
+            'outros': '#64748b'
         };
         
-        // 🌈 Gradiente para HORÁRIOS (1º ao 9º - do índigo ao amarelo)
         const HORARIOS_CORES = [
-            '#6366f1',  // 1º - Índigo
-            '#7c3aed',  // 2º - Roxo
-            '#8b5cf6',  // 3º - Púrpura
-            '#a855f7',  // 4º - Violeta
-            '#d946ef',  // 5º - Fúcsia
-            '#ec4899',  // 6º - Rosa
-            '#f43f5e',  // 7º - Rosa escuro
-            '#f97316',  // 8º - Laranja
-            '#f59e0b'   // 9º - Âmbar
+            '#6366f1',
+            '#7c3aed',
+            '#8b5cf6',
+            '#a855f7',
+            '#d946ef',
+            '#ec4899',
+            '#f43f5e',
+            '#f97316',
+            '#f59e0b'
         ];
         
-        // 🌈 Arco-íris para TURMAS (rotação)
         const TURMAS_CORES = [
-            '#0ea5e9',  // Azul céu
-            '#06b6d4',  // Ciano
-            '#14b8a6',  // Teal
-            '#10b981',  // Verde esmeralda
-            '#22c55e',  // Verde
-            '#84cc16',  // Verde limão
-            '#eab308',  // Amarelo
-            '#f59e0b',  // Âmbar
-            '#f97316',  // Laranja
-            '#ef4444',  // Vermelho
-            '#ec4899',  // Rosa
-            '#d946ef',  // Fúcsia
-            '#a855f7',  // Púrpura
-            '#8b5cf6',  // Roxo
-            '#6366f1'   // Índigo
+            '#0ea5e9',
+            '#06b6d4',
+            '#14b8a6',
+            '#10b981',
+            '#22c55e',
+            '#84cc16',
+            '#eab308',
+            '#f59e0b',
+            '#f97316',
+            '#ef4444',
+            '#ec4899',
+            '#d946ef',
+            '#a855f7',
+            '#8b5cf6',
+            '#6366f1'
         ];
         
         // ==========================================
@@ -6183,7 +6535,6 @@ class SetorPedagogico {
                 horarios.push(enc ? enc.count : 0);
             }
             
-            // 🔥 Cada barra recebe uma cor diferente
             const coresBarras = horarios.map((_, i) => HORARIOS_CORES[i] || '#6366f1');
             
             this.substituicaoState.charts.horarios = new Chart(ctxHorarios.getContext('2d'), {
@@ -6193,12 +6544,12 @@ class SetorPedagogico {
                     datasets: [{
                         label: 'Substituições',
                         data: horarios,
-                        backgroundColor: coresBarras,        // ✅ Cores variadas
-                        borderColor: coresBarras,             // ✅ Borda igual
+                        backgroundColor: coresBarras,
+                        borderColor: coresBarras,
                         borderWidth: 1,
                         borderRadius: 6,
                         maxBarThickness: 42,
-                        hoverBackgroundColor: coresBarras.map(c => c + 'dd')  // hover mais claro
+                        hoverBackgroundColor: coresBarras.map(c => c + 'dd')
                     }]
                 },
                 options: {
@@ -6263,11 +6614,10 @@ class SetorPedagogico {
                 valores.push(enc ? enc.count : 0);
             }
             
-            // 🔥 Gradiente vertical para o preenchimento
             const gradiente = ctxDias.getContext('2d').createLinearGradient(0, 0, 0, 300);
-            gradiente.addColorStop(0, 'rgba(99, 102, 241, 0.4)');    // Índigo no topo
-            gradiente.addColorStop(0.5, 'rgba(139, 92, 246, 0.2)');  // Roxo no meio
-            gradiente.addColorStop(1, 'rgba(236, 72, 153, 0.02)');   // Rosa embaixo
+            gradiente.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+            gradiente.addColorStop(0.5, 'rgba(139, 92, 246, 0.2)');
+            gradiente.addColorStop(1, 'rgba(236, 72, 153, 0.02)');
             
             this.substituicaoState.charts.dias = new Chart(ctxDias.getContext('2d'), {
                 type: 'line',
@@ -6276,12 +6626,11 @@ class SetorPedagogico {
                     datasets: [{
                         label: 'Substituições',
                         data: valores,
-                        borderColor: '#6366f1',              // Índigo
-                        backgroundColor: gradiente,          // ✅ Gradiente
+                        borderColor: '#6366f1',
+                        backgroundColor: gradiente,
                         borderWidth: 3,
                         fill: true,
                         tension: 0.4,
-                        // 🔥 Pontos maiores onde há substituição
                         pointRadius: valores.map(v => v > 0 ? 5 : 2),
                         pointBackgroundColor: valores.map(v => v > 0 ? '#ef4444' : '#cbd5e1'),
                         pointBorderColor: '#ffffff',
@@ -6346,7 +6695,6 @@ class SetorPedagogico {
                 try { this.substituicaoState.charts.turmas.destroy(); } catch(e){}
             }
             
-            // 🔥 Cada turma recebe uma cor diferente (rotação da paleta)
             const coresTurmas = data.porTurma.map((_, i) => TURMAS_CORES[i % TURMAS_CORES.length]);
             
             this.substituicaoState.charts.turmas = new Chart(ctxTurmas.getContext('2d'), {
@@ -6356,8 +6704,8 @@ class SetorPedagogico {
                     datasets: [{
                         label: 'Substituições',
                         data: data.porTurma.map(d => d.count),
-                        backgroundColor: coresTurmas,        // ✅ Cores variadas
-                        borderColor: coresTurmas,             // ✅ Borda igual
+                        backgroundColor: coresTurmas,
+                        borderColor: coresTurmas,
                         borderWidth: 1,
                         borderRadius: 6,
                         maxBarThickness: 28,
@@ -6367,7 +6715,7 @@ class SetorPedagogico {
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    indexAxis: 'y',                          // Horizontal
+                    indexAxis: 'y',
                     plugins: {
                         legend: { display: false },
                         tooltip: {
@@ -6729,7 +7077,6 @@ class SetorPedagogico {
         const content = document.getElementById('content');
         if (!content) return;
         
-        // Verificar permissão
         if (!this.temPermissaoVisitas) {
             content.innerHTML = `
                 <div class="alert alert-warning m-4">
@@ -6743,7 +7090,6 @@ class SetorPedagogico {
         
         console.log('📋 Carregando módulo de Autorização de Visitas...');
         
-        // Criar container
         content.innerHTML = `
             <div id="aba-visitas-content">
                 <div style="text-align: center; padding: 60px;">
@@ -6754,7 +7100,6 @@ class SetorPedagogico {
             </div>
         `;
         
-        // Inicializar o módulo admin de visitas
         setTimeout(async () => {
             try {
                 if (typeof window.visitasAdmin !== 'undefined' && window.visitasAdmin) {
@@ -6763,7 +7108,6 @@ class SetorPedagogico {
                 } else {
                     console.warn('⚠️ visitasAdmin não encontrado, tentando carregar...');
                     
-                    // Tentar carregar o script se ainda não existir
                     if (!document.querySelector('script[src*="visitas-admin.js"]')) {
                         const script = document.createElement('script');
                         script.src = 'js/visitas-admin.js';
@@ -7391,8 +7735,7 @@ class SetorPedagogico {
         this.loadProvas();
     }
     carregarProvas() { this.loadProvas(); }
-
-    // ============================================================================
+        // ============================================================================
     // 📱 MÉTODOS DO MENU MOBILE
     // ============================================================================
 

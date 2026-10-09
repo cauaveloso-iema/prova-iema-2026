@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Gestão Geral">
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
@@ -39,7 +39,6 @@
                 </div>
             </div>
             <div class="btn-actions">
-                <!-- 🔔 SINO ÚNICO -->
                 <div class="notificacoes-container">
                     <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações e Lembretes">
                         <i class="fas fa-bell"></i>
@@ -48,10 +47,7 @@
 
                     <div class="notificacoes-dropdown" id="notificacoesDropdown">
                         <div class="notificacoes-header">
-                            <h3>
-                                <i class="fas fa-bell"></i>
-                                Notificações
-                            </h3>
+                            <h3><i class="fas fa-bell"></i> Notificações</h3>
                             <div style="display: flex; gap: 10px;">
                                 <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
@@ -240,7 +236,6 @@
                         </ul>
                         
                         <div class="tab-content">
-                            <!-- ABA REGISTRAR ATRASO -->
                             <div class="tab-pane fade show active" id="atraso-registrar">
                                 <div id="modoAutomatico">
                                     <div class="card">
@@ -400,7 +395,6 @@
                                 </div>
                             </div>
                             
-                            <!-- ABA DASHBOARD DE ATRASOS -->
                             <div class="tab-pane fade" id="atraso-dashboard">
                                 <div class="row mb-4">
                                     <div class="col-md-3 mb-3">
@@ -507,7 +501,6 @@
                                 </div>
                             </div>
                             
-                            <!-- ABA RELATÓRIOS DE ATRASOS -->
                             <div class="tab-pane fade" id="atraso-relatorios">
                                 <div class="relatorio-filtros">
                                     <div class="row g-3">
@@ -748,8 +741,8 @@
                                                     <input type="text" id="autorizacaoResponsavelNome" class="form-control" placeholder="Nome completo do responsável">
                                                 </div>
                                                 <div class="col-md-3 mb-3">
-                                                    <label class="form-label">CPF</label>
-                                                    <input type="text" id="autorizacaoResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)">
+                                                    <label class="form-label">CPF <span class="text-danger">*</span></label>
+                                                    <input type="text" id="autorizacaoResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)" required>
                                                 </div>
                                                 <div class="col-md-3 mb-3">
                                                     <label class="form-label">Telefone</label>
@@ -1077,10 +1070,24 @@
                                     <h5><i class="fas fa-file-alt"></i> Registrar Justificativa de Falta</h5>
 
                                     <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Data da Falta <span class="text-danger">*</span></label>
-                                            <input type="date" id="justificativaData" class="form-control" required>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Data da Falta (Início) <span class="text-danger">*</span></label>
+                                            <input type="date" id="justificativaPeriodoFaltaInicio" class="form-control" required>
+                                            <small class="text-muted">Primeiro dia da falta</small>
                                         </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Data da Falta (Fim)</label>
+                                            <input type="date" id="justificativaPeriodoFaltaFim" class="form-control">
+                                            <small class="text-muted">Deixe vazio se for 1 dia só</small>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Data do Registro <span class="text-danger">*</span></label>
+                                            <input type="date" id="justificativaData" class="form-control" required>
+                                            <small class="text-muted">Quando está sendo registrado</small>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Horário (opcional)</label>
                                             <input type="time" id="justificativaHorario" class="form-control">
@@ -1128,8 +1135,8 @@
                                                     <input type="text" id="justificativaResponsavelNome" class="form-control" placeholder="Nome completo do responsável">
                                                 </div>
                                                 <div class="col-md-3 mb-3">
-                                                    <label class="form-label">CPF</label>
-                                                    <input type="text" id="justificativaResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)">
+                                                    <label class="form-label">CPF <span class="text-danger">*</span></label>
+                                                    <input type="text" id="justificativaResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)" required>
                                                 </div>
                                                 <div class="col-md-3 mb-3">
                                                     <label class="form-label">Telefone</label>
@@ -1449,10 +1456,63 @@
                                     <h5><i class="fas fa-redo"></i> Registrar 2ª Chamada</h5>
 
                                     <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label">Data da 2ª Chamada <span class="text-danger">*</span></label>
-                                            <input type="date" id="segundaChamadaData" class="form-control" required>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Data da Falta (Início) <span class="text-danger">*</span></label>
+                                            <input type="date" id="segundaChamadaPeriodoFaltaInicio" class="form-control" required>
+                                            <small class="text-muted">Primeiro dia da falta</small>
                                         </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Data da Falta (Fim)</label>
+                                            <input type="date" id="segundaChamadaPeriodoFaltaFim" class="form-control">
+                                            <small class="text-muted">Deixe vazio se for 1 dia só</small>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">Data do Registro <span class="text-danger">*</span></label>
+                                            <input type="date" id="segundaChamadaData" class="form-control" required>
+                                            <small class="text-muted">Quando está sendo registrado</small>
+                                        </div>
+                                    </div>
+
+                                    <!-- 🆕 TIPO DE PROVA PERDIDA -->
+                                    <div class="mb-3" id="campoSegundaChamadaTipoProva">
+                                        <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
+                                        <div class="tipos-tarefa-grid">
+                                            <div class="tipo-card" data-prova="AV1" onclick="selecionarTipoProvaPerdida('AV1')">
+                                                <i class="fas fa-file-alt"></i>
+                                                <span>AV1</span>
+                                            </div>
+                                            <div class="tipo-card" data-prova="AV2" onclick="selecionarTipoProvaPerdida('AV2')">
+                                                <i class="fas fa-file-alt"></i>
+                                                <span>AV2</span>
+                                            </div>
+                                            <div class="tipo-card" data-prova="AV3" onclick="selecionarTipoProvaPerdida('AV3')">
+                                                <i class="fas fa-file-alt"></i>
+                                                <span>AV3</span>
+                                            </div>
+                                            <div class="tipo-card" data-prova="AV4" onclick="selecionarTipoProvaPerdida('AV4')">
+                                                <i class="fas fa-file-alt"></i>
+                                                <span>AV4</span>
+                                            </div>
+                                            <div class="tipo-card" data-prova="Recuperação" onclick="selecionarTipoProvaPerdida('Recuperação')">
+                                                <i class="fas fa-redo"></i>
+                                                <span>Recuperação</span>
+                                            </div>
+                                            <div class="tipo-card" data-prova="Outros" onclick="selecionarTipoProvaPerdida('Outros')">
+                                                <i class="fas fa-ellipsis-h"></i>
+                                                <span>Outros</span>
+                                            </div>
+                                        </div>
+                                        <input type="hidden" id="segundaChamadaTipoProvaPerdida">
+                                    </div>
+
+                                    <div id="campoSegundaChamadaTipoProvaOutros" style="display: none;">
+                                        <div class="mb-3">
+                                            <label class="form-label">Especifique o Tipo de Prova <span class="text-danger">*</span></label>
+                                            <input type="text" id="segundaChamadaTipoProvaOutros" class="form-control" placeholder="Ex: Avaliação Prática, Trabalho...">
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Horário (opcional)</label>
                                             <input type="time" id="segundaChamadaHorario" class="form-control">
@@ -1500,8 +1560,8 @@
                                                     <input type="text" id="segundaChamadaResponsavelNome" class="form-control" placeholder="Nome completo do responsável">
                                                 </div>
                                                 <div class="col-md-3 mb-3">
-                                                    <label class="form-label">CPF</label>
-                                                    <input type="text" id="segundaChamadaResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)">
+                                                    <label class="form-label">CPF <span class="text-danger">*</span></label>
+                                                    <input type="text" id="segundaChamadaResponsavelCPF" class="form-control" placeholder="000.000.000-00" maxlength="14" oninput="formatarCPF(this)" required>
                                                 </div>
                                                 <div class="col-md-3 mb-3">
                                                     <label class="form-label">Telefone</label>
@@ -1662,6 +1722,18 @@
                                             <label class="form-label">Data Fim</label>
                                             <input type="date" id="SegundaChamadaDataFim" class="form-control">
                                         </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">Tipo de Prova Perdida</label>
+                                            <select id="SegundaChamadaFiltroTipoProva" class="form-select">
+                                                <option value="todos">Todos os tipos</option>
+                                                <option value="AV1">AV1</option>
+                                                <option value="AV2">AV2</option>
+                                                <option value="AV3">AV3</option>
+                                                <option value="AV4">AV4</option>
+                                                <option value="Recuperação">Recuperação</option>
+                                                <option value="Outros">Outros</option>
+                                            </select>
+                                        </div>
                                         <div class="col-md-2">
                                             <label class="form-label">&nbsp;</label>
                                             <button class="btn btn-primary w-100" onclick="carregarRelatorioModulo('segundaChamada')">
@@ -1713,6 +1785,17 @@
                                         </select>
                                     </div>
                                     <div class="col-md-2">
+                                        <select id="filtroListaSegundaChamadaTipoProva" class="form-select form-select-sm">
+                                            <option value="">Todos os tipos</option>
+                                            <option value="AV1">AV1</option>
+                                            <option value="AV2">AV2</option>
+                                            <option value="AV3">AV3</option>
+                                            <option value="AV4">AV4</option>
+                                            <option value="Recuperação">Recuperação</option>
+                                            <option value="Outros">Outros</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
                                         <input type="date" id="filtroListaSegundaChamadaDataInicio" class="form-control form-control-sm">
                                     </div>
                                     <div class="col-md-2">
@@ -1739,7 +1822,6 @@
                     <!-- ═══════════════════════════════════════════════════ -->
                     <div class="tab-pane fade" id="tab-acompanhamento" role="tabpanel">
                         
-                        <!-- 🔘 BOTÃO ACOMPANHAMENTO DE VISITAS -->
                         <div style="text-align: center; margin-bottom: 25px;">
                             <button class="btn btn-primary" 
                                     onclick="abrirAcompanhamentoVisitas()"
@@ -1755,7 +1837,6 @@
                             </p>
                         </div>
 
-                        <!-- RESUMO DO DIA -->
                         <div class="row g-3 mb-4" id="resumoDiaCards">
                             <div class="col-md-4">
                                 <div class="card-acompanhamento card-gestao" onclick="filtrarPorSetor('gestao')" style="cursor:pointer;">
@@ -1797,7 +1878,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- 🔥 NOVO: CARD BIBLIOTECA -->
                             <div class="col-md-4">
                                 <div class="card-acompanhamento card-biblioteca" onclick="filtrarPorSetor('biblioteca')" style="cursor:pointer;">
                                     <div class="card-icon"><i class="fas fa-book"></i></div>
@@ -1810,7 +1890,6 @@
                             </div>
                         </div>
 
-                        <!-- FILTROS DE ACOMPANHAMENTO -->
                         <div class="card mb-4">
                             <div class="card-body">
                                 <div class="row g-2 align-items-end">
@@ -1864,7 +1943,6 @@
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 
-                <!-- HEADER -->
                 <div class="modal-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
                     <div>
                         <h5 class="modal-title" style="margin: 0;">
@@ -1875,10 +1953,8 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
 
-                <!-- BODY -->
                 <div class="modal-body" style="background: #f8fafc; padding: 24px;">
 
-                    <!-- FILTROS -->
                     <div style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
                         <h6 style="color: #1e3c72; margin-bottom: 15px;">
                             <i class="fas fa-filter"></i> Filtros
@@ -1940,22 +2016,14 @@
                         </div>
                     </div>
 
-                    <!-- ESTATÍSTICAS -->
-                    <div class="row g-3 mb-4" id="statsAcompanhamentoVisitas">
-                        <!-- Preenchido via JS -->
-                    </div>
+                    <div class="row g-3 mb-4" id="statsAcompanhamentoVisitas"></div>
 
-                    <!-- LISTA -->
-                    <div id="listaAcompanhamentoVisitas">
-                        <!-- Preenchido via JS -->
-                    </div>
+                    <div id="listaAcompanhamentoVisitas"></div>
 
-                    <!-- PAGINAÇÃO -->
                     <div id="paginacaoAcompanhamentoVisitas" style="text-align: center; margin-top: 20px;"></div>
 
                 </div>
 
-                <!-- FOOTER -->
                 <div class="modal-footer" style="background: #f8fafc;">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                         <i class="fas fa-times"></i> Fechar
@@ -2084,8 +2152,6 @@
     <script src="js/gestao-geral-rodizio.js"></script>
     <script src="js/gestao-geral.js"></script>
     <script src="js/acompanhamento-compartilhado.js"></script>
-    
-    <!-- 🔥 NOVO: ACOMPANHAMENTO DE VISITAS -->
     <script src="js/acompanhamento-visitas.js"></script>
 
     <script>

@@ -2,6 +2,8 @@
 // GESTÃO GERAL - SISTEMA COMPLETO
 // Atrasos + Autorização + Justificativa + 2ª Chamada
 // Com Assinatura Digital + Integração Automática
+// + Tipo de Prova Perdida + Verificação de Duplicidade
+// + CPF Obrigatório com Validação
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -24,12 +26,10 @@ let __indiceSelecionado = -1;
 let __alunosCarregados = false;
 
 (function protegerContraAlertNativo() {
-    // ⚠️ IMPORTANTE: guardar a referência original UMA VEZ
     const alertOriginal = window.alert.bind(window);
-    let __alertaEmProgresso = false; // 🔥 Guard contra recursão
+    let __alertaEmProgresso = false;
     
     window.alert = function(mensagem) {
-        // 🔥 Se já está processando um alerta, evita loop
         if (__alertaEmProgresso) {
             console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
             return;
@@ -41,12 +41,10 @@ let __alunosCarregados = false;
                               (typeof window.AppInventor !== 'undefined');
             
             if (!isWebView) {
-                // Desktop: log no console, NUNCA chama toast (evita loop)
                 console.log('%c[ALERT] ' + mensagem, 'background:#8b5cf6;color:white;padding:4px 8px;border-radius:4px;');
                 return;
             }
             
-            // WebView: modal customizado direto (sem chamar toast)
             const modal = document.createElement('div');
             modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
                 background:rgba(0,0,0,0.6);display:flex;align-items:center;
@@ -76,9 +74,27 @@ let __alunosCarregados = false;
 // CONFIGURAÇÃO DOS MÓDULOS
 // ============================================
 const CONFIG_MODULOS = {
-    autorizacao: { tipo: 'autorizacao', prefixo: 'Autorizacao', nomeAmigavel: 'Autorização', containerLista: 'listaAutorizacoes' },
-    justificativa: { tipo: 'justificativa', prefixo: 'Justificativa', nomeAmigavel: 'Justificativa', containerLista: 'listaJustificativas' },
-    segundaChamada: { tipo: 'segunda_chamada', prefixo: 'SegundaChamada', nomeAmigavel: '2ª Chamada', containerLista: 'listaSegundaChamada' }
+    autorizacao: { 
+        tipo: 'autorizacao', 
+        prefixo: 'Autorizacao', 
+        prefixoInput: 'autorizacao',
+        nomeAmigavel: 'Autorização', 
+        containerLista: 'listaAutorizacoes' 
+    },
+    justificativa: { 
+        tipo: 'justificativa', 
+        prefixo: 'Justificativa', 
+        prefixoInput: 'justificativa',
+        nomeAmigavel: 'Justificativa', 
+        containerLista: 'listaJustificativas' 
+    },
+    segundaChamada: { 
+        tipo: 'segunda_chamada', 
+        prefixo: 'SegundaChamada', 
+        prefixoInput: 'segundaChamada',
+        nomeAmigavel: '2ª Chamada', 
+        containerLista: 'listaSegundaChamada' 
+    }
 };
 
 const estados = {
@@ -105,9 +121,6 @@ const autocompleteModuloState = {
     segundaChamada: { alunos: [], filtrados: [], indice: -1, carregado: false, carregando: false }
 };
 
-// ============================================
-// ESTADO DA ASSINATURA DIGITAL
-// ============================================
 const assinaturaState = {
     autorizacao: { canvas: null, ctx: null, desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, larguraBase: 0, alturaBase: 0 },
     justificativa: { canvas: null, ctx: null, desenhando: false, temAssinatura: false, lastX: 0, lastY: 0, larguraBase: 0, alturaBase: 0 },
@@ -117,7 +130,6 @@ const assinaturaState = {
 // ============================================
 // REGRAS DE INTEGRAÇÃO AUTOMÁTICA
 // ============================================
-// Motivos de Autorização que geram Justificativa automaticamente
 const MOTIVOS_AUTORIZACAO_GERAM_JUSTIFICATIVA = {
     'problemas_saude_responsavel_buscou': 'problemas_saude',
     'problemas_saude_responsavel_whatsapp': 'problemas_saude',
@@ -125,7 +137,6 @@ const MOTIVOS_AUTORIZACAO_GERAM_JUSTIFICATIVA = {
     'necessita_ausentar_retornar': 'problemas_saude'
 };
 
-// Toda 2ª Chamada gera Justificativa (mapeamento do motivo)
 const MOTIVOS_SEGUNDA_CHAMADA_PARA_JUSTIFICATIVA = {
     'problemas_pessoais': 'problemas_pessoais',
     'problemas_saude': 'problemas_saude',
@@ -153,6 +164,71 @@ function gerarAvatarSVG(nome) {
     const inicial = (nome || '?').charAt(0).toUpperCase();
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e3c72"/><stop offset="100%" stop-color="#2a5298"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="50" font-family="Arial,sans-serif" font-size="45" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
     return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
+// 🆕 FORMATAÇÃO DE CPF E TELEFONE
+function formatarCPF(input) {
+    if (!input) return;
+    let v = input.value.replace(/\D/g, '');
+    if (v.length > 11) v = v.substring(0, 11);
+    v = v.replace(/(\d{3})(\d)/, '$1.$2');
+    v = v.replace(/(\d{3})(\d)/, '$1.$2');
+    v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    input.value = v;
+}
+
+function formatarTelefone(input) {
+    if (!input) return;
+    let v = input.value.replace(/\D/g, '');
+    if (v.length > 11) v = v.substring(0, 11);
+    if (v.length <= 10) {
+        v = v.replace(/(\d{2})(\d)/, '($1) $2');
+        v = v.replace(/(\d{4})(\d)/, '$1-$2');
+    } else {
+        v = v.replace(/(\d{2})(\d)/, '($1) $2');
+        v = v.replace(/(\d{5})(\d)/, '$1-$2');
+    }
+    input.value = v;
+}
+
+// 🆕 VALIDAÇÃO DE CPF (frontend)
+function validarCPFCliente(cpf) {
+    if (!cpf || typeof cpf !== 'string') {
+        return { valido: false, erro: 'CPF não informado' };
+    }
+    
+    const cpfLimpo = cpf.replace(/\D/g, '');
+    
+    if (cpfLimpo.length !== 11) {
+        return { valido: false, erro: 'CPF deve conter 11 dígitos' };
+    }
+    
+    if (/^(\d)\1{10}$/.test(cpfLimpo)) {
+        return { valido: false, erro: 'CPF inválido (dígitos repetidos)' };
+    }
+    
+    // Validação dos dígitos verificadores
+    let soma = 0;
+    for (let i = 0; i < 9; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+    }
+    let resto = (soma * 10) % 11;
+    if (resto === 10 || resto === 11) resto = 0;
+    if (resto !== parseInt(cpfLimpo.charAt(9))) {
+        return { valido: false, erro: 'CPF inválido (1º dígito verificador)' };
+    }
+    
+    soma = 0;
+    for (let i = 0; i < 10; i++) {
+        soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+    }
+    resto = (soma * 10) % 11;
+    if (resto === 10 || resto === 11) resto = 0;
+    if (resto !== parseInt(cpfLimpo.charAt(10))) {
+        return { valido: false, erro: 'CPF inválido (2º dígito verificador)' };
+    }
+    
+    return { valido: true, cpfLimpo };
 }
 
 // ============================================
@@ -310,7 +386,6 @@ function inicializarAssinatura(modulo) {
     function ajustarCanvas() {
         const rect = canvas.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
-            // Container escondido — tenta de novo depois
             setTimeout(ajustarCanvas, 300);
             return;
         }
@@ -384,13 +459,10 @@ function inicializarAssinatura(modulo) {
         salvarAssinaturaBase64(modulo);
     }
 
-    // TOUCH (mobile)
     canvas.addEventListener('touchstart', iniciar, { passive: false });
     canvas.addEventListener('touchmove', desenhar, { passive: false });
     canvas.addEventListener('touchend', parar, { passive: false });
     canvas.addEventListener('touchcancel', parar, { passive: false });
-
-    // MOUSE (desktop)
     canvas.addEventListener('mousedown', iniciar);
     canvas.addEventListener('mousemove', desenhar);
     canvas.addEventListener('mouseup', parar);
@@ -713,19 +785,16 @@ function mostrarFormRegistro() {
     safeGet('motivoOutrosTexto').value = '';
     safeGet('campoOutros').style.display = 'none';
     
-    // 🔥 NOVO: Preenche data de hoje automaticamente
     const hoje = new Date().toISOString().split('T')[0];
     const dataEl = safeGet('atrasoData');
     if (dataEl) dataEl.value = hoje;
     
-    // 🔥 NOVO: Preenche hora atual automaticamente
     const agora = new Date();
     const horaAtual = String(agora.getHours()).padStart(2, '0') + ':' + 
                       String(agora.getMinutes()).padStart(2, '0');
     const horaEl = safeGet('atrasoHoraChegada');
     if (horaEl) horaEl.value = horaAtual;
     
-    // 🔥 NOVO: Foca no campo de data
     setTimeout(() => {
         dataEl?.focus();
     }, 100);
@@ -747,14 +816,12 @@ async function registrarAtraso() {
         return; 
     }
     
-    // 🔥 NOVO: Valida data
     const dataAtraso = safeGet('atrasoData')?.value;
     if (!dataAtraso) { 
         notificar('Selecione a data do atraso', 'error');
         return; 
     }
     
-    // 🔥 NOVO: Valida se data não é futura
     const hoje = new Date();
     hoje.setHours(23, 59, 59, 999);
     const dataSelecionada = new Date(dataAtraso + 'T00:00:00');
@@ -786,14 +853,12 @@ async function registrarAtraso() {
     if (btn) btn.disabled = true;
     
     try {
-        // 🔥 NOVO: Combina data + hora para montar dataHora completa
         const horaChegada = safeGet('atrasoHoraChegada')?.value || '';
         let dataHoraCompleta;
         
         if (horaChegada) {
             dataHoraCompleta = new Date(dataAtraso + 'T' + horaChegada + ':00');
         } else {
-            // Se não informou hora, usa meio-dia para não bugar timezone
             dataHoraCompleta = new Date(dataAtraso + 'T12:00:00');
         }
         
@@ -1037,24 +1102,16 @@ function renderizarListaAtrasosRecentes(lista) {
                                 <td><small>${a.dataHoraFormatada || (a.dataHora ? new Date(a.dataHora).toLocaleString('pt-BR') : '-')}</small></td>
                                 <td class="text-center">
                                     <div class="d-flex gap-1 justify-content-center flex-wrap">
-                                        <button class="btn btn-sm btn-info" 
-                                                onclick="verAtraso('${a.id}')" 
-                                                title="Ver detalhes">
+                                        <button class="btn btn-sm btn-info" onclick="verAtraso('${a.id}')" title="Ver detalhes">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-warning" 
-                                                onclick="editarAtraso('${a.id}')" 
-                                                title="Editar">
+                                        <button class="btn btn-sm btn-warning" onclick="editarAtraso('${a.id}')" title="Editar">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-success" 
-                                                onclick="imprimirAtraso('${a.id}')" 
-                                                title="Imprimir">
+                                        <button class="btn btn-sm btn-success" onclick="imprimirAtraso('${a.id}')" title="Imprimir">
                                             <i class="fas fa-print"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-danger" 
-                                                onclick="excluirAtraso('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
-                                                title="Excluir">
+                                        <button class="btn btn-sm btn-danger" onclick="excluirAtraso('${a.id}', '${escapeHTML(a.alunoNome || '')}')" title="Excluir">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
@@ -1279,10 +1336,7 @@ async function salvarEdicaoAtraso() {
             const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtraso'));
             if (modal) modal.hide();
             
-            // Toast de sucesso
             notificar('✅ Atraso atualizado com sucesso!', 'success');
-            
-            // Recarrega a lista
             carregarAtrasosRecentes();
             carregarDashboardAtrasos();
         } else {
@@ -1313,7 +1367,6 @@ async function imprimirAtraso(atrasoId) {
         
         const a = data.atraso;
         
-        // 🔥 BUSCAR QR CODE
         let qr = '';
         try {
             const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
@@ -1399,24 +1452,9 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; }
             .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
             
-            .qr-code {
-                text-align: center;
-                margin-top: 6px;
-            }
-            .qr-code img {
-                width: 25mm;
-                height: 25mm;
-                border: 1.5px solid #000;
-                padding: 2px;
-                display: block;
-                margin: 0 auto;
-            }
-            .qr-code p {
-                font-size: 8pt;
-                margin: 3px 0 0 0;
-                color: #444;
-                font-weight: bold;
-            }
+            .qr-code { text-align: center; margin-top: 6px; }
+            .qr-code img { width: 25mm; height: 25mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
+            .qr-code p { font-size: 8pt; margin: 3px 0 0 0; color: #444; font-weight: bold; }
             
             .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
             .footer p { margin: 1px 0; }
@@ -1507,14 +1545,10 @@ async function excluirAtraso(atrasoId, alunoNome) {
     if (!atrasoId) return;
     
     const confirmar1 = await confirm(`⚠️ Tem certeza que deseja EXCLUIR este atraso?\n\nAluno: ${alunoNome}\n\nEsta ação não pode ser desfeita!`);
-    if (!confirmar1) {
-        return;
-    }
+    if (!confirmar1) return;
     
     const confirmar2 = await confirm('⚠️ ÚLTIMA CONFIRMAÇÃO!\n\nDeseja realmente excluir permanentemente?');
-    if (!confirmar2) {
-        return;
-    }
+    if (!confirmar2) return;
     
     try {
         const response = await fetch(`/api/gestao-geral/atraso/${atrasoId}`, {
@@ -1524,7 +1558,6 @@ async function excluirAtraso(atrasoId, alunoNome) {
         const data = await response.json();
         
         if (data.success) {
-            // Remove a linha da tabela com animação
             const row = document.querySelector(`tr[data-id="${atrasoId}"]`);
             if (row) {
                 row.style.transition = 'all 0.3s';
@@ -1611,7 +1644,6 @@ function toggleRelatorioFiltros() {
     safeGet('filtroTurmaDiv').style.display = tipo === 'turma' ? 'block' : 'none';
     safeGet('filtroAlunoDiv').style.display = tipo === 'aluno' ? 'block' : 'none';
     
-    // ✅ RESETAR BOTÕES
     const btnCSV = safeGet('btnExportarCSVAtrasos');
     const btnPDF = safeGet('btnExportarPDFAtrasos');
     if (btnCSV) btnCSV.disabled = true;
@@ -1800,7 +1832,6 @@ async function carregarRelatorio() {
             relatorioData = data;
             exibirRelatorio(data, tipo);
             
-            // ✅ HABILITAR BOTÕES CSV E PDF
             const btnCSV = safeGet('btnExportarCSVAtrasos');
             const btnPDF = safeGet('btnExportarPDFAtrasos');
             if (btnCSV) btnCSV.disabled = false;
@@ -1913,6 +1944,7 @@ function exportarCSV() {
 
 function getCfg(modulo) { return CONFIG_MODULOS[modulo]; }
 function getPrefixo(modulo) { return CONFIG_MODULOS[modulo].prefixo; }
+function getPrefixoInput(modulo) { return CONFIG_MODULOS[modulo].prefixoInput; }
 
 // ============================================
 // SCANNER DOS MÓDULOS
@@ -2177,35 +2209,51 @@ function exibirAlunoModulo(modulo, data) {
 function mostrarFormModulo(modulo) {
     const cfg = getCfg(modulo);
     const P = getPrefixo(modulo);
+    const I = getPrefixoInput(modulo);
+    
     const formEl = safeGet(`form${P}`);
     if (formEl) formEl.style.display = 'block';
     
-    const motivoEl = safeGet(`${cfg.tipo}MotivoSelecionado`);
+    const motivoEl = safeGet(`${I}MotivoSelecionado`);
     if (motivoEl) motivoEl.value = '';
     estados[modulo].motivoSelecionado = null;
     document.querySelectorAll(`#form${P} .tipo-card`).forEach(c => c.classList.remove('selected'));
     
+    // Limpa campos
     const campos = [
-        `${cfg.tipo}Data`, `${cfg.tipo}Horario`, `${cfg.tipo}MotivoOutros`,
-        `${cfg.tipo}ResponsavelNome`, `${cfg.tipo}ResponsavelCPF`,
-        `${cfg.tipo}ResponsavelTelefone`, `${cfg.tipo}Observacoes`,
-        `${cfg.tipo}HorarioEntrada`, `${cfg.tipo}HorarioSaida`,
-        `${cfg.tipo}HorarioAusencia`, `${cfg.tipo}HorarioRetorno`
+        `${I}Data`, `${I}Horario`, `${I}MotivoOutros`,
+        `${I}ResponsavelNome`, `${I}ResponsavelCPF`,
+        `${I}ResponsavelTelefone`, `${I}Observacoes`,
+        `${I}HorarioEntrada`, `${I}HorarioSaida`,
+        `${I}HorarioAusencia`, `${I}HorarioRetorno`,
+        `${I}PeriodoFaltaInicio`, `${I}PeriodoFaltaFim`
     ];
     campos.forEach(id => { const el = safeGet(id); if (el) el.value = ''; });
+    
+    // 🆕 Limpa tipo de prova perdida (apenas 2ª chamada)
+    if (modulo === 'segundaChamada') {
+        const inputTipoProva = safeGet('segundaChamadaTipoProvaPerdida');
+        if (inputTipoProva) inputTipoProva.value = '';
+        
+        document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
+        
+        const campoProvaOutros = safeGet('campoSegundaChamadaTipoProvaOutros');
+        if (campoProvaOutros) campoProvaOutros.style.display = 'none';
+        
+        const inputProvaOutros = safeGet('segundaChamadaTipoProvaOutros');
+        if (inputProvaOutros) inputProvaOutros.value = '';
+    }
     
     const campoOutros = safeGet(`campo${P}Outros`);
     if (campoOutros) campoOutros.style.display = 'none';
     const campoAusencia = safeGet(`campo${P}AusenciaRetorno`);
     if (campoAusencia) campoAusencia.style.display = 'none';
     
-    const dataEl = safeGet(`${cfg.tipo}Data`);
+    const dataEl = safeGet(`${I}Data`);
     if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
     
-    // Limpa assinatura
     limparAssinatura(modulo);
     
-    // Reajusta canvas (pode ter sido escondido quando inicializou)
     setTimeout(() => {
         const canvas = safeGet(`${modulo}AssinaturaCanvas`);
         if (canvas && canvas.dataset.assinaturaInit !== 'true') {
@@ -2213,7 +2261,6 @@ function mostrarFormModulo(modulo) {
         }
     }, 200);
     
-    // Atualiza aviso de integração
     atualizarAvisoIntegracao(modulo);
 }
 
@@ -2232,10 +2279,11 @@ function atualizarAvisoIntegracao(modulo) {
 }
 
 function selecionarMotivoModulo(modulo, motivo) {
-    const cfg = getCfg(modulo);
     const P = getPrefixo(modulo);
+    const I = getPrefixoInput(modulo);
     estados[modulo].motivoSelecionado = motivo;
-    const el = safeGet(`${cfg.tipo}MotivoSelecionado`);
+    
+    const el = safeGet(`${I}MotivoSelecionado`);
     if (el) el.value = motivo;
     
     document.querySelectorAll(`#form${P} .tipo-card`).forEach(c => c.classList.remove('selected'));
@@ -2247,8 +2295,22 @@ function selecionarMotivoModulo(modulo, motivo) {
     const campoAusencia = safeGet(`campo${P}AusenciaRetorno`);
     if (campoAusencia) campoAusencia.style.display = motivo === 'necessita_ausentar_retornar' ? 'block' : 'none';
     
-    // Atualiza aviso de integração
     atualizarAvisoIntegracao(modulo);
+}
+
+// ============================================
+// 🆕 TIPO DE PROVA PERDIDA (2ª chamada)
+// ============================================
+function selecionarTipoProvaPerdida(tipo) {
+    const input = safeGet('segundaChamadaTipoProvaPerdida');
+    if (input) input.value = tipo;
+    
+    document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
+    const card = document.querySelector(`#campoSegundaChamadaTipoProva .tipo-card[data-prova="${tipo}"]`);
+    if (card) card.classList.add('selected');
+    
+    const campoOutros = safeGet('campoSegundaChamadaTipoProvaOutros');
+    if (campoOutros) campoOutros.style.display = tipo === 'Outros' ? 'block' : 'none';
 }
 
 // ============================================
@@ -2258,27 +2320,67 @@ async function registrarModulo(modulo) {
     const cfg = getCfg(modulo);
     const est = estados[modulo];
     const P = getPrefixo(modulo);
+    const I = getPrefixoInput(modulo);
     
     if (!est.motivoSelecionado) { 
         notificar('Selecione o motivo', 'error');
         return; 
     }
-    const data = safeGet(`${cfg.tipo}Data`)?.value;
+    
+    const data = safeGet(`${I}Data`)?.value;
     if (!data) { 
-        notificar('Preencha a data', 'error');
+        notificar('Preencha a data do registro', 'error');
         return; 
     }
     
+    // Período da falta
+    let periodoFaltaInicio = '';
+    let periodoFaltaFim = '';
+    
+    if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
+        periodoFaltaInicio = safeGet(`${I}PeriodoFaltaInicio`)?.value || '';
+        periodoFaltaFim = safeGet(`${I}PeriodoFaltaFim`)?.value || '';
+        
+        if (!periodoFaltaInicio) {
+            notificar('Informe a data da falta (início)', 'error');
+            return;
+        }
+        
+        if (periodoFaltaFim && periodoFaltaFim < periodoFaltaInicio) {
+            notificar('Data final não pode ser anterior à data inicial', 'error');
+            return;
+        }
+    }
+    
+    // 🆕 TIPO DE PROVA PERDIDA (apenas 2ª chamada)
+    let tipoProvaPerdida = null;
+    let tipoProvaPerdidaOutros = '';
+    
+    if (cfg.tipo === 'segunda_chamada') {
+        tipoProvaPerdida = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
+        tipoProvaPerdidaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
+        
+        if (!tipoProvaPerdida) {
+            notificar('Informe o tipo de prova perdida', 'error');
+            return;
+        }
+        
+        if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
+            notificar('Especifique o tipo de prova perdida', 'error');
+            return;
+        }
+    }
+    
     if (est.motivoSelecionado === 'outros') {
-        const motivoOutros = safeGet(`${cfg.tipo}MotivoOutros`)?.value.trim();
+        const motivoOutros = safeGet(`${I}MotivoOutros`)?.value.trim();
         if (!motivoOutros) { 
             notificar('Especifique o motivo', 'error');
             return; 
         }
     }
     if (est.motivoSelecionado === 'necessita_ausentar_retornar') {
-        const ha = safeGet(`${cfg.tipo}HorarioAusencia`)?.value;
-        const hr = safeGet(`${cfg.tipo}HorarioRetorno`)?.value;
+        const ha = safeGet(`${I}HorarioAusencia`)?.value;
+        const hr = safeGet(`${I}HorarioRetorno`)?.value;
         if (!ha || !hr) { 
             notificar('Informe os horários de ausência e retorno', 'error');
             return; 
@@ -2289,13 +2391,28 @@ async function registrarModulo(modulo) {
         return; 
     }
     
-    // VALIDAÇÃO DA ASSINATURA
+    // ==========================================
+    // 🆕 VALIDAÇÃO DE CPF DO RESPONSÁVEL (OBRIGATÓRIO)
+    // ==========================================
+    const responsavelCPF = safeGet(`${I}ResponsavelCPF`)?.value || '';
+    
+    if (!responsavelCPF || responsavelCPF.trim() === '') {
+        notificar('⚠️ CPF do responsável é obrigatório!\n\nPreencha o CPF antes de registrar.', 'error', 5000);
+        safeGet(`${I}ResponsavelCPF`)?.focus();
+        return;
+    }
+    
+    const validacaoCPF = validarCPFCliente(responsavelCPF);
+    if (!validacaoCPF.valido) {
+        notificar(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}\n\nVerifique e corrija o CPF antes de continuar.`, 'error', 5000);
+        safeGet(`${I}ResponsavelCPF`)?.focus();
+        return;
+    }
+    
     const assinaturaBase64 = obterAssinaturaBase64(modulo);
     if (!assinaturaBase64) {
         const confirmar = await confirm('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?');
-        if (!confirmar) {
-            return;
-        }
+        if (!confirmar) return;
     }
     
     const btn = document.querySelector(`#form${P} .btn-primary-custom`);
@@ -2306,26 +2423,43 @@ async function registrarModulo(modulo) {
             tipo: cfg.tipo,
             alunoId: est.currentAluno.id,
             data,
-            horarioEntrada: safeGet(`${cfg.tipo}HorarioEntrada`)?.value || '',
-            horarioSaida: safeGet(`${cfg.tipo}HorarioSaida`)?.value || '',
-            responsavelNome: safeGet(`${cfg.tipo}ResponsavelNome`)?.value || '',
-            responsavelCPF: safeGet(`${cfg.tipo}ResponsavelCPF`)?.value || '',
-            responsavelTelefone: safeGet(`${cfg.tipo}ResponsavelTelefone`)?.value || '',
+            periodoFaltaInicio: periodoFaltaInicio || undefined,
+            periodoFaltaFim: periodoFaltaFim || undefined,
+            tipoProvaPerdida: tipoProvaPerdida || undefined,
+            tipoProvaPerdidaOutros: tipoProvaPerdidaOutros || undefined,
+            horarioEntrada: safeGet(`${I}HorarioEntrada`)?.value || '',
+            horarioSaida: safeGet(`${I}HorarioSaida`)?.value || '',
+            responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
+            responsavelCPF: responsavelCPF,
+            responsavelTelefone: safeGet(`${I}ResponsavelTelefone`)?.value || '',
             motivo: est.motivoSelecionado,
-            motivoOutros: safeGet(`${cfg.tipo}MotivoOutros`)?.value || '',
-            horarioAusencia: safeGet(`${cfg.tipo}HorarioAusencia`)?.value || '',
-            horarioRetorno: safeGet(`${cfg.tipo}HorarioRetorno`)?.value || '',
-            observacoes: safeGet(`${cfg.tipo}Observacoes`)?.value || '',
+            motivoOutros: safeGet(`${I}MotivoOutros`)?.value || '',
+            horarioAusencia: safeGet(`${I}HorarioAusencia`)?.value || '',
+            horarioRetorno: safeGet(`${I}HorarioRetorno`)?.value || '',
+            observacoes: safeGet(`${I}Observacoes`)?.value || '',
             assinaturaBase64: assinaturaBase64
         };
         
-        // ========== REGISTRA O MÓDULO PRINCIPAL ==========
         const r = await fetch('/api/gestao-geral/autorizacao/registrar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
         });
         const d = await r.json();
+        
+        // 🆕 Tratamento do 409 (duplicidade)
+        if (r.status === 409 || (d.error && d.error.includes('Já existe'))) {
+            let msg = '⚠️ Registro duplicado detectado!\n\n';
+            msg += d.error || 'Já existe um registro com os mesmos dados.';
+            if (d.duplicado) {
+                msg += `\n\n📌 Registrado por: ${d.duplicado.registradoPor || 'N/D'}`;
+                msg += `\n📅 Data: ${d.duplicado.data ? new Date(d.duplicado.data).toLocaleDateString('pt-BR') : 'N/D'}`;
+                msg += `\n👤 CPF: ${d.duplicado.responsavelCPF || 'N/D'}`;
+            }
+            notificar(msg, 'warning', 7000);
+            if (btn) btn.disabled = false;
+            return;
+        }
         
         if (!d.success) {
             notificar('❌ ' + (d.error || 'Erro'), 'error');
@@ -2334,10 +2468,11 @@ async function registrarModulo(modulo) {
         
         console.log(`✅ ${cfg.nomeAmigavel} registrado:`, d.autorizacao.id);
         
-        // ========== INTEGRAÇÃO AUTOMÁTICA ==========
+        // ==========================================
+        // INTEGRAÇÃO AUTOMÁTICA
+        // ==========================================
         let justificativaCriada = false;
         
-        // CASO 1: Autorização por doença → cria Justificativa
         if (modulo === 'autorizacao') {
             const motivoJustificativa = MOTIVOS_AUTORIZACAO_GERAM_JUSTIFICATIVA[est.motivoSelecionado];
             if (motivoJustificativa) {
@@ -2345,12 +2480,14 @@ async function registrarModulo(modulo) {
                 justificativaCriada = await criarJustificativaAutomatica({
                     alunoId: est.currentAluno.id,
                     data,
+                    periodoFaltaInicio: data,
+                    periodoFaltaFim: data,
                     motivo: motivoJustificativa,
-                    motivoOutros: safeGet(`${cfg.tipo}MotivoOutros`)?.value || '',
-                    responsavelNome: safeGet(`${cfg.tipo}ResponsavelNome`)?.value || '',
-                    responsavelCPF: safeGet(`${cfg.tipo}ResponsavelCPF`)?.value || '',
-                    responsavelTelefone: safeGet(`${cfg.tipo}ResponsavelTelefone`)?.value || '',
-                    observacoes: `Gerada automaticamente a partir de ${cfg.nomeAmigavel}: ${d.autorizacao.motivoLabel || ''} | ${safeGet(`${cfg.tipo}Observacoes`)?.value || ''}`.trim(),
+                    motivoOutros: safeGet(`${I}MotivoOutros`)?.value || '',
+                    responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
+                    responsavelCPF: responsavelCPF,
+                    responsavelTelefone: safeGet(`${I}ResponsavelTelefone`)?.value || '',
+                    observacoes: `Gerada automaticamente a partir de ${cfg.nomeAmigavel}: ${d.autorizacao.motivoLabel || ''} | ${safeGet(`${I}Observacoes`)?.value || ''}`.trim(),
                     origemTipo: 'autorizacao',
                     origemId: d.autorizacao.id,
                     assinaturaBase64: assinaturaBase64
@@ -2358,46 +2495,37 @@ async function registrarModulo(modulo) {
             }
         }
         
-        // CASO 2: 2ª Chamada → cria Justificativa
         if (modulo === 'segundaChamada') {
             const motivoJustificativa = MOTIVOS_SEGUNDA_CHAMADA_PARA_JUSTIFICATIVA[est.motivoSelecionado] || 'outros';
             console.log(`🔄 Criando justificativa automática (motivo: ${motivoJustificativa})...`);
             justificativaCriada = await criarJustificativaAutomatica({
                 alunoId: est.currentAluno.id,
                 data,
+                periodoFaltaInicio,
+                periodoFaltaFim,
                 motivo: motivoJustificativa,
-                motivoOutros: safeGet(`${cfg.tipo}MotivoOutros`)?.value || '',
-                responsavelNome: safeGet(`${cfg.tipo}ResponsavelNome`)?.value || '',
-                responsavelCPF: safeGet(`${cfg.tipo}ResponsavelCPF`)?.value || '',
-                responsavelTelefone: safeGet(`${cfg.tipo}ResponsavelTelefone`)?.value || '',
-                observacoes: `Gerada automaticamente a partir de 2ª Chamada | ${safeGet(`${cfg.tipo}Observacoes`)?.value || ''}`.trim(),
+                motivoOutros: safeGet(`${I}MotivoOutros`)?.value || '',
+                responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
+                responsavelCPF: responsavelCPF,
+                responsavelTelefone: safeGet(`${I}ResponsavelTelefone`)?.value || '',
+                observacoes: `Gerada automaticamente a partir de 2ª Chamada | ${safeGet(`${I}Observacoes`)?.value || ''}`.trim(),
                 origemTipo: 'segunda_chamada',
                 origemId: d.autorizacao.id,
                 assinaturaBase64: assinaturaBase64
             });
         }
         
-        // ========== FEEDBACK ==========
         let msg = `✅ ${d.message}`;
-        if (justificativaCriada) {
-            msg += ' — Justificativa de Falta criada automaticamente!';
-        }
+        if (justificativaCriada) msg += ' — Justificativa de Falta criada automaticamente!';
         notificar(msg, 'success');
         
-        // ========== IMPRESSÃO ==========
         const imprimir = await confirm('Deseja IMPRIMIR agora?');
-        if (imprimir) {
-            imprimirModulo(modulo, d.autorizacao.id);
-        }
+        if (imprimir) imprimirModulo(modulo, d.autorizacao.id);
         
-        // ========== LIMPEZA ==========
         limparTelaModulo(modulo);
         carregarListaModulo(modulo);
         
-        // Se criou justificativa automática, atualiza a lista de justificativas
-        if (justificativaCriada) {
-            carregarListaModulo('justificativa');
-        }
+        if (justificativaCriada) carregarListaModulo('justificativa');
         
         if (est.modoAtual === 'automatico') reiniciarScannerModulo(modulo);
     } catch (e) {
@@ -2408,22 +2536,21 @@ async function registrarModulo(modulo) {
     }
 }
 
-/**
- * Cria uma justificativa automaticamente
- * @returns {Promise<boolean>} true se criada com sucesso
- */
 async function criarJustificativaAutomatica(params) {
     try {
         const {
             alunoId, data, motivo, motivoOutros = '',
             responsavelNome = '', responsavelCPF = '', responsavelTelefone = '',
-            observacoes = '', origemTipo, origemId, assinaturaBase64 = ''
+            observacoes = '', origemTipo, origemId, assinaturaBase64 = '',
+            periodoFaltaInicio = '', periodoFaltaFim = ''
         } = params;
         
         const body = {
             tipo: 'justificativa',
             alunoId,
             data,
+            periodoFaltaInicio: periodoFaltaInicio || data,
+            periodoFaltaFim: periodoFaltaFim || periodoFaltaInicio || data,
             motivo,
             motivoOutros,
             responsavelNome,
@@ -2490,6 +2617,8 @@ async function carregarListaModulo(modulo) {
     const motivo = safeGet(`filtroLista${P}Motivo`)?.value || '';
     const dataInicio = safeGet(`filtroLista${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`filtroLista${P}DataFim`)?.value || '';
+    // 🆕 Filtro por tipo de prova (apenas 2ª chamada)
+    const tipoProvaPerdida = safeGet(`filtroLista${P}TipoProva`)?.value || '';
 
     let url = `/api/gestao-geral/autorizacao/listar?tipo=${cfg.tipo}&limit=50`;
     if (alunoNome) url += `&alunoNome=${encodeURIComponent(alunoNome)}`;
@@ -2497,6 +2626,7 @@ async function carregarListaModulo(modulo) {
     if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
     if (dataInicio) url += `&dataInicio=${dataInicio}`;
     if (dataFim) url += `&dataFim=${dataFim}`;
+    if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
 
     container.innerHTML = `
         <div class="text-center py-3">
@@ -2521,13 +2651,18 @@ async function carregarListaModulo(modulo) {
 
         const mostraHorario = cfg.tipo === 'autorizacao';
         const cabecalhoHorarios = mostraHorario ? '<th>Entrada</th><th>Saída</th>' : '<th>Horário</th>';
+        
+        const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
+        const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
 
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Data</th>
+                            <th>Data Registro</th>
+                            ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                            ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                             <th>Aluno</th>
                             <th>Turma</th>
                             ${cabecalhoHorarios}
@@ -2541,6 +2676,12 @@ async function carregarListaModulo(modulo) {
                         ${d.autorizacoes.map(a => `
                             <tr>
                                 <td>${a.dataFormatada}</td>
+                                ${mostrarPeriodoFalta 
+                                    ? `<td><strong style="color: #1e3c72;">${a.periodoFaltaFormatado || '-'}</strong></td>` 
+                                    : ''}
+                                ${mostrarTipoProva 
+                                    ? `<td><span class="badge bg-warning text-dark">${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</span></td>` 
+                                    : ''}
                                 <td><strong>${escapeHTML(a.alunoNome)}</strong></td>
                                 <td>${escapeHTML(a.alunoTurma)}</td>
                                 ${mostraHorario 
@@ -2756,7 +2897,7 @@ async function carregarDashboardModulo(modulo) {
 }
 
 // ============================================
-// ✏️ EDITAR MÓDULO (AUTORIZAÇÃO / JUSTIFICATIVA / 2ª CHAMADA)
+// ✏️ EDITAR MÓDULO
 // ============================================
 async function abrirEditarModulo(modulo, id) {
     if (!modulo || !id) return;
@@ -2778,18 +2919,91 @@ async function abrirEditarModulo(modulo, id) {
         const old = safeGet('modalEditarModulo');
         if (old) old.remove();
 
-        // Motivos por tipo
         const motivos = getMotivosPorTipo(cfg.tipo);
         const motivosOptions = motivos.map(m =>
             `<option value="${m.valor}" ${a.motivo === m.valor ? 'selected' : ''}>${m.label}</option>`
         ).join('');
 
-        // Formata data para input date
         let dataInput = '';
         if (a.data) {
             const dObj = new Date(a.data);
             dataInput = dObj.toISOString().split('T')[0];
         }
+        
+        let periodoInicioInput = '';
+        let periodoFimInput = '';
+        if (a.periodoFaltaInicio) {
+            periodoInicioInput = new Date(a.periodoFaltaInicio).toISOString().split('T')[0];
+        }
+        if (a.periodoFaltaFim) {
+            periodoFimInput = new Date(a.periodoFaltaFim).toISOString().split('T')[0];
+        }
+        
+        const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
+        const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+        
+        const blocoPeriodoFalta = mostrarPeriodoFalta ? `
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Data da Falta (Início) <span class="text-danger">*</span></label>
+                    <input type="date" id="editModuloPeriodoFaltaInicio" class="form-control" value="${periodoInicioInput}" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Data da Falta (Fim)</label>
+                    <input type="date" id="editModuloPeriodoFaltaFim" class="form-control" value="${periodoFimInput}">
+                    <small class="text-muted">Deixe vazio se for 1 dia só</small>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Data do Registro</label>
+                    <input type="date" id="editModuloData" class="form-control" value="${dataInput}" disabled>
+                    <small class="text-muted">Data em que foi cadastrado</small>
+                </div>
+            </div>
+        ` : `
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Data <span class="text-danger">*</span></label>
+                    <input type="date" id="editModuloData" class="form-control" value="${dataInput}">
+                </div>
+                ${cfg.tipo === 'autorizacao' ? `
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Entrada</label>
+                        <input type="time" id="editModuloHorarioEntrada" class="form-control" value="${a.horarioEntrada || ''}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Saída</label>
+                        <input type="time" id="editModuloHorarioSaida" class="form-control" value="${a.horarioSaida || ''}">
+                    </div>
+                ` : `
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Horário</label>
+                        <input type="time" id="editModuloHorario" class="form-control" value="${a.horarioEntrada || ''}">
+                    </div>
+                `}
+            </div>
+        `;
+        
+        // 🆕 Bloco de tipo de prova perdida
+        const blocoTipoProva = mostrarTipoProva ? `
+            <div class="mb-3">
+                <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
+                <select id="editModuloTipoProva" class="form-select" onchange="toggleEditTipoProvaOutros()">
+                    <option value="">Selecione...</option>
+                    <option value="AV1" ${a.tipoProvaPerdida === 'AV1' ? 'selected' : ''}>AV1</option>
+                    <option value="AV2" ${a.tipoProvaPerdida === 'AV2' ? 'selected' : ''}>AV2</option>
+                    <option value="AV3" ${a.tipoProvaPerdida === 'AV3' ? 'selected' : ''}>AV3</option>
+                    <option value="AV4" ${a.tipoProvaPerdida === 'AV4' ? 'selected' : ''}>AV4</option>
+                    <option value="Recuperação" ${a.tipoProvaPerdida === 'Recuperação' ? 'selected' : ''}>Recuperação</option>
+                    <option value="Outros" ${a.tipoProvaPerdida === 'Outros' ? 'selected' : ''}>Outros</option>
+                </select>
+            </div>
+            <div id="editCampoTipoProvaOutros" style="display: ${a.tipoProvaPerdida === 'Outros' ? 'block' : 'none'};">
+                <div class="mb-3">
+                    <label class="form-label">Especifique o Tipo de Prova</label>
+                    <input type="text" id="editModuloTipoProvaOutros" class="form-control" value="${escapeHTML(a.tipoProvaPerdidaOutros || '')}">
+                </div>
+            </div>
+        ` : '';
 
         const modalHtml = `
             <div class="modal fade" id="modalEditarModulo" tabindex="-1">
@@ -2816,27 +3030,8 @@ async function abrirEditarModulo(modulo, id) {
                                 </div>
                             </div>
 
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Data <span class="text-danger">*</span></label>
-                                    <input type="date" id="editModuloData" class="form-control" value="${dataInput}">
-                                </div>
-                                ${cfg.tipo === 'autorizacao' ? `
-                                    <div class="col-md-3 mb-3">
-                                        <label class="form-label">Entrada</label>
-                                        <input type="time" id="editModuloHorarioEntrada" class="form-control" value="${a.horarioEntrada || ''}">
-                                    </div>
-                                    <div class="col-md-3 mb-3">
-                                        <label class="form-label">Saída</label>
-                                        <input type="time" id="editModuloHorarioSaida" class="form-control" value="${a.horarioSaida || ''}">
-                                    </div>
-                                ` : `
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Horário</label>
-                                        <input type="time" id="editModuloHorario" class="form-control" value="${a.horarioEntrada || ''}">
-                                    </div>
-                                `}
-                            </div>
+                            ${blocoPeriodoFalta}
+                            ${blocoTipoProva}
 
                             <div class="mb-3">
                                 <label class="form-label">Motivo <span class="text-danger">*</span></label>
@@ -2878,12 +3073,12 @@ async function abrirEditarModulo(modulo, id) {
                                             <input type="text" id="editModuloResponsavelNome" class="form-control" value="${escapeHTML(a.responsavelNome || '')}">
                                         </div>
                                         <div class="col-md-3 mb-3">
-                                            <label class="form-label">CPF</label>
-                                            <input type="text" id="editModuloResponsavelCPF" class="form-control" value="${escapeHTML(a.responsavelCPF || '')}" maxlength="14">
+                                            <label class="form-label">CPF <span class="text-danger">*</span></label>
+                                            <input type="text" id="editModuloResponsavelCPF" class="form-control" value="${escapeHTML(a.responsavelCPF || '')}" maxlength="14" oninput="formatarCPF(this)">
                                         </div>
                                         <div class="col-md-3 mb-3">
                                             <label class="form-label">Telefone</label>
-                                            <input type="text" id="editModuloResponsavelTelefone" class="form-control" value="${escapeHTML(a.responsavelTelefone || '')}" maxlength="15">
+                                            <input type="text" id="editModuloResponsavelTelefone" class="form-control" value="${escapeHTML(a.responsavelTelefone || '')}" maxlength="15" oninput="formatarTelefone(this)">
                                         </div>
                                     </div>
                                 </div>
@@ -2923,9 +3118,18 @@ function toggleEditMotivoOutros() {
     if (campoAusencia) campoAusencia.style.display = motivo === 'necessita_ausentar_retornar' ? 'block' : 'none';
 }
 
+// 🆕 Toggle tipo de prova outros no modal de edição
+function toggleEditTipoProvaOutros() {
+    const tipo = safeGet('editModuloTipoProva')?.value;
+    const campo = safeGet('editCampoTipoProvaOutros');
+    if (campo) campo.style.display = tipo === 'Outros' ? 'block' : 'none';
+}
+
 async function salvarEdicaoModulo() {
     const id = safeGet('editModuloId')?.value;
     const modulo = safeGet('editModuloTipo')?.value;
+    const cfg = getCfg(modulo);
+    
     const data = safeGet('editModuloData')?.value;
     const motivo = safeGet('editModuloMotivo')?.value;
     const motivoOutros = safeGet('editModuloMotivoOutros')?.value || '';
@@ -2939,19 +3143,75 @@ async function salvarEdicaoModulo() {
     const horarioEntrada = safeGet('editModuloHorarioEntrada')?.value || safeGet('editModuloHorario')?.value || '';
     const horarioSaida = safeGet('editModuloHorarioSaida')?.value || '';
 
-    if (!data || !motivo) {
-        notificar('Preencha os campos obrigatórios');
+    if (!motivo) {
+        notificar('Preencha o motivo');
         return;
+    }
+    
+    // Período da falta
+    let periodoFaltaInicio = '';
+    let periodoFaltaFim = '';
+    
+    if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
+        periodoFaltaInicio = safeGet('editModuloPeriodoFaltaInicio')?.value || '';
+        periodoFaltaFim = safeGet('editModuloPeriodoFaltaFim')?.value || '';
+        
+        if (!periodoFaltaInicio) {
+            notificar('Informe a data da falta (início)');
+            return;
+        }
+        
+        if (periodoFaltaFim && periodoFaltaFim < periodoFaltaInicio) {
+            notificar('Data final não pode ser anterior à data inicial');
+            return;
+        }
+    } else {
+        if (!data) {
+            notificar('Preencha a data');
+            return;
+        }
+    }
+    
+    // 🆕 Tipo de prova (apenas 2ª chamada)
+    let tipoProvaPerdida = null;
+    let tipoProvaPerdidaOutros = '';
+    
+    if (cfg.tipo === 'segunda_chamada') {
+        tipoProvaPerdida = safeGet('editModuloTipoProva')?.value || '';
+        tipoProvaPerdidaOutros = safeGet('editModuloTipoProvaOutros')?.value || '';
+        
+        if (!tipoProvaPerdida) {
+            notificar('Informe o tipo de prova perdida');
+            return;
+        }
+        
+        if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
+            notificar('Especifique o tipo de prova perdida');
+            return;
+        }
     }
 
     if (motivo === 'outros' && !motivoOutros.trim()) {
         notificar('Especifique o motivo "Outros"');
         return;
     }
+    
+    // 🆕 Validação de CPF
+    if (responsavelCPF) {
+        const validacaoCPF = validarCPFCliente(responsavelCPF);
+        if (!validacaoCPF.valido) {
+            notificar(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}`, 'error', 5000);
+            safeGet('editModuloResponsavelCPF')?.focus();
+            return;
+        }
+    } else {
+        notificar('⚠️ CPF do responsável é obrigatório!', 'error', 5000);
+        safeGet('editModuloResponsavelCPF')?.focus();
+        return;
+    }
 
     try {
         const body = {
-            data,
             motivo,
             motivoOutros,
             responsavelNome,
@@ -2963,6 +3223,21 @@ async function salvarEdicaoModulo() {
             horarioAusencia,
             horarioRetorno
         };
+        
+        if (cfg.tipo === 'autorizacao' && data) {
+            body.data = data;
+        }
+        
+        if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
+            body.periodoFaltaInicio = periodoFaltaInicio;
+            body.periodoFaltaFim = periodoFaltaFim || periodoFaltaInicio;
+        }
+        
+        // 🆕 Envia tipo de prova
+        if (cfg.tipo === 'segunda_chamada') {
+            body.tipoProvaPerdida = tipoProvaPerdida;
+            body.tipoProvaPerdidaOutros = tipoProvaPerdidaOutros;
+        }
 
         const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
             method: 'PUT',
@@ -2974,18 +3249,24 @@ async function salvarEdicaoModulo() {
         });
         const result = await response.json();
 
+        // 🆕 Tratamento do 409 (duplicidade)
+        if (response.status === 409 || (result.error && result.error.includes('Já existe'))) {
+            let msg = '⚠️ Registro duplicado detectado!\n\n';
+            msg += result.error || 'Já existe outro registro com os mesmos dados.';
+            if (result.duplicado) {
+                msg += `\n\n📌 Registrado por: ${result.duplicado.registradoPor || 'N/D'}`;
+                msg += `\n📅 Data: ${result.duplicado.data ? new Date(result.duplicado.data).toLocaleDateString('pt-BR') : 'N/D'}`;
+                msg += `\n👤 CPF: ${result.duplicado.responsavelCPF || 'N/D'}`;
+            }
+            notificar(msg, 'warning', 7000);
+            return;
+        }
+
         if (result.success) {
             const modal = bootstrap.Modal.getInstance(safeGet('modalEditarModulo'));
             if (modal) modal.hide();
 
-            // Toast
-            if (typeof mostrarToastConcluido === 'function') {
-                notificar('✅ Registro atualizado com sucesso!', 'success');
-            } else {
-                notificar('✅ Registro atualizado com sucesso!');
-            }
-
-            // Recarrega
+            notificar('✅ Registro atualizado com sucesso!', 'success');
             carregarListaModulo(modulo);
         } else {
             notificar('❌ ' + (result.error || 'Erro ao salvar'));
@@ -3010,7 +3291,6 @@ function toggleRelatorioFiltrosModulo(modulo) {
     if (divTurma) divTurma.style.display = tipo === 'turma' ? 'block' : 'none';
     if (divAluno) divAluno.style.display = tipo === 'aluno' ? 'block' : 'none';
 
-    // ✅ RESETAR BOTÕES
     const btnCSV = safeGet(`btnExportarCSV${P}`);
     const btnPDF = safeGet(`btnExportarPDF${P}`);
     if (btnCSV) btnCSV.disabled = true;
@@ -3275,24 +3555,29 @@ async function carregarRelatorioModulo(modulo) {
     const tipo = safeGet(`${P}TipoRelatorio`)?.value || 'geral';
     const dataInicio = safeGet(`${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`${P}DataFim`)?.value || '';
+    // 🆕 Filtro por tipo de prova
+    const tipoProvaPerdida = safeGet(`${P}FiltroTipoProva`)?.value || '';
 
     let url = '';
     if (tipo === 'geral') {
         url = `/api/gestao-geral/autorizacao/relatorio/geral?tipo=${cfg.tipo}&`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
+        if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
     } else if (tipo === 'turma') {
         const turma = safeGet(`${P}FiltroTurma`)?.value;
         if (!turma) { notificar('Selecione uma turma', 'warning'); return; }
         url = `/api/gestao-geral/autorizacao/relatorio/turma/${encodeURIComponent(turma)}?tipo=${cfg.tipo}&`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
+        if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
     } else if (tipo === 'aluno') {
         const alunoId = safeGet(`${P}FiltroAluno`)?.value;
         if (!alunoId) { notificar('Selecione um aluno', 'warning'); return; }
         url = `/api/gestao-geral/autorizacao/relatorio/aluno/${alunoId}?tipo=${cfg.tipo}&`;
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
+        if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
     }
 
     try {
@@ -3303,7 +3588,6 @@ async function carregarRelatorioModulo(modulo) {
             relatoriosModulo[modulo] = data;
             exibirRelatorioModulo(modulo, data, tipo);
             
-            // ✅ HABILITAR BOTÕES CSV E PDF DO MÓDULO
             const btnCSV = safeGet(`btnExportarCSV${P}`);
             const btnPDF = safeGet(`btnExportarPDF${P}`);
             if (btnCSV) btnCSV.disabled = false;
@@ -3343,13 +3627,11 @@ function gerarHTMLRelatorioAtrasos(data) {
     const carimbo = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
     
-    // Assinatura digital
     let assinaturaDigital = null;
     const lista = data.atrasos || data.registros || [];
     const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
     if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
     
-    // Título
     let titulo = 'Relatório de Atrasos - Gestão Geral';
     let subtitulo = '';
     if (tipo === 'turma') { subtitulo = `Turma: ${data.turma || ''}`; }
@@ -3358,7 +3640,6 @@ function gerarHTMLRelatorioAtrasos(data) {
         subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
     } else { subtitulo = 'Relatório Geral'; }
     
-    // Stats
     let statsHTML = '';
     if (tipo === 'geral') {
         statsHTML = `
@@ -3380,7 +3661,6 @@ function gerarHTMLRelatorioAtrasos(data) {
             </div>`;
     }
     
-    // Tabelas
     let tabelaHTML = '';
     if (tipo === 'geral') {
         tabelaHTML = `
@@ -3436,23 +3716,14 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
     const carimbo = '/icons/assinatura_gestao.ico';
     const dataGeracao = new Date().toLocaleString('pt-BR');
     
-    // ========== BUSCAR ASSINATURA DIGITAL ==========
     let assinaturaDigital = null;
     const listaRegistros = data.registros || data.autorizacoes || data.atendimentos || [];
     const comAssinatura = listaRegistros.find(a => a.temAssinatura && a.assinaturaBase64);
     if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
     
-    // ========== HELPER: FORMATAR DATA DE CADASTRO ==========
-    const formatarDataCadastro = (item) => {
-        if (!item.createdAt) return '-';
-        try {
-            return new Date(item.createdAt).toLocaleString('pt-BR');
-        } catch (e) {
-            return '-';
-        }
-    };
+    const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
+    const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
     
-    // ========== TÍTULO ==========
     let titulo = `Relatório de ${cfg.nomeAmigavel} - Gestão Geral`;
     let subtitulo = '';
     if (tipo === 'turma') {
@@ -3464,7 +3735,6 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
         subtitulo = 'Relatório Geral';
     }
     
-    // ========== ESTATÍSTICAS ==========
     let statsHTML = '';
     if (tipo === 'geral') {
         statsHTML = `
@@ -3511,10 +3781,8 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
         `;
     }
     
-    // ========== TABELAS ==========
     let tabelaHTML = '';
     
-    // ---- GERAL ----
     if (tipo === 'geral') {
         const porMotivo = Array.isArray(data.porMotivo) ? data.porMotivo : [];
         const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
@@ -3532,6 +3800,20 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         </tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
                 </tbody>
             </table>
+            
+            ${mostrarTipoProva && (data.porTipoProva || []).length > 0 ? `
+                <div class="section-title">📝 Distribuição por Tipo de Prova Perdida</div>
+                <table>
+                    <thead><tr><th>Tipo de Prova</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                    <tbody>
+                        ${(data.porTipoProva || []).map(t => `
+                            <tr>
+                                <td><strong>${escapeHTML(t.tipoProva || t.label || '')}</strong></td>
+                                <td style="text-align:center;">${t.count || 0}</td>
+                            </tr>`).join('')}
+                    </tbody>
+                </table>
+            ` : ''}
             
             <div class="section-title">🏫 Distribuição por Turma</div>
             <table>
@@ -3552,7 +3834,8 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                     <thead>
                         <tr>
                             <th>Data do Registro</th>
-                            <th>Data de Cadastro</th>
+                            ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                            ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                             <th>Aluno</th>
                             <th>Turma</th>
                             <th>Motivo</th>
@@ -3562,7 +3845,8 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         ${registros.slice(0, 30).map(a => `
                             <tr>
                                 <td>${a.dataFormatada || '-'}</td>
-                                <td><small>${formatarDataCadastro(a)}</small></td>
+                                ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                                ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                                 <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                                 <td>${escapeHTML(a.alunoTurma || '')}</td>
                                 <td>${escapeHTML(a.motivoLabel || '')}</td>
@@ -3573,7 +3857,6 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
         `;
     }
     
-    // ---- TURMA ----
     else if (tipo === 'turma') {
         const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
         const registros = data.registros || data.autorizacoes || [];
@@ -3598,7 +3881,8 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                     <thead>
                         <tr>
                             <th>Data do Registro</th>
-                            <th>Data de Cadastro</th>
+                            ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                            ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                             <th>Aluno</th>
                             <th>Motivo</th>
                         </tr>
@@ -3607,7 +3891,8 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         ${registros.slice(0, 30).map(a => `
                             <tr>
                                 <td>${a.dataFormatada || '-'}</td>
-                                <td><small>${formatarDataCadastro(a)}</small></td>
+                                ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                                ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                                 <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                                 <td>${escapeHTML(a.motivoLabel || '')}</td>
                             </tr>`).join('')}
@@ -3617,7 +3902,6 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
         `;
     }
     
-    // ---- ALUNO ----
     else if (tipo === 'aluno') {
         const registros = data.registros || data.autorizacoes || [];
         
@@ -3627,7 +3911,8 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                 <thead>
                     <tr>
                         <th>Data do Registro</th>
-                        <th>Data de Cadastro</th>
+                        ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                        ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                         <th>Motivo</th>
                         <th>Observações</th>
                     </tr>
@@ -3636,7 +3921,8 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                     ${registros.map(a => `
                         <tr>
                             <td>${a.dataFormatada || '-'}</td>
-                            <td><small>${formatarDataCadastro(a)}</small></td>
+                            ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                            ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                             <td>${escapeHTML(a.motivoLabel || '')}</td>
                             <td>${escapeHTML((a.observacoes || '').substring(0, 80))}${(a.observacoes || '').length > 80 ? '...' : ''}</td>
                         </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum registro</td></tr>'}
@@ -3659,7 +3945,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
 }
 
 // ============================================
-// 🎨 TEMPLATE COMUM DE RELATÓRIO (PADRONIZADO)
+// 🎨 TEMPLATE COMUM DE RELATÓRIO
 // ============================================
 function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor }) {
     return `<!DOCTYPE html>
@@ -3703,48 +3989,27 @@ function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinat
             td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #f9fafb; }
             
-            /* 🖋️ Assinatura com carimbo colado na linha */
             .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
             .assinatura { flex: 0 0 60%; text-align: center; }
             
             .assinatura-container-relatorio {
-                position: relative;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
+                position: relative; min-height: 18mm;
+                display: flex; align-items: flex-end; justify-content: center;
                 padding-bottom: 0;
             }
-            
             .assinatura-container-relatorio::after {
-                content: '';
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
+                content: ''; position: absolute; bottom: 0; left: 0; right: 0;
                 border-bottom: 1px solid #000;
             }
-            
             .assinatura-img {
-                max-height: 14mm;
-                max-width: 100%;
-                object-fit: contain;
-                position: relative;
-                z-index: 2;
-                margin-bottom: 1mm;
+                max-height: 14mm; max-width: 100%; object-fit: contain;
+                position: relative; z-index: 2; margin-bottom: 1mm;
             }
-            
             .carimbo-overlay {
-                position: absolute;
-                bottom: 1mm;
-                left: 50%;
+                position: absolute; bottom: 1mm; left: 50%;
                 transform: translateX(-50%);
-                max-height: 15mm;
-                max-width: 55mm;
-                object-fit: contain;
-                opacity: 0.95;
-                pointer-events: none;
-                z-index: 1;
+                max-height: 15mm; max-width: 55mm; object-fit: contain;
+                opacity: 0.95; pointer-events: none; z-index: 1;
             }
             
             .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
@@ -3794,8 +4059,12 @@ function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinat
 
 function exibirRelatorioModulo(modulo, data, tipo) {
     const P = getPrefixo(modulo);
+    const cfg = getCfg(modulo);
     const container = safeGet(`${P}ResultadoRelatorio`);
     if (!container) return;
+    
+    const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
+    const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
 
     if (tipo === 'geral') {
         container.innerHTML = `
@@ -3809,6 +4078,15 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             <strong>${escapeHTML(m.label)}</strong>: ${m.count}
                         </div>
                     </div>`).join('')}</div>
+                ${mostrarTipoProva && (data.porTipoProva || []).length > 0 ? `
+                    <h6 class="mt-4">Por Tipo de Prova Perdida</h6>
+                    <div class="row">${(data.porTipoProva || []).map(t => `
+                        <div class="col-md-4 mb-2">
+                            <div class="p-2" style="background:#fef3c7;border-radius:8px;">
+                                <strong>${escapeHTML(t.tipoProva || t.label)}</strong>: ${t.count}
+                            </div>
+                        </div>`).join('')}</div>
+                ` : ''}
                 <h6 class="mt-4">Por Turma</h6>
                 <div class="table-responsive">
                     <table class="table table-sm">
@@ -3862,10 +4140,20 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                 <h6 class="mt-4">Histórico</h6>
                 <div class="table-responsive">
                     <table class="table table-sm">
-                        <thead><tr><th>Data</th><th>Motivo</th><th>Observações</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Data Registro</th>
+                                ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                                ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
+                                <th>Motivo</th>
+                                <th>Observações</th>
+                            </tr>
+                        </thead>
                         <tbody>${(data.registros || []).map(a => `
                             <tr>
                                 <td>${a.dataFormatada}</td>
+                                ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                                ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                                 <td>${escapeHTML(a.motivoLabel)}</td>
                                 <td>${escapeHTML((a.observacoes || '').substring(0, 100))}</td>
                             </tr>`).join('')}
@@ -3878,6 +4166,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
 
 function exportarCSVModulo(modulo) {
     const data = relatoriosModulo[modulo];
+    const cfg = getCfg(modulo);
     
     if (!data) {
         notificar('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.');
@@ -3891,11 +4180,15 @@ function exportarCSVModulo(modulo) {
         return;
     }
 
-    const cfg = getCfg(modulo);
-    let csv = "Data do Registro,Data de Cadastro,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
+    const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
+    const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+    
+    let csv = "Data do Registro,Data de Cadastro,";
+    if (mostrarPeriodoFalta) csv += "Período da Falta,";
+    if (mostrarTipoProva) csv += "Tipo de Prova Perdida,";
+    csv += "Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
 
     registros.forEach(a => {
-        // 🆕 Formatar data de cadastro
         let dataCadastro = '';
         if (a.createdAt) {
             try {
@@ -3905,16 +4198,29 @@ function exportarCSVModulo(modulo) {
             }
         }
         
-        csv += [
+        let linha = [
             a.dataFormatada || '',
-            `"${dataCadastro}"`,
+            `"${dataCadastro}"`
+        ];
+        
+        if (mostrarPeriodoFalta) {
+            linha.push(`"${(a.periodoFaltaFormatado || '').replace(/"/g, '""')}"`);
+        }
+        
+        if (mostrarTipoProva) {
+            linha.push(`"${(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '').replace(/"/g, '""')}"`);
+        }
+        
+        linha.push(
             `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
             `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
             `"${(a.alunoTurma || data.turma || '').replace(/"/g, '""')}"`,
             `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
             `"${(a.observacoes || '').replace(/"/g, '""')}"`,
             `"${(a.responsavelNome || '').replace(/"/g, '""')}"`
-        ].join(',') + '\n';
+        );
+        
+        csv += linha.join(',') + '\n';
     });
 
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -3957,10 +4263,12 @@ function configurarEventosModulo(modulo) {
     safeGet(`filtroLista${P}Motivo`)?.addEventListener('change', () => carregarListaModulo(modulo));
     safeGet(`filtroLista${P}DataInicio`)?.addEventListener('change', () => carregarListaModulo(modulo));
     safeGet(`filtroLista${P}DataFim`)?.addEventListener('change', () => carregarListaModulo(modulo));
+    // 🆕 Filtro por tipo de prova (2ª chamada)
+    safeGet(`filtroLista${P}TipoProva`)?.addEventListener('change', () => carregarListaModulo(modulo));
 }
 
 // ============================================
-// IMPRESSÃO COM ASSINATURA (A4 PAISAGEM - METADE DA FOLHA)
+// IMPRESSÃO COM ASSINATURA
 // ============================================
 async function imprimirModulo(modulo, id) {
     try {
@@ -3972,18 +4280,14 @@ async function imprimirModulo(modulo, id) {
         
         const a = d.autorizacao;
         
-        // 🔥 TENTAR BUSCAR QR CODE SEM QUEBRAR SE DER 403
         let qr = '';
         try {
             const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
             if (qrR.ok) {
                 const qrD = await qrR.json();
                 if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
-            } else {
-                console.info(`ℹ️ QR Code não disponível (status ${qrR.status})`);
             }
         } catch (e) {
             console.info('ℹ️ QR Code não pôde ser carregado');
@@ -4026,6 +4330,43 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                 ${a.horarioEntrada ? `<div class="info-item"><span class="info-label">Entrada:</span><span class="info-value">${a.horarioEntrada}</span></div>` : ''}
                 ${a.horarioSaida ? `<div class="info-item"><span class="info-label">Saída:</span><span class="info-value">${a.horarioSaida}</span></div>` : ''}
             </div>`;
+    }
+    
+    const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
+    const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+    let periodoFaltaHTML = '';
+    
+    if (mostrarPeriodoFalta && a.periodoFaltaInicio) {
+        const ini = new Date(a.periodoFaltaInicio);
+        const fim = a.periodoFaltaFim ? new Date(a.periodoFaltaFim) : ini;
+        const iniFmt = ini.toLocaleDateString('pt-BR');
+        const fimFmt = fim.toLocaleDateString('pt-BR');
+        const texto = iniFmt === fimFmt ? iniFmt : `${iniFmt} a ${fimFmt}`;
+        
+        periodoFaltaHTML = `
+            <div class="section-title">📆 Período da Falta Justificada</div>
+            <div class="motivo-box" style="background: #dbeafe; border-color: #1e3c72;">
+                <p style="margin: 0; font-size: 11pt; text-align: center;">
+                    <strong>${texto}</strong>
+                </p>
+            </div>
+        `;
+    }
+    
+    let tipoProvaHTML = '';
+    if (mostrarTipoProva && a.tipoProvaPerdida) {
+        const textoProva = a.tipoProvaPerdida === 'Outros' && a.tipoProvaPerdidaOutros
+            ? `Outros (${a.tipoProvaPerdidaOutros})`
+            : a.tipoProvaPerdida;
+        
+        tipoProvaHTML = `
+            <div class="section-title">📝 Tipo de Prova Perdida</div>
+            <div class="motivo-box" style="background: #fef3c7; border-color: #f59e0b;">
+                <p style="margin: 0; font-size: 11pt; text-align: center;">
+                    <strong>${escapeHTML(textoProva)}</strong>
+                </p>
+            </div>
+        `;
     }
     
     const assinaturaHTML = a.assinaturaBase64 
@@ -4088,24 +4429,9 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
             .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; position: relative; z-index: 2; }
             .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
                         
-            .qr-code {
-                text-align: center;
-                margin-top: 6px;
-            }
-            .qr-code img {
-                width: 25mm;
-                height: 25mm;
-                border: 1.5px solid #000;
-                padding: 2px;
-                display: block;
-                margin: 0 auto;
-            }
-            .qr-code p {
-                font-size: 8pt;
-                margin: 3px 0 0 0;
-                color: #444;
-                font-weight: bold;
-            }
+            .qr-code { text-align: center; margin-top: 6px; }
+            .qr-code img { width: 25mm; height: 25mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
+            .qr-code p { font-size: 8pt; margin: 3px 0 0 0; color: #444; font-weight: bold; }
             
             .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
             .footer p { margin: 1px 0; }
@@ -4138,6 +4464,9 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                 </div>
             </div>
         </div>
+        
+        ${periodoFaltaHTML}
+        ${tipoProvaHTML}
         
         <div class="section-title">📌 Dados do Registro</div>
         <div class="info-grid">
@@ -4212,29 +4541,21 @@ async function excluirModulo(modulo, id) {
 }
 
 // ============================================
-// 🔔 TOAST NATIVO (substitui alert() e mostrarToastConcluido)
+// 🔔 TOAST NATIVO
 // ============================================
 function notificar(mensagem, tipo = 'success', duracao = 3500) {
-    // Se já existe um toast do sistema, usa ele
     if (typeof window.mostrarToastConcluido === 'function') {
         window.mostrarToastConcluido(mensagem, tipo);
         return;
     }
 
-    // Fallback: toast nativo (não trava no Kodular)
     let container = document.getElementById('__toastContainerGG');
     if (!container) {
         container = document.createElement('div');
         container.id = '__toastContainerGG';
         container.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 999999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            pointer-events: none;
+            position: fixed; top: 20px; right: 20px; z-index: 999999;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none;
         `;
         document.body.appendChild(container);
     }
@@ -4249,21 +4570,12 @@ function notificar(mensagem, tipo = 'success', duracao = 3500) {
 
     const toast = document.createElement('div');
     toast.style.cssText = `
-        background: ${c.bg};
-        color: white;
-        padding: 14px 20px;
-        border-radius: 10px;
+        background: ${c.bg}; color: white; padding: 14px 20px; border-radius: 10px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 14px;
-        max-width: 380px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        pointer-events: auto;
-        opacity: 0;
-        transform: translateX(100%);
-        transition: all 0.3s ease;
+        font-size: 14px; max-width: 380px; display: flex; align-items: center; gap: 10px;
+        pointer-events: auto; opacity: 0; transform: translateX(100%);
+        transition: all 0.3s ease; white-space: pre-line;
     `;
     toast.innerHTML = `<span style="font-size:18px;">${c.icon}</span><span>${mensagem}</span>`;
 
@@ -4310,9 +4622,7 @@ function excluirSegundaChamada(id) { excluirModulo('segundaChamada', id); }
 
 // ============================================
 // 🔔 SISTEMA DE NOTIFICAÇÕES UNIFICADO
-// (Notificações do sistema + Lembretes de remarcação)
 // ============================================
-
 let notificacoesInterval = null;
 let __notificacoesCache = [];
 let __lembretesCache = [];
@@ -4498,7 +4808,6 @@ function renderizarSinoUnificado() {
     
     let html = '';
     
-    // SEÇÃO 1: LEMBRETES DE REMARCAÇÃO
     if (temLembretes) {
         html += `
             <div class="notificacoes-secao">
@@ -4545,7 +4854,6 @@ function renderizarSinoUnificado() {
         html += `</div>`;
     }
     
-    // SEÇÃO 2: NOTIFICAÇÕES DO SISTEMA
     if (temNotificacoes) {
         html += `
             <div class="notificacoes-secao">
@@ -4699,7 +5007,6 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
-// Iniciar quando o DOM carregar
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
 });
@@ -4764,17 +5071,12 @@ window.selecionarAlunoAutocompleteModulo = selecionarAlunoAutocompleteModulo;
 window.abrirEditarModulo = abrirEditarModulo;
 window.salvarEdicaoModulo = salvarEdicaoModulo;
 window.toggleEditMotivoOutros = toggleEditMotivoOutros;
-// Assinatura
+window.toggleEditTipoProvaOutros = toggleEditTipoProvaOutros;
+window.selecionarTipoProvaPerdida = selecionarTipoProvaPerdida;
 window.limparAssinatura = limparAssinatura;
 window.inicializarAssinatura = inicializarAssinatura;
 window.obterAssinaturaBase64 = obterAssinaturaBase64;
-
-// Expõe globalmente
 window.notificar = notificar;
-
-// ============================================
-// EXPORTAR GLOBAIS
-// ============================================
 window.abrirNotificacoes = abrirNotificacoes;
 window.abrirNotificacao = abrirNotificacao;
 window.marcarTodasLidas = marcarTodasLidas;
@@ -4782,6 +5084,11 @@ window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
 window.confirmarInternoNotif = confirmarInternoNotif;
-
 window.exportarPDFAtrasos = exportarPDFAtrasos;
 window.exportarPDFModulo = exportarPDFModulo;
+window.getPrefixoInput = getPrefixoInput;
+
+// 🆕 Formatação de CPF e Telefone
+window.formatarCPF = formatarCPF;
+window.formatarTelefone = formatarTelefone;
+window.validarCPFCliente = validarCPFCliente;

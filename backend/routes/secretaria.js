@@ -39,6 +39,27 @@ const verificarSecretaria = (req, res, next) => {
 };
 
 // ============================================
+// HELPERS
+// ============================================
+const getMotivoLabel = (motivo) => {
+  const labels = {
+    'problemas_pessoais': 'Problemas Pessoais',
+    'problemas_saude': 'Problemas de Saúde',
+    'viagem': 'Viagem',
+    'outros': 'Outros'
+  };
+  return labels[motivo] || motivo;
+};
+
+// Constrói o range de datas considerando timezone Brasil (UTC-3)
+function construirRangeData(dataInicio, dataFim) {
+  const inicio = new Date(dataInicio + 'T00:00:00.000-03:00');
+  const fimStr = dataFim || dataInicio;
+  const fim = new Date(fimStr + 'T23:59:59.999-03:00');
+  return { inicio, fim, fimStr };
+}
+
+// ============================================
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
@@ -164,21 +185,11 @@ router.get('/justificativa/por-aluno/:alunoId', authenticateToken, verificarSecr
 
     if (dataInicio || dataFim) {
       query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio);
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
+      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
     }
 
     const registros = await Autorizacao.find(query).sort({ data: -1 });
-
-    const getLabel = (motivo) => {
-      const labels = {
-        'problemas_pessoais': 'Problemas Pessoais',
-        'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem',
-        'outros': 'Outros'
-      };
-      return labels[motivo] || motivo;
-    };
 
     res.json({
       success: true,
@@ -193,7 +204,7 @@ router.get('/justificativa/por-aluno/:alunoId', authenticateToken, verificarSecr
         data: a.data,
         dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
         motivo: a.motivo,
-        motivoLabel: getLabel(a.motivo),
+        motivoLabel: getMotivoLabel(a.motivo),
         motivoOutros: a.motivoOutros,
         observacoes: a.observacoes,
         responsavelNome: a.responsavelNome,
@@ -237,8 +248,8 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
     }
     if (dataInicio || dataFim) {
       query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio);
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
+      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -250,16 +261,6 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
         .limit(parseInt(limit)),
       Autorizacao.countDocuments(query)
     ]);
-
-    const getLabel = (motivo) => {
-      const labels = {
-        'problemas_pessoais': 'Problemas Pessoais',
-        'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem',
-        'outros': 'Outros'
-      };
-      return labels[motivo] || motivo;
-    };
 
     res.json({
       success: true,
@@ -276,7 +277,7 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
         data: a.data,
         dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
         motivo: a.motivo,
-        motivoLabel: getLabel(a.motivo),
+        motivoLabel: getMotivoLabel(a.motivo),
         motivoOutros: a.motivoOutros,
         observacoes: a.observacoes,
         responsavelNome: a.responsavelNome,
@@ -294,11 +295,89 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
   }
 });
 
+// ============================================
+// 🆕 BUSCAR JUSTIFICATIVAS POR DATA (período)
+// ============================================
+router.get('/justificativa/por-data', authenticateToken, verificarSecretaria, async (req, res) => {
+  try {
+    const { dataInicio, dataFim, turma, motivo } = req.query;
+
+    if (!dataInicio) {
+      return res.status(400).json({ success: false, error: 'Data de início é obrigatória' });
+    }
+
+    const { inicio, fim, fimStr } = construirRangeData(dataInicio, dataFim);
+
+    if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) {
+      return res.status(400).json({ success: false, error: 'Data inválida' });
+    }
+
+    if (fim < inicio) {
+      return res.status(400).json({
+        success: false,
+        error: 'Data final não pode ser anterior à inicial'
+      });
+    }
+
+    let query = {
+      tipo: 'justificativa',
+      data: { $gte: inicio, $lte: fim }
+    };
+
+    if (turma && turma !== 'todas' && turma !== '') {
+      query.alunoTurma = turma;
+    }
+
+    if (motivo && motivo !== 'todos' && motivo !== '') {
+      query.motivo = motivo;
+    }
+
+    const registros = await Autorizacao.find(query)
+      .sort({ data: -1, createdAt: -1 })
+      .limit(500);
+
+    res.json({
+      success: true,
+      total: registros.length,
+      filtros: { dataInicio, dataFim: fimStr, turma: turma || null, motivo: motivo || null },
+      registros: registros.map(a => ({
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoCurso: a.alunoCurso,
+        data: a.data,
+        dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
+        motivo: a.motivo,
+        motivoLabel: getMotivoLabel(a.motivo),
+        motivoOutros: a.motivoOutros,
+        observacoes: a.observacoes,
+        responsavelNome: a.responsavelNome,
+        responsavelCPF: a.responsavelCPF,
+        responsavelTelefone: a.responsavelTelefone,
+        temAssinatura: !!(a.assinaturaBase64 && a.assinaturaBase64.length > 50),
+        registradoPor: a.registradoPorNome,
+        createdAt: a.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Erro ao buscar por data:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Buscar justificativa por ID
 router.get('/justificativa/:id', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
-    if (['listar', 'turmas', 'dashboard', 'alunos-por-turma'].includes(req.params.id)) {
+    // Bloqueia rotas que não são IDs (por segurança)
+    const rotasReservadas = ['listar', 'turmas', 'dashboard', 'alunos-por-turma', 'por-data', 'buscar-alunos', 'relatorio'];
+    if (rotasReservadas.includes(req.params.id)) {
       return res.status(404).json({ success: false, error: 'Rota não encontrada' });
+    }
+
+    if (!req.params.id.match(/^[a-f0-9]{24}$/i)) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
     }
 
     const registro = await Autorizacao.findById(req.params.id);
@@ -314,16 +393,6 @@ router.get('/justificativa/:id', authenticateToken, verificarSecretaria, async (
       });
     }
 
-    const getLabel = (motivo) => {
-      const labels = {
-        'problemas_pessoais': 'Problemas Pessoais',
-        'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem',
-        'outros': 'Outros'
-      };
-      return labels[motivo] || motivo;
-    };
-
     res.json({
       success: true,
       autorizacao: {
@@ -338,7 +407,7 @@ router.get('/justificativa/:id', authenticateToken, verificarSecretaria, async (
         data: registro.data,
         dataFormatada: new Date(registro.data).toLocaleDateString('pt-BR'),
         motivo: registro.motivo,
-        motivoLabel: getLabel(registro.motivo),
+        motivoLabel: getMotivoLabel(registro.motivo),
         motivoOutros: registro.motivoOutros,
         responsavelNome: registro.responsavelNome,
         responsavelCPF: registro.responsavelCPF,
@@ -409,8 +478,8 @@ router.get('/justificativa/relatorio/geral', authenticateToken, verificarSecreta
     if (motivo && motivo !== 'todos') query.motivo = motivo;
     if (dataInicio || dataFim) {
       query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio);
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
+      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
     }
 
     const registros = await Autorizacao.find(query).sort({ data: -1 });
@@ -435,16 +504,6 @@ router.get('/justificativa/relatorio/geral', authenticateToken, verificarSecreta
       delete t.alunos;
     });
 
-    const getLabel = (motivo) => {
-      const labels = {
-        'problemas_pessoais': 'Problemas Pessoais',
-        'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem',
-        'outros': 'Outros'
-      };
-      return labels[motivo] || motivo;
-    };
-
     res.json({
       success: true,
       filtros: { dataInicio, dataFim, turma, motivo },
@@ -452,7 +511,7 @@ router.get('/justificativa/relatorio/geral', authenticateToken, verificarSecreta
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
       porMotivo: Object.entries(porMotivo).map(([m, c]) => ({
         motivo: m,
-        label: getLabel(m),
+        label: getMotivoLabel(m),
         count: c
       })).sort((a, b) => b.count - a.count),
       registros: registros.slice(0, 100).map(a => ({
@@ -463,7 +522,7 @@ router.get('/justificativa/relatorio/geral', authenticateToken, verificarSecreta
         data: a.data,
         dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
         motivo: a.motivo,
-        motivoLabel: getLabel(a.motivo),
+        motivoLabel: getMotivoLabel(a.motivo),
         observacoes: a.observacoes,
         createdAt: a.createdAt
       }))
@@ -485,8 +544,8 @@ router.get('/justificativa/relatorio/turma/:turma', authenticateToken, verificar
 
     if (dataInicio || dataFim) {
       query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio);
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
+      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
     }
 
     const registros = await Autorizacao.find(query).sort({ data: -1 });
@@ -510,16 +569,6 @@ router.get('/justificativa/relatorio/turma/:turma', authenticateToken, verificar
       porMotivo[motivoKey] = (porMotivo[motivoKey] || 0) + 1;
     });
 
-    const getLabel = (motivo) => {
-      const labels = {
-        'problemas_pessoais': 'Problemas Pessoais',
-        'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem',
-        'outros': 'Outros'
-      };
-      return labels[motivo] || motivo;
-    };
-
     res.json({
       success: true,
       turma: req.params.turma,
@@ -531,7 +580,7 @@ router.get('/justificativa/relatorio/turma/:turma', authenticateToken, verificar
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       porMotivo: Object.entries(porMotivo).map(([m, c]) => ({
         motivo: m,
-        label: getLabel(m),
+        label: getMotivoLabel(m),
         count: c
       })).sort((a, b) => b.count - a.count),
       registros: registros.slice(0, 100).map(a => ({
@@ -542,7 +591,7 @@ router.get('/justificativa/relatorio/turma/:turma', authenticateToken, verificar
         data: a.data,
         dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
         motivo: a.motivo,
-        motivoLabel: getLabel(a.motivo),
+        motivoLabel: getMotivoLabel(a.motivo),
         observacoes: a.observacoes,
         createdAt: a.createdAt
       }))
@@ -564,8 +613,8 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
 
     if (dataInicio || dataFim) {
       query.data = {};
-      if (dataInicio) query.data.$gte = new Date(dataInicio);
-      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59');
+      if (dataInicio) query.data.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
+      if (dataFim) query.data.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
     }
 
     const registros = await Autorizacao.find(query).sort({ data: -1 });
@@ -580,16 +629,6 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
       const motivoKey = a.motivo || 'outros';
       porMotivo[motivoKey] = (porMotivo[motivoKey] || 0) + 1;
     });
-
-    const getLabel = (motivo) => {
-      const labels = {
-        'problemas_pessoais': 'Problemas Pessoais',
-        'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem',
-        'outros': 'Outros'
-      };
-      return labels[motivo] || motivo;
-    };
 
     res.json({
       success: true,
@@ -606,7 +645,7 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
       },
       porMotivo: Object.entries(porMotivo).map(([m, c]) => ({
         motivo: m,
-        label: getLabel(m),
+        label: getMotivoLabel(m),
         count: c
       })).sort((a, b) => b.count - a.count),
       registros: registros.map(a => ({
@@ -617,7 +656,7 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
         data: a.data,
         dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
         motivo: a.motivo,
-        motivoLabel: getLabel(a.motivo),
+        motivoLabel: getMotivoLabel(a.motivo),
         observacoes: a.observacoes,
         responsavelNome: a.responsavelNome,
         createdAt: a.createdAt
@@ -650,8 +689,8 @@ router.get('/dashboard', authenticateToken, verificarSecretaria, async (req, res
       Autorizacao.countDocuments({
         ...baseQuery,
         data: {
-          $gte: new Date(hoje.toISOString().split('T')[0]),
-          $lt: new Date(new Date(hoje.toISOString().split('T')[0]).setDate(hoje.getDate() + 1))
+          $gte: new Date(hoje.toISOString().split('T')[0] + 'T00:00:00.000-03:00'),
+          $lte: new Date(hoje.toISOString().split('T')[0] + 'T23:59:59.999-03:00')
         }
       })
     ]);
@@ -661,16 +700,6 @@ router.get('/dashboard', authenticateToken, verificarSecretaria, async (req, res
       { $group: { _id: '$motivo', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
-
-    const getLabel = (motivo) => {
-      const labels = {
-        'problemas_pessoais': 'Problemas Pessoais',
-        'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem',
-        'outros': 'Outros'
-      };
-      return labels[motivo] || motivo;
-    };
 
     res.json({
       success: true,
@@ -682,7 +711,7 @@ router.get('/dashboard', authenticateToken, verificarSecretaria, async (req, res
       },
       porMotivo: porMotivo.map(m => ({
         motivo: m._id,
-        label: getLabel(m._id),
+        label: getMotivoLabel(m._id),
         count: m.count
       }))
     });
