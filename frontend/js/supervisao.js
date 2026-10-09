@@ -440,6 +440,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.addEventListener('beforeunload', () => {
     pararScannerAutomatico();
     pararMonitoramentoSessao();
+    // 🆕 Remove listener de redimensionamento
+    window.removeEventListener('resize', handleResizeCanvasTela);
 });
 
 async function carregarFotoPerfil() {
@@ -3504,36 +3506,39 @@ async function mostrarTelaAssinatura(sessaoId) {
         document.body.appendChild(container);
     }
     
+    // 🆕 CORREÇÃO: Layout flexível que se adapta à altura da tela
     container.innerHTML = `
-        <div style="min-height: 100vh; background: #f0f9ff; padding: 20px; display: flex; flex-direction: column; align-items: center;">
-            <div style="max-width: 600px; width: 100%;">
-                <div style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; padding: 18px 24px; border-radius: 16px 16px 0 0; text-align: center;">
-                    <h1 style="font-size: 20px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+        <div style="min-height: 100vh; background: #f0f9ff; padding: 10px; display: flex; flex-direction: column; box-sizing: border-box;">
+            <div style="max-width: 800px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; flex: 1;">
+                
+                <div style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; padding: 12px 20px; border-radius: 16px 16px 0 0; text-align: center; flex-shrink: 0;">
+                    <h1 style="font-size: 18px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
                         <i class="fas fa-signature"></i> Assinatura Digital - Supervisão
                     </h1>
                 </div>
                 
-                <div id="telaAssinaturaInfo" style="background: white; padding: 20px; border-left: 4px solid #0ea5e9;">
-                    <div style="text-align: center; padding: 40px;">
-                        <div style="width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #0ea5e9; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px;"></div>
-                        <p style="color: #64748b; margin: 0;">Carregando atendimento...</p>
+                <div id="telaAssinaturaInfo" style="background: white; padding: 15px; border-left: 4px solid #0ea5e9; flex-shrink: 0; max-height: 40vh; overflow-y: auto;">
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top-color: #0ea5e9; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
+                        <p style="color: #64748b; margin: 0; font-size: 14px;">Carregando atendimento...</p>
                     </div>
                 </div>
                 
-                <div id="telaAssinaturaArea" style="background: white; padding: 20px; display: none; border-radius: 0 0 16px 16px;">
-                    <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 300px; margin-bottom: 16px;">
-                        <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block; touch-action: none;"></canvas>
-                        <div id="placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none;">
-                            <i class="fas fa-pen-fancy" style="font-size: 48px; display: block; margin-bottom: 10px;"></i>
-                            <span style="font-size: 15px;">Assine aqui com o dedo</span>
+                <!-- 🆕 Área de assinatura que se expande para preencher o espaço restante -->
+                <div id="telaAssinaturaArea" style="background: white; padding: 15px; display: none; border-radius: 0 0 16px 16px; flex: 1; display: flex; flex-direction: column;">
+                    <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; flex: 1; min-height: 150px; margin-bottom: 12px; touch-action: none;">
+                        <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block;"></canvas>
+                        <div id="placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
+                            <i class="fas fa-pen-fancy" style="font-size: 32px; display: block; margin-bottom: 5px;"></i>
+                            <span style="font-size: 14px;">Assine aqui com o dedo</span>
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 12px;">
-                        <button onclick="limparAssinaturaTela()" style="flex: 1; padding: 16px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 15px;">
+                    <div style="display: flex; gap: 10px; flex-shrink: 0;">
+                        <button onclick="limparAssinaturaTela()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
                             <i class="fas fa-eraser"></i> Limpar
                         </button>
-                        <button id="btnSalvarAssinatura" onclick="salvarAssinaturaTela()" disabled style="flex: 2; padding: 16px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: not-allowed;">
+                        <button id="btnSalvarAssinatura" onclick="salvarAssinaturaTela()" disabled style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
                             <i class="fas fa-check"></i> Confirmar Assinatura
                         </button>
                     </div>
@@ -3541,40 +3546,47 @@ async function mostrarTelaAssinatura(sessaoId) {
             </div>
         </div>
         
-        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        <style>
+            @keyframes spin { to { transform: rotate(360deg); } }
+            /* 🆕 Ajuste para telas muito baixas (paisagem) */
+            @media (max-height: 500px) {
+                #telaAssinaturaInfo { max-height: 30vh; }
+                #telaAssinaturaArea { padding: 10px; }
+                #canvasWrapper { min-height: 100px; }
+            }
+        </style>
     `;
     
     try {
-        // 🆕 NÃO precisa de Authorization - é pública
         const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`);
         const data = await response.json();
         
         if (!data.success) {
             safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 40px 20px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
-                    <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão inválida ou expirada</h3>
-                    <p style="color: #64748b; margin: 0;">${data.error || 'Esta sessão de assinatura não existe mais ou expirou (30 min).'}</p>
+                <div style="text-align: center; padding: 30px 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
+                    <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão inválida ou expirada</h3>
+                    <p style="color: #64748b; margin: 0; font-size: 14px;">${data.error || 'Esta sessão de assinatura não existe mais ou expirou (30 min).'}</p>
                 </div>`;
             return;
         }
         
         if (data.sessao.status === 'assinado') {
             safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 40px 20px;">
-                    <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px; display: block;"></i>
-                    <h3 style="color: #10b981; margin: 0 0 10px;">Esta sessão já foi assinada</h3>
-                    <p style="color: #64748b; margin: 0;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p>
+                <div style="text-align: center; padding: 30px 20px;">
+                    <i class="fas fa-check-circle" style="font-size: 40px; color: #10b981; margin-bottom: 10px; display: block;"></i>
+                    <h3 style="color: #10b981; margin: 0 0 8px; font-size: 18px;">Esta sessão já foi assinada</h3>
+                    <p style="color: #64748b; margin: 0; font-size: 14px;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p>
                 </div>`;
             return;
         }
         
         if (data.sessao.status === 'cancelado') {
             safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 40px 20px;">
-                    <i class="fas fa-times-circle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
-                    <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão cancelada</h3>
-                    <p style="color: #64748b; margin: 0;">Esta sessão de assinatura foi cancelada.</p>
+                <div style="text-align: center; padding: 30px 20px;">
+                    <i class="fas fa-times-circle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
+                    <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão cancelada</h3>
+                    <p style="color: #64748b; margin: 0; font-size: 14px;">Esta sessão de assinatura foi cancelada.</p>
                 </div>`;
             return;
         }
@@ -3582,49 +3594,108 @@ async function mostrarTelaAssinatura(sessaoId) {
         const d = data.sessao.dadosAtendimento || {};
         
         safeGet('telaAssinaturaInfo').innerHTML = `
-            <div style="border-left: 4px solid #0ea5e9; padding-left: 14px;">
-                <h2 style="margin: 0 0 4px; font-size: 18px; color: #075985;">Supervisão</h2>
-                <p style="margin: 0; color: #64748b; font-size: 13px;">Confirme os dados e assine abaixo</p>
+            <div style="border-left: 4px solid #0ea5e9; padding-left: 10px; margin-bottom: 10px;">
+                <h2 style="margin: 0 0 4px; font-size: 16px; color: #075985;">Supervisão</h2>
+                <p style="margin: 0; color: #64748b; font-size: 12px;">Confirme os dados e assine abaixo</p>
             </div>
             
-            <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                 <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Aluno</span>
-                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Aluno</span>
+                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span>
                 </div>
                 <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Turma</span>
-                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoTurma || '-')}</span>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Turma</span>
+                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoTurma || '-')}</span>
                 </div>
                 <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Tipo</span>
-                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.tipoTarefaLabel || '-')}</span>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Tipo</span>
+                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.tipoTarefaLabel || '-')}</span>
                 </div>
                 <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Gravidade</span>
-                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML((d.gravidade || 'media').toUpperCase())}</span>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Gravidade</span>
+                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML((d.gravidade || 'media').toUpperCase())}</span>
                 </div>
                 ${d.descricao ? `
                     <div style="grid-column: 1 / -1;">
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Descrição</span>
-                        <span style="font-size: 13px; color: #1e293b;">${escapeHTML(d.descricao.substring(0, 200))}${d.descricao.length > 200 ? '...' : ''}</span>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Descrição</span>
+                        <span style="font-size: 12px; color: #1e293b;">${escapeHTML(d.descricao.substring(0, 150))}${d.descricao.length > 150 ? '...' : ''}</span>
                     </div>
                 ` : ''}
             </div>
         `;
         
-        safeGet('telaAssinaturaArea').style.display = 'block';
+        safeGet('telaAssinaturaArea').style.display = 'flex'; // Mudado para flex
         sessaoAssinaturaModo = sessaoId;
         sessaoAssinaturaAtual = data.sessao;
-        inicializarCanvasTela();
+        
+        // 🆕 Pequeno delay para garantir que o DOM esteja renderizado antes de inicializar o canvas
+        setTimeout(() => inicializarCanvasTela(), 100);
+        
+        // 🆕 Adiciona listener para redimensionamento (rotação da tela)
+        window.addEventListener('resize', handleResizeCanvasTela);
         
     } catch (e) {
         safeGet('telaAssinaturaInfo').innerHTML = `
-            <div style="text-align: center; padding: 40px 20px;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
-                <h3 style="color: #ef4444; margin: 0 0 10px;">Erro ao carregar</h3>
-                <p style="color: #64748b; margin: 0;">${e.message}</p>
+            <div style="text-align: center; padding: 30px 20px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
+                <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Erro ao carregar</h3>
+                <p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p>
             </div>`;
+    }
+}
+
+// 🆕 Função auxiliar para redimensionar o canvas quando a tela gira
+function handleResizeCanvasTela() {
+    const canvas = safeGet('canvasAssinatura');
+    const wrapper = safeGet('canvasWrapper');
+    if (!canvas || !wrapper) return;
+    
+    // Se não houver assinatura, apenas redimensiona
+    if (!telaTemAssinatura) {
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0ea5e9';
+        telaCtx = ctx;
+    } else {
+        // Se já houver assinatura, preserva o desenho redimensionando a imagem
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(canvas, 0, 0);
+        
+        const rect = wrapper.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0ea5e9';
+        telaCtx = ctx;
+        
+        // Redesenha a assinatura anterior no novo tamanho
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height, 0, 0, rect.width, rect.height);
     }
 }
 
@@ -3642,7 +3713,7 @@ function inicializarCanvasTela() {
     
     const ajustar = () => {
         const rect = wrapper.getBoundingClientRect();
-        if (rect.width === 0) { setTimeout(ajustar, 200); return; }
+        if (rect.width === 0 || rect.height === 0) { setTimeout(ajustar, 200); return; }
         const dpr = window.devicePixelRatio || 1;
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
@@ -3658,6 +3729,10 @@ function inicializarCanvasTela() {
         telaCtx = ctx;
     };
     ajustar();
+    
+    // 🆕 Remove listener antigo para evitar duplicatas e adiciona novo
+    window.removeEventListener('resize', handleResizeCanvasTela);
+    window.addEventListener('resize', handleResizeCanvasTela);
     
     const getPos = (e) => {
         const rect = canvas.getBoundingClientRect();
