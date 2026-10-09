@@ -117,22 +117,6 @@ class SetorPedagogico {
                 substitutoAusenteObservacoes: ''
             }
         };
-
-        // ============================================
-        // 🆕 Propriedades da Tela de Assinatura (Modo Público via QR Code)
-        // Mesmo padrão da Psicologia
-        // ============================================
-        this.sessaoAssinaturaModo = null;
-        this.sessaoAssinaturaAtual = null;
-        this.telaCanvas = null;
-        this.telaCtx = null;
-        this.telaWrapper = null;
-        this.telaPlaceholder = null;
-        this.telaTemAssinatura = false;
-        this.telaDesenhando = false;
-        this.telaLastX = 0;
-        this.telaLastY = 0;
-        this.modalAssinaturaInstance = null;
         
         this.init();
     }
@@ -141,20 +125,38 @@ class SetorPedagogico {
         console.log('🚀 Inicializando Setor Pedagógico...');
         
         // ============================================
-        // 🆕 VERIFICA PRIMEIRO SE É MODO ASSINATURA
+        // 🆕 VERIFICA PRIMEIRO SE ESTÁ EM MODO ASSINATURA
         // URL: /setor-pedagogico.html?assinatura=UUID
         // O responsável NÃO está logado — só vai assinar
-        // ⚠️ Precisa vir ANTES da checagem de token!
         // ============================================
         const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
         if (modoAssinatura) {
             console.log('📱 Modo assinatura detectado:', modoAssinatura);
+            
+            // Carrega só o usuário (pra ter o nome do assinante) - OPCIONAL
+            try {
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                if (userData.nome) this.currentUser = userData;
+                
+                // Tenta buscar via API, mas se falhar (sem token), não impede
+                if (this.token) {
+                    const data = await this.apiRequest('/api/auth/me');
+                    if (data.success) {
+                        this.currentUser = data.user;
+                        localStorage.setItem('user_data', JSON.stringify(this.currentUser));
+                    }
+                }
+            } catch (e) {
+                console.warn('Erro ao carregar usuário no modo assinatura:', e);
+            }
+            
+            // Mostra SOMENTE a tela de assinatura
             await this.mostrarTelaAssinatura(modoAssinatura);
             return; // ⚠️ NÃO continua com o init normal
         }
         
         // ============================================
-        // ⬇️ SÓ DAQUI PRA BAIXO É O FLUXO NORMAL (com login)
+        // INIT NORMAL (com login)
         // ============================================
         if (!this.token) {
             window.location.href = '/login.html';
@@ -294,369 +296,6 @@ class SetorPedagogico {
             }
         } catch (error) {
             console.error('❌ Erro ao carregar foto:', error);
-        }
-    }
-
-        // ============================================================================
-    // 🆕 TELA DE ASSINATURA PÚBLICA (via QR Code)
-    // Mesmo padrão da Psicologia — NÃO usa token (endpoint público)
-    // ============================================================================
-
-    /**
-     * Mostra a tela de assinatura pública (substitui o conteúdo principal).
-     * ⚠️ NÃO usa token — é uma página pública
-     */
-    async mostrarTelaAssinatura(sessaoId) {
-        // Esconde sidebar, header, bottom nav
-        document.querySelectorAll('.sidebar, .mobile-menu-btn, .page-header, #bottomNavSp, .sidebar-overlay-sp').forEach(el => {
-            if (el) el.style.display = 'none';
-        });
-        
-        // Substitui o conteúdo
-        const content = document.getElementById('content');
-        if (!content) return;
-        
-        content.innerHTML = `
-            <div style="min-height: 100vh; background: #f0f4f8; padding: 10px; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto;">
-                <div style="max-width: 800px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                    
-                    <div style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 12px 20px; border-radius: 16px 16px 0 0; text-align: center; flex-shrink: 0;">
-                        <h1 style="font-size: 18px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                            <i class="fas fa-signature"></i> Assinatura Digital - Setor Pedagógico
-                        </h1>
-                    </div>
-                    
-                    <div id="telaAssinaturaInfo" style="background: white; padding: 15px; border-left: 4px solid #1e3c72; flex-shrink: 0; max-height: 40vh; overflow-y: auto;">
-                        <div style="text-align: center; padding: 20px;">
-                            <div style="width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top-color: #1e3c72; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
-                            <p style="color: #64748b; margin: 0; font-size: 14px;">Carregando atendimento...</p>
-                        </div>
-                    </div>
-                    
-                    <div id="telaAssinaturaArea" style="background: white; padding: 15px; display: none; border-radius: 0 0 16px 16px; flex: 1; display: flex; flex-direction: column; min-height: 0;">
-                        <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; flex: 1; min-height: 150px; margin-bottom: 12px; touch-action: none;">
-                            <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block;"></canvas>
-                            <div id="placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none; width: 100%;">
-                                <i class="fas fa-pen-fancy" style="font-size: 32px; display: block; margin-bottom: 5px;"></i>
-                                <span style="font-size: 14px;">Assine aqui com o dedo</span>
-                            </div>
-                        </div>
-                        
-                        <div style="display: flex; gap: 10px; flex-shrink: 0;">
-                            <button onclick="setorPedagogico.limparAssinaturaTela()" 
-                                    style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
-                                <i class="fas fa-eraser"></i> Limpar
-                            </button>
-                            <button id="btnSalvarAssinatura" onclick="setorPedagogico.salvarAssinaturaTela()" disabled
-                                    style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
-                                <i class="fas fa-check"></i> Confirmar Assinatura
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <style>
-                @keyframes spin { to { transform: rotate(360deg); } }
-                @media (max-height: 500px) {
-                    #telaAssinaturaInfo { max-height: 25vh; }
-                    #telaAssinaturaArea { padding: 10px; }
-                    #canvasWrapper { min-height: 80px; }
-                }
-            </style>
-        `;
-        
-        try {
-            // 🔥 SEM Authorization — endpoint é público (mesmo padrão da Psicologia)
-            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`);
-            const data = await response.json();
-            
-            if (!data.success) {
-                document.getElementById('telaAssinaturaInfo').innerHTML = `
-                    <div style="text-align: center; padding: 30px 20px;">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                        <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão inválida ou expirada</h3>
-                        <p style="color: #64748b; margin: 0; font-size: 14px;">${data.error || 'Esta sessão de assinatura não existe mais ou expirou (30 min).'}</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            if (data.sessao.status === 'assinado') {
-                document.getElementById('telaAssinaturaInfo').innerHTML = `
-                    <div style="text-align: center; padding: 30px 20px;">
-                        <i class="fas fa-check-circle" style="font-size: 40px; color: #10b981; margin-bottom: 10px; display: block;"></i>
-                        <h3 style="color: #10b981; margin: 0 0 8px; font-size: 18px;">Esta sessão já foi assinada</h3>
-                        <p style="color: #64748b; margin: 0; font-size: 14px;">Assinada por ${this.escapeHtml(data.sessao.assinadaPorNome || '')}</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            if (data.sessao.status === 'cancelado') {
-                document.getElementById('telaAssinaturaInfo').innerHTML = `
-                    <div style="text-align: center; padding: 30px 20px;">
-                        <i class="fas fa-times-circle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                        <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão cancelada</h3>
-                        <p style="color: #64748b; margin: 0; font-size: 14px;">Esta sessão de assinatura foi cancelada.</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            const d = data.sessao.dadosAtendimento || {};
-            const tipoLabel = {
-                'autorizacao': 'Autorização',
-                'justificativa': 'Justificativa',
-                'segunda_chamada': '2ª Chamada',
-                'atraso': 'Atraso'
-            }[data.sessao.tipo] || data.sessao.tipo;
-            
-            document.getElementById('telaAssinaturaInfo').innerHTML = `
-                <div style="border-left: 4px solid #1e3c72; padding-left: 10px; margin-bottom: 10px;">
-                    <h2 style="margin: 0 0 4px; font-size: 16px; color: #1e3c72;">${tipoLabel}</h2>
-                    <p style="margin: 0; color: #64748b; font-size: 12px;">Confirme os dados e assine abaixo</p>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Aluno</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoNome || '-')}</span>
-                    </div>
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Turma</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoTurma || '-')}</span>
-                    </div>
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Motivo</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.motivoLabel || '-')}</span>
-                    </div>
-                    ${d.periodoFaltaFormatado ? `
-                        <div>
-                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Período da Falta</span>
-                            <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoFaltaFormatado)}</span>
-                        </div>
-                    ` : ''}
-                    ${d.tipoProvaPerdidaFormatado ? `
-                        <div>
-                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Tipo de Prova</span>
-                            <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.tipoProvaPerdidaFormatado)}</span>
-                        </div>
-                    ` : ''}
-                    ${d.responsavelNome ? `
-                        <div style="grid-column: 1 / -1;">
-                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Responsável</span>
-                            <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.responsavelNome)}</span>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            
-            document.getElementById('telaAssinaturaArea').style.display = 'flex';
-            
-            // Salva sessão ativa no estado da classe
-            this.sessaoAssinaturaModo = sessaoId;
-            this.sessaoAssinaturaAtual = data.sessao;
-            
-            setTimeout(() => this.inicializarCanvasTela(), 100);
-            
-        } catch (e) {
-            console.error('Erro ao carregar sessão:', e);
-            document.getElementById('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 30px 20px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                    <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Erro ao carregar</h3>
-                    <p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p>
-                </div>
-            `;
-        }
-    }
-
-    /**
-     * Inicializa o canvas de assinatura na tela pública.
-     */
-    inicializarCanvasTela() {
-        const canvas = document.getElementById('canvasAssinatura');
-        const wrapper = document.getElementById('canvasWrapper');
-        const placeholder = document.getElementById('placeholder');
-        if (!canvas || !wrapper) return;
-        
-        this.telaCanvas = canvas;
-        this.telaWrapper = wrapper;
-        this.telaPlaceholder = placeholder;
-        this.telaTemAssinatura = false;
-        this.telaDesenhando = false;
-        
-        const ajustar = () => {
-            const rect = wrapper.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) { setTimeout(ajustar, 200); return; }
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            canvas.style.width = rect.width + 'px';
-            canvas.style.height = rect.height + 'px';
-            const ctx = canvas.getContext('2d');
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.scale(dpr, dpr);
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#1e3c72';
-            this.telaCtx = ctx;
-        };
-        ajustar();
-        
-        window.addEventListener('resize', () => {
-            if (this.telaTemAssinatura) return;
-            ajustar();
-        });
-        
-        const getPos = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            let cx, cy;
-            if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
-            else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
-            else { cx = e.clientX; cy = e.clientY; }
-            return { x: cx - rect.left, y: cy - rect.top };
-        };
-        
-        const iniciar = (e) => {
-            e.preventDefault();
-            this.telaDesenhando = true;
-            this.telaTemAssinatura = true;
-            const p = getPos(e);
-            this.telaLastX = p.x;
-            this.telaLastY = p.y;
-            wrapper.style.borderColor = '#1e3c72';
-            wrapper.style.borderStyle = 'solid';
-            placeholder.style.opacity = '0';
-            
-            const btn = document.getElementById('btnSalvarAssinatura');
-            if (btn) {
-                btn.disabled = false;
-                btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                btn.style.cursor = 'pointer';
-            }
-        };
-        
-        const desenhar = (e) => {
-            if (!this.telaDesenhando) return;
-            e.preventDefault();
-            const p = getPos(e);
-            this.telaCtx.beginPath();
-            this.telaCtx.moveTo(this.telaLastX, this.telaLastY);
-            this.telaCtx.lineTo(p.x, p.y);
-            this.telaCtx.stroke();
-            this.telaLastX = p.x;
-            this.telaLastY = p.y;
-        };
-        
-        const parar = (e) => {
-            if (e?.preventDefault) e.preventDefault();
-            this.telaDesenhando = false;
-        };
-        
-        canvas.addEventListener('touchstart', iniciar, { passive: false });
-        canvas.addEventListener('touchmove', desenhar, { passive: false });
-        canvas.addEventListener('touchend', parar, { passive: false });
-        canvas.addEventListener('touchcancel', parar, { passive: false });
-        canvas.addEventListener('mousedown', iniciar);
-        canvas.addEventListener('mousemove', desenhar);
-        canvas.addEventListener('mouseup', parar);
-        canvas.addEventListener('mouseleave', () => { if (this.telaDesenhando) parar(); });
-    }
-
-    /**
-     * Limpa a assinatura da tela.
-     */
-    limparAssinaturaTela() {
-        if (!this.telaCtx || !this.telaCanvas) return;
-        const rect = this.telaCanvas.getBoundingClientRect();
-        this.telaCtx.clearRect(0, 0, rect.width, rect.height);
-        this.telaTemAssinatura = false;
-        if (this.telaPlaceholder) this.telaPlaceholder.style.opacity = '1';
-        if (this.telaWrapper) {
-            this.telaWrapper.style.borderColor = '#cbd5e0';
-            this.telaWrapper.style.borderStyle = 'dashed';
-        }
-        const btn = document.getElementById('btnSalvarAssinatura');
-        if (btn) {
-            btn.disabled = true;
-            btn.style.background = '#cbd5e0';
-            btn.style.cursor = 'not-allowed';
-        }
-    }
-
-    /**
-     * Salva a assinatura da tela pública na sessão.
-     * 🔥 SEM Authorization — endpoint é público
-     */
-    async salvarAssinaturaTela() {
-        if (!this.telaTemAssinatura || !this.sessaoAssinaturaModo) return;
-        
-        const btn = document.getElementById('btnSalvarAssinatura');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-        }
-        
-        try {
-            const base64 = this.telaCanvas.toDataURL('image/png');
-            
-            // 🔥 SEM Authorization — endpoint é público (mesmo padrão da Psicologia)
-            const response = await fetch(`/api/sessoes-assinatura/${this.sessaoAssinaturaModo}/assinar`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    assinaturaBase64: base64,
-                    assinanteNome: 'Responsável'
-                })
-            });
-            
-            const data = await response.json();
-            if (!data.success) throw new Error(data.error || 'Erro ao salvar');
-            
-            document.getElementById('telaAssinaturaInfo').innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;">
-                    <i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i>
-                    <h2 style="color: #10b981; margin: 0 0 8px; font-size: 20px;">Assinatura Confirmada!</h2>
-                    <p style="color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5;">
-                        A assinatura foi registrada com sucesso.<br>
-                        Você já pode fechar esta janela.
-                    </p>
-                    <button onclick="window.close()" 
-                            style="padding: 12px 28px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-times"></i> Fechar
-                    </button>
-                </div>
-            `;
-            document.getElementById('telaAssinaturaArea').style.display = 'none';
-            
-            const telaInfo = document.getElementById('telaAssinaturaInfo');
-            if (telaInfo) {
-                telaInfo.style.flex = '1';
-                telaInfo.style.display = 'flex';
-                telaInfo.style.alignItems = 'center';
-                telaInfo.style.justifyContent = 'center';
-                telaInfo.style.maxHeight = 'none';
-                telaInfo.style.borderLeft = 'none';
-                telaInfo.style.borderRadius = '0 0 16px 16px';
-            }
-            
-        } catch (e) {
-            console.error('Erro ao salvar assinatura:', e);
-            if (typeof this.showToast === 'function') {
-                this.showToast('❌ ' + e.message, 'error');
-            } else {
-                alert('❌ ' + e.message);
-            }
-            
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
-            }
         }
     }
     
