@@ -260,6 +260,7 @@ function obterDestinoPorPerfil(role) {
         'psicologia': '/psicologia.html',
         'assistente-social': '/assistente-social.html',
         'protagonismo': '/protagonismo.html',
+        'secretaria': '/secretaria.html',
         'aluno': '/aluno.html'
     };
     return redirectMap[role] || '/login.html';

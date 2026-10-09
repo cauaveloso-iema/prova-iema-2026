@@ -1109,6 +1109,12 @@ const loginSocialRoutes = require('./routes/login');
 app.use('/api/login-social', loginSocialRoutes);
 console.log('✅ Rotas de login-social registradas');
 
+// ============================================
+//SECRETARIA
+// ============================================
+const secretariaRoutes = require('./routes/secretaria');
+app.use('/api/secretaria', secretariaRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26
 // ============================================================================
@@ -1869,6 +1875,8 @@ app.post('/api/auth/login', async (req, res) => {
             redirectTo = '/psicologia.html';
           } else if (user.role === 'protagonismo') {
             redirectTo = '/protagonismo.html';
+          } else if (user.role === 'secretaria') {
+            redirectTo = '/secretaria.html';
           } else if (user.role === 'assistente-social') {
             redirectTo = '/assistente-social.html';
           } else if (user.role === 'aluno') {
@@ -2103,6 +2111,8 @@ app.post('/api/auth/login', async (req, res) => {
       redirectTo = '/assistente-social.html';
     } else if (user.role === 'protagonismo') {
       redirectTo = '/protagonismo.html';
+    } else if (user.role === 'secretaria') {
+      redirectTo = '/secretaria.html';
     } else if (user.role === 'aluno') {
       redirectTo = '/aluno.html';
     } else {
@@ -2312,6 +2322,8 @@ app.post('/api/auth/login', async (req, res) => {
             redirectTo = '/psicologia.html';
           } else if (user.role === 'protagonismo') {
             redirectTo = '/protagonismo.html';
+          } else if (user.role === 'secretaria') {
+            redirectTo = '/secretaria.html';
           } else if (user.role === 'assistente-social') {
             redirectTo = '/assistente-social.html';
           } else if (user.role === 'aluno') {
@@ -2447,7 +2459,7 @@ app.post('/api/auth/login', async (req, res) => {
     // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
     const perfisCom2FA = ['super_admin'];
     if (exigir2FA) {
-      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria', 'supervisao','psicologia','assistente-social','protagonismo', 'biblioteca');
+      perfisCom2FA.push('admin', 'professor', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria', 'supervisao','psicologia','assistente-social','protagonismo', 'biblioteca', 'secretaria');
     }
     
     if (perfisCom2FA.includes(user.role)) {
@@ -2541,6 +2553,8 @@ app.post('/api/auth/login', async (req, res) => {
       redirectTo = '/assistente-social.html';
     } else if (user.role === 'protagonismo') {
       redirectTo = '/protagonismo.html';
+    } else if (user.role === 'secretaria') {
+      redirectTo = '/secretaria.html';
     } else if (user.role === 'aluno') {
       redirectTo = '/aluno.html';
     } else {
@@ -11706,6 +11720,7 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
             totalAssistenteSocial: 0,
             totalProtagonismo: 0,
             totalBiblioteca: 0,
+            totalSecretaria: 0,       // 🔥 NOVO
             
             // Outras estatísticas
             totalTurmas: 0,
@@ -11771,6 +11786,9 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
                     break;
                 case 'protagonismo': 
                     stats.totalProtagonismo = count; 
+                    break;
+                case 'secretaria':                    // 🔥 NOVO
+                    stats.totalSecretaria = count;    // 🔥 CORRIGIDO
                     break;
                 default:
                     console.log(`   ⚠️ Role não mapeado: ${role} (${count} usuários)`);
@@ -19890,6 +19908,8 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
             dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'protagonismo') {
             dadosEspecificos.departamento = user.departamento;
+        } else if (user.role === 'secretaria') {
+            dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'psicologia') {
             dadosEspecificos.departamento = user.departamento;
         } else if (user.role === 'assistente-social') {
@@ -19952,6 +19972,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (req.userRole === 'biblioteca') {
             camposPermitidos.push('departamento');
         } else if (req.userRole === 'protagonismo') {
+            camposPermitidos.push('departamento');
+        } else if (req.userRole === 'secretaria') {
             camposPermitidos.push('departamento');
         } else if (req.userRole === 'assistente-social') {
             camposPermitidos.push('departamento');
@@ -20088,6 +20110,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         } else if (user.role === 'biblioteca') {
             perfilAtualizado.departamento = user.departamento;
         } else if (user.role === 'protagonismo') {
+            perfilAtualizado.departamento = user.departamento;
+        } else if (user.role === 'secretaria') {
             perfilAtualizado.departamento = user.departamento;
         } else if (user.role === 'assistente-social') {
             perfilAtualizado.departamento = user.departamento;
@@ -21470,7 +21494,8 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
             'enfermaria',         
             'coordenacao_patio',  
             'biblioteca',         
-            'protagonismo',      
+            'protagonismo',
+            'secretaria',      
             'gestao_geral',      
             'cozinha'            
         ];
@@ -22189,6 +22214,7 @@ app.get('/', async (req, res) => {
                 'psicologia': '/psicologia.html',
                 'assistente-social': '/assistente-social.html',
                 'protagonismo': '/protagonismo.html',
+                'secretaria': '/secretaria.html',
                 'aluno': '/aluno.html'
             };
             

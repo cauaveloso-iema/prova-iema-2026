@@ -2254,6 +2254,24 @@ tr:hover td {
     }
 }
 
+/* ===== Badge de Role: Secretaria ===== */
+.role-badge.secretaria {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.role-badge.secretaria i {
+    color: white;
+    font-size: 11px;
+}
+
 /* ============================================================================
    FIM DO CSS
    ============================================================================ */
