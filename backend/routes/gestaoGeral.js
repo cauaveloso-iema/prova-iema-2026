@@ -1,3 +1,5 @@
+///routes/gestaoGeral.js
+
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -5,7 +7,9 @@ const User = require('../models/User');
 const RodizioRefeicao = require('../models/RodizioRefeicao');
 const Atraso = require('../models/Atraso');
 
-// Middleware de autenticação
+// ============================================
+// MIDDLEWARES
+// ============================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -158,10 +162,8 @@ router.get('/estatisticas', authenticateToken, verificarGestaoGeral, async (req,
 });
 
 // ============================================
-// ⏰ ATRAZOS - MÓDULO
+// ⏰ ATRAZOS
 // ============================================
-
-// Turmas disponíveis
 router.get('/atraso/turmas', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
@@ -174,7 +176,6 @@ router.get('/atraso/turmas', authenticateToken, verificarGestaoGeral, async (req
   }
 });
 
-// Alunos por turma
 router.get('/atraso/alunos-por-turma', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -197,7 +198,6 @@ router.get('/atraso/alunos-por-turma', authenticateToken, verificarGestaoGeral, 
   }
 });
 
-// Buscar aluno por ID (QR Code)
 router.get('/atraso/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -235,7 +235,6 @@ router.get('/atraso/aluno/:id', authenticateToken, verificarGestaoGeral, async (
   }
 });
 
-// Buscar aluno por nome/matrícula
 router.get('/atraso/buscar-aluno', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -266,10 +265,16 @@ router.get('/atraso/buscar-aluno', authenticateToken, verificarGestaoGeral, asyn
   }
 });
 
-// Registrar atraso
+// ============================================
+// 📝 REGISTRAR ATRASO (com assinatura via QR Code)
+// ============================================
 router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    const { alunoId, motivo, descricao, observacoes, detalhes, dataHora } = req.body;
+    const { 
+      alunoId, motivo, descricao, observacoes, detalhes, dataHora,
+      precisaAssinatura = false,
+      assinaturaBase64 = ''
+    } = req.body;
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -287,7 +292,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     
     const gestor = await User.findById(req.userId).select('nome');
     
-    // 🔥 Usa a dataHora enviada ou a data atual
     let dataFinal = new Date();
     if (dataHora) {
       const dataParsed = new Date(dataHora);
@@ -296,7 +300,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       }
     }
     
-    // 🔥 Valida se data não é muito futura (> 1 ano)
     const umAnoFuturo = new Date();
     umAnoFuturo.setFullYear(umAnoFuturo.getFullYear() + 1);
     if (dataFinal > umAnoFuturo) {
@@ -305,6 +308,21 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
         error: 'Data do atraso não pode ser superior a 1 ano no futuro' 
       });
     }
+    
+    // 🆕 ASSINATURA
+    let assinaturaValida = '';
+    if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
+      if (assinaturaBase64.startsWith('data:image/png;base64,')) {
+        if (assinaturaBase64.length > 500 * 1024) {
+          return res.status(400).json({ success: false, error: 'Assinatura muito grande (máx 500KB)' });
+        }
+        assinaturaValida = assinaturaBase64;
+      }
+    }
+    
+    const statusAssinatura = precisaAssinatura && !assinaturaValida
+      ? 'pendente'
+      : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
     
     const atraso = new Atraso({
       alunoId: aluno._id,
@@ -319,7 +337,13 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       observacoes: observacoes || '',
       detalhes: detalhes || {},
       registradoPor: req.userId,
-      registradoPorNome: gestor?.nome || req.userNome || 'Gestão Geral'
+      registradoPorNome: gestor?.nome || req.userNome || 'Gestão Geral',
+      assinaturaBase64: assinaturaValida,
+      temAssinatura: assinaturaValida.length > 100,
+      statusAssinatura: statusAssinatura,
+      assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
+      assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
+      assinadaPorNome: assinaturaValida.length > 100 ? (gestor?.nome || req.userNome) : null
     });
     
     await atraso.save();
@@ -328,13 +352,15 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     
     res.json({
       success: true,
-      message: `Atraso de ${dataFormatada} registrado para ${aluno.nome}`,
+      message: `Atraso de ${dataFormatada} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
       atraso: {
         id: atraso._id,
         motivo: atraso.motivo,
         motivoLabel: Atraso.getMotivoLabel(motivo),
         dataHora: atraso.dataHora,
-        dataHoraFormatada: dataFormatada
+        dataHoraFormatada: dataFormatada,
+        temAssinatura: atraso.temAssinatura,
+        statusAssinatura: atraso.statusAssinatura
       }
     });
   } catch (error) {
@@ -343,7 +369,7 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
   }
 });
 
-// Dashboard de atrasos
+// Dashboard
 router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const hoje = new Date();
@@ -426,7 +452,7 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
   }
 });
 
-// Listar atrasos
+// Listar
 router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const { limit = 100, page = 1, motivo, turma, dataInicio, dataFim } = req.query;
@@ -443,7 +469,7 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     const [atrasos, total] = await Promise.all([
-      Atraso.find(query).sort({ dataHora: -1 }).skip(skip).limit(parseInt(limit)),
+      Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 }).skip(skip).limit(parseInt(limit)),
       Atraso.countDocuments(query)
     ]);
     
@@ -466,6 +492,8 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
         dataHora: a.dataHora,
         dataHoraFormatada: new Date(a.dataHora).toLocaleString('pt-BR'),
         registradoPor: a.registradoPorNome,
+        temAssinatura: a.temAssinatura,
+        statusAssinatura: a.statusAssinatura,
         createdAt: a.createdAt
       }))
     });
@@ -474,18 +502,14 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
   }
 });
 
-// ============================================
-// 🔍 BUSCAR ATRASO POR ID (para Ver/Editar/Imprimir)
-// ============================================
+// Buscar por ID
 router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    // Proteção: não deixar "/atraso/listar" cair aqui
     if (req.params.id === 'listar' || req.params.id === 'dashboard' || req.params.id === 'registrar') {
       return res.status(404).json({ success: false, error: 'Rota não encontrada' });
     }
 
     const atraso = await Atraso.findById(req.params.id);
-
     if (!atraso) {
       return res.status(404).json({ success: false, error: 'Atraso não encontrado' });
     }
@@ -508,6 +532,11 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         observacoes: atraso.observacoes,
         detalhes: atraso.detalhes,
         registradoPor: atraso.registradoPorNome,
+        assinaturaBase64: atraso.assinaturaBase64 || '',
+        temAssinatura: atraso.temAssinatura,
+        statusAssinatura: atraso.statusAssinatura,
+        assinadaEm: atraso.assinadaEm,
+        assinadaPorNome: atraso.assinadaPorNome,
         createdAt: atraso.createdAt,
         updatedAt: atraso.updatedAt
       }
@@ -518,9 +547,7 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
   }
 });
 
-// ============================================
-// ✏️ EDITAR ATRASO
-// ============================================
+// Editar
 router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const { motivo, dataHora, descricao, observacoes, detalhes } = req.body;
@@ -543,16 +570,11 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
       if (isNaN(dataParsed.getTime())) {
         return res.status(400).json({ success: false, error: 'Data/hora inválida' });
       }
-
       const umAnoFuturo = new Date();
       umAnoFuturo.setFullYear(umAnoFuturo.getFullYear() + 1);
       if (dataParsed > umAnoFuturo) {
-        return res.status(400).json({
-          success: false,
-          error: 'Data do atraso não pode ser superior a 1 ano no futuro'
-        });
+        return res.status(400).json({ success: false, error: 'Data do atraso não pode ser superior a 1 ano no futuro' });
       }
-
       atraso.dataHora = dataParsed;
     }
 
@@ -563,13 +585,8 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
       atraso.descricao = descricao.trim();
     }
 
-    if (observacoes !== undefined) {
-      atraso.observacoes = observacoes;
-    }
-
-    if (detalhes !== undefined) {
-      atraso.detalhes = { ...atraso.detalhes, ...detalhes };
-    }
+    if (observacoes !== undefined) atraso.observacoes = observacoes;
+    if (detalhes !== undefined) atraso.detalhes = { ...atraso.detalhes, ...detalhes };
 
     atraso.updatedAt = new Date();
     await atraso.save();
@@ -595,7 +612,7 @@ router.put('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
   }
 });
 
-// Excluir atraso
+// Excluir
 router.delete('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     const atraso = await Atraso.findByIdAndDelete(req.params.id);
@@ -618,7 +635,7 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
       if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
     }
     
-    const atrasos = await Atraso.find(query).sort({ dataHora: -1 });
+    const atrasos = await Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 });
     const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
     
     const porMotivo = {};
@@ -642,7 +659,7 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
         motivoLabel: Atraso.getMotivoLabel(a.motivo),
         dataHora: a.dataHora, descricao: a.descricao,
         observacoes: a.observacoes, registradoPor: a.registradoPorNome,
-        createdAt: a.createdAt  // 🆕 Data de cadastro
+        createdAt: a.createdAt
       }))
     });
   } catch (error) {
@@ -662,7 +679,7 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
       if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
     }
     
-    const atrasos = await Atraso.find(query).sort({ dataHora: -1 });
+    const atrasos = await Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 });
     
     const porAluno = {};
     atrasos.forEach(a => {
@@ -690,7 +707,7 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
         id: a._id, alunoNome: a.alunoNome, motivo: a.motivo,
         motivoLabel: Atraso.getMotivoLabel(a.motivo),
         dataHora: a.dataHora, descricao: a.descricao,
-        createdAt: a.createdAt  // 🆕 Data de cadastro
+        createdAt: a.createdAt
       }))
     });
   } catch (error) {
@@ -712,7 +729,7 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
       if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
     }
     
-    const atrasos = await Atraso.find(query).sort({ dataHora: -1 });
+    const atrasos = await Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 });
     
     const porTurma = {};
     const porMotivo = {};
@@ -757,7 +774,7 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
         motivo: a.motivo, motivoLabel: Atraso.getMotivoLabel(a.motivo),
         dataHora: a.dataHora, descricao: a.descricao.substring(0, 100),
         registradoPor: a.registradoPorNome,
-        createdAt: a.createdAt  // 🆕 Data de cadastro
+        createdAt: a.createdAt
       }))
     });
   } catch (error) {

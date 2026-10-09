@@ -1115,6 +1115,12 @@ console.log('✅ Rotas de login-social registradas');
 const secretariaRoutes = require('./routes/secretaria');
 app.use('/api/secretaria', secretariaRoutes);
 
+// ============================================
+//ASSINATURA
+// ============================================
+const sessaoAssinaturaRoutes = require('./routes/sessao-assinatura-routes');
+app.use('/api/sessoes-assinatura', sessaoAssinaturaRoutes);
+
 // ============================================================================
 // FUNÇÃO PARA TESTAR MODELOS GROQ ATUALIZADA 09/09/26
 // ============================================================================

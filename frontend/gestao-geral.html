@@ -27,6 +27,51 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/gestao-geral.css">
+    
+    <!-- 🆕 CSS DO MODAL DE ASSINATURA -->
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .assinatura-wrapper {
+            margin-top: 20px;
+        }
+        
+        .assinatura-wrapper .form-check {
+            transition: all 0.3s ease;
+        }
+        
+        .assinatura-wrapper .form-check:hover {
+            background: #eef2ff !important;
+            border-color: #c7d2fe !important;
+        }
+        
+        #modalAssinaturaQR .modal-content {
+            border: none;
+            overflow: hidden;
+        }
+        
+        #modalAssinaturaQR img#qrCodeImage {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
+        .btn-copiar-link {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e0;
+            color: #475569;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-copiar-link:hover {
+            background: #e2e8f0;
+            border-color: #94a3b8;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -382,6 +427,23 @@
                                         <label class="form-label">Observações Adicionais</label>
                                         <textarea id="observacoes" class="form-control" rows="2" 
                                                 placeholder="Informações complementares..."></textarea>
+                                    </div>
+                                    
+                                    <!-- 🆕 ASSINATURA POR QR CODE (ATRASO) -->
+                                    <div class="assinatura-wrapper">
+                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                            <input class="form-check-input" type="checkbox" 
+                                                id="atrasoNecessitaAssinatura" 
+                                                onchange="gestaoGeral.toggleNecessitaAssinatura('atraso')"
+                                                style="width: 20px; height: 20px; margin-top: 2px;">
+                                            <label class="form-check-label" for="atrasoNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
+                                                <strong><i class="fas fa-signature"></i> Necessita de assinatura do responsável</strong>
+                                                <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
+                                                    Marque para gerar um QR Code. O responsável escaneia e assina no celular dele.
+                                                </p>
+                                            </label>
+                                        </div>
+                                        <div id="atrasoBlocoAssinaturaInfo" style="display: none;"></div>
                                     </div>
                                     
                                     <div class="d-flex gap-2">
@@ -749,32 +811,29 @@
                                                     <input type="text" id="autorizacaoResponsavelTelefone" class="form-control" placeholder="(00) 00000-0000" maxlength="15" oninput="formatarTelefone(this)">
                                                 </div>
                                             </div>
-
-                                            <div class="assinatura-wrapper">
-                                                <label class="form-label">
-                                                    <i class="fas fa-signature"></i> Assinatura do Responsável
-                                                    <small class="text-muted">(assine com o dedo ou mouse)</small>
-                                                </label>
-                                                <div class="assinatura-container">
-                                                    <canvas id="autorizacaoAssinaturaCanvas" class="assinatura-canvas"></canvas>
-                                                    <div class="assinatura-placeholder" id="autorizacaoAssinaturaPlaceholder">
-                                                        <i class="fas fa-pen-fancy"></i>
-                                                        <span>Assine aqui</span>
-                                                    </div>
-                                                </div>
-                                                <div class="assinatura-actions">
-                                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparAssinatura('autorizacao')">
-                                                        <i class="fas fa-eraser"></i> Limpar
-                                                    </button>
-                                                </div>
-                                                <input type="hidden" id="autorizacaoAssinaturaBase64" value="">
-                                            </div>
                                         </div>
                                     </div>
 
                                     <div class="mb-3">
                                         <label class="form-label">Observações</label>
                                         <textarea id="autorizacaoObservacoes" class="form-control" rows="3" placeholder="Informações complementares..."></textarea>
+                                    </div>
+
+                                    <!-- 🆕 ASSINATURA POR QR CODE (AUTORIZAÇÃO) -->
+                                    <div class="assinatura-wrapper">
+                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                            <input class="form-check-input" type="checkbox" 
+                                                id="autorizacaoNecessitaAssinatura" 
+                                                onchange="gestaoGeral.toggleNecessitaAssinatura('autorizacao')"
+                                                style="width: 20px; height: 20px; margin-top: 2px;">
+                                            <label class="form-check-label" for="autorizacaoNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
+                                                <strong><i class="fas fa-signature"></i> Necessita de assinatura do responsável</strong>
+                                                <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
+                                                    Marque para gerar um QR Code. O responsável escaneia e assina no celular dele.
+                                                </p>
+                                            </label>
+                                        </div>
+                                        <div id="autorizacaoBlocoAssinaturaInfo" style="display: none;"></div>
                                     </div>
 
                                     <div class="aviso-integracao" id="avisoAutorizacaoJustificativa" style="display: none;">
@@ -1143,32 +1202,29 @@
                                                     <input type="text" id="justificativaResponsavelTelefone" class="form-control" placeholder="(00) 00000-0000" maxlength="15" oninput="formatarTelefone(this)">
                                                 </div>
                                             </div>
-
-                                            <div class="assinatura-wrapper">
-                                                <label class="form-label">
-                                                    <i class="fas fa-signature"></i> Assinatura do Responsável
-                                                    <small class="text-muted">(assine com o dedo ou mouse)</small>
-                                                </label>
-                                                <div class="assinatura-container">
-                                                    <canvas id="justificativaAssinaturaCanvas" class="assinatura-canvas"></canvas>
-                                                    <div class="assinatura-placeholder" id="justificativaAssinaturaPlaceholder">
-                                                        <i class="fas fa-pen-fancy"></i>
-                                                        <span>Assine aqui</span>
-                                                    </div>
-                                                </div>
-                                                <div class="assinatura-actions">
-                                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparAssinatura('justificativa')">
-                                                        <i class="fas fa-eraser"></i> Limpar
-                                                    </button>
-                                                </div>
-                                                <input type="hidden" id="justificativaAssinaturaBase64" value="">
-                                            </div>
                                         </div>
                                     </div>
 
                                     <div class="mb-3">
                                         <label class="form-label">Observações</label>
                                         <textarea id="justificativaObservacoes" class="form-control" rows="3" placeholder="Informações complementares..."></textarea>
+                                    </div>
+
+                                    <!-- 🆕 ASSINATURA POR QR CODE (JUSTIFICATIVA) -->
+                                    <div class="assinatura-wrapper">
+                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                            <input class="form-check-input" type="checkbox" 
+                                                id="justificativaNecessitaAssinatura" 
+                                                onchange="gestaoGeral.toggleNecessitaAssinatura('justificativa')"
+                                                style="width: 20px; height: 20px; margin-top: 2px;">
+                                            <label class="form-check-label" for="justificativaNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
+                                                <strong><i class="fas fa-signature"></i> Necessita de assinatura do responsável</strong>
+                                                <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
+                                                    Marque para gerar um QR Code. O responsável escaneia e assina no celular dele.
+                                                </p>
+                                            </label>
+                                        </div>
+                                        <div id="justificativaBlocoAssinaturaInfo" style="display: none;"></div>
                                     </div>
 
                                     <div class="d-flex gap-2">
@@ -1473,7 +1529,7 @@
                                         </div>
                                     </div>
 
-                                    <!-- 🆕 TIPO DE PROVA PERDIDA -->
+                                    <!-- TIPO DE PROVA PERDIDA -->
                                     <div class="mb-3" id="campoSegundaChamadaTipoProva">
                                         <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
                                         <div class="tipos-tarefa-grid">
@@ -1568,32 +1624,29 @@
                                                     <input type="text" id="segundaChamadaResponsavelTelefone" class="form-control" placeholder="(00) 00000-0000" maxlength="15" oninput="formatarTelefone(this)">
                                                 </div>
                                             </div>
-
-                                            <div class="assinatura-wrapper">
-                                                <label class="form-label">
-                                                    <i class="fas fa-signature"></i> Assinatura do Responsável
-                                                    <small class="text-muted">(assine com o dedo ou mouse)</small>
-                                                </label>
-                                                <div class="assinatura-container">
-                                                    <canvas id="segundaChamadaAssinaturaCanvas" class="assinatura-canvas"></canvas>
-                                                    <div class="assinatura-placeholder" id="segundaChamadaAssinaturaPlaceholder">
-                                                        <i class="fas fa-pen-fancy"></i>
-                                                        <span>Assine aqui</span>
-                                                    </div>
-                                                </div>
-                                                <div class="assinatura-actions">
-                                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparAssinatura('segundaChamada')">
-                                                        <i class="fas fa-eraser"></i> Limpar
-                                                    </button>
-                                                </div>
-                                                <input type="hidden" id="segundaChamadaAssinaturaBase64" value="">
-                                            </div>
                                         </div>
                                     </div>
 
                                     <div class="mb-3">
                                         <label class="form-label">Observações</label>
                                         <textarea id="segundaChamadaObservacoes" class="form-control" rows="3" placeholder="Informações complementares..."></textarea>
+                                    </div>
+
+                                    <!-- 🆕 ASSINATURA POR QR CODE (2ª CHAMADA) -->
+                                    <div class="assinatura-wrapper">
+                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                            <input class="form-check-input" type="checkbox" 
+                                                id="segundaChamadaNecessitaAssinatura" 
+                                                onchange="gestaoGeral.toggleNecessitaAssinatura('segundaChamada')"
+                                                style="width: 20px; height: 20px; margin-top: 2px;">
+                                            <label class="form-check-label" for="segundaChamadaNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
+                                                <strong><i class="fas fa-signature"></i> Necessita de assinatura do responsável</strong>
+                                                <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
+                                                    Marque para gerar um QR Code. O responsável escaneia e assina no celular dele.
+                                                </p>
+                                            </label>
+                                        </div>
+                                        <div id="segundaChamadaBlocoAssinaturaInfo" style="display: none;"></div>
                                     </div>
 
                                     <div class="aviso-integracao">

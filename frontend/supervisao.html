@@ -70,28 +70,6 @@
             border-radius: 50%; animation: spin 0.8s linear infinite;
         }
 
-        /* ASSINATURA DIGITAL */
-        .assinatura-wrapper { margin-top: 15px; }
-        .assinatura-container {
-            position: relative; width: 100%; height: 150px;
-            background: #f8fafc; border: 2px dashed #cbd5e1;
-            border-radius: 12px; overflow: hidden; transition: border-color 0.3s;
-        }
-        .assinatura-container.ativa { border-color: #0ea5e9; border-style: solid; }
-        .assinatura-canvas {
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%; cursor: crosshair; touch-action: none; z-index: 2;
-        }
-        .assinatura-placeholder {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #94a3b8; pointer-events: none; z-index: 1; transition: opacity 0.3s;
-        }
-        .assinatura-placeholder.escondido { opacity: 0; }
-        .assinatura-placeholder i { font-size: 32px; margin-bottom: 8px; }
-        .assinatura-placeholder span { font-size: 14px; }
-        .assinatura-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
-
         /* MODAL DETALHES */
         .detalhe-atendimento .info-row { display: flex; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
         .detalhe-atendimento .info-row:last-child { border-bottom: none; }
@@ -160,6 +138,55 @@
             from { opacity: 0; transform: translateY(-5px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* ============================================ */
+        /* CHECKBOX DE ASSINATURA VIA QR CODE            */
+        /* ============================================ */
+        .checkbox-assinatura-box {
+            background: #f0f9ff;
+            border: 2px solid #bae6fd;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s;
+        }
+        .checkbox-assinatura-box:hover {
+            border-color: #0ea5e9;
+            background: #e0f2fe;
+        }
+        .checkbox-assinatura-box .form-check-input {
+            width: 22px;
+            height: 22px;
+            margin-top: 2px;
+            cursor: pointer;
+            border: 2px solid #0ea5e9;
+        }
+        .checkbox-assinatura-box .form-check-input:checked {
+            background-color: #0ea5e9;
+            border-color: #0ea5e9;
+        }
+        .checkbox-assinatura-box .form-check-label {
+            cursor: pointer;
+            font-size: 15px;
+            color: #075985;
+            margin-left: 8px;
+        }
+
+        /* MODAL QR CODE ASSINATURA */
+        @keyframes spinQR { to { transform: rotate(360deg); } }
+        #modalAssinaturaQR .modal-content { border: none; overflow: hidden; }
+        #modalAssinaturaQR img#qrCodeImage { image-rendering: pixelated; }
+        .btn-copiar-link {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e0;
+            color: #475569;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-copiar-link:hover { background: #e2e8f0; border-color: #94a3b8; }
+
         @media (max-width: 768px) {
             .filtros-andamento { padding: 12px; }
         }
@@ -179,7 +206,6 @@
                 </div>
             </div>
             <div class="btn-actions">
-                <!-- 🔔 SINO ÚNICO (NOTIFICAÇÕES + LEMBRETES) -->
                 <div class="notificacoes-container">
                     <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações e Lembretes">
                         <i class="fas fa-bell"></i>
@@ -219,7 +245,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- FIM DO SINO -->
 
                 <a href="https://drive.google.com/file/d/10L7dA1aUy0yVnO4vE59qAm6_vQENy0fw/view?usp=sharing" 
                    target="_blank" class="btn-icon" style="
@@ -240,7 +265,6 @@
             </div>
         </div>
         
-        <!-- Título -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
@@ -253,7 +277,6 @@
             </div>
         </div>
         
-        <!-- Seletor de Modo -->
         <div class="card">
             <div class="card-body">
                 <div class="modo-selector">
@@ -267,7 +290,6 @@
             </div>
         </div>
         
-        <!-- Abas -->
         <div class="card">
             <div class="card-body">
                 <ul class="nav nav-tabs" id="myTab" role="tablist">
@@ -455,25 +477,26 @@
                                           placeholder="Informações complementares..."></textarea>
                             </div>
 
-                            <!-- ASSINATURA DIGITAL -->
-                            <div class="assinatura-wrapper">
-                                <label class="form-label">
-                                    <i class="fas fa-signature"></i> Assinatura do Responsável
-                                    <small class="text-muted">(assine com o dedo ou mouse)</small>
-                                </label>
-                                <div class="assinatura-container">
-                                    <canvas id="assinaturaCanvas" class="assinatura-canvas"></canvas>
-                                    <div class="assinatura-placeholder" id="assinaturaPlaceholder">
-                                        <i class="fas fa-pen-fancy"></i>
-                                        <span>Assine aqui</span>
-                                    </div>
+                            <!-- ============================================ -->
+                            <!-- 🔥 CHECKBOX DE ASSINATURA VIA QR CODE          -->
+                            <!-- ============================================ -->
+                            <div class="checkbox-assinatura-box mb-3">
+                                <div class="form-check d-flex align-items-start">
+                                    <input class="form-check-input" 
+                                        type="checkbox" 
+                                        id="supervisaoNecessitaAssinatura" 
+                                        onchange="toggleNecessitaAssinatura('supervisao')">
+                                    <label class="form-check-label fw-bold" for="supervisaoNecessitaAssinatura">
+                                        <i class="fas fa-signature"></i> Precisa de assinatura do responsável?
+                                    </label>
                                 </div>
-                                <div class="assinatura-actions">
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparAssinatura()">
-                                        <i class="fas fa-eraser"></i> Limpar
-                                    </button>
-                                </div>
-                                <input type="hidden" id="assinaturaBase64" value="">
+                                <small class="text-muted d-block mt-2 ms-4">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Ao marcar, o QR Code será gerado <strong>imediatamente</strong> para o responsável escanear.
+                                </small>
+                                
+                                <!-- Bloco onde o JS injeta o status da sessão -->
+                                <div id="supervisaoBlocoAssinaturaInfo" style="display: none;"></div>
                             </div>
                             
                             <div class="d-flex gap-2 mt-3">
@@ -666,7 +689,6 @@
                             </div>
                         </div>
 
-                        <!-- ATENDIMENTOS CONCLUÍDOS -->
                         <div class="card" id="cardConcluidos">
                             <div class="card-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                                 <div>
@@ -809,6 +831,8 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- ABA ACOMPANHAMENTO -->
                     <div class="tab-pane fade" id="acompanhamento" role="tabpanel">
                         <div class="row g-3 mb-4" id="resumoDiaCards">
                             <div class="col-md-4">
@@ -851,7 +875,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- 🔥 NOVO: CARD BIBLIOTECA -->
                             <div class="col-md-4">
                                 <div class="card-acompanhamento card-biblioteca" onclick="filtrarPorSetor('biblioteca')" style="cursor:pointer;">
                                     <div class="card-icon"><i class="fas fa-book"></i></div>
@@ -904,7 +927,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
                 </div>
             </div>
         </div>

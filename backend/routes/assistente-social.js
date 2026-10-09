@@ -4,7 +4,9 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AtendimentoAssistenteSocial = require('../models/AtendimentoAssistenteSocial');
 
-// Middleware de autenticação
+// ============================================
+// MIDDLEWARES
+// ============================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -168,12 +170,14 @@ router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async 
 
 // ============================================
 // REGISTRAR NOVO ATENDIMENTO
+// (com suporte a precisaAssinatura + assinaturaBase64)
 // ============================================
 router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { 
       alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
-      assinaturaBase64 
+      assinaturaBase64,
+      precisaAssinatura = false // 🆕
     } = req.body;
     
     if (!descricao || descricao.trim() === '') {
@@ -197,12 +201,18 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
     
     const assistente = await User.findById(req.userId).select('nome');
     
+    // Valida assinatura base64
     let assinaturaValida = '';
     if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
       if (assinaturaBase64.startsWith('data:image/') && assinaturaBase64.length < 500000) {
         assinaturaValida = assinaturaBase64;
       }
     }
+    
+    // 🆕 Detecta status de assinatura
+    const statusAssinatura = precisaAssinatura && !assinaturaValida
+      ? 'pendente'
+      : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
     
     const atendimento = new AtendimentoAssistenteSocial({
       alunoId: aluno._id,
@@ -219,7 +229,13 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
         gravidade: gravidade || 'media',
         registradoPor: req.userId,
         registradoPorNome: assistente?.nome || req.userNome || 'Assistente Social',
-        assinaturaBase64: assinaturaValida
+        assinaturaBase64: assinaturaValida,
+        // 🆕 Campos de assinatura via QR
+        temAssinatura: assinaturaValida.length > 100,
+        statusAssinatura: statusAssinatura,
+        assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
+        assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
+        assinadaPorNome: assinaturaValida.length > 100 ? (assistente?.nome || req.userNome) : null
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
@@ -230,14 +246,15 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
     
     res.json({
       success: true,
-      message: `${AtendimentoAssistenteSocial.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}`,
+      message: `${AtendimentoAssistenteSocial.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
       atendimento: {
         id: atendimento._id,
         tipoTarefa: atendimento.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(tipoTarefa),
         status: atendimento.status,
         dataHora: atendimento.entrada.dataHora,
-        temAssinatura: !!assinaturaValida
+        temAssinatura: atendimento.entrada.temAssinatura,
+        statusAssinatura: atendimento.entrada.statusAssinatura
       }
     });
   } catch (error) {
@@ -660,7 +677,8 @@ router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial,
         dataHoraEntrada: a.entrada.dataHora,
         tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
         temRemarcacaoPendente: a.temRemarcacaoPendente || false,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria'
       }))
     });
   } catch (error) {
@@ -669,7 +687,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial,
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS (COM FILTROS) — 🔥 CORRIGIDO
+// LISTAR TODOS OS ATENDIMENTOS (COM FILTROS)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -680,7 +698,6 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     
-    // 🔥 CORRIGIDO: Timezone Brasil UTC-3
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
@@ -732,6 +749,7 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
         registradoPor: a.entrada.registradoPorNome,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
         saida: a.saida ? {
           dataHora: a.saida.dataHora,
           dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
@@ -778,7 +796,10 @@ router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
           gravidade: atendimento.entrada.gravidade,
           registradoPor: atendimento.entrada.registradoPorNome,
           temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
-          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null
+          statusAssinatura: atendimento.entrada?.statusAssinatura || 'nao_necessaria',
+          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
+          assinadaEm: atendimento.entrada?.assinadaEm || null,
+          assinadaPorNome: atendimento.entrada?.assinadaPorNome || null
         },
         detalhes: atendimento.detalhes,
         saida: atendimento.saida ? {
@@ -883,7 +904,7 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarAssisten
 });
 
 // ============================================
-// RELATÓRIO POR ALUNO — 🔥 CORRIGIDO
+// RELATÓRIO POR ALUNO
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -926,7 +947,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
         dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
         gravidade: a.entrada.gravidade, status: a.status,
         dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null
       }))
     });
   } catch (error) {
@@ -935,7 +957,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
 });
 
 // ============================================
-// RELATÓRIO POR TURMA — 🔥 CORRIGIDO
+// RELATÓRIO POR TURMA
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -988,9 +1010,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
   }
 });
 
-
 // ============================================
-// RELATÓRIO GERAL — 🔥 COM REGISTROS
+// RELATÓRIO GERAL
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -1009,7 +1030,7 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
     const [atendimentos, total, comAssinatura] = await Promise.all([
       AtendimentoAssistenteSocial.find(query).sort({ 'entrada.dataHora': -1 }).limit(1000),
       AtendimentoAssistenteSocial.countDocuments(query),
-      AtendimentoAssistenteSocial.countDocuments({ ...query, 'entrada.assinaturaBase64': { $exists: true, $ne: '' } })
+      AtendimentoAssistenteSocial.countDocuments({ ...query, 'entrada.temAssinatura': true })
     ]);
     
     const porTurma = {};
@@ -1056,7 +1077,6 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
         count
       })).sort((a, b) => b.count - a.count),
       porGravidade,
-      // 🔥 NOVO: registros detalhados para CSV
       registros: atendimentos.map(a => ({
         id: a._id,
         alunoNome: a.alunoNome,
@@ -1071,9 +1091,9 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
         prioridade: a.prioridade,
         status: a.status,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null,
         registradoPorNome: a.entrada?.registradoPorNome
       })),
-      // Retrocompatibilidade: mantém atendimentos
       atendimentos: atendimentos.slice(0, 100).map(a => ({
         id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
         tipoTarefa: a.tipoTarefa,
@@ -1081,7 +1101,8 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
         dataEntrada: a.entrada.dataHora,
         descricao: a.entrada.descricao.substring(0, 100),
         gravidade: a.entrada.gravidade, status: a.status,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null
       }))
     });
   } catch (error) {

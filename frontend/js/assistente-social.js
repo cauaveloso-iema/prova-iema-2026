@@ -1,6 +1,7 @@
 // ============================================
 // ASSISTENTE SOCIAL - SISTEMA DE ATENDIMENTOS
 // Com Filtros, Remarcação, Assinatura, Sino, Notificações
+// + 🆕 ASSINATURA VIA QR CODE (SESSÃO)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -33,15 +34,38 @@ let __concluidosTotal = 0;
 let __concluidosDados = [];
 
 // ============================================
+// 🆕 ESTADO DA SESSÃO DE ASSINATURA VIA QR CODE
+// ============================================
+const estadoSessaoAssinatura = {
+    assistenteSocial: {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    }
+};
+
+// Modo assinatura (quando abre via ?assinatura=UUID)
+let sessaoAssinaturaModo = null;
+let sessaoAssinaturaAtual = null;
+let telaCanvas = null;
+let telaCtx = null;
+let telaWrapper = null;
+let telaPlaceholder = null;
+let telaTemAssinatura = false;
+let telaDesenhando = false;
+let telaLastX = 0;
+let telaLastY = 0;
+
+// ============================================
 // 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
 // ============================================
 (function protegerContraAlertNativo() {
-    // ⚠️ IMPORTANTE: guardar a referência original UMA VEZ
     const alertOriginal = window.alert.bind(window);
-    let __alertaEmProgresso = false; // 🔥 Guard contra recursão
+    let __alertaEmProgresso = false;
     
     window.alert = function(mensagem) {
-        // 🔥 Se já está processando um alerta, evita loop
         if (__alertaEmProgresso) {
             console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
             return;
@@ -53,12 +77,10 @@ let __concluidosDados = [];
                               (typeof window.AppInventor !== 'undefined');
             
             if (!isWebView) {
-                // Desktop: log no console, NUNCA chama toast (evita loop)
                 console.log('%c[ALERT] ' + mensagem, 'background:#8b5cf6;color:white;padding:4px 8px;border-radius:4px;');
                 return;
             }
             
-            // WebView: modal customizado direto (sem chamar toast)
             const modal = document.createElement('div');
             modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
                 background:rgba(0,0,0,0.6);display:flex;align-items:center;
@@ -85,7 +107,7 @@ let __concluidosDados = [];
 })();
 
 // ============================================
-// ESTADO DA ASSINATURA DIGITAL
+// ESTADO DA ASSINATURA DIGITAL (CANVAS TRADICIONAL)
 // ============================================
 const assinaturaState = {
     canvas: null, ctx: null, desenhando: false, temAssinatura: false,
@@ -285,6 +307,15 @@ function atualizarBadgeComUrgencia() {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (!token) { window.location.href = '/login.html'; return; }
+    
+    // 🆕 VERIFICA SE ESTÁ EM MODO ASSINATURA (?assinatura=UUID)
+    const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
+    if (modoAssinatura) {
+        console.log('📱 Modo assinatura detectado:', modoAssinatura);
+        await mostrarTelaAssinatura(modoAssinatura);
+        return;
+    }
+    
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     const allowedRoles = ['assistente-social', 'super_admin', 'admin'];
     if (!allowedRoles.includes(userData.role)) {
@@ -354,7 +385,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-window.addEventListener('beforeunload', () => pararScannerAutomatico());
+window.addEventListener('beforeunload', () => {
+    pararScannerAutomatico();
+    pararMonitoramentoSessao('assistenteSocial');
+});
 
 async function carregarFotoPerfil() {
     try {
@@ -550,10 +584,6 @@ function limparFiltrosConcluidos() {
 }
 
 // ============================================
-// 🔔 SINO
-// ============================================
-
-// ============================================
 // LEMBRETES / REMARCAÇÕES
 // ============================================
 async function carregarLembretes() {
@@ -584,710 +614,7 @@ async function carregarLembretes() {
 }
 
 // ============================================
-// VER ATENDIMENTO (MODAL DETALHADO)
-// ============================================
-async function verAtendimento(atendimentoId) {
-    if (!atendimentoId) return;
-    fecharNotificacoes();
-    
-    try {
-        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        if (!data.success || !data.atendimento) { mostrarToastConcluido('Erro ao carregar atendimento', 'error'); return; }
-        const a = data.atendimento;
-        
-        // Detalhes
-        let detalhesHTML = '';
-        if (a.detalhes && Object.keys(a.detalhes).length > 0) {
-            const detalhesMap = {
-                contextoFamiliar: 'Contexto Familiar',
-                historicoAnterior: 'Histórico Anterior',
-                profissionaisEnvolvidos: 'Profissionais Envolvidos',
-                condicaoSocial: 'Condição Social',
-                encaminhadoPara: 'Encaminhado Para',
-                motivoEncaminhamento: 'Motivo do Encaminhamento',
-                agendadoPara: 'Agendado Para',
-                tipoIntervencao: 'Tipo de Intervenção',
-                metodosUtilizados: 'Métodos Utilizados',
-                duracaoSessao: 'Duração da Sessão (min)',
-                modalidadeAtendimento: 'Modalidade',
-                participantesAtendimento: 'Participantes',
-                tipoTarefaOutros: 'Especificação',
-                providenciasTomadas: 'Providências Tomadas',
-                proximosPassos: 'Próximos Passos'
-            };
-            
-            detalhesHTML = '<div class="section-title">📋 Detalhes</div>';
-            Object.entries(a.detalhes).forEach(([key, value]) => {
-                if (!value || (Array.isArray(value) && value.length === 0)) return;
-                const label = detalhesMap[key] || key;
-                const valor = Array.isArray(value) ? value.join(', ') : value;
-                detalhesHTML += `
-                    <div class="info-row">
-                        <div class="info-label">${escapeHTML(label)}:</div>
-                        <div class="info-value">${escapeHTML(String(valor))}</div>
-                    </div>`;
-            });
-        }
-        
-        // Assinatura
-        let assinaturaHTML = '';
-        if (a.entrada?.temAssinatura && a.entrada?.assinaturaBase64) {
-            assinaturaHTML = `
-                <div class="section-title">✍️ Assinatura do Responsável</div>
-                <div class="assinatura-preview">
-                    <img src="${a.entrada.assinaturaBase64}" alt="Assinatura">
-                </div>`;
-        }
-        
-        // Remarcações
-        let remarcacoesHTML = '';
-        if (a.remarcacoes && a.remarcacoes.length > 0) {
-            remarcacoesHTML = '<div class="section-title">📅 Histórico de Remarcações</div>';
-            a.remarcacoes.forEach((r, idx) => {
-                const statusLabel = {
-                    'pendente': '⏳ Pendente',
-                    'realizado': '✅ Realizado',
-                    'cancelado': '❌ Cancelado'
-                }[r.status] || r.status;
-                
-                remarcacoesHTML += `
-                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                            <strong style="color: #7c3aed;">#${idx + 1} - ${statusLabel}</strong>
-                            <small style="color: #6b7280;">${formatarDataBR(r.dataRemarcacao)} às ${r.horarioRemarcacao}</small>
-                        </div>
-                        <div style="font-size: 13px; color: #4b5563;">
-                            <strong>Motivo:</strong> ${escapeHTML(r.motivoRemarcacao || '-')}
-                        </div>
-                        ${r.observacoesRemarcacao ? `<div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${escapeHTML(r.observacoesRemarcacao)}</div>` : ''}
-                    </div>`;
-            });
-        }
-        
-        const oldModal = safeGet('modalVerAtendimento');
-        if (oldModal) oldModal.remove();
-        
-        const modalHtml = `
-            <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
-                            <h5 class="modal-title"><i class="fas fa-eye"></i> Detalhes do Atendimento</h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body detalhe-atendimento">
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f3ff; border-radius: 10px; margin-bottom: 16px;">
-                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
-                                <div style="flex: 1;">
-                                    <h5 style="margin: 0; color: #5b21b6;">${escapeHTML(a.alunoNome)}</h5>
-                                    <small style="color: #6b7280;">
-                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
-                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
-                                    </small>
-                                </div>
-                                <span class="badge" style="background: #8b5cf6; font-size: 12px;">${escapeHTML(a.tipoTarefaLabel)}</span>
-                            </div>
-                            
-                            <div class="section-title">📌 Informações</div>
-                            <div class="info-row">
-                                <div class="info-label">Status:</div>
-                                <div class="info-value">
-                                    <span class="badge" style="background: ${a.status === 'finalizado' ? '#10b981' : '#f59e0b'};">
-                                        ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Prioridade:</div>
-                                <div class="info-value">
-                                    <span class="badge" style="background: ${a.prioridade === 'urgente' ? '#dc2626' : a.prioridade === 'alta' ? '#f59e0b' : '#3b82f6'};">
-                                        ${escapeHTML(a.prioridade || 'normal').toUpperCase()}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Gravidade:</div>
-                                <div class="info-value">${escapeHTML(a.entrada?.gravidade || 'media').toUpperCase()}</div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Data de Entrada:</div>
-                                <div class="info-value">${a.entrada?.dataHoraFormatada || '-'}</div>
-                            </div>
-                            <div class="info-row">
-                                <div class="info-label">Registrado por:</div>
-                                <div class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</div>
-                            </div>
-                            
-                            <div class="section-title">📝 Descrição</div>
-                            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 14px; color: #374151; line-height: 1.5;">
-                                ${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}
-                            </div>
-                            
-                            ${a.entrada?.observacoes ? `
-                                <div class="section-title">💬 Observações</div>
-                                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
-                                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
-                                </div>` : ''}
-                            
-                            ${detalhesHTML}
-                            ${assinaturaHTML}
-                            ${remarcacoesHTML}
-                            
-                            ${a.saida ? `
-                                <div class="section-title">🎯 Resultado</div>
-                                <div class="info-row">
-                                    <div class="info-label">Resultado:</div>
-                                    <div class="info-value"><strong>${escapeHTML(a.saida.resultadoTexto || a.saida.resultado)}</strong></div>
-                                </div>
-                                <div class="info-row">
-                                    <div class="info-label">Data de Saída:</div>
-                                    <div class="info-value">${a.saida.dataHoraFormatada || '-'}</div>
-                                </div>` : ''}
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> Fechar
-                            </button>
-                            <button type="button" class="btn btn-info" onclick="imprimirAtendimento('${a.id}')">
-                                <i class="fas fa-print"></i> Imprimir
-                            </button>
-                            ${a.status === 'em_andamento' ? `
-                                <button type="button" class="btn btn-secondary" onclick="fecharVerAtendimento(); abrirEditarAtendimento('${a.id}')">
-                                    <i class="fas fa-edit"></i> Editar
-                                </button>
-                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')">
-                                    <i class="fas fa-calendar-plus"></i> Remarcar
-                                </button>
-                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); abrirFinalizacao('${a.id}')">
-                                    <i class="fas fa-check"></i> Finalizar
-                                </button>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        new bootstrap.Modal(safeGet('modalVerAtendimento')).show();
-    } catch (error) {
-        mostrarToastConcluido('Erro ao carregar detalhes', 'error');
-    }
-}
-
-function fecharVerAtendimento() {
-    const modal = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
-    if (modal) modal.hide();
-    setTimeout(() => { const el = safeGet('modalVerAtendimento'); if (el) el.remove(); }, 300);
-}
-
-// ============================================
-// ✏️ EDITAR ATENDIMENTO
-// ============================================
-async function abrirEditarAtendimento(atendimentoId) {
-    if (!atendimentoId) return;
-    
-    try {
-        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        
-        if (!data.success || !data.atendimento) {
-            mostrarToastConcluido('Erro ao carregar atendimento', 'error');
-            return;
-        }
-        
-        const a = data.atendimento;
-        const oldModal = safeGet('modalEditarAtendimento');
-        if (oldModal) oldModal.remove();
-        
-        // Monta as opções de tipo de tarefa
-        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
-            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
-        ).join('');
-        
-        const modalHtml = `
-            <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
-                            <h5 class="modal-title">
-                                <i class="fas fa-edit"></i> Editar Atendimento
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <input type="hidden" id="editAtendimentoId" value="${a.id}">
-                            
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f3ff; border-radius: 10px; margin-bottom: 16px;">
-                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
-                                <div style="flex: 1;">
-                                    <h5 style="margin: 0; color: #5b21b6;">${escapeHTML(a.alunoNome)}</h5>
-                                    <small style="color: #6b7280;">
-                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
-                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
-                                    </small>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
-                                <select id="editTipoTarefa" class="form-select">
-                                    ${tiposOptions}
-                                </select>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Descrição <span class="text-danger">*</span></label>
-                                <textarea id="editDescricao" class="form-control" rows="3">${escapeHTML(a.entrada?.descricao || '')}</textarea>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Gravidade</label>
-                                    <select id="editGravidade" class="form-select">
-                                        <option value="baixa" ${a.entrada?.gravidade === 'baixa' ? 'selected' : ''}>Baixa</option>
-                                        <option value="media" ${a.entrada?.gravidade === 'media' ? 'selected' : ''}>Média</option>
-                                        <option value="alta" ${a.entrada?.gravidade === 'alta' ? 'selected' : ''}>Alta</option>
-                                        <option value="critica" ${a.entrada?.gravidade === 'critica' ? 'selected' : ''}>Crítica</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Prioridade</label>
-                                    <select id="editPrioridade" class="form-select">
-                                        <option value="baixa" ${a.prioridade === 'baixa' ? 'selected' : ''}>Baixa</option>
-                                        <option value="normal" ${a.prioridade === 'normal' ? 'selected' : ''}>Normal</option>
-                                        <option value="alta" ${a.prioridade === 'alta' ? 'selected' : ''}>Alta</option>
-                                        <option value="urgente" ${a.prioridade === 'urgente' ? 'selected' : ''}>Urgente</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Observações</label>
-                                <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="fas fa-times"></i> Cancelar
-                            </button>
-                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoAtendimento()">
-                                <i class="fas fa-save"></i> Salvar Alterações
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
-    } catch (error) {
-        console.error('Erro:', error);
-        mostrarToastConcluido('Erro ao carregar para edição', 'error');
-    }
-}
-
-async function salvarEdicaoAtendimento() {
-    const atendimentoId = safeGet('editAtendimentoId')?.value;
-    const tipoTarefa = safeGet('editTipoTarefa')?.value;
-    const descricao = (safeGet('editDescricao')?.value || '').trim();
-    const gravidade = safeGet('editGravidade')?.value;
-    const prioridade = safeGet('editPrioridade')?.value;
-    const observacoes = safeGet('editObservacoes')?.value || '';
-    
-    if (!tipoTarefa || !descricao) {
-        mostrarToastConcluido('Preencha todos os campos obrigatórios', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                tipoTarefa,
-                descricao,
-                gravidade,
-                prioridade,
-                observacoes
-            })
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
-            if (modal) modal.hide();
-            
-            // Toast
-            mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
-            
-            // Recarrega
-            carregarAtendimentosAtivos();
-            carregarDashboard();
-            carregarLembretes();
-            carregarAtendimentosConcluidos(__concluidosPaginaAtual);
-        } else {
-            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao salvar'));
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        mostrarToastConcluido('Erro ao salvar alterações', 'error');
-    }
-}
-
-// ============================================
-// 🖨️ IMPRESSÃO DE ATENDIMENTO (COM CARIMBO DO ASSISTENTE SOCIAL)
-// ============================================
-async function imprimirAtendimento(atendimentoId) {
-    if (!atendimentoId) return;
-    
-    try {
-        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-        
-        if (!data.success || !data.atendimento) {
-            mostrarToastConcluido('Erro ao carregar atendimento', 'error');
-            return;
-        }
-        
-        const a = data.atendimento;
-        
-        // 🔥 TENTAR BUSCAR QR CODE SEM QUEBRAR SE DER 403
-        let qr = '';
-        try {
-            const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (qrR.ok) {
-                const qrD = await qrR.json();
-                if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
-            } else {
-                console.info(`ℹ️ QR Code não disponível (status ${qrR.status}) - continuando sem QR`);
-            }
-        } catch (e) {
-            console.info('ℹ️ QR Code não pôde ser carregado, imprimindo sem ele');
-        }
-        
-        const win = window.open('', '_blank');
-        win.document.write(gerarHTMLImpressaoAS(a, qr));
-        win.document.close();
-        win.onload = () => setTimeout(() => win.print(), 500);
-    } catch (e) {
-        console.error(e);
-        mostrarToastConcluido('Erro ao imprimir atendimento', 'error');
-    }
-}
-
-// ============================================
-// 🖨️ IMPRESSÃO DE ATENDIMENTO INDIVIDUAL (PADRONIZADO)
-// ============================================
-function gerarHTMLImpressaoAS(a, qrCodeUrl) {
-    const logo = '/uploads/logo-iema.png';
-    const carimbo = '/icons/assinatura_assistente_social.ico';
-    const dataGeracao = new Date().toLocaleString('pt-BR');
-    
-    const entrada = new Date(a.entrada.dataHora);
-    const dataExt = entrada.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    
-    const badgeStatus = a.status === 'finalizado'
-        ? '<span class="badge-finalizado">✅ FINALIZADO</span>'
-        : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
-    
-    const temAssinaturaDigital = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64;
-    const assinaturaHTML = temAssinaturaDigital
-        ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
-        : '';
-    
-    // ========== DETALHES ==========
-    let detalhesHTML = '';
-    if (a.detalhes && Object.keys(a.detalhes).length > 0) {
-        const mapaDetalhes = {
-            contextoFamiliar: 'Contexto Familiar',
-            historicoAnterior: 'Histórico Anterior',
-            profissionaisEnvolvidos: 'Profissionais Envolvidos',
-            condicaoSocial: 'Condição Social',
-            encaminhadoPara: 'Encaminhado Para',
-            motivoEncaminhamento: 'Motivo do Encaminhamento',
-            agendadoPara: 'Agendado Para',
-            tipoIntervencao: 'Tipo de Intervenção',
-            metodosUtilizados: 'Métodos Utilizados',
-            duracaoSessao: 'Duração da Sessão (min)',
-            modalidadeAtendimento: 'Modalidade',
-            participantesAtendimento: 'Participantes',
-            tipoTarefaOutros: 'Especificação',
-            providenciasTomadas: 'Providências',
-            proximosPassos: 'Próximos Passos'
-        };
-        
-        const linhas = [];
-        Object.entries(a.detalhes).forEach(([key, value]) => {
-            if (!value || (Array.isArray(value) && value.length === 0)) return;
-            const label = mapaDetalhes[key] || key;
-            let valor = value;
-            if (Array.isArray(value)) valor = value.join(', ');
-            if (typeof value === 'boolean') valor = value ? 'Sim' : 'Não';
-            if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
-                try { valor = new Date(value).toLocaleDateString('pt-BR'); } catch(e){}
-            }
-            linhas.push(`<span class="det-item"><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</span>`);
-        });
-        
-        if (linhas.length > 0) {
-            detalhesHTML = `
-                <div class="section-title">📋 Detalhes</div>
-                <div class="detalhes-compactos">${linhas.join('')}</div>`;
-        }
-    }
-    
-    let saidaHTML = '';
-    if (a.saida) {
-        saidaHTML = `
-            <div class="section-title">✅ Resultado Final</div>
-            <div class="linha-compacta">
-                <span><strong>Resultado:</strong> ${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</span>
-                <span><strong>Data:</strong> ${a.saida.dataHoraFormatada || '-'}</span>
-            </div>`;
-    }
-    
-    let remarcacoesHTML = '';
-    if (a.remarcacoes && a.remarcacoes.length > 0) {
-        remarcacoesHTML = `
-            <div class="section-title">📅 Remarcações</div>
-            <table class="tabela-remarcacoes">
-                <thead><tr><th style="width:5%;">#</th><th style="width:15%;">Data</th><th style="width:10%;">Hora</th><th style="width:15%;">Status</th><th>Motivo</th></tr></thead>
-                <tbody>
-                    ${a.remarcacoes.slice(0, 5).map((r, i) => `
-                        <tr>
-                            <td><strong>${i + 1}</strong></td>
-                            <td>${formatarDataBR(r.dataRemarcacao)}</td>
-                            <td>${r.horarioRemarcacao || '-'}</td>
-                            <td><span class="status-remarcacao status-${r.status}">${r.status === 'pendente' ? '⏳' : r.status === 'realizado' ? '✅' : '❌'}</span></td>
-                            <td>${escapeHTML((r.motivoRemarcacao || '-').substring(0, 60))}</td>
-                        </tr>`).join('')}
-                </tbody>
-            </table>`;
-    }
-    
-    return `<!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <title>Atendimento Assistente Social - ${escapeHTML(a.alunoNome)}</title>
-        <style>
-            @page { size: A4 portrait; margin: 8mm; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
-            
-            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
-            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
-            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
-            .header p { font-size: 8pt; margin: 1px 0 0; }
-            
-            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #ede9fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
-            .status-badge { text-align: center; margin: 0 0 5px; }
-            .badge-finalizado { background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #10b981; display: inline-block; }
-            .badge-andamento { background: #fef3c7; color: #92400e; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #f59e0b; display: inline-block; }
-            
-            .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 5px; margin-bottom: 6px; }
-            .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #8b5cf6; flex-shrink: 0; }
-            .aluno-info { flex: 1; }
-            .aluno-nome { font-size: 10pt; font-weight: bold; color: #5b21b6; margin-bottom: 1px; }
-            .aluno-detalhes { font-size: 8pt; color: #374151; }
-            
-            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #8b5cf6; margin: 5px 0 3px; }
-            
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
-            .info-item { display: flex; gap: 4px; }
-            .info-label { font-weight: bold; white-space: nowrap; }
-            .info-value { flex: 1; }
-            
-            .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
-            
-            .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
-            .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
-            
-            .linha-compacta { display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8.5pt; margin-bottom: 3px; }
-            
-            .tabela-remarcacoes { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 2px; }
-            .tabela-remarcacoes th { background: #8b5cf6; color: white; padding: 2px 4px; text-align: left; border: 1px solid #7c3aed; font-size: 7.5pt; }
-            .tabela-remarcacoes td { padding: 2px 4px; border: 1px solid #ddd; }
-            .tabela-remarcacoes tr:nth-child(even) { background: #f9fafb; }
-            .status-remarcacao { padding: 1px 5px; border-radius: 8px; font-size: 7pt; font-weight: bold; }
-            .status-pendente { background: #fef3c7; color: #92400e; }
-            .status-realizado { background: #d1fae5; color: #065f46; }
-            .status-cancelado { background: #fee2e2; color: #991b1b; }
-            
-            /* 🖋️ DUAS ASSINATURAS LADO A LADO */
-            .assinaturas {
-                display: flex;
-                justify-content: space-around;
-                margin-top: 25px;
-                gap: 20px;
-            }
-            .assinatura { flex: 0 0 42%; text-align: center; }
-            
-            .assinatura-container-relatorio {
-                position: relative;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 0;
-            }
-            
-            .assinatura-container-relatorio::after {
-                content: '';
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                border-bottom: 1px solid #000;
-            }
-            
-            .assinatura-img {
-                max-height: 14mm;
-                max-width: 100%;
-                object-fit: contain;
-                position: relative;
-                z-index: 2;
-                margin-bottom: 1mm;
-            }
-            
-            .carimbo-overlay {
-                position: absolute;
-                bottom: 1mm;
-                left: 50%;
-                transform: translateX(-50%);
-                max-height: 15mm;
-                max-width: 45mm;
-                object-fit: contain;
-                opacity: 0.95;
-                pointer-events: none;
-                z-index: 1;
-            }
-            
-            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
-            
-            /* QR Code */
-            .qr-code {
-                text-align: center;
-                margin-top: 10px;
-            }
-            .qr-code img {
-                width: 22mm;
-                height: 22mm;
-                border: 1.5px solid #000;
-                padding: 2px;
-                display: block;
-                margin: 0 auto;
-            }
-            .qr-code p {
-                font-size: 7.5pt;
-                margin: 2px 0 0 0;
-                color: #444;
-                font-weight: bold;
-            }
-            
-            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
-            .footer p { margin: 1px 0; }
-            
-            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
-            .btn-print:hover { background: #7c3aed; }
-            
-            @media print { .no-print { display: none !important; } body { padding: 0; } }
-        </style>
-    </head>
-    <body>
-        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        
-        <div class="header">
-            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
-            <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p>Sistema de Atendimentos — Assistente Social</p>
-        </div>
-        
-        <div class="titulo">🤝 Atendimento Assistente Social</div>
-        <div class="status-badge">${badgeStatus}</div>
-        
-        <div class="aluno-box">
-            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
-            <div class="aluno-info">
-                <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
-                <div class="aluno-detalhes">
-                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')} • 
-                    <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
-                    ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
-                </div>
-            </div>
-        </div>
-        
-        <div class="section-title">📌 Dados do Atendimento</div>
-        <div class="info-grid">
-            <div class="info-item"><span class="info-label">Tipo:</span><span class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></span></div>
-            <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
-            <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
-            <div class="info-item"><span class="info-label">Gravidade:</span><span class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></span></div>
-            <div class="info-item"><span class="info-label">Prioridade:</span><span class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></span></div>
-            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span></div>
-        </div>
-        
-        <div class="section-title">📝 Descrição do Ocorrido</div>
-        <div class="descricao-box">${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}</div>
-        
-        ${a.entrada?.observacoes ? `
-            <div class="section-title">💬 Observações</div>
-            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}</div>
-        ` : ''}
-        
-        ${detalhesHTML}
-        ${saidaHTML}
-        ${remarcacoesHTML}
-        
-        <!-- 🖋️ ASSINATURAS LADO A LADO -->
-        <div class="assinaturas">
-            <div class="assinatura">
-                <div class="assinatura-container-relatorio">
-                    ${assinaturaHTML}
-                </div>
-                <div class="assinatura-linha">Assinatura do Responsável</div>
-            </div>
-            <div class="assinatura">
-                <div class="assinatura-container-relatorio">
-                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
-                </div>
-                <div class="assinatura-linha">Assistente Social</div>
-            </div>
-        </div>
-        
-        ${qrCodeUrl ? `
-            <div class="qr-code">
-                <img src="${qrCodeUrl}" alt="QR Code">
-                <p>Identificação do Aluno</p>
-            </div>
-        ` : ''}
-        
-        <div class="footer">
-            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Assistente Social</p>
-        </div>
-    </body>
-    </html>`;
-}
-
-
-
-// ============================================
-// ASSINATURA DIGITAL
+// ASSINATURA DIGITAL (CANVAS TRADICIONAL)
 // ============================================
 function inicializarAssinatura() {
     const canvas = safeGet('assinaturaCanvas');
@@ -1615,6 +942,13 @@ function mostrarFormRegistro() {
     safeGet('prioridade').value = 'normal';
     safeSetHTML('camposEspecificos', '');
     limparAssinatura();
+    
+    // 🆕 Reseta estado da sessão de assinatura
+    limparEstadoSessaoAssinatura('assistenteSocial');
+    const checkAssinatura = safeGet('assistenteSocialNecessitaAssinatura');
+    if (checkAssinatura) checkAssinatura.checked = false;
+    const blocoInfo = safeGet('assistenteSocialBlocoAssinaturaInfo');
+    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
 }
 
 function selecionarTipo(tipo) {
@@ -1740,13 +1074,36 @@ function coletarDetalhes() {
 }
 
 // ============================================
-// REGISTRAR
+// REGISTRAR OCORRÊNCIA (COM ASSINATURA VIA QR)
 // ============================================
 async function registrarOcorrencia() {
-    if (!tipoTarefaSelecionado) { mostrarToastConcluido('Selecione o tipo de tarefa', 'error'); return; }
+    if (!tipoTarefaSelecionado) { 
+        mostrarToastConcluido('Selecione o tipo de tarefa', 'error'); 
+        return; 
+    }
     const descricao = (safeGet('descricao')?.value || '').trim();
-    if (!descricao) { mostrarToastConcluido('Descreva o ocorrido', 'error'); return; }
-    if (!currentAluno || !currentAluno.id) { mostrarToastConcluido('Nenhum aluno selecionado', 'error'); return; }
+    if (!descricao) { 
+        mostrarToastConcluido('Descreva o ocorrido', 'error'); 
+        return; 
+    }
+    if (!currentAluno || !currentAluno.id) { 
+        mostrarToastConcluido('Nenhum aluno selecionado', 'error'); 
+        return; 
+    }
+    
+    // ==========================================
+    // 🆕 VALIDAÇÃO DA ASSINATURA VIA QR
+    // ==========================================
+    const precisaAssinatura = safeGet('assistenteSocialNecessitaAssinatura')?.checked || false;
+    const assinaturaQRCapturada = estadoSessaoAssinatura.assistenteSocial?.assinaturaCapturada || '';
+    const assinaturaCanvas = obterAssinaturaBase64();
+    const assinaturaFinal = assinaturaQRCapturada || assinaturaCanvas;
+    
+    if (precisaAssinatura && !assinaturaQRCapturada) {
+        mostrarToastConcluido('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'error', 5000);
+        reabrirModalAssinatura('assistenteSocial');
+        return;
+    }
     
     const btn = document.querySelector('#formRegistro .btn-primary-custom');
     if (btn) btn.disabled = true;
@@ -1763,14 +1120,36 @@ async function registrarOcorrencia() {
                 gravidade: safeGet('gravidade')?.value || 'media',
                 prioridade: safeGet('prioridade')?.value || 'normal',
                 detalhes: coletarDetalhes(),
-                assinaturaBase64: obterAssinaturaBase64()
+                assinaturaBase64: assinaturaFinal,
+                precisaAssinatura: precisaAssinatura
             })
         });
         const data = await response.json();
-        if (data.success) { mostrarToastConcluido(`✅ ${data.message}`, 'error'); finalizarAposSucesso(); }
-        else mostrarToastConcluido('❌ ' + (data.error || 'Erro ao registrar'));
-    } catch (error) { mostrarToastConcluido('Erro: ' + error.message); }
-    finally { if (btn) btn.disabled = false; }
+        
+        if (data.success) {
+            // 🆕 Limpa a sessão de assinatura
+            const sessaoId = estadoSessaoAssinatura.assistenteSocial?.sessaoId;
+            if (sessaoId) {
+                fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).catch(e => console.warn(e));
+            }
+            pararMonitoramentoSessao('assistenteSocial');
+            fecharModalAssinatura('assistenteSocial');
+            limparEstadoSessaoAssinatura('assistenteSocial');
+            
+            mostrarToastConcluido(`✅ ${data.message}`, 'success');
+            finalizarAposSucesso();
+        } else {
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao registrar'), 'error');
+        }
+    } catch (error) { 
+        mostrarToastConcluido('Erro: ' + error.message, 'error'); 
+    }
+    finally { 
+        if (btn) btn.disabled = false; 
+    }
 }
 
 function finalizarAposSucesso() {
@@ -1788,6 +1167,23 @@ function limparTela() {
     currentAtendimento = null;
     tipoTarefaSelecionado = null;
     limparAssinatura();
+    
+    // 🆕 Limpa a sessão de assinatura
+    const sessaoId = estadoSessaoAssinatura.assistenteSocial?.sessaoId;
+    if (sessaoId) {
+        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(e => console.warn(e));
+    }
+    pararMonitoramentoSessao('assistenteSocial');
+    fecharModalAssinatura('assistenteSocial');
+    limparEstadoSessaoAssinatura('assistenteSocial');
+    
+    const checkAssinatura = safeGet('assistenteSocialNecessitaAssinatura');
+    if (checkAssinatura) checkAssinatura.checked = false;
+    const blocoInfo = safeGet('assistenteSocialBlocoAssinaturaInfo');
+    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
 }
 
 function reiniciarScannerAutomatico() {
@@ -1938,7 +1334,6 @@ function abrirFinalizacao(atendimentoId) {
 }
 
 async function confirmarFinalizacao(atendimentoId, resultado) {
-    // 🔥 Remove o foco antes de fechar o modal (evita aviso de aria-hidden)
     if (document.activeElement && document.activeElement.blur) {
         document.activeElement.blur();
     }
@@ -1964,7 +1359,6 @@ async function confirmarFinalizacao(atendimentoId, resultado) {
         
         modal.hide();
     } else {
-        // Fallback se o modal já foi fechado
         await finalizarAtendimento(atendimentoId, resultado, false);
     }
 }
@@ -1978,11 +1372,11 @@ async function finalizarAtendimento(atendimentoId, resultado, pularAlerta) {
         });
         const data = await response.json();
         if (data.success) {
-            if (!pularAlerta) mostrarToastConcluido(`✅ ${data.message}`, 'error');
+            if (!pularAlerta) mostrarToastConcluido(`✅ ${data.message}`, 'success');
             carregarAtendimentosAtivos();
             carregarDashboard();
             carregarLembretes();
-        } else mostrarToastConcluido('❌ ' + (data.error || 'Erro'));
+        } else mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
     } catch (error) { mostrarToastConcluido('Erro ao finalizar', 'error'); }
 }
 
@@ -2047,12 +1441,12 @@ async function confirmarRemarcacao() {
         if (!ct.includes('application/json')) { mostrarToastConcluido('⚠️ Funcionalidade indisponível no servidor', 'error'); return; }
         const data = await response.json();
         if (data.success) {
-            mostrarToastConcluido(`✅ ${data.message}`, 'error');
+            mostrarToastConcluido(`✅ ${data.message}`, 'success');
             const modal = bootstrap.Modal.getInstance(safeGet('modalRemarcar'));
             if (modal) modal.hide();
             carregarAtendimentosAtivos();
             carregarLembretes();
-        } else mostrarToastConcluido('❌ ' + (data.error || 'Erro'));
+        } else mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
     } catch (error) { mostrarToastConcluido('Erro ao remarcar', 'error'); }
 }
 
@@ -2098,15 +1492,11 @@ async function confirmarFinalizacaoRemarcacao(remarcacaoId, acao) {
         });
         const data = await response.json();
         if (data.success) {
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido(`✅ ${data.message}`, 'success');
-            } else {
-                console.log(`✅ ${data.message}`);
-            }
+            mostrarToastConcluido(`✅ ${data.message}`, 'success');
             carregarAtendimentosAtivos();
             carregarLembretes();
         } else {
-            console.error('❌ ' + (data.error || 'Erro'));
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
         }
     } catch (error) {
         console.error('Erro ao finalizar remarcação:', error);
@@ -2141,21 +1531,646 @@ async function excluirAtendimento(atendimentoId) {
         });
         const data = await response.json();
         if (data.success) {
-            if (typeof mostrarToastConcluido === 'function') {
-                mostrarToastConcluido('✅ Atendimento excluído!', 'success');
-            } else {
-                console.log('✅ Atendimento excluído!');
-            }
+            mostrarToastConcluido('✅ Atendimento excluído!', 'success');
             carregarAtendimentosAtivos();
             carregarDashboard();
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            console.error('❌ ' + (data.error || 'Erro'));
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
         }
     } catch (error) {
         console.error('Erro ao excluir:', error);
     }
+}
+
+// ============================================
+// ✏️ EDITAR ATENDIMENTO
+// ============================================
+async function abrirEditarAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            mostrarToastConcluido('Erro ao carregar atendimento', 'error');
+            return;
+        }
+        
+        const a = data.atendimento;
+        const oldModal = safeGet('modalEditarAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        const tiposOptions = Object.entries(TIPO_LABELS).map(([key, label]) => 
+            `<option value="${key}" ${a.tipoTarefa === key ? 'selected' : ''}>${label}</option>`
+        ).join('');
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-edit"></i> Editar Atendimento
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="editAtendimentoId" value="${a.id}">
+                            
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f3ff; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #5b21b6;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Tipo de Tarefa <span class="text-danger">*</span></label>
+                                <select id="editTipoTarefa" class="form-select">
+                                    ${tiposOptions}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Descrição <span class="text-danger">*</span></label>
+                                <textarea id="editDescricao" class="form-control" rows="3">${escapeHTML(a.entrada?.descricao || '')}</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Gravidade</label>
+                                    <select id="editGravidade" class="form-select">
+                                        <option value="baixa" ${a.entrada?.gravidade === 'baixa' ? 'selected' : ''}>Baixa</option>
+                                        <option value="media" ${a.entrada?.gravidade === 'media' ? 'selected' : ''}>Média</option>
+                                        <option value="alta" ${a.entrada?.gravidade === 'alta' ? 'selected' : ''}>Alta</option>
+                                        <option value="critica" ${a.entrada?.gravidade === 'critica' ? 'selected' : ''}>Crítica</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Prioridade</label>
+                                    <select id="editPrioridade" class="form-select">
+                                        <option value="baixa" ${a.prioridade === 'baixa' ? 'selected' : ''}>Baixa</option>
+                                        <option value="normal" ${a.prioridade === 'normal' ? 'selected' : ''}>Normal</option>
+                                        <option value="alta" ${a.prioridade === 'alta' ? 'selected' : ''}>Alta</option>
+                                        <option value="urgente" ${a.prioridade === 'urgente' ? 'selected' : ''}>Urgente</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="salvarEdicaoAtendimento()">
+                                <i class="fas fa-save"></i> Salvar Alterações
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarToastConcluido('Erro ao carregar para edição', 'error');
+    }
+}
+
+async function salvarEdicaoAtendimento() {
+    const atendimentoId = safeGet('editAtendimentoId')?.value;
+    const tipoTarefa = safeGet('editTipoTarefa')?.value;
+    const descricao = (safeGet('editDescricao')?.value || '').trim();
+    const gravidade = safeGet('editGravidade')?.value;
+    const prioridade = safeGet('editPrioridade')?.value;
+    const observacoes = safeGet('editObservacoes')?.value || '';
+    
+    if (!tipoTarefa || !descricao) {
+        mostrarToastConcluido('Preencha todos os campos obrigatórios', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                tipoTarefa,
+                descricao,
+                gravidade,
+                prioridade,
+                observacoes
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
+            if (modal) modal.hide();
+            
+            mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
+            
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+            carregarLembretes();
+            carregarAtendimentosConcluidos(__concluidosPaginaAtual);
+        } else {
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao salvar'), 'error');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        mostrarToastConcluido('Erro ao salvar alterações', 'error');
+    }
+}
+
+// ============================================
+// 👁️ VER ATENDIMENTO (MODAL DETALHADO)
+// ============================================
+async function verAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    fecharNotificacoes();
+    
+    try {
+        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (!data.success || !data.atendimento) { mostrarToastConcluido('Erro ao carregar atendimento', 'error'); return; }
+        const a = data.atendimento;
+        
+        let detalhesHTML = '';
+        if (a.detalhes && Object.keys(a.detalhes).length > 0) {
+            const detalhesMap = {
+                contextoFamiliar: 'Contexto Familiar',
+                historicoAnterior: 'Histórico Anterior',
+                profissionaisEnvolvidos: 'Profissionais Envolvidos',
+                condicaoSocial: 'Condição Social',
+                encaminhadoPara: 'Encaminhado Para',
+                motivoEncaminhamento: 'Motivo do Encaminhamento',
+                agendadoPara: 'Agendado Para',
+                tipoIntervencao: 'Tipo de Intervenção',
+                metodosUtilizados: 'Métodos Utilizados',
+                duracaoSessao: 'Duração da Sessão (min)',
+                modalidadeAtendimento: 'Modalidade',
+                participantesAtendimento: 'Participantes',
+                tipoTarefaOutros: 'Especificação',
+                providenciasTomadas: 'Providências Tomadas',
+                proximosPassos: 'Próximos Passos'
+            };
+            
+            detalhesHTML = '<div class="section-title">📋 Detalhes</div>';
+            Object.entries(a.detalhes).forEach(([key, value]) => {
+                if (!value || (Array.isArray(value) && value.length === 0)) return;
+                const label = detalhesMap[key] || key;
+                const valor = Array.isArray(value) ? value.join(', ') : value;
+                detalhesHTML += `
+                    <div class="info-row">
+                        <div class="info-label">${escapeHTML(label)}:</div>
+                        <div class="info-value">${escapeHTML(String(valor))}</div>
+                    </div>`;
+            });
+        }
+        
+        let assinaturaHTML = '';
+        if (a.entrada?.temAssinatura && a.entrada?.assinaturaBase64) {
+            assinaturaHTML = `
+                <div class="section-title">✍️ Assinatura do Responsável</div>
+                <div class="assinatura-preview">
+                    <img src="${a.entrada.assinaturaBase64}" alt="Assinatura">
+                </div>`;
+        }
+        
+        let remarcacoesHTML = '';
+        if (a.remarcacoes && a.remarcacoes.length > 0) {
+            remarcacoesHTML = '<div class="section-title">📅 Histórico de Remarcações</div>';
+            a.remarcacoes.forEach((r, idx) => {
+                const statusLabel = {
+                    'pendente': '⏳ Pendente',
+                    'realizado': '✅ Realizado',
+                    'cancelado': '❌ Cancelado'
+                }[r.status] || r.status;
+                
+                remarcacoesHTML += `
+                    <div style="background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <strong style="color: #7c3aed;">#${idx + 1} - ${statusLabel}</strong>
+                            <small style="color: #6b7280;">${formatarDataBR(r.dataRemarcacao)} às ${r.horarioRemarcacao}</small>
+                        </div>
+                        <div style="font-size: 13px; color: #4b5563;">
+                            <strong>Motivo:</strong> ${escapeHTML(r.motivoRemarcacao || '-')}
+                        </div>
+                        ${r.observacoesRemarcacao ? `<div style="font-size: 12px; color: #6b7280; margin-top: 4px;">${escapeHTML(r.observacoesRemarcacao)}</div>` : ''}
+                    </div>`;
+            });
+        }
+        
+        const oldModal = safeGet('modalVerAtendimento');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
+                            <h5 class="modal-title"><i class="fas fa-eye"></i> Detalhes do Atendimento</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body detalhe-atendimento">
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f5f3ff; border-radius: 10px; margin-bottom: 16px;">
+                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
+                                <div style="flex: 1;">
+                                    <h5 style="margin: 0; color: #5b21b6;">${escapeHTML(a.alunoNome)}</h5>
+                                    <small style="color: #6b7280;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || '-')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </small>
+                                </div>
+                                <span class="badge" style="background: #8b5cf6; font-size: 12px;">${escapeHTML(a.tipoTarefaLabel)}</span>
+                            </div>
+                            
+                            <div class="section-title">📌 Informações</div>
+                            <div class="info-row">
+                                <div class="info-label">Status:</div>
+                                <div class="info-value">
+                                    <span class="badge" style="background: ${a.status === 'finalizado' ? '#10b981' : '#f59e0b'};">
+                                        ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Prioridade:</div>
+                                <div class="info-value">
+                                    <span class="badge" style="background: ${a.prioridade === 'urgente' ? '#dc2626' : a.prioridade === 'alta' ? '#f59e0b' : '#3b82f6'};">
+                                        ${escapeHTML(a.prioridade || 'normal').toUpperCase()}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Gravidade:</div>
+                                <div class="info-value">${escapeHTML(a.entrada?.gravidade || 'media').toUpperCase()}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Data de Entrada:</div>
+                                <div class="info-value">${a.entrada?.dataHoraFormatada || '-'}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Registrado por:</div>
+                                <div class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</div>
+                            </div>
+                            
+                            <div class="section-title">📝 Descrição</div>
+                            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 14px; color: #374151; line-height: 1.5;">
+                                ${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}
+                            </div>
+                            
+                            ${a.entrada?.observacoes ? `
+                                <div class="section-title">💬 Observações</div>
+                                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
+                                    ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
+                                </div>` : ''}
+                            
+                            ${detalhesHTML}
+                            ${assinaturaHTML}
+                            ${remarcacoesHTML}
+                            
+                            ${a.saida ? `
+                                <div class="section-title">🎯 Resultado</div>
+                                <div class="info-row">
+                                    <div class="info-label">Resultado:</div>
+                                    <div class="info-value"><strong>${escapeHTML(a.saida.resultadoTexto || a.saida.resultado)}</strong></div>
+                                </div>
+                                <div class="info-row">
+                                    <div class="info-label">Data de Saída:</div>
+                                    <div class="info-value">${a.saida.dataHoraFormatada || '-'}</div>
+                                </div>` : ''}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                            <button type="button" class="btn btn-info" onclick="imprimirAtendimento('${a.id}')">
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
+                            ${a.status === 'em_andamento' ? `
+                                <button type="button" class="btn btn-secondary" onclick="fecharVerAtendimento(); abrirEditarAtendimento('${a.id}')">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')">
+                                    <i class="fas fa-calendar-plus"></i> Remarcar
+                                </button>
+                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); abrirFinalizacao('${a.id}')">
+                                    <i class="fas fa-check"></i> Finalizar
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalVerAtendimento')).show();
+    } catch (error) {
+        mostrarToastConcluido('Erro ao carregar detalhes', 'error');
+    }
+}
+
+function fecharVerAtendimento() {
+    const modal = bootstrap.Modal.getInstance(safeGet('modalVerAtendimento'));
+    if (modal) modal.hide();
+    setTimeout(() => { const el = safeGet('modalVerAtendimento'); if (el) el.remove(); }, 300);
+}
+
+// ============================================
+// 🖨️ IMPRESSÃO DE ATENDIMENTO (COM ASSINATURA)
+// ============================================
+async function imprimirAtendimento(atendimentoId) {
+    if (!atendimentoId) return;
+    
+    try {
+        const response = await fetch(`/api/assistente-social/atendimento/${atendimentoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimento) {
+            mostrarToastConcluido('Erro ao carregar atendimento', 'error');
+            return;
+        }
+        
+        const a = data.atendimento;
+        
+        let qr = '';
+        try {
+            const qrR = await fetch(`/api/aluno/qrcode/${a.alunoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (qrR.ok) {
+                const qrD = await qrR.json();
+                if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
+            }
+        } catch (e) {
+            console.info('QR Code não pôde ser carregado');
+        }
+        
+        const win = window.open('', '_blank');
+        win.document.write(gerarHTMLImpressaoAS(a, qr));
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+    } catch (e) {
+        console.error(e);
+        mostrarToastConcluido('Erro ao imprimir atendimento', 'error');
+    }
+}
+
+function gerarHTMLImpressaoAS(a, qrCodeUrl) {
+    const logo = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_assistente_social.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    const entrada = new Date(a.entrada.dataHora);
+    const dataExt = entrada.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const horaExt = entrada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    const badgeStatus = a.status === 'finalizado'
+        ? '<span class="badge-finalizado">✅ FINALIZADO</span>'
+        : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
+    
+    const temAssinaturaDigital = a.entrada?.temAssinatura && a.entrada?.assinaturaBase64;
+    const assinaturaHTML = temAssinaturaDigital
+        ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
+        : '';
+    
+    let detalhesHTML = '';
+    if (a.detalhes && Object.keys(a.detalhes).length > 0) {
+        const mapaDetalhes = {
+            contextoFamiliar: 'Contexto Familiar',
+            historicoAnterior: 'Histórico Anterior',
+            profissionaisEnvolvidos: 'Profissionais Envolvidos',
+            condicaoSocial: 'Condição Social',
+            encaminhadoPara: 'Encaminhado Para',
+            motivoEncaminhamento: 'Motivo do Encaminhamento',
+            agendadoPara: 'Agendado Para',
+            tipoIntervencao: 'Tipo de Intervenção',
+            metodosUtilizados: 'Métodos Utilizados',
+            duracaoSessao: 'Duração da Sessão (min)',
+            modalidadeAtendimento: 'Modalidade',
+            participantesAtendimento: 'Participantes',
+            tipoTarefaOutros: 'Especificação',
+            providenciasTomadas: 'Providências',
+            proximosPassos: 'Próximos Passos'
+        };
+        
+        const linhas = [];
+        Object.entries(a.detalhes).forEach(([key, value]) => {
+            if (!value || (Array.isArray(value) && value.length === 0)) return;
+            const label = mapaDetalhes[key] || key;
+            let valor = value;
+            if (Array.isArray(value)) valor = value.join(', ');
+            if (typeof value === 'boolean') valor = value ? 'Sim' : 'Não';
+            if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/)) {
+                try { valor = new Date(value).toLocaleDateString('pt-BR'); } catch(e){}
+            }
+            linhas.push(`<span class="det-item"><strong>${escapeHTML(label)}:</strong> ${escapeHTML(String(valor))}</span>`);
+        });
+        
+        if (linhas.length > 0) {
+            detalhesHTML = `
+                <div class="section-title">📋 Detalhes</div>
+                <div class="detalhes-compactos">${linhas.join('')}</div>`;
+        }
+    }
+    
+    let saidaHTML = '';
+    if (a.saida) {
+        saidaHTML = `
+            <div class="section-title">✅ Resultado Final</div>
+            <div class="linha-compacta">
+                <span><strong>Resultado:</strong> ${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</span>
+                <span><strong>Data:</strong> ${a.saida.dataHoraFormatada || '-'}</span>
+            </div>`;
+    }
+    
+    let remarcacoesHTML = '';
+    if (a.remarcacoes && a.remarcacoes.length > 0) {
+        remarcacoesHTML = `
+            <div class="section-title">📅 Remarcações</div>
+            <table class="tabela-remarcacoes">
+                <thead><tr><th style="width:5%;">#</th><th style="width:15%;">Data</th><th style="width:10%;">Hora</th><th style="width:15%;">Status</th><th>Motivo</th></tr></thead>
+                <tbody>
+                    ${a.remarcacoes.slice(0, 5).map((r, i) => `
+                        <tr>
+                            <td><strong>${i + 1}</strong></td>
+                            <td>${formatarDataBR(r.dataRemarcacao)}</td>
+                            <td>${r.horarioRemarcacao || '-'}</td>
+                            <td><span class="status-remarcacao status-${r.status}">${r.status === 'pendente' ? '⏳' : r.status === 'realizado' ? '✅' : '❌'}</span></td>
+                            <td>${escapeHTML((r.motivoRemarcacao || '-').substring(0, 60))}</td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>`;
+    }
+    
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Atendimento Assistente Social - ${escapeHTML(a.alunoNome)}</title>
+        <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #ede9fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .status-badge { text-align: center; margin: 0 0 5px; }
+            .badge-finalizado { background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #10b981; display: inline-block; }
+            .badge-andamento { background: #fef3c7; color: #92400e; padding: 2px 10px; border-radius: 12px; font-size: 8pt; font-weight: bold; border: 1px solid #f59e0b; display: inline-block; }
+            
+            .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 5px; margin-bottom: 6px; }
+            .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #8b5cf6; flex-shrink: 0; }
+            .aluno-info { flex: 1; }
+            .aluno-nome { font-size: 10pt; font-weight: bold; color: #5b21b6; margin-bottom: 1px; }
+            .aluno-detalhes { font-size: 8pt; color: #374151; }
+            
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #8b5cf6; margin: 5px 0 3px; }
+            
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
+            .info-item { display: flex; gap: 4px; }
+            .info-label { font-weight: bold; white-space: nowrap; }
+            .info-value { flex: 1; }
+            
+            .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
+            
+            .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
+            .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
+            
+            .linha-compacta { display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8.5pt; margin-bottom: 3px; }
+            
+            .tabela-remarcacoes { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 2px; }
+            .tabela-remarcacoes th { background: #8b5cf6; color: white; padding: 2px 4px; text-align: left; border: 1px solid #7c3aed; font-size: 7.5pt; }
+            .tabela-remarcacoes td { padding: 2px 4px; border: 1px solid #ddd; }
+            .tabela-remarcacoes tr:nth-child(even) { background: #f9fafb; }
+            .status-remarcacao { padding: 1px 5px; border-radius: 8px; font-size: 7pt; font-weight: bold; }
+            .status-pendente { background: #fef3c7; color: #92400e; }
+            .status-realizado { background: #d1fae5; color: #065f46; }
+            .status-cancelado { background: #fee2e2; color: #991b1b; }
+            
+            .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 20px; }
+            .assinatura { flex: 0 0 42%; text-align: center; }
+            
+            .assinatura-container-relatorio { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0; }
+            .assinatura-container-relatorio::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; }
+            .assinatura-img { max-height: 14mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
+            .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 45mm; object-fit: contain; opacity: 0.95; pointer-events: none; z-index: 1; }
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .qr-code { text-align: center; margin-top: 10px; }
+            .qr-code img { width: 22mm; height: 22mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
+            .qr-code p { font-size: 7.5pt; margin: 2px 0 0 0; color: #444; font-weight: bold; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
+            .btn-print:hover { background: #7c3aed; }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p>Sistema de Atendimentos — Assistente Social</p>
+        </div>
+        
+        <div class="titulo">🤝 Atendimento Assistente Social</div>
+        <div class="status-badge">${badgeStatus}</div>
+        
+        <div class="aluno-box">
+            <img class="aluno-foto" src="${gerarAvatarSVG(a.alunoNome)}" alt="${escapeHTML(a.alunoNome)}">
+            <div class="aluno-info">
+                <div class="aluno-nome">${escapeHTML(a.alunoNome)}</div>
+                <div class="aluno-detalhes">
+                    <strong>Matrícula:</strong> ${escapeHTML(a.alunoMatricula || 'Não informada')} • 
+                    <strong>Turma:</strong> ${escapeHTML(a.alunoTurma || '-')}
+                    ${a.alunoCurso ? ` • <strong>Curso:</strong> ${escapeHTML(a.alunoCurso)}` : ''}
+                </div>
+            </div>
+        </div>
+        
+        <div class="section-title">📌 Dados do Atendimento</div>
+        <div class="info-grid">
+            <div class="info-item"><span class="info-label">Tipo:</span><span class="info-value"><strong>${escapeHTML(a.tipoTarefaLabel || '-')}</strong></span></div>
+            <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
+            <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
+            <div class="info-item"><span class="info-label">Gravidade:</span><span class="info-value"><strong>${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Prioridade:</span><span class="info-value"><strong>${escapeHTML((a.prioridade || 'normal').toUpperCase())}</strong></span></div>
+            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span></div>
+        </div>
+        
+        <div class="section-title">📝 Descrição do Ocorrido</div>
+        <div class="descricao-box">${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}</div>
+        
+        ${a.entrada?.observacoes ? `
+            <div class="section-title">💬 Observações</div>
+            <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}</div>
+        ` : ''}
+        
+        ${detalhesHTML}
+        ${saidaHTML}
+        ${remarcacoesHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    ${assinaturaHTML}
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável</div>
+            </div>
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Assistente Social</div>
+            </div>
+        </div>
+        
+        ${qrCodeUrl ? `
+            <div class="qr-code">
+                <img src="${qrCodeUrl}" alt="QR Code">
+                <p>Identificação do Aluno</p>
+            </div>
+        ` : ''}
+        
+        <div class="footer">
+            <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Assistente Social</p>
+        </div>
+    </body>
+    </html>`;
 }
 
 // ============================================
@@ -2370,7 +2385,6 @@ async function excluirAtendimentoConcluido(atendimentoId, alunoNome) {
 // 🍞 TOAST
 // ============================================
 function mostrarToastConcluido(mensagem, tipo = 'info') {
-    // 🔥 DETECTA AUTOMATICAMENTE pelo emoji no início da mensagem
     const msg = String(mensagem || '');
     let tipoFinal = tipo;
     
@@ -2480,7 +2494,7 @@ async function confirmarExclusaoMassa() {
             mostrarToastConcluido(`✅ ${data.excluidos || 0} atendimentos excluídos!`, 'success');
             carregarAtendimentosConcluidos(1);
             carregarDashboard();
-        } else mostrarToastConcluido('❌ ' + (data.error || 'Erro'));
+        } else mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
     } catch (error) { mostrarToastConcluido('Erro ao excluir em massa', 'error'); }
 }
 
@@ -2589,7 +2603,6 @@ function toggleRelatorioFiltros() {
     if (divT) divT.style.display = tipo === 'turma' ? 'block' : 'none';
     if (divA) divA.style.display = tipo === 'aluno' ? 'block' : 'none';
     
-    // ✅ RESETAR botões ao trocar tipo
     const btnCSV = safeGet('btnExportarCSVAS');
     const btnPDF = safeGet('btnExportarPDFAS');
     if (btnCSV) btnCSV.disabled = true;
@@ -2751,25 +2764,21 @@ async function carregarRelatorio() {
             if (dF) url += `dataFim=${dF}&`;
         }
         
-        const response = await fetch(url, { 
-            headers: { 'Authorization': `Bearer ${token}` } 
-        });
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await response.json();
         
         if (data.success) {
             relatorioData = data;
             exibirRelatorio(data, tipo);
             
-            // ✅ HABILITAR BOTÕES CSV E PDF
             const btnCSV = safeGet('btnExportarCSVAS');
             const btnPDF = safeGet('btnExportarPDFAS');
             if (btnCSV) btnCSV.disabled = false;
             if (btnPDF) btnPDF.disabled = false;
             
-            // Aviso se não encontrou nada
             const total = data.totalAtendimentos || data.estatisticas?.totalAtendimentos || 0;
             if (total === 0) {
-                mostrarToastConcluido('⚠️ Nenhum registro encontrado. Verifique as datas e filtros.', 'error');
+                mostrarToastConcluido('⚠️ Nenhum registro encontrado. Verifique as datas e filtros.', 'warning');
             }
         } else {
             mostrarToastConcluido('Erro: ' + (data.error || 'Erro ao carregar relatório'), 'error');
@@ -2791,7 +2800,7 @@ function exibirRelatorio(data, tipo) {
             container.innerHTML = `
                 <div class="card"><div class="card-body">
                     <h5><i class="fas fa-chart-bar"></i> Relatório Geral</h5>
-                    <p>Total: <strong>${data.totalAtendimentos || 0}</strong></p>
+                    <p>Total: <strong>${data.totalAtendimentos || 0}</strong> | Com assinatura: <strong>${data.comAssinatura || 0}</strong></p>
                     <h6 class="mt-4">Por Tipo</h6>
                     <div class="row">${porTipo.map(t => `<div class="col-md-4 mb-2"><div class="p-2" style="background:#ede9fe;border-radius:8px;"><strong>${escapeHTML(t.label || '')}</strong>: ${t.count || 0}</div></div>`).join('')}</div>
                     <h6 class="mt-4">Por Turma</h6>
@@ -2845,14 +2854,14 @@ function exibirRelatorio(data, tipo) {
 
 function exportarCSV() {
     if (!relatorioData) {
-        mostrarToastConcluido('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'error');
+        mostrarToastConcluido('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'warning');
         return;
     }
     
     const dados = relatorioData.registros || relatorioData.atendimentos || [];
     
     if (dados.length === 0) {
-        mostrarToastConcluido('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'error');
+        mostrarToastConcluido('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'warning');
         return;
     }
     
@@ -2875,17 +2884,1027 @@ function exportarCSV() {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `supervisao_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `assistente-social-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
 }
 
+// ============================================
+// 📄 EXPORTAR PDF (padrão unificado)
+// ============================================
+function exportarPDF() {
+    if (!relatorioData) {
+        mostrarToastConcluido('⚠️ Gere um relatório primeiro. Clique em BUSCAR.', 'warning');
+        return;
+    }
+    
+    const html = gerarHTMLRelatorioAS(relatorioData);
+    
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 500);
+}
+
+// ============================================
+// 🎯 HABILITAR BOTÕES APÓS CARREGAR RELATÓRIO
+// ============================================
+function habilitarBotoesRelatorioAS() {
+    const btnCSV = safeGet('btnExportarCSVAS');
+    const btnPDF = safeGet('btnExportarPDFAS');
+    if (btnCSV) btnCSV.disabled = false;
+    if (btnPDF) btnPDF.disabled = false;
+}
+
+// ============================================
+// 🎨 GERAR HTML DO RELATÓRIO
+// ============================================
+function gerarHTMLRelatorioAS(data) {
+    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
+    const logoIema = '/uploads/logo-iema.png';
+    const carimbo = '/icons/assinatura_assistente_social.ico';
+    const dataGeracao = new Date().toLocaleString('pt-BR');
+    
+    // Buscar assinatura digital
+    let assinaturaDigital = null;
+    const lista = data.registros || data.atendimentos || [];
+    const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
+    if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
+    
+    let titulo = 'Relatório de Atendimentos - Assistente Social';
+    let subtitulo = '';
+    if (tipo === 'turma') {
+        titulo = 'Relatório de Atendimentos';
+        subtitulo = `Turma: ${data.turma || ''}`;
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual do Aluno';
+        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
+    } else {
+        subtitulo = 'Relatório Geral';
+    }
+    
+    let statsHTML = '';
+    if (tipo === 'geral') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">${data.totalAtendimentos || 0}</div>
+                    <div class="stat-label">Total de Atendimentos</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTipo || []).length}</div>
+                    <div class="stat-label">Tipos Diferentes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">${(data.porTurma || []).length}</div>
+                    <div class="stat-label">Turmas Atendidas</div>
+                </div>
+            </div>`;
+    } else if (tipo === 'turma') {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div><div class="stat-label">Total de Atendimentos</div></div>
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAlunosAtendidos || (data.porAluno || []).length}</div><div class="stat-label">Alunos Atendidos</div></div>
+                <div class="stat"><div class="stat-value">${(data.porAluno || []).length}</div><div class="stat-label">Alunos com Registro</div></div>
+            </div>`;
+    } else {
+        statsHTML = `
+            <div class="stats">
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div><div class="stat-label">Total de Atendimentos</div></div>
+                <div class="stat"><div class="stat-value">${(data.estatisticas?.porTipo || []).length}</div><div class="stat-label">Tipos Diferentes</div></div>
+                <div class="stat"><div class="stat-value">${Object.keys(data.estatisticas?.porGravidade || {}).length}</div><div class="stat-label">Níveis de Gravidade</div></div>
+            </div>`;
+    }
+    
+    let tabelaHTML = '';
+    
+    if (tipo === 'geral') {
+        const porTipo = Array.isArray(data.porTipo) ? data.porTipo : [];
+        const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
+        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                <tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado disponível</td></tr>'}</tbody>
+            </table>
+            
+            <div class="section-title">🏫 Distribuição por Turma</div>
+            <table>
+                <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
+                <tbody>${porTurma.map(t => `<tr><td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado disponível</td></tr>'}</tbody>
+            </table>
+            
+            <div class="section-title">📋 Últimos Atendimentos</div>
+            <table>
+                <thead><tr><th>Data</th><th>Aluno</th><th>Turma</th><th>Tipo</th><th>Gravidade</th><th>Status</th></tr></thead>
+                <tbody>${atendimentos.slice(0, 30).map(a => `
+                    <tr>
+                        <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
+                        <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                        <td>${escapeHTML(a.alunoTurma || '')}</td>
+                        <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
+                        <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
+                        <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
+                    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;">Nenhum atendimento registrado</td></tr>'}
+                </tbody>
+            </table>`;
+    } else if (tipo === 'turma') {
+        const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
+        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                <tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>
+            
+            <div class="section-title">👥 Atendimentos por Aluno</div>
+            <table>
+                <thead><tr><th>Aluno</th><th style="width:100px;text-align:center;">Total</th><th>Tipos</th></tr></thead>
+                <tbody>${porAluno.map(a => `
+                    <tr>
+                        <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                        <td style="text-align:center;">${a.total || 0}</td>
+                        <td>${Object.entries(a.tipos || {}).map(([t, c]) => `${escapeHTML(TIPO_LABELS[t] || t)}: ${c}`).join('<br>')}</td>
+                    </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
+                </tbody>
+            </table>`;
+    } else if (tipo === 'aluno') {
+        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
+        const porGrav = data.estatisticas?.porGravidade || {};
+        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
+        
+        tabelaHTML = `
+            <div class="section-title">📊 Distribuição por Tipo</div>
+            <table>
+                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                <tbody>${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>
+            
+            <div class="section-title">⚠️ Distribuição por Gravidade</div>
+            <table>
+                <thead><tr><th>Gravidade</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                <tbody>${Object.entries(porGrav).map(([g, c]) => `<tr><td><strong>${escapeHTML(g.toUpperCase())}</strong></td><td style="text-align:center;">${c}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
+            </table>
+            
+            <div class="section-title">📋 Histórico de Atendimentos</div>
+            <table>
+                <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Gravidade</th><th>Status</th></tr></thead>
+                <tbody>${atendimentos.map(a => `
+                    <tr>
+                        <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
+                        <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
+                        <td>${escapeHTML((a.descricao || '').substring(0, 80))}${(a.descricao || '').length > 80 ? '...' : ''}</td>
+                        <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
+                        <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
+                    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento</td></tr>'}
+                </tbody>
+            </table>`;
+    }
+    
+    return `<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo}</title>
+        <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
+            
+            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
+            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
+            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
+            .header p { font-size: 8pt; margin: 1px 0 0; }
+            
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #ede9fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
+            
+            .stats { display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px; background: #f5f3ff; border-radius: 5px; border: 1px solid #ddd6fe; }
+            .stat { text-align: center; flex: 1; border-right: 1px solid #ddd6fe; }
+            .stat:last-child { border-right: none; }
+            .stat-value { font-size: 13pt; font-weight: bold; color: #7c3aed; line-height: 1; }
+            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
+            
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #8b5cf6; margin: 6px 0 3px; }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
+            th { background: #8b5cf6; color: white; padding: 4px 5px; text-align: left; border: 1px solid #7c3aed; font-size: 8pt; }
+            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
+            tr:nth-child(even) { background: #f9fafb; }
+            
+            .badge-status { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 7.5pt; font-weight: bold; }
+            .badge-status.finalizado { background: #d1fae5; color: #065f46; }
+            .badge-status.andamento { background: #fef3c7; color: #92400e; }
+            
+            .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
+            .assinatura { flex: 0 0 60%; text-align: center; }
+            
+            .assinatura-container-relatorio { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0; }
+            .assinatura-container-relatorio::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; }
+            .assinatura-img { max-height: 14mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
+            .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 55mm; object-fit: contain; opacity: 0.95; pointer-events: none; z-index: 1; }
+            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
+            
+            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
+            .footer p { margin: 1px 0; }
+            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
+            
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
+            .btn-print:hover { background: #7c3aed; }
+            
+            @media print { .no-print { display: none !important; } body { padding: 0; } }
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+        
+        <div class="header">
+            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
+            <h1>IEMA Pleno: São Luís - Centro</h1>
+            <p>Sistema de Atendimentos — Assistente Social</p>
+        </div>
+        
+        <div class="titulo">🤝 ${titulo}</div>
+        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
+        
+        ${statsHTML}
+        ${tabelaHTML}
+        
+        <div class="assinaturas">
+            <div class="assinatura">
+                <div class="assinatura-container-relatorio">
+                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
+                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                </div>
+                <div class="assinatura-linha">Assinatura do Responsável / Assistente Social</div>
+            </div>
+        </div>
+        
+        <div class="registro-info">
+            Relatório gerado em <strong>${dataGeracao}</strong>
+        </div>
+        
+        <div class="footer">
+            <p>Documento gerado automaticamente pelo EducaPleno</p>
+            <p>Setor: Assistente Social</p>
+        </div>
+    </body>
+    </html>`;
+}
+
+// ============================================================================
+// 🆕 SISTEMA DE SESSÃO DE ASSINATURA VIA QR CODE
+// ============================================================================
+
+function gerarUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+/**
+ * Marca/desmarca necessidade de assinatura.
+ * Cria sessão + gera QR Code + abre modal.
+ */
+async function toggleNecessitaAssinatura(modulo) {
+    const check = safeGet(`${modulo}NecessitaAssinatura`);
+    if (!check) return;
+    
+    if (check.checked) {
+        // 1. Monta snapshot dos dados atuais
+        const snapshot = montarSnapshotAtendimento(modulo);
+        
+        if (!snapshot.alunoId) {
+            mostrarToastConcluido('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
+            check.checked = false;
+            return;
+        }
+        
+        // 2. Gera ID único para a sessão
+        const sessaoId = gerarUUID();
+        estadoSessaoAssinatura[modulo].sessaoId = sessaoId;
+        estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+        
+        // 3. Cria a sessão no backend
+        try {
+            const response = await fetch('/api/sessoes-assinatura', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    sessaoId,
+                    tipo: 'assistente_social',
+                    dadosAtendimento: snapshot
+                })
+            });
+            
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
+            
+            console.log('✅ Sessão criada:', sessaoId);
+            
+            // 4. Gera QR Code
+            const urlAssinatura = `${window.location.origin}/assistente-social.html?assinatura=${sessaoId}`;
+            
+            try {
+                const qrResponse = await fetch('/api/qrcode/gerar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ url: urlAssinatura })
+                });
+                const qrData = await qrResponse.json();
+                
+                if (qrData.success && qrData.qrCode) {
+                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = qrData.qrCode;
+                } else {
+                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
+                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                }
+            } catch (e) {
+                console.warn('Erro ao gerar QR Code, usando fallback:', e);
+                estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
+                    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+            }
+            
+            // 5. Abre o modal com QR Code
+            abrirModalAssinatura(modulo, urlAssinatura);
+            
+            // 6. Inicia monitoramento
+            iniciarMonitoramentoSessao(modulo, sessaoId);
+            
+            mostrarToastConcluido('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
+            
+        } catch (e) {
+            console.error('Erro ao criar sessão:', e);
+            mostrarToastConcluido('❌ Erro ao criar sessão de assinatura', 'error');
+            check.checked = false;
+            estadoSessaoAssinatura[modulo].sessaoId = null;
+        }
+    } else {
+        // Desmarcou → cancela a sessão
+        const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+        if (sessaoId) {
+            try {
+                await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) { console.warn(e); }
+        }
+        
+        estadoSessaoAssinatura[modulo].sessaoId = null;
+        estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+        estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
+        pararMonitoramentoSessao(modulo);
+        fecharModalAssinatura(modulo);
+    }
+}
+
+/**
+ * Monta snapshot dos dados atuais para exibir na tela de assinatura.
+ */
+function montarSnapshotAtendimento(modulo) {
+    return {
+        alunoId: currentAluno?.id,
+        alunoNome: currentAluno?.nome,
+        alunoMatricula: currentAluno?.matricula,
+        alunoTurma: currentAluno?.turma,
+        alunoCurso: currentAluno?.curso,
+        alunoFoto: currentAluno?.fotoPerfil,
+        motivo: tipoTarefaSelecionado,
+        motivoLabel: TIPO_LABELS[tipoTarefaSelecionado] || tipoTarefaSelecionado,
+        descricao: safeGet('descricao')?.value || '',
+        observacoes: safeGet('observacoes')?.value || '',
+        gravidade: safeGet('gravidade')?.value || 'media',
+        prioridade: safeGet('prioridade')?.value || 'normal',
+        data: new Date().toISOString().split('T')[0]
+    };
+}
+
+/**
+ * Abre o modal com QR Code.
+ */
+function abrirModalAssinatura(modulo, urlAssinatura) {
+    const antigo = safeGet('modalAssinaturaQR');
+    if (antigo) antigo.remove();
+    
+    const qrUrl = estadoSessaoAssinatura[modulo].qrCodeDataUrl || 
+        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+    
+    const modalHtml = `
+        <div class="modal fade" id="modalAssinaturaQR" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 20px; border: none; overflow: hidden;">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; padding: 20px 25px;">
+                        <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-signature"></i> 
+                            Aguardando Assinatura
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="assistenteSocial.fecharModalAssinatura('${modulo}')"></button>
+                    </div>
+                    
+                    <div class="modal-body" style="padding: 30px; text-align: center;">
+                        <div id="modalAssinaturaStatus" style="margin-bottom: 20px;">
+                            <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spinQR 1s linear infinite; flex-shrink: 0;"></div>
+                                <div>
+                                    <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                    <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                        Peça para o responsável escanear o QR Code abaixo
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                            <img src="${qrUrl}" 
+                                alt="QR Code para assinatura" 
+                                style="width: 260px; height: 260px; display: block;"
+                                id="qrCodeImage">
+                            <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                <i class="fas fa-mobile-alt"></i> 
+                                Aponte a câmera do celular
+                            </p>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span><strong>O responsável assina direto no celular dele</strong>, sem sair da tela. Assim que ele confirmar, você verá aqui automaticamente.</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <i class="fas fa-clock"></i>
+                                <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 16px;">
+                            <button onclick="assistenteSocial.copiarLinkAssinatura('${urlAssinatura}')"
+                                    class="btn-copiar-link">
+                                <i class="fas fa-link"></i> Copiar link de assinatura
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
+                        <button type="button" class="btn btn-outline-secondary" onclick="assistenteSocial.fecharModalAssinatura('${modulo}')" style="border-radius: 10px;">
+                            <i class="fas fa-eye-slash"></i> Ocultar
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="assistenteSocial.cancelarSessaoAssinatura('${modulo}')" style="border-radius: 10px;">
+                            <i class="fas fa-times"></i> Cancelar Assinatura
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    estadoSessaoAssinatura[modulo].modalInstance = new bootstrap.Modal(safeGet('modalAssinaturaQR'));
+    estadoSessaoAssinatura[modulo].modalInstance.show();
+    
+    setTimeout(() => {
+        const img = safeGet('qrCodeImage');
+        if (img && window.innerWidth < 500) {
+            img.style.width = '200px';
+            img.style.height = '200px';
+        }
+    }, 200);
+}
+
+function fecharModalAssinatura(modulo) {
+    if (estadoSessaoAssinatura[modulo].modalInstance) {
+        estadoSessaoAssinatura[modulo].modalInstance.hide();
+    }
+    const modalEl = safeGet('modalAssinaturaQR');
+    if (modalEl) setTimeout(() => modalEl.remove(), 300);
+    
+    mostrarBlocoCompactoAssinatura(modulo);
+}
+
+function mostrarBlocoCompactoAssinatura(modulo) {
+    let bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    
+    if (!bloco) {
+        bloco = document.createElement('div');
+        bloco.id = `${modulo}BlocoAssinaturaInfo`;
+        const check = safeGet(`${modulo}NecessitaAssinatura`);
+        if (check && check.parentElement) {
+            check.parentElement.parentElement.appendChild(bloco);
+        }
+    }
+    
+    bloco.style.display = 'block';
+    bloco.innerHTML = `
+        <div class="alert alert-warning" style="font-size: 13px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <i class="fas fa-clock"></i>
+                <div style="flex: 1;">
+                    <strong>Aguardando assinatura...</strong>
+                    <p style="margin: 3px 0 0; font-size: 12px;">O responsável precisa escanear o QR Code</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-warning" 
+                        onclick="assistenteSocial.reabrirModalAssinatura('${modulo}')"
+                        style="border-radius: 8px;">
+                    <i class="fas fa-qrcode"></i> Mostrar QR
+                </button>
+            </div>
+        </div>`;
+}
+
+function reabrirModalAssinatura(modulo) {
+    const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+    if (!sessaoId) {
+        mostrarToastConcluido('⚠️ Nenhuma sessão ativa', 'warning');
+        return;
+    }
+    const urlAssinatura = `${window.location.origin}/assistente-social.html?assinatura=${sessaoId}`;
+    abrirModalAssinatura(modulo, urlAssinatura);
+}
+
+async function copiarLinkAssinatura(url) {
+    try {
+        await navigator.clipboard.writeText(url);
+        mostrarToastConcluido('✅ Link copiado!', 'success');
+    } catch (e) {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        mostrarToastConcluido('✅ Link copiado!', 'success');
+    }
+}
+
+function iniciarMonitoramentoSessao(modulo, sessaoId) {
+    pararMonitoramentoSessao(modulo);
+    
+    console.log('👀 Monitorando sessão:', sessaoId);
+    
+    const intervalId = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    console.warn('Sessão expirou ou foi removida');
+                    pararMonitoramentoSessao(modulo);
+                }
+                return;
+            }
+            
+            const data = await response.json();
+            if (!data.success) return;
+            
+            if (data.sessao.status === 'assinado') {
+                console.log('✅ Assinatura capturada!');
+                
+                estadoSessaoAssinatura[modulo].assinaturaCapturada = data.sessao.assinaturaBase64;
+                atualizarStatusAssinado(modulo, data.sessao);
+                pararMonitoramentoSessao(modulo);
+                
+                if (estadoSessaoAssinatura[modulo].modalInstance) {
+                    estadoSessaoAssinatura[modulo].modalInstance.hide();
+                }
+                const modalEl = safeGet('modalAssinaturaQR');
+                if (modalEl) setTimeout(() => modalEl.remove(), 300);
+                
+                mostrarToastConcluido(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome}!`, 'success');
+                
+            } else if (data.sessao.status === 'cancelado') {
+                console.log('Sessão cancelada');
+                pararMonitoramentoSessao(modulo);
+            }
+        } catch (e) {
+            console.warn('Erro no monitoramento:', e);
+        }
+    }, 3000);
+    
+    estadoSessaoAssinatura[modulo].monitoramentoInterval = intervalId;
+}
+
+function pararMonitoramentoSessao(modulo) {
+    const id = estadoSessaoAssinatura[modulo]?.monitoramentoInterval;
+    if (id) {
+        clearInterval(id);
+        estadoSessaoAssinatura[modulo].monitoramentoInterval = null;
+    }
+}
+
+function atualizarStatusAssinado(modulo, sessao) {
+    let bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    
+    if (!bloco) {
+        bloco = document.createElement('div');
+        bloco.id = `${modulo}BlocoAssinaturaInfo`;
+        const check = safeGet(`${modulo}NecessitaAssinatura`);
+        if (check && check.parentElement) {
+            check.parentElement.parentElement.appendChild(bloco);
+        }
+    }
+    
+    bloco.style.display = 'block';
+    bloco.innerHTML = `
+        <div style="margin-top: 10px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <i class="fas fa-check-circle" style="color: #10b981; font-size: 22px;"></i>
+                <div style="flex: 1;">
+                    <strong style="color: #065f46;">✓ Assinatura capturada!</strong>
+                    <p style="margin: 3px 0 0; font-size: 12px; color: #047857;">
+                        Assinado por <strong>${escapeHTML(sessao.assinadaPorNome || '')}</strong>
+                        ${sessao.assinadaEm ? ` em ${new Date(sessao.assinadaEm).toLocaleString('pt-BR')}` : ''}
+                    </p>
+                </div>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 8px; text-align: center;">
+                <img src="${sessao.assinaturaBase64}" 
+                    style="max-width: 100%; max-height: 100px;" 
+                    alt="Assinatura">
+            </div>
+            <button type="button" 
+                    onclick="assistenteSocial.refazerAssinatura('${modulo}')"
+                    class="btn btn-sm btn-outline-danger w-100 mt-2"
+                    style="border-radius: 8px;">
+                <i class="fas fa-redo"></i> Refazer Assinatura
+            </button>
+        </div>`;
+}
+
+async function cancelarSessaoAssinatura(modulo) {
+    const confirmar = await confirm('Cancelar a assinatura? O responsável não poderá mais assinar este atendimento.');
+    if (!confirmar) return;
+    
+    const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+    if (sessaoId) {
+        try {
+            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    pararMonitoramentoSessao(modulo);
+    fecharModalAssinatura(modulo);
+    
+    estadoSessaoAssinatura[modulo].sessaoId = null;
+    estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+    estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
+    
+    const check = safeGet(`${modulo}NecessitaAssinatura`);
+    if (check) check.checked = false;
+    
+    const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    if (bloco) bloco.style.display = 'none';
+    
+    mostrarToastConcluido('Sessão cancelada', 'info');
+}
+
+async function refazerAssinatura(modulo) {
+    const confirmar = await confirm('Refazer a assinatura? A atual será descartada.');
+    if (!confirmar) return;
+    
+    const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+    if (sessaoId) {
+        try {
+            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    pararMonitoramentoSessao(modulo);
+    estadoSessaoAssinatura[modulo].sessaoId = null;
+    estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+    estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
+    
+    const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    if (bloco) bloco.style.display = 'none';
+    
+    const check = safeGet(`${modulo}NecessitaAssinatura`);
+    if (check) {
+        check.checked = false;
+        check.checked = true;
+        await toggleNecessitaAssinatura(modulo);
+    }
+}
+
+function limparEstadoSessaoAssinatura(modulo) {
+    estadoSessaoAssinatura[modulo] = {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    };
+}
+
+// ============================================================================
+// 📱 MODO ASSINATURA (via URL ?assinatura=UUID)
+// ============================================================================
+
+async function mostrarTelaAssinatura(sessaoId) {
+    // Esconde elementos da UI normal
+    document.querySelectorAll('.header-top, .card, .container > *').forEach(el => {
+        if (el && !el.id?.includes('content')) {
+            el.style.display = 'none';
+        }
+    });
+    
+    // Cria container principal
+    let container = safeGet('telaAssinaturaContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'telaAssinaturaContainer';
+        document.body.innerHTML = '';
+        document.body.appendChild(container);
+    }
+    
+    container.innerHTML = `
+        <div style="min-height: 100vh; background: #f0f4f8; padding: 20px; display: flex; flex-direction: column; align-items: center;">
+            <div style="max-width: 600px; width: 100%;">
+                <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 18px 24px; border-radius: 16px 16px 0 0; text-align: center;">
+                    <h1 style="font-size: 20px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        <i class="fas fa-signature"></i> Assinatura Digital
+                    </h1>
+                </div>
+                
+                <div id="telaAssinaturaInfo" style="background: white; padding: 20px; border-left: 4px solid #8b5cf6;">
+                    <div style="text-align: center; padding: 40px;">
+                        <div style="width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #8b5cf6; border-radius: 50%; animation: spinQR 1s linear infinite; margin: 0 auto 15px;"></div>
+                        <p style="color: #64748b; margin: 0;">Carregando atendimento...</p>
+                    </div>
+                </div>
+                
+                <div id="telaAssinaturaArea" style="background: white; padding: 20px; display: none; border-radius: 0 0 16px 16px;">
+                    <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 300px; margin-bottom: 16px;">
+                        <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block; touch-action: none;"></canvas>
+                        <div id="placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none;">
+                            <i class="fas fa-pen-fancy" style="font-size: 48px; display: block; margin-bottom: 10px;"></i>
+                            <span style="font-size: 15px;">Assine aqui com o dedo</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px;">
+                        <button onclick="assistenteSocial.limparAssinaturaTela()" 
+                                style="flex: 1; padding: 16px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 15px;">
+                            <i class="fas fa-eraser"></i> Limpar
+                        </button>
+                        <button id="btnSalvarAssinatura" onclick="assistenteSocial.salvarAssinaturaTela()" disabled
+                                style="flex: 2; padding: 16px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: not-allowed;">
+                            <i class="fas fa-check"></i> Confirmar Assinatura
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    try {
+        const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            safeGet('telaAssinaturaInfo').innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
+                    <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão inválida ou expirada</h3>
+                    <p style="color: #64748b; margin: 0;">Esta sessão de assinatura não existe mais ou expirou (30 min).</p>
+                </div>`;
+            return;
+        }
+        
+        if (data.sessao.status === 'assinado') {
+            safeGet('telaAssinaturaInfo').innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px; display: block;"></i>
+                    <h3 style="color: #10b981; margin: 0 0 10px;">Esta sessão já foi assinada</h3>
+                    <p style="color: #64748b; margin: 0;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p>
+                </div>`;
+            return;
+        }
+        
+        const d = data.sessao.dadosAtendimento || {};
+        
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="border-left: 4px solid #8b5cf6; padding-left: 14px;">
+                <h2 style="margin: 0 0 4px; font-size: 18px; color: #8b5cf6;">Atendimento Assistente Social</h2>
+                <p style="margin: 0; color: #64748b; font-size: 13px;">Confirme os dados e assine abaixo</p>
+            </div>
+            
+            <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Aluno</span>
+                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span>
+                </div>
+                <div>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Turma</span>
+                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoTurma || '-')}</span>
+                </div>
+                <div>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Motivo</span>
+                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.motivoLabel || '-')}</span>
+                </div>
+                ${d.gravidade ? `
+                    <div>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Gravidade</span>
+                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.gravidade.toUpperCase())}</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        safeGet('telaAssinaturaArea').style.display = 'block';
+        
+        sessaoAssinaturaModo = sessaoId;
+        sessaoAssinaturaAtual = data.sessao;
+        
+        inicializarCanvasTela();
+        
+    } catch (e) {
+        console.error('Erro ao carregar sessão:', e);
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="text-align: center; padding: 40px 20px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
+                <h3 style="color: #ef4444; margin: 0 0 10px;">Erro ao carregar</h3>
+                <p style="color: #64748b; margin: 0;">${e.message}</p>
+            </div>`;
+    }
+}
+
+function inicializarCanvasTela() {
+    const canvas = safeGet('canvasAssinatura');
+    const wrapper = safeGet('canvasWrapper');
+    const placeholder = safeGet('placeholder');
+    if (!canvas || !wrapper) return;
+    
+    telaCanvas = canvas;
+    telaWrapper = wrapper;
+    telaPlaceholder = placeholder;
+    telaTemAssinatura = false;
+    telaDesenhando = false;
+    
+    const ajustar = () => {
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0) { setTimeout(ajustar, 200); return; }
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#8b5cf6';
+        telaCtx = ctx;
+    };
+    ajustar();
+    
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        let cx, cy;
+        if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+        else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+        else { cx = e.clientX; cy = e.clientY; }
+        return { x: cx - rect.left, y: cy - rect.top };
+    };
+    
+    const iniciar = (e) => {
+        e.preventDefault();
+        telaDesenhando = true;
+        telaTemAssinatura = true;
+        const p = getPos(e);
+        telaLastX = p.x;
+        telaLastY = p.y;
+        wrapper.style.borderColor = '#8b5cf6';
+        wrapper.style.borderStyle = 'solid';
+        placeholder.style.opacity = '0';
+        
+        const btn = safeGet('btnSalvarAssinatura');
+        if (btn) {
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.cursor = 'pointer';
+        }
+    };
+    
+    const desenhar = (e) => {
+        if (!telaDesenhando) return;
+        e.preventDefault();
+        const p = getPos(e);
+        telaCtx.beginPath();
+        telaCtx.moveTo(telaLastX, telaLastY);
+        telaCtx.lineTo(p.x, p.y);
+        telaCtx.stroke();
+        telaLastX = p.x;
+        telaLastY = p.y;
+    };
+    
+    const parar = (e) => {
+        if (e?.preventDefault) e.preventDefault();
+        telaDesenhando = false;
+    };
+    
+    canvas.addEventListener('touchstart', iniciar, { passive: false });
+    canvas.addEventListener('touchmove', desenhar, { passive: false });
+    canvas.addEventListener('touchend', parar, { passive: false });
+    canvas.addEventListener('touchcancel', parar, { passive: false });
+    canvas.addEventListener('mousedown', iniciar);
+    canvas.addEventListener('mousemove', desenhar);
+    canvas.addEventListener('mouseup', parar);
+    canvas.addEventListener('mouseleave', () => { if (telaDesenhando) parar(); });
+}
+
+function limparAssinaturaTela() {
+    if (!telaCtx || !telaCanvas) return;
+    const rect = telaCanvas.getBoundingClientRect();
+    telaCtx.clearRect(0, 0, rect.width, rect.height);
+    telaTemAssinatura = false;
+    if (telaPlaceholder) telaPlaceholder.style.opacity = '1';
+    if (telaWrapper) {
+        telaWrapper.style.borderColor = '#cbd5e0';
+        telaWrapper.style.borderStyle = 'dashed';
+    }
+    const btn = safeGet('btnSalvarAssinatura');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+}
+
+async function salvarAssinaturaTela() {
+    if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
+    
+    const btn = safeGet('btnSalvarAssinatura');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    }
+    
+    try {
+        const base64 = telaCanvas.toDataURL('image/png');
+        
+        const response = await fetch(`/api/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ assinaturaBase64: base64 })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+        
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="text-align: center; padding: 60px 20px;">
+                <i class="fas fa-check-circle" style="font-size: 64px; color: #10b981; margin-bottom: 20px; display: block;"></i>
+                <h2 style="color: #10b981; margin: 0 0 10px; font-size: 22px;">Assinatura Confirmada!</h2>
+                <p style="color: #64748b; margin: 0; font-size: 15px;">
+                    A assinatura foi registrada com sucesso.<br>
+                    Você já pode fechar esta janela.
+                </p>
+                <button onclick="window.close()" 
+                        style="margin-top: 25px; padding: 14px 28px; background: #8b5cf6; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 15px;">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        `;
+        safeGet('telaAssinaturaArea').style.display = 'none';
+        
+    } catch (e) {
+        console.error('Erro ao salvar assinatura:', e);
+        mostrarToastConcluido('❌ ' + e.message, 'error');
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+        }
+    }
+}
 
 // ============================================
 // 🔔 SISTEMA DE NOTIFICAÇÕES UNIFICADO
-// (Notificações do sistema + Lembretes de remarcação)
 // ============================================
-
 let notificacoesInterval = null;
 let __notificacoesCache = [];
 let __lembretesCache = [];
@@ -2957,9 +3976,6 @@ function confirmarInterno(mensagem) {
     });
 }
 
-// ============================================
-// INICIAR SISTEMA
-// ============================================
 function iniciarSistemaNotificacoesUnificado() {
     if (!document.getElementById('notificacoesBtn')) return;
     
@@ -2985,9 +4001,6 @@ async function carregarTudo() {
     atualizarBadgeUnificado();
 }
 
-// ============================================
-// NOTIFICAÇÕES DO SISTEMA
-// ============================================
 async function carregarNotificacoesSistema() {
     try {
         const token = localStorage.getItem('auth_token');
@@ -3005,9 +4018,6 @@ async function carregarNotificacoesSistema() {
     }
 }
 
-// ============================================
-// LEMBRETES DE REMARCAÇÃO
-// ============================================
 async function carregarLembretesRemarcacao() {
     try {
         const token = localStorage.getItem('auth_token');
@@ -3032,9 +4042,6 @@ async function carregarLembretesRemarcacao() {
     }
 }
 
-// ============================================
-// RENDERIZAÇÃO UNIFICADA
-// ============================================
 function renderizarSinoUnificado() {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
@@ -3042,7 +4049,6 @@ function renderizarSinoUnificado() {
     const temNotificacoes = __notificacoesCache.length > 0;
     const temLembretes = __lembretesCache.length > 0;
     
-    // Se não tem nada
     if (!temNotificacoes && !temLembretes) {
         lista.innerHTML = `
             <div class="notificacoes-vazio">
@@ -3054,7 +4060,6 @@ function renderizarSinoUnificado() {
     
     let html = '';
     
-    // ========== SEÇÃO 1: LEMBRETES DE REMARCAÇÃO (vem primeiro, é mais urgente) ==========
     if (temLembretes) {
         html += `
             <div class="notificacoes-secao">
@@ -3064,7 +4069,6 @@ function renderizarSinoUnificado() {
                     <span class="badge-count">${__lembretesCache.length}</span>
                 </div>`;
         
-        // Ordenar lembretes por urgência
         const ordem = { atrasado: 0, iminente: 1, proximo: 2, hoje: 3, amanha: 4, futuro: 5 };
         const lembretesOrdenados = [...__lembretesCache].sort((a, b) => {
             return ordem[calcularNivelAlerta(a).nivel] - ordem[calcularNivelAlerta(b).nivel];
@@ -3113,7 +4117,6 @@ function renderizarSinoUnificado() {
         html += `</div>`;
     }
     
-    // ========== SEÇÃO 2: NOTIFICAÇÕES DO SISTEMA ==========
     if (temNotificacoes) {
         html += `
             <div class="notificacoes-secao">
@@ -3160,7 +4163,6 @@ function renderizarSinoUnificado() {
     
     lista.innerHTML = html;
     
-    // Adicionar listeners nas notificações do sistema
     lista.querySelectorAll('.notificacao-item').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.getAttribute('data-notif-id');
@@ -3170,9 +4172,6 @@ function renderizarSinoUnificado() {
     });
 }
 
-// ============================================
-// BADGE UNIFICADO
-// ============================================
 function atualizarBadgeUnificado() {
     const badge = document.getElementById('notificacoesBadge');
     const btn = document.getElementById('notificacoesBtn');
@@ -3184,7 +4183,6 @@ function atualizarBadgeUnificado() {
         badge.textContent = total > 99 ? '99+' : total;
         badge.style.display = 'inline';
         
-        // Verifica se tem urgente
         const temUrgente = __lembretesCache.some(r => calcularNivelAlerta(r).urgente);
         if (temUrgente) {
             btn.classList.add('tem-notificacao');
@@ -3199,9 +4197,6 @@ function atualizarBadgeUnificado() {
     }
 }
 
-// ============================================
-// ABRIR / FECHAR
-// ============================================
 function abrirNotificacoes() {
     const dropdown = document.getElementById('notificacoesDropdown');
     if (!dropdown) return;
@@ -3215,9 +4210,6 @@ function fecharNotificacoes() {
     document.getElementById('notificacoesDropdown')?.classList.remove('show');
 }
 
-// ============================================
-// AÇÕES EM NOTIFICAÇÕES
-// ============================================
 async function abrirNotificacao(id, link) {
     try {
         const token = localStorage.getItem('auth_token');
@@ -3278,383 +4270,6 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
-// ============================================
-// 📄 EXPORTAR PDF (padrão unificado)
-// ============================================
-function exportarPDF() {
-    if (!relatorioData) {
-        mostrarToastConcluido('⚠️ Gere um relatório primeiro. Clique em BUSCAR.', 'error');
-        return;
-    }
-    
-    const html = gerarHTMLRelatorioAS(relatorioData);
-    
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => setTimeout(() => win.print(), 500);
-}
-
-// ============================================
-// 🎯 HABILITAR BOTÕES APÓS CARREGAR RELATÓRIO
-// ============================================
-function habilitarBotoesRelatorioAS() {
-    const btnCSV = safeGet('btnExportarCSVAS');
-    const btnPDF = safeGet('btnExportarPDFAS');
-    if (btnCSV) btnCSV.disabled = false;
-    if (btnPDF) btnPDF.disabled = false;
-}
-
-// ============================================
-// 🎨 GERAR HTML DO RELATÓRIO (PADRONIZADO + CARIMBO COLADO NA LINHA)
-// ============================================
-function gerarHTMLRelatorioAS(data) {
-    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
-    const logoIema = '/uploads/logo-iema.png';
-    const carimbo = '/icons/assinatura_assistente_social.ico';
-    const dataGeracao = new Date().toLocaleString('pt-BR');
-    
-    // ========== BUSCAR ASSINATURA DIGITAL ==========
-    let assinaturaDigital = null;
-    if (tipo === 'aluno' && Array.isArray(data.atendimentos)) {
-        const comAssinatura = data.atendimentos.find(a => a.temAssinatura && a.assinaturaBase64);
-        if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
-    }
-    if (!assinaturaDigital) {
-        const lista = data.atendimentos || data.registros || [];
-        const comAssinatura = lista.find(a => a.temAssinatura && a.assinaturaBase64);
-        if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
-    }
-    
-    // ========== TÍTULO ==========
-    let titulo = 'Relatório de Atendimentos - Assistente Social';
-    let subtitulo = '';
-    if (tipo === 'turma') {
-        titulo = 'Relatório de Atendimentos';
-        subtitulo = `Turma: ${data.turma || ''}`;
-    } else if (tipo === 'aluno') {
-        titulo = 'Relatório Individual do Aluno';
-        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
-    } else {
-        subtitulo = 'Relatório Geral';
-    }
-    
-    // ========== ESTATÍSTICAS ==========
-    let statsHTML = '';
-    if (tipo === 'geral') {
-        statsHTML = `
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">${data.totalAtendimentos || 0}</div>
-                    <div class="stat-label">Total de Atendimentos</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porTipo || []).length}</div>
-                    <div class="stat-label">Tipos Diferentes</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porTurma || []).length}</div>
-                    <div class="stat-label">Turmas Atendidas</div>
-                </div>
-            </div>
-        `;
-    } else if (tipo === 'turma') {
-        statsHTML = `
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
-                    <div class="stat-label">Total de Atendimentos</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${data.estatisticas?.totalAlunosAtendidos || (data.porAluno || []).length}</div>
-                    <div class="stat-label">Alunos Atendidos</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porAluno || []).length}</div>
-                    <div class="stat-label">Alunos com Registro</div>
-                </div>
-            </div>
-        `;
-    } else if (tipo === 'aluno') {
-        statsHTML = `
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">${data.estatisticas?.totalAtendimentos || 0}</div>
-                    <div class="stat-label">Total de Atendimentos</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.estatisticas?.porTipo || []).length}</div>
-                    <div class="stat-label">Tipos Diferentes</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${Object.keys(data.estatisticas?.porGravidade || {}).length}</div>
-                    <div class="stat-label">Níveis de Gravidade</div>
-                </div>
-            </div>
-        `;
-    }
-    
-    // ========== TABELAS ==========
-    let tabelaHTML = '';
-    
-    if (tipo === 'geral') {
-        const porTipo = Array.isArray(data.porTipo) ? data.porTipo : [];
-        const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
-        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
-        
-        tabelaHTML = `
-            <div class="section-title">📊 Distribuição por Tipo</div>
-            <table>
-                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>
-                    ${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') 
-                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado disponível</td></tr>'}
-                </tbody>
-            </table>
-            
-            <div class="section-title">🏫 Distribuição por Turma</div>
-            <table>
-                <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
-                <tbody>
-                    ${porTurma.map(t => `<tr><td><strong>${escapeHTML(t.turma || 'Sem turma')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('') 
-                    || '<tr><td colspan="3" style="text-align:center;">Nenhum dado disponível</td></tr>'}
-                </tbody>
-            </table>
-            
-            <div class="section-title">📋 Últimos Atendimentos</div>
-            <table>
-                <thead><tr><th>Data</th><th>Aluno</th><th>Turma</th><th>Tipo</th><th>Gravidade</th><th>Status</th></tr></thead>
-                <tbody>
-                    ${atendimentos.slice(0, 30).map(a => `
-                        <tr>
-                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
-                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                            <td>${escapeHTML(a.alunoTurma || '')}</td>
-                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
-                            <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
-                            <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
-                        </tr>`).join('') 
-                    || '<tr><td colspan="6" style="text-align:center;">Nenhum atendimento registrado</td></tr>'}
-                </tbody>
-            </table>
-        `;
-    } else if (tipo === 'turma') {
-        const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
-        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
-        
-        tabelaHTML = `
-            <div class="section-title">📊 Distribuição por Tipo</div>
-            <table>
-                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>
-                    ${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') 
-                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
-            </table>
-            
-            <div class="section-title">👥 Atendimentos por Aluno</div>
-            <table>
-                <thead><tr><th>Aluno</th><th style="width:100px;text-align:center;">Total</th><th>Tipos</th></tr></thead>
-                <tbody>
-                    ${porAluno.map(a => `
-                        <tr>
-                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                            <td style="text-align:center;">${a.total || 0}</td>
-                            <td>${Object.entries(a.tipos || {}).map(([t, c]) => `${escapeHTML(TIPO_LABELS[t] || t)}: ${c}`).join('<br>')}</td>
-                        </tr>`).join('') 
-                    || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
-            </table>
-        `;
-    } else if (tipo === 'aluno') {
-        const porTipo = Array.isArray(data.estatisticas?.porTipo) ? data.estatisticas.porTipo : [];
-        const porGrav = data.estatisticas?.porGravidade || {};
-        const atendimentos = Array.isArray(data.atendimentos) ? data.atendimentos : [];
-        
-        tabelaHTML = `
-            <div class="section-title">📊 Distribuição por Tipo</div>
-            <table>
-                <thead><tr><th>Tipo de Tarefa</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>
-                    ${porTipo.map(t => `<tr><td><strong>${escapeHTML(t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('') 
-                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
-            </table>
-            
-            <div class="section-title">⚠️ Distribuição por Gravidade</div>
-            <table>
-                <thead><tr><th>Gravidade</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>
-                    ${Object.entries(porGrav).map(([g, c]) => `<tr><td><strong>${escapeHTML(g.toUpperCase())}</strong></td><td style="text-align:center;">${c}</td></tr>`).join('') 
-                    || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
-            </table>
-            
-            <div class="section-title">📋 Histórico de Atendimentos</div>
-            <table>
-                <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Gravidade</th><th>Status</th></tr></thead>
-                <tbody>
-                    ${atendimentos.map(a => `
-                        <tr>
-                            <td>${a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : '-'}</td>
-                            <td>${escapeHTML(a.tipoTarefaLabel || '')}</td>
-                            <td>${escapeHTML((a.descricao || '').substring(0, 80))}${(a.descricao || '').length > 80 ? '...' : ''}</td>
-                            <td>${escapeHTML((a.gravidade || 'media').toUpperCase())}</td>
-                            <td><span class="badge-status ${a.status === 'finalizado' ? 'finalizado' : 'andamento'}">${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Andamento'}</span></td>
-                        </tr>`).join('') 
-                    || '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento</td></tr>'}
-                </tbody>
-            </table>
-        `;
-    }
-    
-    // ========== HTML FINAL (PADRONIZADO + CARIMBO COLADO NA LINHA) ==========
-    return `<!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <title>${titulo}</title>
-        <style>
-            @page { size: A4 portrait; margin: 8mm; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
-            
-            .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
-            .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
-            .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
-            .header p { font-size: 8pt; margin: 1px 0 0; }
-            
-            .titulo {
-                text-align: center; font-size: 11pt; font-weight: bold;
-                background: #ede9fe; padding: 4px 8px; border: 1.5px solid #000;
-                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
-            }
-            .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
-            
-            .stats {
-                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
-                background: #f5f3ff; border-radius: 5px; border: 1px solid #ddd6fe;
-            }
-            .stat { text-align: center; flex: 1; border-right: 1px solid #ddd6fe; }
-            .stat:last-child { border-right: none; }
-            .stat-value { font-size: 13pt; font-weight: bold; color: #7c3aed; line-height: 1; }
-            .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
-            
-            .section-title {
-                font-size: 9pt; font-weight: bold; background: #e8e8e8;
-                padding: 2px 6px; border-left: 3px solid #8b5cf6; margin: 6px 0 3px;
-            }
-            
-            table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
-            th { background: #8b5cf6; color: white; padding: 4px 5px; text-align: left; border: 1px solid #7c3aed; font-size: 8pt; }
-            td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
-            tr:nth-child(even) { background: #f9fafb; }
-            
-            .badge-status {
-                display: inline-block; padding: 1px 6px; border-radius: 8px;
-                font-size: 7.5pt; font-weight: bold;
-            }
-            .badge-status.finalizado { background: #d1fae5; color: #065f46; }
-            .badge-status.andamento { background: #fef3c7; color: #92400e; }
-            
-            /* 🖋️ Assinatura com carimbo — COLADO NA LINHA */
-            .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
-            .assinatura { flex: 0 0 60%; text-align: center; }
-            
-            .assinatura-container-relatorio {
-                position: relative;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 0;
-            }
-            
-            .assinatura-container-relatorio::after {
-                content: '';
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                border-bottom: 1px solid #000;
-            }
-            
-            .assinatura-img {
-                max-height: 14mm;
-                max-width: 100%;
-                object-fit: contain;
-                position: relative;
-                z-index: 2;
-                margin-bottom: 1mm;
-            }
-            
-            .carimbo-overlay {
-                position: absolute;
-                bottom: 1mm;
-                left: 50%;
-                transform: translateX(-50%);
-                max-height: 15mm;
-                max-width: 55mm;
-                object-fit: contain;
-                opacity: 0.95;
-                pointer-events: none;
-                z-index: 1;
-            }
-            
-            .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
-            
-            .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
-            .footer p { margin: 1px 0; }
-            .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
-            
-            .btn-print {
-                display: block; margin: 10px auto; padding: 8px 20px;
-                background: #8b5cf6; color: white; border: none; border-radius: 6px;
-                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
-            }
-            .btn-print:hover { background: #7c3aed; }
-            
-            @media print { .no-print { display: none !important; } body { padding: 0; } }
-        </style>
-    </head>
-    <body>
-        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        
-        <div class="header">
-            <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
-            <h1>IEMA Pleno: São Luís - Centro</h1>
-            <p>Sistema de Atendimentos — Assistente Social</p>
-        </div>
-        
-        <div class="titulo">🤝 ${titulo}</div>
-        ${subtitulo ? `<div class="subtitulo">${escapeHTML(subtitulo)}</div>` : ''}
-        
-        ${statsHTML}
-        ${tabelaHTML}
-        
-        <div class="assinaturas">
-            <div class="assinatura">
-                <div class="assinatura-container-relatorio">
-                    ${assinaturaDigital ? `<img class="assinatura-img" src="${assinaturaDigital}" alt="Assinatura">` : ''}
-                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
-                </div>
-                <div class="assinatura-linha">Assinatura do Responsável / Assistente Social</div>
-            </div>
-        </div>
-        
-        <div class="registro-info">
-            Relatório gerado em <strong>${dataGeracao}</strong>
-        </div>
-        
-        <div class="footer">
-            <p>Documento gerado automaticamente pelo EducaPleno</p>
-            <p>Setor: Assistente Social</p>
-        </div>
-    </body>
-    </html>`;
-}
-
-// Iniciar quando o DOM carregar
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
 });
@@ -3663,6 +4278,9 @@ window.addEventListener('beforeunload', () => {
     if (notificacoesInterval) clearInterval(notificacoesInterval);
 });
 
+// ============================================
+// LOGOUT
+// ============================================
 async function logout() {
     const confirmar = await confirm('Tem certeza que deseja sair?');
     if (confirmar) {
@@ -3717,3 +4335,17 @@ window.confirmarInterno = confirmarInterno;
 window.exportarPDF = exportarPDF;
 window.habilitarBotoesRelatorioAS = habilitarBotoesRelatorioAS;
 window.gerarHTMLRelatorioAS = gerarHTMLRelatorioAS;
+
+// 🆕 SISTEMA DE SESSÃO DE ASSINATURA
+window.assistenteSocial = {
+    toggleNecessitaAssinatura,
+    abrirModalAssinatura,
+    fecharModalAssinatura,
+    reabrirModalAssinatura,
+    copiarLinkAssinatura,
+    cancelarSessaoAssinatura,
+    refazerAssinatura,
+    mostrarTelaAssinatura,
+    limparAssinaturaTela,
+    salvarAssinaturaTela
+};

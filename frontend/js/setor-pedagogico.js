@@ -73,7 +73,12 @@ class SetorPedagogico {
             modoAtual: 'automatico',
             alunosPorTurma: [],
             scanner: null,
-            scannerAtivo: false
+            scannerAtivo: false,
+            // 🆕 Sessão de assinatura
+            sessaoAssinaturaId: null,
+            assinaturaCapturada: null,
+            monitoramentoInterval: null,
+            qrCodeDataUrl: null
         };
         
         this.assinaturaSegundaChamada = {
@@ -124,6 +129,36 @@ class SetorPedagogico {
             return;
         }
         
+        // ============================================
+        // 🆕 VERIFICA SE ESTÁ EM MODO ASSINATURA
+        // URL: /setor-pedagogico.html?assinatura=UUID
+        // ============================================
+        const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
+        if (modoAssinatura) {
+            console.log('📱 Modo assinatura detectado:', modoAssinatura);
+            
+            // Carrega só o usuário (pra ter o nome do assinante)
+            try {
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                if (userData.nome) this.currentUser = userData;
+                
+                const data = await this.apiRequest('/api/auth/me');
+                if (data.success) {
+                    this.currentUser = data.user;
+                    localStorage.setItem('user_data', JSON.stringify(this.currentUser));
+                }
+            } catch (e) {
+                console.warn('Erro ao carregar usuário no modo assinatura:', e);
+            }
+            
+            // Mostra SOMENTE a tela de assinatura
+            await this.mostrarTelaAssinatura(modoAssinatura);
+            return; // Não continua com o init normal
+        }
+        
+        // ============================================
+        // INIT NORMAL
+        // ============================================
         await this.loadUser();
         await this.carregarFotoPerfil();
         await this.carregarNotificacoes();
@@ -1663,7 +1698,7 @@ class SetorPedagogico {
                                 </div>
                             </div>
 
-                            <!-- 🆕 TIPO DE PROVA PERDIDA -->
+                            <!-- TIPO DE PROVA PERDIDA -->
                             <div class="mb-3" id="campoSegundaChamadaTipoProva">
                                 <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
                                 <div class="tipos-tarefa-grid">
@@ -1749,24 +1784,23 @@ class SetorPedagogico {
                                         </div>
                                     </div>
 
+                                    <!-- 🆕 ASSINATURA POR QR CODE -->
                                     <div class="assinatura-wrapper">
-                                        <label class="form-label">
-                                            <i class="fas fa-signature"></i> Assinatura do Responsável
-                                            <small class="text-muted">(assine com o dedo ou mouse)</small>
-                                        </label>
-                                        <div class="assinatura-container">
-                                            <canvas id="segundaChamadaAssinaturaCanvas" class="assinatura-canvas"></canvas>
-                                            <div class="assinatura-placeholder" id="segundaChamadaAssinaturaPlaceholder">
-                                                <i class="fas fa-pen-fancy"></i>
-                                                <span>Assine aqui</span>
-                                            </div>
+                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                            <input class="form-check-input" type="checkbox" 
+                                                id="segundaChamadaNecessitaAssinatura" 
+                                                onchange="setorPedagogico.toggleNecessitaAssinatura('segundaChamada')"
+                                                style="width: 20px; height: 20px; margin-top: 2px;">
+                                            <label class="form-check-label" for="segundaChamadaNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
+                                                <strong><i class="fas fa-signature"></i> Necessita de assinatura do responsável</strong>
+                                                <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
+                                                    Marque para gerar um QR Code. O responsável escaneia e assina no celular dele.
+                                                </p>
+                                            </label>
                                         </div>
-                                        <div class="assinatura-actions">
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="setorPedagogico.limparAssinatura('segundaChamada')">
-                                                <i class="fas fa-eraser"></i> Limpar
-                                            </button>
-                                        </div>
-                                        <input type="hidden" id="segundaChamadaAssinaturaBase64" value="">
+                                        
+                                        <!-- Bloco de status (preenchido dinamicamente) -->
+                                        <div id="segundaChamadaBlocoAssinaturaInfo" style="display: none;"></div>
                                     </div>
                                 </div>
                             </div>
@@ -2017,16 +2051,23 @@ class SetorPedagogico {
             const dataEl = document.getElementById('segundaChamadaData');
             if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
             
+            // Reset do estado
             this.estadoSegundaChamada = {
-                currentAluno: null, motivoSelecionado: null,
-                modoAtual: 'automatico', alunosPorTurma: [],
-                scanner: null, scannerAtivo: false
+                currentAluno: null,
+                motivoSelecionado: null,
+                modoAtual: 'automatico',
+                alunosPorTurma: [],
+                scanner: null,
+                scannerAtivo: false,
+                sessaoAssinaturaId: null,
+                assinaturaCapturada: null,
+                monitoramentoInterval: null,
+                qrCodeDataUrl: null
             };
             
             this.configurarEventosSegundaChamada();
             await this.carregarTurmasSegundaChamada();
             
-            setTimeout(() => this.inicializarAssinaturaSegundaChamada(), 300);
             setTimeout(() => {
                 if (this.estadoSegundaChamada.modoAtual === 'automatico') {
                     this.iniciarScannerSegundaChamada();
@@ -2344,10 +2385,12 @@ class SetorPedagogico {
         const formEl = document.getElementById('formSegundaChamada');
         if (formEl) formEl.style.display = 'block';
         
+        // Limpa motivo selecionado
         document.getElementById('segundaChamadaMotivoSelecionado').value = '';
         this.estadoSegundaChamada.motivoSelecionado = null;
         document.querySelectorAll('#formSegundaChamada .tipo-card').forEach(c => c.classList.remove('selected'));
         
+        // Limpa todos os campos
         [
             'segundaChamadaData',
             'segundaChamadaHorario',
@@ -2365,20 +2408,59 @@ class SetorPedagogico {
             if (el) el.value = '';
         });
         
+        // Esconde campos condicionais
         const campoOutros = document.getElementById('campoSegundaChamadaOutros');
         if (campoOutros) campoOutros.style.display = 'none';
         
-        // 🆕 Limpa tipo de prova perdida
+        // Limpa tipo de prova perdida
         document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
         
         const campoProvaOutros = document.getElementById('campoSegundaChamadaTipoProvaOutros');
         if (campoProvaOutros) campoProvaOutros.style.display = 'none';
         
+        // Define data padrão
         const dataEl = document.getElementById('segundaChamadaData');
         if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
         
-        this.limparAssinatura('segundaChamada');
-        setTimeout(() => this.inicializarAssinaturaSegundaChamada(), 200);
+        // ============================================
+        // 🆕 RESETA ESTADO DE ASSINATURA
+        // ============================================
+        const checkAssinatura = document.getElementById('segundaChamadaNecessitaAssinatura');
+        if (checkAssinatura) checkAssinatura.checked = false;
+        
+        const blocoAssinatura = document.getElementById('segundaChamadaBlocoAssinaturaInfo');
+        if (blocoAssinatura) {
+            blocoAssinatura.style.display = 'none';
+            blocoAssinatura.innerHTML = '';
+        }
+        
+        // Cancela sessão anterior se existir
+        const sessaoAnterior = this.estadoSegundaChamada?.sessaoAssinaturaId;
+        if (sessaoAnterior) {
+            fetch(`/api/sessoes-assinatura/${sessaoAnterior}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            }).catch(e => console.warn(e));
+        }
+        
+        // Para monitoramento anterior
+        this.pararMonitoramentoSessao('segundaChamada');
+        
+        // Fecha modal se estiver aberto
+        this.fecharModalAssinatura();
+        
+        // Reset do estado
+        if (this.estadoSegundaChamada) {
+            this.estadoSegundaChamada.sessaoAssinaturaId = null;
+            this.estadoSegundaChamada.assinaturaCapturada = null;
+            this.estadoSegundaChamada.qrCodeDataUrl = null;
+            this.estadoSegundaChamada.monitoramentoInterval = null;
+        }
+        
+        // Scroll para o form
+        setTimeout(() => {
+            formEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
     }
     
     selecionarMotivoSegundaChamada(motivo) {
@@ -2592,6 +2674,9 @@ class SetorPedagogico {
     async registrarSegundaChamada() {
         const est = this.estadoSegundaChamada;
         
+        // ==========================================
+        // VALIDAÇÕES BÁSICAS
+        // ==========================================
         if (!est.motivoSelecionado) { 
             this.showToast('Selecione o motivo', 'error'); 
             return; 
@@ -2610,13 +2695,14 @@ class SetorPedagogico {
             this.showToast('Informe a data da falta (início)', 'error');
             return;
         }
-        
         if (periodoFaltaFim && periodoFaltaFim < periodoFaltaInicio) {
             this.showToast('Data final não pode ser anterior à data inicial', 'error');
             return;
         }
         
-        // 🆕 TIPO DE PROVA PERDIDA
+        // ==========================================
+        // TIPO DE PROVA PERDIDA
+        // ==========================================
         const tipoProvaPerdida = document.getElementById('segundaChamadaTipoProvaPerdida')?.value || '';
         const tipoProvaPerdidaOutros = document.getElementById('segundaChamadaTipoProvaOutros')?.value || '';
         
@@ -2624,12 +2710,14 @@ class SetorPedagogico {
             this.showToast('⚠️ Informe o tipo de prova perdida', 'error');
             return;
         }
-        
         if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
             this.showToast('⚠️ Especifique o tipo de prova perdida', 'error');
             return;
         }
         
+        // ==========================================
+        // MOTIVO "OUTROS"
+        // ==========================================
         if (est.motivoSelecionado === 'outros') {
             const motivoOutros = document.getElementById('segundaChamadaMotivoOutros')?.value.trim();
             if (!motivoOutros) { 
@@ -2638,13 +2726,16 @@ class SetorPedagogico {
             }
         }
         
+        // ==========================================
+        // ALUNO
+        // ==========================================
         if (!est.currentAluno) { 
             this.showToast('Nenhum aluno selecionado', 'error'); 
             return; 
         }
         
         // ==========================================
-        // 🆕 VALIDAÇÃO DE CPF DO RESPONSÁVEL (OBRIGATÓRIO)
+        // CPF DO RESPONSÁVEL (OBRIGATÓRIO)
         // ==========================================
         const responsavelCPF = document.getElementById('segundaChamadaResponsavelCPF')?.value || '';
         
@@ -2661,10 +2752,17 @@ class SetorPedagogico {
             return;
         }
         
-        const assinaturaBase64 = this.obterAssinaturaBase64();
-        if (!assinaturaBase64) {
-            const confirmar = await this.confirmarAcao('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?');
-            if (!confirmar) return;
+        // ==========================================
+        // 🆕 VALIDAÇÃO DA ASSINATURA
+        // ==========================================
+        const precisaAssinatura = document.getElementById('segundaChamadaNecessitaAssinatura')?.checked || false;
+        const assinaturaBase64 = est.assinaturaCapturada || '';
+        
+        if (precisaAssinatura && !assinaturaBase64) {
+            this.showToast('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'warning');
+            // Reabre o modal com o QR
+            this.reabrirModalAssinatura('segundaChamada');
+            return;
         }
         
         const btn = document.querySelector('#formSegundaChamada .btn-primary-custom');
@@ -2687,6 +2785,7 @@ class SetorPedagogico {
                 motivo: est.motivoSelecionado,
                 motivoOutros: document.getElementById('segundaChamadaMotivoOutros')?.value || '',
                 observacoes: document.getElementById('segundaChamadaObservacoes')?.value || '',
+                // 🆕 Assinatura capturada via QR
                 assinaturaBase64: assinaturaBase64
             };
             
@@ -2700,7 +2799,9 @@ class SetorPedagogico {
             });
             const d = await r.json();
             
-            // 🆕 TRATAMENTO DO 409 (DUPLICIDADE)
+            // ==========================================
+            // TRATAMENTO DE DUPLICIDADE (409)
+            // ==========================================
             if (r.status === 409 || (d.error && d.error.includes('Já existe'))) {
                 let msg = '⚠️ Registro duplicado detectado!\n\n';
                 msg += d.error || 'Já existe um registro com os mesmos dados.';
@@ -2721,6 +2822,28 @@ class SetorPedagogico {
             
             console.log('✅ 2ª Chamada registrada:', d.autorizacao.id);
             
+            // ==========================================
+            // 🆕 LIMPA A SESSÃO DE ASSINATURA
+            // ==========================================
+            const sessaoId = est.sessaoAssinaturaId;
+            if (sessaoId) {
+                try {
+                    await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${this.token}` }
+                    });
+                    console.log('✅ Sessão de assinatura removida');
+                } catch (e) { 
+                    console.warn('Erro ao remover sessão:', e); 
+                }
+            }
+            
+            this.pararMonitoramentoSessao('segundaChamada');
+            this.fecharModalAssinatura();
+            
+            // ==========================================
+            // JUSTIFICATIVA AUTOMÁTICA
+            // ==========================================
             const motivosMap = {
                 'problemas_pessoais': 'problemas_pessoais',
                 'problemas_saude': 'problemas_saude',
@@ -2764,6 +2887,9 @@ class SetorPedagogico {
                 console.warn('⚠️ Erro ao criar justificativa:', e);
             }
             
+            // ==========================================
+            // SUCESSO!
+            // ==========================================
             let msg = `✅ ${d.message}`;
             if (justificativaCriada) msg += ' — Justificativa criada automaticamente!';
             this.showToast(msg, 'success');
@@ -2773,6 +2899,7 @@ class SetorPedagogico {
                 this.imprimirSegundaChamada(d.autorizacao.id);
             }
             
+            // Limpa tudo
             this.limparTelaSegundaChamada();
             await this.carregarListaSegundaChamada();
             
@@ -2791,8 +2918,24 @@ class SetorPedagogico {
         const formEl = document.getElementById('formSegundaChamada');
         if (infoEl) infoEl.style.display = 'none';
         if (formEl) formEl.style.display = 'none';
+        
+        // 🆕 Limpa sessão de assinatura
+        const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
+        if (sessaoId) {
+            fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            }).catch(e => console.warn(e));
+        }
+        
+        this.pararMonitoramentoSessao('segundaChamada');
+        this.fecharModalAssinatura();
+        
         this.estadoSegundaChamada.currentAluno = null;
         this.estadoSegundaChamada.motivoSelecionado = null;
+        this.estadoSegundaChamada.sessaoAssinaturaId = null;
+        this.estadoSegundaChamada.assinaturaCapturada = null;
+        this.estadoSegundaChamada.qrCodeDataUrl = null;
         this.limparAssinatura('segundaChamada');
     }
     
@@ -2920,6 +3063,898 @@ class SetorPedagogico {
                         <i class="fas fa-sync-alt"></i> Tentar novamente
                     </button>
                 </div>`;
+        }
+    }
+
+    // ============================================================================
+    // 🆕 SISTEMA DE SESSÃO DE ASSINATURA COM QR CODE (SEM REDIRECIONAMENTO)
+    // ============================================================================
+
+    /**
+     * Gera UUID v4 simples para identificar a sessão.
+     */
+    gerarUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    /**
+     * Marca/desmarca necessidade de assinatura.
+     * Quando marca → cria sessão + gera QR Code + abre modal
+     * Quando desmarca → cancela sessão + fecha modal
+     */
+    async toggleNecessitaAssinatura(modulo) {
+        const P = this.getPrefixo(modulo);
+        const check = document.getElementById(`${P}NecessitaAssinatura`);
+        
+        if (!check) return;
+        
+        if (check.checked) {
+            // ==========================================
+            // 1. Monta snapshot dos dados atuais
+            // ==========================================
+            const snapshot = this.montarSnapshotAtendimento(modulo);
+            
+            // Valida se o aluno foi selecionado
+            if (!snapshot.alunoId) {
+                this.showToast('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
+                check.checked = false;
+                return;
+            }
+            
+            // ==========================================
+            // 2. Gera ID único para a sessão
+            // ==========================================
+            const sessaoId = this.gerarUUID();
+            this.estadoSegundaChamada.sessaoAssinaturaId = sessaoId;
+            this.estadoSegundaChamada.assinaturaCapturada = null;
+            
+            // ==========================================
+            // 3. Cria a sessão no backend
+            // ==========================================
+            try {
+                const response = await fetch('/api/sessoes-assinatura', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.token}`
+                    },
+                    body: JSON.stringify({
+                        sessaoId,
+                        tipo: 'segunda_chamada',
+                        dadosAtendimento: snapshot
+                    })
+                });
+                
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
+                
+                console.log('✅ Sessão criada:', sessaoId);
+                
+                // ==========================================
+                // 4. Gera QR Code apontando para ESTA MESMA PÁGINA
+                // ==========================================
+                const urlAssinatura = `${window.location.origin}/setor-pedagogico.html?assinatura=${sessaoId}`;
+                
+                try {
+                    const qrResponse = await fetch('/api/qrcode/gerar', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: JSON.stringify({ url: urlAssinatura })
+                    });
+                    const qrData = await qrResponse.json();
+                    
+                    if (qrData.success && qrData.qrCode) {
+                        this.estadoSegundaChamada.qrCodeDataUrl = qrData.qrCode;
+                    } else {
+                        // Fallback: gera via API pública
+                        this.estadoSegundaChamada.qrCodeDataUrl = 
+                            `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                    }
+                } catch (e) {
+                    console.warn('Erro ao gerar QR Code, usando fallback:', e);
+                    this.estadoSegundaChamada.qrCodeDataUrl = 
+                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                }
+                
+                // ==========================================
+                // 5. Abre o MODAL (dentro da própria página)
+                // ==========================================
+                this.abrirModalAssinatura(modulo, urlAssinatura);
+                
+                // ==========================================
+                // 6. Inicia monitoramento (polling)
+                // ==========================================
+                this.iniciarMonitoramentoSessao(modulo, sessaoId);
+                
+                this.showToast('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
+                
+            } catch (e) {
+                console.error('Erro ao criar sessão:', e);
+                this.showToast('❌ Erro ao criar sessão de assinatura', 'error');
+                check.checked = false;
+                this.estadoSegundaChamada.sessaoAssinaturaId = null;
+            }
+        } else {
+            // ==========================================
+            // DESMARCOU → cancela a sessão
+            // ==========================================
+            const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
+            if (sessaoId) {
+                try {
+                    await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${this.token}` }
+                    });
+                } catch (e) { console.warn(e); }
+            }
+            
+            this.estadoSegundaChamada.sessaoAssinaturaId = null;
+            this.estadoSegundaChamada.assinaturaCapturada = null;
+            this.estadoSegundaChamada.qrCodeDataUrl = null;
+            this.pararMonitoramentoSessao(modulo);
+            this.fecharModalAssinatura();
+        }
+    }
+
+    /**
+     * Monta snapshot dos dados do atendimento para enviar.
+     */
+    montarSnapshotAtendimento(modulo) {
+        const est = this.estadoSegundaChamada;
+        const aluno = est.currentAluno || {};
+        
+        const motivosLabel = {
+            'problemas_pessoais': 'Problemas Pessoais',
+            'problemas_saude': 'Problemas de Saúde',
+            'viagem': 'Viagem',
+            'outros': 'Outros'
+        };
+        
+        const periodoIni = document.getElementById('segundaChamadaPeriodoFaltaInicio')?.value || '';
+        const periodoFim = document.getElementById('segundaChamadaPeriodoFaltaFim')?.value || '';
+        
+        let periodoFormatado = '';
+        if (periodoIni) {
+            const ini = new Date(periodoIni + 'T12:00:00');
+            const fim = periodoFim ? new Date(periodoFim + 'T12:00:00') : ini;
+            const fmt = d => d.toLocaleDateString('pt-BR');
+            periodoFormatado = ini.getTime() === fim.getTime() ? fmt(ini) : `${fmt(ini)} a ${fmt(fim)}`;
+        }
+        
+        const tipoProva = document.getElementById('segundaChamadaTipoProvaPerdida')?.value || '';
+        const tipoProvaOutros = document.getElementById('segundaChamadaTipoProvaOutros')?.value || '';
+        
+        return {
+            alunoId: aluno.id,
+            alunoNome: aluno.nome,
+            alunoMatricula: aluno.matricula,
+            alunoTurma: aluno.turma,
+            alunoCurso: aluno.curso,
+            alunoFoto: aluno.fotoPerfil,
+            motivo: est.motivoSelecionado,
+            motivoLabel: motivosLabel[est.motivoSelecionado] || est.motivoSelecionado,
+            periodoFaltaInicio: periodoIni || null,
+            periodoFaltaFim: periodoFim || periodoIni || null,
+            periodoFaltaFormatado: periodoFormatado,
+            tipoProvaPerdida: tipoProva,
+            tipoProvaPerdidaFormatado: tipoProva === 'Outros' && tipoProvaOutros 
+                ? `Outros (${tipoProvaOutros})` 
+                : tipoProva,
+            responsavelNome: document.getElementById('segundaChamadaResponsavelNome')?.value || '',
+            responsavelCPF: document.getElementById('segundaChamadaResponsavelCPF')?.value || '',
+            observacoes: document.getElementById('segundaChamadaObservacoes')?.value || '',
+            data: document.getElementById('segundaChamadaData')?.value || ''
+        };
+    }
+
+    /**
+     * Abre o modal com QR Code (SEM sair da página).
+     */
+    abrirModalAssinatura(modulo, urlAssinatura) {
+        // Remove modal antigo se existir
+        const antigo = document.getElementById('modalAssinaturaQR');
+        if (antigo) antigo.remove();
+        
+        const qrUrl = this.estadoSegundaChamada.qrCodeDataUrl || 
+            `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalAssinaturaQR" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content" style="border-radius: 20px; border: none; overflow: hidden;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
+                            <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-signature"></i> 
+                                Aguardando Assinatura
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" onclick="setorPedagogico.fecharModalAssinatura()"></button>
+                        </div>
+                        
+                        <div class="modal-body" style="padding: 30px; text-align: center;">
+                            <!-- Status -->
+                            <div id="modalAssinaturaStatus" style="margin-bottom: 20px;">
+                                <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                    <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                    <div>
+                                        <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                        <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                            Peça para o responsável escanear o QR Code abaixo
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- QR Code -->
+                            <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                                <img src="${qrUrl}" 
+                                    alt="QR Code para assinatura" 
+                                    style="width: 260px; height: 260px; display: block;"
+                                    id="qrCodeImage">
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                    <i class="fas fa-mobile-alt"></i> 
+                                    Aponte a câmera do celular
+                                </p>
+                            </div>
+                            
+                            <!-- Info extra -->
+                            <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
+                                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span><strong>O responsável assina direto no celular dele</strong>, sem sair da tela. Assim que ele confirmar, você verá aqui automaticamente.</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <i class="fas fa-clock"></i>
+                                    <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Botão link direto (útil se quiser abrir no PC) -->
+                            <div style="margin-top: 16px;">
+                                <button onclick="setorPedagogico.copiarLinkAssinatura('${urlAssinatura}')"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        style="border-radius: 10px; padding: 8px 16px; font-size: 13px;">
+                                    <i class="fas fa-link"></i> Copiar link de assinatura
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
+                            <button type="button" class="btn btn-outline-secondary" onclick="setorPedagogico.fecharModalAssinatura()" style="border-radius: 10px;">
+                                <i class="fas fa-eye-slash"></i> Ocultar
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="setorPedagogico.cancelarSessaoAssinatura()" style="border-radius: 10px;">
+                                <i class="fas fa-times"></i> Cancelar Assinatura
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        this.modalAssinaturaInstance = new bootstrap.Modal(document.getElementById('modalAssinaturaQR'));
+        this.modalAssinaturaInstance.show();
+        
+        // Redimensiona QR para caber bem em mobile
+        setTimeout(() => {
+            const img = document.getElementById('qrCodeImage');
+            if (img && window.innerWidth < 500) {
+                img.style.width = '200px';
+                img.style.height = '200px';
+            }
+        }, 200);
+    }
+
+    /**
+     * Fecha o modal (mas a sessão continua ativa).
+     */
+    fecharModalAssinatura() {
+        if (this.modalAssinaturaInstance) {
+            this.modalAssinaturaInstance.hide();
+        }
+        const modalEl = document.getElementById('modalAssinaturaQR');
+        if (modalEl) setTimeout(() => modalEl.remove(), 300);
+        
+        // Mostra o bloco compacto no formulário
+        this.mostrarBlocoCompactoAssinatura();
+    }
+
+    /**
+     * Mostra um bloco compacto no formulário indicando o status.
+     */
+    mostrarBlocoCompactoAssinatura() {
+        const P = 'segundaChamada';
+        let bloco = document.getElementById(`${P}BlocoAssinaturaInfo`);
+        
+        if (!bloco) {
+            bloco = document.createElement('div');
+            bloco.id = `${P}BlocoAssinaturaInfo`;
+            // Insere após o checkbox
+            const check = document.getElementById(`${P}NecessitaAssinatura`);
+            if (check) {
+                check.parentElement.insertAdjacentElement('afterend', bloco);
+            }
+        }
+        
+        bloco.style.display = 'block';
+        bloco.innerHTML = `
+            <div class="alert alert-warning" style="font-size: 13px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-top: 10px;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <i class="fas fa-clock"></i>
+                    <div style="flex: 1;">
+                        <strong>Aguardando assinatura...</strong>
+                        <p style="margin: 3px 0 0; font-size: 12px;">O responsável precisa escanear o QR Code</p>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-warning" 
+                            onclick="setorPedagogico.reabrirModalAssinatura('segundaChamada')"
+                            style="border-radius: 8px;">
+                        <i class="fas fa-qrcode"></i> Mostrar QR
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Reabre o modal com o mesmo QR Code.
+     */
+    reabrirModalAssinatura(modulo) {
+        const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
+        if (!sessaoId) {
+            this.showToast('⚠️ Nenhuma sessão ativa', 'warning');
+            return;
+        }
+        const urlAssinatura = `${window.location.origin}/setor-pedagogico.html?assinatura=${sessaoId}`;
+        this.abrirModalAssinatura(modulo, urlAssinatura);
+    }
+
+    /**
+     * Copia o link para o clipboard.
+     */
+    async copiarLinkAssinatura(url) {
+        try {
+            await navigator.clipboard.writeText(url);
+            this.showToast('✅ Link copiado!', 'success');
+        } catch (e) {
+            // Fallback
+            const textarea = document.createElement('textarea');
+            textarea.value = url;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            this.showToast('✅ Link copiado!', 'success');
+        }
+    }
+
+    /**
+     * Inicia polling para verificar se a assinatura foi capturada.
+     */
+    iniciarMonitoramentoSessao(modulo, sessaoId) {
+        this.pararMonitoramentoSessao(modulo);
+        
+        console.log('👀 Monitorando sessão:', sessaoId);
+        
+        const intervalId = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        console.warn('Sessão expirou ou foi removida');
+                        this.pararMonitoramentoSessao(modulo);
+                    }
+                    return;
+                }
+                
+                const data = await response.json();
+                if (!data.success) return;
+                
+                if (data.sessao.status === 'assinado') {
+                    console.log('✅ Assinatura capturada!');
+                    
+                    this.estadoSegundaChamada.assinaturaCapturada = data.sessao.assinaturaBase64;
+                    this.atualizarStatusAssinado(modulo, data.sessao);
+                    this.pararMonitoramentoSessao(modulo);
+                    
+                    // Fecha o modal se estiver aberto
+                    if (this.modalAssinaturaInstance) {
+                        this.modalAssinaturaInstance.hide();
+                    }
+                    const modalEl = document.getElementById('modalAssinaturaQR');
+                    if (modalEl) setTimeout(() => modalEl.remove(), 300);
+                    
+                    this.showToast(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome}!`, 'success');
+                    
+                    // Fecha automaticamente após 2s (opcional)
+                    // Aqui deixa aberto pra você ver o preview
+                    
+                } else if (data.sessao.status === 'cancelado') {
+                    console.log('Sessão cancelada');
+                    this.pararMonitoramentoSessao(modulo);
+                }
+            } catch (e) {
+                console.warn('Erro no monitoramento:', e);
+            }
+        }, 3000); // a cada 3 segundos
+        
+        this.estadoSegundaChamada.monitoramentoInterval = intervalId;
+    }
+
+    /**
+     * Para o monitoramento.
+     */
+    pararMonitoramentoSessao(modulo) {
+        const id = this.estadoSegundaChamada.monitoramentoInterval;
+        if (id) {
+            clearInterval(id);
+            this.estadoSegundaChamada.monitoramentoInterval = null;
+        }
+    }
+
+    /**
+     * Atualiza o bloco visual mostrando a assinatura capturada.
+     */
+    atualizarStatusAssinado(modulo, sessao) {
+        const P = 'segundaChamada';
+        let bloco = document.getElementById(`${P}BlocoAssinaturaInfo`);
+        
+        if (!bloco) {
+            bloco = document.createElement('div');
+            bloco.id = `${P}BlocoAssinaturaInfo`;
+            const check = document.getElementById(`${P}NecessitaAssinatura`);
+            if (check) {
+                check.parentElement.insertAdjacentElement('afterend', bloco);
+            }
+        }
+        
+        bloco.style.display = 'block';
+        bloco.innerHTML = `
+            <div style="margin-top: 10px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <i class="fas fa-check-circle" style="color: #10b981; font-size: 22px;"></i>
+                    <div style="flex: 1;">
+                        <strong style="color: #065f46;">✓ Assinatura capturada!</strong>
+                        <p style="margin: 3px 0 0; font-size: 12px; color: #047857;">
+                            Assinado por <strong>${this.escapeHtml(sessao.assinadaPorNome || '')}</strong>
+                            ${sessao.assinadaEm ? ` em ${new Date(sessao.assinadaEm).toLocaleString('pt-BR')}` : ''}
+                        </p>
+                    </div>
+                </div>
+                <div style="background: white; border-radius: 8px; padding: 8px; text-align: center;">
+                    <img src="${sessao.assinaturaBase64}" 
+                        style="max-width: 100%; max-height: 100px;" 
+                        alt="Assinatura">
+                </div>
+                <button type="button" 
+                        onclick="setorPedagogico.refazerAssinatura('segundaChamada')"
+                        class="btn btn-sm btn-outline-danger w-100 mt-2"
+                        style="border-radius: 8px;">
+                    <i class="fas fa-redo"></i> Refazer Assinatura
+                </button>
+            </div>
+        `;
+    }
+
+    /**
+     * Cancela a sessão e limpa tudo.
+     */
+    async cancelarSessaoAssinatura() {
+        const confirmar = await this.confirmarAcao('Cancelar a assinatura? O responsável não poderá mais assinar este atendimento.');
+        if (!confirmar) return;
+        
+        const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
+        if (sessaoId) {
+            try {
+                await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+            } catch (e) { console.warn(e); }
+        }
+        
+        this.pararMonitoramentoSessao('segundaChamada');
+        this.fecharModalAssinatura();
+        
+        this.estadoSegundaChamada.sessaoAssinaturaId = null;
+        this.estadoSegundaChamada.assinaturaCapturada = null;
+        this.estadoSegundaChamada.qrCodeDataUrl = null;
+        
+        const check = document.getElementById('segundaChamadaNecessitaAssinatura');
+        if (check) check.checked = false;
+        
+        const bloco = document.getElementById('segundaChamadaBlocoAssinaturaInfo');
+        if (bloco) bloco.style.display = 'none';
+        
+        this.showToast('Sessão cancelada', 'info');
+    }
+
+    /**
+     * Refaz a assinatura (cancela atual e cria nova).
+     */
+    async refazerAssinatura(modulo) {
+        const confirmar = await this.confirmarAcao('Refazer a assinatura? A atual será descartada.');
+        if (!confirmar) return;
+        
+        const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
+        if (sessaoId) {
+            try {
+                await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+            } catch (e) { console.warn(e); }
+        }
+        
+        this.pararMonitoramentoSessao(modulo);
+        this.estadoSegundaChamada.sessaoAssinaturaId = null;
+        this.estadoSegundaChamada.assinaturaCapturada = null;
+        this.estadoSegundaChamada.qrCodeDataUrl = null;
+        
+        const bloco = document.getElementById('segundaChamadaBlocoAssinaturaInfo');
+        if (bloco) bloco.style.display = 'none';
+        
+        const check = document.getElementById('segundaChamadaNecessitaAssinatura');
+        if (check) {
+            check.checked = false;
+            // Marca de novo (cria nova sessão)
+            check.checked = true;
+            await this.toggleNecessitaAssinatura(modulo);
+        }
+    }
+
+    /**
+     * Detecta se a página abriu com ?assinatura=XXXX (modo assinatura).
+     * Se sim, mostra APENAS a tela de assinatura (esconde o resto).
+     */
+    verificarModoAssinatura() {
+        const params = new URLSearchParams(window.location.search);
+        const sessaoId = params.get('assinatura');
+        
+        if (!sessaoId) return false;
+        
+        console.log('📱 Modo assinatura detectado:', sessaoId);
+        this.mostrarTelaAssinatura(sessaoId);
+        return true;
+    }
+
+    /**
+     * Mostra a tela de assinatura (substitui o conteúdo principal).
+     */
+    async mostrarTelaAssinatura(sessaoId) {
+        // Esconde sidebar, header, bottom nav
+        document.querySelectorAll('.sidebar, .mobile-menu-btn, .page-header, #bottomNavSp, .sidebar-overlay-sp').forEach(el => {
+            if (el) el.style.display = 'none';
+        });
+        
+        // Substitui o conteúdo
+        const content = document.getElementById('content');
+        if (!content) return;
+        
+        content.innerHTML = `
+            <div style="min-height: 100vh; background: #f0f4f8; padding: 20px; display: flex; flex-direction: column; align-items: center;">
+                <div style="max-width: 600px; width: 100%;">
+                    <!-- Header -->
+                    <div style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 18px 24px; border-radius: 16px 16px 0 0; text-align: center;">
+                        <h1 style="font-size: 20px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                            <i class="fas fa-signature"></i> Assinatura Digital
+                        </h1>
+                    </div>
+                    
+                    <!-- Info do atendimento -->
+                    <div id="telaAssinaturaInfo" style="background: white; padding: 20px; border-left: 4px solid #1e3c72;">
+                        <div style="text-align: center; padding: 40px;">
+                            <div style="width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #1e3c72; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px;"></div>
+                            <p style="color: #64748b; margin: 0;">Carregando atendimento...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Área de assinatura -->
+                    <div id="telaAssinaturaArea" style="background: white; padding: 20px; display: none; border-radius: 0 0 16px 16px;">
+                        <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 300px; margin-bottom: 16px;">
+                            <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block; touch-action: none;"></canvas>
+                            <div id="placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none;">
+                                <i class="fas fa-pen-fancy" style="font-size: 48px; display: block; margin-bottom: 10px;"></i>
+                                <span style="font-size: 15px;">Assine aqui com o dedo</span>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 12px;">
+                            <button onclick="setorPedagogico.limparAssinaturaTela()" 
+                                    style="flex: 1; padding: 16px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 15px;">
+                                <i class="fas fa-eraser"></i> Limpar
+                            </button>
+                            <button id="btnSalvarAssinatura" onclick="setorPedagogico.salvarAssinaturaTela()" disabled
+                                    style="flex: 2; padding: 16px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: not-allowed;">
+                                <i class="fas fa-check"></i> Confirmar Assinatura
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+        `;
+        
+        // Busca dados da sessão
+        try {
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (!data.success) {
+                document.getElementById('telaAssinaturaInfo').innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
+                        <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão inválida ou expirada</h3>
+                        <p style="color: #64748b; margin: 0;">Esta sessão de assinatura não existe mais ou expirou (30 min).</p>
+                        <button onclick="window.location.href='/setor-pedagogico.html'" 
+                                style="margin-top: 20px; padding: 12px 24px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (data.sessao.status === 'assinado') {
+                document.getElementById('telaAssinaturaInfo').innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px;">
+                        <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px; display: block;"></i>
+                        <h3 style="color: #10b981; margin: 0 0 10px;">Esta sessão já foi assinada</h3>
+                        <p style="color: #64748b; margin: 0;">Assinada por ${this.escapeHtml(data.sessao.assinadaPorNome || '')}</p>
+                        <button onclick="window.location.href='/setor-pedagogico.html'" 
+                                style="margin-top: 20px; padding: 12px 24px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Exibe os dados do atendimento
+            const d = data.sessao.dadosAtendimento || {};
+            const tipoLabel = {
+                'autorizacao': 'Autorização',
+                'justificativa': 'Justificativa',
+                'segunda_chamada': '2ª Chamada'
+            }[data.sessao.tipo] || data.sessao.tipo;
+            
+            document.getElementById('telaAssinaturaInfo').innerHTML = `
+                <div style="border-left: 4px solid #1e3c72; padding-left: 14px;">
+                    <h2 style="margin: 0 0 4px; font-size: 18px; color: #1e3c72;">${tipoLabel}</h2>
+                    <p style="margin: 0; color: #64748b; font-size: 13px;">Confirme os dados e assine abaixo</p>
+                </div>
+                
+                <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Aluno</span>
+                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoNome || '-')}</span>
+                    </div>
+                    <div>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Turma</span>
+                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.alunoTurma || '-')}</span>
+                    </div>
+                    <div>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Motivo</span>
+                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.motivoLabel || '-')}</span>
+                    </div>
+                    ${d.periodoFaltaFormatado ? `
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Falta</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoFaltaFormatado)}</span>
+                        </div>
+                    ` : ''}
+                    ${d.responsavelNome ? `
+                        <div style="grid-column: 1 / -1;">
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Responsável</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.responsavelNome)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            // Mostra área de assinatura
+            document.getElementById('telaAssinaturaArea').style.display = 'block';
+            
+            // Salva sessão ativa
+            this.sessaoAssinaturaModo = sessaoId;
+            this.sessaoAssinaturaAtual = data.sessao;
+            
+            // Inicializa canvas
+            this.inicializarCanvasTela();
+            
+        } catch (e) {
+            console.error('Erro ao carregar sessão:', e);
+            document.getElementById('telaAssinaturaInfo').innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
+                    <h3 style="color: #ef4444; margin: 0 0 10px;">Erro ao carregar</h3>
+                    <p style="color: #64748b; margin: 0;">${e.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Inicializa o canvas na tela de assinatura.
+     */
+    inicializarCanvasTela() {
+        const canvas = document.getElementById('canvasAssinatura');
+        const wrapper = document.getElementById('canvasWrapper');
+        const placeholder = document.getElementById('placeholder');
+        if (!canvas || !wrapper) return;
+        
+        // Salva refs
+        this.telaCanvas = canvas;
+        this.telaWrapper = wrapper;
+        this.telaPlaceholder = placeholder;
+        this.telaTemAssinatura = false;
+        this.telaDesenhando = false;
+        
+        const ajustar = () => {
+            const rect = wrapper.getBoundingClientRect();
+            if (rect.width === 0) { setTimeout(ajustar, 200); return; }
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#1e3c72';
+            this.telaCtx = ctx;
+        };
+        ajustar();
+        
+        const getPos = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            let cx, cy;
+            if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+            else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+            else { cx = e.clientX; cy = e.clientY; }
+            return { x: cx - rect.left, y: cy - rect.top };
+        };
+        
+        const iniciar = (e) => {
+            e.preventDefault();
+            this.telaDesenhando = true;
+            this.telaTemAssinatura = true;
+            const p = getPos(e);
+            this.telaLastX = p.x;
+            this.telaLastY = p.y;
+            wrapper.style.borderColor = '#1e3c72';
+            wrapper.style.borderStyle = 'solid';
+            placeholder.style.opacity = '0';
+            
+            const btn = document.getElementById('btnSalvarAssinatura');
+            if (btn) {
+                btn.disabled = false;
+                btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                btn.style.cursor = 'pointer';
+            }
+        };
+        
+        const desenhar = (e) => {
+            if (!this.telaDesenhando) return;
+            e.preventDefault();
+            const p = getPos(e);
+            this.telaCtx.beginPath();
+            this.telaCtx.moveTo(this.telaLastX, this.telaLastY);
+            this.telaCtx.lineTo(p.x, p.y);
+            this.telaCtx.stroke();
+            this.telaLastX = p.x;
+            this.telaLastY = p.y;
+        };
+        
+        const parar = (e) => {
+            if (e?.preventDefault) e.preventDefault();
+            this.telaDesenhando = false;
+        };
+        
+        canvas.addEventListener('touchstart', iniciar, { passive: false });
+        canvas.addEventListener('touchmove', desenhar, { passive: false });
+        canvas.addEventListener('touchend', parar, { passive: false });
+        canvas.addEventListener('touchcancel', parar, { passive: false });
+        canvas.addEventListener('mousedown', iniciar);
+        canvas.addEventListener('mousemove', desenhar);
+        canvas.addEventListener('mouseup', parar);
+        canvas.addEventListener('mouseleave', () => { if (this.telaDesenhando) parar(); });
+    }
+
+    /**
+     * Limpa a assinatura da tela.
+     */
+    limparAssinaturaTela() {
+        if (!this.telaCtx || !this.telaCanvas) return;
+        const rect = this.telaCanvas.getBoundingClientRect();
+        this.telaCtx.clearRect(0, 0, rect.width, rect.height);
+        this.telaTemAssinatura = false;
+        if (this.telaPlaceholder) this.telaPlaceholder.style.opacity = '1';
+        if (this.telaWrapper) {
+            this.telaWrapper.style.borderColor = '#cbd5e0';
+            this.telaWrapper.style.borderStyle = 'dashed';
+        }
+        const btn = document.getElementById('btnSalvarAssinatura');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.background = '#cbd5e0';
+            btn.style.cursor = 'not-allowed';
+        }
+    }
+
+    /**
+     * Salva a assinatura na sessão.
+     */
+    async salvarAssinaturaTela() {
+        if (!this.telaTemAssinatura || !this.sessaoAssinaturaModo) return;
+        
+        const btn = document.getElementById('btnSalvarAssinatura');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        }
+        
+        try {
+            const base64 = this.telaCanvas.toDataURL('image/png');
+            
+            const response = await fetch(`/api/sessoes-assinatura/${this.sessaoAssinaturaModo}/assinar`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify({ assinaturaBase64: base64 })
+            });
+            
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+            
+            // Sucesso!
+            document.getElementById('telaAssinaturaInfo').innerHTML = `
+                <div style="text-align: center; padding: 60px 20px;">
+                    <i class="fas fa-check-circle" style="font-size: 64px; color: #10b981; margin-bottom: 20px; display: block;"></i>
+                    <h2 style="color: #10b981; margin: 0 0 10px; font-size: 22px;">Assinatura Confirmada!</h2>
+                    <p style="color: #64748b; margin: 0; font-size: 15px;">
+                        A assinatura foi registrada com sucesso.<br>
+                        Você já pode fechar esta janela.
+                    </p>
+                    <button onclick="window.close()" 
+                            style="margin-top: 25px; padding: 14px 28px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 15px;">
+                        <i class="fas fa-times"></i> Fechar
+                    </button>
+                </div>
+            `;
+            document.getElementById('telaAssinaturaArea').style.display = 'none';
+            
+        } catch (e) {
+            console.error('Erro ao salvar assinatura:', e);
+            this.showToast('❌ ' + e.message, 'error');
+            
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+            }
         }
     }
     
@@ -4701,7 +5736,71 @@ class SetorPedagogico {
         }
     }
 
-        // ============================================================================
+    // ============================================================================
+    // 🔧 MÉTODOS AUXILIARES DE PREFIXO
+    // ============================================================================
+
+    /**
+     * Retorna o prefixo dos IDs HTML para cada módulo.
+     * Ex: 'segundaChamada' → 'segundaChamada' (usado em #segundaChamadaNecessitaAssinatura, etc)
+     */
+    getPrefixo(modulo) {
+        const prefixos = {
+            'autorizacao': 'autorizacao',
+            'justificativa': 'justificativa',
+            'segundaChamada': 'segundaChamada'
+        };
+        return prefixos[modulo] || modulo;
+    }
+
+    /**
+     * Retorna o prefixo dos inputs para cada módulo.
+     */
+    getPrefixoInput(modulo) {
+        const prefixos = {
+            'autorizacao': 'autorizacao',
+            'justificativa': 'justificativa',
+            'segundaChamada': 'segundaChamada'
+        };
+        return prefixos[modulo] || modulo;
+    }
+
+    /**
+     * Retorna a configuração de cada módulo.
+     */
+    getCfg(modulo) {
+        const cfgs = {
+            'autorizacao': { tipo: 'autorizacao', nomeAmigavel: 'Autorização' },
+            'justificativa': { tipo: 'justificativa', nomeAmigavel: 'Justificativa' },
+            'segundaChamada': { tipo: 'segunda_chamada', nomeAmigavel: '2ª Chamada' }
+        };
+        return cfgs[modulo] || { tipo: modulo, nomeAmigavel: modulo };
+    }
+
+    /**
+     * Retorna o tipo da API para cada módulo.
+     */
+    getTipoModulo(modulo) {
+        const mapa = {
+            'autorizacao': 'autorizacao',
+            'justificativa': 'justificativa',
+            'segundaChamada': 'segunda_chamada'
+        };
+        return mapa[modulo] || modulo;
+    }
+
+    /**
+     * Gera UUID v4 simples.
+     */
+    gerarUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    // ============================================================================
     // 🔥 SUBSTITUIÇÃO DE PROFESSORES - PARTE 1 (LOAD + ESTRUTURA)
     // ============================================================================
 

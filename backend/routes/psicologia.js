@@ -1,10 +1,14 @@
+// routes/psicologia.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AtendimentoPsicologia = require('../models/AtendimentoPsicologia');
+const SessaoAssinatura = require('../models/SessaoAssinatura');
 
-// Middleware de autenticação
+// ============================================
+// MIDDLEWARES
+// ============================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -53,20 +57,17 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// LISTAR TURMAS DISPONÍVEIS
+// LISTAR TURMAS
 // ============================================
 router.get('/turmas', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
-      role: 'aluno', 
-      ativo: true, 
+      role: 'aluno', ativo: true, 
       turma: { $nin: [null, '', 'Não informada'] } 
     });
-    
     res.json({ success: true, turmas: turmas.sort() });
   } catch (error) {
-    console.error('Erro ao listar turmas:', error);
-    res.status(500).json({ success: false, error: 'Erro ao listar turmas: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -78,91 +79,61 @@ router.get('/alunos-por-turma', authenticateToken, verificarPsicologia, async (r
     const { turma } = req.query;
     if (!turma) return res.status(400).json({ success: false, error: 'Turma é obrigatória' });
     
-    const alunos = await User.find({ 
-      role: 'aluno', 
-      ativo: true, 
-      turma 
-    })
-    .select('nome matricula turma curso fotoPerfil')
-    .sort({ nome: 1 });
+    const alunos = await User.find({ role: 'aluno', ativo: true, turma })
+      .select('nome matricula turma curso fotoPerfil')
+      .sort({ nome: 1 });
     
     res.json({
       success: true,
       total: alunos.length,
       alunos: alunos.map(a => ({
-        id: a._id,
-        nome: a.nome,
-        matricula: a.matricula,
-        turma: a.turma,
-        curso: a.curso,
-        fotoPerfil: a.fotoPerfil
+        id: a._id, nome: a.nome, matricula: a.matricula,
+        turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
   } catch (error) {
-    console.error('Erro ao listar alunos por turma:', error);
-    res.status(500).json({ success: false, error: 'Erro ao listar alunos: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// BUSCAR ALUNO POR ID (QR CODE)
+// BUSCAR ALUNO POR ID
 // ============================================
 router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
-    const aluno = await User.findOne({ 
-      _id: req.params.id, 
-      ativo: true 
-    }).select('nome email matricula curso turma fotoPerfil role');
+    const aluno = await User.findOne({ _id: req.params.id, ativo: true })
+      .select('nome email matricula curso turma fotoPerfil role');
     
-    if (!aluno) {
-      return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
-    }
-    
-    if (aluno.role !== 'aluno') {
-      return res.status(400).json({ success: false, error: 'Usuário não é um aluno' });
-    }
+    if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
+    if (aluno.role !== 'aluno') return res.status(400).json({ success: false, error: 'Usuário não é aluno' });
     
     const atendimentosAtivos = await AtendimentoPsicologia.find({
-      alunoId: aluno._id,
-      status: 'em_andamento'
+      alunoId: aluno._id, status: 'em_andamento'
     }).sort({ createdAt: -1 });
     
     const historicoRecente = await AtendimentoPsicologia.find({
-      alunoId: aluno._id,
-      status: 'finalizado'
+      alunoId: aluno._id, status: 'finalizado'
     }).sort({ createdAt: -1 }).limit(5);
     
     res.json({
       success: true,
       aluno: {
-        id: aluno._id,
-        nome: aluno.nome,
-        matricula: aluno.matricula,
-        turma: aluno.turma,
-        curso: aluno.curso,
-        fotoPerfil: aluno.fotoPerfil || null
+        id: aluno._id, nome: aluno.nome, matricula: aluno.matricula,
+        turma: aluno.turma, curso: aluno.curso, fotoPerfil: aluno.fotoPerfil || null
       },
       atendimentosAtivos: atendimentosAtivos.map(a => ({
-        id: a._id,
-        tipoTarefa: a.tipoTarefa,
+        id: a._id, tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        dataHoraEntrada: a.entrada.dataHora,
-        prioridade: a.prioridade
+        descricao: a.entrada.descricao, dataHoraEntrada: a.entrada.dataHora, prioridade: a.prioridade
       })),
       historicoRecente: historicoRecente.map(a => ({
-        id: a._id,
-        tipoTarefa: a.tipoTarefa,
+        id: a._id, tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        dataHora: a.entrada.dataHora,
-        resultado: a.saida?.resultado
+        descricao: a.entrada.descricao, dataHora: a.entrada.dataHora, resultado: a.saida?.resultado
       }))
     });
-    
   } catch (error) {
-    console.error('Erro ao buscar aluno:', error);
-    res.status(500).json({ success: false, error: 'Erro ao buscar aluno: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -172,50 +143,42 @@ router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res
 router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { termo } = req.query;
-    
     if (!termo || termo.length < 2) {
       return res.status(400).json({ success: false, error: 'Digite pelo menos 2 caracteres' });
     }
     
     const alunos = await User.find({
-      role: 'aluno',
-      ativo: true,
+      role: 'aluno', ativo: true,
       $or: [
         { nome: { $regex: termo, $options: 'i' } },
         { matricula: { $regex: termo, $options: 'i' } }
       ]
     })
     .select('nome matricula turma curso fotoPerfil')
-    .limit(20)
-    .sort({ nome: 1 });
+    .limit(20).sort({ nome: 1 });
     
     res.json({
       success: true,
       total: alunos.length,
       alunos: alunos.map(a => ({
-        id: a._id,
-        nome: a.nome,
-        matricula: a.matricula,
-        turma: a.turma,
-        curso: a.curso,
-        fotoPerfil: a.fotoPerfil
+        id: a._id, nome: a.nome, matricula: a.matricula,
+        turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
-    
   } catch (error) {
-    console.error('Erro na busca:', error);
-    res.status(500).json({ success: false, error: 'Erro na busca: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// REGISTRAR NOVO ATENDIMENTO (COM ASSINATURA)
+// REGISTRAR NOVO ATENDIMENTO
+// (com suporte a precisaAssinatura — igual à Gestão)
 // ============================================
 router.post('/registrar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { 
-      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
-      assinaturaBase64 
+      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes,
+      precisaAssinatura = false
     } = req.body;
     
     if (!descricao || descricao.trim() === '') {
@@ -223,12 +186,8 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
     }
     
     const tiposValidos = [
-        'escuta_acolhimento',
-        'manejo_crises_emocionais',
-        'atividades_grupos',
-        'acoes_atividades_saude',
-        'acoes_socioemocionais_culturais',
-        'outros'
+      'escuta_acolhimento', 'manejo_crises_emocionais', 'atividades_grupos',
+      'acoes_atividades_saude', 'acoes_socioemocionais_culturais', 'outros'
     ];
     
     if (!tiposValidos.includes(tipoTarefa)) {
@@ -242,12 +201,8 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
     
     const psicologo = await User.findById(req.userId).select('nome');
     
-    let assinaturaValida = '';
-    if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
-      if (assinaturaBase64.startsWith('data:image/') && assinaturaBase64.length < 500000) {
-        assinaturaValida = assinaturaBase64;
-      }
-    }
+    // 🆕 Detecta status de assinatura (mesmo padrão da Gestão)
+    const statusAssinatura = precisaAssinatura ? 'pendente' : 'nao_necessaria';
     
     const atendimento = new AtendimentoPsicologia({
       alunoId: aluno._id,
@@ -263,8 +218,14 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
         observacoes: observacoes || '',
         gravidade: gravidade || 'media',
         registradoPor: req.userId,
-        registradoPorNome: psicologo?.nome || req.userNome || 'Psicólogo',
-        assinaturaBase64: assinaturaValida
+        registradoPorNome: psicologo?.nome || req.userNome || 'Psicologia',
+        assinaturaBase64: '',
+        temAssinatura: false,
+        statusAssinatura: statusAssinatura,
+        assinadaEm: null,
+        assinadaPor: null,
+        assinadaPorNome: null,
+        sessaoAssinaturaId: null
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
@@ -275,20 +236,80 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
     
     res.json({
       success: true,
-      message: `${AtendimentoPsicologia.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}`,
+      message: `${AtendimentoPsicologia.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
       atendimento: {
         id: atendimento._id,
         tipoTarefa: atendimento.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(tipoTarefa),
         status: atendimento.status,
         dataHora: atendimento.entrada.dataHora,
-        temAssinatura: !!assinaturaValida
+        temAssinatura: atendimento.entrada.temAssinatura,
+        statusAssinatura: atendimento.entrada.statusAssinatura
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao registrar:', error);
     res.status(500).json({ success: false, error: 'Erro ao registrar: ' + error.message });
+  }
+});
+
+// ============================================
+// 🔥 APLICAR ASSINATURA DA SESSÃO AO ATENDIMENTO
+// (equivalente ao que a Gestão faz após a sessão ser assinada)
+// ============================================
+router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const { atendimentoId, sessaoId } = req.body;
+    
+    if (!atendimentoId || !sessaoId) {
+      return res.status(400).json({ success: false, error: 'atendimentoId e sessaoId são obrigatórios' });
+    }
+    
+    const sessao = await SessaoAssinatura.findOne({ sessaoId });
+    if (!sessao) {
+      return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
+    }
+    
+    if (sessao.status !== 'assinado') {
+      return res.status(400).json({ success: false, error: 'Sessão ainda não foi assinada' });
+    }
+    
+    if (!sessao.assinaturaBase64) {
+      return res.status(400).json({ success: false, error: 'Sessão não contém assinatura' });
+    }
+    
+    const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
+    if (!atendimento) {
+      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+    
+    // Aplica a assinatura
+    atendimento.entrada.assinaturaBase64 = sessao.assinaturaBase64;
+    atendimento.entrada.temAssinatura = true;
+    atendimento.entrada.statusAssinatura = 'assinada';
+    atendimento.entrada.assinadaEm = sessao.assinadaEm;
+    atendimento.entrada.assinadaPor = sessao.assinadaPor;
+    atendimento.entrada.assinadaPorNome = sessao.assinadaPorNome;
+    atendimento.entrada.sessaoAssinaturaId = sessaoId;
+    atendimento.updatedAt = new Date();
+    
+    await atendimento.save();
+    
+    console.log(`✅ Assinatura aplicada ao atendimento ${atendimentoId} (sessão ${sessaoId})`);
+    
+    res.json({
+      success: true,
+      message: 'Assinatura aplicada com sucesso!',
+      atendimento: {
+        id: atendimento._id,
+        temAssinatura: true,
+        statusAssinatura: 'assinada',
+        assinadaEm: atendimento.entrada.assinadaEm,
+        assinadaPorNome: atendimento.entrada.assinadaPorNome
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao aplicar assinatura:', error);
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -305,10 +326,7 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
     }
     
     const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-    
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     if (atendimento.status === 'finalizado') {
       return res.status(400).json({ success: false, error: 'Atendimento já finalizado' });
     }
@@ -321,7 +339,7 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
       resultadoTexto: resultadoTexto || '',
       observacoesFinais: observacoesFinais || '',
       registradoPor: req.userId,
-      registradoPorNome: psicologo?.nome || req.userNome || 'Psicólogo'
+      registradoPorNome: psicologo?.nome || req.userNome || 'Psicologia'
     };
     atendimento.status = 'finalizado';
     atendimento.updatedAt = new Date();
@@ -329,27 +347,20 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
     await atendimento.save();
     
     const resultadoLabel = {
-      'resolvido': 'Resolvido',
-      'em_acompanhamento': 'Em Acompanhamento',
-      'reincidente': 'Reincidente',
-      'encaminhado': 'Encaminhado',
-      'pendente': 'Pendente'
+      'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+      'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
     }[resultado];
     
     res.json({
       success: true,
       message: `Atendimento finalizado. Resultado: ${resultadoLabel}`,
       atendimento: {
-        id: atendimento._id,
-        status: atendimento.status,
-        resultado: resultadoLabel,
-        dataHoraSaida: atendimento.saida.dataHora
+        id: atendimento._id, status: atendimento.status,
+        resultado: resultadoLabel, dataHoraSaida: atendimento.saida.dataHora
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao finalizar:', error);
-    res.status(500).json({ success: false, error: 'Erro ao finalizar: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -358,38 +369,22 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
 // ============================================
 router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
-    const { 
-      atendimentoId, 
-      dataRemarcacao, 
-      horarioRemarcacao, 
-      motivoRemarcacao, 
-      observacoesRemarcacao 
-    } = req.body;
+    const { atendimentoId, dataRemarcacao, horarioRemarcacao, motivoRemarcacao, observacoesRemarcacao } = req.body;
     
-    if (!atendimentoId) {
-      return res.status(400).json({ success: false, error: 'ID do atendimento é obrigatório' });
-    }
-    if (!dataRemarcacao) {
-      return res.status(400).json({ success: false, error: 'Data da remarcação é obrigatória' });
-    }
-    if (!horarioRemarcacao) {
-      return res.status(400).json({ success: false, error: 'Horário da remarcação é obrigatório' });
-    }
-    if (!motivoRemarcacao) {
-      return res.status(400).json({ success: false, error: 'Motivo da remarcação é obrigatório' });
-    }
+    if (!atendimentoId) return res.status(400).json({ success: false, error: 'ID obrigatório' });
+    if (!dataRemarcacao) return res.status(400).json({ success: false, error: 'Data obrigatória' });
+    if (!horarioRemarcacao) return res.status(400).json({ success: false, error: 'Horário obrigatório' });
+    if (!motivoRemarcacao) return res.status(400).json({ success: false, error: 'Motivo obrigatório' });
     
     const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     const dataObj = new Date(dataRemarcacao + 'T00:00:00');
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
     
     if (dataObj < hoje) {
-      return res.status(400).json({ success: false, error: 'A data deve ser hoje ou no futuro' });
+      return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
     }
     
     const psicologo = await User.findById(req.userId).select('nome');
@@ -403,7 +398,7 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
       status: 'pendente',
       criadaEm: new Date(),
       criadaPor: req.userId,
-      criadaPorNome: psicologo?.nome || req.userNome || 'Psicólogo'
+      criadaPorNome: psicologo?.nome || req.userNome || 'Psicologia'
     };
     
     if (!atendimento.remarcacoes) atendimento.remarcacoes = [];
@@ -413,24 +408,18 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
     
     await atendimento.save();
     
-    console.log(`📅 Remarcação criada: ${atendimento.alunoNome} → ${dataRemarcacao} ${horarioRemarcacao}`);
-    
     res.json({
       success: true,
       message: `Atendimento remarcado para ${dataObj.toLocaleDateString('pt-BR')} às ${horarioRemarcacao}`,
       remarcacao: {
         id: remarcacao.id,
         atendimentoId: atendimento._id,
-        dataRemarcacao,
-        horarioRemarcacao,
-        motivoRemarcacao,
+        dataRemarcacao, horarioRemarcacao, motivoRemarcacao,
         observacoesRemarcacao: remarcacao.observacoesRemarcacao,
         status: 'pendente'
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao remarcar:', error);
     res.status(500).json({ success: false, error: 'Erro ao remarcar: ' + error.message });
   }
 });
@@ -472,8 +461,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
           motivoRemarcacao: rem.motivoRemarcacao,
           observacoesRemarcacao: rem.observacoesRemarcacao,
           status: rem.status,
-          atrasado,
-          hoje: ehHoje,
+          atrasado, hoje: ehHoje,
           criadaEm: rem.criadaEm,
           criadaPorNome: rem.criadaPorNome
         });
@@ -488,14 +476,8 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
       return new Date(a.dataRemarcacao) - new Date(b.dataRemarcacao);
     });
     
-    res.json({
-      success: true,
-      total: remarcacoes.length,
-      remarcacoes
-    });
-    
+    res.json({ success: true, total: remarcacoes.length, remarcacoes });
   } catch (error) {
-    console.error('Erro ao buscar remarcações:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -509,15 +491,10 @@ router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (re
       'remarcacoes.id': req.params.id
     });
     
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === req.params.id);
-    
-    if (!remarcacao) {
-      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
-    }
+    if (!remarcacao) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
     res.json({
       success: true,
@@ -535,9 +512,7 @@ router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (re
         criadaEm: remarcacao.criadaEm
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao buscar remarcação:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -549,27 +524,19 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
   try {
     const { remarcacaoId, acao } = req.body;
     
-    if (!remarcacaoId) {
-      return res.status(400).json({ success: false, error: 'ID da remarcação é obrigatório' });
-    }
-    
+    if (!remarcacaoId) return res.status(400).json({ success: false, error: 'ID obrigatório' });
     if (!['realizado', 'cancelado'].includes(acao)) {
-      return res.status(400).json({ success: false, error: 'Ação inválida. Use "realizado" ou "cancelado"' });
+      return res.status(400).json({ success: false, error: 'Ação inválida' });
     }
     
     const atendimento = await AtendimentoPsicologia.findOne({
       'remarcacoes.id': remarcacaoId
     });
     
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === remarcacaoId);
-    
-    if (!remarcacao) {
-      return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
-    }
+    if (!remarcacao) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
     remarcacao.status = acao === 'realizado' ? 'realizado' : 'cancelado';
     remarcacao.finalizadaEm = new Date();
@@ -597,21 +564,14 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
       ? '✅ Remarcação marcada como realizada!' 
       : '❌ Remarcação cancelada.';
     
-    console.log(`📅 Remarcação ${acao}: ${atendimento.alunoNome}`);
-    
-    res.json({
-      success: true,
-      message: mensagem
-    });
-    
+    res.json({ success: true, message: mensagem });
   } catch (error) {
-    console.error('Erro ao finalizar remarcação:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// DASHBOARD — 🔥 CORRIGIDO
+// DASHBOARD
 // ============================================
 router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -722,18 +682,12 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
         label: AtendimentoPsicologia.getTipoTarefaLabel(t._id),
         count: t.count
       })),
-      porGravidade: porGravidade.map(g => ({
-        gravidade: g._id,
-        count: g.count
-      })),
+      porGravidade: porGravidade.map(g => ({ gravidade: g._id, count: g.count })),
       resultados: resultados.map(r => ({
         resultado: r._id,
         label: {
-          'resolvido': 'Resolvido',
-          'em_acompanhamento': 'Em Acompanhamento',
-          'reincidente': 'Reincidente',
-          'encaminhado': 'Encaminhado',
-          'pendente': 'Pendente'
+          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
         }[r._id] || r._id,
         count: r.count
       })),
@@ -744,10 +698,8 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
         distribuicaoHoraria: horasDistribuicao
       }
     });
-    
   } catch (error) {
-    console.error('Erro no dashboard:', error);
-    res.status(500).json({ success: false, error: 'Erro no dashboard: ' + error.message });
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -776,18 +728,17 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
         dataHoraEntrada: a.entrada.dataHora,
         tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
         temRemarcacaoPendente: a.temRemarcacaoPendente || false,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria'
       }))
     });
-    
   } catch (error) {
-    console.error('Erro ao buscar ativos:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS — 🔥 CORRIGIDO
+// LISTAR TODOS OS ATENDIMENTOS (COM FILTROS)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -798,7 +749,6 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     
-    // 🔥 CORRIGIDO: Timezone Brasil UTC-3
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
@@ -815,7 +765,16 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
       AtendimentoPsicologia.countDocuments(query)
     ]);
     
-    const turmasDisponiveis = await AtendimentoPsicologia.distinct('alunoTurma');
+    const turmasAtendimento = await AtendimentoPsicologia.distinct('alunoTurma');
+    const turmasAlunos = await User.distinct('turma', { 
+      role: 'aluno', ativo: true, 
+      turma: { $nin: [null, '', 'Não informada'] } 
+    });
+
+    const turmasDisponiveis = [...new Set([
+      ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
+      ...turmasAlunos
+    ])].sort();
     
     res.json({
       success: true,
@@ -823,7 +782,7 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
       page: parseInt(page),
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
-      turmasDisponiveis: turmasDisponiveis.filter(t => t && t !== 'Não informada'),
+      turmasDisponiveis,
       atendimentos: atendimentos.map(a => ({
         id: a._id,
         alunoId: a.alunoId,
@@ -841,16 +800,14 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
         registradoPor: a.entrada.registradoPorNome,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
         saida: a.saida ? {
           dataHora: a.saida.dataHora,
           dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
           resultado: a.saida.resultado,
           resultadoTexto: {
-            'resolvido': 'Resolvido',
-            'em_acompanhamento': 'Em Acompanhamento',
-            'reincidente': 'Reincidente',
-            'encaminhado': 'Encaminhado',
-            'pendente': 'Pendente'
+            'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+            'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
           }[a.saida.resultado] || a.saida.resultado,
           observacoesFinais: a.saida.observacoesFinais,
           registradoPor: a.saida.registradoPorNome
@@ -858,9 +815,7 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
         createdAt: a.createdAt
       }))
     });
-    
   } catch (error) {
-    console.error('Erro ao listar:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -871,10 +826,7 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
 router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimento = await AtendimentoPsicologia.findById(req.params.id);
-    
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     res.json({
       success: true,
@@ -895,7 +847,11 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
           gravidade: atendimento.entrada.gravidade,
           registradoPor: atendimento.entrada.registradoPorNome,
           temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
-          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null
+          statusAssinatura: atendimento.entrada?.statusAssinatura || 'nao_necessaria',
+          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
+          assinadaEm: atendimento.entrada?.assinadaEm || null,
+          assinadaPorNome: atendimento.entrada?.assinadaPorNome || null,
+          sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null
         },
         detalhes: atendimento.detalhes,
         saida: atendimento.saida ? {
@@ -914,9 +870,7 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
         createdAt: atendimento.createdAt
       }
     });
-    
   } catch (error) {
-    console.error('Erro ao buscar:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -925,43 +879,29 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 // EDITAR ATENDIMENTO
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
-    try {
-        const { tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
-        
-        const atendimento = await AtendimentoPsicologia.findById(req.params.id);
-        if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-        
-        // ✅ NOVO: permite editar tipo de tarefa
-        if (tipoTarefa) atendimento.tipoTarefa = tipoTarefa;
-        
-        if (descricao) atendimento.entrada.descricao = descricao;
-        if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
-        if (gravidade) atendimento.entrada.gravidade = gravidade;
-        if (prioridade) atendimento.prioridade = prioridade;
-        if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
-        if (status) atendimento.status = status;
-        
-        if (saida) {
-            atendimento.saida = {
-                ...atendimento.saida,
-                ...saida,
-                registradoPor: req.userId,
-                registradoPorNome: req.userNome
-            };
-        }
-        
-        atendimento.updatedAt = new Date();
-        await atendimento.save();
-        
-        res.json({
-            success: true,
-            message: 'Atendimento atualizado com sucesso',
-            atendimento: { id: atendimento._id }
-        });
-    } catch (error) {
-        console.error('Erro ao editar:', error);
-        res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  try {
+    const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
+    const atendimento = await AtendimentoPsicologia.findById(req.params.id);
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    if (descricao) atendimento.entrada.descricao = descricao;
+    if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
+    if (gravidade) atendimento.entrada.gravidade = gravidade;
+    if (prioridade) atendimento.prioridade = prioridade;
+    if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
+    if (status) atendimento.status = status;
+    
+    if (saida) {
+      atendimento.saida = { ...atendimento.saida, ...saida, registradoPor: req.userId, registradoPorNome: req.userNome };
     }
+    
+    atendimento.updatedAt = new Date();
+    await atendimento.save();
+    
+    res.json({ success: true, message: 'Atendimento atualizado com sucesso', atendimento: { id: atendimento._id } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
 });
 
 // ============================================
@@ -970,17 +910,10 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimento = await AtendimentoPsicologia.findByIdAndDelete(req.params.id);
-    
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-    
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id})`);
-    
     res.json({ success: true, message: 'Atendimento excluído com sucesso' });
-    
   } catch (error) {
-    console.error('Erro ao excluir:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -991,61 +924,39 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataCorte, status = 'finalizado', confirmacao } = req.body;
-
     if (confirmacao !== 'CONFIRMAR') {
       return res.status(400).json({ success: false, error: 'Confirmação inválida' });
     }
-
-    if (!dataCorte) {
-      return res.status(400).json({ success: false, error: 'Data de corte é obrigatória' });
-    }
+    if (!dataCorte) return res.status(400).json({ success: false, error: 'Data de corte é obrigatória' });
 
     const dataObj = fimDoDiaBrasil(dataCorte);
-
     if (isNaN(dataObj.getTime())) {
       return res.status(400).json({ success: false, error: 'Data de corte inválida' });
     }
 
-    const filtro = {
-      status: status,
-      'saida.dataHora': { $lt: dataObj }
-    };
-
+    const filtro = { status, 'saida.dataHora': { $lt: dataObj } };
     const totalAntes = await AtendimentoPsicologia.countDocuments(filtro);
 
     if (totalAntes === 0) {
-      return res.json({
-        success: true,
-        message: 'Nenhum atendimento encontrado para os critérios',
-        excluidos: 0
-      });
+      return res.json({ success: true, message: 'Nenhum atendimento encontrado', excluidos: 0 });
     }
 
     const resultado = await AtendimentoPsicologia.deleteMany(filtro);
-
-    console.log(`🗑️ EXCLUSÃO EM MASSA: ${resultado.deletedCount} atendimentos excluídos pelo usuário ${req.userId}`);
-    console.log(`   Data de corte: ${dataCorte}`);
-    console.log(`   Status filtrado: ${status}`);
+    console.log(`🗑️ EXCLUSÃO EM MASSA: ${resultado.deletedCount} excluídos`);
 
     res.json({
       success: true,
-      message: `${resultado.deletedCount} atendimento(s) excluído(s) com sucesso`,
+      message: `${resultado.deletedCount} atendimento(s) excluído(s)`,
       excluidos: resultado.deletedCount,
-      dataCorte: dataCorte,
-      status: status
+      dataCorte, status
     });
-
   } catch (error) {
-    console.error('Erro na exclusão em massa:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Erro ao excluir atendimentos: ' + error.message 
-    });
+    res.status(500).json({ success: false, error: 'Erro ao excluir: ' + error.message });
   }
 });
 
 // ============================================
-// RELATÓRIO POR ALUNO — 🔥 CORRIGIDO
+// RELATÓRIO POR ALUNO
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1071,47 +982,34 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
     
     res.json({
       success: true,
-      aluno: {
-        id: aluno._id,
-        nome: aluno.nome,
-        matricula: aluno.matricula,
-        turma: aluno.turma,
-        curso: aluno.curso
-      },
+      aluno: { id: aluno._id, nome: aluno.nome, matricula: aluno.matricula, turma: aluno.turma, curso: aluno.curso },
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtendimentos: atendimentos.length,
         porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo,
-          label: AtendimentoPsicologia.getTipoTarefaLabel(tipo),
-          count
+          tipo, label: AtendimentoPsicologia.getTipoTarefaLabel(tipo), count
         })),
         porGravidade,
         emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
         finalizados: atendimentos.filter(a => a.status === 'finalizado').length
       },
       atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        tipoTarefa: a.tipoTarefa,
+        id: a._id, tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora,
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        status: a.status,
-        dataSaida: a.saida?.dataHora || null,
-        resultado: a.saida?.resultado || null,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade, status: a.status,
+        dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null
       }))
     });
-    
   } catch (error) {
-    console.error('Erro no relatório:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// RELATÓRIO POR TURMA — 🔥 CORRIGIDO
+// RELATÓRIO POR TURMA
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1132,13 +1030,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
     atendimentos.forEach(a => {
       const key = a.alunoId.toString();
       if (!porAluno[key]) {
-        porAluno[key] = {
-          alunoId: a.alunoId,
-          alunoNome: a.alunoNome,
-          alunoMatricula: a.alunoMatricula,
-          total: 0,
-          tipos: {}
-        };
+        porAluno[key] = { alunoId: a.alunoId, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula, total: 0, tipos: {} };
       }
       porAluno[key].total++;
       porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
@@ -1153,32 +1045,25 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
         totalAtendimentos: atendimentos.length,
         totalAlunosAtendidos: Object.keys(porAluno).length,
         porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo,
-          label: AtendimentoPsicologia.getTipoTarefaLabel(tipo),
-          count
+          tipo, label: AtendimentoPsicologia.getTipoTarefaLabel(tipo), count
         }))
       },
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoNome: a.alunoNome,
+        id: a._id, alunoNome: a.alunoNome,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora,
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        status: a.status
+        dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade, status: a.status
       }))
     });
-    
   } catch (error) {
-    console.error('Erro no relatório:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// RELATÓRIO GERAL — 🔥 COM REGISTROS
+// RELATÓRIO GERAL
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1197,7 +1082,7 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
     const [atendimentos, total, comAssinatura] = await Promise.all([
       AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 }).limit(1000),
       AtendimentoPsicologia.countDocuments(query),
-      AtendimentoPsicologia.countDocuments({ ...query, 'entrada.assinaturaBase64': { $exists: true, $ne: '' } })
+      AtendimentoPsicologia.countDocuments({ ...query, 'entrada.temAssinatura': true })
     ]);
     
     const porTurma = {};
@@ -1220,12 +1105,21 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       delete t.alunos;
     });
     
-    const turmas = await AtendimentoPsicologia.distinct('alunoTurma');
+    const turmasAtendimento = await AtendimentoPsicologia.distinct('alunoTurma');
+    const turmasAlunos = await User.distinct('turma', { 
+      role: 'aluno', ativo: true,
+      turma: { $nin: [null, '', 'Não informada'] } 
+    });
+
+    const turmas = [...new Set([
+      ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
+      ...turmasAlunos
+    ])].sort();
     
     res.json({
       success: true,
       filtros: { dataInicio, dataFim, turma, tipo },
-      turmasDisponiveis: turmas.filter(t => t && t !== 'Não informada'),
+      turmasDisponiveis: turmas,
       totalAtendimentos: total,
       comAssinatura,
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
@@ -1235,7 +1129,6 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
         count
       })).sort((a, b) => b.count - a.count),
       porGravidade,
-      // 🔥 NOVO: registros detalhados para CSV
       registros: atendimentos.map(a => ({
         id: a._id,
         alunoNome: a.alunoNome,
@@ -1250,25 +1143,21 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
         prioridade: a.prioridade,
         status: a.status,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null,
         registradoPorNome: a.entrada?.registradoPorNome
       })),
-      // Retrocompatibilidade
       atendimentos: atendimentos.slice(0, 100).map(a => ({
-        id: a._id,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
+        id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
         dataEntrada: a.entrada.dataHora,
         descricao: a.entrada.descricao.substring(0, 100),
-        gravidade: a.entrada.gravidade,
-        status: a.status,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        gravidade: a.entrada.gravidade, status: a.status,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null
       }))
     });
-    
   } catch (error) {
-    console.error('Erro no relatório:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });

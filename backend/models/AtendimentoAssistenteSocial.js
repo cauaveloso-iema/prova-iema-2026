@@ -65,11 +65,27 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
+    
     // 🔥 Assinatura digital
     assinaturaBase64: {
       type: String,
       default: ''
-    }
+    },
+    // 🆕 Assinatura via QR Code (sessão)
+    temAssinatura: { 
+      type: Boolean, 
+      default: false, 
+      index: true 
+    },
+    statusAssinatura: {
+      type: String,
+      enum: ['nao_necessaria', 'pendente', 'assinada'],
+      default: 'nao_necessaria',
+      index: true
+    },
+    assinadaEm: { type: Date, default: null },
+    assinadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    assinadaPorNome: { type: String, default: null }
   },
   
   detalhes: {
@@ -141,15 +157,43 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Índices
+// ============================================
+// ÍNDICES
+// ============================================
 AtendimentoAssistenteSocialSchema.index({ alunoId: 1, status: 1 });
 AtendimentoAssistenteSocialSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ temRemarcacaoPendente: 1, status: 1 });
 AtendimentoAssistenteSocialSchema.index({ 'remarcacoes.status': 1 });
+AtendimentoAssistenteSocialSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
 
-// Métodos estáticos
+// ============================================
+// MIDDLEWARE: PRE-SAVE
+// ============================================
+AtendimentoAssistenteSocialSchema.pre('save', function(next) {
+  // Sincroniza temAssinatura e statusAssinatura baseado no assinaturaBase64
+  if (this.entrada) {
+    const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
+    this.entrada.temAssinatura = temAssinaturaReal;
+    
+    if (temAssinaturaReal) {
+      this.entrada.statusAssinatura = 'assinada';
+      if (!this.entrada.assinadaEm) {
+        this.entrada.assinadaEm = new Date();
+      }
+    } else if (this.entrada.statusAssinatura !== 'pendente') {
+      this.entrada.statusAssinatura = 'nao_necessaria';
+    }
+  }
+  
+  this.updatedAt = new Date();
+  next();
+});
+
+// ============================================
+// MÉTODOS ESTÁTICOS
+// ============================================
 AtendimentoAssistenteSocialSchema.statics.alunoEmAtendimento = async function(alunoId) {
   const atendimento = await this.findOne({ alunoId, status: 'em_andamento' });
   return !!atendimento;
@@ -176,7 +220,9 @@ AtendimentoAssistenteSocialSchema.statics.getTipoTarefaLabel = function(tipo) {
   return labels[tipo] || tipo;
 };
 
-// Método para adicionar remarcação
+// ============================================
+// MÉTODOS DE INSTÂNCIA
+// ============================================
 AtendimentoAssistenteSocialSchema.methods.adicionarRemarcacao = function(dados) {
   if (!this.remarcacoes) this.remarcacoes = [];
   

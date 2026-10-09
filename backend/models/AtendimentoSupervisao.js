@@ -62,11 +62,20 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
-    // 🔥 Assinatura digital
-    assinaturaBase64: {
+    
+    // 🔥 ASSINATURA DIGITAL (via QR Code)
+    assinaturaBase64: { type: String, default: '' },
+    temAssinatura: { type: Boolean, default: false, index: true },
+    statusAssinatura: {
       type: String,
-      default: ''
-    }
+      enum: ['nao_necessaria', 'pendente', 'assinada'],
+      default: 'nao_necessaria',
+      index: true
+    },
+    assinadaEm: { type: Date, default: null },
+    assinadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    assinadaPorNome: { type: String, default: null },
+    sessaoAssinaturaId: { type: String, default: null }
   },
   
   detalhes: {
@@ -102,7 +111,6 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     registradoPorNome: String
   },
   
-  // 🔥 Remarcações
   remarcacoes: {
     type: [RemarcacaoSchema],
     default: []
@@ -135,15 +143,42 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Índices
+// ============================================
+// ÍNDICES
+// ============================================
 AtendimentoSupervisaoSchema.index({ alunoId: 1, status: 1 });
 AtendimentoSupervisaoSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ temRemarcacaoPendente: 1, status: 1 });
 AtendimentoSupervisaoSchema.index({ 'remarcacoes.status': 1 });
+AtendimentoSupervisaoSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
 
-// Métodos estáticos
+// ============================================
+// MIDDLEWARE: PRE-SAVE
+// ============================================
+AtendimentoSupervisaoSchema.pre('save', function(next) {
+  if (this.entrada) {
+    const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
+    this.entrada.temAssinatura = temAssinaturaReal;
+    
+    if (temAssinaturaReal) {
+      this.entrada.statusAssinatura = 'assinada';
+      if (!this.entrada.assinadaEm) {
+        this.entrada.assinadaEm = new Date();
+      }
+    } else if (this.entrada.statusAssinatura !== 'pendente') {
+      this.entrada.statusAssinatura = 'nao_necessaria';
+    }
+  }
+  
+  this.updatedAt = new Date();
+  next();
+});
+
+// ============================================
+// MÉTODOS ESTÁTICOS
+// ============================================
 AtendimentoSupervisaoSchema.statics.alunoEmAtendimento = async function(alunoId) {
   const atendimento = await this.findOne({ alunoId, status: 'em_andamento' });
   return !!atendimento;
@@ -167,7 +202,6 @@ AtendimentoSupervisaoSchema.statics.getTipoTarefaLabel = function(tipo) {
   return labels[tipo] || tipo;
 };
 
-// Método para adicionar remarcação
 AtendimentoSupervisaoSchema.methods.adicionarRemarcacao = function(dados) {
   if (!this.remarcacoes) this.remarcacoes = [];
   

@@ -72,7 +72,7 @@
             border-radius: 50%; animation: spin 0.8s linear infinite;
         }
 
-        /* ASSINATURA DIGITAL */
+        /* ASSINATURA DIGITAL (CANVAS TRADICIONAL - MANTIDO PARA COMPATIBILIDADE) */
         .assinatura-wrapper { margin-top: 15px; }
         .assinatura-container {
             position: relative; width: 100%; height: 150px;
@@ -93,6 +93,34 @@
         .assinatura-placeholder i { font-size: 32px; margin-bottom: 8px; }
         .assinatura-placeholder span { font-size: 14px; }
         .assinatura-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+        /* 🆕 CHECKBOX DE ASSINATURA VIA QR CODE */
+        .assinatura-qr-wrapper {
+            margin-top: 20px;
+        }
+        .assinatura-qr-wrapper .form-check {
+            transition: all 0.3s ease;
+        }
+        .assinatura-qr-wrapper .form-check:hover {
+            background: #eef2ff !important;
+            border-color: #c7d2fe !important;
+        }
+
+        /* 🆕 MODAL DE ASSINATURA QR */
+        @keyframes spinQR { to { transform: rotate(360deg); } }
+        #modalAssinaturaQR .modal-content { border: none; overflow: hidden; }
+        #modalAssinaturaQR img#qrCodeImage { image-rendering: pixelated; }
+        .btn-copiar-link {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e0;
+            color: #475569;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-copiar-link:hover { background: #e2e8f0; border-color: #94a3b8; }
 
         /* MODAL DETALHES */
         .detalhe-atendimento .info-row {
@@ -527,7 +555,7 @@
                                           placeholder="Informações complementares..."></textarea>
                             </div>
 
-                            <!-- ASSINATURA DIGITAL -->
+                            <!-- 🖋️ ASSINATURA DIGITAL TRADICIONAL (CANVAS) -->
                             <div class="assinatura-wrapper">
                                 <label class="form-label">
                                     <i class="fas fa-signature"></i> Assinatura do Responsável
@@ -546,6 +574,23 @@
                                     </button>
                                 </div>
                                 <input type="hidden" id="assinaturaBase64" value="">
+                            </div>
+
+                            <!-- 🆕 ASSINATURA VIA QR CODE (SESSÃO) -->
+                            <div class="assinatura-qr-wrapper">
+                                <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                    <input class="form-check-input" type="checkbox" 
+                                        id="assistenteSocialNecessitaAssinatura" 
+                                        onchange="assistenteSocial.toggleNecessitaAssinatura('assistenteSocial')"
+                                        style="width: 20px; height: 20px; margin-top: 2px;">
+                                    <label class="form-check-label" for="assistenteSocialNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
+                                        <strong><i class="fas fa-signature"></i> Gerar QR Code para o responsável assinar no celular dele</strong>
+                                        <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;">
+                                            Marque para gerar um QR Code. O responsável escaneia, assina no celular dele, e a assinatura aparece aqui automaticamente.
+                                        </p>
+                                    </label>
+                                </div>
+                                <div id="assistenteSocialBlocoAssinaturaInfo" style="display: none;"></div>
                             </div>
                             
                             <div class="d-flex gap-2 mt-3">
@@ -938,7 +983,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- 🔥 NOVO: CARD BIBLIOTECA -->
                             <div class="col-md-4">
                                 <div class="card-acompanhamento card-biblioteca" onclick="filtrarPorSetor('biblioteca')" style="cursor:pointer;">
                                     <div class="card-icon"><i class="fas fa-book"></i></div>

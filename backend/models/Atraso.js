@@ -32,15 +32,54 @@ const AtrasoSchema = new mongoose.Schema({
   registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   registradoPorNome: String,
   
+  // ============================================
+  // 🆕 ASSINATURA DIGITAL (via QR Code)
+  // ============================================
+  assinaturaBase64: { type: String, default: '' },
+  temAssinatura: { type: Boolean, default: false, index: true },
+  
+  statusAssinatura: {
+    type: String,
+    enum: ['nao_necessaria', 'pendente', 'assinada'],
+    default: 'nao_necessaria',
+    index: true
+  },
+  assinadaEm: { type: Date, default: null },
+  assinadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  assinadaPorNome: { type: String, default: null },
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
+// ============================================
+// ÍNDICES
+// ============================================
 AtrasoSchema.index({ alunoId: 1, dataHora: -1 });
 AtrasoSchema.index({ motivo: 1, dataHora: -1 });
 AtrasoSchema.index({ alunoTurma: 1, dataHora: -1 });
 AtrasoSchema.index({ dataHora: -1 });
+AtrasoSchema.index({ statusAssinatura: 1, createdAt: -1 });
 
+// ============================================
+// MIDDLEWARE
+// ============================================
+AtrasoSchema.pre('save', function(next) {
+  this.temAssinatura = !!(this.assinaturaBase64 && this.assinaturaBase64.length > 100);
+  
+  if (this.temAssinatura) {
+    this.statusAssinatura = 'assinada';
+  } else if (this.statusAssinatura !== 'pendente') {
+    this.statusAssinatura = 'nao_necessaria';
+  }
+  
+  this.updatedAt = new Date();
+  next();
+});
+
+// ============================================
+// MÉTODO ESTÁTICO
+// ============================================
 AtrasoSchema.statics.getMotivoLabel = function(motivo) {
   const labels = {
     'onibus': 'Ônibus',

@@ -4,6 +4,7 @@
 // Com Assinatura Digital + Integração Automática
 // + Tipo de Prova Perdida + Verificação de Duplicidade
 // + CPF Obrigatório com Validação
+// + 🆕 ASSINATURA VIA QR CODE (SESSÃO)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -24,6 +25,52 @@ let __alunosParaRelatorio = [];
 let __alunosFiltrados = [];
 let __indiceSelecionado = -1;
 let __alunosCarregados = false;
+
+// ============================================
+// 🆕 ESTADO DA SESSÃO DE ASSINATURA POR MÓDULO
+// ============================================
+const estadoSessaoAssinatura = {
+    atraso: {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    },
+    autorizacao: {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    },
+    justificativa: {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    },
+    segundaChamada: {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    }
+};
+
+// Modo assinatura (quando abre via ?assinatura=UUID)
+let sessaoAssinaturaModo = null;
+let sessaoAssinaturaAtual = null;
+let telaCanvas = null;
+let telaCtx = null;
+let telaWrapper = null;
+let telaPlaceholder = null;
+let telaTemAssinatura = false;
+let telaDesenhando = false;
+let telaLastX = 0;
+let telaLastY = 0;
 
 (function protegerContraAlertNativo() {
     const alertOriginal = window.alert.bind(window);
@@ -237,6 +284,14 @@ function validarCPFCliente(cpf) {
 document.addEventListener('DOMContentLoaded', async () => {
     if (!token) { window.location.href = '/login.html'; return; }
     
+    // 🆕 VERIFICA SE ESTÁ EM MODO ASSINATURA (?assinatura=UUID)
+    const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
+    if (modoAssinatura) {
+        console.log('📱 Modo assinatura detectado:', modoAssinatura);
+        await mostrarTelaAssinatura(modoAssinatura);
+        return;
+    }
+    
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     const allowedRoles = ['gestao_geral', 'super_admin', 'admin'];
     
@@ -350,6 +405,10 @@ window.addEventListener('beforeunload', () => {
     pararScannerModulo('autorizacao');
     pararScannerModulo('justificativa');
     pararScannerModulo('segundaChamada');
+    // 🆕 Para todos os monitoramentos de sessão
+    ['atraso', 'autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
+        pararMonitoramentoSessao(modulo);
+    });
 });
 
 async function carregarFotoPerfil() {
@@ -475,7 +534,7 @@ function inicializarAssinatura(modulo) {
 
 function limparAssinatura(modulo) {
     const state = assinaturaState[modulo];
-    if (!state.canvas || !state.ctx) return;
+    if (!state || !state.canvas || !state.ctx) return;
     const rect = state.canvas.getBoundingClientRect();
     state.ctx.clearRect(0, 0, rect.width, rect.height);
     state.temAssinatura = false;
@@ -488,7 +547,7 @@ function limparAssinatura(modulo) {
 
 function salvarAssinaturaBase64(modulo) {
     const state = assinaturaState[modulo];
-    if (!state.canvas || !state.temAssinatura) return;
+    if (!state || !state.canvas || !state.temAssinatura) return;
     try {
         const dataURL = state.canvas.toDataURL('image/png');
         const hidden = safeGet(`${modulo}AssinaturaBase64`);
@@ -785,6 +844,13 @@ function mostrarFormRegistro() {
     safeGet('motivoOutrosTexto').value = '';
     safeGet('campoOutros').style.display = 'none';
     
+    // 🆕 Limpa estado de assinatura do atraso
+    limparEstadoSessaoAssinatura('atraso');
+    const checkAssinatura = safeGet('atrasoNecessitaAssinatura');
+    if (checkAssinatura) checkAssinatura.checked = false;
+    const blocoInfo = safeGet('atrasoBlocoAssinaturaInfo');
+    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
+    
     const hoje = new Date().toISOString().split('T')[0];
     const dataEl = safeGet('atrasoData');
     if (dataEl) dataEl.value = hoje;
@@ -849,6 +915,18 @@ async function registrarAtraso() {
         }
     }
     
+    // ==========================================
+    // 🆕 VALIDAÇÃO DA ASSINATURA VIA QR
+    // ==========================================
+    const precisaAssinatura = safeGet('atrasoNecessitaAssinatura')?.checked || false;
+    const assinaturaBase64 = estadoSessaoAssinatura.atraso?.assinaturaCapturada || '';
+    
+    if (precisaAssinatura && !assinaturaBase64) {
+        notificar('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'warning', 5000);
+        reabrirModalAssinatura('atraso');
+        return;
+    }
+    
     const btn = document.querySelector('#formRegistro .btn-primary-custom');
     if (btn) btn.disabled = true;
     
@@ -875,11 +953,26 @@ async function registrarAtraso() {
                     motivoOutros: safeGet('motivoOutrosTexto')?.value || '',
                     horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
                     horarioChegada: safeGet('horarioChegada')?.value || ''
-                }
+                },
+                // 🆕 Assinatura via QR
+                precisaAssinatura: precisaAssinatura,
+                assinaturaBase64: assinaturaBase64
             })
         });
         const data = await response.json();
         if (data.success) {
+            // 🆕 Limpa a sessão de assinatura
+            const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
+            if (sessaoId) {
+                fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).catch(e => console.warn(e));
+            }
+            pararMonitoramentoSessao('atraso');
+            fecharModalAssinatura('atraso');
+            limparEstadoSessaoAssinatura('atraso');
+            
             notificar(`✅ ${data.message}`, 'success');
             limparTela();
             if (modoAtual === 'automatico') reiniciarScannerAutomatico();
@@ -900,6 +993,23 @@ function limparTela() {
     safeGet('formRegistro').style.display = 'none';
     currentAluno = null;
     motivoSelecionado = null;
+    
+    // 🆕 Limpa assinatura do atraso
+    const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
+    if (sessaoId) {
+        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(e => console.warn(e));
+    }
+    pararMonitoramentoSessao('atraso');
+    fecharModalAssinatura('atraso');
+    limparEstadoSessaoAssinatura('atraso');
+    
+    const checkAssinatura = safeGet('atrasoNecessitaAssinatura');
+    if (checkAssinatura) checkAssinatura.checked = false;
+    const blocoInfo = safeGet('atrasoBlocoAssinaturaInfo');
+    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
 }
 
 function reiniciarScannerAutomatico() {
@@ -1410,6 +1520,10 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             </div>`;
     }
     
+    const assinaturaHTML = a.assinaturaBase64 
+        ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura" style="max-height:13mm;max-width:100%;object-fit:contain;position:relative;z-index:2;margin-bottom:1mm;">`
+        : `<span style="color:#999;font-size:8pt;padding-bottom:2px;">_________________________________</span>`;
+    
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
@@ -1511,8 +1625,8 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
         
         <div class="assinaturas">
             <div class="assinatura">
-                <div class="assinatura-container" style="display: flex; align-items: flex-end; justify-content: center;">
-                    <span style="color: #999; font-size: 8pt; padding-bottom: 2px;">_________________________________</span>
+                <div class="assinatura-container">
+                    ${assinaturaHTML}
                 </div>
                 <div class="assinatura-linha">Assinatura do Responsável</div>
             </div>
@@ -2254,6 +2368,13 @@ function mostrarFormModulo(modulo) {
     
     limparAssinatura(modulo);
     
+    // 🆕 Reseta estado de sessão de assinatura deste módulo
+    limparEstadoSessaoAssinatura(modulo);
+    const checkAssinatura = safeGet(`${modulo}NecessitaAssinatura`);
+    if (checkAssinatura) checkAssinatura.checked = false;
+    const blocoInfo = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
+    
     setTimeout(() => {
         const canvas = safeGet(`${modulo}AssinaturaCanvas`);
         if (canvas && canvas.dataset.assinaturaInit !== 'true') {
@@ -2409,10 +2530,16 @@ async function registrarModulo(modulo) {
         return;
     }
     
-    const assinaturaBase64 = obterAssinaturaBase64(modulo);
-    if (!assinaturaBase64) {
-        const confirmar = await confirm('⚠️ Nenhuma assinatura foi capturada. Deseja continuar mesmo assim?');
-        if (!confirmar) return;
+    // ==========================================
+    // 🆕 ASSINATURA VIA QR (substitui o canvas local)
+    // ==========================================
+    const precisaAssinatura = safeGet(`${modulo}NecessitaAssinatura`)?.checked || false;
+    const assinaturaBase64 = estadoSessaoAssinatura[modulo]?.assinaturaCapturada || '';
+    
+    if (precisaAssinatura && !assinaturaBase64) {
+        notificar('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'warning', 5000);
+        reabrirModalAssinatura(modulo);
+        return;
     }
     
     const btn = document.querySelector(`#form${P} .btn-primary-custom`);
@@ -2437,7 +2564,8 @@ async function registrarModulo(modulo) {
             horarioAusencia: safeGet(`${I}HorarioAusencia`)?.value || '',
             horarioRetorno: safeGet(`${I}HorarioRetorno`)?.value || '',
             observacoes: safeGet(`${I}Observacoes`)?.value || '',
-            assinaturaBase64: assinaturaBase64
+            assinaturaBase64: assinaturaBase64,
+            precisaAssinatura: precisaAssinatura
         };
         
         const r = await fetch('/api/gestao-geral/autorizacao/registrar', {
@@ -2467,6 +2595,18 @@ async function registrarModulo(modulo) {
         }
         
         console.log(`✅ ${cfg.nomeAmigavel} registrado:`, d.autorizacao.id);
+        
+        // 🆕 Limpa a sessão de assinatura
+        const sessaoId = estadoSessaoAssinatura[modulo]?.sessaoId;
+        if (sessaoId) {
+            fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).catch(e => console.warn(e));
+        }
+        pararMonitoramentoSessao(modulo);
+        fecharModalAssinatura(modulo);
+        limparEstadoSessaoAssinatura(modulo);
         
         // ==========================================
         // INTEGRAÇÃO AUTOMÁTICA
@@ -2591,6 +2731,23 @@ function limparTelaModulo(modulo) {
     estados[modulo].currentAluno = null;
     estados[modulo].motivoSelecionado = null;
     limparAssinatura(modulo);
+    
+    // 🆕 Limpa a sessão de assinatura
+    const sessaoId = estadoSessaoAssinatura[modulo]?.sessaoId;
+    if (sessaoId) {
+        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(e => console.warn(e));
+    }
+    pararMonitoramentoSessao(modulo);
+    fecharModalAssinatura(modulo);
+    limparEstadoSessaoAssinatura(modulo);
+    
+    const checkAssinatura = safeGet(`${modulo}NecessitaAssinatura`);
+    if (checkAssinatura) checkAssinatura.checked = false;
+    const blocoInfo = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
 }
 
 function reiniciarScannerModulo(modulo) {
@@ -2617,7 +2774,6 @@ async function carregarListaModulo(modulo) {
     const motivo = safeGet(`filtroLista${P}Motivo`)?.value || '';
     const dataInicio = safeGet(`filtroLista${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`filtroLista${P}DataFim`)?.value || '';
-    // 🆕 Filtro por tipo de prova (apenas 2ª chamada)
     const tipoProvaPerdida = safeGet(`filtroLista${P}TipoProva`)?.value || '';
 
     let url = `/api/gestao-geral/autorizacao/listar?tipo=${cfg.tipo}&limit=50`;
@@ -2983,7 +3139,6 @@ async function abrirEditarModulo(modulo, id) {
             </div>
         `;
         
-        // 🆕 Bloco de tipo de prova perdida
         const blocoTipoProva = mostrarTipoProva ? `
             <div class="mb-3">
                 <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
@@ -3118,7 +3273,6 @@ function toggleEditMotivoOutros() {
     if (campoAusencia) campoAusencia.style.display = motivo === 'necessita_ausentar_retornar' ? 'block' : 'none';
 }
 
-// 🆕 Toggle tipo de prova outros no modal de edição
 function toggleEditTipoProvaOutros() {
     const tipo = safeGet('editModuloTipoProva')?.value;
     const campo = safeGet('editCampoTipoProvaOutros');
@@ -3148,7 +3302,6 @@ async function salvarEdicaoModulo() {
         return;
     }
     
-    // Período da falta
     let periodoFaltaInicio = '';
     let periodoFaltaFim = '';
     
@@ -3172,7 +3325,6 @@ async function salvarEdicaoModulo() {
         }
     }
     
-    // 🆕 Tipo de prova (apenas 2ª chamada)
     let tipoProvaPerdida = null;
     let tipoProvaPerdidaOutros = '';
     
@@ -3196,7 +3348,6 @@ async function salvarEdicaoModulo() {
         return;
     }
     
-    // 🆕 Validação de CPF
     if (responsavelCPF) {
         const validacaoCPF = validarCPFCliente(responsavelCPF);
         if (!validacaoCPF.valido) {
@@ -3233,7 +3384,6 @@ async function salvarEdicaoModulo() {
             body.periodoFaltaFim = periodoFaltaFim || periodoFaltaInicio;
         }
         
-        // 🆕 Envia tipo de prova
         if (cfg.tipo === 'segunda_chamada') {
             body.tipoProvaPerdida = tipoProvaPerdida;
             body.tipoProvaPerdidaOutros = tipoProvaPerdidaOutros;
@@ -3249,7 +3399,6 @@ async function salvarEdicaoModulo() {
         });
         const result = await response.json();
 
-        // 🆕 Tratamento do 409 (duplicidade)
         if (response.status === 409 || (result.error && result.error.includes('Já existe'))) {
             let msg = '⚠️ Registro duplicado detectado!\n\n';
             msg += result.error || 'Já existe outro registro com os mesmos dados.';
@@ -3555,7 +3704,6 @@ async function carregarRelatorioModulo(modulo) {
     const tipo = safeGet(`${P}TipoRelatorio`)?.value || 'geral';
     const dataInicio = safeGet(`${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`${P}DataFim`)?.value || '';
-    // 🆕 Filtro por tipo de prova
     const tipoProvaPerdida = safeGet(`${P}FiltroTipoProva`)?.value || '';
 
     let url = '';
@@ -3606,9 +3754,6 @@ async function carregarRelatorioModulo(modulo) {
     }
 }
 
-// ============================================
-// 📄 EXPORTAR PDF - ATRASOS
-// ============================================
 function exportarPDFAtrasos() {
     if (!relatorioData) {
         notificar('⚠️ Gere um relatório primeiro', 'warning');
@@ -3693,9 +3838,6 @@ function gerarHTMLRelatorioAtrasos(data) {
     return montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor: 'Gestão Geral' });
 }
 
-// ============================================
-// 📄 EXPORTAR PDF - MÓDULOS
-// ============================================
 function exportarPDFModulo(modulo) {
     const data = relatoriosModulo[modulo];
     if (!data) {
@@ -3739,46 +3881,22 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
     if (tipo === 'geral') {
         statsHTML = `
             <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">${data.totalRegistros || 0}</div>
-                    <div class="stat-label">Total de Registros</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porMotivo || []).length}</div>
-                    <div class="stat-label">Motivos Diferentes</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porTurma || []).length}</div>
-                    <div class="stat-label">Turmas Envolvidas</div>
-                </div>
-            </div>
-        `;
+                <div class="stat"><div class="stat-value">${data.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
+                <div class="stat"><div class="stat-value">${(data.porMotivo || []).length}</div><div class="stat-label">Motivos Diferentes</div></div>
+                <div class="stat"><div class="stat-value">${(data.porTurma || []).length}</div><div class="stat-label">Turmas Envolvidas</div></div>
+            </div>`;
     } else if (tipo === 'turma') {
         statsHTML = `
             <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div>
-                    <div class="stat-label">Total de Registros</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${data.estatisticas?.totalAlunos || (data.porAluno || []).length}</div>
-                    <div class="stat-label">Alunos Atendidos</div>
-                </div>
-            </div>
-        `;
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalAlunos || (data.porAluno || []).length}</div><div class="stat-label">Alunos Atendidos</div></div>
+            </div>`;
     } else if (tipo === 'aluno') {
         statsHTML = `
             <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div>
-                    <div class="stat-label">Total de Registros</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">${(data.porMotivo || []).length}</div>
-                    <div class="stat-label">Motivos Diferentes</div>
-                </div>
-            </div>
-        `;
+                <div class="stat"><div class="stat-value">${data.estatisticas?.totalRegistros || 0}</div><div class="stat-label">Total de Registros</div></div>
+                <div class="stat"><div class="stat-value">${(data.porMotivo || []).length}</div><div class="stat-label">Motivos Diferentes</div></div>
+            </div>`;
     }
     
     let tabelaHTML = '';
@@ -3792,40 +3910,21 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
             <div class="section-title">📊 Distribuição por Motivo</div>
             <table>
                 <thead><tr><th>Motivo</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                <tbody>
-                    ${porMotivo.map(m => `
-                        <tr>
-                            <td><strong>${escapeHTML(m.label || '')}</strong></td>
-                            <td style="text-align:center;">${m.count || 0}</td>
-                        </tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
+                <tbody>${porMotivo.map(m => `<tr><td><strong>${escapeHTML(m.label || '')}</strong></td><td style="text-align:center;">${m.count || 0}</td></tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
             </table>
             
             ${mostrarTipoProva && (data.porTipoProva || []).length > 0 ? `
                 <div class="section-title">📝 Distribuição por Tipo de Prova Perdida</div>
                 <table>
                     <thead><tr><th>Tipo de Prova</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
-                    <tbody>
-                        ${(data.porTipoProva || []).map(t => `
-                            <tr>
-                                <td><strong>${escapeHTML(t.tipoProva || t.label || '')}</strong></td>
-                                <td style="text-align:center;">${t.count || 0}</td>
-                            </tr>`).join('')}
-                    </tbody>
+                    <tbody>${(data.porTipoProva || []).map(t => `<tr><td><strong>${escapeHTML(t.tipoProva || t.label || '')}</strong></td><td style="text-align:center;">${t.count || 0}</td></tr>`).join('')}</tbody>
                 </table>
             ` : ''}
             
             <div class="section-title">🏫 Distribuição por Turma</div>
             <table>
                 <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
-                <tbody>
-                    ${porTurma.map(t => `
-                        <tr>
-                            <td><strong>${escapeHTML(t.turma || '')}</strong></td>
-                            <td style="text-align:center;">${t.total || 0}</td>
-                            <td style="text-align:center;">${t.totalAlunos || 0}</td>
-                        </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
+                <tbody>${porTurma.map(t => `<tr><td><strong>${escapeHTML(t.turma || '')}</strong></td><td style="text-align:center;">${t.total || 0}</td><td style="text-align:center;">${t.totalAlunos || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
             </table>
             
             ${registros.length > 0 ? `
@@ -3841,22 +3940,19 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                             <th>Motivo</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        ${registros.slice(0, 30).map(a => `
-                            <tr>
-                                <td>${a.dataFormatada || '-'}</td>
-                                ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
-                                ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
-                                <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                                <td>${escapeHTML(a.alunoTurma || '')}</td>
-                                <td>${escapeHTML(a.motivoLabel || '')}</td>
-                            </tr>`).join('')}
+                    <tbody>${registros.slice(0, 30).map(a => `
+                        <tr>
+                            <td>${a.dataFormatada || '-'}</td>
+                            ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                            ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td>${escapeHTML(a.alunoTurma || '')}</td>
+                            <td>${escapeHTML(a.motivoLabel || '')}</td>
+                        </tr>`).join('')}
                     </tbody>
                 </table>
-            ` : ''}
-        `;
+            ` : ''}`;
     }
-    
     else if (tipo === 'turma') {
         const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
         const registros = data.registros || data.autorizacoes || [];
@@ -3865,14 +3961,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
             <div class="section-title">👥 Registros por Aluno</div>
             <table>
                 <thead><tr><th>Aluno</th><th>Matrícula</th><th style="width:100px;text-align:center;">Total</th></tr></thead>
-                <tbody>
-                    ${porAluno.map(a => `
-                        <tr>
-                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                            <td>${escapeHTML(a.alunoMatricula || '-')}</td>
-                            <td style="text-align:center;">${a.total || 0}</td>
-                        </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
-                </tbody>
+                <tbody>${porAluno.map(a => `<tr><td><strong>${escapeHTML(a.alunoNome || '')}</strong></td><td>${escapeHTML(a.alunoMatricula || '-')}</td><td style="text-align:center;">${a.total || 0}</td></tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}</tbody>
             </table>
             
             ${registros.length > 0 ? `
@@ -3887,21 +3976,18 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                             <th>Motivo</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        ${registros.slice(0, 30).map(a => `
-                            <tr>
-                                <td>${a.dataFormatada || '-'}</td>
-                                ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
-                                ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
-                                <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
-                                <td>${escapeHTML(a.motivoLabel || '')}</td>
-                            </tr>`).join('')}
+                    <tbody>${registros.slice(0, 30).map(a => `
+                        <tr>
+                            <td>${a.dataFormatada || '-'}</td>
+                            ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                            ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
+                            <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
+                            <td>${escapeHTML(a.motivoLabel || '')}</td>
+                        </tr>`).join('')}
                     </tbody>
                 </table>
-            ` : ''}
-        `;
+            ` : ''}`;
     }
-    
     else if (tipo === 'aluno') {
         const registros = data.registros || data.autorizacoes || [];
         
@@ -3917,36 +4003,21 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         <th>Observações</th>
                     </tr>
                 </thead>
-                <tbody>
-                    ${registros.map(a => `
-                        <tr>
-                            <td>${a.dataFormatada || '-'}</td>
-                            ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
-                            ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
-                            <td>${escapeHTML(a.motivoLabel || '')}</td>
-                            <td>${escapeHTML((a.observacoes || '').substring(0, 80))}${(a.observacoes || '').length > 80 ? '...' : ''}</td>
-                        </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum registro</td></tr>'}
+                <tbody>${registros.map(a => `
+                    <tr>
+                        <td>${a.dataFormatada || '-'}</td>
+                        ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                        ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
+                        <td>${escapeHTML(a.motivoLabel || '')}</td>
+                        <td>${escapeHTML((a.observacoes || '').substring(0, 80))}${(a.observacoes || '').length > 80 ? '...' : ''}</td>
+                    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum registro</td></tr>'}
                 </tbody>
-            </table>
-        `;
+            </table>`;
     }
     
-    return montarHTMLRelatorio({
-        titulo,
-        subtitulo,
-        statsHTML,
-        tabelaHTML,
-        assinaturaDigital,
-        logo: logoIema,
-        carimbo,
-        dataGeracao,
-        nomeSetor: 'Gestão Geral'
-    });
+    return montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo: logoIema, carimbo, dataGeracao, nomeSetor: 'Gestão Geral' });
 }
 
-// ============================================
-// 🎨 TEMPLATE COMUM DE RELATÓRIO
-// ============================================
 function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinaturaDigital, logo, carimbo, dataGeracao, nomeSetor }) {
     return `<!DOCTYPE html>
     <html lang="pt-BR">
@@ -3963,26 +4034,16 @@ function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinat
             .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
             .header p { font-size: 8pt; margin: 1px 0 0; }
             
-            .titulo {
-                text-align: center; font-size: 11pt; font-weight: bold;
-                background: #dbeafe; padding: 4px 8px; border: 1.5px solid #000;
-                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
-            }
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #dbeafe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
             .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
             
-            .stats {
-                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
-                background: #eef2ff; border-radius: 5px; border: 1px solid #c7d2fe;
-            }
+            .stats { display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px; background: #eef2ff; border-radius: 5px; border: 1px solid #c7d2fe; }
             .stat { text-align: center; flex: 1; border-right: 1px solid #c7d2fe; }
             .stat:last-child { border-right: none; }
             .stat-value { font-size: 13pt; font-weight: bold; color: #1e3c72; line-height: 1; }
             .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
             
-            .section-title {
-                font-size: 9pt; font-weight: bold; background: #e8e8e8;
-                padding: 2px 6px; border-left: 3px solid #1e3c72; margin: 6px 0 3px;
-            }
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #1e3c72; margin: 6px 0 3px; }
             
             table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
             th { background: #1e3c72; color: white; padding: 4px 5px; text-align: left; border: 1px solid #152a52; font-size: 8pt; }
@@ -3992,25 +4053,10 @@ function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinat
             .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
             .assinatura { flex: 0 0 60%; text-align: center; }
             
-            .assinatura-container-relatorio {
-                position: relative; min-height: 18mm;
-                display: flex; align-items: flex-end; justify-content: center;
-                padding-bottom: 0;
-            }
-            .assinatura-container-relatorio::after {
-                content: ''; position: absolute; bottom: 0; left: 0; right: 0;
-                border-bottom: 1px solid #000;
-            }
-            .assinatura-img {
-                max-height: 14mm; max-width: 100%; object-fit: contain;
-                position: relative; z-index: 2; margin-bottom: 1mm;
-            }
-            .carimbo-overlay {
-                position: absolute; bottom: 1mm; left: 50%;
-                transform: translateX(-50%);
-                max-height: 15mm; max-width: 55mm; object-fit: contain;
-                opacity: 0.95; pointer-events: none; z-index: 1;
-            }
+            .assinatura-container-relatorio { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0; }
+            .assinatura-container-relatorio::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; }
+            .assinatura-img { max-height: 14mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
+            .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 55mm; object-fit: contain; opacity: 0.95; pointer-events: none; z-index: 1; }
             
             .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
             
@@ -4018,11 +4064,7 @@ function montarHTMLRelatorio({ titulo, subtitulo, statsHTML, tabelaHTML, assinat
             .footer p { margin: 1px 0; }
             .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
             
-            .btn-print {
-                display: block; margin: 10px auto; padding: 8px 20px;
-                background: #1e3c72; color: white; border: none; border-radius: 6px;
-                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
-            }
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #1e3c72; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
             .btn-print:hover { background: #2a5298; }
             
             @media print { .no-print { display: none !important; } body { padding: 0; } }
@@ -4263,7 +4305,6 @@ function configurarEventosModulo(modulo) {
     safeGet(`filtroLista${P}Motivo`)?.addEventListener('change', () => carregarListaModulo(modulo));
     safeGet(`filtroLista${P}DataInicio`)?.addEventListener('change', () => carregarListaModulo(modulo));
     safeGet(`filtroLista${P}DataFim`)?.addEventListener('change', () => carregarListaModulo(modulo));
-    // 🆕 Filtro por tipo de prova (2ª chamada)
     safeGet(`filtroLista${P}TipoProva`)?.addEventListener('change', () => carregarListaModulo(modulo));
 }
 
@@ -4370,7 +4411,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
     }
     
     const assinaturaHTML = a.assinaturaBase64 
-        ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura">`
+        ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura" style="max-height:12mm;max-width:100%;object-fit:contain;position:relative;z-index:1;">`
         : '';
     
     const temResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
@@ -4425,10 +4466,9 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
             .assinaturas { display: flex; justify-content: space-around; margin-top: 15px; gap: 15px; }
             .assinatura { flex: 1; text-align: center; font-size: 8pt; position: relative; }
             .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
-            .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 1; }
-            .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; position: relative; z-index: 2; }
+            .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; }
             .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
-                        
+            
             .qr-code { text-align: center; margin-top: 6px; }
             .qr-code img { width: 25mm; height: 25mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
             .qr-code p { font-size: 8pt; margin: 3px 0 0 0; color: #444; font-weight: bold; }
@@ -4537,6 +4577,875 @@ async function excluirModulo(modulo, id) {
     } catch (e) {
         console.error(e);
         notificar('Erro ao excluir', 'error');
+    }
+}
+
+// ============================================================================
+// 🆕 SISTEMA DE SESSÃO DE ASSINATURA VIA QR CODE
+// ============================================================================
+
+function gerarUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+/**
+ * Marca/desmarca necessidade de assinatura.
+ * Cria sessão + gera QR Code + abre modal.
+ */
+async function toggleNecessitaAssinatura(modulo) {
+    const check = safeGet(`${modulo}NecessitaAssinatura`);
+    if (!check) return;
+    
+    if (check.checked) {
+        // ==========================================
+        // 1. Monta snapshot dos dados atuais
+        // ==========================================
+        const snapshot = montarSnapshotAtendimento(modulo);
+        
+        if (!snapshot.alunoId) {
+            notificar('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
+            check.checked = false;
+            return;
+        }
+        
+        // ==========================================
+        // 2. Gera ID único para a sessão
+        // ==========================================
+        const sessaoId = gerarUUID();
+        estadoSessaoAssinatura[modulo].sessaoId = sessaoId;
+        estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+        
+        // ==========================================
+        // 3. Cria a sessão no backend
+        // ==========================================
+        try {
+            const response = await fetch('/api/sessoes-assinatura', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    sessaoId,
+                    tipo: modulo === 'atraso' ? 'atraso' : modulo === 'segundaChamada' ? 'segunda_chamada' : modulo,
+                    dadosAtendimento: snapshot
+                })
+            });
+            
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
+            
+            console.log('✅ Sessão criada:', sessaoId);
+            
+            // ==========================================
+            // 4. Gera QR Code apontando para ESTA MESMA PÁGINA
+            // ==========================================
+            const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
+            
+            try {
+                const qrResponse = await fetch('/api/qrcode/gerar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ url: urlAssinatura })
+                });
+                const qrData = await qrResponse.json();
+                
+                if (qrData.success && qrData.qrCode) {
+                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = qrData.qrCode;
+                } else {
+                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
+                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                }
+            } catch (e) {
+                console.warn('Erro ao gerar QR Code, usando fallback:', e);
+                estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
+                    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+            }
+            
+            // ==========================================
+            // 5. Abre o MODAL (dentro da própria página)
+            // ==========================================
+            abrirModalAssinatura(modulo, urlAssinatura);
+            
+            // ==========================================
+            // 6. Inicia monitoramento (polling)
+            // ==========================================
+            iniciarMonitoramentoSessao(modulo, sessaoId);
+            
+            notificar('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
+            
+        } catch (e) {
+            console.error('Erro ao criar sessão:', e);
+            notificar('❌ Erro ao criar sessão de assinatura', 'error');
+            check.checked = false;
+            estadoSessaoAssinatura[modulo].sessaoId = null;
+        }
+    } else {
+        // ==========================================
+        // DESMARCOU → cancela a sessão
+        // ==========================================
+        const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+        if (sessaoId) {
+            try {
+                await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) { console.warn(e); }
+        }
+        
+        estadoSessaoAssinatura[modulo].sessaoId = null;
+        estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+        estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
+        pararMonitoramentoSessao(modulo);
+        fecharModalAssinatura(modulo);
+    }
+}
+
+/**
+ * Monta snapshot dos dados atuais para exibir na tela de assinatura.
+ */
+function montarSnapshotAtendimento(modulo) {
+    if (modulo === 'atraso') {
+        return {
+            alunoId: currentAluno?.id,
+            alunoNome: currentAluno?.nome,
+            alunoMatricula: currentAluno?.matricula,
+            alunoTurma: currentAluno?.turma,
+            alunoCurso: currentAluno?.curso,
+            alunoFoto: currentAluno?.fotoPerfil,
+            motivo: motivoSelecionado,
+            motivoLabel: getMotivoLabelAtraso(motivoSelecionado),
+            descricao: safeGet('descricao')?.value || '',
+            observacoes: safeGet('observacoes')?.value || '',
+            dataHora: safeGet('atrasoData')?.value
+        };
+    }
+    
+    const cfg = getCfg(modulo);
+    const P = getPrefixo(modulo);
+    const I = getPrefixoInput(modulo);
+    const est = estados[modulo];
+    const aluno = est.currentAluno || {};
+    
+    const motivosLabel = {
+        'problemas_pessoais': 'Problemas Pessoais',
+        'problemas_saude': 'Problemas de Saúde',
+        'problemas_saude_responsavel_buscou': 'Problemas de Saúde (Responsável veio buscar)',
+        'problemas_saude_responsavel_whatsapp': 'Problemas de Saúde (Responsável via WhatsApp)',
+        'necessita_ausentar_retornar': 'Necessita se ausentar e retornar',
+        'viagens': 'Viagens',
+        'consultas': 'Consultas',
+        'viagem': 'Viagem',
+        'outros': 'Outros'
+    };
+    
+    const periodoIni = safeGet(`${I}PeriodoFaltaInicio`)?.value || '';
+    const periodoFim = safeGet(`${I}PeriodoFaltaFim`)?.value || '';
+    
+    let periodoFormatado = '';
+    if (periodoIni) {
+        const ini = new Date(periodoIni + 'T12:00:00');
+        const fim = periodoFim ? new Date(periodoFim + 'T12:00:00') : ini;
+        const fmt = d => d.toLocaleDateString('pt-BR');
+        periodoFormatado = ini.getTime() === fim.getTime() ? fmt(ini) : `${fmt(ini)} a ${fmt(fim)}`;
+    }
+    
+    const tipoProva = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
+    const tipoProvaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
+    
+    return {
+        alunoId: aluno.id,
+        alunoNome: aluno.nome,
+        alunoMatricula: aluno.matricula,
+        alunoTurma: aluno.turma,
+        alunoCurso: aluno.curso,
+        alunoFoto: aluno.fotoPerfil,
+        motivo: est.motivoSelecionado,
+        motivoLabel: motivosLabel[est.motivoSelecionado] || est.motivoSelecionado,
+        periodoFaltaInicio: periodoIni || null,
+        periodoFaltaFim: periodoFim || periodoIni || null,
+        periodoFaltaFormatado: periodoFormatado,
+        tipoProvaPerdida: cfg.tipo === 'segunda_chamada' ? tipoProva : null,
+        tipoProvaPerdidaFormatado: cfg.tipo === 'segunda_chamada' 
+            ? (tipoProva === 'Outros' && tipoProvaOutros ? `Outros (${tipoProvaOutros})` : tipoProva)
+            : null,
+        responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
+        responsavelCPF: safeGet(`${I}ResponsavelCPF`)?.value || '',
+        observacoes: safeGet(`${I}Observacoes`)?.value || '',
+        data: safeGet(`${I}Data`)?.value || ''
+    };
+}
+
+function getMotivoLabelAtraso(motivo) {
+    const labels = {
+        'onibus': 'Ônibus',
+        'transito': 'Trânsito',
+        'problemas_pessoais': 'Problemas Pessoais',
+        'fardamento': 'Fardamento',
+        'outros': 'Outros'
+    };
+    return labels[motivo] || motivo;
+}
+
+/**
+ * Abre o modal com QR Code (SEM sair da página).
+ */
+function abrirModalAssinatura(modulo, urlAssinatura) {
+    const antigo = safeGet('modalAssinaturaQR');
+    if (antigo) antigo.remove();
+    
+    const qrUrl = estadoSessaoAssinatura[modulo].qrCodeDataUrl || 
+        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+    
+    const modalHtml = `
+        <div class="modal fade" id="modalAssinaturaQR" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 20px; border: none; overflow: hidden;">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
+                        <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-signature"></i> 
+                            Aguardando Assinatura
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="gestaoGeral.fecharModalAssinatura('${modulo}')"></button>
+                    </div>
+                    
+                    <div class="modal-body" style="padding: 30px; text-align: center;">
+                        <div id="modalAssinaturaStatus" style="margin-bottom: 20px;">
+                            <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                <div>
+                                    <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                    <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                        Peça para o responsável escanear o QR Code abaixo
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                            <img src="${qrUrl}" 
+                                alt="QR Code para assinatura" 
+                                style="width: 260px; height: 260px; display: block;"
+                                id="qrCodeImage">
+                            <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                <i class="fas fa-mobile-alt"></i> 
+                                Aponte a câmera do celular
+                            </p>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span><strong>O responsável assina direto no celular dele</strong>, sem sair da tela. Assim que ele confirmar, você verá aqui automaticamente.</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <i class="fas fa-clock"></i>
+                                <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 16px;">
+                            <button onclick="gestaoGeral.copiarLinkAssinatura('${urlAssinatura}')"
+                                    class="btn-copiar-link">
+                                <i class="fas fa-link"></i> Copiar link de assinatura
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
+                        <button type="button" class="btn btn-outline-secondary" onclick="gestaoGeral.fecharModalAssinatura('${modulo}')" style="border-radius: 10px;">
+                            <i class="fas fa-eye-slash"></i> Ocultar
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="gestaoGeral.cancelarSessaoAssinatura('${modulo}')" style="border-radius: 10px;">
+                            <i class="fas fa-times"></i> Cancelar Assinatura
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+            @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    estadoSessaoAssinatura[modulo].modalInstance = new bootstrap.Modal(safeGet('modalAssinaturaQR'));
+    estadoSessaoAssinatura[modulo].modalInstance.show();
+    
+    setTimeout(() => {
+        const img = safeGet('qrCodeImage');
+        if (img && window.innerWidth < 500) {
+            img.style.width = '200px';
+            img.style.height = '200px';
+        }
+    }, 200);
+}
+
+/**
+ * Fecha o modal (mas a sessão continua ativa).
+ */
+function fecharModalAssinatura(modulo) {
+    if (estadoSessaoAssinatura[modulo].modalInstance) {
+        estadoSessaoAssinatura[modulo].modalInstance.hide();
+    }
+    const modalEl = safeGet('modalAssinaturaQR');
+    if (modalEl) setTimeout(() => modalEl.remove(), 300);
+    
+    // Mostra bloco compacto no formulário
+    mostrarBlocoCompactoAssinatura(modulo);
+}
+
+/**
+ * Mostra bloco compacto no formulário indicando o status.
+ */
+function mostrarBlocoCompactoAssinatura(modulo) {
+    let bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    
+    if (!bloco) {
+        bloco = document.createElement('div');
+        bloco.id = `${modulo}BlocoAssinaturaInfo`;
+        const check = safeGet(`${modulo}NecessitaAssinatura`);
+        if (check && check.parentElement) {
+            check.parentElement.parentElement.appendChild(bloco);
+        }
+    }
+    
+    bloco.style.display = 'block';
+    bloco.innerHTML = `
+        <div class="alert alert-warning" style="font-size: 13px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <i class="fas fa-clock"></i>
+                <div style="flex: 1;">
+                    <strong>Aguardando assinatura...</strong>
+                    <p style="margin: 3px 0 0; font-size: 12px;">O responsável precisa escanear o QR Code</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-warning" 
+                        onclick="gestaoGeral.reabrirModalAssinatura('${modulo}')"
+                        style="border-radius: 8px;">
+                    <i class="fas fa-qrcode"></i> Mostrar QR
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function reabrirModalAssinatura(modulo) {
+    const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+    if (!sessaoId) {
+        notificar('⚠️ Nenhuma sessão ativa', 'warning');
+        return;
+    }
+    const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
+    abrirModalAssinatura(modulo, urlAssinatura);
+}
+
+async function copiarLinkAssinatura(url) {
+    try {
+        await navigator.clipboard.writeText(url);
+        notificar('✅ Link copiado!', 'success');
+    } catch (e) {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        notificar('✅ Link copiado!', 'success');
+    }
+}
+
+function iniciarMonitoramentoSessao(modulo, sessaoId) {
+    pararMonitoramentoSessao(modulo);
+    
+    console.log('👀 Monitorando sessão:', sessaoId);
+    
+    const intervalId = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    console.warn('Sessão expirou ou foi removida');
+                    pararMonitoramentoSessao(modulo);
+                }
+                return;
+            }
+            
+            const data = await response.json();
+            if (!data.success) return;
+            
+            if (data.sessao.status === 'assinado') {
+                console.log('✅ Assinatura capturada!');
+                
+                estadoSessaoAssinatura[modulo].assinaturaCapturada = data.sessao.assinaturaBase64;
+                atualizarStatusAssinado(modulo, data.sessao);
+                pararMonitoramentoSessao(modulo);
+                
+                if (estadoSessaoAssinatura[modulo].modalInstance) {
+                    estadoSessaoAssinatura[modulo].modalInstance.hide();
+                }
+                const modalEl = safeGet('modalAssinaturaQR');
+                if (modalEl) setTimeout(() => modalEl.remove(), 300);
+                
+                notificar(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome}!`, 'success');
+                
+            } else if (data.sessao.status === 'cancelado') {
+                console.log('Sessão cancelada');
+                pararMonitoramentoSessao(modulo);
+            }
+        } catch (e) {
+            console.warn('Erro no monitoramento:', e);
+        }
+    }, 3000);
+    
+    estadoSessaoAssinatura[modulo].monitoramentoInterval = intervalId;
+}
+
+function pararMonitoramentoSessao(modulo) {
+    const id = estadoSessaoAssinatura[modulo]?.monitoramentoInterval;
+    if (id) {
+        clearInterval(id);
+        estadoSessaoAssinatura[modulo].monitoramentoInterval = null;
+    }
+}
+
+function atualizarStatusAssinado(modulo, sessao) {
+    let bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    
+    if (!bloco) {
+        bloco = document.createElement('div');
+        bloco.id = `${modulo}BlocoAssinaturaInfo`;
+        const check = safeGet(`${modulo}NecessitaAssinatura`);
+        if (check && check.parentElement) {
+            check.parentElement.parentElement.appendChild(bloco);
+        }
+    }
+    
+    bloco.style.display = 'block';
+    bloco.innerHTML = `
+        <div style="margin-top: 10px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <i class="fas fa-check-circle" style="color: #10b981; font-size: 22px;"></i>
+                <div style="flex: 1;">
+                    <strong style="color: #065f46;">✓ Assinatura capturada!</strong>
+                    <p style="margin: 3px 0 0; font-size: 12px; color: #047857;">
+                        Assinado por <strong>${escapeHTML(sessao.assinadaPorNome || '')}</strong>
+                        ${sessao.assinadaEm ? ` em ${new Date(sessao.assinadaEm).toLocaleString('pt-BR')}` : ''}
+                    </p>
+                </div>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 8px; text-align: center;">
+                <img src="${sessao.assinaturaBase64}" 
+                    style="max-width: 100%; max-height: 100px;" 
+                    alt="Assinatura">
+            </div>
+            <button type="button" 
+                    onclick="gestaoGeral.refazerAssinatura('${modulo}')"
+                    class="btn btn-sm btn-outline-danger w-100 mt-2"
+                    style="border-radius: 8px;">
+                <i class="fas fa-redo"></i> Refazer Assinatura
+            </button>
+        </div>
+    `;
+}
+
+async function cancelarSessaoAssinatura(modulo) {
+    const confirmar = await confirm('Cancelar a assinatura? O responsável não poderá mais assinar este atendimento.');
+    if (!confirmar) return;
+    
+    const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+    if (sessaoId) {
+        try {
+            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    pararMonitoramentoSessao(modulo);
+    fecharModalAssinatura(modulo);
+    
+    estadoSessaoAssinatura[modulo].sessaoId = null;
+    estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+    estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
+    
+    const check = safeGet(`${modulo}NecessitaAssinatura`);
+    if (check) check.checked = false;
+    
+    const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    if (bloco) bloco.style.display = 'none';
+    
+    notificar('Sessão cancelada', 'info');
+}
+
+async function refazerAssinatura(modulo) {
+    const confirmar = await confirm('Refazer a assinatura? A atual será descartada.');
+    if (!confirmar) return;
+    
+    const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
+    if (sessaoId) {
+        try {
+            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    pararMonitoramentoSessao(modulo);
+    estadoSessaoAssinatura[modulo].sessaoId = null;
+    estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
+    estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
+    
+    const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+    if (bloco) bloco.style.display = 'none';
+    
+    const check = safeGet(`${modulo}NecessitaAssinatura`);
+    if (check) {
+        check.checked = false;
+        check.checked = true;
+        await toggleNecessitaAssinatura(modulo);
+    }
+}
+
+function limparEstadoSessaoAssinatura(modulo) {
+    estadoSessaoAssinatura[modulo] = {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    };
+}
+
+// ============================================================================
+// 📱 MODO ASSINATURA (via URL ?assinatura=UUID)
+// ============================================================================
+
+/**
+ * Mostra a tela de assinatura (substitui o conteúdo principal).
+ */
+async function mostrarTelaAssinatura(sessaoId) {
+    // Esconde elementos da UI normal
+    document.querySelectorAll('.header-top, .card, .container > *').forEach(el => {
+        if (el && !el.id?.includes('content')) {
+            el.style.display = 'none';
+        }
+    });
+    
+    // Cria container principal
+    let container = safeGet('telaAssinaturaContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'telaAssinaturaContainer';
+        document.body.innerHTML = '';
+        document.body.appendChild(container);
+    }
+    
+    container.innerHTML = `
+        <div style="min-height: 100vh; background: #f0f4f8; padding: 20px; display: flex; flex-direction: column; align-items: center;">
+            <div style="max-width: 600px; width: 100%;">
+                <div style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 18px 24px; border-radius: 16px 16px 0 0; text-align: center;">
+                    <h1 style="font-size: 20px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        <i class="fas fa-signature"></i> Assinatura Digital
+                    </h1>
+                </div>
+                
+                <div id="telaAssinaturaInfo" style="background: white; padding: 20px; border-left: 4px solid #1e3c72;">
+                    <div style="text-align: center; padding: 40px;">
+                        <div style="width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #1e3c72; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px;"></div>
+                        <p style="color: #64748b; margin: 0;">Carregando atendimento...</p>
+                    </div>
+                </div>
+                
+                <div id="telaAssinaturaArea" style="background: white; padding: 20px; display: none; border-radius: 0 0 16px 16px;">
+                    <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 300px; margin-bottom: 16px;">
+                        <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block; touch-action: none;"></canvas>
+                        <div id="placeholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #94a3b8; pointer-events: none;">
+                            <i class="fas fa-pen-fancy" style="font-size: 48px; display: block; margin-bottom: 10px;"></i>
+                            <span style="font-size: 15px;">Assine aqui com o dedo</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px;">
+                        <button onclick="gestaoGeral.limparAssinaturaTela()" 
+                                style="flex: 1; padding: 16px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 15px;">
+                            <i class="fas fa-eraser"></i> Limpar
+                        </button>
+                        <button id="btnSalvarAssinatura" onclick="gestaoGeral.salvarAssinaturaTela()" disabled
+                                style="flex: 2; padding: 16px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: not-allowed;">
+                            <i class="fas fa-check"></i> Confirmar Assinatura
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+            @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
+    `;
+    
+    try {
+        const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            safeGet('telaAssinaturaInfo').innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
+                    <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão inválida ou expirada</h3>
+                    <p style="color: #64748b; margin: 0;">Esta sessão de assinatura não existe mais ou expirou (30 min).</p>
+                </div>
+            `;
+            return;
+        }
+        
+        if (data.sessao.status === 'assinado') {
+            safeGet('telaAssinaturaInfo').innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px; display: block;"></i>
+                    <h3 style="color: #10b981; margin: 0 0 10px;">Esta sessão já foi assinada</h3>
+                    <p style="color: #64748b; margin: 0;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Exibe os dados
+        const d = data.sessao.dadosAtendimento || {};
+        const tipoLabel = {
+            'autorizacao': 'Autorização',
+            'justificativa': 'Justificativa',
+            'segunda_chamada': '2ª Chamada',
+            'atraso': 'Atraso'
+        }[data.sessao.tipo] || data.sessao.tipo;
+        
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="border-left: 4px solid #1e3c72; padding-left: 14px;">
+                <h2 style="margin: 0 0 4px; font-size: 18px; color: #1e3c72;">${tipoLabel}</h2>
+                <p style="margin: 0; color: #64748b; font-size: 13px;">Confirme os dados e assine abaixo</p>
+            </div>
+            
+            <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Aluno</span>
+                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span>
+                </div>
+                <div>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Turma</span>
+                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoTurma || '-')}</span>
+                </div>
+                <div>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Motivo</span>
+                    <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.motivoLabel || '-')}</span>
+                </div>
+                ${d.periodoFaltaFormatado ? `
+                    <div>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Falta</span>
+                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.periodoFaltaFormatado)}</span>
+                    </div>
+                ` : ''}
+                ${d.tipoProvaPerdidaFormatado ? `
+                    <div>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Tipo de Prova</span>
+                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.tipoProvaPerdidaFormatado)}</span>
+                    </div>
+                ` : ''}
+                ${d.responsavelNome ? `
+                    <div style="grid-column: 1 / -1;">
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Responsável</span>
+                        <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${escapeHTML(d.responsavelNome)}</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        safeGet('telaAssinaturaArea').style.display = 'block';
+        
+        sessaoAssinaturaModo = sessaoId;
+        sessaoAssinaturaAtual = data.sessao;
+        
+        inicializarCanvasTela();
+        
+    } catch (e) {
+        console.error('Erro ao carregar sessão:', e);
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="text-align: center; padding: 40px 20px;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
+                <h3 style="color: #ef4444; margin: 0 0 10px;">Erro ao carregar</h3>
+                <p style="color: #64748b; margin: 0;">${e.message}</p>
+            </div>
+        `;
+    }
+}
+
+function inicializarCanvasTela() {
+    const canvas = safeGet('canvasAssinatura');
+    const wrapper = safeGet('canvasWrapper');
+    const placeholder = safeGet('placeholder');
+    if (!canvas || !wrapper) return;
+    
+    telaCanvas = canvas;
+    telaWrapper = wrapper;
+    telaPlaceholder = placeholder;
+    telaTemAssinatura = false;
+    telaDesenhando = false;
+    
+    const ajustar = () => {
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0) { setTimeout(ajustar, 200); return; }
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1e3c72';
+        telaCtx = ctx;
+    };
+    ajustar();
+    
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        let cx, cy;
+        if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+        else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+        else { cx = e.clientX; cy = e.clientY; }
+        return { x: cx - rect.left, y: cy - rect.top };
+    };
+    
+    const iniciar = (e) => {
+        e.preventDefault();
+        telaDesenhando = true;
+        telaTemAssinatura = true;
+        const p = getPos(e);
+        telaLastX = p.x;
+        telaLastY = p.y;
+        wrapper.style.borderColor = '#1e3c72';
+        wrapper.style.borderStyle = 'solid';
+        placeholder.style.opacity = '0';
+        
+        const btn = safeGet('btnSalvarAssinatura');
+        if (btn) {
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.cursor = 'pointer';
+        }
+    };
+    
+    const desenhar = (e) => {
+        if (!telaDesenhando) return;
+        e.preventDefault();
+        const p = getPos(e);
+        telaCtx.beginPath();
+        telaCtx.moveTo(telaLastX, telaLastY);
+        telaCtx.lineTo(p.x, p.y);
+        telaCtx.stroke();
+        telaLastX = p.x;
+        telaLastY = p.y;
+    };
+    
+    const parar = (e) => {
+        if (e?.preventDefault) e.preventDefault();
+        telaDesenhando = false;
+    };
+    
+    canvas.addEventListener('touchstart', iniciar, { passive: false });
+    canvas.addEventListener('touchmove', desenhar, { passive: false });
+    canvas.addEventListener('touchend', parar, { passive: false });
+    canvas.addEventListener('touchcancel', parar, { passive: false });
+    canvas.addEventListener('mousedown', iniciar);
+    canvas.addEventListener('mousemove', desenhar);
+    canvas.addEventListener('mouseup', parar);
+    canvas.addEventListener('mouseleave', () => { if (telaDesenhando) parar(); });
+}
+
+function limparAssinaturaTela() {
+    if (!telaCtx || !telaCanvas) return;
+    const rect = telaCanvas.getBoundingClientRect();
+    telaCtx.clearRect(0, 0, rect.width, rect.height);
+    telaTemAssinatura = false;
+    if (telaPlaceholder) telaPlaceholder.style.opacity = '1';
+    if (telaWrapper) {
+        telaWrapper.style.borderColor = '#cbd5e0';
+        telaWrapper.style.borderStyle = 'dashed';
+    }
+    const btn = safeGet('btnSalvarAssinatura');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+}
+
+async function salvarAssinaturaTela() {
+    if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
+    
+    const btn = safeGet('btnSalvarAssinatura');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    }
+    
+    try {
+        const base64 = telaCanvas.toDataURL('image/png');
+        
+        const response = await fetch(`/api/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ assinaturaBase64: base64 })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+        
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="text-align: center; padding: 60px 20px;">
+                <i class="fas fa-check-circle" style="font-size: 64px; color: #10b981; margin-bottom: 20px; display: block;"></i>
+                <h2 style="color: #10b981; margin: 0 0 10px; font-size: 22px;">Assinatura Confirmada!</h2>
+                <p style="color: #64748b; margin: 0; font-size: 15px;">
+                    A assinatura foi registrada com sucesso.<br>
+                    Você já pode fechar esta janela.
+                </p>
+                <button onclick="window.close()" 
+                        style="margin-top: 25px; padding: 14px 28px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 15px;">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        `;
+        safeGet('telaAssinaturaArea').style.display = 'none';
+        
+    } catch (e) {
+        console.error('Erro ao salvar assinatura:', e);
+        notificar('❌ ' + e.message, 'error');
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+        }
     }
 }
 
@@ -5092,3 +6001,17 @@ window.getPrefixoInput = getPrefixoInput;
 window.formatarCPF = formatarCPF;
 window.formatarTelefone = formatarTelefone;
 window.validarCPFCliente = validarCPFCliente;
+
+// 🆕 SISTEMA DE SESSÃO DE ASSINATURA
+window.gestaoGeral = {
+    toggleNecessitaAssinatura,
+    abrirModalAssinatura,
+    fecharModalAssinatura,
+    reabrirModalAssinatura,
+    copiarLinkAssinatura,
+    cancelarSessaoAssinatura,
+    refazerAssinatura,
+    mostrarTelaAssinatura,
+    limparAssinaturaTela,
+    salvarAssinaturaTela
+};

@@ -688,6 +688,7 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
                 horarioRetorno: a.horarioRetorno,
                 observacoes: a.observacoes,
                 temAssinatura: a.temAssinatura,
+                statusAssinatura: a.statusAssinatura,
                 origemTipo: a.origemTipo,
                 origemId: a.origemId,
                 registradoPorNome: a.registradoPorNome,
@@ -732,7 +733,8 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
-                horarioEntrada: a.horarioEntrada, horarioSaida: a.horarioSaida
+                horarioEntrada: a.horarioEntrada, horarioSaida: a.horarioSaida,
+                statusAssinatura: a.statusAssinatura
             }))
         });
     } catch (error) {
@@ -741,7 +743,7 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 });
 
 // ============================================
-// 11. REGISTRAR
+// 11. REGISTRAR (com assinatura pendente)
 // ============================================
 router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -757,7 +759,8 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             origemTipo = 'manual',
             origemId = null,
             tipoProvaPerdida = null,
-            tipoProvaPerdidaOutros = ''
+            tipoProvaPerdidaOutros = '',
+            precisaAssinatura = false
         } = req.body;
 
         if (!alunoId) return res.status(400).json({ success: false, error: 'Aluno é obrigatório' });
@@ -780,7 +783,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         }
 
         // ==========================================
-        // 🆕 VALIDAÇÃO: CPF DO RESPONSÁVEL OBRIGATÓRIO
+        // VALIDAÇÃO: CPF DO RESPONSÁVEL OBRIGATÓRIO
         // ==========================================
         const validacaoCPF = validarCPF(responsavelCPF);
         if (!validacaoCPF.valido) {
@@ -830,13 +833,11 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         }
 
         // ==========================================
-        // 🆕 VERIFICAÇÃO DE DUPLICIDADE (2ª CHAMADA)
-        // Regra: mesmo aluno + período + tipo prova + motivo + CPF responsável
+        // VERIFICAÇÃO DE DUPLICIDADE (2ª CHAMADA)
         // ==========================================
         if (tipo === 'segunda_chamada') {
             const cpfResponsavelLimpo = (responsavelCPF || '').replace(/\D/g, '');
             
-            // Busca candidatos que batem com aluno + período + tipo prova + motivo
             const candidatos = await Autorizacao.find({
                 tipo: 'segunda_chamada',
                 alunoId: alunoId,
@@ -847,7 +848,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                 ativo: true
             });
             
-            // Filtra por CPF (comparando só os dígitos)
             const duplicado = candidatos.find(c => {
                 const cpfExistente = (c.responsavelCPF || '').replace(/\D/g, '');
                 return cpfExistente === cpfResponsavelLimpo;
@@ -868,6 +868,9 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             }
         }
 
+        // ==========================================
+        // ASSINATURA
+        // ==========================================
         let assinaturaValida = '';
         if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
             if (assinaturaBase64.startsWith('data:image/png;base64,')) {
@@ -877,6 +880,11 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                 assinaturaValida = assinaturaBase64;
             }
         }
+
+        // 🆕 Detecta status de assinatura
+        const statusAssinatura = precisaAssinatura && !assinaturaValida
+            ? 'pendente'
+            : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
 
         const aluno = await User.findById(alunoId);
         if (!aluno || aluno.role !== 'aluno') {
@@ -920,6 +928,10 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             observacoes: observacoes || '',
             assinaturaBase64: assinaturaValida,
             temAssinatura: assinaturaValida.length > 100,
+            statusAssinatura: statusAssinatura,
+            assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
+            assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
+            assinadaPorNome: assinaturaValida.length > 100 ? (gestor?.nome || req.userNome) : null,
             origemTipo: origemTipo || 'manual',
             origemId: origemId || null,
             registradoPor: req.userId,
@@ -930,7 +942,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
         res.json({
             success: true,
-            message: `Registro salvo para ${aluno.nome}`,
+            message: `Registro salvo para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
             autorizacao: {
                 id: autorizacao._id,
                 tipo: autorizacao.tipo,
@@ -946,7 +958,8 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(autorizacao),
                 horarioEntrada: autorizacao.horarioEntrada,
                 horarioSaida: autorizacao.horarioSaida,
-                temAssinatura: autorizacao.temAssinatura
+                temAssinatura: autorizacao.temAssinatura,
+                statusAssinatura: autorizacao.statusAssinatura
             }
         });
     } catch (error) {
@@ -999,6 +1012,9 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 observacoes: a.observacoes,
                 assinaturaBase64: a.assinaturaBase64 || '',
                 temAssinatura: a.temAssinatura,
+                statusAssinatura: a.statusAssinatura,
+                assinadaEm: a.assinadaEm,
+                assinadaPorNome: a.assinadaPorNome,
                 origemTipo: a.origemTipo,
                 origemId: a.origemId,
                 registradoPorNome: a.registradoPorNome,
@@ -1128,7 +1144,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.horarioRetorno = hR;
         }
 
-        // 🆕 Validação CPF
+        // Validação CPF
         if (responsavelCPF !== undefined) {
             const validacaoCPF = validarCPF(responsavelCPF);
             if (!validacaoCPF.valido) {
@@ -1147,8 +1163,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
         if (observacoes !== undefined) a.observacoes = observacoes;
 
         // ==========================================
-        // 🆕 VERIFICAÇÃO DE DUPLICIDADE (2ª CHAMADA) - EDIÇÃO
-        // Regra: mesmo aluno + período + tipo prova + motivo + CPF responsável
+        // VERIFICAÇÃO DE DUPLICIDADE (2ª CHAMADA) - EDIÇÃO
         // ==========================================
         if (a.tipo === 'segunda_chamada') {
             const cpfResponsavelLimpo = (a.responsavelCPF || '').replace(/\D/g, '');
@@ -1207,7 +1222,8 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
-                observacoes: a.observacoes
+                observacoes: a.observacoes,
+                statusAssinatura: a.statusAssinatura
             }
         });
 

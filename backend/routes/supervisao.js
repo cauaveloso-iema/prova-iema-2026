@@ -3,8 +3,11 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AtendimentoSupervisao = require('../models/AtendimentoSupervisao');
+const SessaoAssinatura = require('../models/SessaoAssinatura');
 
-// Middleware de autenticação
+// ============================================
+// MIDDLEWARES
+// ============================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -167,13 +170,14 @@ router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, 
 });
 
 // ============================================
-// REGISTRAR NOVO ATENDIMENTO (COM ASSINATURA)
+// REGISTRAR NOVO ATENDIMENTO (COM ASSINATURA VIA QR)
 // ============================================
 router.post('/registrar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { 
       alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
-      assinaturaBase64 
+      assinaturaBase64,
+      precisaAssinatura = false
     } = req.body;
     
     if (!descricao || descricao.trim() === '') {
@@ -203,6 +207,10 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
       }
     }
     
+    const statusAssinatura = precisaAssinatura && !assinaturaValida
+      ? 'pendente'
+      : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
+    
     const atendimento = new AtendimentoSupervisao({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -218,7 +226,12 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
         gravidade: gravidade || 'media',
         registradoPor: req.userId,
         registradoPorNome: supervisor?.nome || req.userNome || 'Supervisor',
-        assinaturaBase64: assinaturaValida
+        assinaturaBase64: assinaturaValida,
+        temAssinatura: assinaturaValida.length > 100,
+        statusAssinatura: statusAssinatura,
+        assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
+        assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
+        assinadaPorNome: assinaturaValida.length > 100 ? (supervisor?.nome || req.userNome) : null
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
@@ -229,18 +242,79 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
     
     res.json({
       success: true,
-      message: `${AtendimentoSupervisao.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}`,
+      message: `${AtendimentoSupervisao.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
       atendimento: {
         id: atendimento._id,
         tipoTarefa: atendimento.tipoTarefa,
         tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(tipoTarefa),
         status: atendimento.status,
         dataHora: atendimento.entrada.dataHora,
-        temAssinatura: !!assinaturaValida
+        temAssinatura: atendimento.entrada.temAssinatura,
+        statusAssinatura: atendimento.entrada.statusAssinatura
       }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro ao registrar: ' + error.message });
+  }
+});
+
+// ============================================
+// 🔥 APLICAR ASSINATURA DA SESSÃO AO ATENDIMENTO
+// ============================================
+router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const { atendimentoId, sessaoId } = req.body;
+    
+    if (!atendimentoId || !sessaoId) {
+      return res.status(400).json({ success: false, error: 'atendimentoId e sessaoId são obrigatórios' });
+    }
+    
+    const sessao = await SessaoAssinatura.findOne({ sessaoId });
+    
+    if (!sessao) {
+      return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
+    }
+    
+    if (sessao.status !== 'assinado') {
+      return res.status(400).json({ success: false, error: 'Sessão ainda não foi assinada' });
+    }
+    
+    if (!sessao.assinaturaBase64) {
+      return res.status(400).json({ success: false, error: 'Sessão não contém assinatura' });
+    }
+    
+    const atendimento = await AtendimentoSupervisao.findById(atendimentoId);
+    if (!atendimento) {
+      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+    
+    atendimento.entrada.assinaturaBase64 = sessao.assinaturaBase64;
+    atendimento.entrada.temAssinatura = true;
+    atendimento.entrada.statusAssinatura = 'assinada';
+    atendimento.entrada.assinadaEm = sessao.assinadaEm;
+    atendimento.entrada.assinadaPor = sessao.assinadaPor;
+    atendimento.entrada.assinadaPorNome = sessao.assinadaPorNome;
+    atendimento.entrada.sessaoAssinaturaId = sessaoId;
+    atendimento.updatedAt = new Date();
+    
+    await atendimento.save();
+    
+    console.log(`✅ Assinatura aplicada ao atendimento ${atendimentoId} (sessão ${sessaoId})`);
+    
+    res.json({
+      success: true,
+      message: 'Assinatura aplicada com sucesso!',
+      atendimento: {
+        id: atendimento._id,
+        temAssinatura: true,
+        statusAssinatura: 'assinada',
+        assinadaEm: atendimento.entrada.assinadaEm,
+        assinadaPorNome: atendimento.entrada.assinadaPorNome
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao aplicar assinatura:', error);
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
@@ -502,7 +576,7 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, as
 });
 
 // ============================================
-// DASHBOARD — 🔥 CORRIGIDO
+// DASHBOARD
 // ============================================
 router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -662,7 +736,8 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
         dataHoraEntrada: a.entrada.dataHora,
         tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
         temRemarcacaoPendente: a.temRemarcacaoPendente || false,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria'
       }))
     });
   } catch (error) {
@@ -671,7 +746,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS — 🔥 CORRIGIDO
+// LISTAR TODOS OS ATENDIMENTOS
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -682,7 +757,6 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
     if (status && status !== 'todos') query.status = status;
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     
-    // 🔥 CORRIGIDO: Timezone Brasil
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
@@ -734,6 +808,7 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
         registradoPor: a.entrada.registradoPorNome,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
         saida: a.saida ? {
           dataHora: a.saida.dataHora,
           dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
@@ -783,7 +858,11 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
           gravidade: atendimento.entrada.gravidade,
           registradoPor: atendimento.entrada.registradoPorNome,
           temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
-          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null
+          statusAssinatura: atendimento.entrada?.statusAssinatura || 'nao_necessaria',
+          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
+          assinadaEm: atendimento.entrada?.assinadaEm || null,
+          assinadaPorNome: atendimento.entrada?.assinadaPorNome || null,
+          sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null
         },
         detalhes: atendimento.detalhes,
         saida: atendimento.saida ? {
@@ -817,9 +896,7 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
         const atendimento = await AtendimentoSupervisao.findById(req.params.id);
         if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
         
-        // ✅ NOVO: permite editar tipo de tarefa
         if (tipoTarefa) atendimento.tipoTarefa = tipoTarefa;
-        
         if (descricao) atendimento.entrada.descricao = descricao;
         if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
         if (gravidade) atendimento.entrada.gravidade = gravidade;
@@ -919,7 +996,7 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervis
 });
 
 // ============================================
-// RELATÓRIO POR ALUNO — 🔥 CORRIGIDO
+// RELATÓRIO POR ALUNO
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -965,7 +1042,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
         dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
         gravidade: a.entrada.gravidade, status: a.status,
         dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null
       }))
     });
   } catch (error) {
@@ -974,7 +1052,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
 });
 
 // ============================================
-// RELATÓRIO POR TURMA — 🔥 CORRIGIDO
+// RELATÓRIO POR TURMA
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1030,9 +1108,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
   }
 });
 
-
 // ============================================
-// RELATÓRIO GERAL — 🔥 COM REGISTROS
+// RELATÓRIO GERAL
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1098,7 +1175,6 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
         count
       })).sort((a, b) => b.count - a.count),
       porGravidade,
-      // 🔥 NOVO: registros detalhados para CSV
       registros: atendimentos.map(a => ({
         id: a._id,
         alunoNome: a.alunoNome,
@@ -1113,9 +1189,9 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
         prioridade: a.prioridade,
         status: a.status,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null,
         registradoPorNome: a.entrada?.registradoPorNome
       })),
-      // Retrocompatibilidade
       atendimentos: atendimentos.slice(0, 100).map(a => ({
         id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
         tipoTarefa: a.tipoTarefa,
@@ -1123,7 +1199,8 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
         dataEntrada: a.entrada.dataHora,
         descricao: a.entrada.descricao.substring(0, 100),
         gravidade: a.entrada.gravidade, status: a.status,
-        temAssinatura: !!(a.entrada?.assinaturaBase64)
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        assinaturaBase64: a.entrada?.assinaturaBase64 || null
       }))
     });
   } catch (error) {

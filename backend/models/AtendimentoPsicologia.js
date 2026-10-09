@@ -8,50 +8,20 @@ const RemarcacaoSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     default: () => new mongoose.Types.ObjectId()
   },
-  dataRemarcacao: {
-    type: String,  // Formato YYYY-MM-DD
-    required: true
-  },
-  horarioRemarcacao: {
-    type: String,  // Formato HH:MM
-    required: true
-  },
-  motivoRemarcacao: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  observacoesRemarcacao: {
-    type: String,
-    default: '',
-    trim: true
-  },
+  dataRemarcacao: { type: String, required: true },
+  horarioRemarcacao: { type: String, required: true },
+  motivoRemarcacao: { type: String, required: true, trim: true },
+  observacoesRemarcacao: { type: String, default: '', trim: true },
   status: {
     type: String,
     enum: ['pendente', 'realizado', 'cancelado'],
     default: 'pendente'
   },
-  criadaEm: {
-    type: Date,
-    default: Date.now
-  },
-  criadaPor: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  criadaPorNome: {
-    type: String,
-    default: ''
-  },
-  finalizadaEm: {
-    type: Date,
-    default: null
-  },
-  finalizadaPor: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
-  }
+  criadaEm: { type: Date, default: Date.now },
+  criadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  criadaPorNome: { type: String, default: '' },
+  finalizadaEm: { type: Date, default: null },
+  finalizadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
 }, { _id: false });
 
 // ============================================
@@ -69,7 +39,6 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
   alunoCurso: String,
   alunoFoto: String,
   
-  // Tipo de tarefa de psicologia
   tipoTarefa: {
     type: String,
     enum: [
@@ -94,11 +63,29 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
     },
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
-    // 🔥 NOVO: Assinatura digital
+    
+    // 🔥 ASSINATURA DIGITAL (via QR Code)
     assinaturaBase64: {
       type: String,
       default: ''
-    }
+    },
+    temAssinatura: { 
+      type: Boolean, 
+      default: false, 
+      index: true 
+    },
+    statusAssinatura: {
+      type: String,
+      enum: ['nao_necessaria', 'pendente', 'assinada'],
+      default: 'nao_necessaria',
+      index: true
+    },
+    assinadaEm: { type: Date, default: null },
+    assinadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    assinadaPorNome: { type: String, default: null },
+    
+    // Sessão de assinatura vinculada
+    sessaoAssinaturaId: { type: String, default: null }
   },
   
   detalhes: {
@@ -152,7 +139,6 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
     registradoPorNome: String
   },
   
-  // 🔥 NOVO: Remarcações
   remarcacoes: {
     type: [RemarcacaoSchema],
     default: []
@@ -192,8 +178,32 @@ AtendimentoPsicologiaSchema.index({ alunoId: 1, status: 1 });
 AtendimentoPsicologiaSchema.index({ tipoTarefa: 1, createdAt: -1 });
 AtendimentoPsicologiaSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoPsicologiaSchema.index({ createdAt: -1 });
-AtendimentoPsicologiaSchema.index({ temRemarcacaoPendente: 1, status: 1 }); // 🔥 NOVO
-AtendimentoPsicologiaSchema.index({ 'remarcacoes.status': 1 }); // 🔥 NOVO
+AtendimentoPsicologiaSchema.index({ temRemarcacaoPendente: 1, status: 1 });
+AtendimentoPsicologiaSchema.index({ 'remarcacoes.status': 1 });
+AtendimentoPsicologiaSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
+
+// ============================================
+// MIDDLEWARE: PRE-SAVE
+// ============================================
+AtendimentoPsicologiaSchema.pre('save', function(next) {
+  // Sincroniza temAssinatura e statusAssinatura baseado no assinaturaBase64
+  if (this.entrada) {
+    const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
+    this.entrada.temAssinatura = temAssinaturaReal;
+    
+    if (temAssinaturaReal) {
+      this.entrada.statusAssinatura = 'assinada';
+      if (!this.entrada.assinadaEm) {
+        this.entrada.assinadaEm = new Date();
+      }
+    } else if (this.entrada.statusAssinatura !== 'pendente') {
+      this.entrada.statusAssinatura = 'nao_necessaria';
+    }
+  }
+  
+  this.updatedAt = new Date();
+  next();
+});
 
 // ============================================
 // MÉTODOS ESTÁTICOS
@@ -219,7 +229,9 @@ AtendimentoPsicologiaSchema.statics.getTipoTarefaLabel = function(tipo) {
   return labels[tipo] || tipo;
 };
 
-// 🔥 NOVO: Método para adicionar remarcação
+// ============================================
+// MÉTODOS DE INSTÂNCIA
+// ============================================
 AtendimentoPsicologiaSchema.methods.adicionarRemarcacao = function(dados) {
   if (!this.remarcacoes) this.remarcacoes = [];
   
