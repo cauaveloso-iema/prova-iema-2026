@@ -1,5 +1,5 @@
 // frontend/js/visitas-publico.js
-// Autorização de Visitas - Página Pública (CÓDIGO DO FRONTEND)
+// Autorização de Visitas - Página Pública
 
 class VisitasPublico {
     constructor() {
@@ -285,7 +285,9 @@ class VisitasPublico {
         }
         
         container.innerHTML = this.termosPorCodigo.map(t => {
-            const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+            const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { 
+                day: '2-digit', month: 'long', year: 'numeric' 
+            });
             
             let badgeStatus = '';
             if (t.status === 'autorizado') {
@@ -298,12 +300,28 @@ class VisitasPublico {
                 badgeStatus = '<span class="badge-termo pendente">⏳ Pendente</span>';
             }
             
-            const alunosHTML = (t.alunos || []).map(a => `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f9fafb; border-radius: 8px; margin-top: 6px; font-size: 12px;">
-                    <span><i class="fas fa-user-graduate" style="color: #667eea;"></i> ${this.escapeHtml(a.nome)}</span>
-                    <span style="color: #6b7280; font-size: 11px;">${a.turma || 'N/A'}</span>
+            // 🔥 NOVO: botão de imprimir POR ALUNO
+            const alunosHTML = (t.alunos || []).map(a => {
+                const alunoId = a.alunoId?._id || a.alunoId || a._id || a.id || '';
+                return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f9fafb; border-radius: 8px; margin-top: 6px; font-size: 12px; gap: 8px; flex-wrap: wrap;">
+                    <span style="flex: 1; min-width: 150px;">
+                        <i class="fas fa-user-graduate" style="color: #667eea;"></i> 
+                        ${this.escapeHtml(a.nome || a.alunoNome || '-')}
+                    </span>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <span style="color: #6b7280; font-size: 11px;">${a.turma || '-'}</span>
+                        ${t.responsaveis.autorizados > 0 ? `
+                            <button class="btn-filter" 
+                                onclick="event.stopPropagation(); visitasPublico.imprimirTermoOficial('${t.id}', '${alunoId}')" 
+                                style="padding: 4px 10px; font-size: 11px; background: #3b82f6; border-radius: 20px;"
+                                title="Imprimir termo somente deste aluno">
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
-            `).join('');
+            `}).join('');
             
             return `
                 <div class="termo-publico-card" style="cursor: default;">
@@ -321,6 +339,7 @@ class VisitasPublico {
                     <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e5e7eb;">
                         <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">
                             <strong>Alunos (${t.totalAlunos}):</strong>
+                            <span style="font-size: 10px; color: #9ca3af;">— clique em imprimir para gerar o termo individual</span>
                         </div>
                         ${alunosHTML}
                     </div>
@@ -339,14 +358,6 @@ class VisitasPublico {
                             <div style="color: #6b7280; font-size: 10px;">Recusados</div>
                         </div>
                     </div>
-                    
-                    ${t.responsaveis.autorizados > 0 ? `
-                        <div style="margin-top: 12px; text-align: right;">
-                            <button class="btn-filter" onclick="visitasPublico.imprimirTermoOficial('${t.id}')" style="padding: 8px 16px; font-size: 12px;">
-                                <i class="fas fa-print"></i> Imprimir Termo
-                            </button>
-                        </div>
-                    ` : ''}
                 </div>
             `;
         }).join('');
@@ -382,7 +393,7 @@ class VisitasPublico {
     }
 
     // ============================================
-    // SELECIONAR ALUNO (com debug)
+    // SELECIONAR ALUNO
     // ============================================
     async selecionarAluno(alunoId) {
         const aluno = this.alunos.find(a => a.id === alunoId);
@@ -399,7 +410,6 @@ class VisitasPublico {
             if (data.success && data.termos.length > 0) {
                 this.termos = data.termos;
                 
-                // Debug: mostra status de cada termo
                 data.termos.forEach(t => {
                     console.log(`   → ${t.codigo}: status=${t.statusResponsavel} jaAutorizou=${t.jaAutorizou} jaRecusou=${t.jaRecusou}`);
                 });
@@ -415,11 +425,16 @@ class VisitasPublico {
     }
 
     // ============================================
-    // 📋 MOSTRAR TERMOS DO ALUNO (COM STATUS)
+    // 📋 MOSTRAR TERMOS DO ALUNO (COM BOTÃO IMPRIMIR INDIVIDUAL)
     // ============================================
     mostrarTermos() {
         const container = document.getElementById('listaTermosPublico');
         if (!container) return;
+        
+        // 🔥 Pega o ID do aluno selecionado (para passar no imprimir)
+        const alunoSelecionadoId = this.alunoSelecionado?.id 
+            || this.alunoSelecionado?._id 
+            || null;
         
         container.innerHTML = this.termos.map(t => {
             const dataVisita = new Date(t.dataVisita).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -430,8 +445,9 @@ class VisitasPublico {
             if (t.jaAutorizou) {
                 badgeStatus = '<span class="badge-termo autorizado">✓ Você já autorizou</span>';
                 acoesHTML = `
-                    <button class="btn-filter" onclick="event.stopPropagation(); visitasPublico.imprimirTermoOficial('${t.id}')" 
-                            style="padding: 8px 16px; font-size: 12px; background: #3b82f6;">
+                    <button class="btn-filter" 
+                        onclick="event.stopPropagation(); visitasPublico.imprimirTermoOficial('${t.id}', '${alunoSelecionadoId || ''}')" 
+                        style="padding: 8px 16px; font-size: 12px; background: #3b82f6;">
                         <i class="fas fa-print"></i> Imprimir Termo
                     </button>
                 `;
@@ -513,6 +529,13 @@ class VisitasPublico {
             this.termoAtual = data.termo;
             this.lgpdAceito = false;
             this.totpSecret = null;
+            
+            // 🔥 Guarda o alunoId do aluno selecionado para o imprimir
+            if (this.alunoSelecionado) {
+                this.termoAtual.alunoIdFoco = this.alunoSelecionado.id || this.alunoSelecionado._id;
+            } else if (this.termoAtual.alunos?.length === 1) {
+                this.termoAtual.alunoIdFoco = this.termoAtual.alunos[0].alunoId || this.termoAtual.alunos[0]._id;
+            }
             
             const container = document.getElementById('detalhesTermo');
             if (container) {
@@ -849,7 +872,8 @@ class VisitasPublico {
         }
         
         // 🔥 PEGAR O ALUNO CORRETO DO TERMO ATUAL
-        const alunoId = this.termoAtual.alunos?.[0]?.alunoId 
+        const alunoId = this.termoAtual.alunoIdFoco
+            || this.termoAtual.alunos?.[0]?.alunoId 
             || this.termoAtual.alunos?.[0]?._id 
             || this.alunoSelecionado?.id;
         
@@ -874,7 +898,7 @@ class VisitasPublico {
                     lgpdAceito: true,
                     assinaturaBase64,
                     localizacao: this.localizacao,
-                    alunoId: alunoId.toString()  // 🔥 Envia o ID do aluno
+                    alunoId: alunoId.toString()
                 })
             });
             
@@ -900,8 +924,8 @@ class VisitasPublico {
         const confirmar = confirm('Tem certeza que deseja RECUSAR a participação?');
         if (!confirmar) return;
         
-        // 🔥 Envia o alunoId também na recusa
-        const alunoId = this.termoAtual.alunos?.[0]?.alunoId 
+        const alunoId = this.termoAtual.alunoIdFoco
+            || this.termoAtual.alunos?.[0]?.alunoId 
             || this.termoAtual.alunos?.[0]?._id 
             || this.alunoSelecionado?.id;
         
@@ -935,6 +959,13 @@ class VisitasPublico {
     mostrarSucesso(termo) {
         const container = document.querySelector('.container-public');
         
+        // 🔥 Pega o alunoId do termo autorizado
+        const alunoId = termo.alunos?.[0]?.alunoId 
+            || termo.alunos?.[0]?._id 
+            || this.alunoSelecionado?.id 
+            || this.alunoSelecionado?._id
+            || '';
+        
         container.innerHTML = `
             <div class="hero-section">
                 <div class="sucesso-icon">
@@ -960,7 +991,8 @@ class VisitasPublico {
                 </div>
                 
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 20px;">
-                    <button class="btn-autorizar-grande" onclick="visitasPublico.imprimirTermoOficial('${termo.id}')" 
+                    <button class="btn-autorizar-grande" 
+                            onclick="visitasPublico.imprimirTermoOficial('${termo.id}', '${alunoId}')" 
                             style="max-width: 320px; padding: 15px 30px;">
                         <i class="fas fa-file-pdf"></i> Imprimir Termo Assinado
                     </button>
@@ -981,13 +1013,36 @@ class VisitasPublico {
     }
 
     // ============================================
-    // 📄 IMPRIMIR TERMO OFICIAL (endpoint do backend)
+    // 📄 IMPRIMIR TERMO OFICIAL (SOMENTE DO ALUNO CONSULTADO)
     // ============================================
-    async imprimirTermoOficial(termoId) {
+    async imprimirTermoOficial(termoId, alunoId = null) {
         try {
             this.showToast('📄 Gerando termo oficial...', 'info');
             
-            const response = await fetch(`${this.apiBase}/termo-oficial/${termoId}`);
+            // 🔥 Se não veio por parâmetro, tenta pegar do estado atual
+            if (!alunoId) {
+                alunoId = this.termoAtual?.alunoIdFoco
+                    || this.termoAtual?.alunos?.[0]?.alunoId 
+                    || this.termoAtual?.alunos?.[0]?._id 
+                    || this.alunoSelecionado?.id
+                    || this.alunoSelecionado?._id
+                    || null;
+            }
+            
+            // 🔥 Normalizar (pode vir ObjectId)
+            if (alunoId && typeof alunoId === 'object') {
+                alunoId = alunoId._id || alunoId.id || alunoId.toString();
+            }
+            
+            // Monta URL com o alunoId
+            let url = `${this.apiBase}/termo-oficial/${termoId}`;
+            if (alunoId) {
+                url += `?alunoId=${encodeURIComponent(alunoId)}`;
+            }
+            
+            console.log(`🖨️ [FRONTEND] Imprimindo termo ${termoId} | Aluno: ${alunoId || 'TODOS'}`);
+            
+            const response = await fetch(url);
             const data = await response.json();
             
             if (!data.success) {
@@ -1004,12 +1059,18 @@ class VisitasPublico {
                 }, 800);
             };
             
+            // Mostra info do modo
+            if (data.modoIndividual) {
+                this.showToast(`📄 Termo de ${data.termo.alunoImpresso} gerado!`, 'success');
+            } else {
+                this.showToast(`📄 ${data.termo.totalPaginas} termo(s) gerado(s)`, 'info');
+            }
+            
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
     }
-
 
     // ============================================
     // UTILITÁRIOS
@@ -1062,5 +1123,3 @@ if (document.readyState === 'loading') {
 } else {
     visitasPublico.init();
 }
-
-console.log('✅ visitas-publico.js (frontend) carregado');

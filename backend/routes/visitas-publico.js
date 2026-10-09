@@ -929,13 +929,12 @@ router.post('/recusar/:termoId', rateLimit(5, 10), async (req, res) => {
 });
 
 // ============================================
-// 📱 GERAR QR CODE EM BASE64 (SEM CHAMAR API)
+// 📱 GERAR QR CODE DO ALUNO (BASE64)
 // ============================================
 async function gerarQRCodeAlunoBase64(alunoId) {
   try {
     if (!alunoId) return '';
     
-    // URL que será codificada no QR Code (pode ser ajustada)
     const url = `${process.env.BASE_URL || 'https://sistema-avaliativo.onrender.com'}/aluno.html?aluno=${alunoId}`;
     
     const qrCodeDataUrl = await QRCode.toDataURL(url, {
@@ -956,35 +955,103 @@ async function gerarQRCodeAlunoBase64(alunoId) {
 }
 
 // ============================================
-// 📄 GERAR TERMO OFICIAL (INDIVIDUAL)
+// 📄 GERAR TERMO OFICIAL (com filtro opcional por aluno)
 // ============================================
 router.get('/termo-oficial/:id', async (req, res) => {
   try {
-    const termo = await TermoVisita.findById(req.params.id).lean();
+    const { id } = req.params;
+    const { alunoId } = req.query; // 🔥 NOVO: filtro por aluno
+    
+    console.log(`📄 [TERMO-OFICIAL] Termo: ${id} | Aluno: ${alunoId || 'TODOS'}`);
+    
+    const termo = await TermoVisita.findById(id).lean();
     
     if (!termo) {
       return res.status(404).json({ success: false, error: 'Termo não encontrado' });
     }
     
-    const responsaveisAutorizados = (termo.responsaveis || []).filter(r => r.status === 'autorizado');
+    // ============================================
+    // 🔥 SE VEIO alunoId → FILTRA APENAS ESSE ALUNO
+    // ============================================
+    let termoParaImprimir = termo;
+    let modoIndividual = false;
+    let alunoFoco = null;
     
-    if (responsaveisAutorizados.length === 0) {
+    if (alunoId) {
+      const alunoIdNorm = normalizarId(alunoId);
+      
+      const alunoEncontrado = (termo.alunos || []).find(a => 
+        normalizarId(a.alunoId) === alunoIdNorm || 
+        normalizarId(a._id) === alunoIdNorm
+      );
+      
+      if (!alunoEncontrado) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Aluno não encontrado neste termo' 
+        });
+      }
+      
+      // 🔥 Cria uma cópia do termo apenas com esse aluno
+      alunoFoco = alunoEncontrado;
+      termoParaImprimir = {
+        ...termo,
+        alunos: [alunoEncontrado]
+      };
+      
+      modoIndividual = true;
+      
+      console.log(`   → Modo INDIVIDUAL: ${alunoEncontrado.nome}`);
+    }
+    
+    // ============================================
+    // VERIFICA SE TEM AUTORIZAÇÃO
+    // ============================================
+    const responsaveisAutorizados = (termoParaImprimir.responsaveis || []).filter(r => {
+      if (r.status !== 'autorizado') return false;
+      
+      // Se modo individual, filtra o responsável do aluno também
+      if (modoIndividual && alunoFoco) {
+        const rId = normalizarId(r.alunoId);
+        const aId = normalizarId(alunoFoco.alunoId);
+        return rId === aId;
+      }
+      
+      return true;
+    });
+    
+    // No modo individual, permite imprimir mesmo se ainda não autorizado
+    // No modo "todos", exige pelo menos 1 autorização
+    if (!modoIndividual && responsaveisAutorizados.length === 0) {
       return res.status(400).json({ 
         success: false, 
         error: 'Este termo ainda não foi autorizado por nenhum responsável' 
       });
     }
     
-    const html = await gerarHTMLTermoOficial(termo);
+    // ============================================
+    // GERA O HTML
+    // ============================================
+    let html;
+    
+    if (modoIndividual) {
+      // 🔥 Gera apenas 1 página (do aluno específico)
+      html = await gerarPaginaTermoOficial(termoParaImprimir, alunoFoco, 1, 1);
+    } else {
+      // Gera uma página por aluno (comportamento atual)
+      html = await gerarHTMLTermoOficial(termoParaImprimir);
+    }
     
     res.json({
       success: true,
       html,
+      modoIndividual,
       termo: {
         codigo: termo.codigo,
         totalAutorizados: responsaveisAutorizados.length,
-        totalAlunos: termo.alunos?.length || 1,
-        totalPaginas: termo.alunos?.length || 1
+        totalAlunos: modoIndividual ? 1 : (termo.alunos?.length || 1),
+        totalPaginas: modoIndividual ? 1 : (termo.alunos?.length || 1),
+        alunoImpresso: modoIndividual ? alunoFoco.nome : null
       }
     });
     
@@ -1120,21 +1187,32 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     day: '2-digit', month: 'long', year: 'numeric'
   });
 
-  const alunoIdStr = normalizarId(aluno.alunoId);
+  const alunoIdStr = normalizarId(aluno.alunoId) || normalizarId(aluno._id);
   
+  // Busca o responsável deste aluno
   let responsavelFinal = (termo.responsaveis || []).find(r => {
     const rId = normalizarId(r.alunoId);
     return rId && alunoIdStr && rId === alunoIdStr;
   });
   
+  // Fallback 1: por alunoNome
+  if (!responsavelFinal && aluno.nome) {
+    responsavelFinal = (termo.responsaveis || []).find(r => 
+      r.alunoNome && r.alunoNome === aluno.nome
+    );
+  }
+  
+  // Fallback 2: se só tem 1 aluno e 1 responsável
   if (!responsavelFinal && (termo.alunos || []).length === 1 && (termo.responsaveis || []).length === 1) {
     responsavelFinal = termo.responsaveis[0];
   }
   
+  // Fallback 3: pega qualquer autorizado
   if (!responsavelFinal) {
     responsavelFinal = (termo.responsaveis || []).find(r => r.status === 'autorizado');
   }
   
+  // Fallback 4: por índice
   if (!responsavelFinal) {
     const idxAluno = (termo.alunos || []).findIndex(a => 
       normalizarId(a.alunoId) === alunoIdStr
@@ -1144,6 +1222,7 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     }
   }
   
+  // Fallback 5: primeiro disponível
   if (!responsavelFinal && (termo.responsaveis || []).length > 0) {
     responsavelFinal = termo.responsaveis[0];
   }
@@ -1218,7 +1297,7 @@ async function gerarPaginaTermoOficial(termo, aluno, numeroPagina, totalPaginas)
     statusBadge = '<span class="badge pendente">⏳ Pendente</span>';
   }
 
-  // 🔥 GERAR QR CODE EM BASE64 DIRETO NO BACKEND
+  // 🔥 GERAR QR CODE EM BASE64
   const alunoIdParaQR = aluno.alunoId || aluno._id;
   let qrCodeAlunoBase64 = '';
   

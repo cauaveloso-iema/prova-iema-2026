@@ -555,27 +555,6 @@
                                           placeholder="Informações complementares..."></textarea>
                             </div>
 
-                            <!-- 🖋️ ASSINATURA DIGITAL TRADICIONAL (CANVAS) -->
-                            <div class="assinatura-wrapper">
-                                <label class="form-label">
-                                    <i class="fas fa-signature"></i> Assinatura do Responsável
-                                    <small class="text-muted">(assine com o dedo ou mouse)</small>
-                                </label>
-                                <div class="assinatura-container">
-                                    <canvas id="assinaturaCanvas" class="assinatura-canvas"></canvas>
-                                    <div class="assinatura-placeholder" id="assinaturaPlaceholder">
-                                        <i class="fas fa-pen-fancy"></i>
-                                        <span>Assine aqui</span>
-                                    </div>
-                                </div>
-                                <div class="assinatura-actions">
-                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparAssinatura()">
-                                        <i class="fas fa-eraser"></i> Limpar
-                                    </button>
-                                </div>
-                                <input type="hidden" id="assinaturaBase64" value="">
-                            </div>
-
                             <!-- 🆕 ASSINATURA VIA QR CODE (SESSÃO) -->
                             <div class="assinatura-qr-wrapper">
                                 <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
