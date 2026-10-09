@@ -35,29 +35,29 @@ const authenticateToken = async (req, res, next) => {
 
 // ============================================
 // 🆕 ROLES QUE PODEM CRIAR/ASSINAR SESSÕES
-// ⚠️ IMPORTANTE: Aceita BOTH formas (com hífen E com underscore)
+// Aceita BOTH formas (com hífen E com underscore)
 // ============================================
 const verificarGestaoGeral = (req, res, next) => {
     const allowedRoles = [
         // Gestão
         'gestao_geral',
-        'gestao-geral',           // 🆕 com hífen
+        'gestao-geral',
         'super_admin',
-        'super-admin',            // 🆕 com hífen
+        'super-admin',
         'admin',
         
         // Setor Pedagógico
         'setor_pedagogico',
-        'setor-pedagogico',       // 🆕 com hífen
+        'setor-pedagogico',
         
         // Psicologia
         'psicologia',
         'psicologo',
         'psicologa',
         
-        // Assistente Social (as duas formas!)
-        'assistente_social',      // com underscore
-        'assistente-social',      // 🆕 com hífen ← ESSA É A CORREÇÃO!
+        // Assistente Social
+        'assistente_social',
+        'assistente-social',
         
         // Supervisão
         'supervisao',
@@ -80,12 +80,7 @@ const verificarGestaoGeral = (req, res, next) => {
 };
 
 // ============================================
-// ⚠️ IMPORTANTE: A ORDEM IMPORTA!
-// Rotas fixas (sem parâmetro) devem vir ANTES das rotas com /:param
-// ============================================
-
-// ============================================
-// HEALTH CHECK
+// HEALTH CHECK (público)
 // ============================================
 router.get('/health', (req, res) => {
     res.json({ 
@@ -97,7 +92,12 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// 1. CRIAR / ATUALIZAR SESSÃO
+// ⚠️ IMPORTANTE: A ORDEM IMPORTA!
+// Rotas fixas (sem parâmetro) ANTES de /:param
+// ============================================
+
+// ============================================
+// 1. CRIAR / ATUALIZAR SESSÃO (AUTENTICADO - quem cria é o profissional logado)
 // ============================================
 router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -108,7 +108,6 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
         if (!sessaoId) return res.status(400).json({ success: false, error: 'sessaoId obrigatório' });
         if (!tipo) return res.status(400).json({ success: false, error: 'tipo obrigatório' });
         
-        // Valida o tipo
         const tiposValidos = [
             'autorizacao', 'justificativa', 'segunda_chamada', 'atraso',
             'psicologia', 'assistente_social', 'supervisao', 'biblioteca'
@@ -121,7 +120,6 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
             });
         }
         
-        // Se já existe uma sessão com esse ID e ainda está aguardando, atualiza
         const existente = await Sessao.findOne({ sessaoId });
         if (existente) {
             if (existente.status === 'aguardando') {
@@ -130,7 +128,6 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
                 await existente.save();
                 return res.json({ success: true, sessaoId: existente.sessaoId, atualizada: true });
             }
-            // Se já foi assinada ou cancelada, remove e cria nova
             await Sessao.deleteOne({ sessaoId });
         }
         
@@ -157,7 +154,7 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
 });
 
 // ============================================
-// 2. LISTAR SESSÕES PENDENTES (antes de /:sessaoId!)
+// 2. LISTAR SESSÕES PENDENTES (AUTENTICADO)
 // ============================================
 router.get('/pendentes', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -186,7 +183,7 @@ router.get('/pendentes', authenticateToken, verificarGestaoGeral, async (req, re
 });
 
 // ============================================
-// 3. CONTADOR DE PENDENTES (antes de /:sessaoId!)
+// 3. CONTADOR DE PENDENTES (AUTENTICADO)
 // ============================================
 router.get('/pendentes/contador', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -200,7 +197,7 @@ router.get('/pendentes/contador', authenticateToken, verificarGestaoGeral, async
 });
 
 // ============================================
-// 4. ATUALIZAR DADOS DA SESSÃO
+// 4. ATUALIZAR DADOS DA SESSÃO (AUTENTICADO)
 // ============================================
 router.put('/:sessaoId/dados', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -227,15 +224,20 @@ router.put('/:sessaoId/dados', authenticateToken, verificarGestaoGeral, async (r
 });
 
 // ============================================
-// 5. BUSCAR SESSÃO POR ID
+// 5. BUSCAR SESSÃO POR ID (🔓 PÚBLICA - responsável consulta sem login)
 // ============================================
-router.get('/:sessaoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
+router.get('/:sessaoId', async (req, res) => {
     try {
         const Sessao = getSessao();
         const sessao = await Sessao.findOne({ sessaoId: req.params.sessaoId });
         
         if (!sessao) {
             return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
+        }
+        
+        // Verifica se expirou
+        if (sessao.expiraEm && new Date() > new Date(sessao.expiraEm)) {
+            return res.status(404).json({ success: false, error: 'Sessão expirada' });
         }
         
         res.json({
@@ -260,13 +262,12 @@ router.get('/:sessaoId', authenticateToken, verificarGestaoGeral, async (req, re
 });
 
 // ============================================
-// 6. ASSINAR SESSÃO
+// 6. ASSINAR SESSÃO (🔓 PÚBLICA - responsável assina sem login)
 // ============================================
-router.put('/:sessaoId/assinar', authenticateToken, verificarGestaoGeral, async (req, res) => {
+router.put('/:sessaoId/assinar', async (req, res) => {
     try {
         const Sessao = getSessao();
-        const User = getUser();
-        const { assinaturaBase64 } = req.body;
+        const { assinaturaBase64, assinanteNome } = req.body;
         
         if (!assinaturaBase64 || typeof assinaturaBase64 !== 'string') {
             return res.status(400).json({ success: false, error: 'Assinatura é obrigatória' });
@@ -292,13 +293,16 @@ router.put('/:sessaoId/assinar', authenticateToken, verificarGestaoGeral, async 
             });
         }
         
-        const assinante = await User.findById(req.userId).select('nome');
+        // Verifica expiração
+        if (sessao.expiraEm && new Date() > new Date(sessao.expiraEm)) {
+            return res.status(400).json({ success: false, error: 'Sessão expirada' });
+        }
         
         sessao.status = 'assinado';
         sessao.assinaturaBase64 = assinaturaBase64;
         sessao.assinadaEm = new Date();
-        sessao.assinadaPor = req.userId;
-        sessao.assinadaPorNome = assinante?.nome || req.userNome;
+        sessao.assinadaPor = null; // sem usuário logado (é o responsável)
+        sessao.assinadaPorNome = assinanteNome || 'Responsável';
         
         await sessao.save();
         
@@ -321,7 +325,7 @@ router.put('/:sessaoId/assinar', authenticateToken, verificarGestaoGeral, async 
 });
 
 // ============================================
-// 7. CANCELAR SESSÃO
+// 7. CANCELAR SESSÃO (AUTENTICADO - profissional logado)
 // ============================================
 router.delete('/:sessaoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {

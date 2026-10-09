@@ -306,14 +306,25 @@ function atualizarBadgeComUrgencia() {
 // INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    if (!token) { window.location.href = '/login.html'; return; }
     
-    // 🆕 VERIFICA SE ESTÁ EM MODO ASSINATURA (?assinatura=UUID)
+    // ============================================
+    // 🆕 VERIFICA PRIMEIRO SE É MODO ASSINATURA
+    // URL: /assistente-social.html?assinatura=UUID
+    // O responsável NÃO está logado — só vai assinar
+    // ============================================
     const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
     if (modoAssinatura) {
         console.log('📱 Modo assinatura detectado:', modoAssinatura);
         await mostrarTelaAssinatura(modoAssinatura);
-        return;
+        return; // ⚠️ NÃO continua o init normal
+    }
+    
+    // ============================================
+    // ⬇️ SÓ DAQUI PRA BAIXO É O FLUXO NORMAL (com login)
+    // ============================================
+    if (!token) { 
+        window.location.href = '/login.html'; 
+        return; 
     }
     
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
@@ -3674,9 +3685,8 @@ async function mostrarTelaAssinatura(sessaoId) {
         </div>`;
     
     try {
-        const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        // 🆕 NÃO precisa de Authorization - é pública
+        const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`);
         const data = await response.json();
         
         if (!data.success) {
@@ -3684,7 +3694,7 @@ async function mostrarTelaAssinatura(sessaoId) {
                 <div style="text-align: center; padding: 40px 20px;">
                     <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
                     <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão inválida ou expirada</h3>
-                    <p style="color: #64748b; margin: 0;">Esta sessão de assinatura não existe mais ou expirou (30 min).</p>
+                    <p style="color: #64748b; margin: 0;">${data.error || 'Esta sessão de assinatura não existe mais ou expirou (30 min).'}</p>
                 </div>`;
             return;
         }
@@ -3695,6 +3705,16 @@ async function mostrarTelaAssinatura(sessaoId) {
                     <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px; display: block;"></i>
                     <h3 style="color: #10b981; margin: 0 0 10px;">Esta sessão já foi assinada</h3>
                     <p style="color: #64748b; margin: 0;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p>
+                </div>`;
+            return;
+        }
+        
+        if (data.sessao.status === 'cancelado') {
+            safeGet('telaAssinaturaInfo').innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                    <i class="fas fa-times-circle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
+                    <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão cancelada</h3>
+                    <p style="color: #64748b; margin: 0;">Esta sessão de assinatura foi cancelada.</p>
                 </div>`;
             return;
         }
@@ -3863,13 +3883,17 @@ async function salvarAssinaturaTela() {
     try {
         const base64 = telaCanvas.toDataURL('image/png');
         
+        // 🆕 NÃO precisa de Authorization - é pública
         const response = await fetch(`/api/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Content-Type': 'application/json'
+                // ⚠️ Sem Authorization header
             },
-            body: JSON.stringify({ assinaturaBase64: base64 })
+            body: JSON.stringify({ 
+                assinaturaBase64: base64,
+                assinanteNome: 'Responsável'
+            })
         });
         
         const data = await response.json();
