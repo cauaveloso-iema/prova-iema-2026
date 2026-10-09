@@ -891,6 +891,12 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
         const gestor = await User.findById(req.userId).select('nome');
 
+        // ==========================================
+        // ✅ DATA DO REGISTRO
+        // A 'data' representa QUANDO o registro foi lançado no sistema.
+        // A data da FALTA fica em periodoFaltaInicio / periodoFaltaFim.
+        // NÃO sobrescrever 'data' com periodoFaltaInicio!
+        // ==========================================
         let dataFinal;
         if (data) {
             if (data.length === 10) {
@@ -902,15 +908,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             dataFinal = new Date();
         }
 
-        // ==========================================
-        // 🔥 CORREÇÃO: para justificativa e 2ª chamada,
-        // a "data" deve ser a data da FALTA (periodoFaltaInicio)
-        // ==========================================
-        let dataParaSalvar = dataFinal;
-        if ((tipo === 'justificativa' || tipo === 'segunda_chamada') && periodoFaltaInicio) {
-            dataParaSalvar = periodoFaltaInicio;
-        }
-
         const autorizacao = new Autorizacao({
             tipo,
             alunoId: aluno._id,
@@ -920,8 +917,8 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             alunoCurso: aluno.curso || 'Não informado',
             alunoFoto: aluno.fotoPerfil,
             
-            // 🔥 CORRIGIDO: usa a data da falta quando for justificativa/2ª chamada
-            data: dataParaSalvar,
+            // ✅ data = data do REGISTRO
+            data: dataFinal,
             
             periodoFaltaInicio,
             periodoFaltaFim,
@@ -950,7 +947,10 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
         await autorizacao.save();
 
-        console.log(`✅ ${tipo} registrado: ${aluno.nome} - data: ${dataParaSalvar.toLocaleDateString('pt-BR')}${periodoFaltaInicio ? ` (falta: ${periodoFaltaInicio.toLocaleDateString('pt-BR')})` : ''}`);
+        const logFalta = periodoFaltaInicio 
+            ? ` (falta: ${periodoFaltaInicio.toLocaleDateString('pt-BR')} a ${periodoFaltaFim.toLocaleDateString('pt-BR')})` 
+            : '';
+        console.log(`✅ ${tipo} registrado: ${aluno.nome} - data do registro: ${dataFinal.toLocaleDateString('pt-BR')}${logFalta}`);
 
         res.json({
             success: true,
@@ -962,6 +962,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                 motivo: autorizacao.motivo,
                 motivoLabel: Autorizacao.getMotivoLabel(autorizacao.motivo, autorizacao.tipo),
                 data: autorizacao.data,
+                dataFormatada: new Date(autorizacao.data).toLocaleDateString('pt-BR'),
                 periodoFaltaInicio: autorizacao.periodoFaltaInicio,
                 periodoFaltaFim: autorizacao.periodoFaltaFim,
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(autorizacao),
@@ -1005,6 +1006,7 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 alunoCurso: a.alunoCurso,
                 alunoFoto: a.alunoFoto,
                 data: a.data,
+                dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
                 periodoFaltaInicio: a.periodoFaltaInicio,
                 periodoFaltaFim: a.periodoFaltaFim,
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
@@ -1078,10 +1080,10 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.motivo = motivo;
         }
 
-        // 🔥 Se for justificativa ou 2ª chamada, a data é controlada pelo periodoFaltaInicio
-        const ehJustificativaOuSegundaChamada = a.tipo === 'justificativa' || a.tipo === 'segunda_chamada';
-
-        if (data && !ehJustificativaOuSegundaChamada) {
+        // ==========================================
+        // ✅ DATA DO REGISTRO (sempre editável, independente do tipo)
+        // ==========================================
+        if (data) {
             let dataFinal;
             if (data.length === 10) {
                 dataFinal = new Date(data + 'T12:00:00.000-03:00');
@@ -1094,8 +1096,10 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.data = dataFinal;
         }
 
-        // Período da falta
-        if (ehJustificativaOuSegundaChamada) {
+        // ==========================================
+        // ✅ PERÍODO DA FALTA (campos separados)
+        // ==========================================
+        if (a.tipo === 'justificativa' || a.tipo === 'segunda_chamada') {
             if (periodoFaltaInicio !== undefined || periodoFaltaFim !== undefined) {
                 const iniStr = periodoFaltaInicio !== undefined 
                     ? periodoFaltaInicio 
@@ -1116,9 +1120,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 
                 a.periodoFaltaInicio = resultado.dataInicio;
                 a.periodoFaltaFim = resultado.dataFim;
-                
-                // 🔥 CORREÇÃO: atualiza data também
-                a.data = resultado.dataInicio;
+                // ✅ NÃO sobrescreve a.data aqui — a data do registro é independente
             }
         }
 
@@ -1235,6 +1237,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 motivo: a.motivo,
                 motivoLabel: Autorizacao.getMotivoLabel(a.motivo, a.tipo),
                 data: a.data,
+                dataFormatada: new Date(a.data).toLocaleDateString('pt-BR'),
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
