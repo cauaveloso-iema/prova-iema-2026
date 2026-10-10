@@ -57,6 +57,14 @@
     console.log('🛡️ [Proteção] window.alert sobrescrito (setor pedagógico)');
 })();
 
+// ✅ Helper: retorna data LOCAL no formato YYYY-MM-DD (evita bug de UTC)
+function getDataLocalISO(dateObj) {
+    const d = dateObj || new Date();
+    return d.getFullYear() + '-' + 
+        String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(d.getDate()).padStart(2, '0');
+}
+
 class SetorPedagogico {
     constructor() {
         this.token = localStorage.getItem('auth_token');
@@ -2068,7 +2076,7 @@ class SetorPedagogico {
         
         setTimeout(async () => {
             const dataEl = document.getElementById('segundaChamadaData');
-            if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+            if (dataEl) dataEl.value = getDataLocalISO();
             
             // Reset do estado
             this.estadoSegundaChamada = {
@@ -2439,7 +2447,7 @@ class SetorPedagogico {
         
         // Define data padrão
         const dataEl = document.getElementById('segundaChamadaData');
-        if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+        if (dataEl) dataEl.value = getDataLocalISO();
         
         // ============================================
         // 🆕 RESETA ESTADO DE ASSINATURA
@@ -2966,6 +2974,9 @@ class SetorPedagogico {
         }, 1000);
     }
 
+    // ============================================
+    // LISTA DE 2ªS CHAMADAS - COM PAGINAÇÃO + FILTRO POR PERÍODO DA FALTA
+    // ============================================
     async carregarListaSegundaChamada(pagina = null) {
         const container = document.getElementById('listaSegundaChamada');
         if (!container) return;
@@ -2981,6 +2992,17 @@ class SetorPedagogico {
         const dataInicio = document.getElementById('filtroListaSegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('filtroListaSegundaChamadaDataFim')?.value || '';
 
+        // 🔥 Se só um dos campos está preenchido, usa o mesmo para os dois
+        let dataInicioFinal = dataInicio;
+        let dataFimFinal = dataFim;
+
+        if (dataInicio && !dataFim) {
+            dataFimFinal = dataInicio;
+        }
+        if (dataFim && !dataInicio) {
+            dataInicioFinal = dataFim;
+        }
+
         // 🔥 Paginação
         const limit = this.paginacao2Chamada.porPagina;
         let url = `/api/gestao-geral/autorizacao/listar?tipo=segunda_chamada&limit=${limit}&page=${pagina}`;
@@ -2988,8 +3010,11 @@ class SetorPedagogico {
         if (turma) url += `&turma=${encodeURIComponent(turma)}`;
         if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
         if (tipoProvaPerdida) url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
-        if (dataInicio) url += `&dataInicio=${dataInicio}`;
-        if (dataFim) url += `&dataFim=${dataFim}`;
+        if (dataInicioFinal) url += `&dataInicio=${dataInicioFinal}`;
+        if (dataFimFinal) url += `&dataFim=${dataFimFinal}`;
+
+        // 🔥 FORÇA FILTRO POR PERÍODO DA FALTA (overlap)
+        url += `&filtrarPorPeriodoFalta=true`;
 
         container.innerHTML = `<div class="text-center py-3"><div class="loading-spinner"></div><p>Carregando registros...</p></div>`;
 
@@ -5133,7 +5158,7 @@ class SetorPedagogico {
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `segunda-chamada-${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `segunda-chamada-${getDataLocalISO()}.csv`;
         link.click();
         URL.revokeObjectURL(link.href);
     }
@@ -5632,15 +5657,15 @@ class SetorPedagogico {
             let periodoInicioInput = '';
             let periodoFimInput = '';
             if (a.periodoFaltaInicio) {
-                periodoInicioInput = new Date(a.periodoFaltaInicio).toISOString().split('T')[0];
+                periodoInicioInput = getDataLocalISO(new Date(a.periodoFaltaInicio));
             }
             if (a.periodoFaltaFim) {
-                periodoFimInput = new Date(a.periodoFaltaFim).toISOString().split('T')[0];
+                periodoFimInput = getDataLocalISO(new Date(a.periodoFaltaFim));
             }
             
             let dataRegistroInput = '';
             if (a.data) {
-                dataRegistroInput = new Date(a.data).toISOString().split('T')[0];
+                dataRegistroInput = getDataLocalISO(new Date(a.data));
             }
             
             const modalHtml = `
@@ -6399,7 +6424,7 @@ class SetorPedagogico {
         `;
         
         setTimeout(async () => {
-            const hoje = new Date().toISOString().split('T')[0];
+            const hoje = getDataLocalISO();
             const mesAtual = new Date().toISOString().substring(0, 7);
             
             const inputData = document.getElementById('inputDataSubstituicao');
@@ -6884,7 +6909,7 @@ class SetorPedagogico {
     }
     
     resetarFormularioSubstituicao() {
-        const hoje = new Date().toISOString().split('T')[0];
+        const hoje = getDataLocalISO();
         this.substituicaoState.formData = {
             professorAusente: null,
             professorSubstituto: null,
@@ -8231,7 +8256,7 @@ class SetorPedagogico {
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `substituicoes_${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `substituicoes_${getDataLocalISO()}.csv`;
         link.click();
         URL.revokeObjectURL(link.href);
         
@@ -8951,7 +8976,7 @@ class SetorPedagogico {
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `relatorio_acessibilidade_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `relatorio_acessibilidade_${getDataLocalISO()}.csv`);
         link.style.visibility = "hidden";
         document.body.appendChild(link);
         link.click();

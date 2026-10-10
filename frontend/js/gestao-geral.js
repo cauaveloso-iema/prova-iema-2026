@@ -218,6 +218,14 @@ function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// ✅ Helper: retorna data LOCAL no formato YYYY-MM-DD (evita bug de UTC)
+function getDataLocalISO(dateObj) {
+    const d = dateObj || new Date();
+    return d.getFullYear() + '-' + 
+        String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(d.getDate()).padStart(2, '0');
+}
+
 function gerarAvatarSVG(nome) {
     const inicial = (nome || '?').charAt(0).toUpperCase();
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e3c72"/><stop offset="100%" stop-color="#2a5298"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="50" font-family="Arial,sans-serif" font-size="45" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
@@ -346,7 +354,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     // ============ MÓDULOS EXTRAS ============
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = getDataLocalISO();
     ['autorizacaoData', 'justificativaData', 'segundaChamadaData'].forEach(id => {
         const el = safeGet(id);
         if (el) el.value = hoje;
@@ -862,7 +870,7 @@ function mostrarFormRegistro() {
     const blocoInfo = safeGet('atrasoBlocoAssinaturaInfo');
     if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
     
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = getDataLocalISO();
     const dataEl = safeGet('atrasoData');
     if (dataEl) dataEl.value = hoje;
     
@@ -2121,7 +2129,7 @@ function exportarCSV() {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `gestao-geral-atrasos_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `gestao-geral-atrasos_${getDataLocalISO()}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
 }
@@ -2436,7 +2444,7 @@ function mostrarFormModulo(modulo) {
     if (campoAusencia) campoAusencia.style.display = 'none';
     
     const dataEl = safeGet(`${I}Data`);
-    if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+    if (dataEl) dataEl.value = getDataLocalISO();
     
     limparAssinatura(modulo);
     
@@ -2818,6 +2826,9 @@ function reiniciarScannerModulo(modulo) {
 // ============================================
 // LISTA COM FILTROS - COM PAGINAÇÃO
 // ============================================
+// ============================================
+// LISTAR MÓDULO - COM PAGINAÇÃO + FILTRO POR PERÍODO DA FALTA
+// ============================================
 async function carregarListaModulo(modulo, pagina = null) {
     const cfg = getCfg(modulo);
     const container = safeGet(cfg.containerLista);
@@ -2837,14 +2848,30 @@ async function carregarListaModulo(modulo, pagina = null) {
     const dataFim = safeGet(`filtroLista${P}DataFim`)?.value || '';
     const tipoProvaPerdida = safeGet(`filtroLista${P}TipoProva`)?.value || '';
 
+    // 🔥 Se só um dos campos está preenchido, usa o mesmo para os dois
+    let dataInicioFinal = dataInicio;
+    let dataFimFinal = dataFim;
+
+    if (dataInicio && !dataFim) {
+        dataFimFinal = dataInicio;
+    }
+    if (dataFim && !dataInicio) {
+        dataInicioFinal = dataFim;
+    }
+
     const limit = pag.porPagina;
     let url = `/api/gestao-geral/autorizacao/listar?tipo=${cfg.tipo}&limit=${limit}&page=${pagina}`;
     if (alunoNome) url += `&alunoNome=${encodeURIComponent(alunoNome)}`;
     if (turma) url += `&turma=${encodeURIComponent(turma)}`;
     if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
-    if (dataInicio) url += `&dataInicio=${dataInicio}`;
-    if (dataFim) url += `&dataFim=${dataFim}`;
+    if (dataInicioFinal) url += `&dataInicio=${dataInicioFinal}`;
+    if (dataFimFinal) url += `&dataFim=${dataFimFinal}`;
     if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
+
+    // 🔥 FORÇA FILTRO POR PERÍODO DA FALTA (overlap)
+    if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
+        url += `&filtrarPorPeriodoFalta=true`;
+    }
 
     container.innerHTML = `
         <div class="text-center py-3">
@@ -2903,7 +2930,7 @@ async function carregarListaModulo(modulo, pagina = null) {
                                     ? `<td><strong style="color: #1e3c72;">${a.periodoFaltaFormatado || '-'}</strong></td>` 
                                     : ''}
                                 ${mostrarTipoProva 
-                                    ? `<td><span class="badge bg-warning text-dark">${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</span></td>` 
+                                    ? `<td><span class="badge bg-warning text-dark">${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</span></td>` 
                                     : ''}
                                 <td><strong>${escapeHTML(a.alunoNome)}</strong></td>
                                 <td>${escapeHTML(a.alunoTurma)}</td>
@@ -3217,16 +3244,16 @@ async function abrirEditarModulo(modulo, id) {
         let dataInput = '';
         if (a.data) {
             const dObj = new Date(a.data);
-            dataInput = dObj.toISOString().split('T')[0];
+            dataInput = getDataLocalISO(dObj);
         }
         
         let periodoInicioInput = '';
         let periodoFimInput = '';
         if (a.periodoFaltaInicio) {
-            periodoInicioInput = new Date(a.periodoFaltaInicio).toISOString().split('T')[0];
+            periodoInicioInput = getDataLocalISO(new Date(a.periodoFaltaInicio));
         }
         if (a.periodoFaltaFim) {
-            periodoFimInput = new Date(a.periodoFaltaFim).toISOString().split('T')[0];
+            periodoFimInput = getDataLocalISO(new Date(a.periodoFaltaFim));
         }
         
         const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
@@ -4402,7 +4429,7 @@ function exportarCSVModulo(modulo) {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${cfg.tipo}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `${cfg.tipo}-${getDataLocalISO()}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
 }

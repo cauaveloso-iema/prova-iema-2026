@@ -64,6 +64,38 @@ function construirRangeData(dataInicio, dataFim) {
   return { inicio, fim, fimStr };
 }
 
+// 🔥 CONSTRÓI A CONDIÇÃO DE OVERLAP DE INTERVALOS
+// Um registro deve aparecer se o período de falta dele SOBREPÕE
+// o intervalo buscado. Fórmula:
+//   periodoFaltaInicio <= fimBusca  E  periodoFaltaFim >= inicioBusca
+function construirFiltroData(inicio, fim) {
+  return {
+    $or: [
+      // Caso 1: tem início E fim → overlap completo
+      {
+        periodoFaltaInicio: { $lte: fim },
+        periodoFaltaFim: { $gte: inicio }
+      },
+      // Caso 2: tem início, fim vazio/nulo → o início deve estar no range
+      {
+        periodoFaltaInicio: { $gte: inicio, $lte: fim },
+        $or: [
+          { periodoFaltaFim: null },
+          { periodoFaltaFim: { $exists: false } }
+        ]
+      },
+      // Caso 3: não tem periodoFaltaInicio → cai pra "data" (compatibilidade com registros antigos)
+      {
+        $or: [
+          { periodoFaltaInicio: null },
+          { periodoFaltaInicio: { $exists: false } }
+        ],
+        data: { $gte: inicio, $lte: fim }
+      }
+    ]
+  };
+}
+
 // 🔥 Formata período da falta
 function getPeriodoFaltaFormatado(doc) {
   if (!doc || !doc.periodoFaltaInicio) return null;
@@ -91,7 +123,6 @@ function getTipoProvaPerdidaFormatado(doc) {
 
 // 🔥 Formata registro COMPLETO com todos os campos
 function formatarRegistro(a) {
-  // 🔥 Prioriza periodoFaltaInicio como data principal (data real da falta)
   const dataPrincipal = a.periodoFaltaInicio || a.data;
   
   return {
@@ -102,14 +133,12 @@ function formatarRegistro(a) {
     alunoTurma: a.alunoTurma,
     alunoCurso: a.alunoCurso,
     
-    // 🔥 Datas
     data: a.data,
     dataFormatada: a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '-',
     
     dataFalta: dataPrincipal,
     dataFaltaFormatada: dataPrincipal ? new Date(dataPrincipal).toLocaleDateString('pt-BR') : '-',
     
-    // 🔥 Campos novos
     periodoFaltaInicio: a.periodoFaltaInicio || null,
     periodoFaltaFim: a.periodoFaltaFim || null,
     periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
@@ -118,7 +147,6 @@ function formatarRegistro(a) {
     tipoProvaPerdidaOutros: a.tipoProvaPerdidaOutros || null,
     tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
     
-    // Dados do registro
     motivo: a.motivo,
     motivoLabel: getMotivoLabel(a.motivo),
     motivoOutros: a.motivoOutros,
@@ -236,6 +264,7 @@ router.get('/justificativa/aluno/:id', authenticateToken, verificarSecretaria, a
       },
       estatisticas: {
         totalJustificativas,
+        justificativosUltimos30: justificativasUltimos30,
         justificativasUltimos30
       }
     });
@@ -244,7 +273,7 @@ router.get('/justificativa/aluno/:id', authenticateToken, verificarSecretaria, a
   }
 });
 
-// 🔥 Buscar justificativas de um aluno (filtro por periodoFaltaInicio)
+// 🔥 Buscar justificativas de um aluno (COM OVERLAP DE INTERVALO)
 router.get('/justificativa/por-aluno/:alunoId', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const { dataInicio, dataFim, motivo } = req.query;
@@ -258,15 +287,13 @@ router.get('/justificativa/por-aluno/:alunoId', authenticateToken, verificarSecr
       query.motivo = motivo;
     }
 
-    // 🔥 Filtra por periodoFaltaInicio SE EXISTIR, senão por data
+    // 🔥 Filtro por overlap de intervalo
     if (dataInicio || dataFim) {
       const { inicio, fim } = construirRangeData(dataInicio, dataFim);
+      const filtroData = construirFiltroData(inicio, fim);
       
-      query.$or = [
-        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
-      ];
+      // Mescla o $or do filtro com a query (se já tem $or, precisa combinar)
+      Object.assign(query, filtroData);
     }
 
     const registros = await Autorizacao.find(query)
@@ -310,13 +337,11 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
       query.motivo = motivo;
     }
 
+    // 🔥 Filtro por overlap de intervalo
     if (dataInicio || dataFim) {
       const { inicio, fim } = construirRangeData(dataInicio, dataFim);
-      query.$or = [
-        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
-      ];
+      const filtroData = construirFiltroData(inicio, fim);
+      Object.assign(query, filtroData);
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -346,7 +371,7 @@ router.get('/justificativa/listar', authenticateToken, verificarSecretaria, asyn
 });
 
 // ============================================
-// 🆕 BUSCAR JUSTIFICATIVAS POR DATA (principal!)
+// 🆕 BUSCAR JUSTIFICATIVAS POR DATA (COM OVERLAP DE INTERVALO)
 // ============================================
 router.get('/justificativa/por-data', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
@@ -371,15 +396,9 @@ router.get('/justificativa/por-data', authenticateToken, verificarSecretaria, as
 
     let query = { tipo: 'justificativa' };
 
-    // 🔥 CORREÇÃO PRINCIPAL: Filtra por periodoFaltaInicio SE EXISTIR
-    // Senão, cai pra data (compatibilidade com registros antigos)
-    query.$or = [
-      // Registros novos: filtram por periodoFaltaInicio
-      { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
-      // Registros antigos (sem periodoFaltaInicio): filtram por data
-      { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
-      { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
-    ];
+    // 🔥 Filtro por overlap de intervalo
+    const filtroData = construirFiltroData(inicio, fim);
+    Object.assign(query, filtroData);
 
     if (turma && turma !== 'todas' && turma !== '') {
       query.alunoTurma = turma;
@@ -529,13 +548,11 @@ router.get('/justificativa/relatorio/geral', authenticateToken, verificarSecreta
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     if (motivo && motivo !== 'todos') query.motivo = motivo;
 
+    // 🔥 Filtro por overlap de intervalo
     if (dataInicio || dataFim) {
       const { inicio, fim } = construirRangeData(dataInicio, dataFim);
-      query.$or = [
-        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
-      ];
+      const filtroData = construirFiltroData(inicio, fim);
+      Object.assign(query, filtroData);
     }
 
     const registros = await Autorizacao.find(query).sort({ data: -1 }).lean();
@@ -587,13 +604,11 @@ router.get('/justificativa/relatorio/turma/:turma', authenticateToken, verificar
       alunoTurma: req.params.turma
     };
 
+    // 🔥 Filtro por overlap de intervalo
     if (dataInicio || dataFim) {
       const { inicio, fim } = construirRangeData(dataInicio, dataFim);
-      query.$or = [
-        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
-      ];
+      const filtroData = construirFiltroData(inicio, fim);
+      Object.assign(query, filtroData);
     }
 
     const registros = await Autorizacao.find(query).sort({ data: -1 }).lean();
@@ -648,13 +663,11 @@ router.get('/justificativa/relatorio/aluno/:alunoId', authenticateToken, verific
       alunoId: req.params.alunoId
     };
 
+    // 🔥 Filtro por overlap de intervalo
     if (dataInicio || dataFim) {
       const { inicio, fim } = construirRangeData(dataInicio, dataFim);
-      query.$or = [
-        { periodoFaltaInicio: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: { $exists: false }, data: { $gte: inicio, $lte: fim } },
-        { periodoFaltaInicio: null, data: { $gte: inicio, $lte: fim } }
-      ];
+      const filtroData = construirFiltroData(inicio, fim);
+      Object.assign(query, filtroData);
     }
 
     const registros = await Autorizacao.find(query).sort({ data: -1 }).lean();

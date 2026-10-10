@@ -22,6 +22,59 @@ function fimDoDiaBrasil(dataStr) {
     return new Date(dataStr + 'T23:59:59.999-03:00');
 }
 
+// 🔥 CONSTRÓI A CONDIÇÃO DE OVERLAP DE INTERVALOS
+// Um registro deve aparecer se o período de falta dele SOBREPÕE
+// o intervalo buscado. Fórmula:
+//   periodoFaltaInicio <= fimBusca  E  periodoFaltaFim >= inicioBusca
+function construirFiltroOverlap(inicio, fim) {
+    return {
+        $or: [
+            // Caso 1: tem início E fim → overlap completo
+            {
+                periodoFaltaInicio: { $lte: fim },
+                periodoFaltaFim: { $gte: inicio }
+            },
+            // Caso 2: tem início, fim vazio/nulo → o início deve estar no range
+            {
+                periodoFaltaInicio: { $gte: inicio, $lte: fim },
+                $or: [
+                    { periodoFaltaFim: null },
+                    { periodoFaltaFim: { $exists: false } }
+                ]
+            },
+            // Caso 3: não tem periodoFaltaInicio → cai pra "data" (compatibilidade)
+            {
+                $or: [
+                    { periodoFaltaInicio: null },
+                    { periodoFaltaInicio: { $exists: false } }
+                ],
+                data: { $gte: inicio, $lte: fim }
+            }
+        ]
+    };
+}
+
+// 🔥 Constrói o filtro de data considerando se deve usar periodoFalta ou data
+function construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta) {
+    if (!dataInicio && !dataFim) return null;
+    
+    const inicio = dataInicio ? inicioDoDiaBrasil(dataInicio) : new Date('1970-01-01');
+    const fim = dataFim ? fimDoDiaBrasil(dataFim) : new Date();
+    
+    // Se for filtrar por período da falta → usa overlap
+    if (filtrarPorPeriodoFalta === 'true') {
+        return construirFiltroOverlap(inicio, fim);
+    }
+    
+    // Senão, filtra por data simples (registro)
+    return {
+        data: {
+            $gte: inicio,
+            $lte: fim
+        }
+    };
+}
+
 function getPeriodoFaltaFormatado(doc) {
     if (!doc || !doc.periodoFaltaInicio) return null;
     
@@ -295,7 +348,7 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
 });
 
 // ============================================
-// 5. RELATÓRIO GERAL
+// 5. RELATÓRIO GERAL (COM OVERLAP)
 // ============================================
 router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -303,12 +356,11 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
         const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida } = req.query;
 
         let matchStage = { tipo };
-        const campoData = filtrarPorPeriodoFalta === 'true' ? 'periodoFaltaInicio' : 'data';
         
-        if (dataInicio || dataFim) {
-            matchStage[campoData] = {};
-            if (dataInicio) matchStage[campoData].$gte = inicioDoDiaBrasil(dataInicio);
-            if (dataFim) matchStage[campoData].$lte = fimDoDiaBrasil(dataFim);
+        // 🔥 Filtro de data (com overlap para período da falta)
+        const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
+        if (filtroData) {
+            Object.assign(matchStage, filtroData);
         }
         
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') {
@@ -406,7 +458,7 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
 });
 
 // ============================================
-// 6. RELATÓRIO POR TURMA
+// 6. RELATÓRIO POR TURMA (COM OVERLAP)
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -415,12 +467,11 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
         const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida } = req.query;
 
         let matchStage = { tipo, alunoTurma: turma };
-        const campoData = filtrarPorPeriodoFalta === 'true' ? 'periodoFaltaInicio' : 'data';
         
-        if (dataInicio || dataFim) {
-            matchStage[campoData] = {};
-            if (dataInicio) matchStage[campoData].$gte = inicioDoDiaBrasil(dataInicio);
-            if (dataFim) matchStage[campoData].$lte = fimDoDiaBrasil(dataFim);
+        // 🔥 Filtro de data (com overlap para período da falta)
+        const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
+        if (filtroData) {
+            Object.assign(matchStage, filtroData);
         }
         
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') {
@@ -499,7 +550,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
 });
 
 // ============================================
-// 7. RELATÓRIO POR ALUNO
+// 7. RELATÓRIO POR ALUNO (COM OVERLAP)
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -509,12 +560,11 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
         const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida } = req.query;
 
         let matchStage = { tipo, alunoId };
-        const campoData = filtrarPorPeriodoFalta === 'true' ? 'periodoFaltaInicio' : 'data';
         
-        if (dataInicio || dataFim) {
-            matchStage[campoData] = {};
-            if (dataInicio) matchStage[campoData].$gte = inicioDoDiaBrasil(dataInicio);
-            if (dataFim) matchStage[campoData].$lte = fimDoDiaBrasil(dataFim);
+        // 🔥 Filtro de data (com overlap para período da falta)
+        const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
+        if (filtroData) {
+            Object.assign(matchStage, filtroData);
         }
         
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') {
@@ -612,7 +662,7 @@ router.get('/estatisticas/assinatura', authenticateToken, verificarGestaoGeral, 
 });
 
 // ============================================
-// 9. LISTAR
+// 9. LISTAR (COM OVERLAP)
 // ============================================
 router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -633,12 +683,10 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
             query.tipoProvaPerdida = tipoProvaPerdida;
         }
         
-        const campoData = filtrarPorPeriodoFalta === 'true' ? 'periodoFaltaInicio' : 'data';
-        
-        if (dataInicio || dataFim) {
-            query[campoData] = {};
-            if (dataInicio) query[campoData].$gte = inicioDoDiaBrasil(dataInicio);
-            if (dataFim) query[campoData].$lte = fimDoDiaBrasil(dataFim);
+        // 🔥 Filtro de data (com overlap para período da falta)
+        const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
+        if (filtroData) {
+            Object.assign(query, filtroData);
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1253,7 +1301,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
 });
 
 // ============================================
-// 13. EXCLUIR
+// 13. EXCLUIR (COM CASCATA PARA JUSTIFICATIVAS)
 // ============================================
 router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -1266,21 +1314,18 @@ router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) 
         const a = await Autorizacao.findByIdAndDelete(req.params.id);
         if (!a) return res.status(404).json({ success: false, error: 'Registro não encontrado' });
         
-        // 🔥 CASCATA: se for uma 2ª chamada, exclui a justificativa vinculada
+        // 🔥 CASCATA: se for 2ª chamada, exclui a justificativa vinculada
+        let justificativasExcluidas = 0;
         if (a.tipo === 'segunda_chamada') {
-            const justificativas = await Autorizacao.find({
+            const result = await Autorizacao.deleteMany({
                 tipo: 'justificativa',
                 origemTipo: 'segunda_chamada',
                 origemId: a._id
             });
+            justificativasExcluidas = result.deletedCount || 0;
             
-            if (justificativas.length > 0) {
-                await Autorizacao.deleteMany({
-                    tipo: 'justificativa',
-                    origemTipo: 'segunda_chamada',
-                    origemId: a._id
-                });
-                console.log(`🗑️ Cascata: ${justificativas.length} justificativa(s) excluída(s) junto com 2ª chamada ${a._id}`);
+            if (justificativasExcluidas > 0) {
+                console.log(`🗑️ Cascata: ${justificativasExcluidas} justificativa(s) excluída(s) junto com 2ª chamada ${a._id}`);
             }
         }
         
@@ -1288,10 +1333,15 @@ router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) 
         
         res.json({ 
             success: true, 
-            message: 'Registro excluído com sucesso',
-            cascata: a.tipo === 'segunda_chamada' ? 'Justificativa(s) vinculada(s) também excluída(s)' : null
+            message: justificativasExcluidas > 0 
+                ? `Registro excluído + ${justificativasExcluidas} justificativa(s) vinculada(s)`
+                : 'Registro excluído com sucesso',
+            cascata: {
+                justificativasExcluidas
+            }
         });
     } catch (error) {
+        console.error('Erro ao excluir:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
