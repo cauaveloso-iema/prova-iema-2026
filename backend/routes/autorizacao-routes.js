@@ -13,15 +13,13 @@ function getAutorizacao() { return require('../models/Autorizacao'); }
 // 🔥 HELPERS
 // ============================================
 function inicioDoDiaBrasil(dataStr) {
-    const d = new Date(dataStr + 'T00:00:00.000-03:00');
-    d.setDate(d.getDate() - 1);
-    return d;
+    // Meia-noite no horário de Brasília
+    return new Date(dataStr + 'T00:00:00.000-03:00');
 }
 
 function fimDoDiaBrasil(dataStr) {
-    const d = new Date(dataStr + 'T23:59:59.999-03:00');
-    d.setDate(d.getDate() + 1);
-    return d;
+    // 23:59:59.999 no horário de Brasília
+    return new Date(dataStr + 'T23:59:59.999-03:00');
 }
 
 function getPeriodoFaltaFormatado(doc) {

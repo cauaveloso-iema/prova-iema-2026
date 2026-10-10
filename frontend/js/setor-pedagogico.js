@@ -1956,6 +1956,13 @@ class SetorPedagogico {
                                     <input type="date" id="SegundaChamadaDataFim" class="form-control">
                                 </div>
                                 <div class="col-md-3">
+                                    <label class="form-label">Filtrar por</label>
+                                    <select id="SegundaChamadaFiltroPorData" class="form-select">
+                                        <option value="falta" selected>📆 Período da Falta</option>
+                                        <option value="registro">📝 Data do Registro</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
                                     <label class="form-label">Tipo de Prova Perdida</label>
                                     <select id="SegundaChamadaFiltroTipoProva" class="form-select">
                                         <option value="todos">Todos os tipos</option>
@@ -2969,6 +2976,9 @@ class SetorPedagogico {
         if (tipoProvaPerdida) url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
         if (dataInicio) url += `&dataInicio=${dataInicio}`;
         if (dataFim) url += `&dataFim=${dataFim}`;
+
+        // 🆕 Sempre filtrar por período da falta na lista (faz mais sentido)
+        url += `&filtrarPorPeriodoFalta=true`;
         
         container.innerHTML = `<div class="text-center py-3"><div class="loading-spinner"></div><p>Carregando registros...</p></div>`;
         
@@ -4339,12 +4349,17 @@ class SetorPedagogico {
         const dataFim = document.getElementById('SegundaChamadaDataFim')?.value || '';
         const tipoProvaPerdida = document.getElementById('SegundaChamadaFiltroTipoProva')?.value || '';
         
+        // 🆕 Pega o modo de filtro por data
+        const filtroPor = document.getElementById('SegundaChamadaFiltroPorData')?.value || 'falta';
+        const filtrarPorPeriodoFalta = filtroPor === 'falta' ? 'true' : 'false';
+        
         let url = '';
         if (tipo === 'geral') {
             url = `/api/gestao-geral/autorizacao/relatorio/geral?tipo=segunda_chamada&`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
             if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
+            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;   // 🆕
         } else if (tipo === 'turma') {
             const turma = document.getElementById('SegundaChamadaFiltroTurma')?.value;
             if (!turma) { this.mostrarNotificacao('Selecione uma turma', 'error'); return; }
@@ -4352,6 +4367,7 @@ class SetorPedagogico {
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
             if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
+            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;   // 🆕
         } else if (tipo === 'aluno') {
             const alunoId = document.getElementById('SegundaChamadaFiltroAluno')?.value;
             if (!alunoId) { this.mostrarNotificacao('Selecione um aluno', 'error'); return; }
@@ -4359,7 +4375,10 @@ class SetorPedagogico {
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
             if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
+            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;   // 🆕
         }
+        
+        console.log('🔍 URL do relatório:', url);   // 🆕 log pra debug
         
         try {
             const response = await fetch(url, {
@@ -4370,7 +4389,6 @@ class SetorPedagogico {
                 this.relatorio2Chamada = data;
                 this.exibirRelatorioSegundaChamada(data, tipo);
                 
-                // ✅ HABILITAR BOTÕES CSV E PDF
                 const btnCSV = document.getElementById('btnExportarCSVSegundaChamada');
                 const btnPDF = document.getElementById('btnExportarPDFSegundaChamada');
                 if (btnCSV) btnCSV.disabled = false;
