@@ -5,6 +5,7 @@
 // + Tipo de Prova Perdida + Verificação de Duplicidade
 // + CPF Obrigatório com Validação
 // + 🆕 ASSINATURA VIA QR CODE (SESSÃO)
+// + 🆕 PAGINAÇÃO (10 POR PÁGINA)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -156,6 +157,16 @@ const relatoriosModulo = {
     segundaChamada: null
 };
 
+// 🆕 ESTADO DA PAGINAÇÃO POR MÓDULO (10 por página)
+const paginacaoModuloState = {
+    autorizacao: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 },
+    justificativa: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 },
+    segundaChamada: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 }
+};
+
+// 🆕 ESTADO DA PAGINAÇÃO - ATRASOS RECENTES (Dashboard)
+const paginacaoAtrasosState = { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 };
+
 const dashboardChartsModulo = {
     autorizacao: { motivos: null, atrasos: null, turmas: null },
     justificativa: { motivos: null, atrasos: null, turmas: null },
@@ -254,7 +265,6 @@ function validarCPFCliente(cpf) {
         return { valido: false, erro: 'CPF inválido (dígitos repetidos)' };
     }
     
-    // Validação dos dígitos verificadores
     let soma = 0;
     for (let i = 0; i < 9; i++) {
         soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
@@ -283,21 +293,13 @@ function validarCPFCliente(cpf) {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // ============================================
-    // 🆕 VERIFICA PRIMEIRO SE É MODO ASSINATURA
-    // URL: /gestao-geral.html?assinatura=UUID
-    // O responsável NÃO está logado — só vai assinar
-    // ============================================
     const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
     if (modoAssinatura) {
         console.log('📱 Modo assinatura detectado:', modoAssinatura);
         await mostrarTelaAssinatura(modoAssinatura);
-        return; // ⚠️ NÃO continua o init normal
+        return;
     }
     
-    // ============================================
-    // ⬇️ SÓ DAQUI PRA BAIXO É O FLUXO NORMAL (com login)
-    // ============================================
     if (!token) { 
         window.location.href = '/login.html'; 
         return; 
@@ -357,14 +359,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('filtroBuscaManualAutorizacao')?.addEventListener('input', () => filtrarAlunosManualModulo('autorizacao'));
     safeGet('aba-autorizacao')?.addEventListener('shown.bs.tab', () => {
         carregarTurmasManualModulo('autorizacao');
-        carregarListaModulo('autorizacao');
+        carregarListaModulo('autorizacao', 1);
         setTimeout(() => {
             if (estados.autorizacao.modoAtual === 'automatico' && !estados.autorizacao.scannerAtivo) {
                 iniciarScannerModulo('autorizacao');
             }
         }, 300);
     });
-    carregarListaModulo('autorizacao');
+    carregarListaModulo('autorizacao', 1);
     
     // JUSTIFICATIVA
     safeGet('modoAutomaticoJustificativaBtn')?.addEventListener('click', () => setModoModulo('justificativa', 'automatico'));
@@ -373,14 +375,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('filtroBuscaManualJustificativa')?.addEventListener('input', () => filtrarAlunosManualModulo('justificativa'));
     safeGet('aba-justificativa')?.addEventListener('shown.bs.tab', () => {
         carregarTurmasManualModulo('justificativa');
-        carregarListaModulo('justificativa');
+        carregarListaModulo('justificativa', 1);
         setTimeout(() => {
             if (estados.justificativa.modoAtual === 'automatico' && !estados.justificativa.scannerAtivo) {
                 iniciarScannerModulo('justificativa');
             }
         }, 300);
     });
-    carregarListaModulo('justificativa');
+    carregarListaModulo('justificativa', 1);
     
     // 2ª CHAMADA
     safeGet('modoAutomaticoSegundaChamadaBtn')?.addEventListener('click', () => setModoModulo('segundaChamada', 'automatico'));
@@ -389,21 +391,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('filtroBuscaManualSegundaChamada')?.addEventListener('input', () => filtrarAlunosManualModulo('segundaChamada'));
     safeGet('aba-segunda-chamada')?.addEventListener('shown.bs.tab', () => {
         carregarTurmasManualModulo('segundaChamada');
-        carregarListaModulo('segundaChamada');
+        carregarListaModulo('segundaChamada', 1);
         setTimeout(() => {
             if (estados.segundaChamada.modoAtual === 'automatico' && !estados.segundaChamada.scannerAtivo) {
                 iniciarScannerModulo('segundaChamada');
             }
         }, 300);
     });
-    carregarListaModulo('segundaChamada');
+    carregarListaModulo('segundaChamada', 1);
     
     // ============ EVENTOS DOS MÓDULOS ============
     ['autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
         configurarEventosModulo(modulo);
     });
     
-    // ============ INICIALIZA ASSINATURAS ============
     setTimeout(() => {
         ['autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
             inicializarAssinatura(modulo);
@@ -416,11 +417,9 @@ window.addEventListener('beforeunload', () => {
     pararScannerModulo('autorizacao');
     pararScannerModulo('justificativa');
     pararScannerModulo('segundaChamada');
-    // 🆕 Para todos os monitoramentos de sessão
     ['atraso', 'autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
         pararMonitoramentoSessao(modulo);
     });
-    // 🆕 Remove listener de redimensionamento
     window.removeEventListener('resize', handleResizeCanvasTela);
 });
 
@@ -857,7 +856,6 @@ function mostrarFormRegistro() {
     safeGet('motivoOutrosTexto').value = '';
     safeGet('campoOutros').style.display = 'none';
     
-    // 🆕 Limpa estado de assinatura do atraso
     limparEstadoSessaoAssinatura('atraso');
     const checkAssinatura = safeGet('atrasoNecessitaAssinatura');
     if (checkAssinatura) checkAssinatura.checked = false;
@@ -928,9 +926,6 @@ async function registrarAtraso() {
         }
     }
     
-    // ==========================================
-    // 🆕 VALIDAÇÃO DA ASSINATURA VIA QR
-    // ==========================================
     const precisaAssinatura = safeGet('atrasoNecessitaAssinatura')?.checked || false;
     const assinaturaBase64 = estadoSessaoAssinatura.atraso?.assinaturaCapturada || '';
     
@@ -967,14 +962,12 @@ async function registrarAtraso() {
                     horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
                     horarioChegada: safeGet('horarioChegada')?.value || ''
                 },
-                // 🆕 Assinatura via QR
                 precisaAssinatura: precisaAssinatura,
                 assinaturaBase64: assinaturaBase64
             })
         });
         const data = await response.json();
         if (data.success) {
-            // 🆕 Limpa a sessão de assinatura
             const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
             if (sessaoId) {
                 fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -1007,7 +1000,6 @@ function limparTela() {
     currentAluno = null;
     motivoSelecionado = null;
     
-    // 🆕 Limpa assinatura do atraso
     const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
     if (sessaoId) {
         fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -1112,51 +1104,53 @@ async function carregarDashboardAtrasos() {
 }
 
 // ============================================
-// 📋 ATRASOS RECENTES (DASHBOARD)
+// 📋 ATRASOS RECENTES (DASHBOARD) - COM PAGINAÇÃO
 // ============================================
 let __atrasosRecentes = [];
 
-async function carregarAtrasosRecentes(pagina = 1) {
+async function carregarAtrasosRecentes(pagina = null) {
     const container = safeGet('listaAtrasosRecentes');
     if (!container) return;
-    
-    const busca = (safeGet('filtroAtrasosRecentesBusca')?.value || '').trim().toLowerCase();
+
+    if (pagina === null) pagina = paginacaoAtrasosState.paginaAtual;
+    paginacaoAtrasosState.paginaAtual = pagina;
+
+    const busca = (safeGet('filtroAtrasosRecentesBusca')?.value || '').trim();
     const turma = safeGet('filtroAtrasosRecentesTurma')?.value || '';
-    
+
+    const limit = paginacaoAtrasosState.porPagina;
+
     container.innerHTML = `
         <div class="text-center py-4">
             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
             <p class="text-muted mt-2 mb-0">Carregando atrasos...</p>
         </div>`;
-    
+
     try {
         const params = new URLSearchParams();
-        params.append('limit', '20');
+        params.append('limit', limit);
         params.append('page', pagina);
         if (turma) params.append('turma', turma);
-        
+        if (busca) params.append('alunoNome', busca);
+
         const response = await fetch(`/api/gestao-geral/atraso/listar?${params.toString()}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (!data.success || !Array.isArray(data.atrasos)) {
             container.innerHTML = `<div class="alert alert-warning">Nenhum atraso encontrado</div>`;
+            paginacaoAtrasosState.totalRegistros = 0;
+            paginacaoAtrasosState.totalPaginas = 0;
             return;
         }
-        
-        let lista = data.atrasos;
-        
-        if (busca) {
-            lista = lista.filter(a =>
-                (a.alunoNome || '').toLowerCase().includes(busca) ||
-                (a.alunoMatricula || '').toLowerCase().includes(busca)
-            );
-        }
-        
-        __atrasosRecentes = lista;
-        atualizarContadorAtrasosRecentes(lista.length);
-        renderizarListaAtrasosRecentes(lista);
+
+        paginacaoAtrasosState.totalRegistros = data.total || 0;
+        paginacaoAtrasosState.totalPaginas = data.totalPages || 1;
+
+        __atrasosRecentes = data.atrasos;
+        atualizarContadorAtrasosRecentes(data.total || 0);
+        renderizarListaAtrasosRecentes(data.atrasos);
     } catch (error) {
         console.error('Erro ao carregar atrasos:', error);
         container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
@@ -1243,7 +1237,74 @@ function renderizarListaAtrasosRecentes(lista) {
                     }).join('')}
                 </tbody>
             </table>
-        </div>`;
+        </div>
+        ${renderizarPaginacaoAtrasos()}
+    `;
+}
+
+// 🆕 Renderiza paginação dos atrasos
+function renderizarPaginacaoAtrasos() {
+    const { paginaAtual, totalPaginas, totalRegistros, porPagina } = paginacaoAtrasosState;
+
+    if (totalPaginas <= 1) {
+        return `<p class="text-muted text-end mt-2"><small>${totalRegistros} registro(s) encontrado(s)</small></p>`;
+    }
+
+    const maxBotoes = 5;
+    let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
+    let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
+
+    if (fim - inicio + 1 < maxBotoes) {
+        inicio = Math.max(1, fim - maxBotoes + 1);
+    }
+
+    let botoes = '';
+
+    botoes += paginaAtual > 1
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarAtrasosRecentes(1)" title="Primeira"><i class="fas fa-angle-double-left"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-left"></i></span></li>`;
+
+    botoes += paginaAtual > 1
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarAtrasosRecentes(${paginaAtual - 1})" title="Anterior"><i class="fas fa-angle-left"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-left"></i></span></li>`;
+
+    if (inicio > 1) {
+        botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    }
+
+    for (let i = inicio; i <= fim; i++) {
+        botoes += i === paginaAtual
+            ? `<li class="page-item active"><span class="page-link">${i}</span></li>`
+            : `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarAtrasosRecentes(${i})">${i}</a></li>`;
+    }
+
+    if (fim < totalPaginas) {
+        botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    }
+
+    botoes += paginaAtual < totalPaginas
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarAtrasosRecentes(${paginaAtual + 1})" title="Próxima"><i class="fas fa-angle-right"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-right"></i></span></li>`;
+
+    botoes += paginaAtual < totalPaginas
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarAtrasosRecentes(${totalPaginas})" title="Última"><i class="fas fa-angle-double-right"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-right"></i></span></li>`;
+
+    const de = (paginaAtual - 1) * porPagina + 1;
+    const ate = Math.min(paginaAtual * porPagina, totalRegistros);
+
+    return `
+        <div class="paginacao-modulo" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+            <small class="text-muted">
+                Mostrando <strong>${de}</strong>–<strong>${ate}</strong> de <strong>${totalRegistros}</strong> registros
+            </small>
+            <nav aria-label="Paginação">
+                <ul class="pagination pagination-sm mb-0" style="gap: 2px;">
+                    ${botoes}
+                </ul>
+            </nav>
+        </div>
+    `;
 }
 
 // ============================================
@@ -2346,7 +2407,6 @@ function mostrarFormModulo(modulo) {
     estados[modulo].motivoSelecionado = null;
     document.querySelectorAll(`#form${P} .tipo-card`).forEach(c => c.classList.remove('selected'));
     
-    // Limpa campos
     const campos = [
         `${I}Data`, `${I}Horario`, `${I}MotivoOutros`,
         `${I}ResponsavelNome`, `${I}ResponsavelCPF`,
@@ -2357,7 +2417,6 @@ function mostrarFormModulo(modulo) {
     ];
     campos.forEach(id => { const el = safeGet(id); if (el) el.value = ''; });
     
-    // 🆕 Limpa tipo de prova perdida (apenas 2ª chamada)
     if (modulo === 'segundaChamada') {
         const inputTipoProva = safeGet('segundaChamadaTipoProvaPerdida');
         if (inputTipoProva) inputTipoProva.value = '';
@@ -2381,7 +2440,6 @@ function mostrarFormModulo(modulo) {
     
     limparAssinatura(modulo);
     
-    // 🆕 Reseta estado de sessão de assinatura deste módulo
     limparEstadoSessaoAssinatura(modulo);
     const checkAssinatura = safeGet(`${modulo}NecessitaAssinatura`);
     if (checkAssinatura) checkAssinatura.checked = false;
@@ -2467,7 +2525,6 @@ async function registrarModulo(modulo) {
         return; 
     }
     
-    // Período da falta
     let periodoFaltaInicio = '';
     let periodoFaltaFim = '';
     
@@ -2486,7 +2543,6 @@ async function registrarModulo(modulo) {
         }
     }
     
-    // 🆕 TIPO DE PROVA PERDIDA (apenas 2ª chamada)
     let tipoProvaPerdida = null;
     let tipoProvaPerdidaOutros = '';
     
@@ -2525,9 +2581,6 @@ async function registrarModulo(modulo) {
         return; 
     }
     
-    // ==========================================
-    // 🆕 VALIDAÇÃO DE CPF DO RESPONSÁVEL (OBRIGATÓRIO)
-    // ==========================================
     const responsavelCPF = safeGet(`${I}ResponsavelCPF`)?.value || '';
     
     if (!responsavelCPF || responsavelCPF.trim() === '') {
@@ -2543,9 +2596,6 @@ async function registrarModulo(modulo) {
         return;
     }
     
-    // ==========================================
-    // 🆕 ASSINATURA VIA QR (substitui o canvas local)
-    // ==========================================
     const precisaAssinatura = safeGet(`${modulo}NecessitaAssinatura`)?.checked || false;
     const assinaturaBase64 = estadoSessaoAssinatura[modulo]?.assinaturaCapturada || '';
     
@@ -2588,7 +2638,6 @@ async function registrarModulo(modulo) {
         });
         const d = await r.json();
         
-        // 🆕 Tratamento do 409 (duplicidade)
         if (r.status === 409 || (d.error && d.error.includes('Já existe'))) {
             let msg = '⚠️ Registro duplicado detectado!\n\n';
             msg += d.error || 'Já existe um registro com os mesmos dados.';
@@ -2609,7 +2658,6 @@ async function registrarModulo(modulo) {
         
         console.log(`✅ ${cfg.nomeAmigavel} registrado:`, d.autorizacao.id);
         
-        // 🆕 Limpa a sessão de assinatura
         const sessaoId = estadoSessaoAssinatura[modulo]?.sessaoId;
         if (sessaoId) {
             fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -2621,9 +2669,6 @@ async function registrarModulo(modulo) {
         fecharModalAssinatura(modulo);
         limparEstadoSessaoAssinatura(modulo);
         
-        // ==========================================
-        // INTEGRAÇÃO AUTOMÁTICA
-        // ==========================================
         let justificativaCriada = false;
         
         if (modulo === 'autorizacao') {
@@ -2676,9 +2721,9 @@ async function registrarModulo(modulo) {
         if (imprimir) imprimirModulo(modulo, d.autorizacao.id);
         
         limparTelaModulo(modulo);
-        carregarListaModulo(modulo);
+        carregarListaModulo(modulo, 1);
         
-        if (justificativaCriada) carregarListaModulo('justificativa');
+        if (justificativaCriada) carregarListaModulo('justificativa', 1);
         
         if (est.modoAtual === 'automatico') reiniciarScannerModulo(modulo);
     } catch (e) {
@@ -2745,7 +2790,6 @@ function limparTelaModulo(modulo) {
     estados[modulo].motivoSelecionado = null;
     limparAssinatura(modulo);
     
-    // 🆕 Limpa a sessão de assinatura
     const sessaoId = estadoSessaoAssinatura[modulo]?.sessaoId;
     if (sessaoId) {
         fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -2772,12 +2816,16 @@ function reiniciarScannerModulo(modulo) {
 }
 
 // ============================================
-// LISTA COM FILTROS
+// LISTA COM FILTROS - COM PAGINAÇÃO
 // ============================================
-async function carregarListaModulo(modulo) {
+async function carregarListaModulo(modulo, pagina = null) {
     const cfg = getCfg(modulo);
     const container = safeGet(cfg.containerLista);
     if (!container) return;
+
+    const pag = paginacaoModuloState[modulo];
+    if (pagina === null) pagina = pag.paginaAtual;
+    pag.paginaAtual = pagina;
 
     await carregarOpcoesFiltrosLista(modulo);
 
@@ -2789,7 +2837,8 @@ async function carregarListaModulo(modulo) {
     const dataFim = safeGet(`filtroLista${P}DataFim`)?.value || '';
     const tipoProvaPerdida = safeGet(`filtroLista${P}TipoProva`)?.value || '';
 
-    let url = `/api/gestao-geral/autorizacao/listar?tipo=${cfg.tipo}&limit=50`;
+    const limit = pag.porPagina;
+    let url = `/api/gestao-geral/autorizacao/listar?tipo=${cfg.tipo}&limit=${limit}&page=${pagina}`;
     if (alunoNome) url += `&alunoNome=${encodeURIComponent(alunoNome)}`;
     if (turma) url += `&turma=${encodeURIComponent(turma)}`;
     if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
@@ -2815,8 +2864,13 @@ async function carregarListaModulo(modulo) {
                 <i class="fas fa-inbox" style="font-size: 32px; color: #cbd5e1; display: block; margin-bottom: 10px;"></i>
                 Nenhum registro de ${cfg.nomeAmigavel.toLowerCase()} encontrado.
             </p>`;
+            pag.totalRegistros = 0;
+            pag.totalPaginas = 0;
             return;
         }
+
+        pag.totalRegistros = d.total || 0;
+        pag.totalPaginas = d.totalPages || 1;
 
         const mostraHorario = cfg.tipo === 'autorizacao';
         const cabecalhoHorarios = mostraHorario ? '<th>Entrada</th><th>Saída</th>' : '<th>Horário</th>';
@@ -2885,17 +2939,84 @@ async function carregarListaModulo(modulo) {
                     </tbody>
                 </table>
             </div>
-            <p class="text-muted text-end mt-2"><small>${d.total} registro(s) encontrado(s)</small></p>`;
+            ${renderizarPaginacaoModulo(modulo)}
+        `;
     } catch (e) {
         console.error(`❌ Erro ao carregar ${cfg.nomeAmigavel}:`, e);
         container.innerHTML = `
             <div class="text-center py-3">
                 <p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar.</p>
-                <button class="btn btn-sm btn-outline-primary" onclick="carregarListaModulo('${modulo}')">
+                <button class="btn btn-sm btn-outline-primary" onclick="carregarListaModulo('${modulo}', 1)">
                     <i class="fas fa-sync-alt"></i> Tentar novamente
                 </button>
             </div>`;
     }
+}
+
+// 🆕 Renderiza a barra de paginação dos módulos
+function renderizarPaginacaoModulo(modulo) {
+    const pag = paginacaoModuloState[modulo];
+    const { paginaAtual, totalPaginas, totalRegistros, porPagina } = pag;
+
+    if (totalPaginas <= 1) {
+        return `<p class="text-muted text-end mt-2"><small>${totalRegistros} registro(s) encontrado(s)</small></p>`;
+    }
+
+    const maxBotoes = 5;
+    let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
+    let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
+
+    if (fim - inicio + 1 < maxBotoes) {
+        inicio = Math.max(1, fim - maxBotoes + 1);
+    }
+
+    let botoes = '';
+
+    botoes += paginaAtual > 1
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarListaModulo('${modulo}', 1)" title="Primeira"><i class="fas fa-angle-double-left"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-left"></i></span></li>`;
+
+    botoes += paginaAtual > 1
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarListaModulo('${modulo}', ${paginaAtual - 1})" title="Anterior"><i class="fas fa-angle-left"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-left"></i></span></li>`;
+
+    if (inicio > 1) {
+        botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    }
+
+    for (let i = inicio; i <= fim; i++) {
+        botoes += i === paginaAtual
+            ? `<li class="page-item active"><span class="page-link">${i}</span></li>`
+            : `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarListaModulo('${modulo}', ${i})">${i}</a></li>`;
+    }
+
+    if (fim < totalPaginas) {
+        botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    }
+
+    botoes += paginaAtual < totalPaginas
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarListaModulo('${modulo}', ${paginaAtual + 1})" title="Próxima"><i class="fas fa-angle-right"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-right"></i></span></li>`;
+
+    botoes += paginaAtual < totalPaginas
+        ? `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); carregarListaModulo('${modulo}', ${totalPaginas})" title="Última"><i class="fas fa-angle-double-right"></i></a></li>`
+        : `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-right"></i></span></li>`;
+
+    const de = (paginaAtual - 1) * porPagina + 1;
+    const ate = Math.min(paginaAtual * porPagina, totalRegistros);
+
+    return `
+        <div class="paginacao-modulo" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+            <small class="text-muted">
+                Mostrando <strong>${de}</strong>–<strong>${ate}</strong> de <strong>${totalRegistros}</strong> registros
+            </small>
+            <nav aria-label="Paginação">
+                <ul class="pagination pagination-sm mb-0" style="gap: 2px;">
+                    ${botoes}
+                </ul>
+            </nav>
+        </div>
+    `;
 }
 
 async function carregarOpcoesFiltrosLista(modulo) {
@@ -3429,7 +3550,7 @@ async function salvarEdicaoModulo() {
             if (modal) modal.hide();
 
             notificar('✅ Registro atualizado com sucesso!', 'success');
-            carregarListaModulo(modulo);
+            carregarListaModulo(modulo, 1);
         } else {
             notificar('❌ ' + (result.error || 'Erro ao salvar'));
         }
@@ -4287,7 +4408,7 @@ function exportarCSVModulo(modulo) {
 }
 
 function aplicarFiltrosLista(modulo) {
-    carregarListaModulo(modulo);
+    carregarListaModulo(modulo, 1);
 }
 
 // ============================================
@@ -4312,13 +4433,13 @@ function configurarEventosModulo(modulo) {
 
     safeGet(`filtroLista${P}Aluno`)?.addEventListener('input', () => {
         clearTimeout(window[`_timeoutFiltro${P}`]);
-        window[`_timeoutFiltro${P}`] = setTimeout(() => carregarListaModulo(modulo), 500);
+        window[`_timeoutFiltro${P}`] = setTimeout(() => carregarListaModulo(modulo, 1), 500);
     });
-    safeGet(`filtroLista${P}Turma`)?.addEventListener('change', () => carregarListaModulo(modulo));
-    safeGet(`filtroLista${P}Motivo`)?.addEventListener('change', () => carregarListaModulo(modulo));
-    safeGet(`filtroLista${P}DataInicio`)?.addEventListener('change', () => carregarListaModulo(modulo));
-    safeGet(`filtroLista${P}DataFim`)?.addEventListener('change', () => carregarListaModulo(modulo));
-    safeGet(`filtroLista${P}TipoProva`)?.addEventListener('change', () => carregarListaModulo(modulo));
+    safeGet(`filtroLista${P}Turma`)?.addEventListener('change', () => carregarListaModulo(modulo, 1));
+    safeGet(`filtroLista${P}Motivo`)?.addEventListener('change', () => carregarListaModulo(modulo, 1));
+    safeGet(`filtroLista${P}DataInicio`)?.addEventListener('change', () => carregarListaModulo(modulo, 1));
+    safeGet(`filtroLista${P}DataFim`)?.addEventListener('change', () => carregarListaModulo(modulo, 1));
+    safeGet(`filtroLista${P}TipoProva`)?.addEventListener('change', () => carregarListaModulo(modulo, 1));
 }
 
 // ============================================
@@ -4583,7 +4704,7 @@ async function excluirModulo(modulo, id) {
         const d = await r.json();
         if (d.success) {
             notificar('✅ Excluído com sucesso!', 'success');
-            carregarListaModulo(modulo);
+            carregarListaModulo(modulo, 1);
         } else {
             notificar('❌ ' + (d.error || 'Erro'), 'error');
         }
@@ -4605,18 +4726,11 @@ function gerarUUID() {
     });
 }
 
-/**
- * Marca/desmarca necessidade de assinatura.
- * Cria sessão + gera QR Code + abre modal.
- */
 async function toggleNecessitaAssinatura(modulo) {
     const check = safeGet(`${modulo}NecessitaAssinatura`);
     if (!check) return;
     
     if (check.checked) {
-        // ==========================================
-        // 1. Monta snapshot dos dados atuais
-        // ==========================================
         const snapshot = montarSnapshotAtendimento(modulo);
         
         if (!snapshot.alunoId) {
@@ -4625,16 +4739,10 @@ async function toggleNecessitaAssinatura(modulo) {
             return;
         }
         
-        // ==========================================
-        // 2. Gera ID único para a sessão
-        // ==========================================
         const sessaoId = gerarUUID();
         estadoSessaoAssinatura[modulo].sessaoId = sessaoId;
         estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
         
-        // ==========================================
-        // 3. Cria a sessão no backend
-        // ==========================================
         try {
             const response = await fetch('/api/sessoes-assinatura', {
                 method: 'POST',
@@ -4654,9 +4762,6 @@ async function toggleNecessitaAssinatura(modulo) {
             
             console.log('✅ Sessão criada:', sessaoId);
             
-            // ==========================================
-            // 4. Gera QR Code apontando para ESTA MESMA PÁGINA
-            // ==========================================
             const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
             
             try {
@@ -4682,14 +4787,7 @@ async function toggleNecessitaAssinatura(modulo) {
                     `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
             
-            // ==========================================
-            // 5. Abre o MODAL (dentro da própria página)
-            // ==========================================
             abrirModalAssinatura(modulo, urlAssinatura);
-            
-            // ==========================================
-            // 6. Inicia monitoramento (polling)
-            // ==========================================
             iniciarMonitoramentoSessao(modulo, sessaoId);
             
             notificar('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
@@ -4701,9 +4799,6 @@ async function toggleNecessitaAssinatura(modulo) {
             estadoSessaoAssinatura[modulo].sessaoId = null;
         }
     } else {
-        // ==========================================
-        // DESMARCOU → cancela a sessão
-        // ==========================================
         const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
         if (sessaoId) {
             try {
@@ -4722,9 +4817,6 @@ async function toggleNecessitaAssinatura(modulo) {
     }
 }
 
-/**
- * Monta snapshot dos dados atuais para exibir na tela de assinatura.
- */
 function montarSnapshotAtendimento(modulo) {
     if (modulo === 'atraso') {
         return {
@@ -4808,9 +4900,6 @@ function getMotivoLabelAtraso(motivo) {
     return labels[motivo] || motivo;
 }
 
-/**
- * Abre o modal com QR Code (SEM sair da página).
- */
 function abrirModalAssinatura(modulo, urlAssinatura) {
     const antigo = safeGet('modalAssinaturaQR');
     if (antigo) antigo.remove();
@@ -4903,9 +4992,6 @@ function abrirModalAssinatura(modulo, urlAssinatura) {
     }, 200);
 }
 
-/**
- * Fecha o modal (mas a sessão continua ativa).
- */
 function fecharModalAssinatura(modulo) {
     if (estadoSessaoAssinatura[modulo].modalInstance) {
         estadoSessaoAssinatura[modulo].modalInstance.hide();
@@ -4913,13 +4999,9 @@ function fecharModalAssinatura(modulo) {
     const modalEl = safeGet('modalAssinaturaQR');
     if (modalEl) setTimeout(() => modalEl.remove(), 300);
     
-    // Mostra bloco compacto no formulário
     mostrarBlocoCompactoAssinatura(modulo);
 }
 
-/**
- * Mostra bloco compacto no formulário indicando o status.
- */
 function mostrarBlocoCompactoAssinatura(modulo) {
     let bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
     
@@ -5147,18 +5229,13 @@ function limparEstadoSessaoAssinatura(modulo) {
 // 📱 MODO ASSINATURA (via URL ?assinatura=UUID)
 // ============================================================================
 
-/**
- * Mostra a tela de assinatura (substitui o conteúdo principal).
- */
 async function mostrarTelaAssinatura(sessaoId) {
-    // Esconde elementos da UI normal
     document.querySelectorAll('.header-top, .card, .container > *').forEach(el => {
         if (el && !el.id?.includes('content')) {
             el.style.display = 'none';
         }
     });
     
-    // Cria container principal
     let container = safeGet('telaAssinaturaContainer');
     if (!container) {
         container = document.createElement('div');
@@ -5167,7 +5244,6 @@ async function mostrarTelaAssinatura(sessaoId) {
         document.body.appendChild(container);
     }
     
-    // 🆕 CORREÇÃO: Layout flexível que se adapta à altura da tela
     container.innerHTML = `
         <div style="min-height: 100vh; background: #f0f4f8; padding: 10px; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto;">
             <div style="max-width: 800px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; flex: 1; min-height: 0;">
@@ -5324,15 +5400,12 @@ async function mostrarTelaAssinatura(sessaoId) {
     }
 }
 
-// 🆕 Função auxiliar para redimensionar o canvas quando a tela gira
 function handleResizeCanvasTela() {
     const canvas = safeGet('canvasAssinatura');
     const wrapper = safeGet('canvasWrapper');
     
-    // 🔥 Se o canvas não existir mais (tela de sucesso), não faz nada
     if (!canvas || !wrapper) return;
     
-    // Se não houver assinatura, apenas redimensiona
     if (!telaTemAssinatura) {
         const rect = wrapper.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
@@ -5352,7 +5425,6 @@ function handleResizeCanvasTela() {
         ctx.strokeStyle = '#1e3c72';
         telaCtx = ctx;
     } else {
-        // Se já houver assinatura, preserva o desenho redimensionando a imagem
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
@@ -5375,7 +5447,6 @@ function handleResizeCanvasTela() {
         ctx.strokeStyle = '#1e3c72';
         telaCtx = ctx;
         
-        // Redesenha a assinatura anterior no novo tamanho
         ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height, 0, 0, rect.width, rect.height);
     }
 }
@@ -5513,7 +5584,6 @@ async function salvarAssinaturaTela() {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Erro ao salvar');
         
-        // 🆕 TELA DE SUCESSO CORRIGIDA (sem corte)
         safeGet('telaAssinaturaInfo').innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;">
                 <i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i>
@@ -5530,7 +5600,6 @@ async function salvarAssinaturaTela() {
         `;
         safeGet('telaAssinaturaArea').style.display = 'none';
         
-        // 🔥 Ajusta o container para centralizar o conteúdo de sucesso
         const telaInfo = safeGet('telaAssinaturaInfo');
         if (telaInfo) {
             telaInfo.style.flex = '1';
@@ -5621,9 +5690,9 @@ function limparTelaAutorizacao() { limparTelaModulo('autorizacao'); }
 function limparTelaJustificativa() { limparTelaModulo('justificativa'); }
 function limparTelaSegundaChamada() { limparTelaModulo('segundaChamada'); }
 
-function carregarAutorizacoes() { carregarListaModulo('autorizacao'); }
-function carregarJustificativas() { carregarListaModulo('justificativa'); }
-function carregarSegundaChamada() { carregarListaModulo('segundaChamada'); }
+function carregarAutorizacoes() { carregarListaModulo('autorizacao', 1); }
+function carregarJustificativas() { carregarListaModulo('justificativa', 1); }
+function carregarSegundaChamada() { carregarListaModulo('segundaChamada', 1); }
 
 function imprimirAutorizacao(id) { imprimirModulo('autorizacao', id); }
 function imprimirJustificativa(id) { imprimirModulo('justificativa', id); }

@@ -452,32 +452,66 @@ router.get('/atraso/dashboard', authenticateToken, verificarGestaoGeral, async (
   }
 });
 
-// Listar
+// ============================================
+// 📋 LISTAR ATRASOS (COM PAGINAÇÃO + BUSCA)
+// ============================================
 router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
-    const { limit = 100, page = 1, motivo, turma, dataInicio, dataFim } = req.query;
+    const { 
+      limit = 100, 
+      page = 1, 
+      motivo, 
+      turma, 
+      dataInicio, 
+      dataFim,
+      alunoNome  // 🆕 Busca por nome/matrícula
+    } = req.query;
     
     let query = {};
-    if (motivo && motivo !== 'todos') query.motivo = motivo;
-    if (turma && turma !== 'todas') query.alunoTurma = turma;
-    if (dataInicio || dataFim) {
-      query.dataHora = {};
-      if (dataInicio) query.dataHora.$gte = new Date(dataInicio);
-      if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
+    
+    if (motivo && motivo !== 'todos') {
+      query.motivo = motivo;
     }
     
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    if (turma && turma !== 'todas') {
+      query.alunoTurma = turma;
+    }
+    
+    // 🆕 Busca por nome OU matrícula
+    if (alunoNome && alunoNome.trim()) {
+      const termoBusca = alunoNome.trim();
+      query.$or = [
+        { alunoNome: { $regex: termoBusca, $options: 'i' } },
+        { alunoMatricula: { $regex: termoBusca, $options: 'i' } }
+      ];
+    }
+    
+    if (dataInicio || dataFim) {
+      query.dataHora = {};
+      if (dataInicio) query.dataHora.$gte = new Date(dataInicio + 'T00:00:00.000-03:00');
+      if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
+    }
+    
+    // 🔥 Paginação
+    const limitNum = parseInt(limit) || 100;
+    const pageNum = parseInt(page) || 1;
+    const skip = (pageNum - 1) * limitNum;
     
     const [atrasos, total] = await Promise.all([
-      Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 }).skip(skip).limit(parseInt(limit)),
+      Atraso.find(query)
+        .select('-assinaturaBase64')
+        .sort({ dataHora: -1 })
+        .skip(skip)
+        .limit(limitNum),
       Atraso.countDocuments(query)
     ]);
     
     res.json({
       success: true,
       total,
-      page: parseInt(page),
-      totalPages: Math.ceil(total / parseInt(limit)),
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
       atrasos: atrasos.map(a => ({
         id: a._id,
         alunoId: a.alunoId,
@@ -498,6 +532,7 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
       }))
     });
   } catch (error) {
+    console.error('Erro ao listar atrasos:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

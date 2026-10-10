@@ -1575,3 +1575,30 @@ td div[style*="font-size: 12px"] small {
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(14, 165, 233, 0.2);
 }
+
+.paginacao-modulo .pagination .page-link {
+    border: 1px solid #e5e7eb;
+    color: #4b5563;
+    border-radius: 8px;
+    min-width: 32px;
+    text-align: center;
+    padding: 5px 8px;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+.paginacao-modulo .pagination .page-link:hover {
+    background: #eef2ff;
+    border-color: #1e3c72;
+    color: #1e3c72;
+}
+.paginacao-modulo .pagination .page-item.active .page-link {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    border-color: #1e3c72;
+    color: white;
+    font-weight: 600;
+}
+.paginacao-modulo .pagination .page-item.disabled .page-link {
+    color: #cbd5e1;
+    background: #f9fafb;
+    cursor: not-allowed;
+}

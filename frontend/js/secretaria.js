@@ -48,6 +48,14 @@ let __lembretesCache = [];
 function safeGet(id) { return document.getElementById(id); }
 function safeSetText(id, value) { const el = safeGet(id); if (el) el.textContent = value; }
 
+// ✅ Helper: retorna data LOCAL no formato YYYY-MM-DD (evita bug de UTC)
+function getDataLocalISO(dateObj) {
+    const d = dateObj || new Date();
+    return d.getFullYear() + '-' + 
+        String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(d.getDate()).padStart(2, '0');
+}
+
 function escapeHTML(str) {
     if (typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -559,11 +567,10 @@ function configurarEventos() {
 
     // Botão "Buscar por Data"
     safeGet('btnBuscarPorData')?.addEventListener('click', () => buscarPorData());
-    safeGet('filtroDataInicio')?.addEventListener('change', () => {
-        const ini = safeGet('filtroDataInicio')?.value;
-        const fim = safeGet('filtroDataFim')?.value;
-        if (ini && !fim) safeGet('filtroDataFim').value = ini;
-    });
+
+    // 🔥 NOVO COMPORTAMENTO: data fim NÃO é preenchida automaticamente
+    // O usuário é quem escolhe se quer preencher ou não
+    // (removido o auto-preenchimento anterior)
 
     safeGet('btnBuscarJustificativas')?.addEventListener('click', () => buscarJustificativasDoAluno());
 
@@ -634,12 +641,17 @@ async function setModo(modo) {
         safeGet('modoData').style.display = 'block';
         await pararScannerAutomatico();
 
-        // Preenche data de hoje por padrão
-        const hoje = new Date().toISOString().split('T')[0];
-        if (!safeGet('filtroDataInicio')?.value) {
-            safeGet('filtroDataInicio').value = hoje;
-            safeGet('filtroDataFim').value = hoje;
+        // ✅ Data LOCAL (não UTC — evita erro de fuso de 1 dia)
+        const dataLocal = getDataLocalISO();
+
+        // ✅ Preenche APENAS a Data Início (se estiver vazia)
+        const inputInicio = safeGet('filtroDataInicio');
+        if (inputInicio && !inputInicio.value) {
+            inputInicio.value = dataLocal;
         }
+
+        // ✅ Data Fim permanece VAZIA (usuário escolhe se quer)
+        // Não fazemos nada com filtroDataFim
 
         // Popula select de turmas
         popularSelectTurmasData();
@@ -924,8 +936,9 @@ function exibirAlunoComJustificativas(data) {
     const trintaDiasAtras = new Date();
     trintaDiasAtras.setDate(hoje.getDate() - 30);
 
-    safeGet('consultaDataInicio').value = trintaDiasAtras.toISOString().split('T')[0];
-    safeGet('consultaDataFim').value = hoje.toISOString().split('T')[0];
+    // ✅ CORRIGIDO: usar data LOCAL (não UTC)
+    safeGet('consultaDataInicio').value = getDataLocalISO(trintaDiasAtras);
+    safeGet('consultaDataFim').value = getDataLocalISO(hoje);
 
     motivoConsulta = 'todos';
     safeGet('consultaMotivo').value = 'todos';
@@ -1658,7 +1671,7 @@ function exportarCSVData() {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `justificativas-data_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `justificativas-data_${getDataLocalISO()}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
     notificar('✅ CSV exportado!', 'success');
@@ -2078,7 +2091,7 @@ function exportarCSV() {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `justificativas-secretaria_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `justificativas-secretaria_${getDataLocalISO()}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
 

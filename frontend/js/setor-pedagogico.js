@@ -87,6 +87,14 @@ class SetorPedagogico {
         };
         
         this.relatorio2Chamada = null;
+
+        // 🆕 Estado da paginação da lista de 2ªs chamadas
+        this.paginacao2Chamada = {
+            paginaAtual: 1,
+            porPagina: 10,
+            totalRegistros: 0,
+            totalPaginas: 0
+        };
         
         this.autocomplete2Chamada = {
             alunos: [], filtrados: [], indice: -1,
@@ -2958,18 +2966,24 @@ class SetorPedagogico {
         }, 1000);
     }
 
-    async carregarListaSegundaChamada() {
+    async carregarListaSegundaChamada(pagina = null) {
         const container = document.getElementById('listaSegundaChamada');
         if (!container) return;
-        
+
+        // Se não passou página, usa a atual
+        if (pagina === null) pagina = this.paginacao2Chamada.paginaAtual;
+        this.paginacao2Chamada.paginaAtual = pagina;
+
         const alunoNome = document.getElementById('filtroListaSegundaChamadaAluno')?.value || '';
         const turma = document.getElementById('filtroListaSegundaChamadaTurma')?.value || '';
         const motivo = document.getElementById('filtroListaSegundaChamadaMotivo')?.value || '';
         const tipoProvaPerdida = document.getElementById('filtroListaSegundaChamadaTipoProva')?.value || '';
         const dataInicio = document.getElementById('filtroListaSegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('filtroListaSegundaChamadaDataFim')?.value || '';
-        
-        let url = `/api/gestao-geral/autorizacao/listar?tipo=segunda_chamada&limit=50`;
+
+        // 🔥 Paginação
+        const limit = this.paginacao2Chamada.porPagina;
+        let url = `/api/gestao-geral/autorizacao/listar?tipo=segunda_chamada&limit=${limit}&page=${pagina}`;
         if (alunoNome) url += `&alunoNome=${encodeURIComponent(alunoNome)}`;
         if (turma) url += `&turma=${encodeURIComponent(turma)}`;
         if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
@@ -2977,12 +2991,10 @@ class SetorPedagogico {
         if (dataInicio) url += `&dataInicio=${dataInicio}`;
         if (dataFim) url += `&dataFim=${dataFim}`;
 
-        // 🆕 Sempre filtrar por período da falta na lista (faz mais sentido)
-        url += `&filtrarPorPeriodoFalta=true`;
-        
         container.innerHTML = `<div class="text-center py-3"><div class="loading-spinner"></div><p>Carregando registros...</p></div>`;
-        
+
         try {
+            // Popula filtros (só na 1ª vez)
             const selectTurma = document.getElementById('filtroListaSegundaChamadaTurma');
             if (selectTurma && selectTurma.options.length <= 1) {
                 try {
@@ -2997,21 +3009,30 @@ class SetorPedagogico {
                     }
                 } catch (e) { console.warn(e); }
             }
-            
+
             const r = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             const d = await r.json();
-            
+
             if (!d.success || !d.autorizacoes || d.autorizacoes.length === 0) {
                 container.innerHTML = `<p class="text-muted text-center py-3">
                     <i class="fas fa-inbox" style="font-size: 32px; color: #cbd5e1; display: block; margin-bottom: 10px;"></i>
                     Nenhum registro de 2ª chamada encontrado.
                 </p>`;
+
+                // Zera paginação
+                this.paginacao2Chamada.totalRegistros = 0;
+                this.paginacao2Chamada.totalPaginas = 0;
                 return;
             }
-            
+
+            // 🔥 Atualiza estado da paginação
+            this.paginacao2Chamada.totalRegistros = d.total || 0;
+            this.paginacao2Chamada.totalPaginas = d.totalPages || 1;
+
+            // Renderiza a tabela
             container.innerHTML = `
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -3067,7 +3088,8 @@ class SetorPedagogico {
                         </tbody>
                     </table>
                 </div>
-                <p class="text-muted text-end mt-2"><small>${d.total} registro(s) encontrado(s)</small></p>`;
+                ${this.renderizarPaginacao2Chamada()}
+            `;
         } catch (e) {
             console.error('❌ Erro ao carregar 2ª Chamada:', e);
             container.innerHTML = `
@@ -3078,6 +3100,113 @@ class SetorPedagogico {
                     </button>
                 </div>`;
         }
+    }
+
+    // 🆕 Renderiza a barra de paginação
+    renderizarPaginacao2Chamada() {
+        const { paginaAtual, totalPaginas, totalRegistros } = this.paginacao2Chamada;
+
+        if (totalPaginas <= 1) {
+            return `<p class="text-muted text-end mt-2"><small>${totalRegistros} registro(s) encontrado(s)</small></p>`;
+        }
+
+        // Calcula o range de páginas para mostrar (máx 5 botões + reticências)
+        const maxBotoes = 5;
+        let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
+        let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
+
+        if (fim - inicio + 1 < maxBotoes) {
+            inicio = Math.max(1, fim - maxBotoes + 1);
+        }
+
+        let botoes = '';
+
+        // Botão "Primeira"
+        if (paginaAtual > 1) {
+            botoes += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); setorPedagogico.carregarListaSegundaChamada(1)" title="Primeira página">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                </li>`;
+        } else {
+            botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-left"></i></span></li>`;
+        }
+
+        // Botão "Anterior"
+        if (paginaAtual > 1) {
+            botoes += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); setorPedagogico.carregarListaSegundaChamada(${paginaAtual - 1})" title="Página anterior">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                </li>`;
+        } else {
+            botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-left"></i></span></li>`;
+        }
+
+        // Reticências à esquerda
+        if (inicio > 1) {
+            botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+        }
+
+        // Botões das páginas
+        for (let i = inicio; i <= fim; i++) {
+            if (i === paginaAtual) {
+                botoes += `<li class="page-item active"><span class="page-link">${i}</span></li>`;
+            } else {
+                botoes += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="event.preventDefault(); setorPedagogico.carregarListaSegundaChamada(${i})">${i}</a>
+                    </li>`;
+            }
+        }
+
+        // Reticências à direita
+        if (fim < totalPaginas) {
+            botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+        }
+
+        // Botão "Próxima"
+        if (paginaAtual < totalPaginas) {
+            botoes += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); setorPedagogico.carregarListaSegundaChamada(${paginaAtual + 1})" title="Próxima página">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                </li>`;
+        } else {
+            botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-right"></i></span></li>`;
+        }
+
+        // Botão "Última"
+        if (paginaAtual < totalPaginas) {
+            botoes += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); setorPedagogico.carregarListaSegundaChamada(${totalPaginas})" title="Última página">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                </li>`;
+        } else {
+            botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-right"></i></span></li>`;
+        }
+
+        // Info de range
+        const de = (paginaAtual - 1) * this.paginacao2Chamada.porPagina + 1;
+        const ate = Math.min(paginaAtual * this.paginacao2Chamada.porPagina, totalRegistros);
+
+        return `
+            <div class="paginacao-2chamada" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                <small class="text-muted">
+                    Mostrando <strong>${de}</strong>–<strong>${ate}</strong> de <strong>${totalRegistros}</strong> registros
+                </small>
+                <nav aria-label="Paginação">
+                    <ul class="pagination pagination-sm mb-0" style="gap: 2px;">
+                        ${botoes}
+                    </ul>
+                </nav>
+            </div>
+        `;
     }
 
     // ============================================================================

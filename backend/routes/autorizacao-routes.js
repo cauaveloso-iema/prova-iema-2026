@@ -1266,9 +1266,31 @@ router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) 
         const a = await Autorizacao.findByIdAndDelete(req.params.id);
         if (!a) return res.status(404).json({ success: false, error: 'Registro não encontrado' });
         
+        // 🔥 CASCATA: se for uma 2ª chamada, exclui a justificativa vinculada
+        if (a.tipo === 'segunda_chamada') {
+            const justificativas = await Autorizacao.find({
+                tipo: 'justificativa',
+                origemTipo: 'segunda_chamada',
+                origemId: a._id
+            });
+            
+            if (justificativas.length > 0) {
+                await Autorizacao.deleteMany({
+                    tipo: 'justificativa',
+                    origemTipo: 'segunda_chamada',
+                    origemId: a._id
+                });
+                console.log(`🗑️ Cascata: ${justificativas.length} justificativa(s) excluída(s) junto com 2ª chamada ${a._id}`);
+            }
+        }
+        
         console.log(`🗑️ ${a.tipo} excluído: ${a.alunoNome} (${a._id}) por ${req.userNome}`);
         
-        res.json({ success: true, message: 'Registro excluído com sucesso' });
+        res.json({ 
+            success: true, 
+            message: 'Registro excluído com sucesso',
+            cascata: a.tipo === 'segunda_chamada' ? 'Justificativa(s) vinculada(s) também excluída(s)' : null
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

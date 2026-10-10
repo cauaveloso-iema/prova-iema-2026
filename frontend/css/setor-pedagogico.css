@@ -1823,3 +1823,42 @@ body {
         overflow-x: auto;
     }
 }
+
+/* ============================================
+   PAGINAÇÃO - 2ª CHAMADA
+   ============================================ */
+.paginacao-2chamada .pagination .page-link {
+    border: 1px solid #e5e7eb;
+    color: #4b5563;
+    border-radius: 8px;
+    min-width: 32px;
+    text-align: center;
+    padding: 5px 8px;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+
+.paginacao-2chamada .pagination .page-link:hover {
+    background: #f0fdf4;
+    border-color: #10b981;
+    color: #059669;
+}
+
+.paginacao-2chamada .pagination .page-item.active .page-link {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    border-color: #1e3c72;
+    color: white;
+    font-weight: 600;
+}
+
+.paginacao-2chamada .pagination .page-item.disabled .page-link {
+    color: #cbd5e1;
+    background: #f9fafb;
+    cursor: not-allowed;
+}
+
+.paginacao-2chamada .pagination .page-item.disabled .page-link:hover {
+    background: #f9fafb;
+    border-color: #e5e7eb;
+    color: #cbd5e1;
+}
