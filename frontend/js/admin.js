@@ -3906,7 +3906,7 @@ class AdminPanel {
 
     // ============ USUÁRIOS ============
 
-    // ============ LOAD USUÁRIOS (VERSÃO CORRIGIDA - SEM ERRO DE TURMA) ============
+    // ============ LOAD USUÁRIOS (VERSÃO CORRIGIDA - ESTATÍSTICAS GLOBAIS) ============
     async loadUsuarios() {
         const contentArea = document.getElementById('contentArea');
         
@@ -3924,7 +3924,7 @@ class AdminPanel {
 
             const token = localStorage.getItem('auth_token');
             
-            // 🔥 BUSCAR USUÁRIOS
+            // CONSTRUIR URL COM PARÂMETROS
             let url = `${this.apiBase}/usuarios?page=${page}&limit=${limit}`;
             
             if (search && search.trim() !== '') {
@@ -3942,16 +3942,21 @@ class AdminPanel {
             
             console.log('🔗 URL final:', url);
             
-            // 🔥 BUSCAR USUÁRIOS E TODAS AS TURMAS EM PARALELO (SEM ROTA CONFLITANTE)
-            const [responseUsuarios, responseTodosAlunos] = await Promise.all([
+            // 🔥 BUSCAR USUÁRIOS PAGINADOS + TODOS ALUNOS (turmas) + TODOS USUÁRIOS (estatísticas)
+            const [responseUsuarios, responseTodosAlunos, responseTodosUsuarios] = await Promise.all([
                 fetch(url, {
                     headers: { 
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     }
                 }),
-                // 🔥 Buscar TODOS os alunos (não apenas da página) para extrair todas as turmas
                 fetch(`${this.apiBase}/usuarios?role=aluno&limit=5000`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }),
+                fetch(`${this.apiBase}/usuarios?limit=5000`, {
                     headers: { 
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
@@ -3967,6 +3972,21 @@ class AdminPanel {
             console.log('📦 Dados recebidos:', data);
 
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
+
+            // 🔥 PROCESSAR TODOS OS USUÁRIOS (para os cards e modal)
+            let todosUsuariosParaStats = [];
+            try {
+                const todosUsuariosData = await responseTodosUsuarios.json();
+                if (todosUsuariosData.success && todosUsuariosData.usuarios) {
+                    todosUsuariosParaStats = todosUsuariosData.usuarios;
+                    console.log(`✅ ${todosUsuariosParaStats.length} usuários totais carregados para estatísticas`);
+                }
+            } catch (e) {
+                console.error('❌ Erro ao processar todos os usuários:', e);
+            }
+            
+            // Armazenar globalmente para o modal "Todos os Perfis"
+            this.todosUsuariosStats = todosUsuariosParaStats;
 
             // 🔥 EXTRAIR TODAS AS TURMAS ÚNICAS DOS ALUNOS
             let todasTurmas = [];
@@ -3986,17 +4006,19 @@ class AdminPanel {
                 console.error('❌ Erro ao processar turmas:', e);
             }
 
-            // ARMAZENAR DADOS
+            // ARMAZENAR DADOS DA PÁGINA ATUAL
             this.usuarios = data.usuarios || [];
             this.todasTurmasUsuarios = todasTurmas;
 
-            // 🔥 CALCULAR ESTATÍSTICAS — TODOS OS PERFIS (CORRIGIDO)
-            const totalUsuarios = this.usuarios.length;
-            const usuariosAtivos = this.usuarios.filter(u => u.ativo === true).length;
-            const usuariosInativos = this.usuarios.filter(u => u.ativo === false).length;
-            const comAcessibilidade = this.usuarios.filter(u => u.precisaAcessibilidade === true).length;
+            // 🔥 CALCULAR ESTATÍSTICAS GLOBAIS (usando TODOS os usuários, não só da página)
+            const usuariosParaStats = todosUsuariosParaStats.length > 0 ? todosUsuariosParaStats : this.usuarios;
 
-            // 🔥 CONTAGEM POR PERFIL
+            const totalUsuarios = usuariosParaStats.length;
+            const usuariosAtivos = usuariosParaStats.filter(u => u.ativo === true).length;
+            const usuariosInativos = usuariosParaStats.filter(u => u.ativo === false).length;
+            const comAcessibilidade = usuariosParaStats.filter(u => u.precisaAcessibilidade === true).length;
+
+            // 🔥 CONTAGEM POR PERFIL (TODOS os usuários, não só da página)
             const contagemPorRole = {
                 aluno: 0,
                 professor: 0,
@@ -4015,7 +4037,7 @@ class AdminPanel {
                 secretaria: 0
             };
 
-            this.usuarios.forEach(u => {
+            usuariosParaStats.forEach(u => {
                 if (contagemPorRole.hasOwnProperty(u.role)) {
                     contagemPorRole[u.role]++;
                 }
@@ -4041,6 +4063,7 @@ class AdminPanel {
             this.configurarEventosFiltrosUsuarios();
 
             console.log('✅ Usuários carregados:', this.usuarios.length);
+            console.log('✅ Total de usuários para estatísticas:', usuariosParaStats.length);
             console.log('✅ Total de turmas disponíveis:', todasTurmas.length);
 
         } catch (error) {
@@ -9143,8 +9166,12 @@ class AdminPanel {
 
     // ============ ABRIR MODAL COM TODOS OS PERFIS ============
     abrirModalTodosPerfis() {
-        // Contar todos os perfis
-        const usuarios = this.usuarios || [];
+        // 🔥 USAR OS DADOS GLOBAIS (todos os usuários, não só da página)
+        const usuarios = this.todosUsuariosStats && this.todosUsuariosStats.length > 0
+            ? this.todosUsuariosStats
+            : (this.usuarios || []);
+        
+        console.log(`📊 Modal Todos os Perfis: usando ${usuarios.length} usuários`);
         
         const contagem = {
             aluno: usuarios.filter(u => u.role === 'aluno').length,
@@ -9246,10 +9273,64 @@ class AdminPanel {
         
         const { search, role, status, turma } = this.filtros.usuarios;
         
-        // Filtrar a lista de usuários já carregada
+        // 🔥 USAR A LISTA GLOBAL para os cards/modal, mas a página para a tabela
+        const todosUsuarios = this.todosUsuariosStats && this.todosUsuariosStats.length > 0
+            ? this.todosUsuariosStats
+            : this.usuarios;
+        
+        // ==========================================
+        // 🔥 FILTRAR A LISTA GLOBAL PARA OS CARDS
+        // ==========================================
+        let usuariosGlobaisFiltrados = [...todosUsuarios];
+        
+        if (search && search.trim() !== '') {
+            const termo = search.toLowerCase().trim();
+            usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => {
+                const nome = (u.nome || '').toLowerCase();
+                const email = (u.email || '').toLowerCase();
+                const cpf = (u.cpf || '').replace(/\D/g, '');
+                const matricula = (u.matricula || '').toLowerCase();
+                const cpfTermo = termo.replace(/\D/g, '');
+                
+                return nome.includes(termo) || 
+                    email.includes(termo) || 
+                    matricula.includes(termo) ||
+                    (cpfTermo && cpf.includes(cpfTermo));
+            });
+        }
+        
+        if (role && role !== 'todos') {
+            if (role === 'admin') {
+                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.role === 'admin' || u.role === 'super_admin');
+            } else if (role === 'ativo') {
+                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === true);
+            } else if (role === 'inativo') {
+                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === false);
+            } else {
+                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.role === role);
+            }
+        }
+        
+        if (status && status !== 'todos') {
+            if (status === 'ativo') {
+                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === true);
+            } else if (status === 'inativo') {
+                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === false);
+            }
+        }
+        
+        if (turma && turma !== 'todas' && turma !== '') {
+            usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.turma === turma);
+        }
+        
+        // 🔥 Atualizar TODOS os cards com base nos dados globais filtrados
+        this.atualizarCardsUsuariosFiltrados(usuariosGlobaisFiltrados);
+        
+        // ==========================================
+        // 🔥 FILTRAR A PÁGINA ATUAL PARA A TABELA
+        // ==========================================
         let usuariosFiltrados = [...this.usuarios];
         
-        // Filtro de busca
         if (search && search.trim() !== '') {
             const termo = search.toLowerCase().trim();
             usuariosFiltrados = usuariosFiltrados.filter(u => {
@@ -9266,7 +9347,6 @@ class AdminPanel {
             });
         }
         
-        // Filtro de perfil
         if (role && role !== 'todos') {
             if (role === 'admin') {
                 usuariosFiltrados = usuariosFiltrados.filter(u => u.role === 'admin' || u.role === 'super_admin');
@@ -9279,7 +9359,6 @@ class AdminPanel {
             }
         }
         
-        // Filtro de status
         if (status && status !== 'todos') {
             if (status === 'ativo') {
                 usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === true);
@@ -9288,17 +9367,15 @@ class AdminPanel {
             }
         }
         
-        // Filtro de turma
         if (turma && turma !== 'todas' && turma !== '') {
             usuariosFiltrados = usuariosFiltrados.filter(u => u.turma === turma);
         }
         
-        // Ordenar por nome
         usuariosFiltrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
         
-        console.log(`✅ ${usuariosFiltrados.length} usuários após filtro local`);
+        console.log(`✅ ${usuariosFiltrados.length} usuários na página, ${usuariosGlobaisFiltrados.length} no total (globais)`);
         
-        // Atualizar apenas o corpo da tabela
+        // Atualizar tabela
         const tbody = document.getElementById('tabelaUsuariosBody');
         if (tbody) {
             tbody.innerHTML = this.gerarLinhasUsuarios(usuariosFiltrados);
@@ -9313,10 +9390,10 @@ class AdminPanel {
         // Atualizar badge de resultados
         const resultadosBadge = document.getElementById('resultadosBadge');
         if (resultadosBadge) {
-            resultadosBadge.textContent = `${usuariosFiltrados.length} ${usuariosFiltrados.length === 1 ? 'usuário' : 'usuários'}`;
+            resultadosBadge.textContent = `${usuariosGlobaisFiltrados.length} ${usuariosGlobaisFiltrados.length === 1 ? 'usuário' : 'usuários'}`;
         }
         
-        // Restaurar o foco no campo de busca
+        // Restaurar foco
         const searchInput = document.getElementById('searchUsuarios');
         if (searchInput && document.activeElement === searchInput) {
             const cursorPos = searchInput.selectionStart;
@@ -9428,7 +9505,7 @@ class AdminPanel {
             secretaria: usuarios.filter(u => u.role === 'secretaria').length
         };
         
-        // Atualizar os cards
+        // Atualizar os cards por ID
         const updates = {
             'totalUsuariosCard': total,
             'ativosCard': ativos,
@@ -9453,31 +9530,24 @@ class AdminPanel {
             const el = document.getElementById(id);
             if (el) el.textContent = valor;
         }
-    }
-
-    // ============ ATUALIZAR CARDS DE USUÁRIOS COM DADOS FILTRADOS ============
-    atualizarCardsUsuariosFiltrados(usuarios) {
-        const total = usuarios.length;
-        const ativos = usuarios.filter(u => u.ativo === true).length;
-        const inativos = usuarios.filter(u => u.ativo === false).length;
-        const alunos = usuarios.filter(u => u.role === 'aluno').length;
-        const professores = usuarios.filter(u => u.role === 'professor').length;
-        const admins = usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length;
         
-        // Atualizar os cards
-        const totalEl = document.getElementById('totalUsuariosCard');
-        const ativosEl = document.getElementById('ativosCard');
-        const inativosEl = document.getElementById('inativosCard');
-        const alunosEl = document.getElementById('alunosCard');
-        const professoresEl = document.getElementById('professoresCard');
-        const adminsEl = document.getElementById('adminsCard');
+        // Atualizar detalhes do card "Total de Usuários"
+        const totalCard = document.getElementById('totalUsuariosCard');
+        if (totalCard && totalCard.parentElement) {
+            const detailEl = totalCard.parentElement.querySelector('.stat-detail');
+            if (detailEl) {
+                detailEl.textContent = `${ativos} ativos • ${inativos} inativos`;
+            }
+        }
         
-        if (totalEl) totalEl.textContent = total;
-        if (ativosEl) ativosEl.textContent = ativos;
-        if (inativosEl) inativosEl.textContent = inativos;
-        if (alunosEl) alunosEl.textContent = alunos;
-        if (professoresEl) professoresEl.textContent = professores;
-        if (adminsEl) adminsEl.textContent = admins;
+        // Atualizar detalhes do card "Alunos"
+        const alunosCard = document.getElementById('alunosCard');
+        if (alunosCard && alunosCard.parentElement) {
+            const detailEl = alunosCard.parentElement.querySelector('.stat-detail');
+            if (detailEl) {
+                detailEl.textContent = `${comAcessibilidade} com acessib.`;
+            }
+        }
     }
 
     // ============ APLICAR FILTROS ============
