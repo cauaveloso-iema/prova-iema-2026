@@ -2412,6 +2412,13 @@ function renderizarListaAtendimentosAtivos(lista) {
         const estaMascarado = a._mascarado === true;
         const podeEditar = !estaMascarado;
         
+        // 🎯 Tempo formatado vindo do backend
+        const tempoTexto = a.tempoTexto || '0 min';
+        const tempoClasse = a.nivelTempo === 'critico' 
+            ? 'text-danger fw-bold' 
+            : (a.nivelTempo === 'alerta' ? 'text-warning fw-bold' : 'text-muted');
+        const tempoIcone = a.nivelTempo === 'critico' ? 'fa-exclamation-triangle' : 'fa-clock';
+        
         return `
         <div class="list-group-item filtrado" ${estaMascarado ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
             ${estaMascarado ? `
@@ -2419,6 +2426,15 @@ function renderizarListaAtendimentosAtivos(lista) {
                     <i class="fas fa-lock"></i> <strong>Conteúdo protegido</strong> — criado por ${escapeHTML(a._criadorNome || 'outro profissional')}
                 </div>
             ` : ''}
+            
+            ${a.alerta24hAtivo ? `
+                <div style="background: #fef2f2; border-left: 3px solid #dc2626; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i>
+                    <strong style="color: #991b1b;">Atendimento há mais de 24h!</strong>
+                    <span style="color: #991b1b; font-size: 11px;">${a.totalAlertas24h || 0} alerta(s) enviado(s)</span>
+                </div>
+            ` : ''}
+            
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-3">
                     <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
@@ -2437,7 +2453,10 @@ function renderizarListaAtendimentosAtivos(lista) {
                     </div>
                 </div>
                 <div class="text-end">
-                    <small class="text-muted d-block"><i class="fas fa-clock"></i> Há ${a.tempoAtendimento || 0} min</small>
+                    <!-- 🎯 TEMPO FORMATADO (corrigido) -->
+                    <small class="${tempoClasse} d-block">
+                        <i class="fas ${tempoIcone}"></i> ${escapeHTML(tempoTexto)}
+                    </small>
                     <div class="mt-2 d-flex gap-1 flex-wrap justify-content-end">
                         <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes">
                             <i class="fas fa-eye"></i> Ver
@@ -2445,6 +2464,12 @@ function renderizarListaAtendimentosAtivos(lista) {
                         <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir">
                             <i class="fas fa-print"></i>
                         </button>
+                        
+                        ${a.alerta24hAtivo ? `
+                            <button class="btn btn-sm btn-danger" onclick="abrirModalVerificacao24h()" title="Verificar 24h">
+                                <i class="fas fa-exclamation-triangle"></i> Verificar
+                            </button>
+                        ` : ''}
                         
                         ${podeEditar ? `
                             <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
@@ -4170,6 +4195,94 @@ function limparAssinaturaTela() {
     }
 }
 
+// ============================================
+// 🆕 EXCLUSÃO EM MASSA
+// ============================================
+function abrirExclusaoEmMassa() {
+    const modalHtml = `
+        <div class="modal fade" id="modalExclusaoMassa" tabindex="-1">
+            <div class="modal-dialog"><div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle"></i> Exclusão em Massa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <strong>⚠️ ATENÇÃO!</strong><br>
+                        Esta ação é <strong>IRREVERSÍVEL</strong>. Todos os atendimentos 
+                        que corresponderem aos filtros serão <strong>PERMANENTEMENTE EXCLUÍDOS</strong>.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Excluir atendimentos finalizados antes de:</label>
+                        <input type="date" id="massaDataCorte" class="form-control" 
+                               value="${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}">
+                        <small class="text-muted">Todos os atendimentos finalizados antes desta data serão excluídos</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Digite "CONFIRMAR" para prosseguir:</label>
+                        <input type="text" id="massaConfirmacao" class="form-control" 
+                               placeholder="Digite CONFIRMAR" autocomplete="off">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmarExclusaoMassa()">
+                        <i class="fas fa-trash-alt"></i> Excluir Definitivamente
+                    </button>
+                </div>
+            </div></div>
+        </div>`;
+    
+    const old = safeGet('modalExclusaoMassa');
+    if (old) old.remove();
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    new bootstrap.Modal(safeGet('modalExclusaoMassa')).show();
+}
+
+async function confirmarExclusaoMassa() {
+    const dataCorte = safeGet('massaDataCorte')?.value;
+    const confirmacao = (safeGet('massaConfirmacao')?.value || '').trim().toUpperCase();
+    
+    if (confirmacao !== 'CONFIRMAR') {
+        notificar('⚠️ Digite "CONFIRMAR" para prosseguir', 'error');
+        return;
+    }
+    if (!dataCorte) {
+        notificar('⚠️ Selecione uma data de corte', 'error');
+        return;
+    }
+    
+    const modal = bootstrap.Modal.getInstance(safeGet('modalExclusaoMassa'));
+    if (modal) modal.hide();
+    
+    try {
+        const response = await fetch('/api/supervisao/atendimentos/exclusao-massa', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ 
+                dataCorte, status: 'finalizado', confirmacao: 'CONFIRMAR' 
+            })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            notificar(`✅ ${data.excluidos || 0} atendimentos excluídos!`, 'success');
+            carregarAtendimentosConcluidos(1);
+            carregarDashboard();
+        } else {
+            notificar('❌ ' + (data.error || 'Erro'), 'error');
+        }
+    } catch (error) {
+        notificar('Erro ao excluir em massa', 'error');
+    }
+}
+
 async function salvarAssinaturaTela() {
     if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
     
@@ -4294,3 +4407,6 @@ window.abrirModalVerificacao24h = abrirModalVerificacao24h;
 window.verificarAtendimento24h = verificarAtendimento24h;
 window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;
 window.formatarTempoAtendimentoFront = formatarTempoAtendimentoFront;
+
+window.abrirExclusaoEmMassa = abrirExclusaoEmMassa;
+window.confirmarExclusaoMassa = confirmarExclusaoMassa;
