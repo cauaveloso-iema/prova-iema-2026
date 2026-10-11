@@ -473,7 +473,8 @@ class AdminPanel {
             biblioteca: 'Painel de Biblioteca',
             'permissoes-especiais': 'Permissões Especiais',
             'qrcode-management': 'Gerenciamento de QR Codes',
-            'secretaria': 'Painel da Secretaria'
+            'secretaria': 'Painel da Secretaria',
+            'admin-simples': 'Admin Simples'
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -566,32 +567,121 @@ class AdminPanel {
                 
                 await monitoramentoTempoReal.carregar();
                 break;
+
+            case 'admin-simples':
+                await this.loadAdminSimples();
+                break;
                 
-                case 'enfermaria-monitoramento':
-                    console.log('🏥 Carregando módulo Enfermaria Monitoramento...');
-                    
-                    // Verificar se o módulo foi carregado
-                    if (typeof monitoramentoEnfermaria === 'undefined' || monitoramentoEnfermaria === null) {
-                        console.warn('⚠️ monitoramentoEnfermaria não encontrado, tentando criar...');
-                        if (typeof MonitoramentoEnfermaria !== 'undefined') {
-                            monitoramentoEnfermaria = new MonitoramentoEnfermaria();
-                            window.monitoramentoEnfermaria = monitoramentoEnfermaria;
-                        } else {
-                            contentArea.innerHTML = `
-                                <div class="alert alert-danger m-4">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    <strong>Erro:</strong> Módulo de monitoramento da Enfermaria não carregado.
-                                    <br><small>Verifique se o arquivo admin-enfermaria-monitoramento.js foi carregado corretamente.</small>
-                                    <br><button class="btn btn-sm btn-primary mt-2" onclick="location.reload()">
-                                        <i class="fas fa-sync-alt"></i> Recarregar página
+                case 'enfermaria-monitoramento':                    
+                    contentArea.innerHTML = `
+                        <div class="enfermaria-wrapper" style="
+                            height: calc(100vh - 80px);
+                            display: flex;
+                            flex-direction: column;
+                            background: #f8fafc;
+                        ">
+                            <div style="
+                                padding: 16px 24px;
+                                background: linear-gradient(135deg, #0891b2, #06b6d4);
+                                color: white;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+                                border-radius: 12px 12px 0 0;
+                                margin: 16px 16px 0 16px;
+                            ">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="
+                                        width: 44px; height: 44px;
+                                        background: rgba(255,255,255,0.2);
+                                        border-radius: 12px;
+                                        display: flex;
+                                        align-items: center;
+                                        justify-content: center;
+                                        font-size: 22px;
+                                    ">
+                                        <i class="fas fa-hospital-user"></i>
+                                    </div>
+                                    <div>
+                                        <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel da Enfermaria</h2>
+                                        <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                            <i class="fas fa-info-circle"></i> 
+                                            Acesso total como Super Admin - Gerencie os atendimentos da enfermaria
+                                        </p>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <button 
+                                        onclick="admin.recarregarEnfermaria()" 
+                                        style="
+                                            background: rgba(255,255,255,0.2);
+                                            border: 1px solid rgba(255,255,255,0.3);
+                                            color: white;
+                                            padding: 10px 18px;
+                                            border-radius: 30px;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            cursor: pointer;
+                                            display: flex;
+                                            align-items: center;
+                                            gap: 8px;
+                                            transition: all 0.2s;
+                                        "
+                                        onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                                        onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                                        title="Recarregar o painel da enfermaria"
+                                    >
+                                        <i class="fas fa-sync-alt"></i> Recarregar
+                                    </button>
+                                    <button 
+                                        onclick="admin.abrirEnfermariaNovaAba()" 
+                                        style="
+                                            background: white;
+                                            border: none;
+                                            color: #0891b2;
+                                            padding: 10px 18px;
+                                            border-radius: 30px;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            cursor: pointer;
+                                            display: flex;
+                                            align-items: center;
+                                            gap: 8px;
+                                            transition: all 0.2s;
+                                        "
+                                        onmouseover="this.style.transform='translateY(-2px)'"
+                                        onmouseout="this.style.transform='translateY(0)'"
+                                        title="Abrir em nova aba"
+                                    >
+                                        <i class="fas fa-external-link-alt"></i> Nova Aba
                                     </button>
                                 </div>
-                            `;
-                            return;
-                        }
-                    }
-                    
-                    await monitoramentoEnfermaria.carregar();
+                            </div>
+                            
+                            <div style="
+                                flex: 1;
+                                margin: 0 16px 16px 16px;
+                                border-radius: 0 0 12px 12px;
+                                overflow: hidden;
+                                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                                background: white;
+                            ">
+                                <iframe 
+                                    id="enfermariaIframe"
+                                    src="/enfermaria.html?modo=admin_view" 
+                                    style="
+                                        width: 100%;
+                                        height: 100%;
+                                        border: none;
+                                        display: block;
+                                    "
+                                    title="Painel da Enfermaria"
+                                    allow="camera; microphone; geolocation"
+                                ></iframe>
+                            </div>
+                        </div>
+                    `;
                     break;
             case 'gestao-geral':
                 await this.loadGestaoGeral();
@@ -42833,6 +42923,190 @@ class AdminPanel {
         window.open('/psicologia.html', '_blank');
         if (typeof this.showToast === 'function') {
             this.showToast('✅ Psicologia aberta em nova aba', 'success');
+        }
+    }
+
+    // ============================================
+    // MÓDULO: ADMIN SIMPLES (via iframe)
+    // ============================================
+    async loadAdminSimples() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Admin Simples.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        contentArea.innerHTML = `
+            <div class="admin-simples-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header do Admin Simples -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #6366f1, #4f46e5);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-user-cog"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Admin Simples</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Painel simplificado para gerenciamento rápido
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarAdminSimples()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o Admin Simples"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirAdminSimplesNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #4f46e5;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe do Admin Simples -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="adminSimplesIframe"
+                        src="/admin-simples.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Admin Simples"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Admin Simples carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO ADMIN SIMPLES
+    // ============================================
+    recarregarAdminSimples() {
+        const iframe = document.getElementById('adminSimplesIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando Admin Simples...', 'info');
+            }
+            console.log('🔄 Iframe do Admin Simples recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR ADMIN SIMPLES EM NOVA ABA
+    // ============================================
+    abrirAdminSimplesNovaAba() {
+        window.open('/admin-simples.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Admin Simples aberto em nova aba', 'success');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA ENFERMARIA
+    // ============================================
+    recarregarEnfermaria() {
+        const iframe = document.getElementById('enfermariaIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel da enfermaria...', 'info');
+            }
+            console.log('🔄 Iframe da enfermaria recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR ENFERMARIA EM NOVA ABA
+    // ============================================
+    abrirEnfermariaNovaAba() {
+        window.open('/enfermaria.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Enfermaria aberta em nova aba', 'success');
         }
     }
 

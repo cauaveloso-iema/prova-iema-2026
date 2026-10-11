@@ -593,6 +593,7 @@ function limparFiltrosConcluidos() {
     if (busca) busca.value = '';
     if (tipo) tipo.value = '';
     if (resultado) resultado.value = '';
+    __concluidosPaginaAtual = 1;  // 🔥 Volta pra página 1
     carregarAtendimentosConcluidos(1);
 }
 
@@ -1258,8 +1259,18 @@ function renderizarListaAtendimentosAtivos(lista) {
     
     const prioridadeIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baixa: '🟢' };
     
-    container.innerHTML = lista.map(a => `
-        <div class="list-group-item filtrado">
+    container.innerHTML = lista.map(a => {
+        // 🔒 Detecta se está mascarado
+        const estaMascarado = a._mascarado === true;
+        const podeEditar = !estaMascarado;
+        
+        return `
+        <div class="list-group-item filtrado" ${estaMascarado ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
+            ${estaMascarado ? `
+                <div style="background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px;">
+                    <i class="fas fa-lock"></i> <strong>Conteúdo protegido</strong> — criado por ${escapeHTML(a._criadorNome || 'outro profissional')}
+                </div>
+            ` : ''}
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-3">
                     <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
@@ -1285,26 +1296,34 @@ function renderizarListaAtendimentosAtivos(lista) {
                         <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir">
                             <i class="fas fa-print"></i>
                         </button>
-                        <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-primary" onclick="abrirFinalizacao('${a.id}')" title="Finalizar">
-                            <i class="fas fa-check"></i>
-                        </button>
-                        <button class="btn btn-sm btn-warning" onclick="abrirRemarcar('${a.id}')" title="Remarcar">
-                            <i class="fas fa-calendar-plus"></i>
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}')" title="Excluir">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        
+                        ${podeEditar ? `
+                            <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="abrirFinalizacao('${a.id}')" title="Finalizar">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="abrirRemarcar('${a.id}')" title="Remarcar">
+                                <i class="fas fa-calendar-plus"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}')" title="Excluir">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : `
+                            <span class="badge" style="background: #fef3c7; color: #92400e; padding: 6px 10px;" 
+                                  title="Somente o profissional que criou pode editar">
+                                <i class="fas fa-lock"></i> Somente leitura
+                            </span>
+                        `}
                     </div>
                 </div>
             </div>
             <div class="mt-2 p-2" style="background:#f8fafc;border-radius:8px;font-size:13px;">
                 ${escapeHTML((a.descricao || '').substring(0, 150))}${(a.descricao || '').length > 150 ? '...' : ''}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 // ============================================
@@ -1543,6 +1562,7 @@ async function excluirAtendimento(atendimentoId) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
+        
         if (data.success) {
             mostrarToastConcluido('✅ Atendimento excluído!', 'success');
             carregarAtendimentosAtivos();
@@ -1550,7 +1570,15 @@ async function excluirAtendimento(atendimentoId) {
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
+            // 🔒 Trata bloqueio específico
+            if (data.code === 'ADMIN_NAO_CRIADOR') {
+                mostrarNotificacaoInterna(
+                    '🔒 Acesso restrito\n\n' + data.error,
+                    'warning'
+                );
+            } else {
+                mostrarToastConcluido('❌ ' + (data.error || 'Erro'), 'error');
+            }
         }
     } catch (error) {
         console.error('Erro ao excluir:', error);
@@ -1705,7 +1733,17 @@ async function salvarEdicaoAtendimento() {
             carregarLembretes();
             carregarAtendimentosConcluidos(__concluidosPaginaAtual);
         } else {
-            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao salvar'), 'error');
+            // 🔒 Trata bloqueio específico
+            if (data.code === 'ADMIN_NAO_CRIADOR') {
+                const modal = bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento'));
+                if (modal) modal.hide();
+                mostrarNotificacaoInterna(
+                    '🔒 Acesso restrito\n\n' + data.error,
+                    'warning'
+                );
+            } else {
+                mostrarToastConcluido('❌ ' + (data.error || 'Erro ao salvar'), 'error');
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
@@ -1725,8 +1763,14 @@ async function verAtendimento(atendimentoId) {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        if (!data.success || !data.atendimento) { mostrarToastConcluido('Erro ao carregar atendimento', 'error'); return; }
+        if (!data.success || !data.atendimento) { 
+            mostrarToastConcluido('Erro ao carregar atendimento', 'error'); 
+            return; 
+        }
         const a = data.atendimento;
+        
+        // 🔒 Detecta se está mascarado
+        const estaMascarado = a._mascarado === true;
         
         let detalhesHTML = '';
         if (a.detalhes && Object.keys(a.detalhes).length > 0) {
@@ -1762,7 +1806,7 @@ async function verAtendimento(atendimentoId) {
         }
         
         let assinaturaHTML = '';
-        if (a.entrada?.temAssinatura && a.entrada?.assinaturaBase64) {
+        if (!estaMascarado && a.entrada?.temAssinatura && a.entrada?.assinaturaBase64) {
             assinaturaHTML = `
                 <div class="section-title">✍️ Assinatura do Responsável</div>
                 <div class="assinatura-preview">
@@ -1818,6 +1862,21 @@ async function verAtendimento(atendimentoId) {
                                 <span class="badge" style="background: #8b5cf6; font-size: 12px;">${escapeHTML(a.tipoTarefaLabel)}</span>
                             </div>
                             
+                            ${estaMascarado ? `
+                                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 14px 16px; border-radius: 10px; margin-bottom: 16px;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <i class="fas fa-lock" style="color: #d97706; font-size: 22px;"></i>
+                                        <div>
+                                            <strong style="color: #92400e; font-size: 15px;">Conteúdo Protegido</strong>
+                                            <p style="margin: 4px 0 0; font-size: 13px; color: #92400e; line-height: 1.4;">
+                                                Este atendimento foi registrado por <strong>${escapeHTML(a.entrada?.registradoPorNome || 'outro profissional')}</strong>.
+                                                Por questões de privacidade, apenas o profissional responsável pode visualizar ou editar o conteúdo.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
                             <div class="section-title">📌 Informações</div>
                             <div class="info-row">
                                 <div class="info-label">Status:</div>
@@ -1845,17 +1904,17 @@ async function verAtendimento(atendimentoId) {
                             </div>
                             <div class="info-row">
                                 <div class="info-label">Registrado por:</div>
-                                <div class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</div>
+                                <div class="info-value">${escapeHTML(a.entrada?.registradoPorNome || '-')}</div>
                             </div>
                             
                             <div class="section-title">📝 Descrição</div>
-                            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 14px; color: #374151; line-height: 1.5;">
+                            <div style="background: ${estaMascarado ? '#fef3c7' : '#f9fafb'}; padding: 12px; border-radius: 8px; font-size: 14px; color: ${estaMascarado ? '#92400e' : '#374151'}; line-height: 1.5; font-style: ${estaMascarado ? 'italic' : 'normal'};">
                                 ${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}
                             </div>
                             
                             ${a.entrada?.observacoes ? `
                                 <div class="section-title">💬 Observações</div>
-                                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
+                                <div style="background: ${estaMascarado ? '#fef3c7' : '#f9fafb'}; padding: 12px; border-radius: 8px; font-size: 13px; color: ${estaMascarado ? '#92400e' : '#4b5563'}; font-style: ${estaMascarado ? 'italic' : 'normal'};">
                                     ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
                                 </div>` : ''}
                             
@@ -1878,20 +1937,27 @@ async function verAtendimento(atendimentoId) {
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                                 <i class="fas fa-times"></i> Fechar
                             </button>
-                            <button type="button" class="btn btn-info" onclick="imprimirAtendimento('${a.id}')">
-                                <i class="fas fa-print"></i> Imprimir
-                            </button>
-                            ${a.status === 'em_andamento' ? `
-                                <button type="button" class="btn btn-secondary" onclick="fecharVerAtendimento(); abrirEditarAtendimento('${a.id}')">
-                                    <i class="fas fa-edit"></i> Editar
+                            
+                            ${!estaMascarado ? `
+                                <button type="button" class="btn btn-info" onclick="imprimirAtendimento('${a.id}')">
+                                    <i class="fas fa-print"></i> Imprimir
                                 </button>
-                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')">
-                                    <i class="fas fa-calendar-plus"></i> Remarcar
-                                </button>
-                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); abrirFinalizacao('${a.id}')">
-                                    <i class="fas fa-check"></i> Finalizar
-                                </button>
-                            ` : ''}
+                                ${a.status === 'em_andamento' ? `
+                                    <button type="button" class="btn btn-secondary" onclick="fecharVerAtendimento(); abrirEditarAtendimento('${a.id}')">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </button>
+                                    <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); abrirRemarcar('${a.id}')">
+                                        <i class="fas fa-calendar-plus"></i> Remarcar
+                                    </button>
+                                    <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); abrirFinalizacao('${a.id}')">
+                                        <i class="fas fa-check"></i> Finalizar
+                                    </button>
+                                ` : ''}
+                            ` : `
+                                <span class="badge" style="background: #fef3c7; color: #92400e; padding: 10px 16px; font-size: 13px;">
+                                    <i class="fas fa-lock"></i> Ações disponíveis apenas para o profissional responsável
+                                </span>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -2194,7 +2260,7 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
     if (!container) return;
     __concluidosPaginaAtual = pagina;
     
-    const busca = (safeGet('filtroConcluidosBusca')?.value || '').trim().toLowerCase();
+    const busca = (safeGet('filtroConcluidosBusca')?.value || '').trim();
     const tipo = safeGet('filtroConcluidosTipo')?.value || '';
     const resultado = safeGet('filtroConcluidosResultado')?.value || '';
     
@@ -2211,6 +2277,10 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
         params.append('page', pagina);
         if (tipo) params.append('tipo', tipo);
         
+        // 🔥 NOVO: envia a busca e resultado pro backend
+        if (busca) params.append('busca', busca);
+        if (resultado) params.append('resultado', resultado);
+        
         const response = await fetch(`/api/assistente-social/atendimentos?${params.toString()}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -2221,22 +2291,13 @@ async function carregarAtendimentosConcluidos(pagina = 1) {
             return;
         }
         
-        let lista = data.atendimentos;
-        
-        if (busca) {
-            lista = lista.filter(a =>
-                (a.alunoNome || '').toLowerCase().includes(busca) ||
-                (a.alunoMatricula || '').toLowerCase().includes(busca)
-            );
-        }
-        if (resultado) {
-            lista = lista.filter(a => a.saida?.resultado === resultado);
-        }
+        // 🔥 NÃO filtra mais no cliente — o backend já filtra!
+        const lista = data.atendimentos;
         
         __concluidosDados = lista;
         __concluidosTotal = data.total || lista.length;
         
-        atualizarContadorConcluidos(lista.length);
+        atualizarContadorConcluidos(data.total || lista.length);
         renderizarListaConcluidos(lista);
         renderizarPaginacaoConcluidos(data.totalPages || 1);
     } catch (error) {

@@ -40,6 +40,16 @@ let alunosPorTurma = [];
 let __atendimentosRecentes = [];
 
 // ============================================
+// ESTADO DA PAGINAÇÃO DOS ATENDIMENTOS RECENTES
+// ============================================
+let __atendimentosRecentesPaginacao = {
+    page: 1,
+    total: 0,
+    pages: 1,
+    limit: 20
+};
+
+// ============================================
 // UTILITÁRIOS
 // ============================================
 function safeGet(id) { return document.getElementById(id); }
@@ -653,8 +663,16 @@ async function carregarAtendimentosAtivos() {
         const data = await response.json();
         
         if (data.success && Array.isArray(data.atendimentos) && data.atendimentos.length > 0) {
-            container.innerHTML = data.atendimentos.map(a => `
-                <div class="list-group-item" data-id="${a.id}">
+            container.innerHTML = data.atendimentos.map(a => {
+                const estaMascarado = a._mascarado === true;
+                
+                return `
+                <div class="list-group-item" data-id="${a.id}" ${estaMascarado ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
+                    ${estaMascarado ? `
+                        <div style="background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px;">
+                            <i class="fas fa-lock"></i> <strong>Conteúdo protegido</strong> — criado por ${escapeHTML(a._criadorNome || 'outro profissional')}
+                        </div>
+                    ` : ''}
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                         <div class="d-flex align-items-center gap-3">
                             <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
@@ -676,33 +694,42 @@ async function carregarAtendimentosAtivos() {
                                     title="Ver detalhes">
                                 <i class="fas fa-eye"></i> Ver
                             </button>
-                            <button class="btn btn-sm btn-secondary" 
-                                    onclick="imprimirAtendimentoIndividual('${a.id}')" 
-                                    title="Imprimir ficha do atendimento">
-                                <i class="fas fa-print"></i>
-                            </button>
-                            <button class="btn btn-sm btn-warning" 
-                                    onclick="editarAtendimento('${a.id}')" 
-                                    title="Editar queixa/observações">
-                                <i class="fas fa-edit"></i> Editar
-                            </button>
-                            <button class="btn btn-sm btn-success" 
-                                    onclick="finalizarAtendimentoAtivo('${a.alunoId}')" 
-                                    title="Finalizar atendimento">
-                                <i class="fas fa-check"></i> Finalizar
-                            </button>
-                            <button class="btn btn-sm btn-danger" 
-                                    onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
-                                    title="Excluir atendimento">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            
+                            ${!estaMascarado ? `
+                                <button class="btn btn-sm btn-secondary" 
+                                        onclick="imprimirAtendimentoIndividual('${a.id}')" 
+                                        title="Imprimir ficha do atendimento">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                                <button class="btn btn-sm btn-warning" 
+                                        onclick="editarAtendimento('${a.id}')" 
+                                        title="Editar queixa/observações">
+                                    <i class="fas fa-edit"></i> Editar
+                                </button>
+                                <button class="btn btn-sm btn-success" 
+                                        onclick="finalizarAtendimentoAtivo('${a.alunoId}')" 
+                                        title="Finalizar atendimento">
+                                    <i class="fas fa-check"></i> Finalizar
+                                </button>
+                                <button class="btn btn-sm btn-danger" 
+                                        onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
+                                        title="Excluir atendimento">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : `
+                                <span class="badge" style="background:#fef3c7;color:#92400e;padding:8px 12px;font-size:12px;" 
+                                      title="Somente o profissional que criou pode editar">
+                                    <i class="fas fa-lock"></i> Somente leitura
+                                </span>
+                            `}
                         </div>
                     </div>
-                    <div class="mt-2 p-2" style="background:#f8fafc;border-radius:8px;font-size:13px;">
+                    <div class="mt-2 p-2" style="background:${estaMascarado ? '#fef3c7' : '#f8fafc'};border-radius:8px;font-size:13px;${estaMascarado ? 'color:#92400e;font-style:italic;' : ''}">
                         <strong>Queixa:</strong> ${escapeHTML((a.queixa || '').substring(0, 200))}${(a.queixa || '').length > 200 ? '...' : ''}
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         } else {
             container.innerHTML = `
                 <div class="text-center text-muted py-5">
@@ -936,39 +963,22 @@ async function verAtendimento(atendimentoId) {
         }
         
         const a = data.atendimento;
+        const estaMascarado = a._mascarado === true;
         
-        let saidaHTML = '';
-        if (a.saida) {
-            saidaHTML = `
-                <div class="section-title">🎯 Resultado / Saída</div>
-                <div class="info-row">
-                    <div class="info-label">Desfecho:</div>
-                    <div class="info-value"><strong>${escapeHTML(a.saida.desfechoTexto || '')}</strong></div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Data da Saída:</div>
-                    <div class="info-value">${escapeHTML(a.saida.dataHoraFormatada || '-')}</div>
-                </div>
-                <div class="info-row">
-                    <div class="info-label">Registrado por:</div>
-                    <div class="info-value">${escapeHTML(a.saida.registradoPorNome || '-')}</div>
-                </div>
-                ${a.saida.observacoes ? `
-                    <div class="info-row">
-                        <div class="info-label">Observações finais:</div>
-                        <div class="info-value">${escapeHTML(a.saida.observacoes)}</div>
+        let avisoMascarado = '';
+        if (estaMascarado) {
+            avisoMascarado = `
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 14px 16px; border-radius: 10px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-lock" style="color: #d97706; font-size: 22px;"></i>
+                        <div>
+                            <strong style="color: #92400e; font-size: 15px;">Conteúdo Protegido</strong>
+                            <p style="margin: 4px 0 0; font-size: 13px; color: #92400e; line-height: 1.4;">
+                                Este atendimento foi registrado por <strong>${escapeHTML(a.entrada?.registradoPorNome || 'outro profissional')}</strong>.
+                                Por questões de privacidade, apenas o profissional responsável pode visualizar ou editar o conteúdo.
+                            </p>
+                        </div>
                     </div>
-                ` : ''}
-            `;
-        }
-        
-        let editadoHTML = '';
-        if (a.entrada.editadoEm) {
-            editadoHTML = `
-                <div class="mostrarToast mostrarToast-info mt-2" style="font-size: 12px;">
-                    <i class="fas fa-info-circle"></i> 
-                    <strong>Editado em:</strong> ${new Date(a.entrada.editadoEm).toLocaleString('pt-BR')} 
-                    por <strong>${escapeHTML(a.entrada.editadoPorNome || 'Enfermeiro')}</strong>
                 </div>
             `;
         }
@@ -980,11 +990,13 @@ async function verAtendimento(atendimentoId) {
             <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #0891b2, #06b6d4); color: white;">
                             <h5 class="modal-title"><i class="fas fa-eye"></i> Detalhes do Atendimento</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body detalhe-atendimento">
+                            ${avisoMascarado}
+                            
                             <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f0fdf4; border-radius: 10px; margin-bottom: 16px;">
                                 <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
                                      style="width: 50px; height: 50px; border-radius: 50%;"
@@ -1004,43 +1016,68 @@ async function verAtendimento(atendimentoId) {
                             <div class="section-title">📌 Informações da Entrada</div>
                             <div class="info-row">
                                 <div class="info-label">Data de Entrada:</div>
-                                <div class="info-value">${escapeHTML(a.entrada.dataHoraFormatada || '-')}</div>
+                                <div class="info-value">${escapeHTML(a.entrada?.dataHoraFormatada || '-')}</div>
                             </div>
                             <div class="info-row">
                                 <div class="info-label">Registrado por:</div>
-                                <div class="info-value">${escapeHTML(a.entrada.registradoPorNome || '-')}</div>
+                                <div class="info-value">${escapeHTML(a.entrada?.registradoPorNome || '-')}</div>
                             </div>
                             
                             <div class="section-title">📝 Queixa</div>
-                            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 14px; color: #374151; line-height: 1.5;">
-                                ${escapeHTML(a.entrada.queixa || '-').replace(/\n/g, '<br>')}
+                            <div style="background: ${estaMascarado ? '#fef3c7' : '#f9fafb'}; padding: 12px; border-radius: 8px; font-size: 14px; color: ${estaMascarado ? '#92400e' : '#374151'}; line-height: 1.5; font-style: ${estaMascarado ? 'italic' : 'normal'};">
+                                ${escapeHTML(a.entrada?.queixa || '-').replace(/\n/g, '<br>')}
                             </div>
                             
-                            ${a.entrada.observacoes ? `
+                            ${a.entrada?.observacoes ? `
                                 <div class="section-title">💬 Observações</div>
-                                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
+                                <div style="background: ${estaMascarado ? '#fef3c7' : '#f9fafb'}; padding: 12px; border-radius: 8px; font-size: 13px; color: ${estaMascarado ? '#92400e' : '#4b5563'}; font-style: ${estaMascarado ? 'italic' : 'normal'};">
                                     ${escapeHTML(a.entrada.observacoes).replace(/\n/g, '<br>')}
                                 </div>
                             ` : ''}
                             
-                            ${editadoHTML}
-                            ${saidaHTML}
+                            ${a.saida ? `
+                                <div class="section-title">🎯 Resultado / Saída</div>
+                                <div class="info-row">
+                                    <div class="info-label">Desfecho:</div>
+                                    <div class="info-value"><strong>${escapeHTML(a.saida.desfechoTexto || '-')}</strong></div>
+                                </div>
+                                <div class="info-row">
+                                    <div class="info-label">Data da Saída:</div>
+                                    <div class="info-value">${escapeHTML(a.saida.dataHoraFormatada || '-')}</div>
+                                </div>
+                                <div class="info-row">
+                                    <div class="info-label">Registrado por:</div>
+                                    <div class="info-value">${escapeHTML(a.saida.registradoPorNome || '-')}</div>
+                                </div>
+                                ${a.saida.observacoes ? `
+                                    <div class="info-row">
+                                        <div class="info-label">Observações finais:</div>
+                                        <div class="info-value" style="${estaMascarado ? 'color: #92400e; font-style: italic;' : ''}">
+                                            ${escapeHTML(a.saida.observacoes)}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            ` : ''}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                                 <i class="fas fa-times"></i> Fechar
                             </button>
-                            ${a.status === 'em_atendimento' ? `
-                                <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); editarAtendimento('${a.id}')">
-                                    <i class="fas fa-edit"></i> Editar
-                                </button>
-                                <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); finalizarAtendimentoAtivo('${a.alunoId}')">
-                                    <i class="fas fa-check"></i> Finalizar
-                                </button>
-                            ` : ''}
-                            <button type="button" class="btn btn-danger" onclick="fecharVerAtendimento(); excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome)}')">
-                                <i class="fas fa-trash"></i> Excluir
-                            </button>
+                            
+                            ${!estaMascarado ? `
+                                ${a.status === 'em_atendimento' ? `
+                                    <button type="button" class="btn btn-warning" onclick="fecharVerAtendimento(); editarAtendimento('${a.id}')">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </button>
+                                    <button type="button" class="btn btn-success" onclick="fecharVerAtendimento(); finalizarAtendimentoAtivo('${a.alunoId}')">
+                                        <i class="fas fa-check"></i> Finalizar
+                                    </button>
+                                ` : ''}
+                            ` : `
+                                <span class="badge" style="background: #fef3c7; color: #92400e; padding: 10px 16px; font-size: 13px;">
+                                    <i class="fas fa-lock"></i> Ações disponíveis apenas para o profissional responsável
+                                </span>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -1084,7 +1121,16 @@ async function editarAtendimento(atendimentoId) {
         }
         
         const a = data.atendimento;
+        const estaMascarado = a._mascarado === true;
         
+        // 🔒 Bloqueia edição se estiver mascarado
+        if (estaMascarado) {
+            mostrarToast('🔒 Este atendimento foi criado por outro profissional. Você não pode editá-lo.');
+            return;
+        }
+        
+        // Se não está mascarado, prossegue com a edição normal
+        // (mantém o código original que você já tinha)
         const dataEntradaObj = new Date(a.entrada.dataHora);
         const offsetEntrada = dataEntradaObj.getTimezoneOffset() * 60000;
         const dataEntradaLocal = new Date(dataEntradaObj.getTime() - offsetEntrada);
@@ -1110,10 +1156,6 @@ async function editarAtendimento(atendimentoId) {
                     <i class="fas fa-calendar-alt me-1"></i> Data/Hora da Saída <span class="text-danger">*</span>
                 </label>
                 <input type="datetime-local" id="editarDataSaida" class="form-control" value="${dataSaidaValue}" required>
-                <small class="text-muted">
-                    <i class="fas fa-info-circle"></i> 
-                    Altere caso necessário (correção de registro).
-                </small>
             </div>
             
             <div class="mb-3">
@@ -1137,40 +1179,30 @@ async function editarAtendimento(atendimentoId) {
                                 <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
                                      style="width: 50px; height: 50px; border-radius: 50%;"
                                      onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
-                                <div>
+                                <div style="flex: 1;">
                                     <strong>${escapeHTML(a.alunoNome)}</strong><br>
                                     <small class="text-muted">${escapeHTML(a.alunoMatricula || '-')} • ${escapeHTML(a.alunoTurma || '-')}</small>
                                 </div>
-                                <span class="badge ms-auto" style="background: ${a.status === 'finalizado' ? '#10b981' : '#f59e0b'};">
-                                    ${a.status === 'finalizado' ? '✅ Finalizado' : '⏳ Em Atendimento'}
-                                </span>
                             </div>
                             
                             <h6 class="mb-3"><i class="fas fa-sign-in-alt"></i> Dados da Entrada</h6>
                             
                             <div class="mb-3">
-                                <label class="form-label">
-                                    <i class="fas fa-calendar-alt me-1"></i> Data/Hora da Entrada <span class="text-danger">*</span>
-                                </label>
+                                <label class="form-label">Data/Hora da Entrada <span class="text-danger">*</span></label>
                                 <input type="datetime-local" id="editarDataEntrada" class="form-control" value="${dataEntradaValue}" required>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">Queixa / Motivo <span class="text-danger">*</span></label>
-                                <textarea id="editarQueixa" class="form-control" rows="4" placeholder="Descreva o que o aluno está sentindo...">${escapeHTML(a.entrada.queixa || '')}</textarea>
+                                <textarea id="editarQueixa" class="form-control" rows="4">${escapeHTML(a.entrada.queixa || '')}</textarea>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">Observações</label>
-                                <textarea id="editarObservacoes" class="form-control" rows="3" placeholder="Sinais vitais, medicamentos, etc...">${escapeHTML(a.entrada.observacoes || '')}</textarea>
+                                <textarea id="editarObservacoes" class="form-control" rows="3">${escapeHTML(a.entrada.observacoes || '')}</textarea>
                             </div>
                             
                             ${blocoSaida}
-                            
-                            <div class="mostrarToast mostrarToast-info mt-3" style="font-size: 13px;">
-                                <i class="fas fa-info-circle"></i>
-                                As alterações serão registradas no histórico com seu nome e data/hora.
-                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -1761,7 +1793,12 @@ async function excluirAtendimento(atendimentoId, alunoNome) {
             carregarAtendimentosRecentes();
             carregarDashboard();
         } else {
-            mostrarToast('❌ ' + (data.error || 'Erro ao excluir'));
+            // 🔒 Trata o bloqueio do super_admin
+            if (data.code === 'ADMIN_NAO_CRIADOR') {
+                mostrarToast('🔒 ' + data.error);
+            } else {
+                mostrarToast('❌ ' + (data.error || 'Erro ao excluir'));
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
@@ -1975,7 +2012,7 @@ async function carregarAtendimentosRecentes(pagina = 1) {
     const container = safeGet('listaAtendimentosRecentes');
     if (!container) return;
     
-    const busca = (safeGet('filtroAtendimentosRecentesBusca')?.value || '').trim().toLowerCase();
+    const busca = (safeGet('filtroAtendimentosRecentesBusca')?.value || '').trim();
     const turma = safeGet('filtroAtendimentosRecentesTurma')?.value || '';
     
     container.innerHTML = `
@@ -1989,6 +2026,7 @@ async function carregarAtendimentosRecentes(pagina = 1) {
         params.append('limit', '20');
         params.append('page', pagina);
         if (turma) params.append('turma', turma);
+        if (busca) params.append('busca', busca);   // 🆕 manda busca para o backend
         
         const response = await fetch(`/api/enfermaria/listar?${params.toString()}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -2000,18 +2038,19 @@ async function carregarAtendimentosRecentes(pagina = 1) {
             return;
         }
         
-        let lista = data.atendimentos;
+        // 🆕 Guarda a paginação retornada pelo backend
+        __atendimentosRecentesPaginacao = {
+            page: parseInt(data.paginacao?.page) || pagina,
+            total: parseInt(data.paginacao?.total) || data.atendimentos.length,
+            pages: parseInt(data.paginacao?.pages) || 1,
+            limit: parseInt(data.paginacao?.limit) || 20
+        };
         
-        if (busca) {
-            lista = lista.filter(a =>
-                (a.alunoNome || '').toLowerCase().includes(busca) ||
-                (a.alunoMatricula || '').toLowerCase().includes(busca)
-            );
-        }
+        __atendimentosRecentes = data.atendimentos;
         
-        __atendimentosRecentes = lista;
-        atualizarContadorAtendimentosRecentes(lista.length);
-        renderizarListaAtendimentosRecentes(lista);
+        atualizarContadorAtendimentosRecentes(__atendimentosRecentesPaginacao.total);
+        renderizarListaAtendimentosRecentes(data.atendimentos);
+        renderizarPaginacaoAtendimentosRecentes();  // 🆕 renderiza os botões
     } catch (error) {
         console.error('Erro ao carregar atendimentos:', error);
         container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
@@ -2027,7 +2066,7 @@ function renderizarListaAtendimentosRecentes(lista) {
     const container = safeGet('listaAtendimentosRecentes');
     if (!container) return;
     
-    if (lista.length === 0) {
+    if (!lista || lista.length === 0) {
         container.innerHTML = `
             <div class="text-center py-4 text-muted">
                 <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
@@ -2050,11 +2089,15 @@ function renderizarListaAtendimentosRecentes(lista) {
                 </thead>
                 <tbody>
                     ${lista.map(a => {
+                        const estaMascarado = a._mascarado === true;
                         const badge = a.status === 'finalizado'
                             ? '<span class="badge bg-success">✅ Finalizado</span>'
                             : '<span class="badge bg-warning text-dark">⏳ Em Atendimento</span>';
+                        const badgeBloqueado = estaMascarado
+                            ? '<span class="badge" style="background:#fef3c7;color:#92400e;margin-left:4px;" title="Criado por outro profissional"><i class="fas fa-lock"></i></span>'
+                            : '';
                         
-                        const dataEntrada = a.entrada?.dataHoraFormatada || '-';
+                        const dataEntrada = a.entrada?.dataHoraFormatada || (a.entrada?.dataHora ? new Date(a.entrada.dataHora).toLocaleString('pt-BR') : '-');
                         
                         return `
                             <tr data-id="${a.id}">
@@ -2071,29 +2114,25 @@ function renderizarListaAtendimentosRecentes(lista) {
                                 </td>
                                 <td><small>${escapeHTML(a.alunoTurma || '-')}</small></td>
                                 <td><small>${dataEntrada}</small></td>
-                                <td>${badge}</td>
+                                <td>${badge}${badgeBloqueado}</td>
                                 <td class="text-center">
                                     <div class="d-flex gap-1 justify-content-center flex-wrap">
-                                        <button class="btn btn-sm btn-info" 
-                                                onclick="verAtendimento('${a.id}')" 
-                                                title="Ver detalhes">
+                                        <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-warning" 
-                                                onclick="editarAtendimento('${a.id}')" 
-                                                title="Editar">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-success" 
-                                                onclick="imprimirAtendimentoIndividual('${a.id}')" 
-                                                title="Imprimir">
+                                        ${!estaMascarado ? `
+                                            <button class="btn btn-sm btn-warning" onclick="editarAtendimento('${a.id}')" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        ` : ''}
+                                        <button class="btn btn-sm btn-success" onclick="imprimirAtendimentoIndividual('${a.id}')" title="Imprimir">
                                             <i class="fas fa-print"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-danger" 
-                                                onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome || '')}')" 
-                                                title="Excluir">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        ${!estaMascarado ? `
+                                            <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome || '')}')" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        ` : ''}
                                     </div>
                                 </td>
                             </tr>`;
@@ -2101,6 +2140,62 @@ function renderizarListaAtendimentosRecentes(lista) {
                 </tbody>
             </table>
         </div>`;
+}
+
+function renderizarPaginacaoAtendimentosRecentes() {
+    let pagContainer = safeGet('paginacaoAtendimentosRecentes');
+    
+    // Se não existir o container, cria dinamicamente
+    if (!pagContainer) {
+        const listaContainer = safeGet('listaAtendimentosRecentes');
+        if (!listaContainer) return;
+        
+        pagContainer = document.createElement('div');
+        pagContainer.id = 'paginacaoAtendimentosRecentes';
+        pagContainer.style.cssText = `
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 0 5px 0;
+            border-top: 1px solid #e5e7eb;
+            margin-top: 10px;
+        `;
+        listaContainer.parentNode.insertBefore(pagContainer, listaContainer.nextSibling);
+    }
+    
+    const { page, pages, total, limit } = __atendimentosRecentesPaginacao;
+    
+    // Se só tem 1 página, esconde a paginação
+    if (pages <= 1) {
+        pagContainer.style.display = 'none';
+        return;
+    }
+    
+    pagContainer.style.display = 'flex';
+    
+    const inicio = (page - 1) * limit + 1;
+    const fim = Math.min(page * limit, total);
+    
+    pagContainer.innerHTML = `
+        <button class="btn btn-sm btn-outline-secondary" 
+                onclick="carregarAtendimentosRecentes(${page - 1})"
+                ${page <= 1 ? 'disabled' : ''}>
+            <i class="fas fa-chevron-left"></i> Anterior
+        </button>
+        
+        <span style="font-size: 13px; color: #6b7280; font-weight: 500; text-align: center; line-height: 1.4;">
+            Página <strong>${page}</strong> de <strong>${pages}</strong>
+            <br>
+            <small style="font-size: 11px;">Mostrando ${inicio}-${fim} de ${total} registros</small>
+        </span>
+        
+        <button class="btn btn-sm btn-outline-secondary" 
+                onclick="carregarAtendimentosRecentes(${page + 1})"
+                ${page >= pages ? 'disabled' : ''}>
+            Próxima <i class="fas fa-chevron-right"></i>
+        </button>
+    `;
 }
 
 function configurarFiltrosAtendimentosRecentes() {
