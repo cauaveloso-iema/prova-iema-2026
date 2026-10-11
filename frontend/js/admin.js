@@ -9040,19 +9040,18 @@ class AdminPanel {
     }
 
     // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
-    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO CORRIGIDA - SEMPRE RECARREGA DO SERVIDOR) ============
+    // ============ CONFIGURAR EVENTOS DOS FILTROS (BUSCA EM TEMPO REAL) ============
     configurarEventosFiltrosUsuarios() {
-        console.log('🔧 Configurando eventos dos filtros (busca no servidor)...');
+        console.log('🔧 Configurando eventos dos filtros (busca em tempo real)...');
         
-        // 🔍 Busca com debounce (recarrega do SERVIDOR)
+        // 🔍 Busca em tempo real (SEM recarregar do servidor)
         const searchInput = document.getElementById('searchUsuarios');
         if (searchInput) {
             const novoSearch = searchInput.cloneNode(true);
             searchInput.parentNode.replaceChild(novoSearch, searchInput);
             
-            let timeout;
+            // 🔥 Busca instantânea - filtra localmente a cada tecla
             novoSearch.addEventListener('input', (e) => {
-                clearTimeout(timeout);
                 const valor = e.target.value;
                 
                 // Mostrar/ocultar botão de limpar
@@ -9061,28 +9060,23 @@ class AdminPanel {
                     clearBtn.style.display = valor ? 'flex' : 'none';
                 }
                 
-                // Debounce de 500ms
-                timeout = setTimeout(() => {
-                    this.filtros.usuarios.search = valor;
-                    this.filtros.usuarios.page = 1;
-                    
-                    // 🔥 RECARREGAR DO SERVIDOR (BUSCA EM TODOS OS USUÁRIOS)
-                    this.loadUsuarios();
-                    
-                    // Manter foco no input
-                    setTimeout(() => {
-                        const currentInput = document.getElementById('searchUsuarios');
-                        if (currentInput && currentInput.value === valor) {
-                            currentInput.focus();
-                            const len = currentInput.value.length;
-                            currentInput.setSelectionRange(len, len);
-                        }
-                    }, 100);
-                }, 500);
+                // Atualizar o filtro
+                this.filtros.usuarios.search = valor;
+                
+                // 🔥 FILTRAR LOCALMENTE (SEM RECARREGAR)
+                this.filtrarTabelaUsuariosLocal();
+            });
+            
+            // Manter o foco após renderização
+            novoSearch.addEventListener('keydown', (e) => {
+                // Prevenir comportamento padrão do Enter se necessário
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                }
             });
         }
         
-        // 👤 Select de Perfil (recarrega do SERVIDOR)
+        // 👤 Select de Perfil
         const roleSelect = document.getElementById('filterRole');
         if (roleSelect) {
             const novoRoleSelect = roleSelect.cloneNode(true);
@@ -9091,11 +9085,11 @@ class AdminPanel {
             novoRoleSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.role = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios(); // 🔥 RECARREGAR DO SERVIDOR
+                this.filtrarTabelaUsuariosLocal(); // 🔥 Local, não recarrega
             });
         }
         
-        // 🔘 Select de Status (recarrega do SERVIDOR)
+        // 🔘 Select de Status
         const statusSelect = document.getElementById('filterStatus');
         if (statusSelect) {
             const novoStatusSelect = statusSelect.cloneNode(true);
@@ -9104,11 +9098,11 @@ class AdminPanel {
             novoStatusSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.status = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios(); // 🔥 RECARREGAR DO SERVIDOR
+                this.filtrarTabelaUsuariosLocal(); // 🔥 Local
             });
         }
         
-        // 🏫 Select de Turma (recarrega do SERVIDOR)
+        // 🏫 Select de Turma
         const turmaSelect = document.getElementById('filterTurma');
         if (turmaSelect) {
             const novoTurmaSelect = turmaSelect.cloneNode(true);
@@ -9117,7 +9111,7 @@ class AdminPanel {
             novoTurmaSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.turma = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios(); // 🔥 RECARREGAR DO SERVIDOR
+                this.filtrarTabelaUsuariosLocal(); // 🔥 Local
             });
         }
     }
@@ -9229,9 +9223,14 @@ class AdminPanel {
             return;
         }
         
+        // 🔥 GUARDAR O FOCO E POSIÇÃO DO CURSOR ANTES DE RENDERIZAR
+        const searchInput = document.getElementById('searchUsuarios');
+        const tinhaFoco = searchInput && document.activeElement === searchInput;
+        const cursorPos = searchInput ? searchInput.selectionStart : 0;
+        
         const { search, role, status, turma } = this.filtros.usuarios;
         
-        // 🔥 USAR A LISTA GLOBAL para os cards/modal, mas a página para a tabela
+        // 🔥 USAR A LISTA GLOBAL para os cards/modal
         const todosUsuarios = this.todosUsuariosStats && this.todosUsuariosStats.length > 0
             ? this.todosUsuariosStats
             : this.usuarios;
@@ -9351,12 +9350,12 @@ class AdminPanel {
             resultadosBadge.textContent = `${usuariosGlobaisFiltrados.length} ${usuariosGlobaisFiltrados.length === 1 ? 'usuário' : 'usuários'}`;
         }
         
-        // Restaurar foco
-        const searchInput = document.getElementById('searchUsuarios');
-        if (searchInput && document.activeElement === searchInput) {
-            const cursorPos = searchInput.selectionStart;
-            searchInput.focus();
-            searchInput.setSelectionRange(cursorPos, cursorPos);
+        // 🔥 RESTAURAR O FOCO E POSIÇÃO DO CURSOR
+        if (tinhaFoco && searchInput) {
+            setTimeout(() => {
+                searchInput.focus();
+                searchInput.setSelectionRange(cursorPos, cursorPos);
+            }, 0);
         }
     }
 
