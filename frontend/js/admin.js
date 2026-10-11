@@ -3906,7 +3906,7 @@ class AdminPanel {
 
     // ============ USUÁRIOS ============
 
-    // ============ LOAD USUÁRIOS (VERSÃO CORRIGIDA - ESTATÍSTICAS GLOBAIS) ============
+    // ============ LOAD USUÁRIOS (BUSCA GLOBAL NO SERVIDOR) ============
     async loadUsuarios() {
         const contentArea = document.getElementById('contentArea');
         
@@ -3924,25 +3924,29 @@ class AdminPanel {
 
             const token = localStorage.getItem('auth_token');
             
-            // CONSTRUIR URL COM PARÂMETROS
+            // 🔥 CONSTRUIR URL COM TODOS OS PARÂMETROS
             let url = `${this.apiBase}/usuarios?page=${page}&limit=${limit}`;
             
             if (search && search.trim() !== '') {
                 url += `&search=${encodeURIComponent(search.trim())}`;
+                console.log('🔍 Filtro de busca aplicado:', search);
             }
+            
             if (role && role !== 'todos') {
                 url += `&role=${role}`;
             }
+            
             if (status && status !== 'todos') {
                 url += `&status=${status}`;
             }
+            
             if (turma && turma !== 'todas' && turma !== '') {
                 url += `&turma=${encodeURIComponent(turma)}`;
             }
             
             console.log('🔗 URL final:', url);
             
-            // 🔥 BUSCAR USUÁRIOS PAGINADOS + TODOS ALUNOS (turmas) + TODOS USUÁRIOS (estatísticas)
+            // 🔥 BUSCAR EM PARALELO
             const [responseUsuarios, responseTodosAlunos, responseTodosUsuarios] = await Promise.all([
                 fetch(url, {
                     headers: { 
@@ -3973,22 +3977,18 @@ class AdminPanel {
 
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
-            // 🔥 PROCESSAR TODOS OS USUÁRIOS (para os cards e modal)
+            // Processar todos usuários (estatísticas)
             let todosUsuariosParaStats = [];
             try {
                 const todosUsuariosData = await responseTodosUsuarios.json();
                 if (todosUsuariosData.success && todosUsuariosData.usuarios) {
                     todosUsuariosParaStats = todosUsuariosData.usuarios;
-                    console.log(`✅ ${todosUsuariosParaStats.length} usuários totais carregados para estatísticas`);
                 }
-            } catch (e) {
-                console.error('❌ Erro ao processar todos os usuários:', e);
-            }
+            } catch (e) {}
             
-            // Armazenar globalmente para o modal "Todos os Perfis"
             this.todosUsuariosStats = todosUsuariosParaStats;
 
-            // 🔥 EXTRAIR TODAS AS TURMAS ÚNICAS DOS ALUNOS
+            // Extrair turmas
             let todasTurmas = [];
             try {
                 const todosAlunosData = await responseTodosAlunos.json();
@@ -4000,41 +4000,25 @@ class AdminPanel {
                         }
                     });
                     todasTurmas = Array.from(turmasSet).sort();
-                    console.log(`✅ ${todasTurmas.length} turmas carregadas de ${todosAlunosData.usuarios.length} alunos`);
                 }
-            } catch (e) {
-                console.error('❌ Erro ao processar turmas:', e);
-            }
+            } catch (e) {}
 
-            // ARMAZENAR DADOS DA PÁGINA ATUAL
             this.usuarios = data.usuarios || [];
             this.todasTurmasUsuarios = todasTurmas;
 
-            // 🔥 CALCULAR ESTATÍSTICAS GLOBAIS (usando TODOS os usuários, não só da página)
+            // 🔥 ESTATÍSTICAS GLOBAIS
             const usuariosParaStats = todosUsuariosParaStats.length > 0 ? todosUsuariosParaStats : this.usuarios;
-
             const totalUsuarios = usuariosParaStats.length;
             const usuariosAtivos = usuariosParaStats.filter(u => u.ativo === true).length;
             const usuariosInativos = usuariosParaStats.filter(u => u.ativo === false).length;
             const comAcessibilidade = usuariosParaStats.filter(u => u.precisaAcessibilidade === true).length;
 
-            // 🔥 CONTAGEM POR PERFIL (TODOS os usuários, não só da página)
             const contagemPorRole = {
-                aluno: 0,
-                professor: 0,
-                admin: 0,
-                super_admin: 0,
-                setor_pedagogico: 0,
-                coordenacao_patio: 0,
-                cozinha: 0,
-                gestao_geral: 0,
-                enfermaria: 0,
-                supervisao: 0,
-                psicologia: 0,
-                'assistente-social': 0,
-                protagonismo: 0,
-                biblioteca: 0,
-                secretaria: 0
+                aluno: 0, professor: 0, admin: 0, super_admin: 0,
+                setor_pedagogico: 0, coordenacao_patio: 0, cozinha: 0,
+                gestao_geral: 0, enfermaria: 0, supervisao: 0,
+                psicologia: 0, 'assistente-social': 0, protagonismo: 0,
+                biblioteca: 0, secretaria: 0
             };
 
             usuariosParaStats.forEach(u => {
@@ -4043,12 +4027,12 @@ class AdminPanel {
                 }
             });
 
-            // RENDERIZAR HTML
+            // RENDERIZAR
             contentArea.innerHTML = this.renderUsuariosProfissional({
                 role, search, page, limit, status, turma,
                 usuarios: this.usuarios,
                 pagination: data.pagination,
-                total: totalUsuarios,
+                total: data.pagination?.total || totalUsuarios,
                 todasTurmas: todasTurmas,
                 estatisticas: {
                     total: totalUsuarios,
@@ -4059,15 +4043,12 @@ class AdminPanel {
                 }
             });
 
-            // CONFIGURAR EVENTOS DOS FILTROS
             this.configurarEventosFiltrosUsuarios();
 
-            console.log('✅ Usuários carregados:', this.usuarios.length);
-            console.log('✅ Total de usuários para estatísticas:', usuariosParaStats.length);
-            console.log('✅ Total de turmas disponíveis:', todasTurmas.length);
+            console.log('✅ Usuários carregados:', this.usuarios.length, 'de', data.pagination?.total || 0);
 
         } catch (error) {
-            console.error('❌ Erro ao carregar usuários:', error);
+            console.error('❌ Erro:', error);
             contentArea.innerHTML = this.renderErroUsuarios(error.message);
         }
     }
