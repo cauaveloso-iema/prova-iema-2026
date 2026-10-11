@@ -172,10 +172,18 @@ const verificarSupervisao = (req, res, next) => {
 function inicioDoDiaBrasil(dataStr) { return new Date(dataStr + 'T00:00:00.000-03:00'); }
 function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:00'); }
 
+// ============================================
+// HEALTH CHECK
+// Retorna status do serviço (online/versão/timestamp)
+// ============================================
 router.get('/health', (req, res) => {
   res.json({ success: true, status: 'online', service: 'Supervisão', versao: '2.0-alertas-24h' });
 });
 
+// ============================================
+// MIGRAÇÃO
+// Inicializa campos de alerta 24h em atendimentos existentes
+// ============================================
 router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
     const resultado = await AtendimentoSupervisao.updateMany(
@@ -188,6 +196,11 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
   }
 });
 
+// ============================================
+// TURMAS E ALUNOS
+// ============================================
+
+// Lista todas as turmas distintas de alunos ativos
 router.get('/turmas', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
@@ -197,6 +210,7 @@ router.get('/turmas', authenticateToken, verificarSupervisao, async (req, res) =
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Lista alunos de uma turma específica
 router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -213,6 +227,7 @@ router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (r
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Busca dados de um aluno (atendimentos ativos + histórico recente)
 router.get('/aluno/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -247,6 +262,7 @@ router.get('/aluno/:id', authenticateToken, verificarSupervisao, async (req, res
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Busca alunos por nome ou matrícula (mínimo 2 caracteres)
 router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -270,6 +286,10 @@ router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// REGISTRAR
+// Cria uma nova ocorrência de supervisão com dados do aluno e assinatura opcional
+// ============================================
 router.post('/registrar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, assinaturaBase64, precisaAssinatura = false } = req.body;
@@ -346,6 +366,10 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// APLICAR ASSINATURA
+// Aplica assinatura capturada via QR Code em um atendimento
+// ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { atendimentoId, sessaoId } = req.body;
@@ -383,6 +407,10 @@ router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// FINALIZAR
+// Finaliza um atendimento com resultado e observações finais
+// ============================================
 router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { atendimentoId, resultado, resultadoTexto, observacoesFinais } = req.body;
@@ -427,6 +455,10 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// REMARCAR
+// Adiciona uma remarcação a um atendimento existente
+// ============================================
 router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { atendimentoId, dataRemarcacao, horarioRemarcacao, motivoRemarcacao, observacoesRemarcacao } = req.body;
@@ -479,6 +511,10 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// REMARCAÇÕES PENDENTES
+// Lista todas as remarcações com status pendente
+// ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimentos = await AtendimentoSupervisao.find({
@@ -522,6 +558,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Busca uma remarcação específica pelo ID
 router.get('/remarcacoes/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findOne({ 'remarcacoes.id': req.params.id });
@@ -544,6 +581,7 @@ router.get('/remarcacoes/:id', authenticateToken, verificarSupervisao, async (re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Finaliza uma remarcação (realizado ou cancelado)
 router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
@@ -586,6 +624,10 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, as
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// ATENDIMENTOS COM +24H
+// Lista ocorrências em andamento há mais de 24h (com máscara para super_admin)
+// ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const agora = new Date();
@@ -603,23 +645,46 @@ router.get('/atendimentos-antigos', authenticateToken, verificarSupervisao, asyn
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade, dataHoraEntrada: a.entrada.dataHora,
-        tempoTexto: tempo.texto, minutosEmAndamento: tempo.minutos, nivelAlerta: tempo.nivel,
-        registradoPorNome: a.entrada.registradoPorNome, registradoPor: a.entrada.registradoPor,
-        ultimoAlerta24h: a.ultimoAlerta24h, totalAlertas24h: a.totalAlertas24h || 0,
-        alerta24hReconhecido: a.alerta24hReconhecido || false
+        descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade,
+        dataHoraEntrada: a.entrada.dataHora,
+        tempoTexto: tempo.texto,
+        minutosEmAndamento: tempo.minutos,
+        nivelAlerta: tempo.nivel,
+        registradoPorNome: a.entrada.registradoPorNome,
+        registradoPor: a.entrada.registradoPor,
+        ultimoAlerta24h: a.ultimoAlerta24h,
+        totalAlertas24h: a.totalAlertas24h || 0,
+        alerta24hReconhecido: a.alerta24hReconhecido || false,
+        _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
+        entrada: {
+          descricao: a.entrada.descricao,
+          observacoes: a.entrada.observacoes,
+          registradoPor: a.entrada.registradoPor
+        }
       };
     });
     
-    res.json({ success: true, total: lista.length, atendimentos: lista });
+    // 🔒 APLICA A MÁSCARA PARA SUPER_ADMIN
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
+    res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// VERIFICAR ATENDIMENTO +24H
+// Permite encerrar ou manter aberto um atendimento com +24h
+// ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { acao, resultado, observacoes } = req.body;
@@ -682,6 +747,7 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSuperv
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Processa manualmente os alertas de +24h (usado para testes)
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
@@ -689,6 +755,10 @@ router.post('/processar-alertas-24h', async (req, res) => {
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// DASHBOARD
+// Retorna métricas, gráficos e tendências das ocorrências
+// ============================================
 router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const hoje = new Date();
@@ -805,6 +875,10 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// ATENDIMENTOS ATIVOS
+// Lista todos os atendimentos em andamento (com máscara para super_admin)
+// ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimentos = await AtendimentoSupervisao.find({ status: 'em_andamento' })
@@ -839,6 +913,10 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// LISTAR ATENDIMENTOS
+// Lista atendimentos com filtros e paginação (com máscara para super_admin)
+// ============================================
 router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { limit = 100, page = 1, tipo, status, turma, dataInicio, dataFim, busca, resultado } = req.query;
@@ -926,6 +1004,10 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// BUSCAR ATENDIMENTO POR ID
+// Retorna um atendimento específico (com máscara para super_admin)
+// ============================================
 router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findById(req.params.id);
@@ -979,6 +1061,10 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// EDITAR
+// Atualiza um atendimento (com verificação de permissão para super_admin)
+// ============================================
 router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findById(req.params.id);
@@ -1015,6 +1101,10 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// EXCLUIR
+// Exclui um atendimento (com verificação de permissão para super_admin)
+// ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findById(req.params.id);
@@ -1030,6 +1120,10 @@ router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// EXCLUSÃO EM MASSA
+// Exclui atendimentos finalizados antes de uma data (bloqueado para super_admin)
+// ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     if (req.userRole === 'super_admin') {
@@ -1054,6 +1148,11 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervis
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// RELATÓRIOS
+// ============================================
+
+// Relatório individual de um aluno
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1103,6 +1202,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Relatório por turma
 router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1155,6 +1255,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Relatório geral com filtros
 router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
@@ -1247,6 +1348,10 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ============================================
+// SCHEDULER
+// Executa alertas de +24h a cada 5 minutos
+// ============================================
 let schedulerInterval = null;
 
 function iniciarSchedulerAlertas24h() {

@@ -210,6 +210,7 @@ function fimDoDiaBrasil(dataStr) {
 
 // ============================================
 // HEALTH CHECK
+// Retorna status do serviço (online/versão/timestamp)
 // ============================================
 router.get('/health', (req, res) => {
   res.json({ 
@@ -223,6 +224,7 @@ router.get('/health', (req, res) => {
 
 // ============================================
 // MIGRAÇÃO
+// Inicializa campos de alerta 24h em atendimentos existentes
 // ============================================
 router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
@@ -239,6 +241,8 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
 // ============================================
 // TURMAS E ALUNOS
 // ============================================
+
+// Lista todas as turmas distintas de alunos ativos
 router.get('/turmas', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
@@ -250,6 +254,7 @@ router.get('/turmas', authenticateToken, verificarPsicologia, async (req, res) =
   }
 });
 
+// Lista alunos de uma turma específica
 router.get('/alunos-por-turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -270,6 +275,7 @@ router.get('/alunos-por-turma', authenticateToken, verificarPsicologia, async (r
   }
 });
 
+// Busca dados completos de um aluno (atendimentos ativos + histórico recente)
 router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -308,6 +314,7 @@ router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res
   }
 });
 
+// Busca alunos por nome ou matrícula (mínimo 2 caracteres)
 router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -337,6 +344,7 @@ router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, 
 
 // ============================================
 // REGISTRAR ATENDIMENTO
+// Cria um novo atendimento psicológico (assinatura opcional)
 // ============================================
 router.post('/registrar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -419,6 +427,7 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
 
 // ============================================
 // APLICAR ASSINATURA
+// Aplica assinatura capturada via QR Code em um atendimento
 // ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -464,6 +473,7 @@ router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async
 
 // ============================================
 // FINALIZAR
+// Finaliza um atendimento com resultado e observações finais
 // ============================================
 router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -521,6 +531,7 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
 
 // ============================================
 // REMARCAR
+// Adiciona uma remarcação a um atendimento existente
 // ============================================
 router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -583,6 +594,7 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
 
 // ============================================
 // REMARCAÇÕES PENDENTES
+// Lista todas as remarcações com status pendente
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -634,6 +646,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
   }
 });
 
+// Busca uma remarcação específica pelo ID
 router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimento = await AtendimentoPsicologia.findOne({ 'remarcacoes.id': req.params.id });
@@ -663,6 +676,7 @@ router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (re
   }
 });
 
+// Finaliza uma remarcação (realizado ou cancelado)
 router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
@@ -716,6 +730,7 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
 
 // ============================================
 // ATENDIMENTOS COM +24H
+// Lista atendimentos em andamento há mais de 24h (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -734,20 +749,39 @@ router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, asyn
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
+        descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
-        tempoTexto: tempo.texto, minutosEmAndamento: tempo.minutos, nivelAlerta: tempo.nivel,
-        registradoPorNome: a.entrada.registradoPorNome, registradoPor: a.entrada.registradoPor,
-        ultimoAlerta24h: a.ultimoAlerta24h, totalAlertas24h: a.totalAlertas24h || 0,
-        alerta24hReconhecido: a.alerta24hReconhecido || false
+        tempoTexto: tempo.texto,
+        minutosEmAndamento: tempo.minutos,
+        nivelAlerta: tempo.nivel,
+        registradoPorNome: a.entrada.registradoPorNome,
+        registradoPor: a.entrada.registradoPor,
+        ultimoAlerta24h: a.ultimoAlerta24h,
+        totalAlertas24h: a.totalAlertas24h || 0,
+        alerta24hReconhecido: a.alerta24hReconhecido || false,
+        _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
+        entrada: {
+          descricao: a.entrada.descricao,
+          observacoes: a.entrada.observacoes,
+          registradoPor: a.entrada.registradoPor
+        }
       };
     });
     
-    res.json({ success: true, total: lista.length, atendimentos: lista });
+    // 🔒 APLICA A MÁSCARA PARA SUPER_ADMIN
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
+    res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -755,6 +789,7 @@ router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, asyn
 
 // ============================================
 // VERIFICAR ATENDIMENTO +24H
+// Permite encerrar ou manter aberto um atendimento com +24h
 // ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -822,9 +857,7 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicol
   }
 });
 
-// ============================================
-// PROCESSAR ALERTAS (MANUAL)
-// ============================================
+// Processa manualmente os alertas de +24h (usado para testes)
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
@@ -836,6 +869,7 @@ router.post('/processar-alertas-24h', async (req, res) => {
 
 // ============================================
 // DASHBOARD
+// Retorna métricas, gráficos e tendências dos atendimentos
 // ============================================
 router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -960,6 +994,7 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
 
 // ============================================
 // ATENDIMENTOS ATIVOS
+// Lista todos os atendimentos em andamento (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -999,6 +1034,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
 
 // ============================================
 // LISTAR ATENDIMENTOS
+// Lista atendimentos com filtros e paginação (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1097,6 +1133,7 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
 
 // ============================================
 // BUSCAR ATENDIMENTO POR ID
+// Retorna um atendimento específico (com máscara para super_admin)
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1155,6 +1192,7 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 
 // ============================================
 // EDITAR
+// Atualiza um atendimento (com verificação de permissão para super_admin)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1203,6 +1241,7 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 
 // ============================================
 // EXCLUIR
+// Exclui um atendimento (com verificação de permissão para super_admin)
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1223,6 +1262,7 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
 
 // ============================================
 // EXCLUSÃO EM MASSA
+// Exclui atendimentos finalizados antes de uma data (bloqueado para super_admin)
 // ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1268,6 +1308,8 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicolog
 // ============================================
 // RELATÓRIOS
 // ============================================
+
+// Relatório individual de um aluno
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1320,6 +1362,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
   }
 });
 
+// Relatório por turma
 router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1375,6 +1418,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
   }
 });
 
+// Relatório geral com filtros
 router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
@@ -1471,6 +1515,7 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
 
 // ============================================
 // SCHEDULER
+// Executa alertas de +24h a cada 5 minutos
 // ============================================
 let schedulerInterval = null;
 

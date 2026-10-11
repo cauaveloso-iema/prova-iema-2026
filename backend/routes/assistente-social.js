@@ -181,6 +181,7 @@ function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:0
 
 // ============================================
 // HEALTH CHECK
+// Retorna o status do serviço (online/versão/timestamp)
 // ============================================
 router.get('/health', (req, res) => {
   res.json({ 
@@ -191,6 +192,7 @@ router.get('/health', (req, res) => {
 
 // ============================================
 // MIGRAÇÃO
+// Inicializa campos de alerta 24h em atendimentos existentes
 // ============================================
 router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
@@ -207,6 +209,8 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
 // ============================================
 // TURMAS E ALUNOS
 // ============================================
+
+// Lista todas as turmas distintas de alunos ativos
 router.get('/turmas', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
@@ -216,6 +220,7 @@ router.get('/turmas', authenticateToken, verificarAssistenteSocial, async (req, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Lista alunos de uma turma específica
 router.get('/alunos-por-turma', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -234,6 +239,7 @@ router.get('/alunos-por-turma', authenticateToken, verificarAssistenteSocial, as
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Busca dados completos de um aluno (incluindo atendimentos ativos e histórico recente)
 router.get('/aluno/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -270,6 +276,7 @@ router.get('/aluno/:id', authenticateToken, verificarAssistenteSocial, async (re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Busca alunos por nome ou matrícula (mínimo 2 caracteres)
 router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -297,6 +304,7 @@ router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async 
 
 // ============================================
 // REGISTRAR
+// Cria um novo atendimento com dados do aluno e assinatura opcional
 // ============================================
 router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -383,6 +391,7 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
 
 // ============================================
 // APLICAR ASSINATURA
+// Aplica a assinatura capturada via QR Code em um atendimento
 // ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -422,6 +431,7 @@ router.post('/aplicar-assinatura', authenticateToken, verificarAssistenteSocial,
 
 // ============================================
 // FINALIZAR
+// Finaliza um atendimento com resultado e observações finais
 // ============================================
 router.post('/finalizar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -477,6 +487,7 @@ router.post('/finalizar', authenticateToken, verificarAssistenteSocial, async (r
 
 // ============================================
 // REMARCAR
+// Adiciona uma remarcação a um atendimento existente
 // ============================================
 router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -536,6 +547,7 @@ router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (re
 
 // ============================================
 // REMARCAÇÕES PENDENTES
+// Lista todas as remarcações com status pendente
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -580,6 +592,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarAssistenteSocia
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Busca uma remarcação específica pelo ID
 router.get('/remarcacoes/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findOne({ 'remarcacoes.id': req.params.id });
@@ -604,6 +617,7 @@ router.get('/remarcacoes/:id', authenticateToken, verificarAssistenteSocial, asy
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Finaliza uma remarcação (realizado ou cancelado)
 router.post('/remarcacoes/finalizar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
@@ -648,6 +662,7 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarAssistenteSoci
 
 // ============================================
 // ATENDIMENTOS COM +24H
+// Lista atendimentos em andamento há mais de 24h (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -666,25 +681,45 @@ router.get('/atendimentos-antigos', authenticateToken, verificarAssistenteSocial
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade, dataHoraEntrada: a.entrada.dataHora,
-        tempoTexto: tempo.texto, minutosEmAndamento: tempo.minutos, nivelAlerta: tempo.nivel,
-        registradoPorNome: a.entrada.registradoPorNome, registradoPor: a.entrada.registradoPor,
-        ultimoAlerta24h: a.ultimoAlerta24h, totalAlertas24h: a.totalAlertas24h || 0,
-        alerta24hReconhecido: a.alerta24hReconhecido || false
+        descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade,
+        dataHoraEntrada: a.entrada.dataHora,
+        tempoTexto: tempo.texto,
+        minutosEmAndamento: tempo.minutos,
+        nivelAlerta: tempo.nivel,
+        registradoPorNome: a.entrada.registradoPorNome,
+        registradoPor: a.entrada.registradoPor,
+        ultimoAlerta24h: a.ultimoAlerta24h,
+        totalAlertas24h: a.totalAlertas24h || 0,
+        alerta24hReconhecido: a.alerta24hReconhecido || false,
+        _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
+        entrada: {
+          descricao: a.entrada.descricao,
+          observacoes: a.entrada.observacoes,
+          registradoPor: a.entrada.registradoPor
+        }
       };
     });
     
-    res.json({ success: true, total: lista.length, atendimentos: lista });
+    // 🔒 APLICA A MÁSCARA PARA SUPER_ADMIN
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
+    res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 // ============================================
 // VERIFICAR ATENDIMENTO +24H
+// Permite encerrar ou manter aberto um atendimento com +24h
 // ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -747,6 +782,7 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarAssist
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Processa manualmente os alertas de +24h (usado para testes)
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
@@ -756,6 +792,7 @@ router.post('/processar-alertas-24h', async (req, res) => {
 
 // ============================================
 // DASHBOARD
+// Retorna métricas, gráficos e tendências dos atendimentos
 // ============================================
 router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -878,6 +915,7 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
 
 // ============================================
 // ATENDIMENTOS ATIVOS
+// Lista todos os atendimentos em andamento (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -915,6 +953,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial,
 
 // ============================================
 // LISTAR ATENDIMENTOS
+// Lista atendimentos com filtros (tipo, status, turma, data, busca, resultado)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
@@ -1008,6 +1047,7 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Busca um atendimento específico pelo ID (com máscara para super_admin)
 router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
@@ -1060,6 +1100,7 @@ router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Atualiza um atendimento (com verificação de permissão para super_admin)
 router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
@@ -1096,6 +1137,7 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Exclui um atendimento (com verificação de permissão para super_admin)
 router.delete('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
@@ -1111,6 +1153,7 @@ router.delete('/atendimento/:id', authenticateToken, verificarAssistenteSocial, 
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Exclusão em massa de atendimentos finalizados antes de uma data (bloqueado para super_admin)
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     if (req.userRole === 'super_admin') {
@@ -1145,6 +1188,8 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarAssisten
 // ============================================
 // RELATÓRIOS
 // ============================================
+
+// Relatório individual de um aluno
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1195,6 +1240,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarAssistenteSo
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Relatório por turma
 router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1248,6 +1294,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarAssistenteSoci
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Relatório geral com filtros
 router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
@@ -1342,6 +1389,7 @@ router.get('/relatorio/geral', authenticateToken, verificarAssistenteSocial, asy
 
 // ============================================
 // SCHEDULER
+// Executa alertas de +24h a cada 5 minutos
 // ============================================
 let schedulerInterval = null;
 
