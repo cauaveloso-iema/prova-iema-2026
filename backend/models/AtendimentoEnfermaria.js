@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { criptografar, descriptografar } = require('../utils/criptografia');
 
 const AtendimentoEnfermariaSchema = new mongoose.Schema({
   alunoId: {
@@ -6,29 +7,43 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  alunoNome: {
-    type: String,
-    required: true
-  },
+  alunoNome: { type: String, required: true },
   alunoMatricula: String,
   alunoTurma: String,
   alunoCurso: String,
   alunoFoto: String,
   
-  // Dados da entrada
+  // ============================================
+  // DADOS DA ENTRADA
+  // ============================================
   entrada: {
     dataHora: { type: Date, default: Date.now },
-    queixa: { type: String, required: true },
-    observacoes: String,
+    
+    // 🔐 Criptografados
+    queixa: { 
+      type: String, 
+      required: true,
+      set: criptografar,
+      get: descriptografar
+    },
+    observacoes: { 
+      type: String,
+      set: criptografar,
+      get: descriptografar
+    },
+    
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
+    
     // 🆕 Auditoria de edição
     editadoEm: { type: Date, default: null },
     editadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     editadoPorNome: { type: String, default: null }
   },
   
-  // Dados da saída (preenchido quando finalizado)
+  // ============================================
+  // DADOS DA SAÍDA
+  // ============================================
   saida: {
     dataHora: Date,
     desfecho: {
@@ -38,9 +53,21 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
     },
     desfechoOutrosTexto: String,
     coordenadorPatioNome: String,
-    observacoes: String,
+    
+    // 🔐 Criptografado
+    observacoes: { 
+      type: String,
+      set: criptografar,
+      get: descriptografar
+    },
+    
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    registradoPorNome: String
+    registradoPorNome: String,
+    
+    // 🆕 Auditoria de edição
+    editadoEm: { type: Date, default: null },
+    editadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    editadoPorNome: { type: String, default: null }
   },
   
   // Status do atendimento
@@ -53,14 +80,22 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
   // Metadados
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  // 🔑 ESSENCIAL para descriptografar automaticamente
+  toJSON: { getters: true },
+  toObject: { getters: true }
 });
 
-// Índices
+// ============================================
+// ÍNDICES
+// ============================================
 AtendimentoEnfermariaSchema.index({ alunoId: 1, status: 1 });
 AtendimentoEnfermariaSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoEnfermariaSchema.index({ createdAt: -1 });
 
-// Métodos estáticos
+// ============================================
+// MÉTODOS ESTÁTICOS
+// ============================================
 AtendimentoEnfermariaSchema.statics.alunoEmAtendimento = async function(alunoId) {
   const atendimento = await this.findOne({ alunoId, status: 'em_atendimento' });
   return !!atendimento;

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { criptografar, descriptografar } = require('../utils/criptografia');
 
 // ============================================
 // SUB-SCHEMA: REMARCAÇÃO
@@ -10,8 +11,23 @@ const RemarcacaoSchema = new mongoose.Schema({
   },
   dataRemarcacao: { type: String, required: true },
   horarioRemarcacao: { type: String, required: true },
-  motivoRemarcacao: { type: String, required: true, trim: true },
-  observacoesRemarcacao: { type: String, default: '', trim: true },
+  
+  // 🔐 Criptografados
+  motivoRemarcacao: { 
+    type: String, 
+    required: true, 
+    trim: true,
+    set: criptografar,
+    get: descriptografar
+  },
+  observacoesRemarcacao: { 
+    type: String, 
+    default: '', 
+    trim: true,
+    set: criptografar,
+    get: descriptografar
+  },
+  
   status: {
     type: String,
     enum: ['pendente', 'realizado', 'cancelado'],
@@ -22,8 +38,15 @@ const RemarcacaoSchema = new mongoose.Schema({
   criadaPorNome: { type: String, default: '' },
   finalizadaEm: { type: Date, default: null },
   finalizadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
-}, { _id: false });
+}, { 
+  _id: false,
+  toJSON: { getters: true },
+  toObject: { getters: true }
+});
 
+// ============================================
+// SCHEMA PRINCIPAL
+// ============================================
 const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   alunoId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -56,8 +79,20 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   
   entrada: {
     dataHora: { type: Date, default: Date.now },
-    descricao: { type: String, required: true },
-    observacoes: String,
+    
+    // 🔐 Criptografados
+    descricao: { 
+      type: String, 
+      required: true,
+      set: criptografar,
+      get: descriptografar
+    },
+    observacoes: { 
+      type: String,
+      set: criptografar,
+      get: descriptografar
+    },
+    
     gravidade: {
       type: String,
       enum: ['baixa', 'media', 'alta', 'critica'],
@@ -66,12 +101,14 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
     
-    // 🔥 Assinatura digital
+    // 🔐 Criptografado
     assinaturaBase64: {
       type: String,
-      default: ''
+      default: '',
+      set: criptografar,
+      get: descriptografar
     },
-    // 🆕 Assinatura via QR Code (sessão)
+    
     temAssinatura: { 
       type: Boolean, 
       default: false, 
@@ -88,27 +125,36 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     assinadaPorNome: { type: String, default: null }
   },
   
+  // 🔐 Todos os campos sensíveis criptografados
   detalhes: {
-    contextoFamiliar: String,
-    historicoAnterior: String,
-    profissionaisEnvolvidos: [String],
-    condicaoSocial: String,
+    contextoFamiliar: { type: String, set: criptografar, get: descriptografar },
+    historicoAnterior: { type: String, set: criptografar, get: descriptografar },
+    profissionaisEnvolvidos: { 
+      type: [String],
+      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
+      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
+    },
+    condicaoSocial: { type: String, set: criptografar, get: descriptografar },
     
-    encaminhadoPara: String,
-    motivoEncaminhamento: String,
+    encaminhadoPara: { type: String, set: criptografar, get: descriptografar },
+    motivoEncaminhamento: { type: String, set: criptografar, get: descriptografar },
     agendadoPara: Date,
     
-    tipoIntervencao: String,
-    metodosUtilizados: String,
+    tipoIntervencao: { type: String, set: criptografar, get: descriptografar },
+    metodosUtilizados: { type: String, set: criptografar, get: descriptografar },
     duracaoSessao: Number,
     
-    modalidadeAtendimento: String,
-    participantesAtendimento: [String],
+    modalidadeAtendimento: { type: String, set: criptografar, get: descriptografar },
+    participantesAtendimento: { 
+      type: [String],
+      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
+      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
+    },
     
-    tipoTarefaOutros: String,
+    tipoTarefaOutros: { type: String, set: criptografar, get: descriptografar },
     
-    providenciasTomadas: String,
-    proximosPassos: String
+    providenciasTomadas: { type: String, set: criptografar, get: descriptografar },
+    proximosPassos: { type: String, set: criptografar, get: descriptografar }
   },
   
   saida: {
@@ -118,13 +164,15 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
       enum: ['resolvido', 'em_acompanhamento', 'reincidente', 'encaminhado', 'pendente'],
       required: false
     },
-    resultadoTexto: String,
-    observacoesFinais: String,
+    
+    // 🔐 Criptografados
+    resultadoTexto: { type: String, set: criptografar, get: descriptografar },
+    observacoesFinais: { type: String, set: criptografar, get: descriptografar },
+    
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String
   },
   
-  // 🔥 Remarcações
   remarcacoes: {
     type: [RemarcacaoSchema],
     default: []
@@ -155,6 +203,9 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  toJSON: { getters: true },
+  toObject: { getters: true }
 });
 
 // ============================================
@@ -172,7 +223,6 @@ AtendimentoAssistenteSocialSchema.index({ 'entrada.statusAssinatura': 1, created
 // MIDDLEWARE: PRE-SAVE
 // ============================================
 AtendimentoAssistenteSocialSchema.pre('save', function(next) {
-  // Sincroniza temAssinatura e statusAssinatura baseado no assinaturaBase64
   if (this.entrada) {
     const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
     this.entrada.temAssinatura = temAssinaturaReal;
@@ -243,4 +293,11 @@ AtendimentoAssistenteSocialSchema.methods.adicionarRemarcacao = function(dados) 
   return this.save();
 };
 
-module.exports = mongoose.model('AtendimentoAssistenteSocial', AtendimentoAssistenteSocialSchema);
+// ============================================
+// EXPORT — força o nome EXATO da coleção
+// ============================================
+module.exports = mongoose.model(
+  'AtendimentoAssistenteSocial',
+  AtendimentoAssistenteSocialSchema,
+  'atendimentoassistentesocials'  // ← nome REAL da coleção no MongoDB
+);

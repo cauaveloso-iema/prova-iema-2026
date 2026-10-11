@@ -6,6 +6,99 @@ const AtendimentoSupervisao = require('../models/AtendimentoSupervisao');
 const SessaoAssinatura = require('../models/SessaoAssinatura');
 
 // ============================================
+// 🔒 HELPER: MASCARAR DADOS SENSÍVEIS
+// ============================================
+const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
+const ROLES_MASCARADOS = ['super_admin'];
+
+function mascararParaAdmin(dados, req) {
+  if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) {
+    return dados;
+  }
+  
+  if (Array.isArray(dados)) {
+    return dados.map(item => mascararItem(item, req));
+  }
+  
+  return mascararItem(dados, req);
+}
+
+function mascararItem(item, req) {
+  if (!item) return item;
+  
+  const obj = item.toObject ? item.toObject() : JSON.parse(JSON.stringify(item));
+  
+  const adminId = req.userId?.toString();
+  const criadorId = (
+    obj.entrada?.registradoPor || 
+    obj.registradoPorId || 
+    obj.criadoPor
+  )?.toString();
+  
+  if (criadorId && adminId && criadorId === adminId) {
+    obj._mascarado = false;
+    obj._criadoPorMim = true;
+    return obj;
+  }
+  
+  obj._mascarado = true;
+  obj._criadoPorMim = false;
+  
+  if (obj.entrada) {
+    if (obj.entrada.descricao) obj.entrada.descricao = MASCARA_TEXTO;
+    if (obj.entrada.observacoes) obj.entrada.observacoes = MASCARA_TEXTO;
+    if (obj.entrada.assinaturaBase64) obj.entrada.assinaturaBase64 = null;
+  }
+  
+  if (obj.descricao) obj.descricao = MASCARA_TEXTO;
+  
+  if (obj.saida) {
+    if (obj.saida.resultadoTexto) obj.saida.resultadoTexto = MASCARA_TEXTO;
+    if (obj.saida.observacoesFinais) obj.saida.observacoesFinais = MASCARA_TEXTO;
+  }
+  
+  if (obj.detalhes && typeof obj.detalhes === 'object') {
+    Object.keys(obj.detalhes).forEach(chave => {
+      const valor = obj.detalhes[chave];
+      if (Array.isArray(valor)) {
+        obj.detalhes[chave] = [MASCARA_TEXTO];
+      } else if (valor !== undefined && valor !== null && valor !== '') {
+        obj.detalhes[chave] = MASCARA_TEXTO;
+      }
+    });
+  }
+  
+  if (Array.isArray(obj.remarcacoes)) {
+    obj.remarcacoes = obj.remarcacoes.map(rem => {
+      const nova = { ...rem };
+      if (nova.motivoRemarcacao) nova.motivoRemarcacao = MASCARA_TEXTO;
+      if (nova.observacoesRemarcacao) nova.observacoesRemarcacao = MASCARA_TEXTO;
+      return nova;
+    });
+  }
+  
+  return obj;
+}
+
+function adminPodeModificar(atendimento, req) {
+  if (!ROLES_MASCARADOS.includes(req.userRole)) {
+    return { permitido: true };
+  }
+  
+  const adminId = req.userId?.toString();
+  const criadorId = atendimento?.entrada?.registradoPor?.toString();
+  
+  if (criadorId === adminId) {
+    return { permitido: true };
+  }
+  
+  return {
+    permitido: false,
+    motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
+  };
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -28,7 +121,8 @@ const authenticateToken = (req, res, next) => {
 };
 
 const verificarSupervisao = (req, res, next) => {
-  const allowedRoles = ['supervisao', 'super_admin', 'admin'];
+  // 🔥 Apenas supervisao e super_admin acessam
+  const allowedRoles = ['supervisao', 'super_admin'];
   if (!allowedRoles.includes(req.userRole)) {
     return res.status(403).json({
       success: false,
@@ -170,7 +264,7 @@ router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, 
 });
 
 // ============================================
-// REGISTRAR NOVO ATENDIMENTO (COM ASSINATURA VIA QR)
+// REGISTRAR NOVO ATENDIMENTO
 // ============================================
 router.post('/registrar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -259,7 +353,7 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
 });
 
 // ============================================
-// 🔥 APLICAR ASSINATURA DA SESSÃO AO ATENDIMENTO
+// APLICAR ASSINATURA
 // ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -270,23 +364,12 @@ router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async
     }
     
     const sessao = await SessaoAssinatura.findOne({ sessaoId });
-    
-    if (!sessao) {
-      return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
-    }
-    
-    if (sessao.status !== 'assinado') {
-      return res.status(400).json({ success: false, error: 'Sessão ainda não foi assinada' });
-    }
-    
-    if (!sessao.assinaturaBase64) {
-      return res.status(400).json({ success: false, error: 'Sessão não contém assinatura' });
-    }
+    if (!sessao) return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
+    if (sessao.status !== 'assinado') return res.status(400).json({ success: false, error: 'Sessão ainda não foi assinada' });
+    if (!sessao.assinaturaBase64) return res.status(400).json({ success: false, error: 'Sessão não contém assinatura' });
     
     const atendimento = await AtendimentoSupervisao.findById(atendimentoId);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     atendimento.entrada.assinaturaBase64 = sessao.assinaturaBase64;
     atendimento.entrada.temAssinatura = true;
@@ -336,6 +419,12 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
       return res.status(400).json({ success: false, error: 'Atendimento já finalizado' });
     }
     
+    // 🚫 super_admin só finaliza os que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
+    }
+    
     const supervisor = await User.findById(req.userId).select('nome');
     
     atendimento.saida = {
@@ -383,6 +472,11 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
     
     const atendimento = await AtendimentoSupervisao.findById(atendimentoId);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
+    }
     
     const dataObj = new Date(dataRemarcacao + 'T00:00:00');
     const hoje = new Date();
@@ -492,10 +586,7 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
 // ============================================
 router.get('/remarcacoes/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const atendimento = await AtendimentoSupervisao.findOne({
-      'remarcacoes.id': req.params.id
-    });
-    
+    const atendimento = await AtendimentoSupervisao.findOne({ 'remarcacoes.id': req.params.id });
     if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === req.params.id);
@@ -534,11 +625,13 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, as
       return res.status(400).json({ success: false, error: 'Ação inválida' });
     }
     
-    const atendimento = await AtendimentoSupervisao.findOne({
-      'remarcacoes.id': remarcacaoId
-    });
-    
+    const atendimento = await AtendimentoSupervisao.findOne({ 'remarcacoes.id': remarcacaoId });
     if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
+    }
     
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === remarcacaoId);
     if (!remarcacao) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
@@ -674,31 +767,13 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     
     res.json({
       success: true,
-      metricas: {
-        hoje: atendimentosHoje,
-        semana: atendimentosSemana,
-        mes: atendimentosMes,
-        total,
-        emAndamento,
-        finalizadosHoje
-      },
-      porTipo: porTipo.map(t => ({
-        tipo: t._id,
-        label: AtendimentoSupervisao.getTipoTarefaLabel(t._id),
-        count: t.count
-      })),
-      porGravidade: porGravidade.map(g => ({
-        gravidade: g._id,
-        count: g.count
-      })),
-      resultados: resultados.map(r => ({
-        resultado: r._id,
-        label: {
-          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
-          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
-        }[r._id] || r._id,
-        count: r.count
-      })),
+      metricas: { hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes, total, emAndamento, finalizadosHoje },
+      porTipo: porTipo.map(t => ({ tipo: t._id, label: AtendimentoSupervisao.getTipoTarefaLabel(t._id), count: t.count })),
+      porGravidade: porGravidade.map(g => ({ gravidade: g._id, count: g.count })),
+      resultados: resultados.map(r => ({ resultado: r._id, label: {
+        'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+        'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
+      }[r._id] || r._id, count: r.count })),
       tendencias: {
         ultimos7Dias,
         porTurma: porTurma.map(t => ({ turma: t._id || 'Sem turma', count: t.count })),
@@ -712,45 +787,55 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS ATIVOS
+// LISTAR ATENDIMENTOS ATIVOS (🔒 MASCARADO)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimentos = await AtendimentoSupervisao.find({ status: 'em_andamento' })
       .sort({ prioridade: -1, 'entrada.dataHora': -1 });
     
-    res.json({
-      success: true,
-      total: atendimentos.length,
-      atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
-        tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
+    const lista = atendimentos.map(a => ({
+      id: a._id,
+      alunoId: a.alunoId,
+      alunoNome: a.alunoNome,
+      alunoTurma: a.alunoTurma,
+      alunoFoto: a.alunoFoto,
+      tipoTarefa: a.tipoTarefa,
+      tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
+      descricao: a.entrada.descricao,
+      gravidade: a.entrada.gravidade,
+      prioridade: a.prioridade,
+      dataHoraEntrada: a.entrada.dataHora,
+      tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
+      temRemarcacaoPendente: a.temRemarcacaoPendente || false,
+      temAssinatura: !!(a.entrada?.assinaturaBase64),
+      statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+      entrada: {
         descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        dataHoraEntrada: a.entrada.dataHora,
-        tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
-        temRemarcacaoPendente: a.temRemarcacaoPendente || false,
-        temAssinatura: !!(a.entrada?.assinaturaBase64),
-        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria'
-      }))
-    });
+        observacoes: a.entrada.observacoes,
+        registradoPor: a.entrada.registradoPor,
+        registradoPorNome: a.entrada.registradoPorNome
+      },
+      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
+    }));
+    
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
+    res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS
+// LISTAR TODOS OS ATENDIMENTOS (🔒 MASCARADO + BUSCA)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const { limit = 100, page = 1, tipo, status, turma, dataInicio, dataFim } = req.query;
+    const { 
+      limit = 100, page = 1, tipo, status, turma, dataInicio, dataFim,
+      busca, resultado
+    } = req.query;
     
     let query = {};
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
@@ -761,6 +846,18 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
       if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
+    }
+    
+    if (busca && busca.trim() !== '') {
+      const termo = busca.trim();
+      query.$or = [
+        { alunoNome: { $regex: termo, $options: 'i' } },
+        { alunoMatricula: { $regex: termo, $options: 'i' } }
+      ];
+    }
+    
+    if (resultado && resultado !== 'todos' && resultado !== '') {
+      query['saida.resultado'] = resultado;
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -784,6 +881,47 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
       ...turmasAlunos
     ])].sort();
     
+    const lista = atendimentos.map(a => ({
+      id: a._id,
+      alunoId: a.alunoId,
+      alunoNome: a.alunoNome,
+      alunoMatricula: a.alunoMatricula,
+      alunoTurma: a.alunoTurma,
+      alunoCurso: a.alunoCurso,
+      tipoTarefa: a.tipoTarefa,
+      tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
+      descricao: a.entrada.descricao,
+      gravidade: a.entrada.gravidade,
+      prioridade: a.prioridade,
+      status: a.status,
+      dataEntrada: a.entrada.dataHora,
+      dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
+      registradoPor: a.entrada.registradoPorNome,
+      registradoPorId: a.entrada.registradoPor,
+      temAssinatura: !!(a.entrada?.assinaturaBase64),
+      statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+      saida: a.saida ? {
+        dataHora: a.saida.dataHora,
+        dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
+        resultado: a.saida.resultado,
+        resultadoTexto: {
+          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
+        }[a.saida.resultado] || a.saida.resultado,
+        observacoesFinais: a.saida.observacoesFinais,
+        registradoPor: a.saida.registradoPorNome
+      } : null,
+      createdAt: a.createdAt,
+      entrada: {
+        descricao: a.entrada.descricao,
+        observacoes: a.entrada.observacoes,
+        registradoPor: a.entrada.registradoPor
+      },
+      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
+    }));
+    
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
     res.json({
       success: true,
       total,
@@ -791,37 +929,7 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
       turmasDisponiveis,
-      atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        status: a.status,
-        dataEntrada: a.entrada.dataHora,
-        dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
-        registradoPor: a.entrada.registradoPorNome,
-        temAssinatura: !!(a.entrada?.assinaturaBase64),
-        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
-        saida: a.saida ? {
-          dataHora: a.saida.dataHora,
-          dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
-          resultado: a.saida.resultado,
-          resultadoTexto: {
-            'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
-            'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
-          }[a.saida.resultado] || a.saida.resultado,
-          observacoesFinais: a.saida.observacoesFinais,
-          registradoPor: a.saida.registradoPorNome
-        } : null,
-        createdAt: a.createdAt
-      }))
+      atendimentos: listaMascarada
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
@@ -829,115 +937,113 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
 });
 
 // ============================================
-// BUSCAR ATENDIMENTO POR ID
+// BUSCAR ATENDIMENTO POR ID (🔒 MASCARADO)
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findById(req.params.id);
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
+    const payload = {
+      id: atendimento._id,
+      alunoId: atendimento.alunoId,
+      alunoNome: atendimento.alunoNome,
+      alunoMatricula: atendimento.alunoMatricula,
+      alunoTurma: atendimento.alunoTurma,
+      alunoCurso: atendimento.alunoCurso,
+      tipoTarefa: atendimento.tipoTarefa,
+      tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(atendimento.tipoTarefa),
+      entrada: {
+        dataHora: atendimento.entrada.dataHora,
+        dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
+        descricao: atendimento.entrada.descricao,
+        observacoes: atendimento.entrada.observacoes,
+        gravidade: atendimento.entrada.gravidade,
+        registradoPor: atendimento.entrada.registradoPor,
+        registradoPorNome: atendimento.entrada.registradoPorNome,
+        temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
+        statusAssinatura: atendimento.entrada?.statusAssinatura || 'nao_necessaria',
+        assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
+        assinadaEm: atendimento.entrada?.assinadaEm || null,
+        assinadaPorNome: atendimento.entrada?.assinadaPorNome || null,
+        sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null
+      },
+      detalhes: atendimento.detalhes,
+      saida: atendimento.saida ? {
+        dataHora: atendimento.saida.dataHora,
+        dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
+        resultado: atendimento.saida.resultado,
+        resultadoTexto: atendimento.saida.resultadoTexto,
+        observacoesFinais: atendimento.saida.observacoesFinais,
+        registradoPor: atendimento.saida.registradoPorNome
+      } : null,
+      status: atendimento.status,
+      prioridade: atendimento.prioridade,
+      remarcacoes: atendimento.remarcacoes || [],
+      temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
+      anexos: atendimento.anexos,
+      createdAt: atendimento.createdAt
+    };
     
-    res.json({
-      success: true,
-      atendimento: {
-        id: atendimento._id,
-        alunoId: atendimento.alunoId,
-        alunoNome: atendimento.alunoNome,
-        alunoMatricula: atendimento.alunoMatricula,
-        alunoTurma: atendimento.alunoTurma,
-        alunoCurso: atendimento.alunoCurso,
-        tipoTarefa: atendimento.tipoTarefa,
-        tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(atendimento.tipoTarefa),
-        entrada: {
-          dataHora: atendimento.entrada.dataHora,
-          dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
-          descricao: atendimento.entrada.descricao,
-          observacoes: atendimento.entrada.observacoes,
-          gravidade: atendimento.entrada.gravidade,
-          registradoPor: atendimento.entrada.registradoPorNome,
-          temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
-          statusAssinatura: atendimento.entrada?.statusAssinatura || 'nao_necessaria',
-          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
-          assinadaEm: atendimento.entrada?.assinadaEm || null,
-          assinadaPorNome: atendimento.entrada?.assinadaPorNome || null,
-          sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null
-        },
-        detalhes: atendimento.detalhes,
-        saida: atendimento.saida ? {
-          dataHora: atendimento.saida.dataHora,
-          dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
-          resultado: atendimento.saida.resultado,
-          resultadoTexto: atendimento.saida.resultadoTexto,
-          observacoesFinais: atendimento.saida.observacoesFinais,
-          registradoPor: atendimento.saida.registradoPorNome
-        } : null,
-        status: atendimento.status,
-        prioridade: atendimento.prioridade,
-        remarcacoes: atendimento.remarcacoes || [],
-        temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
-        anexos: atendimento.anexos,
-        createdAt: atendimento.createdAt
-      }
-    });
+    const payloadMascarado = mascararParaAdmin(payload, req);
+    
+    res.json({ success: true, atendimento: payloadMascarado });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// EDITAR ATENDIMENTO
+// EDITAR ATENDIMENTO (🚫 BLOQUEADO)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
-    try {
-        const { tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
-        
-        const atendimento = await AtendimentoSupervisao.findById(req.params.id);
-        if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-        
-        if (tipoTarefa) atendimento.tipoTarefa = tipoTarefa;
-        if (descricao) atendimento.entrada.descricao = descricao;
-        if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
-        if (gravidade) atendimento.entrada.gravidade = gravidade;
-        if (prioridade) atendimento.prioridade = prioridade;
-        if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
-        if (status) atendimento.status = status;
-        
-        if (saida) {
-            atendimento.saida = {
-                ...atendimento.saida,
-                ...saida,
-                registradoPor: req.userId,
-                registradoPorNome: req.userNome
-            };
-        }
-        
-        atendimento.updatedAt = new Date();
-        await atendimento.save();
-        
-        res.json({
-            success: true,
-            message: 'Atendimento atualizado com sucesso',
-            atendimento: { id: atendimento._id }
-        });
-    } catch (error) {
-        console.error('Erro ao editar:', error);
-        res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  try {
+    const atendimento = await AtendimentoSupervisao.findById(req.params.id);
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
+    
+    const { tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
+    
+    if (tipoTarefa) atendimento.tipoTarefa = tipoTarefa;
+    if (descricao) atendimento.entrada.descricao = descricao;
+    if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
+    if (gravidade) atendimento.entrada.gravidade = gravidade;
+    if (prioridade) atendimento.prioridade = prioridade;
+    if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
+    if (status) atendimento.status = status;
+    
+    if (saida) {
+      atendimento.saida = { ...atendimento.saida, ...saida, registradoPor: req.userId, registradoPorNome: req.userNome };
+    }
+    
+    atendimento.updatedAt = new Date();
+    await atendimento.save();
+    
+    res.json({ success: true, message: 'Atendimento atualizado com sucesso', atendimento: { id: atendimento._id } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
 });
 
 // ============================================
-// EXCLUIR ATENDIMENTO
+// EXCLUIR ATENDIMENTO (🚫 BLOQUEADO)
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const atendimento = await AtendimentoSupervisao.findByIdAndDelete(req.params.id);
-    
+    const atendimento = await AtendimentoSupervisao.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
-    console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id})`);
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
+    }
     
+    await AtendimentoSupervisao.findByIdAndDelete(req.params.id);
+    console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id})`);
     res.json({ success: true, message: 'Atendimento excluído com sucesso' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
@@ -949,46 +1055,36 @@ router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async 
 // ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
+    if (req.userRole === 'super_admin') {
+      return res.status(403).json({ success: false, error: 'Apenas a Supervisão pode excluir em massa.', code: 'ADMIN_SEM_PERMISSAO_MASSA' });
+    }
+    
     const { dataCorte, status = 'finalizado', confirmacao } = req.body;
-
     if (confirmacao !== 'CONFIRMAR') {
       return res.status(400).json({ success: false, error: 'Confirmação inválida' });
     }
-
-    if (!dataCorte) {
-      return res.status(400).json({ success: false, error: 'Data de corte é obrigatória' });
-    }
+    if (!dataCorte) return res.status(400).json({ success: false, error: 'Data de corte é obrigatória' });
 
     const dataObj = fimDoDiaBrasil(dataCorte);
     if (isNaN(dataObj.getTime())) {
       return res.status(400).json({ success: false, error: 'Data de corte inválida' });
     }
 
-    const filtro = {
-      status: status,
-      'saida.dataHora': { $lt: dataObj }
-    };
-
+    const filtro = { status, 'saida.dataHora': { $lt: dataObj } };
     const totalAntes = await AtendimentoSupervisao.countDocuments(filtro);
 
     if (totalAntes === 0) {
-      return res.json({
-        success: true,
-        message: 'Nenhum atendimento encontrado para os critérios',
-        excluidos: 0
-      });
+      return res.json({ success: true, message: 'Nenhum atendimento encontrado', excluidos: 0 });
     }
 
     const resultado = await AtendimentoSupervisao.deleteMany(filtro);
-
-    console.log(`🗑️ EXCLUSÃO EM MASSA: ${resultado.deletedCount} atendimentos excluídos`);
+    console.log(`🗑️ EXCLUSÃO EM MASSA: ${resultado.deletedCount} excluídos`);
 
     res.json({
       success: true,
-      message: `${resultado.deletedCount} atendimento(s) excluído(s) com sucesso`,
+      message: `${resultado.deletedCount} atendimento(s) excluído(s)`,
       excluidos: resultado.deletedCount,
-      dataCorte: dataCorte,
-      status: status
+      dataCorte, status
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro ao excluir: ' + error.message });
@@ -1022,16 +1118,11 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
     
     res.json({
       success: true,
-      aluno: {
-        id: aluno._id, nome: aluno.nome, matricula: aluno.matricula,
-        turma: aluno.turma, curso: aluno.curso
-      },
+      aluno: { id: aluno._id, nome: aluno.nome, matricula: aluno.matricula, turma: aluno.turma, curso: aluno.curso },
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtendimentos: atendimentos.length,
-        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count
-        })),
+        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({ tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count })),
         porGravidade,
         emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
         finalizados: atendimentos.filter(a => a.status === 'finalizado').length
@@ -1073,10 +1164,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
     atendimentos.forEach(a => {
       const key = a.alunoId.toString();
       if (!porAluno[key]) {
-        porAluno[key] = {
-          alunoId: a.alunoId, alunoNome: a.alunoNome,
-          alunoMatricula: a.alunoMatricula, total: 0, tipos: {}
-        };
+        porAluno[key] = { alunoId: a.alunoId, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula, total: 0, tipos: {} };
       }
       porAluno[key].total++;
       porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
@@ -1090,9 +1178,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
       estatisticas: {
         totalAtendimentos: atendimentos.length,
         totalAlunosAtendidos: Object.keys(porAluno).length,
-        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
-          tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count
-        }))
+        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({ tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count }))
       },
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       atendimentos: atendimentos.map(a => ({
@@ -1128,7 +1214,7 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
     const [atendimentos, total, comAssinatura] = await Promise.all([
       AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 }).limit(1000),
       AtendimentoSupervisao.countDocuments(query),
-      AtendimentoSupervisao.countDocuments({ ...query, 'entrada.assinaturaBase64': { $exists: true, $ne: '' } })
+      AtendimentoSupervisao.countDocuments({ ...query, 'entrada.temAssinatura': true })
     ]);
     
     const porTurma = {};
@@ -1169,11 +1255,7 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
       totalAtendimentos: total,
       comAssinatura,
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
-      porTipo: Object.entries(porTipo).map(([t, count]) => ({
-        tipo: t,
-        label: AtendimentoSupervisao.getTipoTarefaLabel(t),
-        count
-      })).sort((a, b) => b.count - a.count),
+      porTipo: Object.entries(porTipo).map(([t, count]) => ({ tipo: t, label: AtendimentoSupervisao.getTipoTarefaLabel(t), count })).sort((a, b) => b.count - a.count),
       porGravidade,
       registros: atendimentos.map(a => ({
         id: a._id,

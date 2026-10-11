@@ -3,8 +3,82 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AtendimentoEnfermaria = require('../models/AtendimentoEnfermaria');
+const { descriptografar } = require('../utils/criptografia');
 
-// Middleware de autenticação
+// ============================================
+// 🔒 HELPER: MASCARAR DADOS SENSÍVEIS
+// ============================================
+const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
+const ROLES_MASCARADOS = ['super_admin'];
+
+function mascararParaAdmin(dados, req) {
+  if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) {
+    return dados;
+  }
+  
+  if (Array.isArray(dados)) {
+    return dados.map(item => mascararItem(item, req));
+  }
+  
+  return mascararItem(dados, req);
+}
+
+function mascararItem(item, req) {
+  if (!item) return item;
+  
+  const obj = item.toObject ? item.toObject() : JSON.parse(JSON.stringify(item));
+  
+  const adminId = req.userId?.toString();
+  const criadorId = (
+    obj.entrada?.registradoPor || 
+    obj.registradoPorId || 
+    obj.criadoPor
+  )?.toString();
+  
+  if (criadorId && adminId && criadorId === adminId) {
+    obj._mascarado = false;
+    obj._criadoPorMim = true;
+    return obj;
+  }
+  
+  obj._mascarado = true;
+  obj._criadoPorMim = false;
+  
+  if (obj.entrada) {
+    if (obj.entrada.queixa) obj.entrada.queixa = MASCARA_TEXTO;
+    if (obj.entrada.observacoes) obj.entrada.observacoes = MASCARA_TEXTO;
+  }
+  
+  if (obj.queixa) obj.queixa = MASCARA_TEXTO;
+  
+  if (obj.saida) {
+    if (obj.saida.observacoes) obj.saida.observacoes = MASCARA_TEXTO;
+  }
+  
+  return obj;
+}
+
+function adminPodeModificar(atendimento, req) {
+  if (!ROLES_MASCARADOS.includes(req.userRole)) {
+    return { permitido: true };
+  }
+  
+  const adminId = req.userId?.toString();
+  const criadorId = atendimento?.entrada?.registradoPor?.toString();
+  
+  if (criadorId === adminId) {
+    return { permitido: true };
+  }
+  
+  return {
+    permitido: false,
+    motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
+  };
+}
+
+// ============================================
+// MIDDLEWARES
+// ============================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -117,12 +191,9 @@ router.get('/aluno/:id', authenticateToken, verificarEnfermaria, async (req, res
 // ============================================
 // 📝 REGISTRAR ENTRADA
 // ============================================
-// ============================================
-// 📝 REGISTRAR ENTRADA
-// ============================================
 router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
-    const { alunoId, queixa, observacoes, dataEntrada } = req.body; // 🆕 dataEntrada
+    const { alunoId, queixa, observacoes, dataEntrada } = req.body;
     
     if (!queixa || queixa.trim() === '') {
       return res.status(400).json({ success: false, error: 'A queixa é obrigatória' });
@@ -140,7 +211,6 @@ router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res)
     
     const enfermeiro = await User.findById(req.userId).select('nome');
     
-    // 🆕 Definir data da entrada (usa a fornecida ou a data atual)
     let dataHoraEntrada = new Date();
     if (dataEntrada) {
       const dataParsed = new Date(dataEntrada);
@@ -161,7 +231,7 @@ router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res)
       alunoCurso: aluno.curso || 'Não informado',
       alunoFoto: aluno.fotoPerfil,
       entrada: {
-        dataHora: dataHoraEntrada, // 🆕 Data personalizada
+        dataHora: dataHoraEntrada,
         queixa: queixa.trim(),
         observacoes: observacoes || '',
         registradoPor: req.userId,
@@ -188,9 +258,6 @@ router.post('/entrada', authenticateToken, verificarEnfermaria, async (req, res)
 // ============================================
 // 📤 REGISTRAR SAÍDA
 // ============================================
-// ============================================
-// 📤 REGISTRAR SAÍDA
-// ============================================
 router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const { 
@@ -199,7 +266,7 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
       desfechoOutrosTexto, 
       coordenadorPatioNome, 
       observacoes,
-      dataSaida // 🆕 NOVO CAMPO
+      dataSaida
     } = req.body;
     
     const desfechosValidos = ['retornou_sala', 'encaminhado_gestao', 'liberado_responsavel', 'liberado_coordenador', 'outros'];
@@ -216,8 +283,7 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
       return res.status(404).json({ success: false, error: 'Nenhum atendimento ativo encontrado' });
     }
     
-    // 🆕 Validar e processar dataHoraSaida
-    let dataHoraSaida = new Date(); // fallback: agora
+    let dataHoraSaida = new Date();
     if (dataSaida) {
       const dataParsed = new Date(dataSaida);
       if (isNaN(dataParsed.getTime())) {
@@ -226,7 +292,6 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
       if (dataParsed > new Date()) {
         return res.status(400).json({ success: false, error: 'Data de saída não pode ser no futuro' });
       }
-      // 🆕 Não pode ser anterior à entrada
       if (dataParsed < new Date(atendimento.entrada.dataHora)) {
         return res.status(400).json({ 
           success: false, 
@@ -239,7 +304,7 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
     const enfermeiro = await User.findById(req.userId).select('nome');
     
     atendimento.saida = {
-      dataHora: dataHoraSaida, // 🆕 Data personalizada
+      dataHora: dataHoraSaida,
       desfecho,
       desfechoOutrosTexto: desfecho === 'outros' ? desfechoOutrosTexto : undefined,
       coordenadorPatioNome: desfecho === 'liberado_coordenador' ? coordenadorPatioNome : undefined,
@@ -276,7 +341,7 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
 });
 
 // ============================================
-// 🆕 📋 BUSCAR ATENDIMENTO POR ID (para VER detalhes)
+// 📋 BUSCAR ATENDIMENTO POR ID (🔒 MASCARADO)
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -294,39 +359,45 @@ router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
       'outros': `Outros: ${atendimento.saida?.desfechoOutrosTexto || ''}`
     }[atendimento.saida.desfecho] : null;
     
+    const payload = {
+      id: atendimento._id,
+      alunoId: atendimento.alunoId,
+      alunoNome: atendimento.alunoNome,
+      alunoMatricula: atendimento.alunoMatricula,
+      alunoTurma: atendimento.alunoTurma,
+      alunoCurso: atendimento.alunoCurso,
+      alunoFoto: atendimento.alunoFoto,
+      status: atendimento.status,
+      entrada: {
+        dataHora: atendimento.entrada.dataHora,
+        dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
+        queixa: atendimento.entrada.queixa,
+        observacoes: atendimento.entrada.observacoes,
+        registradoPor: atendimento.entrada.registradoPor,
+        registradoPorNome: atendimento.entrada.registradoPorNome,
+        editadoEm: atendimento.entrada.editadoEm,
+        editadoPorNome: atendimento.entrada.editadoPorNome
+      },
+      saida: atendimento.saida ? {
+        dataHora: atendimento.saida.dataHora,
+        dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
+        desfecho: atendimento.saida.desfecho,
+        desfechoTexto,
+        desfechoOutrosTexto: atendimento.saida.desfechoOutrosTexto,
+        coordenadorPatioNome: atendimento.saida.coordenadorPatioNome,
+        observacoes: atendimento.saida.observacoes,
+        registradoPorNome: atendimento.saida.registradoPorNome
+      } : null,
+      createdAt: atendimento.createdAt,
+      updatedAt: atendimento.updatedAt
+    };
+
+    // 🔒 MASCARAR PARA SUPER_ADMIN
+    const payloadMascarado = mascararParaAdmin(payload, req);
+    
     res.json({
       success: true,
-      atendimento: {
-        id: atendimento._id,
-        alunoId: atendimento.alunoId,
-        alunoNome: atendimento.alunoNome,
-        alunoMatricula: atendimento.alunoMatricula,
-        alunoTurma: atendimento.alunoTurma,
-        alunoCurso: atendimento.alunoCurso,
-        alunoFoto: atendimento.alunoFoto,
-        status: atendimento.status,
-        entrada: {
-          dataHora: atendimento.entrada.dataHora,
-          dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
-          queixa: atendimento.entrada.queixa,
-          observacoes: atendimento.entrada.observacoes,
-          registradoPorNome: atendimento.entrada.registradoPorNome,
-          editadoEm: atendimento.entrada.editadoEm,
-          editadoPorNome: atendimento.entrada.editadoPorNome
-        },
-        saida: atendimento.saida ? {
-          dataHora: atendimento.saida.dataHora,
-          dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
-          desfecho: atendimento.saida.desfecho,
-          desfechoTexto,
-          desfechoOutrosTexto: atendimento.saida.desfechoOutrosTexto,
-          coordenadorPatioNome: atendimento.saida.coordenadorPatioNome,
-          observacoes: atendimento.saida.observacoes,
-          registradoPorNome: atendimento.saida.registradoPorNome
-        } : null,
-        createdAt: atendimento.createdAt,
-        updatedAt: atendimento.updatedAt
-      }
+      atendimento: payloadMascarado
     });
   } catch (error) {
     console.error('Erro ao buscar atendimento:', error);
@@ -335,28 +406,35 @@ router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
-// 🆕 ✏️ EDITAR ATENDIMENTO (queixa, observações, data)
-// ============================================
-// ============================================
-// 🆕 ✏️ EDITAR ATENDIMENTO (queixa, observações, data entrada e saída)
+// ✏️ EDITAR ATENDIMENTO (🚫 BLOQUEIO PARA SUPER_ADMIN)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const { 
       queixa, 
       observacoes, 
-      dataEntrada,  // 🆕
-      dataSaida,    // 🆕
-      desfecho,     // 🆕 (opcional - permitir editar desfecho)
-      desfechoOutrosTexto,      // 🆕
-      coordenadorPatioNome,     // 🆕
-      observacoesSaida          // 🆕
+      dataEntrada,
+      dataSaida,
+      desfecho,
+      desfechoOutrosTexto,
+      coordenadorPatioNome,
+      observacoesSaida
     } = req.body;
     
     const atendimento = await AtendimentoEnfermaria.findById(req.params.id);
     
     if (!atendimento) {
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+
+    // 🚫 BLOQUEIO: super_admin só edita os que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.motivo,
+        code: 'ADMIN_NAO_CRIADOR'
+      });
     }
     
     if (!queixa || queixa.trim() === '') {
@@ -366,7 +444,6 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
     const enfermeiro = await User.findById(req.userId).select('nome');
     const agora = new Date();
     
-    // 🆕 Validar e atualizar data de entrada
     if (dataEntrada) {
       const dataParsed = new Date(dataEntrada);
       if (isNaN(dataParsed.getTime())) {
@@ -378,14 +455,12 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
       atendimento.entrada.dataHora = dataParsed;
     }
     
-    // Atualizar dados da entrada
     atendimento.entrada.queixa = queixa.trim();
     atendimento.entrada.observacoes = observacoes || '';
     atendimento.entrada.editadoEm = agora;
     atendimento.entrada.editadoPor = req.userId;
     atendimento.entrada.editadoPorNome = enfermeiro?.nome || req.userNome || 'Enfermeiro';
     
-    // 🆕 Se for finalizado e vieram dados de saída, permitir editar
     if (atendimento.status === 'finalizado' && atendimento.saida) {
       if (desfecho) {
         const desfechosValidos = ['retornou_sala', 'encaminhado_gestao', 'liberado_responsavel', 'liberado_coordenador', 'outros'];
@@ -401,7 +476,6 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
         atendimento.saida.observacoes = observacoesSaida;
       }
       
-      // 🆕 Validar e atualizar data de saída
       if (dataSaida) {
         const dataParsed = new Date(dataSaida);
         if (isNaN(dataParsed.getTime())) {
@@ -450,7 +524,7 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
-// 🆕 🗑️ EXCLUIR ATENDIMENTO
+// 🗑️ EXCLUIR ATENDIMENTO (🚫 BLOQUEIO PARA SUPER_ADMIN)
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -458,6 +532,16 @@ router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async 
     
     if (!atendimento) {
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+
+    // 🚫 BLOQUEIO: super_admin só exclui os que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.motivo,
+        code: 'ADMIN_NAO_CRIADOR'
+      });
     }
     
     await AtendimentoEnfermaria.findByIdAndDelete(req.params.id);
@@ -474,6 +558,9 @@ router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async 
   }
 });
 
+// ============================================
+// 📊 DASHBOARD
+// ============================================
 // ============================================
 // 📊 DASHBOARD
 // ============================================
@@ -531,11 +618,49 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       { $sort: { count: -1 } }, { $limit: 5 }
     ]);
     
-    const queixas = await AtendimentoEnfermaria.aggregate([
+    // ============================================
+    // 🆕 QUEIXAS COMUNS - DESCRIPTOGRAFADAS
+    // ============================================
+    const queixasRaw = await AtendimentoEnfermaria.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
       { $group: { _id: '$entrada.queixa', count: { $sum: 1 } } },
-      { $sort: { count: -1 } }, { $limit: 5 }
+      { $sort: { count: -1 } }, 
+      { $limit: 20 }
     ]);
+    
+    // 🔓 Descriptografa cada queixa e agrupa as que ficarem iguais
+    const queixasMap = new Map();
+    queixasRaw.forEach(q => {
+      let texto = q._id;
+      try {
+        texto = descriptografar(q._id);
+      } catch (e) {
+        // Se falhar, mantém o valor bruto
+      }
+      
+      // Trunca para agrupar queixas parecidas
+      const textoChave = (texto || '').substring(0, 50).trim();
+      
+      if (queixasMap.has(textoChave)) {
+        queixasMap.set(textoChave, queixasMap.get(textoChave) + q.count);
+      } else {
+        queixasMap.set(textoChave, q.count);
+      }
+    });
+    
+    // Ordena por count e pega as 5 mais comuns
+    const queixasOrdenadas = Array.from(queixasMap.entries())
+      .map(([queixa, count]) => ({ queixa, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    
+    // 🔒 MASCARAR para super_admin
+    const queixasParaEnviar = ROLES_MASCARADOS.includes(req.userRole)
+      ? queixasOrdenadas.map(q => ({
+          queixa: '🔒 Conteúdo protegido',
+          count: q.count
+        }))
+      : queixasOrdenadas;
     
     const porHora = await AtendimentoEnfermaria.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
@@ -580,11 +705,12 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       tendencias: {
         ultimos7Dias,
         porTurma: porTurma.map(t => ({ turma: t._id || 'Sem turma', count: t.count })),
-        queixasComuns: queixas.map(q => ({ queixa: q._id.substring(0, 50), count: q.count })),
+        queixasComuns: queixasParaEnviar,  // 🆕 com mascaramento
         distribuicaoHoraria: horasDistribuicao
       }
     });
   } catch (error) {
+    console.error('Erro no dashboard da enfermaria:', error);
     res.status(500).json({ success: false, error: 'Erro ao buscar estatísticas: ' + error.message });
   }
 });
@@ -758,27 +884,46 @@ router.get('/relatorio/geral', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
-// 📋 LISTAR ATENDIMENTOS (com filtros e paginação)
-// Usado pelo dashboard para exibir os atendimentos recentes
+// 📋 LISTAR ATENDIMENTOS (COM PAGINAÇÃO + BUSCA NO BACKEND)
 // ============================================
 router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
-    const { turma, status, dataInicio, dataFim, page = 1, limit = 20 } = req.query;
+    const { 
+      turma, 
+      status, 
+      dataInicio, 
+      dataFim, 
+      busca,         // 🆕 busca por nome/matrícula
+      page = 1, 
+      limit = 20 
+    } = req.query;
     
     let query = {};
     
+    // Filtro por turma
     if (turma && turma.trim() !== '') {
       query.alunoTurma = turma;
     }
     
+    // Filtro por status
     if (status && status !== 'todos') {
       query.status = status;
     }
     
+    // Filtro por período
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
       if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
+    }
+    
+    // 🆕 BUSCA por nome OU matrícula (no banco, em TODOS os registros)
+    if (busca && busca.trim() !== '') {
+      const termo = busca.trim();
+      query.$or = [
+        { alunoNome: { $regex: termo, $options: 'i' } },
+        { alunoMatricula: { $regex: termo, $options: 'i' } }
+      ];
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -800,47 +945,54 @@ router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) =
       'outros': 'Outros'
     };
     
+    const lista = atendimentos.map(a => ({
+      id: a._id,
+      alunoId: a.alunoId,
+      alunoNome: a.alunoNome,
+      alunoMatricula: a.alunoMatricula,
+      alunoTurma: a.alunoTurma,
+      alunoCurso: a.alunoCurso,
+      alunoFoto: a.alunoFoto,
+      status: a.status,
+      entrada: {
+        dataHora: a.entrada?.dataHora,
+        dataHoraFormatada: a.entrada?.dataHora 
+          ? new Date(a.entrada.dataHora).toLocaleString('pt-BR') 
+          : '-',
+        queixa: a.entrada?.queixa || '',
+        observacoes: a.entrada?.observacoes || '',
+        registradoPor: a.entrada?.registradoPor,
+        registradoPorNome: a.entrada?.registradoPorNome || '-'
+      },
+      saida: a.saida ? {
+        dataHora: a.saida.dataHora,
+        dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
+        desfecho: a.saida.desfecho,
+        desfechoTexto: desfechoLabel[a.saida.desfecho] || a.saida.desfecho,
+        observacoes: a.saida.observacoes || ''
+      } : null,
+      tempoAtendimento: a.saida?.dataHora 
+        ? Math.floor((new Date(a.saida.dataHora) - new Date(a.entrada.dataHora)) / 60000)
+        : (a.status === 'em_atendimento' 
+            ? Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000) 
+            : 0),
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt
+    }));
+
+    // 🔒 MASCARAR PARA SUPER_ADMIN
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
     res.json({
       success: true,
       total,
       paginacao: {
         page: parseInt(page),
         limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit))
+        pages: Math.ceil(total / parseInt(limit)),
+        total
       },
-      atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        alunoFoto: a.alunoFoto,
-        status: a.status,
-        entrada: {
-          dataHora: a.entrada?.dataHora,
-          dataHoraFormatada: a.entrada?.dataHora 
-            ? new Date(a.entrada.dataHora).toLocaleString('pt-BR') 
-            : '-',
-          queixa: a.entrada?.queixa || '',
-          observacoes: a.entrada?.observacoes || '',
-          registradoPorNome: a.entrada?.registradoPorNome || '-'
-        },
-        saida: a.saida ? {
-          dataHora: a.saida.dataHora,
-          dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
-          desfecho: a.saida.desfecho,
-          desfechoTexto: desfechoLabel[a.saida.desfecho] || a.saida.desfecho,
-          observacoes: a.saida.observacoes || ''
-        } : null,
-        tempoAtendimento: a.saida?.dataHora 
-          ? Math.floor((new Date(a.saida.dataHora) - new Date(a.entrada.dataHora)) / 60000)
-          : (a.status === 'em_atendimento' 
-              ? Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000) 
-              : 0),
-        createdAt: a.createdAt,
-        updatedAt: a.updatedAt
-      }))
+      atendimentos: listaMascarada
     });
   } catch (error) {
     console.error('Erro ao listar atendimentos:', error);
@@ -849,25 +1001,38 @@ router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) =
 });
 
 // ============================================
-// 📋 LISTAR ATENDIMENTOS ATIVOS
+// 📋 LISTAR ATENDIMENTOS ATIVOS (🔒 MASCARADO)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const atendimentos = await AtendimentoEnfermaria.find({ status: 'em_atendimento' }).sort({ 'entrada.dataHora': -1 });
     
+    const lista = atendimentos.map(a => ({
+      id: a._id,
+      alunoId: a.alunoId,
+      alunoNome: a.alunoNome,
+      alunoTurma: a.alunoTurma,
+      alunoFoto: a.alunoFoto,
+      queixa: a.entrada.queixa,
+      dataHoraEntrada: a.entrada.dataHora,
+      tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
+      registradoPor: a.entrada.registradoPor,
+      registradoPorNome: a.entrada.registradoPorNome,
+      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
+      entrada: {
+        queixa: a.entrada.queixa,
+        observacoes: a.entrada.observacoes,
+        registradoPor: a.entrada.registradoPor
+      }
+    }));
+
+    // 🔒 MASCARAR PARA SUPER_ADMIN
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
     res.json({
       success: true,
-      total: atendimentos.length,
-      atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
-        queixa: a.entrada.queixa,
-        dataHoraEntrada: a.entrada.dataHora,
-        tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000)
-      }))
+      total: listaMascarada.length,
+      atendimentos: listaMascarada
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro ao buscar atendimentos: ' + error.message });

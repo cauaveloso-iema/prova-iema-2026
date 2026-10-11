@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { criptografar, descriptografar } = require('../utils/criptografia');
 
 // ============================================
 // SUB-SCHEMA: REMARCAÇÃO
@@ -10,8 +11,23 @@ const RemarcacaoSchema = new mongoose.Schema({
   },
   dataRemarcacao: { type: String, required: true },
   horarioRemarcacao: { type: String, required: true },
-  motivoRemarcacao: { type: String, required: true, trim: true },
-  observacoesRemarcacao: { type: String, default: '', trim: true },
+  
+  // 🔐 Criptografados
+  motivoRemarcacao: { 
+    type: String, 
+    required: true, 
+    trim: true,
+    set: criptografar,
+    get: descriptografar
+  },
+  observacoesRemarcacao: { 
+    type: String, 
+    default: '', 
+    trim: true,
+    set: criptografar,
+    get: descriptografar
+  },
+  
   status: {
     type: String,
     enum: ['pendente', 'realizado', 'cancelado'],
@@ -22,7 +38,11 @@ const RemarcacaoSchema = new mongoose.Schema({
   criadaPorNome: { type: String, default: '' },
   finalizadaEm: { type: Date, default: null },
   finalizadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
-}, { _id: false });
+}, { 
+  _id: false,
+  toJSON: { getters: true },
+  toObject: { getters: true }
+});
 
 const AtendimentoSupervisaoSchema = new mongoose.Schema({
   alunoId: {
@@ -53,8 +73,20 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   
   entrada: {
     dataHora: { type: Date, default: Date.now },
-    descricao: { type: String, required: true },
-    observacoes: String,
+    
+    // 🔐 Criptografados
+    descricao: { 
+      type: String, 
+      required: true,
+      set: criptografar,
+      get: descriptografar
+    },
+    observacoes: { 
+      type: String,
+      set: criptografar,
+      get: descriptografar
+    },
+    
     gravidade: {
       type: String,
       enum: ['baixa', 'media', 'alta', 'critica'],
@@ -63,8 +95,13 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
     
-    // 🔥 ASSINATURA DIGITAL (via QR Code)
-    assinaturaBase64: { type: String, default: '' },
+    // 🔐 Criptografado
+    assinaturaBase64: { 
+      type: String, 
+      default: '',
+      set: criptografar,
+      get: descriptografar
+    },
     temAssinatura: { type: Boolean, default: false, index: true },
     statusAssinatura: {
       type: String,
@@ -78,24 +115,29 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     sessaoAssinaturaId: { type: String, default: null }
   },
   
+  // 🔐 Todos os campos de detalhes criptografados
   detalhes: {
-    testemunhas: [String],
-    descricaoOcorrido: String,
-    nomeResponsavel: String,
-    parentescoResponsavel: String,
-    telefoneResponsavel: String,
+    testemunhas: { 
+      type: [String],
+      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
+      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
+    },
+    descricaoOcorrido: { type: String, set: criptografar, get: descriptografar },
+    nomeResponsavel: { type: String, set: criptografar, get: descriptografar },
+    parentescoResponsavel: { type: String, set: criptografar, get: descriptografar },
+    telefoneResponsavel: { type: String, set: criptografar, get: descriptografar },
     compareceu: { type: Boolean, default: false },
-    nomeProfessor: String,
-    disciplina: String,
+    nomeProfessor: { type: String, set: criptografar, get: descriptografar },
+    disciplina: { type: String, set: criptografar, get: descriptografar },
     dataInicioSuspensao: Date,
     dataFimSuspensao: Date,
     diasSuspensao: Number,
-    encaminhadoPara: String,
-    motivoEncaminhamento: String,
+    encaminhadoPara: { type: String, set: criptografar, get: descriptografar },
+    motivoEncaminhamento: { type: String, set: criptografar, get: descriptografar },
     agendadoPara: Date,
-    tipoTarefaOutros: String,
-    providenciasTomadas: String,
-    proximosPassos: String
+    tipoTarefaOutros: { type: String, set: criptografar, get: descriptografar },
+    providenciasTomadas: { type: String, set: criptografar, get: descriptografar },
+    proximosPassos: { type: String, set: criptografar, get: descriptografar }
   },
   
   saida: {
@@ -105,8 +147,11 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
       enum: ['resolvido', 'em_acompanhamento', 'reincidente', 'encaminhado', 'pendente'],
       required: false
     },
-    resultadoTexto: String,
-    observacoesFinais: String,
+    
+    // 🔐 Criptografados
+    resultadoTexto: { type: String, set: criptografar, get: descriptografar },
+    observacoesFinais: { type: String, set: criptografar, get: descriptografar },
+    
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String
   },
@@ -141,6 +186,9 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  toJSON: { getters: true },
+  toObject: { getters: true }
 });
 
 // ============================================
@@ -222,4 +270,11 @@ AtendimentoSupervisaoSchema.methods.adicionarRemarcacao = function(dados) {
   return this.save();
 };
 
-module.exports = mongoose.model('AtendimentoSupervisao', AtendimentoSupervisaoSchema);
+// ============================================
+// EXPORT — força o nome EXATO da coleção
+// ============================================
+module.exports = mongoose.model(
+  'AtendimentoSupervisao',
+  AtendimentoSupervisaoSchema,
+  'atendimentosupervisaos'  // ⚠️ CONFIRME o nome no passo anterior!
+);

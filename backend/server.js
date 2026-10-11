@@ -1031,10 +1031,6 @@ app.use('/api/gestao-geral', gestaoGeralRoutes);
 const enfermariaRoutes = require('./routes/enfermaria');
 app.use('/api/enfermaria', enfermariaRoutes);
 
-// Importar rotas da Enfermaria Monitoramento
-const enfermariaMonitoramentoRoutes = require('./routes/enfermaria-monitoramento');
-app.use('/api/enfermaria-monitoramento', enfermariaMonitoramentoRoutes);
-
 // Importar rotas do rodízio
 const rodizioRefeicaoRoutes = require('./routes/rodizioRefeicao');
 app.use('/api/rodizio', rodizioRefeicaoRoutes);

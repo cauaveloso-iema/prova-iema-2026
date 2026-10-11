@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { criptografar, descriptografar } = require('../utils/criptografia');
 
 // ============================================
 // SUB-SCHEMA: REMARCAÇÃO
@@ -10,8 +11,23 @@ const RemarcacaoSchema = new mongoose.Schema({
   },
   dataRemarcacao: { type: String, required: true },
   horarioRemarcacao: { type: String, required: true },
-  motivoRemarcacao: { type: String, required: true, trim: true },
-  observacoesRemarcacao: { type: String, default: '', trim: true },
+  
+  // 🔐 Criptografados
+  motivoRemarcacao: { 
+    type: String, 
+    required: true, 
+    trim: true,
+    set: criptografar,
+    get: descriptografar
+  },
+  observacoesRemarcacao: { 
+    type: String, 
+    default: '', 
+    trim: true,
+    set: criptografar,
+    get: descriptografar
+  },
+  
   status: {
     type: String,
     enum: ['pendente', 'realizado', 'cancelado'],
@@ -22,7 +38,11 @@ const RemarcacaoSchema = new mongoose.Schema({
   criadaPorNome: { type: String, default: '' },
   finalizadaEm: { type: Date, default: null },
   finalizadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
-}, { _id: false });
+}, { 
+  _id: false,
+  toJSON: { getters: true },
+  toObject: { getters: true }
+});
 
 // ============================================
 // SCHEMA PRINCIPAL: ATENDIMENTO PSICOLOGIA
@@ -54,8 +74,20 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
   
   entrada: {
     dataHora: { type: Date, default: Date.now },
-    descricao: { type: String, required: true },
-    observacoes: String,
+    
+    // 🔐 Criptografados
+    descricao: { 
+      type: String, 
+      required: true,
+      set: criptografar,
+      get: descriptografar
+    },
+    observacoes: { 
+      type: String,
+      set: criptografar,
+      get: descriptografar
+    },
+    
     gravidade: {
       type: String,
       enum: ['baixa', 'media', 'alta', 'critica'],
@@ -64,11 +96,14 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
     
-    // 🔥 ASSINATURA DIGITAL (via QR Code)
+    // 🔐 Criptografado (dado biométrico - LGPD crítica!)
     assinaturaBase64: {
       type: String,
-      default: ''
+      default: '',
+      set: criptografar,
+      get: descriptografar
     },
+    
     temAssinatura: { 
       type: Boolean, 
       default: false, 
@@ -88,42 +123,51 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
     sessaoAssinaturaId: { type: String, default: null }
   },
   
+  // 🔐 Todos os campos sensíveis criptografados
   detalhes: {
-    contextoFamiliar: String,
-    historicoAnterior: String,
-    profissionaisEnvolvidos: [String],
+    contextoFamiliar: { type: String, set: criptografar, get: descriptografar },
+    historicoAnterior: { type: String, set: criptografar, get: descriptografar },
+    profissionaisEnvolvidos: { 
+      type: [String],
+      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
+      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
+    },
     
     // Escuta de Acolhimento
-    tipoEscuta: String,
+    tipoEscuta: { type: String, set: criptografar, get: descriptografar },
     duracaoEscuta: Number,
     
     // Manejo de Crises Emocionais
-    tipoCrise: String,
-    acoesTomadas: String,
-    encaminhamentoEmergencial: String,
+    tipoCrise: { type: String, set: criptografar, get: descriptografar },
+    acoesTomadas: { type: String, set: criptografar, get: descriptografar },
+    encaminhamentoEmergencial: { type: String, set: criptografar, get: descriptografar },
     
     // Atividades em Grupos
-    nomeAtividade: String,
-    participantesAtividade: [String],
-    localAtividade: String,
+    nomeAtividade: { type: String, set: criptografar, get: descriptografar },
+    participantesAtividade: { 
+      type: [String],
+      set: (arr) => Array.isArray(arr) ? arr.map(criptografar) : arr,
+      get: (arr) => Array.isArray(arr) ? arr.map(descriptografar) : arr
+    },
+    localAtividade: { type: String, set: criptografar, get: descriptografar },
     duracaoAtividade: Number,
     
     // Ações e Atividades em Saúde
-    temaAcao: String,
-    publicoAlvo: String,
-    localAcao: String,
+    temaAcao: { type: String, set: criptografar, get: descriptografar },
+    publicoAlvo: { type: String, set: criptografar, get: descriptografar },
+    localAcao: { type: String, set: criptografar, get: descriptografar },
     
     // Ações e Atividades Socioemocionais e Culturais
-    temaSocioemocional: String,
-    tipoAtividadeCultural: String,
-    parceria: String,
+    temaSocioemocional: { type: String, set: criptografar, get: descriptografar },
+    tipoAtividadeCultural: { type: String, set: criptografar, get: descriptografar },
+    parceria: { type: String, set: criptografar, get: descriptografar },
     
     // Outros
-    tipoTarefaOutros: String,
+    tipoTarefaOutros: { type: String, set: criptografar, get: descriptografar },
     
     // Comuns finais
-    providenciasTomadas: String,
-    proximosPassos: String
+    providenciasTomadas: { type: String, set: criptografar, get: descriptografar },
+    proximosPassos: { type: String, set: criptografar, get: descriptografar }
   },
   
   saida: {
@@ -133,8 +177,11 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
       enum: ['resolvido', 'em_acompanhamento', 'reincidente', 'encaminhado', 'pendente'],
       required: false
     },
-    resultadoTexto: String,
-    observacoesFinais: String,
+    
+    // 🔐 Criptografados
+    resultadoTexto: { type: String, set: criptografar, get: descriptografar },
+    observacoesFinais: { type: String, set: criptografar, get: descriptografar },
+    
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String
   },
@@ -169,6 +216,9 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
   
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+}, {
+  toJSON: { getters: true },
+  toObject: { getters: true }
 });
 
 // ============================================
@@ -186,7 +236,6 @@ AtendimentoPsicologiaSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1
 // MIDDLEWARE: PRE-SAVE
 // ============================================
 AtendimentoPsicologiaSchema.pre('save', function(next) {
-  // Sincroniza temAssinatura e statusAssinatura baseado no assinaturaBase64
   if (this.entrada) {
     const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
     this.entrada.temAssinatura = temAssinaturaReal;
@@ -252,4 +301,11 @@ AtendimentoPsicologiaSchema.methods.adicionarRemarcacao = function(dados) {
   return this.save();
 };
 
-module.exports = mongoose.model('AtendimentoPsicologia', AtendimentoPsicologiaSchema);
+// ============================================
+// EXPORT — força o nome EXATO da coleção
+// ============================================
+module.exports = mongoose.model(
+  'AtendimentoPsicologia',
+  AtendimentoPsicologiaSchema,
+  'atendimentopsicologias'  // ⚠️ CONFIRME o nome no passo anterior!
+);

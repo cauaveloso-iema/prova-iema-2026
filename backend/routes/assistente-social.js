@@ -5,6 +5,123 @@ const User = require('../models/User');
 const AtendimentoAssistenteSocial = require('../models/AtendimentoAssistenteSocial');
 
 // ============================================
+// 🔒 HELPER: MASCARAR DADOS SENSÍVEIS
+// ============================================
+// REGRA:
+//   - assistente-social → vê TUDO sempre (é o profissional)
+//   - super_admin       → SÓ vê o que ELE criou
+//   - admin             → nem tem acesso ao módulo
+// ============================================
+const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
+
+// 🔥 APENAS super_admin é mascarado
+const ROLES_MASCARADOS = ['super_admin'];
+
+/**
+ * Mascara campos sensíveis para super_admin
+ */
+function mascararParaAdmin(dados, req) {
+  // Se NÃO for super_admin, retorna tudo
+  if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) {
+    return dados;
+  }
+  
+  // Se for array, processa cada item
+  if (Array.isArray(dados)) {
+    return dados.map(item => mascararItem(item, req));
+  }
+  
+  return mascararItem(dados, req);
+}
+
+function mascararItem(item, req) {
+  if (!item) return item;
+  
+  const obj = item.toObject ? item.toObject() : JSON.parse(JSON.stringify(item));
+  
+  // 🎯 REGRA: se foi ele mesmo quem criou, NÃO mascara
+  const adminId = req.userId?.toString();
+  const criadorId = (
+    obj.entrada?.registradoPor || 
+    obj.registradoPorId || 
+    obj.criadoPor
+  )?.toString();
+  
+  if (criadorId && adminId && criadorId === adminId) {
+    obj._mascarado = false;
+    obj._criadoPorMim = true;
+    return obj;
+  }
+  
+  // Não foi ele quem criou → mascara
+  obj._mascarado = true;
+  obj._criadoPorMim = false;
+  
+  // ===== entrada =====
+  if (obj.entrada) {
+    if (obj.entrada.descricao) obj.entrada.descricao = MASCARA_TEXTO;
+    if (obj.entrada.observacoes) obj.entrada.observacoes = MASCARA_TEXTO;
+    if (obj.entrada.assinaturaBase64) obj.entrada.assinaturaBase64 = null;
+  }
+  
+  // ===== descricao direta (na lista) =====
+  if (obj.descricao) obj.descricao = MASCARA_TEXTO;
+  
+  // ===== saida =====
+  if (obj.saida) {
+    if (obj.saida.resultadoTexto) obj.saida.resultadoTexto = MASCARA_TEXTO;
+    if (obj.saida.observacoesFinais) obj.saida.observacoesFinais = MASCARA_TEXTO;
+  }
+  
+  // ===== detalhes (TODOS) =====
+  if (obj.detalhes && typeof obj.detalhes === 'object') {
+    Object.keys(obj.detalhes).forEach(chave => {
+      const valor = obj.detalhes[chave];
+      if (Array.isArray(valor)) {
+        obj.detalhes[chave] = [MASCARA_TEXTO];
+      } else if (valor !== undefined && valor !== null && valor !== '') {
+        obj.detalhes[chave] = MASCARA_TEXTO;
+      }
+    });
+  }
+  
+  // ===== remarcações =====
+  if (Array.isArray(obj.remarcacoes)) {
+    obj.remarcacoes = obj.remarcacoes.map(rem => {
+      const nova = { ...rem };
+      if (nova.motivoRemarcacao) nova.motivoRemarcacao = MASCARA_TEXTO;
+      if (nova.observacoesRemarcacao) nova.observacoesRemarcacao = MASCARA_TEXTO;
+      return nova;
+    });
+  }
+  
+  return obj;
+}
+
+/**
+ * Bloqueia edição/exclusão para super_admin que NÃO criou
+ */
+function adminPodeModificar(atendimento, req) {
+  // Se NÃO for super_admin, sempre pode
+  if (!ROLES_MASCARADOS.includes(req.userRole)) {
+    return { permitido: true };
+  }
+  
+  // É super_admin: só pode se foi o criador
+  const adminId = req.userId?.toString();
+  const criadorId = atendimento?.entrada?.registradoPor?.toString();
+  
+  if (criadorId === adminId) {
+    return { permitido: true };
+  }
+  
+  return {
+    permitido: false,
+    motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
+  };
+}
+
+// ============================================
 // MIDDLEWARES
 // ============================================
 const authenticateToken = (req, res, next) => {
@@ -27,7 +144,9 @@ const authenticateToken = (req, res, next) => {
 };
 
 const verificarAssistenteSocial = (req, res, next) => {
-  const allowedRoles = ['assistente-social', 'super_admin', 'admin'];
+  // 🔥 Apenas assistente-social e super_admin acessam
+  // admin NÃO tem acesso a esse módulo
+  const allowedRoles = ['assistente-social', 'super_admin'];
   if (!allowedRoles.includes(req.userRole)) {
     return res.status(403).json({
       success: false,
@@ -170,14 +289,13 @@ router.get('/buscar-aluno', authenticateToken, verificarAssistenteSocial, async 
 
 // ============================================
 // REGISTRAR NOVO ATENDIMENTO
-// (com suporte a precisaAssinatura + assinaturaBase64)
 // ============================================
 router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const { 
       alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
       assinaturaBase64,
-      precisaAssinatura = false // 🆕
+      precisaAssinatura = false
     } = req.body;
     
     if (!descricao || descricao.trim() === '') {
@@ -201,7 +319,6 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
     
     const assistente = await User.findById(req.userId).select('nome');
     
-    // Valida assinatura base64
     let assinaturaValida = '';
     if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
       if (assinaturaBase64.startsWith('data:image/') && assinaturaBase64.length < 500000) {
@@ -209,7 +326,6 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
       }
     }
     
-    // 🆕 Detecta status de assinatura
     const statusAssinatura = precisaAssinatura && !assinaturaValida
       ? 'pendente'
       : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
@@ -230,7 +346,6 @@ router.post('/registrar', authenticateToken, verificarAssistenteSocial, async (r
         registradoPor: req.userId,
         registradoPorNome: assistente?.nome || req.userNome || 'Assistente Social',
         assinaturaBase64: assinaturaValida,
-        // 🆕 Campos de assinatura via QR
         temAssinatura: assinaturaValida.length > 100,
         statusAssinatura: statusAssinatura,
         assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
@@ -280,6 +395,16 @@ router.post('/finalizar', authenticateToken, verificarAssistenteSocial, async (r
       return res.status(400).json({ success: false, error: 'Atendimento já finalizado' });
     }
     
+    // 🚫 super_admin só finaliza os que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.motivo,
+        code: 'ADMIN_NAO_CRIADOR'
+      });
+    }
+    
     const assistente = await User.findById(req.userId).select('nome');
     
     atendimento.saida = {
@@ -327,6 +452,16 @@ router.post('/remarcar', authenticateToken, verificarAssistenteSocial, async (re
     
     const atendimento = await AtendimentoAssistenteSocial.findById(atendimentoId);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    // 🚫 super_admin só remarca os que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.motivo,
+        code: 'ADMIN_NAO_CRIADOR'
+      });
+    }
     
     const dataObj = new Date(dataRemarcacao + 'T00:00:00');
     const hoje = new Date();
@@ -483,6 +618,16 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarAssistenteSoci
     });
     
     if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
+    
+    // 🚫 super_admin só finaliza remarcação dos que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.motivo,
+        code: 'ADMIN_NAO_CRIADOR'
+      });
+    }
     
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === remarcacaoId);
     if (!remarcacao) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
@@ -653,33 +798,46 @@ router.get('/dashboard', authenticateToken, verificarAssistenteSocial, async (re
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS ATIVOS
+// LISTAR ATENDIMENTOS ATIVOS (🔒 MASCARADO PARA SUPER_ADMIN)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimentos = await AtendimentoAssistenteSocial.find({ status: 'em_andamento' })
       .sort({ prioridade: -1, 'entrada.dataHora': -1 });
     
+    const lista = atendimentos.map(a => ({
+      id: a._id,
+      alunoId: a.alunoId,
+      alunoNome: a.alunoNome,
+      alunoTurma: a.alunoTurma,
+      alunoFoto: a.alunoFoto,
+      tipoTarefa: a.tipoTarefa,
+      tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+      descricao: a.entrada.descricao,
+      gravidade: a.entrada.gravidade,
+      prioridade: a.prioridade,
+      dataHoraEntrada: a.entrada.dataHora,
+      tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
+      temRemarcacaoPendente: a.temRemarcacaoPendente || false,
+      temAssinatura: !!(a.entrada?.assinaturaBase64),
+      statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+      // 🔑 Para o mask funcionar
+      entrada: {
+        descricao: a.entrada.descricao,
+        observacoes: a.entrada.observacoes,
+        registradoPor: a.entrada.registradoPor,
+        registradoPorNome: a.entrada.registradoPorNome
+      },
+      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
+    }));
+    
+    // 🔒 Mascara para super_admin
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
     res.json({
       success: true,
-      total: atendimentos.length,
-      atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
-        tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        dataHoraEntrada: a.entrada.dataHora,
-        tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
-        temRemarcacaoPendente: a.temRemarcacaoPendente || false,
-        temAssinatura: !!(a.entrada?.assinaturaBase64),
-        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria'
-      }))
+      total: listaMascarada.length,
+      atendimentos: listaMascarada
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
@@ -687,11 +845,21 @@ router.get('/atendimentos-ativos', authenticateToken, verificarAssistenteSocial,
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS (COM FILTROS)
+// LISTAR TODOS OS ATENDIMENTOS (🔒 MASCARADO + BUSCA NO BACKEND)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
-    const { limit = 100, page = 1, tipo, status, turma, dataInicio, dataFim } = req.query;
+    const { 
+      limit = 100, 
+      page = 1, 
+      tipo, 
+      status, 
+      turma, 
+      dataInicio, 
+      dataFim,
+      busca,          // 🔥 busca por nome/matrícula
+      resultado       // 🔥 filtro por resultado final
+    } = req.query;
     
     let query = {};
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
@@ -702,6 +870,20 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
       if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
+    }
+    
+    // 🔥 Busca por nome OU matrícula (case-insensitive)
+    if (busca && busca.trim() !== '') {
+      const termo = busca.trim();
+      query.$or = [
+        { alunoNome: { $regex: termo, $options: 'i' } },
+        { alunoMatricula: { $regex: termo, $options: 'i' } }
+      ];
+    }
+    
+    // 🔥 Filtro por resultado (só faz sentido em finalizados)
+    if (resultado && resultado !== 'todos' && resultado !== '') {
+      query['saida.resultado'] = resultado;
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -725,6 +907,49 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
       ...turmasAlunos
     ])].sort();
     
+    const lista = atendimentos.map(a => ({
+      id: a._id,
+      alunoId: a.alunoId,
+      alunoNome: a.alunoNome,
+      alunoMatricula: a.alunoMatricula,
+      alunoTurma: a.alunoTurma,
+      alunoCurso: a.alunoCurso,
+      tipoTarefa: a.tipoTarefa,
+      tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
+      descricao: a.entrada.descricao,
+      gravidade: a.entrada.gravidade,
+      prioridade: a.prioridade,
+      status: a.status,
+      dataEntrada: a.entrada.dataHora,
+      dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
+      registradoPor: a.entrada.registradoPorNome,
+      registradoPorId: a.entrada.registradoPor,
+      temAssinatura: !!(a.entrada?.assinaturaBase64),
+      statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+      saida: a.saida ? {
+        dataHora: a.saida.dataHora,
+        dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
+        resultado: a.saida.resultado,
+        resultadoTexto: {
+          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
+        }[a.saida.resultado] || a.saida.resultado,
+        observacoesFinais: a.saida.observacoesFinais,
+        registradoPor: a.saida.registradoPorNome
+      } : null,
+      createdAt: a.createdAt,
+      // 🔑 Para o mask
+      entrada: {
+        descricao: a.entrada.descricao,
+        observacoes: a.entrada.observacoes,
+        registradoPor: a.entrada.registradoPor
+      },
+      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
+    }));
+    
+    // 🔒 Mascara para super_admin
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
     res.json({
       success: true,
       total,
@@ -732,37 +957,7 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
       limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
       turmasDisponiveis,
-      atendimentos: atendimentos.map(a => ({
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        status: a.status,
-        dataEntrada: a.entrada.dataHora,
-        dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
-        registradoPor: a.entrada.registradoPorNome,
-        temAssinatura: !!(a.entrada?.assinaturaBase64),
-        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
-        saida: a.saida ? {
-          dataHora: a.saida.dataHora,
-          dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
-          resultado: a.saida.resultado,
-          resultadoTexto: {
-            'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
-            'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
-          }[a.saida.resultado] || a.saida.resultado,
-          observacoesFinais: a.saida.observacoesFinais,
-          registradoPor: a.saida.registradoPorNome
-        } : null,
-        createdAt: a.createdAt
-      }))
+      atendimentos: listaMascarada
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
@@ -770,67 +965,81 @@ router.get('/atendimentos', authenticateToken, verificarAssistenteSocial, async 
 });
 
 // ============================================
-// BUSCAR ATENDIMENTO POR ID
+// BUSCAR ATENDIMENTO POR ID (🔒 MASCARADO PARA SUPER_ADMIN)
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
-    res.json({
-      success: true,
-      atendimento: {
-        id: atendimento._id,
-        alunoId: atendimento.alunoId,
-        alunoNome: atendimento.alunoNome,
-        alunoMatricula: atendimento.alunoMatricula,
-        alunoTurma: atendimento.alunoTurma,
-        alunoCurso: atendimento.alunoCurso,
-        tipoTarefa: atendimento.tipoTarefa,
-        tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(atendimento.tipoTarefa),
-        entrada: {
-          dataHora: atendimento.entrada.dataHora,
-          dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
-          descricao: atendimento.entrada.descricao,
-          observacoes: atendimento.entrada.observacoes,
-          gravidade: atendimento.entrada.gravidade,
-          registradoPor: atendimento.entrada.registradoPorNome,
-          temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
-          statusAssinatura: atendimento.entrada?.statusAssinatura || 'nao_necessaria',
-          assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
-          assinadaEm: atendimento.entrada?.assinadaEm || null,
-          assinadaPorNome: atendimento.entrada?.assinadaPorNome || null
-        },
-        detalhes: atendimento.detalhes,
-        saida: atendimento.saida ? {
-          dataHora: atendimento.saida.dataHora,
-          dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
-          resultado: atendimento.saida.resultado,
-          resultadoTexto: atendimento.saida.resultadoTexto,
-          observacoesFinais: atendimento.saida.observacoesFinais,
-          registradoPor: atendimento.saida.registradoPorNome
-        } : null,
-        status: atendimento.status,
-        prioridade: atendimento.prioridade,
-        remarcacoes: atendimento.remarcacoes || [],
-        temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
-        anexos: atendimento.anexos,
-        createdAt: atendimento.createdAt
-      }
-    });
+    const payload = {
+      id: atendimento._id,
+      alunoId: atendimento.alunoId,
+      alunoNome: atendimento.alunoNome,
+      alunoMatricula: atendimento.alunoMatricula,
+      alunoTurma: atendimento.alunoTurma,
+      alunoCurso: atendimento.alunoCurso,
+      tipoTarefa: atendimento.tipoTarefa,
+      tipoTarefaLabel: AtendimentoAssistenteSocial.getTipoTarefaLabel(atendimento.tipoTarefa),
+      entrada: {
+        dataHora: atendimento.entrada.dataHora,
+        dataHoraFormatada: new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR'),
+        descricao: atendimento.entrada.descricao,
+        observacoes: atendimento.entrada.observacoes,
+        gravidade: atendimento.entrada.gravidade,
+        registradoPor: atendimento.entrada.registradoPor,
+        registradoPorNome: atendimento.entrada.registradoPorNome,
+        temAssinatura: !!(atendimento.entrada?.assinaturaBase64),
+        statusAssinatura: atendimento.entrada?.statusAssinatura || 'nao_necessaria',
+        assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
+        assinadaEm: atendimento.entrada?.assinadaEm || null,
+        assinadaPorNome: atendimento.entrada?.assinadaPorNome || null
+      },
+      detalhes: atendimento.detalhes,
+      saida: atendimento.saida ? {
+        dataHora: atendimento.saida.dataHora,
+        dataHoraFormatada: new Date(atendimento.saida.dataHora).toLocaleString('pt-BR'),
+        resultado: atendimento.saida.resultado,
+        resultadoTexto: atendimento.saida.resultadoTexto,
+        observacoesFinais: atendimento.saida.observacoesFinais,
+        registradoPor: atendimento.saida.registradoPorNome
+      } : null,
+      status: atendimento.status,
+      prioridade: atendimento.prioridade,
+      remarcacoes: atendimento.remarcacoes || [],
+      temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
+      anexos: atendimento.anexos,
+      createdAt: atendimento.createdAt
+    };
+    
+    // 🔒 Mascara para super_admin
+    const payloadMascarado = mascararParaAdmin(payload, req);
+    
+    res.json({ success: true, atendimento: payloadMascarado });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
 
 // ============================================
-// EDITAR ATENDIMENTO
+// EDITAR ATENDIMENTO (🚫 BLOQUEADO PARA SUPER_ADMIN NÃO-CRIADOR)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
-    const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
     const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    // 🚫 super_admin só edita os que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.motivo,
+        code: 'ADMIN_NAO_CRIADOR'
+      });
+    }
+    
+    const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
     
     if (descricao) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
@@ -853,12 +1062,24 @@ router.put('/atendimento/:id', authenticateToken, verificarAssistenteSocial, asy
 });
 
 // ============================================
-// EXCLUIR ATENDIMENTO
+// EXCLUIR ATENDIMENTO (🚫 BLOQUEADO PARA SUPER_ADMIN NÃO-CRIADOR)
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
-    const atendimento = await AtendimentoAssistenteSocial.findByIdAndDelete(req.params.id);
+    const atendimento = await AtendimentoAssistenteSocial.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    // 🚫 super_admin só exclui os que ele mesmo criou
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ 
+        success: false, 
+        error: check.motivo,
+        code: 'ADMIN_NAO_CRIADOR'
+      });
+    }
+    
+    await AtendimentoAssistenteSocial.findByIdAndDelete(req.params.id);
     console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id})`);
     res.json({ success: true, message: 'Atendimento excluído com sucesso' });
   } catch (error) {
@@ -867,10 +1088,19 @@ router.delete('/atendimento/:id', authenticateToken, verificarAssistenteSocial, 
 });
 
 // ============================================
-// EXCLUSÃO EM MASSA
+// EXCLUSÃO EM MASSA (APENAS ASSISTENTE SOCIAL)
 // ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarAssistenteSocial, async (req, res) => {
   try {
+    // 🚫 super_admin NÃO pode excluir em massa
+    if (req.userRole === 'super_admin') {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Apenas o Assistente Social pode excluir em massa.',
+        code: 'ADMIN_SEM_PERMISSAO_MASSA'
+      });
+    }
+    
     const { dataCorte, status = 'finalizado', confirmacao } = req.body;
     if (confirmacao !== 'CONFIRMAR') {
       return res.status(400).json({ success: false, error: 'Confirmação inválida' });
