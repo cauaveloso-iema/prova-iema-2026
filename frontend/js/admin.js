@@ -15,12 +15,6 @@ class AdminPanel {
         this.wsListener = null;
         this.cozinhaMonitoramento = null;
 
-    
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.init());
-        } else {
-            this.init();
-        }
         this.filtros = {
             usuarios: { role: 'todos', search: '', status: 'todos', turma: 'todas', page: 1, limit: 10 },
             turmas: { 
@@ -3897,13 +3891,6 @@ class AdminPanel {
         this.switchSection('monitoramento');
     }
 
-    // ============ VER HISTÓRICO COMPLETO ============
-    verHistoricoCompleto() {
-        this.showToast('📊 Carregando histórico completo...', 'info');
-        // Pode abrir um modal ou redirecionar para uma página de histórico
-        this.switchSection('monitoramento');
-    }
-
     // ============ USUÁRIOS ============
 
     // ============ LOAD USUÁRIOS (BUSCA GLOBAL NO SERVIDOR) ============
@@ -5424,12 +5411,6 @@ class AdminPanel {
                 nome: item.nome || '-'
             };
         }
-    }
-
-    // ============ VALIDAR EMAIL ============
-    validarEmail(email) {
-        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return regex.test(email);
     }
 
     // ============ MOSTRAR RESULTADO VINCULAR EMAILS POR TURMA ============
@@ -9059,9 +9040,9 @@ class AdminPanel {
     }
 
     // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
-    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO SERVIDOR) ============
+    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO CORRIGIDA - SEMPRE RECARREGA DO SERVIDOR) ============
     configurarEventosFiltrosUsuarios() {
-        console.log('🔧 Configurando eventos dos filtros...');
+        console.log('🔧 Configurando eventos dos filtros (busca no servidor)...');
         
         // 🔍 Busca com debounce (recarrega do SERVIDOR)
         const searchInput = document.getElementById('searchUsuarios');
@@ -9085,7 +9066,7 @@ class AdminPanel {
                     this.filtros.usuarios.search = valor;
                     this.filtros.usuarios.page = 1;
                     
-                    // 🔥 RECARREGAR DO SERVIDOR
+                    // 🔥 RECARREGAR DO SERVIDOR (BUSCA EM TODOS OS USUÁRIOS)
                     this.loadUsuarios();
                     
                     // Manter foco no input
@@ -9110,7 +9091,7 @@ class AdminPanel {
             novoRoleSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.role = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios();
+                this.loadUsuarios(); // 🔥 RECARREGAR DO SERVIDOR
             });
         }
         
@@ -9123,7 +9104,7 @@ class AdminPanel {
             novoStatusSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.status = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios();
+                this.loadUsuarios(); // 🔥 RECARREGAR DO SERVIDOR
             });
         }
         
@@ -9136,7 +9117,7 @@ class AdminPanel {
             novoTurmaSelect.addEventListener('change', (e) => {
                 this.filtros.usuarios.turma = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios();
+                this.loadUsuarios(); // 🔥 RECARREGAR DO SERVIDOR
             });
         }
     }
@@ -9377,87 +9358,6 @@ class AdminPanel {
             searchInput.focus();
             searchInput.setSelectionRange(cursorPos, cursorPos);
         }
-    }
-
-    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO CORRIGIDA) ============
-    configurarEventosFiltrosUsuarios() {
-        console.log('🔧 Configurando eventos dos filtros com busca em tempo real...');
-        
-        // Busca com debounce (SEM recarregar a página)
-        const searchInput = document.getElementById('searchUsuarios');
-        if (searchInput) {
-            const novoSearch = searchInput.cloneNode(true);
-            searchInput.parentNode.replaceChild(novoSearch, searchInput);
-            
-            let timeout;
-            novoSearch.addEventListener('input', (e) => {
-                clearTimeout(timeout);
-                this.filtros.usuarios.search = e.target.value;
-                
-                // Mostrar/ocultar botão de limpar
-                const clearBtn = novoSearch.parentElement.querySelector('.input-clear');
-                if (clearBtn) {
-                    clearBtn.style.display = e.target.value ? 'flex' : 'none';
-                }
-                
-                timeout = setTimeout(() => {
-                    this.filtrarTabelaUsuariosLocal();
-                }, 300);
-            });
-        }
-        
-        // Perfil
-        const roleSelect = document.getElementById('filterRole');
-        if (roleSelect) {
-            const novoRoleSelect = roleSelect.cloneNode(true);
-            roleSelect.parentNode.replaceChild(novoRoleSelect, roleSelect);
-            novoRoleSelect.addEventListener('change', (e) => {
-                this.filtros.usuarios.role = e.target.value;
-                this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal();
-            });
-        }
-        
-        // Status
-        const statusSelect = document.getElementById('filterStatus');
-        if (statusSelect) {
-            const novoStatusSelect = statusSelect.cloneNode(true);
-            statusSelect.parentNode.replaceChild(novoStatusSelect, statusSelect);
-            novoStatusSelect.addEventListener('change', (e) => {
-                this.filtros.usuarios.status = e.target.value;
-                this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal();
-            });
-        }
-        
-        // Turma
-        const turmaSelect = document.getElementById('filterTurma');
-        if (turmaSelect) {
-            const novoTurmaSelect = turmaSelect.cloneNode(true);
-            turmaSelect.parentNode.replaceChild(novoTurmaSelect, turmaSelect);
-            novoTurmaSelect.addEventListener('change', (e) => {
-                this.filtros.usuarios.turma = e.target.value;
-                this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal();
-            });
-        }
-    }
-
-    // ============ APLICAR FILTROS (RECARREGA DO SERVIDOR) ============
-    aplicarFiltrosUsuarios() {
-        console.log('🔍 Aplicando filtros...');
-        
-        // Atualizar os filtros com os valores dos selects/inputs
-        this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
-        this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
-        this.filtros.usuarios.status = document.getElementById('filterStatus')?.value || 'todos';
-        this.filtros.usuarios.turma = document.getElementById('filterTurma')?.value || 'todas';
-        this.filtros.usuarios.page = 1;
-        
-        console.log('📋 Filtros aplicados:', this.filtros.usuarios);
-        
-        // 🔥 RECARREGAR DO SERVIDOR com todos os filtros aplicados
-        this.loadUsuarios();
     }
 
     // ============ ATUALIZAR CARDS DE USUÁRIOS COM DADOS FILTRADOS ============
@@ -14875,13 +14775,6 @@ class AdminPanel {
         if (eixoSelect) eixoSelect.value = 'todos';
         if (professorSelect) professorSelect.value = 'todos';
         
-        this.loadTurmas();
-    }
-
-    // ============ FILTRAR POR STATUS ============
-    filtrarPorStatus(status) {
-        this.filtros.turmas.status = status || 'todas';
-        this.filtros.turmas.page = 1;
         this.loadTurmas();
     }
 
@@ -22370,42 +22263,6 @@ class AdminPanel {
         }
     }
 
-    // ==================== EXECUÇÃO DE COMANDOS ====================
-    async executarComando() {
-        const input = document.getElementById('consoleCommandInput');
-        const comando = input.value.trim();
-        
-        if (!comando) {
-            this.mostrarToast('⚠️ Digite um comando', 'warning');
-            return;
-        }
-
-        // Adicionar comando ao log
-        this.adicionarLogServidor({
-            type: 'command',
-            message: `⚡ $ ${comando}`,
-            timestamp: new Date().toISOString()
-        });
-
-        // Limpar input
-        input.value = '';
-
-        // Enviar via WebSocket
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-                type: 'execute_command',
-                command: comando
-            }));
-        } else {
-            this.adicionarLogServidor({
-                type: 'error',
-                message: '❌ WebSocket não conectado. Tentando reconectar...',
-                timestamp: new Date().toISOString()
-            });
-            this.conectarWebSocketLogs();
-        }
-    }
-
     escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -25751,20 +25608,6 @@ class AdminPanel {
             }
         }
 
-        // ============ CONFIGURAR FECHAMENTO DO MODAL (VERSÃO SIMPLES) ============
-        configurarFechamentoModalSimples() {
-            const closeBtn = document.querySelector('#modal .modal-close');
-            if (closeBtn) {
-                const newCloseBtn = closeBtn.cloneNode(true);
-                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-                
-                newCloseBtn.onclick = (e) => {
-                    e.preventDefault();
-                    this.closeModal();
-                };
-            }
-        }
-
         // ============ ATUALIZAR CONTADORES DOS CARDS (VERSÃO CORRIGIDA) ============
         atualizarContadoresCards() {
             if (!this.resultadosCompletos) return;
@@ -27790,27 +27633,6 @@ class AdminPanel {
 
             this.configurarFechamentoModal();
             this.openModal();
-        }
-
-        // ============ FECHAMENTO DO MODAL ============
-        configurarFechamentoModal() {
-            const closeBtn = document.querySelector('#modal .modal-close');
-            if (closeBtn) {
-                const newCloseBtn = closeBtn.cloneNode(true);
-                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-                newCloseBtn.onclick = () => this.closeModal();
-            }
-            
-            const modal = document.getElementById('modal');
-            if (modal) {
-                const newModal = modal.cloneNode(true);
-                modal.parentNode.replaceChild(newModal, modal);
-                newModal.onclick = (e) => {
-                    if (e.target === newModal) {
-                        this.closeModal();
-                    }
-                };
-            }
         }
 
         async editarResultado(resultadoId) {
@@ -30023,53 +29845,6 @@ class AdminPanel {
                 </tr>
             `;
         }
-    }
-
-
-    abrirModalMatricula(matriculaExistente = null) {
-        const isEdit = !!matriculaExistente;
-        let matriculaData = null;
-        
-        if (isEdit) {
-            matriculaData = this.matriculas.find(m => m.matricula === matriculaExistente);
-        }
-        
-        const modalBody = document.getElementById('modalBody');
-        modalBody.innerHTML = `
-            <form id="matriculaForm">
-                <div class="form-group">
-                    <label>Matrícula (6 dígitos)</label>
-                    <input type="text" id="matriculaInput" class="form-control" 
-                        value="${matriculaData?.matricula || ''}" 
-                        maxlength="6" pattern="\\d{6}" 
-                        placeholder="Ex: 123456" ${isEdit ? 'readonly' : ''} required>
-                    <small style="color: #6c757d;">Apenas números, 6 dígitos</small>
-                </div>
-                
-                <div class="form-group">
-                    <label>Nome do Professor</label>
-                    <input type="text" id="nomeMatriculaInput" class="form-control" 
-                        value="${matriculaData?.nome || ''}" 
-                        placeholder="Ex: JOÃO DA SILVA" required>
-                </div>
-                
-                <div class="info-card" style="margin-top: 10px;">
-                    <i class="fas fa-info-circle"></i>
-                    <div>
-                        <strong>Importante:</strong> Esta matrícula será usada no cadastro de professores.
-                        O nome deve corresponder ao documento oficial.
-                    </div>
-                </div>
-            </form>
-        `;
-        
-        document.getElementById('modalTitle').innerHTML = isEdit ? 
-            '<i class="fas fa-edit"></i> Editar Matrícula' : 
-            '<i class="fas fa-plus"></i> Nova Matrícula';
-        
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarMatricula(isEdit ? matriculaExistente : null);
-        
-        this.openModal();
     }
 
     async salvarMatricula(matriculaAntiga = null) {
@@ -43078,42 +42853,6 @@ class AdminPanel {
     
     // Carregar estatísticas
     this.carregarEstatisticasLimpeza();
-    }
-
-    async carregarEstatisticasLimpeza() {
-    const container = document.getElementById('estatisticasContainer');
-    if (!container) return;
-    
-    try {
-        const stats = await this.verificarEstatisticasRegistros();
-        
-        if (stats) {
-        container.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-            <div style="text-align: center;">
-                <div style="font-size: 24px; font-weight: bold; color: #1e293b;">${stats.total}</div>
-                <div style="font-size: 12px; color: #64748b;">Total de registros</div>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 24px; font-weight: bold; color: #10b981;">${stats.ultimoMes}</div>
-                <div style="font-size: 12px; color: #64748b;">Último mês</div>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 24px; font-weight: bold; color: #f59e0b;">${stats.anteriores}</div>
-                <div style="font-size: 12px; color: #64748b;">Mais antigos</div>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 12px; font-weight: bold; color: #6b7280;">
-                ${stats.ultimaData ? `Até ${new Date(stats.ultimaData).toLocaleDateString()}` : 'Sem dados'}
-                </div>
-                <div style="font-size: 11px; color: #94a3b8;">Último registro</div>
-            </div>
-            </div>
-        `;
-        }
-    } catch (error) {
-        container.innerHTML = '<p style="text-align: center; color: #dc2626;">Erro ao carregar estatísticas</p>';
-    }
     }
 
     async confirmarLimpezaRegistros() {
