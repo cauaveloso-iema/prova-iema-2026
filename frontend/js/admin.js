@@ -9214,9 +9214,9 @@ class AdminPanel {
         this.openModal();
     }
 
-    // ============ FILTRAR TABELA DE USUÁRIOS LOCALMENTE (SEM RECARREGAR) ============
+    // ============ FILTRAR TABELA DE USUÁRIOS LOCALMENTE (BUSCA EM TODOS) ============
     filtrarTabelaUsuariosLocal() {
-        console.log('🔍 Filtrando tabela localmente...');
+        console.log('🔍 Filtrando tabela localmente (busca em TODOS os usuários)...');
         
         if (!this.usuarios || this.usuarios.length === 0) {
             console.log('⚠️ Nenhum usuário carregado para filtrar');
@@ -9230,124 +9230,127 @@ class AdminPanel {
         
         const { search, role, status, turma } = this.filtros.usuarios;
         
-        // 🔥 USAR A LISTA GLOBAL para os cards/modal
+        // 🔥 USAR A LISTA GLOBAL (TODOS OS USUÁRIOS) - não apenas os 10 da página
         const todosUsuarios = this.todosUsuariosStats && this.todosUsuariosStats.length > 0
             ? this.todosUsuariosStats
             : this.usuarios;
         
         // ==========================================
-        // 🔥 FILTRAR A LISTA GLOBAL PARA OS CARDS
+        // 🔥 FUNÇÃO AUXILIAR DE FILTRAGEM
         // ==========================================
-        let usuariosGlobaisFiltrados = [...todosUsuarios];
-        
-        if (search && search.trim() !== '') {
-            const termo = search.toLowerCase().trim();
-            usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => {
-                const nome = (u.nome || '').toLowerCase();
-                const email = (u.email || '').toLowerCase();
-                const cpf = (u.cpf || '').replace(/\D/g, '');
-                const matricula = (u.matricula || '').toLowerCase();
+        const aplicarFiltros = (lista) => {
+            let filtrados = [...lista];
+            
+            // Filtro de busca (nome, email, cpf, matrícula)
+            if (search && search.trim() !== '') {
+                const termo = search.toLowerCase().trim();
                 const cpfTermo = termo.replace(/\D/g, '');
                 
-                return nome.includes(termo) || 
-                    email.includes(termo) || 
-                    matricula.includes(termo) ||
-                    (cpfTermo && cpf.includes(cpfTermo));
-            });
-        }
-        
-        if (role && role !== 'todos') {
-            if (role === 'admin') {
-                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.role === 'admin' || u.role === 'super_admin');
-            } else if (role === 'ativo') {
-                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === true);
-            } else if (role === 'inativo') {
-                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === false);
-            } else {
-                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.role === role);
+                filtrados = filtrados.filter(u => {
+                    const nome = (u.nome || '').toLowerCase();
+                    const email = (u.email || '').toLowerCase();
+                    const cpf = (u.cpf || '').replace(/\D/g, '');
+                    const matricula = (u.matricula || '').toLowerCase();
+                    
+                    return nome.includes(termo) || 
+                        email.includes(termo) || 
+                        matricula.includes(termo) ||
+                        (cpfTermo && cpf.includes(cpfTermo));
+                });
             }
-        }
-        
-        if (status && status !== 'todos') {
-            if (status === 'ativo') {
-                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === true);
-            } else if (status === 'inativo') {
-                usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.ativo === false);
+            
+            // Filtro de perfil (role)
+            if (role && role !== 'todos') {
+                if (role === 'admin') {
+                    filtrados = filtrados.filter(u => u.role === 'admin' || u.role === 'super_admin');
+                } else if (role === 'ativo') {
+                    filtrados = filtrados.filter(u => u.ativo === true);
+                } else if (role === 'inativo') {
+                    filtrados = filtrados.filter(u => u.ativo === false);
+                } else {
+                    filtrados = filtrados.filter(u => u.role === role);
+                }
             }
-        }
+            
+            // Filtro de status
+            if (status && status !== 'todos') {
+                if (status === 'ativo') {
+                    filtrados = filtrados.filter(u => u.ativo === true);
+                } else if (status === 'inativo') {
+                    filtrados = filtrados.filter(u => u.ativo === false);
+                }
+            }
+            
+            // Filtro de turma
+            if (turma && turma !== 'todas' && turma !== '') {
+                filtrados = filtrados.filter(u => u.turma === turma);
+            }
+            
+            // Ordenar por nome
+            filtrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+            
+            return filtrados;
+        };
         
-        if (turma && turma !== 'todas' && turma !== '') {
-            usuariosGlobaisFiltrados = usuariosGlobaisFiltrados.filter(u => u.turma === turma);
-        }
+        // ==========================================
+        // 🔥 1. FILTRAR A LISTA GLOBAL (para cards)
+        // ==========================================
+        const usuariosGlobaisFiltrados = aplicarFiltros(todosUsuarios);
         
-        // 🔥 Atualizar TODOS os cards com base nos dados globais filtrados
+        // 🔥 Atualizar os cards com base nos dados globais filtrados
         this.atualizarCardsUsuariosFiltrados(usuariosGlobaisFiltrados);
         
         // ==========================================
-        // 🔥 FILTRAR A PÁGINA ATUAL PARA A TABELA
+        // 🔥 2. FILTRAR A PÁGINA ATUAL (para tabela) - CORREÇÃO PRINCIPAL
         // ==========================================
-        let usuariosFiltrados = [...this.usuarios];
+        // SE TIVER BUSCA ATIVA, mostrar TODOS os resultados (não apenas 10)
+        // SE NÃO TIVER BUSCA, mostrar apenas a página atual
+        let usuariosParaTabela;
         
-        if (search && search.trim() !== '') {
-            const termo = search.toLowerCase().trim();
-            usuariosFiltrados = usuariosFiltrados.filter(u => {
-                const nome = (u.nome || '').toLowerCase();
-                const email = (u.email || '').toLowerCase();
-                const cpf = (u.cpf || '').replace(/\D/g, '');
-                const matricula = (u.matricula || '').toLowerCase();
-                const cpfTermo = termo.replace(/\D/g, '');
-                
-                return nome.includes(termo) || 
-                    email.includes(termo) || 
-                    matricula.includes(termo) ||
-                    (cpfTermo && cpf.includes(cpfTermo));
-            });
+        const temFiltroAtivo = (search && search.trim() !== '') || 
+                            (role && role !== 'todos') || 
+                            (status && status !== 'todos') ||
+                            (turma && turma !== 'todas' && turma !== '');
+        
+        if (temFiltroAtivo) {
+            // 🔥 COM FILTRO: mostra TODOS os resultados encontrados na lista global
+            usuariosParaTabela = usuariosGlobaisFiltrados;
+            console.log(`🔍 Busca ativa: mostrando ${usuariosParaTabela.length} resultados (de ${todosUsuarios.length} totais)`);
+        } else {
+            // 🔥 SEM FILTRO: mostra apenas a página atual (10 usuários)
+            usuariosParaTabela = aplicarFiltros(this.usuarios);
+            console.log(`📄 Sem filtro: mostrando ${usuariosParaTabela.length} da página`);
         }
-        
-        if (role && role !== 'todos') {
-            if (role === 'admin') {
-                usuariosFiltrados = usuariosFiltrados.filter(u => u.role === 'admin' || u.role === 'super_admin');
-            } else if (role === 'ativo') {
-                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === true);
-            } else if (role === 'inativo') {
-                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === false);
-            } else {
-                usuariosFiltrados = usuariosFiltrados.filter(u => u.role === role);
-            }
-        }
-        
-        if (status && status !== 'todos') {
-            if (status === 'ativo') {
-                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === true);
-            } else if (status === 'inativo') {
-                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === false);
-            }
-        }
-        
-        if (turma && turma !== 'todas' && turma !== '') {
-            usuariosFiltrados = usuariosFiltrados.filter(u => u.turma === turma);
-        }
-        
-        usuariosFiltrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-        
-        console.log(`✅ ${usuariosFiltrados.length} usuários na página, ${usuariosGlobaisFiltrados.length} no total (globais)`);
         
         // Atualizar tabela
         const tbody = document.getElementById('tabelaUsuariosBody');
         if (tbody) {
-            tbody.innerHTML = this.gerarLinhasUsuarios(usuariosFiltrados);
+            tbody.innerHTML = this.gerarLinhasUsuarios(usuariosParaTabela);
         }
         
         // Atualizar contador
         const itemsCounter = document.getElementById('itemsCounter');
         if (itemsCounter) {
-            itemsCounter.textContent = `${usuariosFiltrados.length} ${usuariosFiltrados.length === 1 ? 'registro' : 'registros'}`;
+            const total = usuariosParaTabela.length;
+            itemsCounter.textContent = `${total} ${total === 1 ? 'registro' : 'registros'}`;
         }
         
         // Atualizar badge de resultados
         const resultadosBadge = document.getElementById('resultadosBadge');
         if (resultadosBadge) {
-            resultadosBadge.textContent = `${usuariosGlobaisFiltrados.length} ${usuariosGlobaisFiltrados.length === 1 ? 'usuário' : 'usuários'}`;
+            const total = usuariosGlobaisFiltrados.length;
+            resultadosBadge.textContent = `${total} ${total === 1 ? 'usuário' : 'usuários'}`;
+        }
+        
+        // 🔥 ESCONDER/MOSTRAR PAGINAÇÃO
+        // Se tiver busca ativa, esconder a paginação (já que mostra tudo)
+        const paginacao = document.querySelector('.pagination-professional');
+        if (paginacao) {
+            if (temFiltroAtivo) {
+                paginacao.style.display = 'none';
+            } else {
+                paginacao.style.display = 'flex';
+            }
         }
         
         // 🔥 RESTAURAR O FOCO E POSIÇÃO DO CURSOR
