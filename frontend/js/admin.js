@@ -9078,88 +9078,84 @@ class AdminPanel {
     }
 
     // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
-    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO COM BUSCA EM TEMPO REAL) ============
+    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO SERVIDOR) ============
     configurarEventosFiltrosUsuarios() {
-        console.log('🔧 Configurando eventos dos filtros com busca em tempo real...');
+        console.log('🔧 Configurando eventos dos filtros...');
         
-        // Busca com debounce e filtro LOCAL (sem recarregar a página)
+        // 🔍 Busca com debounce (recarrega do SERVIDOR)
         const searchInput = document.getElementById('searchUsuarios');
         if (searchInput) {
-            // Remover listeners anteriores clonando e substituindo
             const novoSearch = searchInput.cloneNode(true);
             searchInput.parentNode.replaceChild(novoSearch, searchInput);
             
             let timeout;
             novoSearch.addEventListener('input', (e) => {
                 clearTimeout(timeout);
-                const termo = e.target.value;
-                
-                // Atualizar o filtro imediatamente
-                this.filtros.usuarios.search = termo;
+                const valor = e.target.value;
                 
                 // Mostrar/ocultar botão de limpar
                 const clearBtn = novoSearch.parentElement.querySelector('.input-clear');
                 if (clearBtn) {
-                    clearBtn.style.display = termo ? 'flex' : 'none';
+                    clearBtn.style.display = valor ? 'flex' : 'none';
                 }
                 
-                // Debounce para filtrar (300ms é mais responsivo)
+                // Debounce de 500ms
                 timeout = setTimeout(() => {
-                    this.filtrarTabelaUsuariosLocal();
-                }, 300);
-            });
-            
-            // Manter o foco no campo após filtrar
-            novoSearch.addEventListener('focus', () => {
-                this._buscaUsuariosAtiva = true;
-            });
-            
-            novoSearch.addEventListener('blur', () => {
-                setTimeout(() => {
-                    this._buscaUsuariosAtiva = false;
-                }, 200);
+                    this.filtros.usuarios.search = valor;
+                    this.filtros.usuarios.page = 1;
+                    
+                    // 🔥 RECARREGAR DO SERVIDOR
+                    this.loadUsuarios();
+                    
+                    // Manter foco no input
+                    setTimeout(() => {
+                        const currentInput = document.getElementById('searchUsuarios');
+                        if (currentInput && currentInput.value === valor) {
+                            currentInput.focus();
+                            const len = currentInput.value.length;
+                            currentInput.setSelectionRange(len, len);
+                        }
+                    }, 100);
+                }, 500);
             });
         }
         
-        // Configurar select de Perfil
+        // 👤 Select de Perfil (recarrega do SERVIDOR)
         const roleSelect = document.getElementById('filterRole');
         if (roleSelect) {
             const novoRoleSelect = roleSelect.cloneNode(true);
             roleSelect.parentNode.replaceChild(novoRoleSelect, roleSelect);
+            
             novoRoleSelect.addEventListener('change', (e) => {
-                const value = e.target.value;
-                console.log('🔄 Perfil alterado:', value);
-                this.filtros.usuarios.role = value;
+                this.filtros.usuarios.role = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal();
+                this.loadUsuarios();
             });
         }
         
-        // Configurar select de Status
+        // 🔘 Select de Status (recarrega do SERVIDOR)
         const statusSelect = document.getElementById('filterStatus');
         if (statusSelect) {
             const novoStatusSelect = statusSelect.cloneNode(true);
             statusSelect.parentNode.replaceChild(novoStatusSelect, statusSelect);
+            
             novoStatusSelect.addEventListener('change', (e) => {
-                const value = e.target.value;
-                console.log('🔄 Status alterado para:', value);
-                this.filtros.usuarios.status = value;
+                this.filtros.usuarios.status = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal();
+                this.loadUsuarios();
             });
         }
         
-        // Configurar select de Turma
+        // 🏫 Select de Turma (recarrega do SERVIDOR)
         const turmaSelect = document.getElementById('filterTurma');
         if (turmaSelect) {
             const novoTurmaSelect = turmaSelect.cloneNode(true);
             turmaSelect.parentNode.replaceChild(novoTurmaSelect, turmaSelect);
+            
             novoTurmaSelect.addEventListener('change', (e) => {
-                const value = e.target.value;
-                console.log('🔄 Turma alterada para:', value);
-                this.filtros.usuarios.turma = value;
+                this.filtros.usuarios.turma = e.target.value;
                 this.filtros.usuarios.page = 1;
-                this.filtrarTabelaUsuariosLocal();
+                this.loadUsuarios();
             });
         }
     }
@@ -9466,18 +9462,21 @@ class AdminPanel {
         }
     }
 
-    // ============ APLICAR FILTROS (CORRIGIDO) ============
+    // ============ APLICAR FILTROS (RECARREGA DO SERVIDOR) ============
     aplicarFiltrosUsuarios() {
         console.log('🔍 Aplicando filtros...');
         
+        // Atualizar os filtros com os valores dos selects/inputs
         this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
         this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
         this.filtros.usuarios.status = document.getElementById('filterStatus')?.value || 'todos';
         this.filtros.usuarios.turma = document.getElementById('filterTurma')?.value || 'todas';
         this.filtros.usuarios.page = 1;
         
-        // 🔥 MUDANÇA: usar filtro local em vez de recarregar tudo
-        this.filtrarTabelaUsuariosLocal();
+        console.log('📋 Filtros aplicados:', this.filtros.usuarios);
+        
+        // 🔥 RECARREGAR DO SERVIDOR com todos os filtros aplicados
+        this.loadUsuarios();
     }
 
     // ============ ATUALIZAR CARDS DE USUÁRIOS COM DADOS FILTRADOS ============
@@ -9581,6 +9580,7 @@ class AdminPanel {
             limit: 10 
         };
         
+        // Resetar campos visuais
         const searchInput = document.getElementById('searchUsuarios');
         const roleSelect = document.getElementById('filterRole');
         const statusSelect = document.getElementById('filterStatus');
@@ -9591,34 +9591,67 @@ class AdminPanel {
         if (statusSelect) statusSelect.value = 'todos';
         if (turmaSelect) turmaSelect.value = 'todas';
         
-        // Esconder botão de limpar
+        // Esconder botão de limpar busca
         const clearBtn = document.querySelector('.input-clear');
         if (clearBtn) clearBtn.style.display = 'none';
         
-        // Usar filtro local
-        this.filtrarTabelaUsuariosLocal();
+        // 🔥 RECARREGAR DO SERVIDOR sem filtros
+        this.loadUsuarios();
     }
 
     // ============ FILTRAR POR TURMA ============
     filtrarPorTurma() {
+        console.log('🔍 Filtrando por turma...');
+        
         const turma = document.getElementById('filterTurma')?.value || 'todas';
         this.filtros.usuarios.turma = turma;
         this.filtros.usuarios.page = 1;
+        
+        // 🔥 RECARREGAR DO SERVIDOR
         this.loadUsuarios();
     }
 
-    // Filtrar por role (clicando nos cards)
+    // ============ FILTRAR USUÁRIOS POR ROLE (RECARREGA DO SERVIDOR) ============
     filtrarUsuariosPorRole(role) {
-        const select = document.getElementById('filterRole');
-        if (select) {
-            select.value = role;
-            this.aplicarFiltrosUsuarios();
+        console.log(`🔍 Filtrando usuários por role: ${role}`);
+        
+        // Atualizar o filtro
+        if (role === 'ativo' || role === 'inativo') {
+            // Esses são filtros de STATUS, não de role
+            this.filtros.usuarios.status = role;
+            this.filtros.usuarios.role = 'todos';
+            
+            // Atualizar os selects visuais
+            const statusSelect = document.getElementById('filterStatus');
+            const roleSelect = document.getElementById('filterRole');
+            if (statusSelect) statusSelect.value = role;
+            if (roleSelect) roleSelect.value = 'todos';
+        } else {
+            // Filtro de ROLE normal
+            this.filtros.usuarios.role = role;
+            
+            // Atualizar select visual
+            const roleSelect = document.getElementById('filterRole');
+            if (roleSelect) roleSelect.value = role;
         }
+        
+        // Resetar para a primeira página
+        this.filtros.usuarios.page = 1;
+        
+        // 🔥 RECARREGAR DO SERVIDOR com o filtro aplicado
+        this.loadUsuarios();
     }
 
-    // Filtrar por status
+    // ============ FILTRAR POR STATUS ============
     filtrarPorStatusUsuario() {
-        this.aplicarFiltrosUsuarios();
+        console.log('🔍 Filtrando por status...');
+        
+        const status = document.getElementById('filterStatus')?.value || 'todos';
+        this.filtros.usuarios.status = status;
+        this.filtros.usuarios.page = 1;
+        
+        // 🔥 RECARREGAR DO SERVIDOR
+        this.loadUsuarios();
     }
 
     // Atualizar usuários
@@ -14999,15 +15032,18 @@ class AdminPanel {
         
         let botoes = '';
         
+        // Botão "primeira página"
         if (paginaAtual > 3) {
             botoes += `<button class="btn-page" onclick="admin.mudarPagina('${tipo}', 1)">1</button>`;
             if (paginaAtual > 4) botoes += '<span class="page-ellipsis">...</span>';
         }
         
+        // Páginas ao redor da atual
         for (let i = Math.max(1, paginaAtual - 2); i <= Math.min(totalPaginas, paginaAtual + 2); i++) {
             botoes += `<button class="btn-page ${i === paginaAtual ? 'active' : ''}" onclick="admin.mudarPagina('${tipo}', ${i})">${i}</button>`;
         }
         
+        // Botão "última página"
         if (paginaAtual < totalPaginas - 2) {
             if (paginaAtual < totalPaginas - 3) botoes += '<span class="page-ellipsis">...</span>';
             botoes += `<button class="btn-page" onclick="admin.mudarPagina('${tipo}', ${totalPaginas})">${totalPaginas}</button>`;
@@ -15015,11 +15051,25 @@ class AdminPanel {
         
         return `
             <div class="pagination-professional">
-                <div class="pagination-info">Mostrando ${inicio} a ${fim} de ${pagination.total} usuários</div>
+                <div class="pagination-info">
+                    Mostrando <strong>${inicio}</strong> a <strong>${fim}</strong> de <strong>${pagination.total}</strong> usuários
+                </div>
                 <div class="pagination-controls">
-                    <button class="btn-page" ${paginaAtual === 1 ? 'disabled' : ''} onclick="admin.mudarPagina('${tipo}', ${paginaAtual - 1})"><i class="fas fa-chevron-left"></i></button>
-                    ${botoes}
-                    <button class="btn-page" ${paginaAtual === totalPaginas ? 'disabled' : ''} onclick="admin.mudarPagina('${tipo}', ${paginaAtual + 1})"><i class="fas fa-chevron-right"></i></button>
+                    <button class="btn-pagination ${paginaAtual === 1 ? 'disabled' : ''}" 
+                            ${paginaAtual === 1 ? 'disabled' : ''} 
+                            onclick="admin.mudarPagina('${tipo}', ${paginaAtual - 1})"
+                            title="Página anterior">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <div class="pagination-pages">
+                        ${botoes}
+                    </div>
+                    <button class="btn-pagination ${paginaAtual === totalPaginas ? 'disabled' : ''}" 
+                            ${paginaAtual === totalPaginas ? 'disabled' : ''} 
+                            onclick="admin.mudarPagina('${tipo}', ${paginaAtual + 1})"
+                            title="Próxima página">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
                 </div>
             </div>
         `;
