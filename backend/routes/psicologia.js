@@ -9,15 +9,13 @@ const SessaoAssinatura = require('../models/SessaoAssinatura');
 const Notificacao = require('../models/Notificacao');
 
 // ============================================
-// 🔒 HELPER: MASCARAR DADOS SENSÍVEIS
+// MASCARAR DADOS SENSÍVEIS
 // ============================================
 const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
 const ROLES_MASCARADOS = ['super_admin'];
 
 function mascararParaAdmin(dados, req) {
-  if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) {
-    return dados;
-  }
+  if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) return dados;
   if (Array.isArray(dados)) return dados.map(item => mascararItem(item, req));
   return mascararItem(dados, req);
 }
@@ -77,41 +75,26 @@ function adminPodeModificar(atendimento, req) {
 }
 
 // ============================================
-// HELPER: FORMATAR TEMPO DE ATENDIMENTO
-// Regra:
-//   - < 60 min  → "X min"
-//   - < 24h     → "Xh Ymin"
-//   - >= 24h    → "Xd Yh Zmin"
+// FORMATAR TEMPO
 // ============================================
 function formatarTempoAtendimento(dataEntrada) {
   if (!dataEntrada) return { minutos: 0, texto: '0 min', nivel: 'normal' };
   
   const agora = new Date();
   const entrada = new Date(dataEntrada);
-  const diffMs = agora - entrada;
-  const minutosTotal = Math.floor(diffMs / 60000);
+  const minutosTotal = Math.floor((agora - entrada) / 60000);
   
-  if (minutosTotal < 0) {
-    return { minutos: 0, texto: 'agora', nivel: 'normal' };
-  }
+  if (minutosTotal < 0) return { minutos: 0, texto: 'agora', nivel: 'normal' };
   
   if (minutosTotal < 60) {
-    return {
-      minutos: minutosTotal,
-      texto: `${minutosTotal} min`,
-      nivel: minutosTotal >= 45 ? 'atencao' : 'normal'
-    };
+    return { minutos: minutosTotal, texto: `${minutosTotal} min`, nivel: minutosTotal >= 45 ? 'atencao' : 'normal' };
   }
   
   if (minutosTotal < 1440) {
     const horas = Math.floor(minutosTotal / 60);
     const mins = minutosTotal % 60;
     const texto = mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
-    return {
-      minutos: minutosTotal,
-      texto,
-      nivel: minutosTotal >= 720 ? 'alerta' : 'atencao'
-    };
+    return { minutos: minutosTotal, texto, nivel: minutosTotal >= 720 ? 'alerta' : 'atencao' };
   }
   
   const dias = Math.floor(minutosTotal / 1440);
@@ -122,92 +105,76 @@ function formatarTempoAtendimento(dataEntrada) {
   if (horasRestantes > 0) texto += ` ${horasRestantes}h`;
   if (minsRestantes > 0) texto += ` ${minsRestantes}min`;
   
-  return {
-    minutos: minutosTotal,
-    texto,
-    nivel: 'critico'
-  };
+  return { minutos: minutosTotal, texto, nivel: 'critico' };
 }
 
 // ============================================
-// HELPER: CRIAR NOTIFICAÇÃO INTERNA
+// NOTIFICAÇÃO INTERNA
 // ============================================
 async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link, icone, cor, metadata }) {
-  try {
-    const TIPOS_VALIDOS = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
-    const tipoFinal = TIPOS_VALIDOS.includes(tipo) ? tipo : 'sistema';
-    
-    const notif = new Notificacao({
-      usuarioId,
-      titulo,
-      mensagem,
-      tipo: tipoFinal,
-      link: link || '/psicologia.html',
-      icone: icone || '⏰',
-      cor: cor || '#f59e0b',
-      lida: false,
-      metadata: metadata || {}
-    });
-    await notif.save();
-    return notif;
-  } catch (e) {
-    console.error('[NOTIF] Erro ao salvar notificação:', e.message);
-    throw e;
-  }
+  const TIPOS_VALIDOS = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
+  const tipoFinal = TIPOS_VALIDOS.includes(tipo) ? tipo : 'sistema';
+  
+  const notif = new Notificacao({
+    usuarioId,
+    titulo,
+    mensagem,
+    tipo: tipoFinal,
+    link: link || '/psicologia.html',
+    icone: icone || '⏰',
+    cor: cor || '#f59e0b',
+    lida: false,
+    metadata: metadata || {}
+  });
+  await notif.save();
+  return notif;
 }
 
 // ============================================
-// HELPER: PROCESSAR ALERTAS DE 24H
+// PROCESSAR ALERTAS 24H
 // ============================================
 async function processarAlertas24h() {
-  try {
-    const atendimentos = await AtendimentoPsicologia.buscarAtendimentosParaAlerta();
+  const atendimentos = await AtendimentoPsicologia.buscarAtendimentosParaAlerta();
+  if (atendimentos.length === 0) return { processados: 0 };
+  
+  let processados = 0;
+  
+  for (const atendimento of atendimentos) {
+    const registradoPor = atendimento.entrada?.registradoPor;
+    if (!registradoPor) continue;
     
-    if (atendimentos.length === 0) return { processados: 0 };
+    const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
+    const tipoLabel = AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa);
     
-    let processados = 0;
-    
-    for (const atendimento of atendimentos) {
-      const registradoPor = atendimento.entrada?.registradoPor;
+    try {
+      await criarNotificacaoInterna({
+        usuarioId: registradoPor._id || registradoPor,
+        titulo: '⏰ Atendimento há mais de 24h em andamento',
+        mensagem: `O atendimento de ${atendimento.alunoNome} (${tipoLabel}) está em andamento há ${tempo.texto}. Verifique se já foi encerrado.`,
+        tipo: 'sistema',
+        link: `/psicologia.html?verificar=${atendimento._id}`,
+        icone: '⏰',
+        cor: '#dc2626',
+        metadata: {
+          atendimentoId: atendimento._id.toString(),
+          alunoId: atendimento.alunoId.toString(),
+          alunoNome: atendimento.alunoNome,
+          minutosEmAndamento: tempo.minutos,
+          tempoTexto: tempo.texto
+        }
+      });
       
-      if (!registradoPor) continue;
+      atendimento.ultimoAlerta24h = new Date();
+      atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
+      await atendimento.save();
       
-      const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
-      const tipoLabel = AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa);
-      
-      try {
-        await criarNotificacaoInterna({
-          usuarioId: registradoPor._id || registradoPor,
-          titulo: '⏰ Atendimento há mais de 24h em andamento',
-          mensagem: `O atendimento de ${atendimento.alunoNome} (${tipoLabel}) está em andamento há ${tempo.texto}. Verifique se já foi encerrado.`,
-          tipo: 'sistema',
-          link: `/psicologia.html?verificar=${atendimento._id}`,
-          icone: '⏰',
-          cor: '#dc2626',
-          metadata: {
-            atendimentoId: atendimento._id.toString(),
-            alunoId: atendimento.alunoId.toString(),
-            alunoNome: atendimento.alunoNome,
-            minutosEmAndamento: tempo.minutos,
-            tempoTexto: tempo.texto
-          }
-        });
-        
-        atendimento.ultimoAlerta24h = new Date();
-        atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
-        await atendimento.save();
-        
-        processados++;
-      } catch (e) {
-        console.error(`[ALERTA 24H] Falha para ${atendimento.alunoNome}:`, e.message);
-      }
+      processados++;
+    } catch (e) {
+      console.error(`[ALERTA 24H] Falha para ${atendimento.alunoNome}:`, e.message);
     }
-    
-    return { processados };
-  } catch (error) {
-    console.error('Erro ao processar alertas 24h:', error);
-    return { processados: 0, erro: error.message };
   }
+  
+  return { processados };
 }
 
 // ============================================
@@ -216,15 +183,9 @@ async function processarAlertas24h() {
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ success: false, error: 'Token não fornecido.' });
-  }
-
+  if (!token) return res.status(401).json({ success: false, error: 'Token não fornecido.' });
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ success: false, error: 'Token inválido.' });
-    }
+    if (err) return res.status(403).json({ success: false, error: 'Token inválido.' });
     req.userId = decoded.id;
     req.userRole = decoded.role;
     req.userNome = decoded.nome;
@@ -235,17 +196,11 @@ const authenticateToken = (req, res, next) => {
 const verificarPsicologia = (req, res, next) => {
   const allowedRoles = ['psicologia', 'super_admin'];
   if (!allowedRoles.includes(req.userRole)) {
-    return res.status(403).json({
-      success: false,
-      error: 'Acesso permitido apenas para Psicologia'
-    });
+    return res.status(403).json({ success: false, error: 'Acesso permitido apenas para Psicologia' });
   }
   next();
 };
 
-// ============================================
-// HELPER: Timezone Brasil (UTC-3)
-// ============================================
 function inicioDoDiaBrasil(dataStr) {
   return new Date(dataStr + 'T00:00:00.000-03:00');
 }
@@ -257,52 +212,64 @@ function fimDoDiaBrasil(dataStr) {
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Psicologia' });
+  res.json({ 
+    success: true, 
+    status: 'online', 
+    service: 'Psicologia',
+    versao: '2.0-alertas-24h',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ============================================
-// LISTAR TURMAS
+// MIGRAÇÃO
 // ============================================
-router.get('/turmas', authenticateToken, verificarPsicologia, async (req, res) => {
+router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
-    const turmas = await User.distinct('turma', { 
-      role: 'aluno', ativo: true, 
-      turma: { $nin: [null, '', 'Não informada'] } 
-    });
-    res.json({ success: true, turmas: turmas.sort() });
+    const resultado = await AtendimentoPsicologia.updateMany(
+      { status: 'em_andamento', alerta24hReconhecido: { $exists: false } },
+      { $set: { ultimoAlerta24h: null, alerta24hReconhecido: false, totalAlertas24h: 0 } }
+    );
+    res.json({ success: true, modified: resultado.modifiedCount });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// LISTAR ALUNOS POR TURMA
+// TURMAS E ALUNOS
 // ============================================
+router.get('/turmas', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const turmas = await User.distinct('turma', { 
+      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
+    });
+    res.json({ success: true, turmas: turmas.sort() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/alunos-por-turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { turma } = req.query;
     if (!turma) return res.status(400).json({ success: false, error: 'Turma é obrigatória' });
     
     const alunos = await User.find({ role: 'aluno', ativo: true, turma })
-      .select('nome matricula turma curso fotoPerfil')
-      .sort({ nome: 1 });
+      .select('nome matricula turma curso fotoPerfil').sort({ nome: 1 });
     
     res.json({
-      success: true,
-      total: alunos.length,
+      success: true, total: alunos.length,
       alunos: alunos.map(a => ({
         id: a._id, nome: a.nome, matricula: a.matricula,
         turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// BUSCAR ALUNO POR ID
-// ============================================
 router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -337,13 +304,10 @@ router.get('/aluno/:id', authenticateToken, verificarPsicologia, async (req, res
       }))
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// BUSCAR ALUNO POR NOME/MATRÍCULA
-// ============================================
 router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -357,25 +321,22 @@ router.get('/buscar-aluno', authenticateToken, verificarPsicologia, async (req, 
         { nome: { $regex: termo, $options: 'i' } },
         { matricula: { $regex: termo, $options: 'i' } }
       ]
-    })
-    .select('nome matricula turma curso fotoPerfil')
-    .limit(20).sort({ nome: 1 });
+    }).select('nome matricula turma curso fotoPerfil').limit(20).sort({ nome: 1 });
     
     res.json({
-      success: true,
-      total: alunos.length,
+      success: true, total: alunos.length,
       alunos: alunos.map(a => ({
         id: a._id, nome: a.nome, matricula: a.matricula,
         turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// REGISTRAR NOVO ATENDIMENTO
+// REGISTRAR ATENDIMENTO
 // ============================================
 router.post('/registrar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -403,7 +364,6 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
     }
     
     const psicologo = await User.findById(req.userId).select('nome');
-    
     const statusAssinatura = precisaAssinatura ? 'pendente' : 'nao_necessaria';
     
     const atendimento = new AtendimentoPsicologia({
@@ -431,7 +391,10 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
-      status: 'em_andamento'
+      status: 'em_andamento',
+      ultimoAlerta24h: null,
+      alerta24hReconhecido: false,
+      totalAlertas24h: 0
     });
     
     await atendimento.save();
@@ -450,38 +413,27 @@ router.post('/registrar', authenticateToken, verificarPsicologia, async (req, re
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro ao registrar: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// APLICAR ASSINATURA DA SESSÃO AO ATENDIMENTO
+// APLICAR ASSINATURA
 // ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { atendimentoId, sessaoId } = req.body;
-    
     if (!atendimentoId || !sessaoId) {
       return res.status(400).json({ success: false, error: 'atendimentoId e sessaoId são obrigatórios' });
     }
     
     const sessao = await SessaoAssinatura.findOne({ sessaoId });
-    if (!sessao) {
-      return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
-    }
-    
-    if (sessao.status !== 'assinado') {
-      return res.status(400).json({ success: false, error: 'Sessão ainda não foi assinada' });
-    }
-    
-    if (!sessao.assinaturaBase64) {
-      return res.status(400).json({ success: false, error: 'Sessão não contém assinatura' });
-    }
+    if (!sessao) return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
+    if (sessao.status !== 'assinado') return res.status(400).json({ success: false, error: 'Sessão ainda não foi assinada' });
+    if (!sessao.assinaturaBase64) return res.status(400).json({ success: false, error: 'Sessão não contém assinatura' });
     
     const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
     atendimento.entrada.assinaturaBase64 = sessao.assinaturaBase64;
     atendimento.entrada.temAssinatura = true;
@@ -506,13 +458,12 @@ router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async
       }
     });
   } catch (error) {
-    console.error('Erro ao aplicar assinatura:', error);
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// FINALIZAR ATENDIMENTO
+// FINALIZAR
 // ============================================
 router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -531,11 +482,7 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
     
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
-      return res.status(403).json({ 
-        success: false, 
-        error: check.motivo,
-        code: 'ADMIN_NAO_CRIADOR'
-      });
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
     const psicologo = await User.findById(req.userId).select('nome');
@@ -568,12 +515,12 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// REMARCAR ATENDIMENTO
+// REMARCAR
 // ============================================
 router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -589,17 +536,12 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
     
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
-      return res.status(403).json({ 
-        success: false, 
-        error: check.motivo,
-        code: 'ADMIN_NAO_CRIADOR'
-      });
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
     const dataObj = new Date(dataRemarcacao + 'T00:00:00');
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    
     if (dataObj < hoje) {
       return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
     }
@@ -608,9 +550,7 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
     
     const remarcacao = {
       id: new mongoose.Types.ObjectId(),
-      dataRemarcacao,
-      horarioRemarcacao,
-      motivoRemarcacao,
+      dataRemarcacao, horarioRemarcacao, motivoRemarcacao,
       observacoesRemarcacao: observacoesRemarcacao || '',
       status: 'pendente',
       criadaEm: new Date(),
@@ -637,33 +577,27 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro ao remarcar: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// LISTAR REMARCAÇÕES PENDENTES
+// REMARCAÇÕES PENDENTES
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimentos = await AtendimentoPsicologia.find({
-      'remarcacoes.status': 'pendente',
-      status: { $ne: 'cancelado' }
+      'remarcacoes.status': 'pendente', status: { $ne: 'cancelado' }
     }).sort({ 'remarcacoes.dataRemarcacao': 1 });
     
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    
     const remarcacoes = [];
     
     atendimentos.forEach(atendimento => {
       (atendimento.remarcacoes || []).forEach(rem => {
         if (rem.status !== 'pendente') return;
-        
         const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
-        const atrasado = dataRem < hoje;
-        const ehHoje = dataRem.getTime() === hoje.getTime();
-        
         remarcacoes.push({
           id: rem.id.toString(),
           atendimentoId: atendimento._id,
@@ -678,7 +612,8 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
           motivoRemarcacao: rem.motivoRemarcacao,
           observacoesRemarcacao: rem.observacoesRemarcacao,
           status: rem.status,
-          atrasado, hoje: ehHoje,
+          atrasado: dataRem < hoje,
+          hoje: dataRem.getTime() === hoje.getTime(),
           criadaEm: rem.criadaEm,
           criadaPorNome: rem.criadaPorNome
         });
@@ -695,19 +630,13 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarPsicologia, asy
     
     res.json({ success: true, total: remarcacoes.length, remarcacoes });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// BUSCAR REMARCAÇÃO POR ID
-// ============================================
 router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
-    const atendimento = await AtendimentoPsicologia.findOne({
-      'remarcacoes.id': req.params.id
-    });
-    
+    const atendimento = await AtendimentoPsicologia.findOne({ 'remarcacoes.id': req.params.id });
     if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === req.params.id);
@@ -730,35 +659,24 @@ router.get('/remarcacoes/:id', authenticateToken, verificarPsicologia, async (re
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// FINALIZAR REMARCAÇÃO
-// ============================================
 router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
-    
     if (!remarcacaoId) return res.status(400).json({ success: false, error: 'ID obrigatório' });
     if (!['realizado', 'cancelado'].includes(acao)) {
       return res.status(400).json({ success: false, error: 'Ação inválida' });
     }
     
-    const atendimento = await AtendimentoPsicologia.findOne({
-      'remarcacoes.id': remarcacaoId
-    });
-    
+    const atendimento = await AtendimentoPsicologia.findOne({ 'remarcacoes.id': remarcacaoId });
     if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
-      return res.status(403).json({ 
-        success: false, 
-        error: check.motivo,
-        code: 'ADMIN_NAO_CRIADOR'
-      });
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === remarcacaoId);
@@ -787,18 +705,17 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
     atendimento.updatedAt = new Date();
     await atendimento.save();
     
-    const mensagem = acao === 'realizado' 
-      ? '✅ Remarcação marcada como realizada!' 
-      : '❌ Remarcação cancelada.';
-    
-    res.json({ success: true, message: mensagem });
+    res.json({
+      success: true,
+      message: acao === 'realizado' ? '✅ Remarcação marcada como realizada!' : '❌ Remarcação cancelada.'
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS COM MAIS DE 24H
+// ATENDIMENTOS COM +24H
 // ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -807,45 +724,37 @@ router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, asyn
     
     const atendimentos = await AtendimentoPsicologia.find({
       status: 'em_andamento',
-      alerta24hReconhecido: false,
+      $or: [
+        { alerta24hReconhecido: false },
+        { alerta24hReconhecido: { $exists: false } }
+      ],
       'entrada.dataHora': { $lte: limite24h }
     }).sort({ 'entrada.dataHora': 1 });
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
+        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
+        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
-        tempoTexto: tempo.texto,
-        minutosEmAndamento: tempo.minutos,
-        nivelAlerta: tempo.nivel,
-        registradoPorNome: a.entrada.registradoPorNome,
-        registradoPor: a.entrada.registradoPor,
-        ultimoAlerta24h: a.ultimoAlerta24h,
-        totalAlertas24h: a.totalAlertas24h || 0,
-        alerta24hReconhecido: a.alerta24hReconhecido
+        tempoTexto: tempo.texto, minutosEmAndamento: tempo.minutos, nivelAlerta: tempo.nivel,
+        registradoPorNome: a.entrada.registradoPorNome, registradoPor: a.entrada.registradoPor,
+        ultimoAlerta24h: a.ultimoAlerta24h, totalAlertas24h: a.totalAlertas24h || 0,
+        alerta24hReconhecido: a.alerta24hReconhecido || false
       };
     });
     
     res.json({ success: true, total: lista.length, atendimentos: lista });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// VERIFICAR ATENDIMENTO DE 24H
-// Ações: 'ja_encerrou' | 'manter_aberto'
+// VERIFICAR ATENDIMENTO +24H
 // ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -853,7 +762,7 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicol
     const atendimentoId = req.params.id;
     
     if (!['ja_encerrou', 'manter_aberto'].includes(acao)) {
-      return res.status(400).json({ success: false, error: 'Ação inválida. Use "ja_encerrou" ou "manter_aberto".' });
+      return res.status(400).json({ success: false, error: 'Ação inválida' });
     }
     
     const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
@@ -885,40 +794,43 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicol
       atendimento.status = 'finalizado';
       atendimento.alerta24hReconhecido = true;
       atendimento.updatedAt = new Date();
-      
       await atendimento.save();
       
       return res.json({
         success: true,
         message: 'Atendimento encerrado com sucesso!',
         atendimento: {
-          id: atendimento._id,
-          status: 'finalizado',
-          resultado: resultadoFinal,
-          dataHoraSaida: atendimento.saida.dataHora
+          id: atendimento._id, status: 'finalizado',
+          resultado: resultadoFinal, dataHoraSaida: atendimento.saida.dataHora
         }
       });
     }
     
-    // ação === 'manter_aberto'
     const proximoAlerta = new Date(Date.now() + 20 * 60 * 1000);
     atendimento.ultimoAlerta24h = proximoAlerta;
     atendimento.updatedAt = new Date();
     await atendimento.save();
     
-    return res.json({
+    res.json({
       success: true,
       message: 'Atendimento mantido aberto. Você será lembrado novamente em 20 minutos.',
       proximoAlerta,
-      atendimento: {
-        id: atendimento._id,
-        status: 'em_andamento',
-        proximoAlerta
-      }
+      atendimento: { id: atendimento._id, status: 'em_andamento', proximoAlerta }
     });
   } catch (error) {
-    console.error('Erro ao verificar atendimento 24h:', error);
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// PROCESSAR ALERTAS (MANUAL)
+// ============================================
+router.post('/processar-alertas-24h', async (req, res) => {
+  try {
+    const resultado = await processarAlertas24h();
+    res.json({ success: true, ...resultado });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -937,10 +849,7 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
       AtendimentoPsicologia.countDocuments({
-        'entrada.dataHora': {
-          $gte: inicioDoDiaBrasil(hojeStr),
-          $lte: fimDoDiaBrasil(hojeStr)
-        }
+        'entrada.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
       }),
       AtendimentoPsicologia.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
       AtendimentoPsicologia.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } }),
@@ -950,16 +859,13 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     const emAndamento = await AtendimentoPsicologia.countDocuments({ status: 'em_andamento' });
     const finalizadosHoje = await AtendimentoPsicologia.countDocuments({
       status: 'finalizado',
-      'saida.dataHora': {
-        $gte: inicioDoDiaBrasil(hojeStr),
-        $lte: fimDoDiaBrasil(hojeStr)
-      }
+      'saida.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
     });
     
     const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const atendimentosAntigos = await AtendimentoPsicologia.countDocuments({
       status: 'em_andamento',
-      alerta24hReconhecido: false,
+      $or: [{ alerta24hReconhecido: false }, { alerta24hReconhecido: { $exists: false } }],
       'entrada.dataHora': { $lte: limite24h }
     });
     
@@ -985,11 +891,9 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
       const data = new Date();
       data.setDate(data.getDate() - i);
       const dataStr = data.toISOString().split('T')[0];
-      
       const count = await AtendimentoPsicologia.countDocuments({
         'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
       });
-      
       ultimos7Dias.push({
         data: dataStr,
         dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
@@ -1000,21 +904,19 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     const porTurma = await AtendimentoPsicologia.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
       { $group: { _id: '$alunoTurma', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 8 }
+      { $sort: { count: -1 } }, { $limit: 8 }
     ]);
     
     const alunosReincidentes = await AtendimentoPsicologia.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
       { $group: { 
-        _id: '$alunoId', 
+        _id: '$alunoId',
         alunoNome: { $first: '$alunoNome' },
         alunoTurma: { $first: '$alunoTurma' },
         count: { $sum: 1 } 
       }},
       { $match: { count: { $gte: 2 } } },
-      { $sort: { count: -1 } },
-      { $limit: 10 }
+      { $sort: { count: -1 } }, { $limit: 10 }
     ]);
     
     const porHora = await AtendimentoPsicologia.aggregate([
@@ -1029,18 +931,11 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
     res.json({
       success: true,
       metricas: {
-        hoje: atendimentosHoje,
-        semana: atendimentosSemana,
-        mes: atendimentosMes,
-        total,
-        emAndamento,
-        finalizadosHoje,
-        atendimentosAntigos
+        hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes,
+        total, emAndamento, finalizadosHoje, atendimentosAntigos
       },
       porTipo: porTipo.map(t => ({
-        tipo: t._id,
-        label: AtendimentoPsicologia.getTipoTarefaLabel(t._id),
-        count: t.count
+        tipo: t._id, label: AtendimentoPsicologia.getTipoTarefaLabel(t._id), count: t.count
       })),
       porGravidade: porGravidade.map(g => ({ gravidade: g._id, count: g.count })),
       resultados: resultados.map(r => ({
@@ -1059,12 +954,12 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS ATIVOS
+// ATENDIMENTOS ATIVOS
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1074,28 +969,20 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
+        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
+        alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
+        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
-        tempoAtendimento: tempo.minutos,
-        tempoTexto: tempo.texto,
-        nivelTempo: tempo.nivel,
+        tempoAtendimento: tempo.minutos, tempoTexto: tempo.texto, nivelTempo: tempo.nivel,
         alerta24hAtivo: tempo.minutos >= 1440 && !a.alerta24hReconhecido,
         totalAlertas24h: a.totalAlertas24h || 0,
         temRemarcacaoPendente: a.temRemarcacaoPendente || false,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
         statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
         entrada: {
-          descricao: a.entrada.descricao,
-          observacoes: a.entrada.observacoes,
+          descricao: a.entrada.descricao, observacoes: a.entrada.observacoes,
           registradoPor: a.entrada.registradoPor,
           registradoPorNome: a.entrada.registradoPorNome
         },
@@ -1104,32 +991,20 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
     });
     
     const listaMascarada = mascararParaAdmin(lista, req);
-    
-    res.json({
-      success: true,
-      total: listaMascarada.length,
-      atendimentos: listaMascarada
-    });
+    res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS
+// LISTAR ATENDIMENTOS
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { 
-      limit = 100, 
-      page = 1, 
-      tipo, 
-      status, 
-      turma, 
-      dataInicio, 
-      dataFim,
-      busca,
-      resultado
+      limit = 100, page = 1, tipo, status, turma, 
+      dataInicio, dataFim, busca, resultado
     } = req.query;
     
     let query = {};
@@ -1158,19 +1033,14 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     const [atendimentos, total] = await Promise.all([
-      AtendimentoPsicologia.find(query)
-        .sort({ 'entrada.dataHora': -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
+      AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 }).skip(skip).limit(parseInt(limit)),
       AtendimentoPsicologia.countDocuments(query)
     ]);
     
     const turmasAtendimento = await AtendimentoPsicologia.distinct('alunoTurma');
     const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', ativo: true, 
-      turma: { $nin: [null, '', 'Não informada'] } 
+      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
     });
-
     const turmasDisponiveis = [...new Set([
       ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
       ...turmasAlunos
@@ -1179,24 +1049,16 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
+        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoCurso: a.alunoCurso,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
+        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         status: a.status,
         dataEntrada: a.entrada.dataHora,
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
-        tempoTexto: tempo.texto,
-        tempoMinutos: tempo.minutos,
-        registradoPor: a.entrada.registradoPorNome,
-        registradoPorId: a.entrada.registradoPor,
+        tempoTexto: tempo.texto, tempoMinutos: tempo.minutos,
+        registradoPor: a.entrada.registradoPorNome, registradoPorId: a.entrada.registradoPor,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
         statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
         saida: a.saida ? {
@@ -1212,8 +1074,7 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
         } : null,
         createdAt: a.createdAt,
         entrada: {
-          descricao: a.entrada.descricao,
-          observacoes: a.entrada.observacoes,
+          descricao: a.entrada.descricao, observacoes: a.entrada.observacoes,
           registradoPor: a.entrada.registradoPor
         },
         _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
@@ -1223,16 +1084,14 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
     const listaMascarada = mascararParaAdmin(lista, req);
     
     res.json({
-      success: true,
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      success: true, total,
+      page: parseInt(page), limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
       turmasDisponiveis,
       atendimentos: listaMascarada
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -1247,11 +1106,8 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
     
     const payload = {
-      id: atendimento._id,
-      alunoId: atendimento.alunoId,
-      alunoNome: atendimento.alunoNome,
-      alunoMatricula: atendimento.alunoMatricula,
-      alunoTurma: atendimento.alunoTurma,
+      id: atendimento._id, alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
+      alunoMatricula: atendimento.alunoMatricula, alunoTurma: atendimento.alunoTurma,
       alunoCurso: atendimento.alunoCurso,
       tipoTarefa: atendimento.tipoTarefa,
       tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa),
@@ -1279,29 +1135,26 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
         observacoesFinais: atendimento.saida.observacoesFinais,
         registradoPor: atendimento.saida.registradoPorNome
       } : null,
-      status: atendimento.status,
-      prioridade: atendimento.prioridade,
+      status: atendimento.status, prioridade: atendimento.prioridade,
       remarcacoes: atendimento.remarcacoes || [],
       temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
-      anexos: atendimento.anexos,
-      createdAt: atendimento.createdAt,
-      tempoTexto: tempo.texto,
-      tempoMinutos: tempo.minutos,
-      nivelTempo: tempo.nivel,
+      anexos: atendimento.anexos, createdAt: atendimento.createdAt,
+      tempoTexto: tempo.texto, tempoMinutos: tempo.minutos, nivelTempo: tempo.nivel,
       alerta24hAtivo: tempo.minutos >= 1440 && !atendimento.alerta24hReconhecido,
-      totalAlertas24h: atendimento.totalAlertas24h || 0
+      totalAlertas24h: atendimento.totalAlertas24h || 0,
+      alerta24hReconhecido: atendimento.alerta24hReconhecido || false,
+      ultimoAlerta24h: atendimento.ultimoAlerta24h || null
     };
     
     const payloadMascarado = mascararParaAdmin(payload, req);
-    
     res.json({ success: true, atendimento: payloadMascarado });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// EDITAR ATENDIMENTO
+// EDITAR
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1310,11 +1163,7 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
-      return res.status(403).json({ 
-        success: false, 
-        error: check.motivo,
-        code: 'ADMIN_NAO_CRIADOR'
-      });
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
     const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida, tipoTarefa } = req.body;
@@ -1334,7 +1183,10 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     if (status) atendimento.status = status;
     
     if (saida) {
-      atendimento.saida = { ...atendimento.saida, ...saida, registradoPor: req.userId, registradoPorNome: req.userNome };
+      atendimento.saida = { 
+        ...atendimento.saida, ...saida,
+        registradoPor: req.userId, registradoPorNome: req.userNome 
+      };
       if (atendimento.status === 'finalizado') {
         atendimento.alerta24hReconhecido = true;
       }
@@ -1345,12 +1197,12 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     
     res.json({ success: true, message: 'Atendimento atualizado com sucesso', atendimento: { id: atendimento._id } });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// EXCLUIR ATENDIMENTO
+// EXCLUIR
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -1359,17 +1211,13 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
     
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
-      return res.status(403).json({ 
-        success: false, 
-        error: check.motivo,
-        code: 'ADMIN_NAO_CRIADOR'
-      });
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
     await AtendimentoPsicologia.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Atendimento excluído com sucesso' });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -1413,17 +1261,16 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicolog
       dataCorte, status
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro ao excluir: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// RELATÓRIO POR ALUNO
+// RELATÓRIOS
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
-    
     let query = { alunoId: req.params.alunoId };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
@@ -1433,7 +1280,6 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
     
     const atendimentos = await AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 });
     const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
-    
     const porTipo = {};
     const porGravidade = {};
     
@@ -1470,17 +1316,13 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
       })
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// RELATÓRIO POR TURMA
-// ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
-    
     let query = { alunoTurma: req.params.turma };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
@@ -1489,14 +1331,16 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
     }
     
     const atendimentos = await AtendimentoPsicologia.find(query).sort({ 'entrada.dataHora': -1 });
-    
     const porAluno = {};
     const porTipo = {};
     
     atendimentos.forEach(a => {
       const key = a.alunoId.toString();
       if (!porAluno[key]) {
-        porAluno[key] = { alunoId: a.alunoId, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula, total: 0, tipos: {} };
+        porAluno[key] = { 
+          alunoId: a.alunoId, alunoNome: a.alunoNome,
+          alunoMatricula: a.alunoMatricula, total: 0, tipos: {} 
+        };
       }
       porAluno[key].total++;
       porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
@@ -1504,8 +1348,7 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
     });
     
     res.json({
-      success: true,
-      turma: req.params.turma,
+      success: true, turma: req.params.turma,
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtendimentos: atendimentos.length,
@@ -1528,17 +1371,13 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
       })
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// RELATÓRIO GERAL
-// ============================================
 router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
-    
     let query = {};
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
@@ -1565,7 +1404,6 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       }
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
-      
       porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
       porGravidade[a.entrada.gravidade] = (porGravidade[a.entrada.gravidade] || 0) + 1;
     });
@@ -1577,10 +1415,8 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
     
     const turmasAtendimento = await AtendimentoPsicologia.distinct('alunoTurma');
     const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', ativo: true,
-      turma: { $nin: [null, '', 'Não informada'] } 
+      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
     });
-
     const turmas = [...new Set([
       ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
       ...turmasAlunos
@@ -1594,26 +1430,19 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       comAssinatura,
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
       porTipo: Object.entries(porTipo).map(([t, count]) => ({
-        tipo: t,
-        label: AtendimentoPsicologia.getTipoTarefaLabel(t),
-        count
+        tipo: t, label: AtendimentoPsicologia.getTipoTarefaLabel(t), count
       })).sort((a, b) => b.count - a.count),
       porGravidade,
       registros: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
         return {
-          id: a._id,
-          alunoNome: a.alunoNome,
-          alunoMatricula: a.alunoMatricula,
-          alunoTurma: a.alunoTurma,
-          tipoTarefa: a.tipoTarefa,
+          id: a._id, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula,
+          alunoTurma: a.alunoTurma, tipoTarefa: a.tipoTarefa,
           tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
           dataEntrada: a.entrada.dataHora,
           dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
-          descricao: a.entrada.descricao,
-          gravidade: a.entrada.gravidade,
-          prioridade: a.prioridade,
-          status: a.status,
+          descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
+          prioridade: a.prioridade, status: a.status,
           tempoTexto: tempo.texto,
           temAssinatura: !!(a.entrada?.assinaturaBase64),
           assinaturaBase64: a.entrada?.assinaturaBase64 || null,
@@ -1636,19 +1465,17 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
       })
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// SCHEDULER: PROCESSAMENTO PERIÓDICO DE ALERTAS 24H
+// SCHEDULER
 // ============================================
 let schedulerInterval = null;
 
 function iniciarSchedulerAlertas24h() {
-  if (schedulerInterval) {
-    clearInterval(schedulerInterval);
-  }
+  if (schedulerInterval) clearInterval(schedulerInterval);
   
   setTimeout(async () => {
     await processarAlertas24h();
@@ -1658,7 +1485,7 @@ function iniciarSchedulerAlertas24h() {
     await processarAlertas24h();
   }, 5 * 60 * 1000);
   
-  console.log('⏰ [SCHEDULER] Agendador de alertas 24h iniciado (a cada 5 min)');
+  console.log('⏰ [SCHEDULER PSI] Agendador iniciado');
 }
 
 iniciarSchedulerAlertas24h();

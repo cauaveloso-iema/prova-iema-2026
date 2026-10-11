@@ -1,3 +1,4 @@
+// routes/supervisao.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -7,35 +8,20 @@ const AtendimentoSupervisao = require('../models/AtendimentoSupervisao');
 const SessaoAssinatura = require('../models/SessaoAssinatura');
 const Notificacao = require('../models/Notificacao');
 
-// ============================================
-// 🔒 HELPER: MASCARAR DADOS SENSÍVEIS
-// ============================================
 const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
 const ROLES_MASCARADOS = ['super_admin'];
 
 function mascararParaAdmin(dados, req) {
-  if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) {
-    return dados;
-  }
-  
-  if (Array.isArray(dados)) {
-    return dados.map(item => mascararItem(item, req));
-  }
-  
+  if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) return dados;
+  if (Array.isArray(dados)) return dados.map(item => mascararItem(item, req));
   return mascararItem(dados, req);
 }
 
 function mascararItem(item, req) {
   if (!item) return item;
-  
   const obj = item.toObject ? item.toObject() : JSON.parse(JSON.stringify(item));
-  
   const adminId = req.userId?.toString();
-  const criadorId = (
-    obj.entrada?.registradoPor || 
-    obj.registradoPorId || 
-    obj.criadoPor
-  )?.toString();
+  const criadorId = (obj.entrada?.registradoPor || obj.registradoPorId || obj.criadoPor)?.toString();
   
   if (criadorId && adminId && criadorId === adminId) {
     obj._mascarado = false;
@@ -51,25 +37,18 @@ function mascararItem(item, req) {
     if (obj.entrada.observacoes) obj.entrada.observacoes = MASCARA_TEXTO;
     if (obj.entrada.assinaturaBase64) obj.entrada.assinaturaBase64 = null;
   }
-  
   if (obj.descricao) obj.descricao = MASCARA_TEXTO;
-  
   if (obj.saida) {
     if (obj.saida.resultadoTexto) obj.saida.resultadoTexto = MASCARA_TEXTO;
     if (obj.saida.observacoesFinais) obj.saida.observacoesFinais = MASCARA_TEXTO;
   }
-  
   if (obj.detalhes && typeof obj.detalhes === 'object') {
     Object.keys(obj.detalhes).forEach(chave => {
       const valor = obj.detalhes[chave];
-      if (Array.isArray(valor)) {
-        obj.detalhes[chave] = [MASCARA_TEXTO];
-      } else if (valor !== undefined && valor !== null && valor !== '') {
-        obj.detalhes[chave] = MASCARA_TEXTO;
-      }
+      if (Array.isArray(valor)) obj.detalhes[chave] = [MASCARA_TEXTO];
+      else if (valor !== undefined && valor !== null && valor !== '') obj.detalhes[chave] = MASCARA_TEXTO;
     });
   }
-  
   if (Array.isArray(obj.remarcacoes)) {
     obj.remarcacoes = obj.remarcacoes.map(rem => {
       const nova = { ...rem };
@@ -78,172 +57,103 @@ function mascararItem(item, req) {
       return nova;
     });
   }
-  
   return obj;
 }
 
 function adminPodeModificar(atendimento, req) {
-  if (!ROLES_MASCARADOS.includes(req.userRole)) {
-    return { permitido: true };
-  }
-  
+  if (!ROLES_MASCARADOS.includes(req.userRole)) return { permitido: true };
   const adminId = req.userId?.toString();
   const criadorId = atendimento?.entrada?.registradoPor?.toString();
-  
-  if (criadorId === adminId) {
-    return { permitido: true };
-  }
-  
+  if (criadorId === adminId) return { permitido: true };
   return {
     permitido: false,
     motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
   };
 }
 
-// ============================================
-// 🆕 HELPER: FORMATAR TEMPO DE ATENDIMENTO
-// ============================================
 function formatarTempoAtendimento(dataEntrada) {
   if (!dataEntrada) return { minutos: 0, texto: '0 min', nivel: 'normal' };
-  
   const agora = new Date();
   const entrada = new Date(dataEntrada);
-  const diffMs = agora - entrada;
-  const minutosTotal = Math.floor(diffMs / 60000);
-  
-  if (minutosTotal < 0) {
-    return { minutos: 0, texto: 'agora', nivel: 'normal' };
-  }
-  
+  const minutosTotal = Math.floor((agora - entrada) / 60000);
+  if (minutosTotal < 0) return { minutos: 0, texto: 'agora', nivel: 'normal' };
   if (minutosTotal < 60) {
-    return {
-      minutos: minutosTotal,
-      texto: `${minutosTotal} min`,
-      nivel: minutosTotal >= 45 ? 'atencao' : 'normal'
-    };
+    return { minutos: minutosTotal, texto: `${minutosTotal} min`, nivel: minutosTotal >= 45 ? 'atencao' : 'normal' };
   }
-  
   if (minutosTotal < 1440) {
     const horas = Math.floor(minutosTotal / 60);
     const mins = minutosTotal % 60;
     const texto = mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
-    return {
-      minutos: minutosTotal,
-      texto,
-      nivel: minutosTotal >= 720 ? 'alerta' : 'atencao'
-    };
+    return { minutos: minutosTotal, texto, nivel: minutosTotal >= 720 ? 'alerta' : 'atencao' };
   }
-  
   const dias = Math.floor(minutosTotal / 1440);
   const horasRestantes = Math.floor((minutosTotal % 1440) / 60);
   const minsRestantes = minutosTotal % 60;
-  
   let texto = `${dias}d`;
   if (horasRestantes > 0) texto += ` ${horasRestantes}h`;
   if (minsRestantes > 0) texto += ` ${minsRestantes}min`;
-  
-  return {
-    minutos: minutosTotal,
-    texto,
-    nivel: 'critico'
-  };
+  return { minutos: minutosTotal, texto, nivel: 'critico' };
 }
 
-// ============================================
-// 🆕 HELPER: CRIAR NOTIFICAÇÃO INTERNA
-// ============================================
 async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link, icone, cor, metadata }) {
-  try {
-    const TIPOS_VALIDOS = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
-    const tipoFinal = TIPOS_VALIDOS.includes(tipo) ? tipo : 'sistema';
-    
-    const notif = new Notificacao({
-      usuarioId,
-      titulo,
-      mensagem,
-      tipo: tipoFinal,
-      link: link || '/supervisao.html',
-      icone: icone || '⏰',
-      cor: cor || '#f59e0b',
-      lida: false,
-      metadata: metadata || {}
-    });
-    await notif.save();
-    return notif;
-  } catch (e) {
-    console.error('[NOTIF] Erro ao salvar notificação:', e.message);
-    throw e;
-  }
+  const TIPOS_VALIDOS = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
+  const tipoFinal = TIPOS_VALIDOS.includes(tipo) ? tipo : 'sistema';
+  const notif = new Notificacao({
+    usuarioId, titulo, mensagem,
+    tipo: tipoFinal,
+    link: link || '/supervisao.html',
+    icone: icone || '⏰',
+    cor: cor || '#f59e0b',
+    lida: false,
+    metadata: metadata || {}
+  });
+  await notif.save();
+  return notif;
 }
 
-// ============================================
-// 🆕 HELPER: PROCESSAR ALERTAS DE 24H
-// ============================================
 async function processarAlertas24h() {
-  try {
-    const atendimentos = await AtendimentoSupervisao.buscarAtendimentosParaAlerta();
-    
-    if (atendimentos.length === 0) return { processados: 0 };
-    
-    let processados = 0;
-    
-    for (const atendimento of atendimentos) {
-      const registradoPor = atendimento.entrada?.registradoPor;
-      if (!registradoPor) continue;
-      
-      const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
-      const tipoLabel = AtendimentoSupervisao.getTipoTarefaLabel(atendimento.tipoTarefa);
-      
-      try {
-        await criarNotificacaoInterna({
-          usuarioId: registradoPor._id || registradoPor,
-          titulo: '⏰ Ocorrência em Supervisão há mais de 24h',
-          mensagem: `A ocorrência de ${atendimento.alunoNome} (${tipoLabel}) está em andamento há ${tempo.texto}. Verifique se precisa de desfecho.`,
-          tipo: 'sistema',
-          link: `/supervisao.html?verificar=${atendimento._id}`,
-          icone: '⏰',
-          cor: '#dc2626',
-          metadata: {
-            atendimentoId: atendimento._id.toString(),
-            alunoId: atendimento.alunoId.toString(),
-            alunoNome: atendimento.alunoNome,
-            minutosEmAndamento: tempo.minutos,
-            tempoTexto: tempo.texto
-          }
-        });
-        
-        atendimento.ultimoAlerta24h = new Date();
-        atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
-        await atendimento.save();
-        
-        processados++;
-      } catch (e) {
-        console.error(`[ALERTA 24H] Falha para ${atendimento.alunoNome}:`, e.message);
-      }
+  const atendimentos = await AtendimentoSupervisao.buscarAtendimentosParaAlerta();
+  if (atendimentos.length === 0) return { processados: 0 };
+  let processados = 0;
+  for (const atendimento of atendimentos) {
+    const registradoPor = atendimento.entrada?.registradoPor;
+    if (!registradoPor) continue;
+    const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
+    const tipoLabel = AtendimentoSupervisao.getTipoTarefaLabel(atendimento.tipoTarefa);
+    try {
+      await criarNotificacaoInterna({
+        usuarioId: registradoPor._id || registradoPor,
+        titulo: '⏰ Ocorrência em Supervisão há mais de 24h',
+        mensagem: `A ocorrência de ${atendimento.alunoNome} (${tipoLabel}) está em andamento há ${tempo.texto}. Verifique se precisa de desfecho.`,
+        tipo: 'sistema',
+        link: `/supervisao.html?verificar=${atendimento._id}`,
+        icone: '⏰',
+        cor: '#dc2626',
+        metadata: {
+          atendimentoId: atendimento._id.toString(),
+          alunoId: atendimento.alunoId.toString(),
+          alunoNome: atendimento.alunoNome,
+          minutosEmAndamento: tempo.minutos,
+          textoTexto: tempo.texto
+        }
+      });
+      atendimento.ultimoAlerta24h = new Date();
+      atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
+      await atendimento.save();
+      processados++;
+    } catch (e) {
+      console.error(`[ALERTA 24H] Falha para ${atendimento.alunoNome}:`, e.message);
     }
-    
-    return { processados };
-  } catch (error) {
-    console.error('Erro ao processar alertas 24h:', error);
-    return { processados: 0, erro: error.message };
   }
+  return { processados };
 }
 
-// ============================================
-// MIDDLEWARES
-// ============================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ success: false, error: 'Token não fornecido.' });
-  }
-
+  if (!token) return res.status(401).json({ success: false, error: 'Token não fornecido.' });
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ success: false, error: 'Token inválido.' });
-    }
+    if (err) return res.status(403).json({ success: false, error: 'Token inválido.' });
     req.userId = decoded.id;
     req.userRole = decoded.role;
     req.userNome = decoded.nome;
@@ -254,86 +164,65 @@ const authenticateToken = (req, res, next) => {
 const verificarSupervisao = (req, res, next) => {
   const allowedRoles = ['supervisao', 'super_admin'];
   if (!allowedRoles.includes(req.userRole)) {
-    return res.status(403).json({
-      success: false,
-      error: 'Acesso permitido apenas para Supervisão'
-    });
+    return res.status(403).json({ success: false, error: 'Acesso permitido apenas para Supervisão' });
   }
   next();
 };
 
-// ============================================
-// HELPER: Timezone Brasil (UTC-3)
-// ============================================
-function inicioDoDiaBrasil(dataStr) {
-  return new Date(dataStr + 'T00:00:00.000-03:00');
-}
-function fimDoDiaBrasil(dataStr) {
-  return new Date(dataStr + 'T23:59:59.999-03:00');
-}
+function inicioDoDiaBrasil(dataStr) { return new Date(dataStr + 'T00:00:00.000-03:00'); }
+function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:00'); }
 
-// ============================================
-// HEALTH CHECK
-// ============================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Supervisão' });
+  res.json({ success: true, status: 'online', service: 'Supervisão', versao: '2.0-alertas-24h' });
 });
 
-// ============================================
-// LISTAR TURMAS
-// ============================================
-router.get('/turmas', authenticateToken, verificarSupervisao, async (req, res) => {
+router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
-    const turmas = await User.distinct('turma', { 
-      role: 'aluno', ativo: true, 
-      turma: { $nin: [null, '', 'Não informada'] } 
-    });
-    res.json({ success: true, turmas: turmas.sort() });
+    const resultado = await AtendimentoSupervisao.updateMany(
+      { status: 'em_andamento', alerta24hReconhecido: { $exists: false } },
+      { $set: { ultimoAlerta24h: null, alerta24hReconhecido: false, totalAlertas24h: 0 } }
+    );
+    res.json({ success: true, modified: resultado.modifiedCount });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================
-// LISTAR ALUNOS POR TURMA
-// ============================================
+router.get('/turmas', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const turmas = await User.distinct('turma', { 
+      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
+    });
+    res.json({ success: true, turmas: turmas.sort() });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
 router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { turma } = req.query;
     if (!turma) return res.status(400).json({ success: false, error: 'Turma é obrigatória' });
-    
     const alunos = await User.find({ role: 'aluno', ativo: true, turma })
-      .select('nome matricula turma curso fotoPerfil')
-      .sort({ nome: 1 });
-    
+      .select('nome matricula turma curso fotoPerfil').sort({ nome: 1 });
     res.json({
-      success: true,
-      total: alunos.length,
+      success: true, total: alunos.length,
       alunos: alunos.map(a => ({
         id: a._id, nome: a.nome, matricula: a.matricula,
         turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// BUSCAR ALUNO POR ID
-// ============================================
 router.get('/aluno/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
       .select('nome email matricula curso turma fotoPerfil role');
-    
     if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
     if (aluno.role !== 'aluno') return res.status(400).json({ success: false, error: 'Usuário não é aluno' });
     
     const atendimentosAtivos = await AtendimentoSupervisao.find({
       alunoId: aluno._id, status: 'em_andamento'
     }).sort({ createdAt: -1 });
-    
     const historicoRecente = await AtendimentoSupervisao.find({
       alunoId: aluno._id, status: 'finalizado'
     }).sort({ createdAt: -1 }).limit(5);
@@ -355,54 +244,35 @@ router.get('/aluno/:id', authenticateToken, verificarSupervisao, async (req, res
         descricao: a.entrada.descricao, dataHora: a.entrada.dataHora, resultado: a.saida?.resultado
       }))
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// BUSCAR ALUNO POR NOME/MATRÍCULA
-// ============================================
 router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { termo } = req.query;
     if (!termo || termo.length < 2) {
       return res.status(400).json({ success: false, error: 'Digite pelo menos 2 caracteres' });
     }
-    
     const alunos = await User.find({
       role: 'aluno', ativo: true,
       $or: [
         { nome: { $regex: termo, $options: 'i' } },
         { matricula: { $regex: termo, $options: 'i' } }
       ]
-    })
-    .select('nome matricula turma curso fotoPerfil')
-    .limit(20).sort({ nome: 1 });
-    
+    }).select('nome matricula turma curso fotoPerfil').limit(20).sort({ nome: 1 });
     res.json({
-      success: true,
-      total: alunos.length,
+      success: true, total: alunos.length,
       alunos: alunos.map(a => ({
         id: a._id, nome: a.nome, matricula: a.matricula,
         turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// REGISTRAR NOVO ATENDIMENTO
-// ============================================
 router.post('/registrar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const { 
-      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, 
-      assinaturaBase64,
-      precisaAssinatura = false
-    } = req.body;
+    const { alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, assinaturaBase64, precisaAssinatura = false } = req.body;
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -412,7 +282,6 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
       'advertencia_verbal', 'advertencia_escrita', 'atendimento_aluno',
       'atendimento_responsavel', 'atendimento_professor', 'suspensao', 'encaminhamento', 'outros'
     ];
-    
     if (!tiposValidos.includes(tipoTarefa)) {
       return res.status(400).json({ success: false, error: 'Tipo de tarefa inválido' });
     }
@@ -423,7 +292,6 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
     }
     
     const supervisor = await User.findById(req.userId).select('nome');
-    
     let assinaturaValida = '';
     if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
       if (assinaturaBase64.startsWith('data:image/') && assinaturaBase64.length < 500000) {
@@ -436,13 +304,9 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
       : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
     
     const atendimento = new AtendimentoSupervisao({
-      alunoId: aluno._id,
-      alunoNome: aluno.nome,
-      alunoMatricula: aluno.matricula,
-      alunoTurma: aluno.turma || 'Não informada',
-      alunoCurso: aluno.curso || 'Não informado',
-      alunoFoto: aluno.fotoPerfil,
-      tipoTarefa,
+      alunoId: aluno._id, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
+      alunoTurma: aluno.turma || 'Não informada', alunoCurso: aluno.curso || 'Não informado',
+      alunoFoto: aluno.fotoPerfil, tipoTarefa,
       entrada: {
         dataHora: new Date(),
         descricao: descricao.trim(),
@@ -459,14 +323,16 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
-      status: 'em_andamento'
+      status: 'em_andamento',
+      ultimoAlerta24h: null,
+      alerta24hReconhecido: false,
+      totalAlertas24h: 0
     });
     
     await atendimento.save();
-    
     res.json({
       success: true,
-      message: `${AtendimentoSupervisao.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
+      message: `${AtendimentoSupervisao.getTipoTarefaLabel(tipoTarefa)} registrado para ${aluno.nome}`,
       atendimento: {
         id: atendimento._id,
         tipoTarefa: atendimento.tipoTarefa,
@@ -477,18 +343,12 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
         statusAssinatura: atendimento.entrada.statusAssinatura
       }
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro ao registrar: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// APLICAR ASSINATURA
-// ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { atendimentoId, sessaoId } = req.body;
-    
     if (!atendimentoId || !sessaoId) {
       return res.status(400).json({ success: false, error: 'atendimentoId e sessaoId são obrigatórios' });
     }
@@ -509,7 +369,6 @@ router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async
     atendimento.entrada.assinadaPorNome = sessao.assinadaPorNome;
     atendimento.entrada.sessaoAssinaturaId = sessaoId;
     atendimento.updatedAt = new Date();
-    
     await atendimento.save();
     
     res.json({
@@ -518,24 +377,15 @@ router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async
       atendimento: {
         id: atendimento._id,
         temAssinatura: true,
-        statusAssinatura: 'assinada',
-        assinadaEm: atendimento.entrada.assinadaEm,
-        assinadaPorNome: atendimento.entrada.assinadaPorNome
+        statusAssinatura: 'assinada'
       }
     });
-  } catch (error) {
-    console.error('Erro ao aplicar assinatura:', error);
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// FINALIZAR ATENDIMENTO
-// ============================================
 router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { atendimentoId, resultado, resultadoTexto, observacoesFinais } = req.body;
-    
     const resultadosValidos = ['resolvido', 'em_acompanhamento', 'reincidente', 'encaminhado', 'pendente'];
     if (!resultadosValidos.includes(resultado)) {
       return res.status(400).json({ success: false, error: 'Resultado inválido' });
@@ -553,7 +403,6 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
     }
     
     const supervisor = await User.findById(req.userId).select('nome');
-    
     atendimento.saida = {
       dataHora: new Date(),
       resultado,
@@ -563,40 +412,27 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
       registradoPorNome: supervisor?.nome || req.userNome || 'Supervisor'
     };
     atendimento.status = 'finalizado';
-    atendimento.updatedAt = new Date();
     atendimento.alerta24hReconhecido = true;
-    
+    atendimento.updatedAt = new Date();
     await atendimento.save();
-    
-    const resultadoLabel = {
-      'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
-      'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
-    }[resultado];
     
     res.json({
       success: true,
-      message: `Atendimento finalizado. Resultado: ${resultadoLabel}`,
+      message: `Atendimento finalizado`,
       atendimento: {
         id: atendimento._id, status: atendimento.status,
-        resultado: resultadoLabel, dataHoraSaida: atendimento.saida.dataHora
+        resultado, dataHoraSaida: atendimento.saida.dataHora
       }
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// REMARCAR ATENDIMENTO
-// ============================================
 router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { atendimentoId, dataRemarcacao, horarioRemarcacao, motivoRemarcacao, observacoesRemarcacao } = req.body;
-    
-    if (!atendimentoId) return res.status(400).json({ success: false, error: 'ID obrigatório' });
-    if (!dataRemarcacao) return res.status(400).json({ success: false, error: 'Data obrigatória' });
-    if (!horarioRemarcacao) return res.status(400).json({ success: false, error: 'Horário obrigatório' });
-    if (!motivoRemarcacao) return res.status(400).json({ success: false, error: 'Motivo obrigatório' });
+    if (!atendimentoId || !dataRemarcacao || !horarioRemarcacao || !motivoRemarcacao) {
+      return res.status(400).json({ success: false, error: 'Preencha todos os campos obrigatórios' });
+    }
     
     const atendimento = await AtendimentoSupervisao.findById(atendimentoId);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
@@ -609,18 +445,14 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
     const dataObj = new Date(dataRemarcacao + 'T00:00:00');
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    
     if (dataObj < hoje) {
       return res.status(400).json({ success: false, error: 'A data deve ser hoje ou futura' });
     }
     
     const supervisor = await User.findById(req.userId).select('nome');
-    
     const remarcacao = {
       id: new mongoose.Types.ObjectId(),
-      dataRemarcacao,
-      horarioRemarcacao,
-      motivoRemarcacao,
+      dataRemarcacao, horarioRemarcacao, motivoRemarcacao,
       observacoesRemarcacao: observacoesRemarcacao || '',
       status: 'pendente',
       criadaEm: new Date(),
@@ -632,65 +464,48 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
     atendimento.remarcacoes.push(remarcacao);
     atendimento.temRemarcacaoPendente = true;
     atendimento.updatedAt = new Date();
-    
     await atendimento.save();
     
     res.json({
       success: true,
-      message: `Atendimento remarcado para ${dataObj.toLocaleDateString('pt-BR')} às ${horarioRemarcacao}`,
+      message: `Atendimento remarcado para ${dataObj.toLocaleDateString('pt-BR')}`,
       remarcacao: {
-        id: remarcacao.id,
-        atendimentoId: atendimento._id,
+        id: remarcacao.id, atendimentoId: atendimento._id,
         dataRemarcacao, horarioRemarcacao, motivoRemarcacao,
         observacoesRemarcacao: remarcacao.observacoesRemarcacao,
         status: 'pendente'
       }
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro ao remarcar: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// LISTAR REMARCAÇÕES PENDENTES
-// ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimentos = await AtendimentoSupervisao.find({
-      'remarcacoes.status': 'pendente',
-      status: { $ne: 'cancelado' }
+      'remarcacoes.status': 'pendente', status: { $ne: 'cancelado' }
     }).sort({ 'remarcacoes.dataRemarcacao': 1 });
     
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    
     const remarcacoes = [];
     
     atendimentos.forEach(atendimento => {
       (atendimento.remarcacoes || []).forEach(rem => {
         if (rem.status !== 'pendente') return;
-        
         const dataRem = new Date(rem.dataRemarcacao + 'T00:00:00');
-        const atrasado = dataRem < hoje;
-        const ehHoje = dataRem.getTime() === hoje.getTime();
-        
         remarcacoes.push({
-          id: rem.id.toString(),
-          atendimentoId: atendimento._id,
-          alunoId: atendimento.alunoId,
-          alunoNome: atendimento.alunoNome,
-          alunoTurma: atendimento.alunoTurma,
-          alunoFoto: atendimento.alunoFoto,
+          id: rem.id.toString(), atendimentoId: atendimento._id,
+          alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
+          alunoTurma: atendimento.alunoTurma, alunoFoto: atendimento.alunoFoto,
           tipoTarefa: atendimento.tipoTarefa,
           tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(atendimento.tipoTarefa),
-          dataRemarcacao: rem.dataRemarcacao,
-          horarioRemarcacao: rem.horarioRemarcacao,
+          dataRemarcacao: rem.dataRemarcacao, horarioRemarcacao: rem.horarioRemarcacao,
           motivoRemarcacao: rem.motivoRemarcacao,
           observacoesRemarcacao: rem.observacoesRemarcacao,
           status: rem.status,
-          atrasado, hoje: ehHoje,
-          criadaEm: rem.criadaEm,
-          criadaPorNome: rem.criadaPorNome
+          atrasado: dataRem < hoje,
+          hoje: dataRem.getTime() === hoje.getTime(),
+          criadaEm: rem.criadaEm, criadaPorNome: rem.criadaPorNome
         });
       });
     });
@@ -704,50 +519,34 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
     });
     
     res.json({ success: true, total: remarcacoes.length, remarcacoes });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// BUSCAR REMARCAÇÃO POR ID
-// ============================================
 router.get('/remarcacoes/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findOne({ 'remarcacoes.id': req.params.id });
     if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
-    
     const remarcacao = atendimento.remarcacoes.find(r => r.id.toString() === req.params.id);
     if (!remarcacao) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
-    
     res.json({
       success: true,
       remarcacao: {
-        id: remarcacao.id.toString(),
-        atendimentoId: atendimento._id,
-        alunoId: atendimento.alunoId,
-        alunoNome: atendimento.alunoNome,
+        id: remarcacao.id.toString(), atendimentoId: atendimento._id,
+        alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
         alunoTurma: atendimento.alunoTurma,
         dataRemarcacao: remarcacao.dataRemarcacao,
         horarioRemarcacao: remarcacao.horarioRemarcacao,
         motivoRemarcacao: remarcacao.motivoRemarcacao,
         observacoesRemarcacao: remarcacao.observacoesRemarcacao,
-        status: remarcacao.status,
-        criadaEm: remarcacao.criadaEm
+        status: remarcacao.status, criadaEm: remarcacao.criadaEm
       }
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// FINALIZAR REMARCAÇÃO
-// ============================================
 router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
-    
     if (!remarcacaoId) return res.status(400).json({ success: false, error: 'ID obrigatório' });
     if (!['realizado', 'cancelado'].includes(acao)) {
       return res.status(400).json({ success: false, error: 'Ação inválida' });
@@ -767,7 +566,6 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, as
     remarcacao.status = acao === 'realizado' ? 'realizado' : 'cancelado';
     remarcacao.finalizadaEm = new Date();
     remarcacao.finalizadaPor = req.userId;
-    
     const temPendente = (atendimento.remarcacoes || []).some(r => r.status === 'pendente');
     atendimento.temRemarcacaoPendente = temPendente;
     
@@ -775,31 +573,19 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, as
       atendimento.status = 'finalizado';
       atendimento.alerta24hReconhecido = true;
       atendimento.saida = {
-        dataHora: new Date(),
-        resultado: 'resolvido',
+        dataHora: new Date(), resultado: 'resolvido',
         resultadoTexto: 'Atendimento remarcado e realizado',
         observacoesFinais: `Remarcação realizada em ${new Date().toLocaleString('pt-BR')}`,
-        registradoPor: req.userId,
-        registradoPorNome: req.userNome
+        registradoPor: req.userId, registradoPorNome: req.userNome
       };
     }
     
     atendimento.updatedAt = new Date();
     await atendimento.save();
-    
-    const mensagem = acao === 'realizado' 
-      ? '✅ Remarcação marcada como realizada!' 
-      : '❌ Remarcação cancelada.';
-    
-    res.json({ success: true, message: mensagem });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+    res.json({ success: true, message: acao === 'realizado' ? '✅ Realizada!' : '❌ Cancelada.' });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// 🆕 LISTAR ATENDIMENTOS COM MAIS DE 24H
-// ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const agora = new Date();
@@ -807,52 +593,40 @@ router.get('/atendimentos-antigos', authenticateToken, verificarSupervisao, asyn
     
     const atendimentos = await AtendimentoSupervisao.find({
       status: 'em_andamento',
-      alerta24hReconhecido: false,
+      $or: [
+        { alerta24hReconhecido: false },
+        { alerta24hReconhecido: { $exists: false } }
+      ],
       'entrada.dataHora': { $lte: limite24h }
     }).sort({ 'entrada.dataHora': 1 });
     
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
+        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        dataHoraEntrada: a.entrada.dataHora,
-        tempoTexto: tempo.texto,
-        minutosEmAndamento: tempo.minutos,
-        nivelAlerta: tempo.nivel,
-        registradoPorNome: a.entrada.registradoPorNome,
-        registradoPor: a.entrada.registradoPor,
-        ultimoAlerta24h: a.ultimoAlerta24h,
-        totalAlertas24h: a.totalAlertas24h || 0,
-        alerta24hReconhecido: a.alerta24hReconhecido
+        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade, dataHoraEntrada: a.entrada.dataHora,
+        tempoTexto: tempo.texto, minutosEmAndamento: tempo.minutos, nivelAlerta: tempo.nivel,
+        registradoPorNome: a.entrada.registradoPorNome, registradoPor: a.entrada.registradoPor,
+        ultimoAlerta24h: a.ultimoAlerta24h, totalAlertas24h: a.totalAlertas24h || 0,
+        alerta24hReconhecido: a.alerta24hReconhecido || false
       };
     });
     
     res.json({ success: true, total: lista.length, atendimentos: lista });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// 🆕 VERIFICAR ATENDIMENTO DE 24H
-// ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { acao, resultado, observacoes } = req.body;
     const atendimentoId = req.params.id;
     
     if (!['ja_encerrou', 'manter_aberto'].includes(acao)) {
-      return res.status(400).json({ success: false, error: 'Ação inválida. Use "ja_encerrou" ou "manter_aberto".' });
+      return res.status(400).json({ success: false, error: 'Ação inválida' });
     }
     
     const atendimento = await AtendimentoSupervisao.findById(atendimentoId);
@@ -878,64 +652,43 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSuperv
         resultado: resultadoFinal,
         resultadoTexto: 'Encerrado após verificação de ocorrência antiga (>24h)',
         observacoesFinais: observacoes || `Verificado e encerrado por ${nomeResponsavel} em ${new Date().toLocaleString('pt-BR')}`,
-        registradoPor: req.userId,
-        registradoPorNome: nomeResponsavel
+        registradoPor: req.userId, registradoPorNome: nomeResponsavel
       };
       atendimento.status = 'finalizado';
       atendimento.alerta24hReconhecido = true;
       atendimento.updatedAt = new Date();
-      
       await atendimento.save();
       
       return res.json({
-        success: true,
-        message: 'Atendimento encerrado com sucesso!',
+        success: true, message: 'Atendimento encerrado com sucesso!',
         atendimento: {
-          id: atendimento._id,
-          status: 'finalizado',
-          resultado: resultadoFinal,
-          dataHoraSaida: atendimento.saida.dataHora
+          id: atendimento._id, status: 'finalizado',
+          resultado: resultadoFinal, dataHoraSaida: atendimento.saida.dataHora
         }
       });
     }
     
-    // ação === 'manter_aberto'
     const proximoAlerta = new Date(Date.now() + 20 * 60 * 1000);
     atendimento.ultimoAlerta24h = proximoAlerta;
     atendimento.updatedAt = new Date();
     await atendimento.save();
     
-    return res.json({
+    res.json({
       success: true,
       message: 'Atendimento mantido aberto. Você será lembrado novamente em 20 minutos.',
       proximoAlerta,
-      atendimento: {
-        id: atendimento._id,
-        status: 'em_andamento',
-        proximoAlerta
-      }
+      atendimento: { id: atendimento._id, status: 'em_andamento', proximoAlerta }
     });
-  } catch (error) {
-    console.error('Erro ao verificar atendimento 24h:', error);
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// 🆕 PROCESSAR ALERTAS 24H
-// ============================================
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
     res.json({ success: true, ...resultado });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// DASHBOARD
-// ============================================
 router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const hoje = new Date();
@@ -948,10 +701,7 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     
     const [atendimentosHoje, atendimentosSemana, atendimentosMes, total] = await Promise.all([
       AtendimentoSupervisao.countDocuments({
-        'entrada.dataHora': {
-          $gte: inicioDoDiaBrasil(hojeStr),
-          $lte: fimDoDiaBrasil(hojeStr)
-        }
+        'entrada.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
       }),
       AtendimentoSupervisao.countDocuments({ 'entrada.dataHora': { $gte: inicioSemana } }),
       AtendimentoSupervisao.countDocuments({ 'entrada.dataHora': { $gte: inicioMes } }),
@@ -961,16 +711,13 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     const emAndamento = await AtendimentoSupervisao.countDocuments({ status: 'em_andamento' });
     const finalizadosHoje = await AtendimentoSupervisao.countDocuments({
       status: 'finalizado',
-      'saida.dataHora': {
-        $gte: inicioDoDiaBrasil(hojeStr),
-        $lte: fimDoDiaBrasil(hojeStr)
-      }
+      'saida.dataHora': { $gte: inicioDoDiaBrasil(hojeStr), $lte: fimDoDiaBrasil(hojeStr) }
     });
     
     const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const atendimentosAntigos = await AtendimentoSupervisao.countDocuments({
       status: 'em_andamento',
-      alerta24hReconhecido: false,
+      $or: [{ alerta24hReconhecido: false }, { alerta24hReconhecido: { $exists: false } }],
       'entrada.dataHora': { $lte: limite24h }
     });
     
@@ -996,11 +743,9 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
       const data = new Date();
       data.setDate(data.getDate() - i);
       const dataStr = data.toISOString().split('T')[0];
-      
       const count = await AtendimentoSupervisao.countDocuments({
         'entrada.dataHora': { $gte: inicioDoDiaBrasil(dataStr), $lte: fimDoDiaBrasil(dataStr) }
       });
-      
       ultimos7Dias.push({
         data: dataStr,
         dia: data.toLocaleDateString('pt-BR', { weekday: 'short' }),
@@ -1011,21 +756,19 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     const porTurma = await AtendimentoSupervisao.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
       { $group: { _id: '$alunoTurma', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 8 }
+      { $sort: { count: -1 } }, { $limit: 8 }
     ]);
     
     const alunosReincidentes = await AtendimentoSupervisao.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
-      { $group: { 
-        _id: '$alunoId', 
+      { $group: {
+        _id: '$alunoId',
         alunoNome: { $first: '$alunoNome' },
         alunoTurma: { $first: '$alunoTurma' },
-        count: { $sum: 1 } 
+        count: { $sum: 1 }
       }},
       { $match: { count: { $gte: 2 } } },
-      { $sort: { count: -1 } },
-      { $limit: 10 }
+      { $sort: { count: -1 } }, { $limit: 10 }
     ]);
     
     const porHora = await AtendimentoSupervisao.aggregate([
@@ -1039,16 +782,19 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
     
     res.json({
       success: true,
-      metricas: { 
-        hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes, 
-        total, emAndamento, finalizadosHoje, atendimentosAntigos
-      },
-      porTipo: porTipo.map(t => ({ tipo: t._id, label: AtendimentoSupervisao.getTipoTarefaLabel(t._id), count: t.count })),
+      metricas: { hoje: atendimentosHoje, semana: atendimentosSemana, mes: atendimentosMes, total, emAndamento, finalizadosHoje, atendimentosAntigos },
+      porTipo: porTipo.map(t => ({
+        tipo: t._id, label: AtendimentoSupervisao.getTipoTarefaLabel(t._id), count: t.count
+      })),
       porGravidade: porGravidade.map(g => ({ gravidade: g._id, count: g.count })),
-      resultados: resultados.map(r => ({ resultado: r._id, label: {
-        'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
-        'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
-      }[r._id] || r._id, count: r.count })),
+      resultados: resultados.map(r => ({
+        resultado: r._id,
+        label: {
+          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
+        }[r._id] || r._id,
+        count: r.count
+      })),
       tendencias: {
         ultimos7Dias,
         porTurma: porTurma.map(t => ({ turma: t._id || 'Sem turma', count: t.count })),
@@ -1056,14 +802,9 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
         distribuicaoHoraria: horasDistribuicao
       }
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// LISTAR ATENDIMENTOS ATIVOS
-// ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimentos = await AtendimentoSupervisao.find({ status: 'em_andamento' })
@@ -1072,28 +813,20 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoTurma: a.alunoTurma,
-        alunoFoto: a.alunoFoto,
+        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
+        alunoTurma: a.alunoTurma, alunoFoto: a.alunoFoto,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
+        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
         dataHoraEntrada: a.entrada.dataHora,
-        tempoAtendimento: tempo.minutos,
-        tempoTexto: tempo.texto,
-        nivelTempo: tempo.nivel,
+        tempoAtendimento: tempo.minutos, tempoTexto: tempo.texto, nivelTempo: tempo.nivel,
         alerta24hAtivo: tempo.minutos >= 1440 && !a.alerta24hReconhecido,
         totalAlertas24h: a.totalAlertas24h || 0,
         temRemarcacaoPendente: a.temRemarcacaoPendente || false,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
         statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
         entrada: {
-          descricao: a.entrada.descricao,
-          observacoes: a.entrada.observacoes,
+          descricao: a.entrada.descricao, observacoes: a.entrada.observacoes,
           registradoPor: a.entrada.registradoPor,
           registradoPorNome: a.entrada.registradoPorNome
         },
@@ -1102,22 +835,13 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
     });
     
     const listaMascarada = mascararParaAdmin(lista, req);
-    
     res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// LISTAR TODOS OS ATENDIMENTOS
-// ============================================
 router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const { 
-      limit = 100, page = 1, tipo, status, turma, dataInicio, dataFim,
-      busca, resultado
-    } = req.query;
+    const { limit = 100, page = 1, tipo, status, turma, dataInicio, dataFim, busca, resultado } = req.query;
     
     let query = {};
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
@@ -1143,21 +867,15 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
     const [atendimentos, total] = await Promise.all([
-      AtendimentoSupervisao.find(query)
-        .sort({ 'entrada.dataHora': -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
+      AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 }).skip(skip).limit(parseInt(limit)),
       AtendimentoSupervisao.countDocuments(query)
     ]);
     
     const turmasAtendimento = await AtendimentoSupervisao.distinct('alunoTurma');
     const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', ativo: true, 
-      turma: { $nin: [null, '', 'Não informada'] } 
+      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
     });
-
     const turmasDisponiveis = [...new Set([
       ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
       ...turmasAlunos
@@ -1166,24 +884,15 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
     const lista = atendimentos.map(a => {
       const tempo = formatarTempoAtendimento(a.entrada.dataHora);
       return {
-        id: a._id,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
+        id: a._id, alunoId: a.alunoId, alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula, alunoTurma: a.alunoTurma, alunoCurso: a.alunoCurso,
         tipoTarefa: a.tipoTarefa,
         tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        status: a.status,
-        dataEntrada: a.entrada.dataHora,
+        descricao: a.entrada.descricao, gravidade: a.entrada.gravidade, prioridade: a.prioridade,
+        status: a.status, dataEntrada: a.entrada.dataHora,
         dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
-        tempoTexto: tempo.texto,
-        tempoMinutos: tempo.minutos,
-        registradoPor: a.entrada.registradoPorNome,
-        registradoPorId: a.entrada.registradoPor,
+        tempoTexto: tempo.texto, tempoMinutos: tempo.minutos,
+        registradoPor: a.entrada.registradoPorNome, registradoPorId: a.entrada.registradoPor,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
         statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
         saida: a.saida ? {
@@ -1199,8 +908,7 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
         } : null,
         createdAt: a.createdAt,
         entrada: {
-          descricao: a.entrada.descricao,
-          observacoes: a.entrada.observacoes,
+          descricao: a.entrada.descricao, observacoes: a.entrada.observacoes,
           registradoPor: a.entrada.registradoPor
         },
         _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
@@ -1208,24 +916,16 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
     });
     
     const listaMascarada = mascararParaAdmin(lista, req);
-    
     res.json({
-      success: true,
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
+      success: true, total,
+      page: parseInt(page), limit: parseInt(limit),
       totalPages: Math.ceil(total / parseInt(limit)),
       turmasDisponiveis,
       atendimentos: listaMascarada
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// BUSCAR ATENDIMENTO POR ID
-// ============================================
 router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findById(req.params.id);
@@ -1234,11 +934,8 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
     
     const payload = {
-      id: atendimento._id,
-      alunoId: atendimento.alunoId,
-      alunoNome: atendimento.alunoNome,
-      alunoMatricula: atendimento.alunoMatricula,
-      alunoTurma: atendimento.alunoTurma,
+      id: atendimento._id, alunoId: atendimento.alunoId, alunoNome: atendimento.alunoNome,
+      alunoMatricula: atendimento.alunoMatricula, alunoTurma: atendimento.alunoTurma,
       alunoCurso: atendimento.alunoCurso,
       tipoTarefa: atendimento.tipoTarefa,
       tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(atendimento.tipoTarefa),
@@ -1266,30 +963,22 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
         observacoesFinais: atendimento.saida.observacoesFinais,
         registradoPor: atendimento.saida.registradoPorNome
       } : null,
-      status: atendimento.status,
-      prioridade: atendimento.prioridade,
+      status: atendimento.status, prioridade: atendimento.prioridade,
       remarcacoes: atendimento.remarcacoes || [],
       temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
-      anexos: atendimento.anexos,
-      createdAt: atendimento.createdAt,
-      tempoTexto: tempo.texto,
-      tempoMinutos: tempo.minutos,
-      nivelTempo: tempo.nivel,
+      anexos: atendimento.anexos, createdAt: atendimento.createdAt,
+      tempoTexto: tempo.texto, tempoMinutos: tempo.minutos, nivelTempo: tempo.nivel,
       alerta24hAtivo: tempo.minutos >= 1440 && !atendimento.alerta24hReconhecido,
-      totalAlertas24h: atendimento.totalAlertas24h || 0
+      totalAlertas24h: atendimento.totalAlertas24h || 0,
+      alerta24hReconhecido: atendimento.alerta24hReconhecido || false,
+      ultimoAlerta24h: atendimento.ultimoAlerta24h || null
     };
     
     const payloadMascarado = mascararParaAdmin(payload, req);
-    
     res.json({ success: true, atendimento: payloadMascarado });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// EDITAR ATENDIMENTO
-// ============================================
 router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findById(req.params.id);
@@ -1311,7 +1000,10 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     if (status) atendimento.status = status;
     
     if (saida) {
-      atendimento.saida = { ...atendimento.saida, ...saida, registradoPor: req.userId, registradoPorNome: req.userNome };
+      atendimento.saida = { 
+        ...atendimento.saida, ...saida,
+        registradoPor: req.userId, registradoPorNome: req.userNome 
+      };
       if (atendimento.status === 'finalizado') {
         atendimento.alerta24hReconhecido = true;
       }
@@ -1319,16 +1011,10 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     
     atendimento.updatedAt = new Date();
     await atendimento.save();
-    
-    res.json({ success: true, message: 'Atendimento atualizado com sucesso', atendimento: { id: atendimento._id } });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+    res.json({ success: true, message: 'Atualizado', atendimento: { id: atendimento._id } });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// EXCLUIR ATENDIMENTO
-// ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findById(req.params.id);
@@ -1340,69 +1026,45 @@ router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async 
     }
     
     await AtendimentoSupervisao.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: 'Atendimento excluído com sucesso' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+    res.json({ success: true, message: 'Excluído com sucesso' });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// EXCLUSÃO EM MASSA
-// ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     if (req.userRole === 'super_admin') {
-      return res.status(403).json({ success: false, error: 'Apenas a Supervisão pode excluir em massa.', code: 'ADMIN_SEM_PERMISSAO_MASSA' });
+      return res.status(403).json({ success: false, error: 'Apenas a Supervisão', code: 'ADMIN_SEM_PERMISSAO_MASSA' });
     }
-    
     const { dataCorte, status = 'finalizado', confirmacao } = req.body;
     if (confirmacao !== 'CONFIRMAR') {
       return res.status(400).json({ success: false, error: 'Confirmação inválida' });
     }
-    if (!dataCorte) return res.status(400).json({ success: false, error: 'Data de corte é obrigatória' });
-
+    if (!dataCorte) return res.status(400).json({ success: false, error: 'Data obrigatória' });
+    
     const dataObj = fimDoDiaBrasil(dataCorte);
-    if (isNaN(dataObj.getTime())) {
-      return res.status(400).json({ success: false, error: 'Data de corte inválida' });
-    }
-
+    if (isNaN(dataObj.getTime())) return res.status(400).json({ success: false, error: 'Data inválida' });
+    
     const filtro = { status, 'saida.dataHora': { $lt: dataObj } };
     const totalAntes = await AtendimentoSupervisao.countDocuments(filtro);
-
     if (totalAntes === 0) {
-      return res.json({ success: true, message: 'Nenhum atendimento encontrado', excluidos: 0 });
+      return res.json({ success: true, message: 'Nenhum', excluidos: 0 });
     }
-
     const resultado = await AtendimentoSupervisao.deleteMany(filtro);
-
-    res.json({
-      success: true,
-      message: `${resultado.deletedCount} atendimento(s) excluído(s)`,
-      excluidos: resultado.deletedCount,
-      dataCorte, status
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro ao excluir: ' + error.message });
-  }
+    res.json({ success: true, message: `${resultado.deletedCount} excluído(s)`, excluidos: resultado.deletedCount, dataCorte, status });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// RELATÓRIO POR ALUNO
-// ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
-    
     let query = { alunoId: req.params.alunoId };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
       if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
-    
     const atendimentos = await AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 });
     const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
-    
     const porTipo = {};
     const porGravidade = {};
     
@@ -1417,7 +1079,9 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtendimentos: atendimentos.length,
-        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({ tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count })),
+        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
+          tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count
+        })),
         porGravidade,
         emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
         finalizados: atendimentos.filter(a => a.status === 'finalizado').length
@@ -1436,34 +1100,29 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
         };
       })
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// RELATÓRIO POR TURMA
-// ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
-    
     let query = { alunoTurma: req.params.turma };
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = inicioDoDiaBrasil(dataInicio);
       if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
-    
     const atendimentos = await AtendimentoSupervisao.find(query).sort({ 'entrada.dataHora': -1 });
-    
     const porAluno = {};
     const porTipo = {};
     
     atendimentos.forEach(a => {
       const key = a.alunoId.toString();
       if (!porAluno[key]) {
-        porAluno[key] = { alunoId: a.alunoId, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula, total: 0, tipos: {} };
+        porAluno[key] = { 
+          alunoId: a.alunoId, alunoNome: a.alunoNome,
+          alunoMatricula: a.alunoMatricula, total: 0, tipos: {} 
+        };
       }
       porAluno[key].total++;
       porAluno[key].tipos[a.tipoTarefa] = (porAluno[key].tipos[a.tipoTarefa] || 0) + 1;
@@ -1471,13 +1130,14 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
     });
     
     res.json({
-      success: true,
-      turma: req.params.turma,
+      success: true, turma: req.params.turma,
       periodo: { dataInicio, dataFim },
       estatisticas: {
         totalAtendimentos: atendimentos.length,
         totalAlunosAtendidos: Object.keys(porAluno).length,
-        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({ tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count }))
+        porTipo: Object.entries(porTipo).map(([tipo, count]) => ({
+          tipo, label: AtendimentoSupervisao.getTipoTarefaLabel(tipo), count
+        }))
       },
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
       atendimentos: atendimentos.map(a => {
@@ -1492,18 +1152,12 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
         };
       })
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// RELATÓRIO GERAL
-// ============================================
 router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
-    
     let query = {};
     if (turma && turma !== 'todas') query.alunoTurma = turma;
     if (tipo && tipo !== 'todos') query.tipoTarefa = tipo;
@@ -1530,7 +1184,6 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
       }
       porTurma[a.alunoTurma].total++;
       porTurma[a.alunoTurma].alunos.add(a.alunoId.toString());
-      
       porTipo[a.tipoTarefa] = (porTipo[a.tipoTarefa] || 0) + 1;
       porGravidade[a.entrada.gravidade] = (porGravidade[a.entrada.gravidade] || 0) + 1;
     });
@@ -1542,10 +1195,8 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
     
     const turmasAtendimento = await AtendimentoSupervisao.distinct('alunoTurma');
     const turmasAlunos = await User.distinct('turma', { 
-      role: 'aluno', ativo: true,
-      turma: { $nin: [null, '', 'Não informada'] } 
+      role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
     });
-
     const turmas = [...new Set([
       ...turmasAtendimento.filter(t => t && t !== 'Não informada'),
       ...turmasAlunos
@@ -1558,23 +1209,20 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
       totalAtendimentos: total,
       comAssinatura,
       porTurma: Object.values(porTurma).sort((a, b) => b.total - a.total),
-      porTipo: Object.entries(porTipo).map(([t, count]) => ({ tipo: t, label: AtendimentoSupervisao.getTipoTarefaLabel(t), count })).sort((a, b) => b.count - a.count),
+      porTipo: Object.entries(porTipo).map(([t, count]) => ({
+        tipo: t, label: AtendimentoSupervisao.getTipoTarefaLabel(t), count
+      })).sort((a, b) => b.count - a.count),
       porGravidade,
       registros: atendimentos.map(a => {
         const tempo = formatarTempoAtendimento(a.entrada.dataHora);
         return {
-          id: a._id,
-          alunoNome: a.alunoNome,
-          alunoMatricula: a.alunoMatricula,
-          alunoTurma: a.alunoTurma,
-          tipoTarefa: a.tipoTarefa,
+          id: a._id, alunoNome: a.alunoNome, alunoMatricula: a.alunoMatricula,
+          alunoTurma: a.alunoTurma, tipoTarefa: a.tipoTarefa,
           tipoTarefaLabel: AtendimentoSupervisao.getTipoTarefaLabel(a.tipoTarefa),
           dataEntrada: a.entrada.dataHora,
           dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
-          descricao: a.entrada.descricao,
-          gravidade: a.entrada.gravidade,
-          prioridade: a.prioridade,
-          status: a.status,
+          descricao: a.entrada.descricao, gravidade: a.entrada.gravidade,
+          prioridade: a.prioridade, status: a.status,
           tempoTexto: tempo.texto,
           temAssinatura: !!(a.entrada?.assinaturaBase64),
           assinaturaBase64: a.entrada?.assinaturaBase64 || null,
@@ -1596,92 +1244,16 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
         };
       })
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ============================================
-// 🧪 ENDPOINT DE TESTE — CRIAR ATENDIMENTO COM DATA ANTIGA
-// ============================================
-router.post('/teste/criar-atendimento-antigo', authenticateToken, verificarSupervisao, async (req, res) => {
-  try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ success: false, error: 'Endpoint desabilitado em produção' });
-    }
-    
-    const { alunoId, horasAtras = 26, tipoTarefa = 'advertencia_verbal' } = req.body;
-    
-    if (!alunoId) return res.status(400).json({ success: false, error: 'alunoId obrigatório' });
-    
-    const aluno = await User.findById(alunoId);
-    if (!aluno || aluno.role !== 'aluno') return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
-    
-    const supervisor = await User.findById(req.userId).select('nome');
-    const dataAntiga = new Date(Date.now() - horasAtras * 60 * 60 * 1000);
-    
-    const atendimento = new AtendimentoSupervisao({
-      alunoId: aluno._id,
-      alunoNome: aluno.nome,
-      alunoMatricula: aluno.matricula,
-      alunoTurma: aluno.turma || 'Não informada',
-      alunoCurso: aluno.curso || 'Não informado',
-      alunoFoto: aluno.fotoPerfil,
-      tipoTarefa,
-      entrada: {
-        dataHora: dataAntiga,
-        descricao: `🧪 TESTE AUTOMÁTICO — criado com ${horasAtras}h de atraso`,
-        observacoes: 'Gerado pelo endpoint de teste',
-        gravidade: 'alta',
-        registradoPor: req.userId,
-        registradoPorNome: supervisor?.nome || req.userNome || 'Supervisão',
-        assinaturaBase64: '',
-        temAssinatura: false,
-        statusAssinatura: 'nao_necessaria'
-      },
-      detalhes: {},
-      prioridade: 'urgente',
-      status: 'em_andamento',
-      ultimoAlerta24h: null,
-      alerta24hReconhecido: false,
-      totalAlertas24h: 0
-    });
-    
-    await atendimento.save();
-    
-    res.json({
-      success: true,
-      message: `Atendimento de teste criado com ${horasAtras}h de atraso`,
-      atendimento: {
-        id: atendimento._id,
-        alunoNome: aluno.nome,
-        dataHora: dataAntiga,
-        horasAtras
-      }
-    });
-  } catch (error) {
-    console.error('Erro no endpoint de teste:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================
-// 🆕 SCHEDULER: PROCESSAMENTO PERIÓDICO
-// ============================================
 let schedulerInterval = null;
 
 function iniciarSchedulerAlertas24h() {
   if (schedulerInterval) clearInterval(schedulerInterval);
-  
-  setTimeout(async () => {
-    await processarAlertas24h();
-  }, 30000);
-  
-  schedulerInterval = setInterval(async () => {
-    await processarAlertas24h();
-  }, 5 * 60 * 1000);
-  
-  console.log('⏰ [SCHEDULER SUP] Agendador de alertas 24h iniciado (a cada 5 min)');
+  setTimeout(async () => { await processarAlertas24h(); }, 30000);
+  schedulerInterval = setInterval(async () => { await processarAlertas24h(); }, 5 * 60 * 1000);
+  console.log('⏰ [SCHEDULER SUP] Agendador iniciado');
 }
 
 iniciarSchedulerAlertas24h();
