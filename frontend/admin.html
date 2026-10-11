@@ -9,12 +9,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
-    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
-    <!-- ========== ONE SIGNAL - NOTIFICAÇÕES PUSH ========== -->
+    <!-- ========== ONE SIGNAL ========== -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
@@ -47,13 +46,11 @@
         
         console.log('✅ OneSignal inicializado');
         
-        // Capturar quando o usuário se inscreve
         OneSignal.on('subscriptionChange', async function(isSubscribed) {
         if (isSubscribed) {
             const playerId = await OneSignal.User.PushSubscription.getId();
             console.log('📱 Novo player_id:', playerId);
             
-            // Salvar no backend
             const token = localStorage.getItem('auth_token');
             if (token) {
             fetch('/api/usuario/salvar-player-id', {
@@ -88,503 +85,412 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Super Admin - EducaPleno</title>
     
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Chart.js para gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
-    <!-- 🔥 ADICIONAR ESTA LINHA - CLIENTE PUSH -->
     <script src="js/push-client.js"></script>
 
     <link rel="stylesheet" href="css/dark-mode.css">
     <link rel="stylesheet" href="css/admin-painel.css">
+    <link rel="stylesheet" href="css/mobile.css">
+    <link rel="stylesheet" href="css/admin-banco-dados.css">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-    <!-- Bibliotecas para Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-
 </head>
 <body>
     <div class="admin-container">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div class="logo">
-                <i class="fas fa-crown"></i>
-                <span>EducaPleno</span>
-            </div>
-            <span class="badge-super">SUPER ADMIN</span>
-        </div>
-
-        <ul class="sidebar-nav">
-            <li class="nav-item">
-                <a class="nav-link active" data-section="dashboard">
-                    <i class="fas fa-tachometer-alt"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-section="usuarios">
-                    <i class="fas fa-users-cog"></i>
-                    <span>Usuários</span>
-                    <span class="badge" id="badge-usuarios">0</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-section="turmas">
-                    <i class="fas fa-school"></i>
-                    <span>Turmas</span>
-                    <span class="badge" id="badge-turmas">0</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-section="provas">
-                    <i class="fas fa-file-alt"></i>
-                    <span>Provas</span>
-                    <span class="badge" id="badge-provas">0</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-section="monitoramento">
-                    <i class="fas fa-terminal"></i>
-                    <span>Monitoramento</span>
-                    <span class="badge warning" id="badge-violacoes">0</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-section="resultados">
-                    <i class="fas fa-chart-line"></i>
-                    <span>Resultados</span>
-                    <span class="badge" id="badge-resultados">0</span>
-                </a>
-            </li>
-
-            <li class="nav-item">
-                <a class="nav-link" href="calendario.html" target="_blank">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>Calendário Acadêmico</span>
-                    <span class="badge info" id="badge-eventos">0</span>
-                </a>
-            </li>
-            
-            <li class="nav-divider"></li>
-            
-            <li class="nav-item">
-                <a class="nav-link" data-section="matriculas">
-                    <i class="fas fa-user-graduate"></i>
-                    <span>Matrículas Autorizadas</span>
-                </a>
-            </li>
-
-            <li class="nav-item">
-                <a href="#" class="nav-link" data-section="faceid">
-                    <i class="fas fa-id-card"></i>
-                    <span>Face ID</span>
-                </a>
-            </li>
-            
-            <li class="nav-item">
-                <a href="#" class="nav-link" data-section="onesignal">
-                    <i class="fas fa-bell"></i>
-                    <span>OneSignal</span>
-                    <span class="badge" id="badgeOneSignal">0</span>
-                </a>
-                <a href="#" class="nav-link" data-section="omr-debug">
-                    <i class="fas fa-camera"></i>
-                    <span>OMR Debug</span>
-                </a>
-                <a href="#" class="nav-link" data-section="qrcode-management">
-                    <i class="fas fa-qrcode"></i>
-                    <span>QR Codes</span>
-                </a>
-                <a href="#" class="nav-link" data-section="cozinha-monitoramento">
-                    <i class="fas fa-chart-line"></i>
-                    <span>Cozinha Monitoramento</span>
-                </a>
-            </li>
-
-            <li class="nav-item">
-                <a class="nav-link" data-section="admin-simples">
-                    <i class="fas fa-user-cog"></i>
-                    <span>Admin Simples</span>
-                </a>
-            </li>
-
-            <!-- Enfermaria Monitoramento -->
-            <li class="nav-item">
-                <a class="nav-link" href="#" data-section="enfermaria-monitoramento">
-                    <i class="fas fa-hospital-user"></i>
-                    <span>Enfermaria</span>
-                </a>
-            </li>
-
-            <!-- Gestao Geral -->
-            <li class="nav-item">
-                <a class="nav-link" data-section="gestao-geral">
-                    <i class="fas fa-user-tie"></i>
-                    <span>Gestão Geral</span>
-                </a>
-            </li>
-
-           <!-- Setor Pedagógico -->
-            <li class="nav-item">
-                <a class="nav-link" data-section="setor-pedagogico">
-                    <i class="fas fa-chalkboard-user"></i>
-                    <span>Setor Pedagógico</span>
-                </a>
-            </li> 
-
-            <!-- Supervisao -->
-            <li class="nav-item">
-                <a class="nav-link" data-section="supervisao">
-                    <i class="fas fa-user-shield"></i>
-                    <span>Supervisão</span>
-                </a>
-            </li>
-
-            <!-- Psicologia -->
-            <li class="nav-item">
-                <a class="nav-link" data-section="psicologia">
-                    <i class="fas fa-brain"></i>
-                    <span>Psicologia</span>
-                </a>
-            </li>
-
-            <!-- Assistente Social -->
-
-            <li class="nav-item">
-                <a class="nav-link" data-section="assistente-social">
-                    <i class="fas fa-hands-helping"></i>
-                    <span>Assistente Social</span>
-                </a>
-            </li>
-
-            <!-- Protagonismo -->
-            <li class="nav-item">
-                <a class="nav-link" data-section="protagonismo">
-                    <i class="fas fa-star"></i>
-                    <span>Protagonismo</span>
-                </a>
-            </li>
-
-            <!-- Biblioteca -->
-            <li class="nav-item">
-                <a class="nav-link" data-section="biblioteca">
-                    <i class="fas fa-book-reader"></i>
-                    <span>Biblioteca</span>
-                </a>
-            </li>
-
-            <li class="nav-item">
-                <a class="nav-link" data-section="secretaria">
-                    <i class="fas fa-file-signature"></i>
-                    <span>Secretaria</span>
-                </a>
-            </li>
-            
-            <li class="nav-item">
-                <a class="nav-link" data-section="eixos">
-                    <i class="fas fa-sitemap"></i>
-                    <span>Eixos</span>
-                </a>
-            </li>
-            
-            <li class="nav-item">
-                <a class="nav-link" data-section="cursos">
-                    <i class="fas fa-graduation-cap"></i>
-                    <span>Cursos</span>
-                </a>
-            </li>
-
-            <li class="nav-item">
-                <a class="nav-link" data-section="backups">
-                    <i class="fas fa-database"></i>
-                    <span>Backups</span>
-                </a>
-            </li>
-
-            <!-- Gerenciamento de Permissões Especiais -->
-            <li class="nav-item">
-                <a class="nav-link" data-section="permissoes-especiais">
-                    <i class="fas fa-user-lock"></i>
-                    <span>Permissões Especiais</span>
-                </a>
-            </li>
-            
-            <li class="nav-item">
-                <a class="nav-link" data-section="configuracoes">
-                    <i class="fas fa-cog"></i>
-                    <span>Configurações</span>
-                </a>
-            </li>
-        </ul>
-
-        <div class="sidebar-footer">
-            <div class="user-info">
-                <div class="user-avatar" id="adminAvatar" style="position: relative; width: 48px; height: 48px; background: linear-gradient(135deg, #0d6efd, #0b5ed7); border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
-                    <img id="adminFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; display: none; border-radius: 50%;">
-                    <i id="adminAvatarIcon" class="fas fa-user-shield" style="font-size: 24px; color: white; position: relative; z-index: 2;"></i>
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-crown"></i>
+                    <span>EducaPleno</span>
                 </div>
-                <div class="user-details">
-                    <p id="adminNome">Carregando...</p>
-                    <small id="adminEmail">admin@iemasaoluiscentro.net</small>
-                </div>
+                <span class="badge-super">SUPER ADMIN</span>
             </div>
-            <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'" style="
-                margin-top: 1rem;
-                margin-bottom: 0.5rem;
-                width: 100%;
-                padding: 0.75rem;
-                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-weight: 600;
-                font-size: 0.9rem;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 0.5rem;
-                transition: all 0.2s;
-            ">
-                <i class="fas fa-user-edit"></i> Editar Perfil
-            </button>
-            <button class="logout-btn" id="logoutBtn">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Sair</span>
-            </button>
-        </div>
-    </aside>
+
+            <ul class="sidebar-nav">
+                
+                <!-- ===== PRINCIPAL ===== -->
+                <li class="nav-section-title">
+                    <span class="nav-section-dot" data-color="#3b82f6"></span>
+                    Principal
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link active" data-section="dashboard">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="usuarios">
+                        <i class="fas fa-users-cog"></i>
+                        <span>Usuários</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="turmas">
+                        <i class="fas fa-school"></i>
+                        <span>Turmas</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="provas">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Provas</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="resultados">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Resultados</span>
+                    </a>
+                </li>
+
+                <!-- ===== ACADÊMICO ===== -->
+                <li class="nav-section-title">
+                    <span class="nav-section-dot" data-color="#8b5cf6"></span>
+                    Acadêmico
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" href="calendario.html" target="_blank">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Calendário Acadêmico</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="matriculas">
+                        <i class="fas fa-user-graduate"></i>
+                        <span>Matrículas Autorizadas</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="eixos">
+                        <i class="fas fa-sitemap"></i>
+                        <span>Eixos</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="cursos">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>Cursos</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="onesignal">
+                        <i class="fas fa-bell"></i>
+                        <span>OneSignal</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="omr-debug">
+                        <i class="fas fa-camera"></i>
+                        <span>OMR Debug</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="qrcode-management">
+                        <i class="fas fa-qrcode"></i>
+                        <span>QR Codes</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="faceid">
+                        <i class="fas fa-id-card"></i>
+                        <span>Face ID</span>
+                    </a>
+                </li>
+
+                <!-- ===== SETORES ===== -->
+                <li class="nav-section-title">
+                    <span class="nav-section-dot" data-color="#10b981"></span>
+                    Setores
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="setor-pedagogico">
+                        <i class="fas fa-chalkboard-user"></i>
+                        <span>Setor Pedagógico</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="supervisao">
+                        <i class="fas fa-user-shield"></i>
+                        <span>Supervisão</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="psicologia">
+                        <i class="fas fa-brain"></i>
+                        <span>Psicologia</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="assistente-social">
+                        <i class="fas fa-hands-helping"></i>
+                        <span>Assistente Social</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="protagonismo">
+                        <i class="fas fa-star"></i>
+                        <span>Protagonismo</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="biblioteca">
+                        <i class="fas fa-book-reader"></i>
+                        <span>Biblioteca</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="secretaria">
+                        <i class="fas fa-file-signature"></i>
+                        <span>Secretaria</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="enfermaria-monitoramento">
+                        <i class="fas fa-hospital-user"></i>
+                        <span>Enfermaria</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="cozinha-monitoramento">
+                        <i class="fas fa-utensils"></i>
+                        <span>Cozinha Monitoramento</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="gestao-geral">
+                        <i class="fas fa-user-tie"></i>
+                        <span>Gestão Geral</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="admin-simples">
+                        <i class="fas fa-user-cog"></i>
+                        <span>Admin Simples</span>
+                    </a>
+                </li>
+
+                <!-- ===== SISTEMA ===== -->
+                <li class="nav-section-title">
+                    <span class="nav-section-dot" data-color="#ef4444"></span>
+                    Sistema
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="monitoramento">
+                        <i class="fas fa-terminal"></i>
+                        <span>Monitoramento</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="backups">
+                        <i class="fas fa-database"></i>
+                        <span>Backups</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="permissoes-especiais">
+                        <i class="fas fa-user-lock"></i>
+                        <span>Permissões Especiais</span>
+                    </a>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link" data-section="configuracoes">
+                        <i class="fas fa-cog"></i>
+                        <span>Configurações</span>
+                    </a>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar" id="adminAvatar">
+                        <img id="adminFotoPerfil" alt="Foto de perfil">
+                        <i id="adminAvatarIcon" class="fas fa-user-shield"></i>
+                    </div>
+                    <div class="user-details">
+                        <p id="adminNome">Carregando...</p>
+                        <small id="adminEmail">admin@iemasaoluiscentro.net</small>
+                    </div>
+                </div>
+                <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'">
+                    <i class="fas fa-user-edit"></i> Editar Perfil
+                </button>
+                <button class="logout-btn" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Sair</span>
+                </button>
+            </div>
+        </aside>
+
         <!-- Main Content -->
         <main class="main-content" id="mainContent">
             <header class="top-bar">
-                <div class="mobile-menu-logo">
-                    <div class="logo-icon">
-                        <i class="fas fa-graduation-cap"></i>  <!-- ← TROCAR AQUI -->
+                <div class="top-bar-left">
+                    <div class="top-bar-brand">
+                        <div class="brand-logo">
+                            <i class="fas fa-graduation-cap"></i>
+                        </div>
+                        <div class="brand-text">
+                            <strong>EducaPleno</strong>
+                            <small>Gestão Educacional</small>
+                        </div>
                     </div>
-                    <div class="logo-text">
-                        <strong>EducaPleno</strong>
-                        <small>Gestão Educacional<small>
-                    </div>
+                    
+                    <div class="top-bar-divider"></div>
+                    
+                    <h1 class="page-title" id="pageTitle">Dashboard</h1>
                 </div>
-                <h1 class="page-title" id="pageTitle">Dashboard</h1>
-                <div class="header-actions">
-                    <!-- BOTÃO DE NOTIFICAÇÕES -->
+
+                <div class="top-bar-right">
+                    
+                    <div class="top-bar-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="globalSearch" placeholder="Pesquisar...">
+                    </div>
+                    
                     <div class="notificacoes-container">
-                        <button class="notificacoes-btn" id="notificacoesBtn" style="
-                            background: #f8f9fa;
-                            border: 1px solid #dee2e6;
-                            border-radius: 40px;
-                            padding: 8px 16px;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                            position: relative;
-                        ">
+                        <button class="top-bar-icon-btn" id="notificacoesBtn" title="Notificações">
                             <i class="fas fa-bell"></i>
-                            <span>Notificações</span>
-                            <span class="notificacoes-badge" id="notificacoesBadge" style="
-                                position: absolute;
-                                top: -5px;
-                                right: -5px;
-                                background: #dc3545;
-                                color: white;
-                                font-size: 0.7rem;
-                                font-weight: bold;
-                                padding: 2px 6px;
-                                border-radius: 12px;
-                                min-width: 20px;
-                                text-align: center;
-                                border: 2px solid white;
-                                display: none;
-                            ">0</span>
+                            <span class="notificacoes-badge" id="notificacoesBadge" style="display: none;">0</span>
                         </button>
                         
-                        <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
-                            position: absolute;
-                            top: 50px;
-                            right: 0;
-                            width: 380px;
-                            background: white;
-                            border-radius: 16px;
-                            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                            display: none;
-                            z-index: 1000;
-                            overflow: hidden;
-                            border: 1px solid #e5e7eb;
-                        ">
-                            <div class="notificacoes-header" style="
-                                background: linear-gradient(135deg, #0d6efd, #0b5ed7);
-                                color: white;
-                                padding: 16px 20px;
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                            ">
-                                <h3 style="margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-bell"></i> Notificações
-                                </h3>
-                                <button class="btn-marcar-todas" id="marcarTodasLidasBtn" style="
-                                    background: rgba(255,255,255,0.2);
-                                    border: 1px solid rgba(255,255,255,0.3);
-                                    color: white;
-                                    padding: 6px 12px;
-                                    border-radius: 20px;
-                                    font-size: 0.8rem;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 5px;
-                                    border: none;
-                                ">
+                        <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                            <div class="notificacoes-header">
+                                <h3><i class="fas fa-bell"></i> Notificações</h3>
+                                <button class="btn-marcar-todas" id="marcarTodasLidasBtn">
                                     <i class="fas fa-check-double"></i> Marcar todas
                                 </button>
                             </div>
-                            
-                            <div class="notificacoes-lista" id="notificacoesLista" style="
-                                max-height: 400px;
-                                overflow-y: auto;
-                                background: #f8fafc;
-                            ">
-                                <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                    <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
-                                    <p>Carregando notificações...</p>
+                            <div class="notificacoes-lista" id="notificacoesLista">
+                                <div class="notificacoes-empty">
+                                    <i class="fas fa-bell-slash"></i>
+                                    <h4>Carregando...</h4>
+                                    <p>Aguarde um instante</p>
                                 </div>
                             </div>
-                            
-                            <div class="notificacao-footer" style="
-                                padding: 12px 20px;
-                                background: white;
-                                border-top: 1px solid #e5e7eb;
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                            ">
-                                <a href="#" id="verTodasNotificacoes" style="
-                                    color: #0d6efd;
-                                    text-decoration: none;
-                                    font-size: 0.85rem;
-                                    font-weight: 500;
-                                    display: inline-flex;
-                                    align-items: center;
-                                    gap: 5px;
-                                ">
+                            <div class="notificacao-footer">
+                                <a href="#" id="verTodasNotificacoes">
                                     <i class="fas fa-eye"></i> Ver todas
                                 </a>
-                                
-                                <button id="limparNotificacoesBtn" style="
-                                    background: none;
-                                    border: none;
-                                    color: #dc2626;
-                                    font-size: 0.85rem;
-                                    font-weight: 500;
-                                    cursor: pointer;
-                                    display: inline-flex;
-                                    align-items: center;
-                                    gap: 5px;
-                                    padding: 0;
-                                ">
+                                <button id="limparNotificacoesBtn">
                                     <i class="fas fa-trash"></i> Limpar todas
                                 </button>
                             </div>
                         </div>
                     </div>
-
-                    <div class="header-actions">
-                    <!-- 🔥 NOVO BOTÃO DE ENVIO DE NOTIFICAÇÕES -->
-                    <button class="btn-notificacao-envio" onclick="admin.abrirModalEnvioNotificacao()" style="
-                        background: linear-gradient(135deg, #f59e0b, #d97706);
-                        color: white;
-                        border: none;
-                        border-radius: 40px;
-                        padding: 8px 20px;
-                        font-size: 0.9rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 10px;
-                        margin-right: 10px;
-                        transition: all 0.3s;
-                        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
-                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(245,158,11,0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(245,158,11,0.3)';">
-                        <i class="fas fa-bullhorn"></i>
-                        <span>Enviar Notificação</span>
-                    </button>
-
-                    <!-- 🔥 NOVO: BOTÃO DE CONTROLE GLOBAL PUSH -->
-                    <button id="btnPushGlobal" class="btn-push" style="
-                        background: linear-gradient(135deg, #6b7280, #4b5563);
-                        color: white;
-                        border: none;
-                        border-radius: 40px;
-                        padding: 8px 16px;
-                        font-size: 0.85rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 8px;
-                        transition: all 0.3s;
-                        border: 1px solid rgba(255,255,255,0.2);
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                        margin-left: 10px;
-                    ">
-                        <i class="fas fa-bell-slash"></i>
-                        <span>Push: Carregando...</span>
-                    </button>
-
-                    <!-- COLE AQUI O LINK DO APP (APÓS O BOTÃO PUSH) -->
-                    <a href="https://drive.google.com/file/d/10L7dA1aUy0yVnO4vE59qAm6_vQENy0fw/view?usp=sharing" target="_blank" style="
-                        background: linear-gradient(135deg, #10b981, #059669);
-                        color: white;
-                        padding: 8px 16px;
-                        border-radius: 30px;
-                        text-decoration: none;
-                        font-size: 0.85rem;
-                        font-weight: 600;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 8px;
-                        border: 1px solid #059669;
-                        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
-                        margin-left: 10px;
-                        transition: all 0.3s;
-                    ">
-                        <i class="fas fa-download"></i> App
-                    </a>
                     
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="globalSearch" placeholder="Pesquisar...">
+                    <div class="top-bar-avatar-container">
+                        <button class="top-bar-avatar" id="topBarAvatarBtn" title="Menu do usuário">
+                            <img id="topBarAvatarImg" alt="Avatar">
+                            <i id="topBarAvatarIcon" class="fas fa-user-shield"></i>
+                        </button>
+                        
+                        <div class="avatar-dropdown" id="avatarDropdown">
+                            <div class="avatar-dropdown-header">
+                                <div class="avatar-dropdown-avatar" id="avatarDropdownAvatar">
+                                    <i class="fas fa-user-shield"></i>
+                                </div>
+                                <div class="avatar-dropdown-info">
+                                    <strong id="avatarDropdownNome">Admin</strong>
+                                    <small id="avatarDropdownEmail">admin@iemasaoluiscentro.net</small>
+                                    <span class="avatar-dropdown-badge" id="avatarDropdownRole">Super Admin</span>
+                                </div>
+                            </div>
+                            
+                            <div class="avatar-dropdown-divider"></div>
+                            
+                            <button class="avatar-dropdown-item" onclick="admin.abrirModalEnvioNotificacao()">
+                                <div class="dropdown-item-icon orange"><i class="fas fa-bullhorn"></i></div>
+                                <div class="dropdown-item-content">
+                                    <strong>Enviar Notificação</strong>
+                                    <small>Comunicar usuários</small>
+                                </div>
+                            </button>
+                            
+                            <button class="avatar-dropdown-item" id="btnPushGlobal">
+                                <div class="dropdown-item-icon gray"><i class="fas fa-bell-slash"></i></div>
+                                <div class="dropdown-item-content">
+                                    <strong>Push Global</strong>
+                                    <small>Carregando...</small>
+                                </div>
+                            </button>
+                            
+                            <a class="avatar-dropdown-item" href="https://drive.google.com/file/d/10L7dA1aUy0yVnO4vE59qAm6_vQENy0fw/view?usp=sharing" target="_blank">
+                                <div class="dropdown-item-icon green"><i class="fas fa-download"></i></div>
+                                <div class="dropdown-item-content">
+                                    <strong>Baixar App</strong>
+                                    <small>Versão Android</small>
+                                </div>
+                            </a>
+                            
+                            <div class="avatar-dropdown-divider"></div>
+                            
+                            <a class="avatar-dropdown-item" href="editar-perfil.html">
+                                <div class="dropdown-item-icon blue"><i class="fas fa-user-edit"></i></div>
+                                <div class="dropdown-item-content">
+                                    <strong>Editar Perfil</strong>
+                                </div>
+                            </a>
+                            
+                            <button class="avatar-dropdown-item" onclick="admin.toggleModoEscuro()">
+                                <div class="dropdown-item-icon purple"><i class="fas fa-moon"></i></div>
+                                <div class="dropdown-item-content">
+                                    <strong>Alternar Tema</strong>
+                                </div>
+                            </button>
+                            
+                            <div class="avatar-dropdown-divider"></div>
+                            
+                            <button class="avatar-dropdown-item" onclick="admin.confirmarResetAcessos()">
+                                <div class="dropdown-item-icon red"><i class="fas fa-sync-alt"></i></div>
+                                <div class="dropdown-item-content">
+                                    <strong>Resetar Acessos</strong>
+                                    <small>Desconectar todos</small>
+                                </div>
+                            </button>
+                            
+                            <button class="avatar-dropdown-item danger" onclick="admin.logout()">
+                                <div class="dropdown-item-icon red"><i class="fas fa-sign-out-alt"></i></div>
+                                <div class="dropdown-item-content">
+                                    <strong>Sair</strong>
+                                </div>
+                            </button>
+                        </div>
                     </div>
-                    <button class="btn-refresh" id="refreshBtn">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
-                    <button id="btnResetAcessos" class="btn-danger" style="
-                        background: linear-gradient(135deg, #dc2626, #b91c1c);
-                        color: white;
-                        border: none;
-                        padding: 12px 24px;
-                        border-radius: 40px;
-                        font-size: 14px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 8px;
-                        margin-left: 10px;
-                        box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);
-                    ">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Resetar Acessos</span>
-                    </button>    
-                    <div class="datetime" id="currentDatetime"></div>
+                    
+                    <div class="top-bar-datetime" id="currentDatetime"></div>
                 </div>
             </header>
 
@@ -604,9 +510,7 @@
                 <h2 id="modalTitle">Título</h2>
                 <button class="modal-close">&times;</button>
             </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Conteúdo dinâmico -->
-            </div>
+            <div class="modal-body" id="modalBody"></div>
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="admin.closeModal()">Cancelar</button>
                 <button class="btn-save" id="modalSaveBtn">Salvar</button>
@@ -616,7 +520,7 @@
 
     <!-- Modal de Confirmação -->
     <div class="modal" id="confirmModal">
-        <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-content modal-content-sm">
             <div class="modal-header">
                 <h2>Confirmar Ação</h2>
                 <button class="modal-close">&times;</button>
@@ -631,42 +535,235 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
-    <div class="toast-container" id="toastContainer"></div>    
+    <div class="toast-container" id="toastContainer"></div>
 
-    <!-- ============================================================================ -->
-    <!-- SISTEMA DE NOTIFICAÇÕES DO ADMIN - VERSÃO FUNCIONAL -->
-    <!-- ============================================================================ -->
+    <!-- ============================================ -->
+    <!-- 🎯 SCRIPT: MENU DO AVATAR                    -->
+    <!-- ============================================ -->
     <script>
     (function() {
-        console.log('🚀 Inicializando sistema de notificações...');
+        'use strict';
         
-        // ============================================
-        // FUNÇÕES PRINCIPAIS
-        // ============================================
+        console.log('🎯 Inicializando menu do avatar...');
         
-        // Função para atualizar o badge
+        function initAvatarDropdown() {
+            const avatarBtn = document.getElementById('topBarAvatarBtn');
+            const dropdown = document.getElementById('avatarDropdown');
+            
+            if (!avatarBtn || !dropdown) {
+                setTimeout(initAvatarDropdown, 500);
+                return;
+            }
+            
+            console.log('✅ Avatar dropdown inicializado');
+            
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            
+            const nomeEl = document.getElementById('avatarDropdownNome');
+            const emailEl = document.getElementById('avatarDropdownEmail');
+            const roleEl = document.getElementById('avatarDropdownRole');
+            
+            if (nomeEl) nomeEl.textContent = userData.nome || 'Administrador';
+            if (emailEl) emailEl.textContent = userData.email || 'admin@iemasaoluiscentro.net';
+            
+            if (roleEl) {
+                if (userData.role === 'super_admin') {
+                    roleEl.innerHTML = '<i class="fas fa-crown"></i> Super Admin';
+                } else if (userData.role === 'admin') {
+                    roleEl.innerHTML = '<i class="fas fa-user-shield"></i> Admin';
+                } else {
+                    roleEl.style.display = 'none';
+                }
+            }
+            
+            function syncAvatarPhoto() {
+                const mainPhoto = document.getElementById('adminFotoPerfil');
+                const dropdownAvatar = document.getElementById('avatarDropdownAvatar');
+                const topBarImg = document.getElementById('topBarAvatarImg');
+                const topBarIcon = document.getElementById('topBarAvatarIcon');
+                
+                const temFoto = mainPhoto && mainPhoto.src && mainPhoto.style.display !== 'none' && mainPhoto.src.indexOf('data:') === 0;
+                
+                if (temFoto) {
+                    if (dropdownAvatar) {
+                        dropdownAvatar.innerHTML = '<img src="' + mainPhoto.src + '" alt="Avatar">';
+                    }
+                    if (topBarImg) {
+                        topBarImg.src = mainPhoto.src;
+                        topBarImg.style.display = 'block';
+                    }
+                    if (topBarIcon) {
+                        topBarIcon.style.display = 'none';
+                    }
+                } else {
+                    const iniciais = (userData.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    
+                    if (dropdownAvatar) {
+                        dropdownAvatar.innerHTML = '<span class="avatar-iniciais">' + iniciais + '</span>';
+                    }
+                    if (topBarImg) topBarImg.style.display = 'none';
+                    if (topBarIcon) {
+                        topBarIcon.style.display = 'block';
+                        topBarIcon.textContent = iniciais;
+                    }
+                }
+            }
+            
+            setTimeout(syncAvatarPhoto, 300);
+            setTimeout(syncAvatarPhoto, 1000);
+            setTimeout(syncAvatarPhoto, 2000);
+            
+            avatarBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                dropdown.classList.toggle('show');
+                if (dropdown.classList.contains('show')) {
+                    syncAvatarPhoto();
+                }
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (!avatarBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
+            });
+            
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    dropdown.classList.remove('show');
+                }
+            });
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initAvatarDropdown);
+        } else {
+            initAvatarDropdown();
+        }
+        
+        setTimeout(initAvatarDropdown, 1000);
+        setTimeout(initAvatarDropdown, 3000);
+    })();
+    </script>
+
+    <!-- ============================================ -->
+    <!-- 📸 SCRIPT: CARREGAR FOTO DE PERFIL           -->
+    <!-- ============================================ -->
+    <script>
+    (function() {
+        'use strict';
+        
+        console.log('📸 Aguardando carregamento de foto...');
+        
+        async function carregarFotoPerfil() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+                
+                let imgElement = document.getElementById('adminFotoPerfil');
+                let iconElement = document.getElementById('adminAvatarIcon');
+                
+                if (!imgElement || !iconElement) {
+                    const avatarDiv = document.getElementById('adminAvatar');
+                    if (avatarDiv) {
+                        avatarDiv.innerHTML =
+                            '<img id="adminFotoPerfil" alt="Foto de perfil">' +
+                            '<i id="adminAvatarIcon" class="fas fa-user-shield"></i>';
+                        imgElement = document.getElementById('adminFotoPerfil');
+                        iconElement = document.getElementById('adminAvatarIcon');
+                    }
+                }
+                
+                if (!imgElement) return;
+                
+                const response = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                
+                const data = await response.json();
+                console.log('📦 Dados do perfil:', data);
+                
+                if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                    console.log('✅ Foto encontrada, aplicando...');
+                    
+                    imgElement.src = data.perfil.fotoPerfil;
+                    imgElement.style.display = 'block';
+                    
+                    if (iconElement) {
+                        iconElement.style.display = 'none';
+                    }
+                    
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    userData.fotoPerfil = data.perfil.fotoPerfil;
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    
+                    window.dispatchEvent(new CustomEvent('fotoPerfilCarregada', { 
+                        detail: { foto: data.perfil.fotoPerfil }
+                    }));
+                    
+                    console.log('✅ Foto aplicada!');
+                } else {
+                    console.log('📸 Sem foto - usando iniciais');
+                    
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    const iniciais = (userData.nome || 'A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    
+                    if (iconElement) {
+                        iconElement.textContent = iniciais;
+                        iconElement.style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar foto:', error);
+            }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(carregarFotoPerfil, 500);
+            });
+        } else {
+            setTimeout(carregarFotoPerfil, 500);
+        }
+        
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted || (document.referrer && document.referrer.includes('editar-perfil'))) {
+                setTimeout(carregarFotoPerfil, 300);
+            }
+        });
+    })();
+    </script>
+
+    <!-- ============================================ -->
+    <!-- 🔔 SISTEMA DE NOTIFICAÇÕES                   -->
+    <!-- ============================================ -->
+    <script>
+    (function() {
+        console.log('🚀 Sistema de notificações...');
+        
         async function atualizarBadge() {
             try {
                 const token = localStorage.getItem('auth_token');
                 if (!token) return;
                 
                 const response = await fetch('/api/notificacoes/nao-lidas/contador', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': 'Bearer ' + token }
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
                     const badge = document.getElementById('notificacoesBadge');
+                    const btn = document.getElementById('notificacoesBtn');
                     if (badge) {
                         if (data.count > 0) {
                             badge.textContent = data.count > 99 ? '99+' : data.count;
                             badge.style.display = 'inline';
-                            document.getElementById('notificacoesBtn')?.classList.add('tem-notificacao');
+                            if (btn) btn.classList.add('tem-notificacao');
                         } else {
                             badge.style.display = 'none';
-                            document.getElementById('notificacoesBtn')?.classList.remove('tem-notificacao');
+                            if (btn) btn.classList.remove('tem-notificacao');
                         }
                     }
                 }
@@ -675,14 +772,13 @@
             }
         }
         
-        // Função para carregar notificações
         async function carregarNotificacoes() {
             try {
                 const token = localStorage.getItem('auth_token');
                 if (!token) return;
                 
                 const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': 'Bearer ' + token }
                 });
                 
                 const data = await response.json();
@@ -695,19 +791,17 @@
             }
         }
         
-        // Função para renderizar notificações
         function renderizarNotificacoes(notificacoes) {
             const lista = document.getElementById('notificacoesLista');
             if (!lista) return;
             
             if (notificacoes.length === 0) {
-                lista.innerHTML = `
-                    <div class="notificacoes-empty">
-                        <i class="fas fa-bell-slash"></i>
-                        <h4>Nenhuma notificação</h4>
-                        <p>Você está em dia! 🎉</p>
-                    </div>
-                `;
+                lista.innerHTML =
+                    '<div class="notificacoes-empty">' +
+                        '<i class="fas fa-bell-slash"></i>' +
+                        '<h4>Nenhuma notificação</h4>' +
+                        '<p>Você está em dia! 🎉</p>' +
+                    '</div>';
                 return;
             }
             
@@ -718,57 +812,52 @@
                 const diffMin = Math.floor((agora - data) / 60000);
                 
                 let tempoTexto = diffMin < 1 ? 'agora' : 
-                            diffMin < 60 ? `há ${diffMin} min` : 
-                            `há ${Math.floor(diffMin/60)} h`;
+                            diffMin < 60 ? 'há ' + diffMin + ' min' : 
+                            'há ' + Math.floor(diffMin/60) + ' h';
                 
                 const isSolicitacaoBackup = notif.tipo === 'solicitacao_backup' || 
                                             (notif.titulo && notif.titulo.includes('backup')) ||
                                             (notif.mensagem && notif.mensagem.includes('códigos de backup'));
                 
-                // Adicionar badge especial para solicitações de backup
                 const tipoBadge = isSolicitacaoBackup ? 
                     '<span class="notificacao-tipo-badge"><i class="fas fa-key"></i> SOLICITAÇÃO BACKUP</span>' : '';
                 
-                html += `
-                    <div class="notificacao-item ${notif.lida ? '' : 'nao-lida'}" 
-                        data-id="${notif._id}"
-                        data-tipo="${notif.tipo || 'normal'}"
-                        data-dados='${JSON.stringify(notif.dados || {})}'
-                        data-usuario-id="${notif.dados?.solicitanteId || ''}"
-                        data-usuario-nome="${notif.dados?.solicitanteNome || ''}"
-                        style="cursor: pointer;">
+                html +=
+                    '<div class="notificacao-item ' + (notif.lida ? '' : 'nao-lida') + '" ' +
+                        'data-id="' + notif._id + '" ' +
+                        'data-tipo="' + (notif.tipo || 'normal') + '" ' +
+                        'data-dados=\'' + JSON.stringify(notif.dados || {}) + '\' ' +
+                        'data-usuario-id="' + ((notif.dados && notif.dados.solicitanteId) || '') + '" ' +
+                        'data-usuario-nome="' + ((notif.dados && notif.dados.solicitanteNome) || '') + '">' +
                         
-                        <div class="notificacao-icone" style="background: ${notif.cor || (isSolicitacaoBackup ? '#f59e0b' : '#0d6efd')};">
-                            ${notif.icone || (isSolicitacaoBackup ? '🔑' : '📋')}
-                        </div>
+                        '<div class="notificacao-icone" style="background: ' + (notif.cor || (isSolicitacaoBackup ? '#f59e0b' : '#0d6efd')) + ';">' +
+                            (notif.icone || (isSolicitacaoBackup ? '🔑' : '📋')) +
+                        '</div>' +
                         
-                        <div class="notificacao-conteudo">
-                            <div class="notificacao-titulo">
-                                ${notif.titulo}
-                                ${tipoBadge}
-                            </div>
-                            <div class="notificacao-mensagem">
-                                ${notif.mensagem}
-                            </div>
-                            <div class="notificacao-meta">
-                                <span><i class="far fa-clock"></i> ${tempoTexto}</span>
-                                ${isSolicitacaoBackup ? '<span><i class="fas fa-user-graduate"></i> Professor</span>' : ''}
-                            </div>
-                        </div>
+                        '<div class="notificacao-conteudo">' +
+                            '<div class="notificacao-titulo">' +
+                                notif.titulo +
+                                tipoBadge +
+                            '</div>' +
+                            '<div class="notificacao-mensagem">' +
+                                notif.mensagem +
+                            '</div>' +
+                            '<div class="notificacao-meta">' +
+                                '<span><i class="far fa-clock"></i> ' + tempoTexto + '</span>' +
+                                (isSolicitacaoBackup ? '<span><i class="fas fa-user-graduate"></i> Professor</span>' : '') +
+                            '</div>' +
+                        '</div>' +
                         
-                        <button class="btn-excluir-notificacao" onclick="excluirNotificacao('${notif._id}', event)">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                `;
+                        '<button class="btn-excluir-notificacao" onclick="excluirNotificacao(\'' + notif._id + '\', event)">' +
+                            '<i class="fas fa-times"></i>' +
+                        '</button>' +
+                    '</div>';
             });
             
             lista.innerHTML = html;
             
-            // Adicionar eventos de clique diferenciados
             document.querySelectorAll('.notificacao-item').forEach(item => {
                 item.addEventListener('click', async function(e) {
-                    // Não abrir se clicou no botão de excluir
                     if (e.target.closest('.btn-excluir-notificacao')) return;
                     
                     const id = this.dataset.id;
@@ -780,35 +869,27 @@
                     try {
                         const token = localStorage.getItem('auth_token');
                         
-                        // Marcar como lida
-                        await fetch(`/api/notificacoes/${id}/lida`, {
+                        await fetch('/api/notificacoes/' + id + '/lida', {
                             method: 'PUT',
-                            headers: { 'Authorization': `Bearer ${token}` }
+                            headers: { 'Authorization': 'Bearer ' + token }
                         });
                         
-                        // SE FOR SOLICITAÇÃO DE BACKUP, ABRIR MODAL ESPECIAL
                         if (tipo === 'solicitacao_backup' || (dados && dados.solicitanteId)) {
-                            console.log('🔑 Abrindo modal de geração de códigos para:', usuarioNome || dados.solicitanteNome);
-                            
-                            // Fechar dropdown
                             document.getElementById('notificacoesDropdown')?.classList.remove('show');
                             
-                            // Perguntar se quer gerar códigos (usa window.confirm sobrescrito pelo dialog-helper)
-                            const confirmar = await confirm(`🔐 Gerar 10 novos códigos de backup para o professor ${usuarioNome || dados.solicitanteNome}?`);
+                            const confirmar = await confirm('🔐 Gerar 10 novos códigos de backup para o professor ' + (usuarioNome || dados.solicitanteNome) + '?');
                             
-                            if (confirmar) {
+                            if (confirmar && typeof gerarCodigosBackupParaProfessor === 'function') {
                                 await gerarCodigosBackupParaProfessor(
                                     usuarioId || dados.solicitanteId, 
                                     usuarioNome || dados.solicitanteNome
                                 );
                             }
-                        } 
-                        // SE TIVER LINK, REDIRECIONAR
+                        }
                         else if (this.dataset.link && this.dataset.link !== '#') {
                             window.location.href = this.dataset.link;
                         }
                         
-                        // Atualizar badge
                         atualizarBadge();
                         
                     } catch (error) {
@@ -818,70 +899,11 @@
             });
         }
         
-        // ============================================
-        // FUNÇÕES DOS BOTÕES
-        // ============================================
-        
-        // Ver todas as notificações
-        async function verTodas() {
-            console.log('🔍 Redirecionando para notificacoes.html');
-            window.location.href = 'notificacoes.html';
-        }
-        
-        // Limpar todas as notificações
-        async function limparTodas() {
-            try {
-                const token = localStorage.getItem('auth_token');
-                
-                const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
-                if (!confirmacao) return;
-                
-                // Mostrar loading
-                const btn = event?.currentTarget;
-                if (btn) {
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
-                    btn.disabled = true;
-                }
-                
-                const response = await fetch('/api/notificacoes/limpar-minhas', {
-                    method: 'DELETE',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    await atualizarBadge();
-                    
-                    // Fechar dropdown
-                    document.getElementById('notificacoesDropdown')?.classList.remove('show');
-                    
-                    alert(`✅ ${data.message || 'Notificações excluídas com sucesso!'}`);
-                } else {
-                    throw new Error(data.error || 'Erro ao excluir');
-                }
-            } catch (error) {
-                console.error('❌ Erro:', error);
-                alert('❌ ' + error.message);
-            } finally {
-                // Restaurar botão
-                const btn = document.querySelector('.notificacao-footer button');
-                if (btn) {
-                    btn.innerHTML = '<i class="fas fa-trash"></i> Limpar todas';
-                    btn.disabled = false;
-                }
-            }
-        }
-        
-        // Marcar todas como lidas
         async function marcarTodas() {
             try {
                 const token = localStorage.getItem('auth_token');
-                
                 const btn = event?.currentTarget;
+                
                 if (btn) {
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Marcando...';
                     btn.disabled = true;
@@ -889,7 +911,7 @@
                 
                 await fetch('/api/notificacoes/marcar-todas-lidas', {
                     method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': 'Bearer ' + token }
                 });
                 
                 await atualizarBadge();
@@ -907,21 +929,24 @@
                 }
             }
         }
-
-        // ============================================
-        // FUNÇÃO PARA GERAR CÓDIGOS DE BACKUP (ADMIN)
-        // ============================================
-
-        async function gerarCodigosBackupParaProfessor(professorId, professorNome) {
+        
+        async function limparTodas() {
             try {
                 const token = localStorage.getItem('auth_token');
+                const confirmacao = await confirm('🗑️ Excluir TODAS as notificações?\n\nNão pode ser desfeito.');
                 
-                console.log(`🔑 Gerando 10 códigos de backup para professor: ${professorNome} (${professorId})`);
+                if (!confirmacao) return;
                 
-                const response = await fetch(`/api/admin/2fa/gerar-backup-codes/${professorId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
+                const btn = event?.currentTarget;
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+                    btn.disabled = true;
+                }
+                
+                const response = await fetch('/api/notificacoes/limpar-minhas', {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': 'Bearer ' + token,
                         'Content-Type': 'application/json'
                     }
                 });
@@ -929,282 +954,64 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    console.log('✅ Códigos gerados:', data.backupCodes);
-                    
-                    // Mostrar modal com os códigos
-                    mostrarCodigosBackupGerados(data.backupCodes, professorNome, professorId);
-                    
-                    // Atualizar badge de notificações
-                    if (typeof atualizarBadge === 'function') {
-                        atualizarBadge();
-                    }
-                    
-                    return data;
-                } else {
-                    throw new Error(data.error || 'Erro ao gerar códigos');
+                    await atualizarBadge();
+                    document.getElementById('notificacoesDropdown')?.classList.remove('show');
+                    alert('✅ ' + (data.message || 'Notificações excluídas!'));
                 }
             } catch (error) {
                 console.error('❌ Erro:', error);
-                alert(`❌ Erro ao gerar códigos: ${error.message}`);
+                alert('❌ ' + error.message);
             }
         }
-
-        // ============================================
-        // FUNÇÃO PARA MOSTRAR CÓDIGOS GERADOS EM MODAL
-        // ============================================
-
-        function mostrarCodigosBackupGerados(codigos, professorNome, professorId) {
-            // Criar modal se não existir
-            let modal = document.getElementById('modalBackupCodes');
-            
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'modalBackupCodes';
-                modal.className = 'modal';
-                modal.innerHTML = `
-                    <div class="modal-content" style="max-width: 600px;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669);">
-                            <h2><i class="fas fa-key"></i> Códigos de Backup Gerados</h2>
-                            <button class="modal-close" onclick="document.getElementById('modalBackupCodes').style.display='none'">&times;</button>
-                        </div>
-                        <div class="modal-body" style="padding: 25px;">
-                            <div id="backupCodesContent"></div>
-                        </div>
-                        <div class="modal-footer">
-                            <button class="btn-cancel" onclick="document.getElementById('modalBackupCodes').style.display='none'">Fechar</button>
-                            <button class="btn-save" id="downloadBackupCodesBtn" style="background: #10b981;">
-                                <i class="fas fa-download"></i> Baixar Códigos
-                            </button>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-            }
-            
-            const content = document.getElementById('backupCodesContent') || (() => {
-                const div = document.createElement('div');
-                div.id = 'backupCodesContent';
-                modal.querySelector('.modal-body').appendChild(div);
-                return div;
-            })();
-            
-            // HTML dos códigos
-            let codigosHtml = `
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 10px;"></i>
-                    <h3 style="color: #059669; margin-bottom: 5px;">10 códigos gerados com sucesso!</h3>
-                    <p style="color: #4b5563; margin-bottom: 5px;">
-                        Para: <strong>${professorNome}</strong>
-                    </p>
-                    <p style="color: #ef4444; font-size: 0.9rem; margin-top: 5px;">
-                        <i class="fas fa-exclamation-triangle"></i> 
-                        Guarde estes códigos em local seguro. Cada código pode ser usado apenas UMA vez.
-                    </p>
-                </div>
-                
-                <div style="
-                    background: #f8fafc;
-                    border-radius: 16px;
-                    padding: 20px;
-                    margin: 20px 0;
-                    border: 2px dashed #cbd5e1;
-                ">
-                    <div style="
-                        display: grid;
-                        grid-template-columns: repeat(2, 1fr);
-                        gap: 12px;
-                    ">
-            `;
-            
-            codigos.forEach((codigo, index) => {
-                codigosHtml += `
-                    <div style="
-                        background: white;
-                        border: 1px solid #e2e8f0;
-                        border-radius: 10px;
-                        padding: 15px 10px;
-                        text-align: center;
-                        font-family: 'SF Mono', 'Fira Code', monospace;
-                        font-size: 16px;
-                        font-weight: 600;
-                        letter-spacing: 2px;
-                        color: #059669;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                        position: relative;
-                    " 
-                    onclick="copiarCodigoBackup('${codigo}', this)"
-                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(5,150,105,0.2)';"
-                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.05)';"
-                    >
-                        ${codigo}
-                        <span style="
-                            position: absolute;
-                            top: -8px;
-                            right: -8px;
-                            background: #059669;
-                            color: white;
-                            font-size: 0.6rem;
-                            padding: 2px 6px;
-                            border-radius: 12px;
-                            font-weight: normal;
-                        ">${index + 1}</span>
-                    </div>
-                `;
-            });
-            
-            codigosHtml += `
-                    </div>
-                </div>
-                
-                <div style="background: #e6f7e6; border-left: 4px solid #10b981; padding: 15px; border-radius: 8px; margin-top: 15px;">
-                    <p style="margin: 0; color: #065f46; font-size: 0.9rem;">
-                        <i class="fas fa-info-circle"></i> 
-                        Os códigos foram salvos no perfil do professor. O professor poderá visualizá-los 
-                        apenas uma vez, no momento do primeiro acesso.
-                    </p>
-                </div>
-            `;
-            
-            content.innerHTML = codigosHtml;
-            
-            // Configurar botão de download
-            const downloadBtn = document.getElementById('downloadBackupCodesBtn') || modal.querySelector('.btn-save');
-            if (downloadBtn) {
-                downloadBtn.onclick = () => baixarCodigosBackup(codigos, professorNome);
-            }
-            
-            // Mostrar modal
-            modal.style.display = 'flex';
-            
-            // Adicionar função global para copiar
-            window.copiarCodigoBackup = (codigo, element) => {
-                navigator.clipboard.writeText(codigo);
-                
-                // Feedback visual
-                const originalText = element.innerText;
-                element.innerText = '✓ COPIADO!';
-                element.style.background = '#10b981';
-                element.style.color = 'white';
-                
-                setTimeout(() => {
-                    element.innerText = originalText;
-                    element.style.background = 'white';
-                    element.style.color = '#059669';
-                }, 1500);
-            };
-        }
-
-        // ============================================
-        // FUNÇÃO PARA BAIXAR CÓDIGOS COMO ARQUIVO
-        // ============================================
-
-        function baixarCodigosBackup(codigos, professorNome) {
-            const data = new Date().toLocaleString('pt-BR');
-            
-            const conteudo = [
-                '='.repeat(60),
-                '🔐 CÓDIGOS DE BACKUP - EDUCAPLENO',
-                '='.repeat(60),
-                '',
-                `Professor: ${professorNome}`,
-                `Data: ${data}`,
-                '',
-                '⚠️ IMPORTANTE:',
-                '• Cada código pode ser usado apenas UMA vez',
-                '• Guarde em local seguro',
-                '• Não compartilhe com ninguém',
-                '',
-                '📋 CÓDIGOS:',
-                '='.repeat(40),
-                '',
-                ...codigos.map((c, i) => `${String(i+1).padStart(2, '0')}. ${c}`),
-                '',
-                '='.repeat(40),
-                'EducaPleno',
-                '='.repeat(40)
-            ].join('\n');
-            
-            const blob = new Blob([conteudo], { type: 'text/plain;charset=utf-8' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `backup-codes-${professorNome.replace(/\s+/g, '_')}.txt`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-            
-            alert('📥 Download iniciado!');
-        }
-
-        // ============================================
-        // FUNÇÃO PARA EXCLUIR NOTIFICAÇÃO ESPECÍFICA
-        // ============================================
-
+        
         async function excluirNotificacao(id, event) {
             event.stopPropagation();
             
-            const confirmar = await confirm('🗑️ Deseja excluir esta notificação?');
+            const confirmar = await confirm('🗑️ Excluir esta notificação?');
             if (!confirmar) return;
             
             try {
                 const token = localStorage.getItem('auth_token');
                 
-                const response = await fetch(`/api/notificacoes/${id}`, {
+                const response = await fetch('/api/notificacoes/' + id, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': 'Bearer ' + token }
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Remover elemento da lista
                     event.target.closest('.notificacao-item').remove();
-                    
-                    // Atualizar badge
                     atualizarBadge();
                     
-                    // Se lista ficar vazia, mostrar mensagem
                     const lista = document.getElementById('notificacoesLista');
                     if (lista && lista.children.length === 0) {
-                        lista.innerHTML = `
-                            <div class="notificacoes-empty">
-                                <i class="fas fa-bell-slash"></i>
-                                <h4>Nenhuma notificação</h4>
-                                <p>Você está em dia! 🎉</p>
-                            </div>
-                        `;
+                        lista.innerHTML =
+                            '<div class="notificacoes-empty">' +
+                                '<i class="fas fa-bell-slash"></i>' +
+                                '<h4>Nenhuma notificação</h4>' +
+                                '<p>Você está em dia! 🎉</p>' +
+                            '</div>';
                     }
                 }
             } catch (error) {
-                console.error('❌ Erro ao excluir:', error);
-                alert('❌ Erro ao excluir notificação');
+                console.error('❌ Erro:', error);
             }
         }
-
-        // ============================================
-        // CONFIGURAÇÃO DOS ELEMENTOS
-        // ============================================
         
-        function configurarElementos() {
-            console.log('🔧 Configurando elementos...');
-            
-            // Botão principal de notificações
+        function configurarEventos() {
             const btnNotificacoes = document.getElementById('notificacoesBtn');
             if (btnNotificacoes) {
-                // Remover eventos antigos
                 const novoBtn = btnNotificacoes.cloneNode(true);
                 btnNotificacoes.parentNode.replaceChild(novoBtn, btnNotificacoes);
                 
                 novoBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('🔔 Abrindo/fechando dropdown');
                     
                     const dropdown = document.getElementById('notificacoesDropdown');
                     if (dropdown) {
                         dropdown.classList.toggle('show');
-                        
                         if (dropdown.classList.contains('show')) {
                             carregarNotificacoes();
                         }
@@ -1212,7 +1019,6 @@
                 });
             }
             
-            // Fechar dropdown ao clicar fora
             document.addEventListener('click', function(event) {
                 const dropdown = document.getElementById('notificacoesDropdown');
                 const btn = document.getElementById('notificacoesBtn');
@@ -1222,395 +1028,326 @@
                 }
             });
             
-            // Configurar footer após um pequeno delay
-            setTimeout(() => {
-                const footer = document.querySelector('.notificacao-footer');
-                if (!footer) {
-                    console.warn('⚠️ Footer não encontrado, tentando novamente...');
-                    setTimeout(configurarFooter, 1000);
-                    return;
-                }
-                
-                configurarFooter();
-            }, 1000);
+            document.getElementById('marcarTodasLidasBtn')?.addEventListener('click', marcarTodas);
+            document.getElementById('limparNotificacoesBtn')?.addEventListener('click', limparTodas);
+            document.getElementById('verTodasNotificacoes')?.addEventListener('click', function(e) {
+                e.preventDefault();
+                window.location.href = 'notificacoes.html';
+            });
         }
-        
-        function configurarFooter() {
-            const footer = document.querySelector('.notificacao-footer');
-            if (!footer) return;
-            
-            console.log('📋 Configurando footer do dropdown...');
-            
-            // LIMPAR TODO O FOOTER e recriar do zero
-            footer.innerHTML = `
-                <a href="#" style="
-                    color: #4f46e5;
-                    text-decoration: none;
-                    font-size: 0.9rem;
-                    font-weight: 500;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 5px;
-                ">
-                    <i class="fas fa-eye"></i> Ver todas
-                </a>
-                
-                <button style="
-                    background: none;
-                    border: none;
-                    color: #dc2626;
-                    font-size: 0.9rem;
-                    font-weight: 500;
-                    cursor: pointer;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 5px;
-                    padding: 0;
-                ">
-                    <i class="fas fa-trash"></i> Limpar todas
-                </button>
-            `;
-            
-            // Adicionar eventos aos novos elementos
-            const linkVerTodas = footer.querySelector('a');
-            const btnLimparTodas = footer.querySelector('button');
-            
-            if (linkVerTodas) {
-                linkVerTodas.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    verTodas();
-                });
-                console.log('✅ Link "Ver todas" configurado');
-            }
-            
-            if (btnLimparTodas) {
-                btnLimparTodas.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    limparTodas();
-                });
-                console.log('✅ Botão "Limpar todas" configurado');
-            }
-            
-            // Configurar também o botão "Marcar todas" no header
-            const btnMarcarTodas = document.querySelector('.btn-marcar-todas, .notificacoes-header button');
-            if (btnMarcarTodas) {
-                const novoBtnMarcar = btnMarcarTodas.cloneNode(true);
-                btnMarcarTodas.parentNode.replaceChild(novoBtnMarcar, btnMarcarTodas);
-                
-                novoBtnMarcar.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    marcarTodas();
-                });
-                console.log('✅ Botão "Marcar todas" configurado');
-            }
-        }
-        
-        // ============================================
-        // INICIALIZAÇÃO
-        // ============================================
         
         function iniciar() {
-            console.log('🚀 Iniciando sistema de notificações...');
-            
-            // Aguardar admin estar disponível
             if (typeof admin === 'undefined') {
-                console.log('⏳ Aguardando admin.js...');
                 setTimeout(iniciar, 500);
                 return;
             }
             
-            // Configurar elementos
-            configurarElementos();
-            
-            // Carregar badge inicial
+            configurarEventos();
             atualizarBadge();
-            
-            // Atualizar a cada 30 segundos
             setInterval(atualizarBadge, 30000);
-            
-            // Observar quando o dropdown abre
-            const dropdown = document.getElementById('notificacoesDropdown');
-            if (dropdown) {
-                const observer = new MutationObserver(function(mutations) {
-                    mutations.forEach(function(mutation) {
-                        if (mutation.target.classList.contains('show')) {
-                            console.log('📂 Dropdown aberto');
-                            carregarNotificacoes();
-                        }
-                    });
-                });
-                
-                observer.observe(dropdown, { attributes: true, attributeFilter: ['class'] });
-            }
-            
-            console.log('✅ Sistema de notificações inicializado com sucesso!');
         }
         
-        // Iniciar quando a página carregar
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', iniciar);
         } else {
             iniciar();
         }
+        
+        window.excluirNotificacao = excluirNotificacao;
     })();
     </script>
-    
+
+    <!-- ============================================ -->
+    <!-- 🔔 CONTROLE DE PUSH GLOBAL                   -->
+    <!-- ============================================ -->
     <script>
-    // Controle global de push (admin) - VERSÃO CORRIGIDA
-    document.addEventListener('DOMContentLoaded', async function() {
-        console.log('🔔 Inicializando controle de push admin...');
-        
-        // Verificar se é admin
+    document.addEventListener('DOMContentLoaded', function() {
         const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
         const isAdmin = userData.role === 'admin' || userData.role === 'super_admin';
         
-        if (!isAdmin) {
-            console.log('⏭️ Usuário não é admin - ignorando');
-            return;
-        }
+        if (!isAdmin) return;
         
-        const btnPush = document.getElementById('btnPushGlobal');
-        if (!btnPush) {
-            console.error('❌ Botão push não encontrado');
-            return;
-        }
-        
-        // Função para carregar status
-        async function carregarStatus() {
-            try {
-                console.log('📡 Buscando status do push...');
-                const response = await fetch('/api/push/status');
-                const data = await response.json();
-                
-                console.log('📦 Status recebido:', data);
-                
-                if (data.success) {
-                    if (data.pushAtivado) {
-                        btnPush.innerHTML = '<i class="fas fa-bell"></i> <span>Push Global ATIVADO</span>';
-                        btnPush.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                    } else {
-                        btnPush.innerHTML = '<i class="fas fa-bell-slash"></i> <span>Push Global DESATIVADO</span>';
-                        btnPush.style.background = 'linear-gradient(135deg, #6b7280, #4b5563)';
-                    }
-                } else {
-                    console.error('❌ Erro na resposta:', data);
-                    btnPush.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Erro ao carregar</span>';
-                }
-            } catch (error) {
-                console.error('❌ Erro ao carregar status:', error);
-                btnPush.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Erro de conexão</span>';
+        function attachPushHandler() {
+            const btnPush = document.getElementById('btnPushGlobal');
+            if (!btnPush) {
+                setTimeout(attachPushHandler, 500);
+                return;
             }
-        }
-        
-        // Carregar status inicial
-        await carregarStatus();
-        
-        // Evento de clique
-        btnPush.addEventListener('click', async () => {
-            try {
-                const token = localStorage.getItem('auth_token');
-                
-                // Buscar status atual para saber o novo estado
-                const statusResponse = await fetch('/api/push/status');
-                const statusData = await statusResponse.json();
-                
-                if (!statusData.success) {
-                    throw new Error('Não foi possível obter status atual');
-                }
-                
-                const novoEstado = !statusData.pushAtivado;
-                
-                // Mostrar loading
-                const originalHtml = btnPush.innerHTML;
-                btnPush.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Alterando...</span>';
-                btnPush.disabled = true;
-                
-                console.log(`🔄 Alterando push para: ${novoEstado ? 'ATIVADO' : 'DESATIVADO'}`);
-                
-                // Enviar requisição
-                const toggleResponse = await fetch('/api/push/admin/toggle', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ ativar: novoEstado })
-                });
-                
-                const toggleData = await toggleResponse.json();
-                console.log('📦 Resposta toggle:', toggleData);
-                
-                if (toggleData.success) {
-                    await carregarStatus();
+            
+            async function carregarStatus() {
+                try {
+                    const response = await fetch('/api/push/status');
+                    const data = await response.json();
                     
-                    // Mostrar toast de sucesso
-                    if (window.showToast) {
-                        window.showToast(`✅ Push ${novoEstado ? 'ativado' : 'desativado'}!`, 'success');
+                    const icon = btnPush.querySelector('.dropdown-item-icon');
+                    const strong = btnPush.querySelector('.dropdown-item-content strong');
+                    const small = btnPush.querySelector('.dropdown-item-content small');
+                    
+                    if (data.success && data.pushAtivado) {
+                        if (strong) strong.textContent = 'Push Global';
+                        if (small) small.textContent = '✅ ATIVADO';
+                        if (icon) {
+                            icon.classList.remove('gray');
+                            icon.classList.add('green');
+                            icon.innerHTML = '<i class="fas fa-bell"></i>';
+                        }
                     } else {
-                        alert(`✅ Push ${novoEstado ? 'ativado' : 'desativado'} globalmente!`);
+                        if (strong) strong.textContent = 'Push Global';
+                        if (small) small.textContent = '🔕 DESATIVADO';
+                        if (icon) {
+                            icon.classList.remove('green');
+                            icon.classList.add('gray');
+                            icon.innerHTML = '<i class="fas fa-bell-slash"></i>';
+                        }
                     }
-                } else {
-                    throw new Error(toggleData.error || 'Erro ao alterar status');
+                } catch (error) {
+                    console.error('❌ Erro:', error);
                 }
-                
-            } catch (error) {
-                console.error('❌ Erro:', error);
-                
-                // Mostrar erro
-                if (window.showToast) {
-                    window.showToast('❌ ' + error.message, 'error');
-                } else {
-                    alert('❌ Erro: ' + error.message);
-                }
-                
-                // Recarregar status para garantir consistência
-                await carregarStatus();
-                
-            } finally {
-                btnPush.disabled = false;
             }
-        });
+            
+            carregarStatus();
+            
+            btnPush.addEventListener('click', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const statusResponse = await fetch('/api/push/status');
+                    const statusData = await statusResponse.json();
+                    
+                    const novoEstado = !statusData.pushAtivado;
+                    
+                    const small = btnPush.querySelector('.dropdown-item-content small');
+                    if (small) small.textContent = 'Alterando...';
+                    btnPush.disabled = true;
+                    
+                    const toggleResponse = await fetch('/api/push/admin/toggle', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ ativar: novoEstado })
+                    });
+                    
+                    const toggleData = await toggleResponse.json();
+                    
+                    if (toggleData.success) {
+                        await carregarStatus();
+                        if (window.admin && window.admin.showToast) {
+                            window.admin.showToast('✅ Push ' + (novoEstado ? 'ativado' : 'desativado') + '!', 'success');
+                        }
+                    }
+                } catch (error) {
+                    console.error('❌ Erro:', error);
+                } finally {
+                    btnPush.disabled = false;
+                }
+            });
+        }
+        
+        attachPushHandler();
     });
     </script>
 
-            <!-- VLibras Oficial (PRIMEIRO) -->
+    <!-- ============================================ -->
+    <!-- 📝 RESET DE ACESSOS                          -->
+    <!-- ============================================ -->
+    <script>
+    (function() {
+        const btnReset = document.getElementById('btnResetAcessos');
+        if (!btnReset) return;
+        
+        btnReset.addEventListener('click', async function() {
+            const confirmar = await mostrarModalConfirmacao(
+                '⚠️ RESET DE ACESSOS',
+                'Resetar os acessos de <strong>TODOS</strong> os usuários (exceto Super Admins)?<br><br>' +
+                '<span style="color: #f59e0b;">Todos serão desconectados e precisarão fazer login novamente.</span>'
+            );
+            
+            if (!confirmar) return;
+            
+            try {
+                btnReset.disabled = true;
+                btnReset.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetando...';
+                
+                const token = localStorage.getItem('auth_token');
+                
+                const response = await fetch('/api/admin/reset-access', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    await mostrarModalSucesso(
+                        '✅ RESET CONCLUÍDO!',
+                        '<strong>' + data.totalAfetados + ' usuários foram afetados!</strong>'
+                    );
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                alert('❌ Erro: ' + error.message);
+            } finally {
+                btnReset.disabled = false;
+                btnReset.innerHTML = '<i class="fas fa-sync-alt"></i> Resetar Acessos';
+            }
+        });
+        
+        function mostrarModalConfirmacao(titulo, mensagem) {
+            return new Promise((resolve) => {
+                let modal = document.getElementById('modalResetConfirmacao');
+                
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'modalResetConfirmacao';
+                    modal.className = 'modal';
+                    modal.innerHTML =
+                        '<div class="modal-content">' +
+                            '<div class="modal-header modal-header-warning">' +
+                                '<h2>' + titulo + '</h2>' +
+                                '<button class="modal-close">&times;</button>' +
+                            '</div>' +
+                            '<div class="modal-body">' +
+                                '<div id="modalConfirmMensagem"></div>' +
+                            '</div>' +
+                            '<div class="modal-footer">' +
+                                '<button class="btn-cancel" id="modalConfirmCancelar">Cancelar</button>' +
+                                '<button class="btn-danger" id="modalConfirmConfirmar">Confirmar</button>' +
+                            '</div>' +
+                        '</div>';
+                    document.body.appendChild(modal);
+                }
+                
+                document.getElementById('modalConfirmMensagem').innerHTML = mensagem;
+                modal.style.display = 'flex';
+                
+                document.getElementById('modalConfirmCancelar').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
+                document.getElementById('modalConfirmConfirmar').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+                modal.querySelector('.modal-close').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
+            });
+        }
+        
+        function mostrarModalSucesso(titulo, mensagem) {
+            return new Promise((resolve) => {
+                let modal = document.getElementById('modalResetSucesso');
+                
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'modalResetSucesso';
+                    modal.className = 'modal';
+                    modal.innerHTML =
+                        '<div class="modal-content">' +
+                            '<div class="modal-header modal-header-success">' +
+                                '<h2>' + titulo + '</h2>' +
+                                '<button class="modal-close">&times;</button>' +
+                            '</div>' +
+                            '<div class="modal-body">' +
+                                '<div id="modalSucessoMensagem"></div>' +
+                            '</div>' +
+                            '<div class="modal-footer">' +
+                                '<button class="btn-primary" id="modalSucessoOk">OK</button>' +
+                            '</div>' +
+                        '</div>';
+                    document.body.appendChild(modal);
+                }
+                
+                document.getElementById('modalSucessoMensagem').innerHTML = mensagem;
+                modal.style.display = 'flex';
+                
+                document.getElementById('modalSucessoOk').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve();
+                };
+                modal.querySelector('.modal-close').onclick = () => {
+                    modal.style.display = 'none';
+                    resolve();
+                };
+            });
+        }
+    })();
+    </script>
+
+    <!-- VLibras -->
     <script src="js/vlibras-oficial.js"></script>
-    
-    <!-- Sistema de Acessibilidade (SEGUNDO) -->
     <script src="js/acessibilidade.js"></script>
-    
-    <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
-
-    <!-- ===== MOBILE OPTIMIZATION ===== -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <link rel="stylesheet" href="css/mobile.css">
     <script src="js/toggle-buttons.js"></script>
-
-        <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
     <script src="js/dialog-helper.js"></script>
     <script src="/js/core-security.js"></script>
 
+    <!-- MENU HAMBURGUER -->
     <script>
-    // ============================================
-    // MENU HAMBURGUER SIMPLIFICADO - APENAS ADMIN
-    // ============================================
     (function() {
         'use strict';
         
-        console.log('🍔 Inicializando menu do admin...');
-        
-        // Função que faz tudo funcionar
         function iniciarMenu() {
-            // Pegar elementos
             const menuToggle = document.getElementById('menuToggle') || document.querySelector('.menu-toggle');
             const sidebar = document.getElementById('sidebar') || document.querySelector('.sidebar');
             
-            // Verificar se encontrou
-            if (!menuToggle) {
-                console.log('❌ Botão do menu não encontrado');
-                return false;
-            }
+            if (!menuToggle || !sidebar) return false;
             
-            if (!sidebar) {
-                console.log('❌ Sidebar não encontrada');
-                return false;
-            }
-            
-            console.log('✅ Elementos encontrados!');
-            
-            // CRIAR OVERLAY (se não existir)
             let overlay = document.querySelector('.sidebar-overlay');
             if (!overlay) {
                 overlay = document.createElement('div');
                 overlay.className = 'sidebar-overlay';
-                overlay.style.cssText = 'display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1999;';
                 document.body.appendChild(overlay);
-                console.log('✅ Overlay criado');
             }
             
-            // Remover eventos antigos (clonar para garantir)
             const novoBotao = menuToggle.cloneNode(true);
             menuToggle.parentNode.replaceChild(novoBotao, menuToggle);
             
-            // Adicionar evento de clique
             novoBotao.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                console.log('🍔 Menu clicado!');
-                
-                // Alternar classes
-                if (sidebar.classList.contains('active')) {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
-                    overlay.style.display = 'none';
-                    document.body.style.overflow = '';
-                } else {
-                    sidebar.classList.add('active');
-                    overlay.classList.add('active');
-                    overlay.style.display = 'block';
-                    document.body.style.overflow = 'hidden';
-                }
+                sidebar.classList.toggle('active');
+                overlay.classList.toggle('active');
+                document.body.style.overflow = sidebar.classList.contains('active') ? 'hidden' : '';
             });
             
-            // Fechar ao clicar no overlay
             overlay.addEventListener('click', function() {
                 sidebar.classList.remove('active');
                 overlay.classList.remove('active');
-                overlay.style.display = 'none';
                 document.body.style.overflow = '';
-            });
-            
-            // Fechar ao redimensionar para desktop
-            window.addEventListener('resize', function() {
-                if (window.innerWidth > 768) {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
-                    overlay.style.display = 'none';
-                    document.body.style.overflow = '';
-                }
             });
             
             return true;
         }
         
-        // Tentar iniciar de várias formas
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', iniciarMenu);
         } else {
-            // Já carregou, tenta agora
             setTimeout(iniciarMenu, 100);
             setTimeout(iniciarMenu, 500);
-            setTimeout(iniciarMenu, 1000);
         }
-        
-        // Também tentar quando a janela carregar
-        window.addEventListener('load', function() {
-            setTimeout(iniciarMenu, 200);
-        });
-        
     })();
     </script>
 
-        <script>
-
-    // ============================================
-    // PULL-TO-REFRESH - MENOS SENSÍVEL (CORRIGIDO)
-    // ============================================
-
+    <!-- PULL-TO-REFRESH -->
+    <script>
     let touchStartY = 0;
     let touchCurrentY = 0;
     let isPulling = false;
-    const PULL_THRESHOLD = 600; // AUMENTADO para 200px (bem menos sensível)
-    const TOP_TOLERANCE = 100;    // Tolerância maior para considerar "topo"
+    const PULL_THRESHOLD = 600;
+    const TOP_TOLERANCE = 100;
 
     document.addEventListener('touchstart', function(e) {
-        // Só ativa se estiver no topo da página (com tolerância)
         if (window.scrollY <= TOP_TOLERANCE) {
             touchStartY = e.touches[0].clientY;
             isPulling = true;
@@ -1619,708 +1356,106 @@
 
     document.addEventListener('touchmove', function(e) {
         if (!isPulling) return;
-        
         touchCurrentY = e.touches[0].clientY;
         const pullDistance = touchCurrentY - touchStartY;
         
-        // Só considera movimento para BAIXO
-        if (pullDistance > 0) {
-            // NÃO bloqueia o scroll! (removido e.preventDefault)
-            
-            // Mostrar indicador visual apenas se passar de 50px
-            if (pullDistance > 50) {
-                mostrarIndicadorPull(pullDistance);
-            }
-            
-            // Se passou do limite MUITO MAIOR, atualiza
-            if (pullDistance > PULL_THRESHOLD) {
-                // Agora sim bloqueia para não dar conflito
-                e.preventDefault();
-                atualizarPagina();
-            }
+        if (pullDistance > 50) {
+            const indicador = document.getElementById('pull-indicator');
+            if (indicador) indicador.classList.add('show');
         }
-    }, { passive: true }); // MUDADO para passive: true (não bloqueia)
+        
+        if (pullDistance > PULL_THRESHOLD) {
+            e.preventDefault();
+            location.reload();
+        }
+    }, { passive: true });
 
-    document.addEventListener('touchend', function(e) {
-        if (!isPulling) return;
-        
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        // Se não passou do limite, apenas esconde o indicador
-        if (pullDistance < PULL_THRESHOLD) {
-            esconderIndicadorPull();
-        }
-        
+    document.addEventListener('touchend', function() {
         isPulling = false;
         touchStartY = 0;
         touchCurrentY = 0;
-    }, { passive: true });
-
-    // Função para atualizar a página
-    function atualizarPagina() {
-        // Mostrar mensagem
-        mostrarMensagem('Atualizando página...');
-        
-        // Efeito visual
-        document.body.style.opacity = '0.7';
-        document.body.style.transition = 'opacity 0.3s';
-        
-        // Recarregar a página
-        setTimeout(() => {
-            location.reload();
-        }, 500);
-    }
-
-    // Indicador visual simplificado
-    function mostrarIndicadorPull(distancia) {
-        let indicador = document.getElementById('pull-indicator');
-        
-        if (!indicador) {
-            indicador = document.createElement('div');
-            indicador.id = 'pull-indicator';
-            indicador.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                background: #4f46e5;
-                color: white;
-                text-align: center;
-                padding: 10px;
-                font-size: 14px;
-                z-index: 9999;
-                transform: translateY(-100%);
-                transition: transform 0.2s;
-            `;
-            indicador.innerHTML = '↓ Solte para atualizar';
-            document.body.appendChild(indicador);
-        }
-        
-        // Mostrar conforme a distância
-        if (distancia > 50) {
-            indicador.style.transform = 'translateY(0)';
-        }
-    }
-
-    function esconderIndicadorPull() {
         const indicador = document.getElementById('pull-indicator');
-        if (indicador) {
-            indicador.style.transform = 'translateY(-100%)';
-        }
-    }
-
-    function mostrarMensagem(texto) {
-        const msg = document.createElement('div');
-        msg.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #10b981;
-            color: white;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-weight: bold;
-            z-index: 10000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        `;
-        msg.textContent = texto;
-        document.body.appendChild(msg);
-        
-        setTimeout(() => msg.remove(), 1500);
-    }
-
+        if (indicador) indicador.classList.remove('show');
+    }, { passive: true });
     </script>
 
+    <!-- ESCALONAMENTO MOBILE -->
     <script>
-// ============================================
-// NOTIFICAÇÕES PUSH PARA CELULAR
-// ============================================
-
-(function() {
-    // Verificar se o navegador suporta
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log('📱 Push não suportado neste navegador');
-        return;
-    }
-
-    console.log('📱 Push notifications disponível');
-
-    // Verificar status atual
-    if (Notification.permission === 'granted') {
-        console.log('✅ Notificações já permitidas');
-        registrarPushSubscription();
-    } else if (Notification.permission === 'default') {
-        // Nunca perguntou - perguntar após 3 segundos
-        setTimeout(solicitarPermissaoNotificacao, 3000);
-    } else {
-        // Bloqueado - mostrar botão flutuante após 5 segundos
-        setTimeout(mostrarBotaoAtivarNotificacoes, 5000);
-    }
-})();
-
-// Função para solicitar permissão
-async function solicitarPermissaoNotificacao() {
-    try {
-        console.log('📱 Solicitando permissão de notificação...');
-        const permission = await Notification.requestPermission();
-        
-        console.log('📋 Resposta:', permission);
-        
-        if (permission === 'granted') {
-            console.log('✅ Permissão concedida!');
-            await registrarPushSubscription();
-            mostrarNotificacaoBoasVindas();
-        } else {
-            console.log('❌ Permissão negada');
-        }
-    } catch (error) {
-        console.error('❌ Erro ao solicitar permissão:', error);
-    }
-}
-
-// Registrar inscrição push
-async function registrarPushSubscription() {
-    try {
-        // Aguardar service worker estar pronto
-        const registration = await navigator.serviceWorker.ready;
-        
-        // Verificar se já tem inscrição
-        let subscription = await registration.pushManager.getSubscription();
-        
-        if (!subscription) {
-            console.log('🆕 Criando nova inscrição push...');
-            
-            // Chave VAPID pública (você precisa gerar uma)
-            const vapidPublicKey = urlBase64ToUint8Array('BFV6eF6W3rqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQ');
-            
-            subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: vapidPublicKey
-            });
-            
-            console.log('✅ Inscrição criada:', subscription);
-            
-            // Enviar para o servidor
-            await fetch('/api/push/subscribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                },
-                body: JSON.stringify(subscription)
-            });
-            
-            console.log('✅ Inscrição enviada ao servidor');
-            
-        } else {
-            console.log('✅ Já inscrito em push');
-            
-            // Verificar se a inscrição ainda é válida
-            try {
-                await fetch('/api/push/check-subscription', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                    }
-                });
-            } catch (e) {
-                console.log('⚠️ Erro ao verificar inscrição:', e.message);
-            }
-        }
-    } catch (error) {
-        console.error('❌ Erro ao registrar push:', error);
-    }
-}
-
-// Mostrar notificação de boas-vindas
-function mostrarNotificacaoBoasVindas() {
-    if (Notification.permission === 'granted') {
-        new Notification('📱 Notificações ativadas!', {
-            body: 'Você receberá alertas de provas, resultados e mensagens importantes',
-            icon: '/icons/favicon.ico',
-            badge: '/icons/favicon.ico',
-            vibrate: [200, 100, 200],
-            tag: 'boas-vindas-push',
-            silent: false,
-            requireInteraction: false
-        });
-    }
-}
-
-// Mostrar botão flutuante para quando está bloqueado
-function mostrarBotaoAtivarNotificacoes() {
-    // Verificar se já não existe
-    if (document.getElementById('push-banner')) return;
-    
-    const banner = document.createElement('div');
-    banner.id = 'push-banner';
-    banner.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white;
-        padding: 20px;
-        border-radius: 16px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        z-index: 10000;
-        animation: slideUp 0.3s ease;
-        max-width: 400px;
-        margin: 0 auto;
-    `;
-    
-    banner.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-            <div style="
-                width: 50px;
-                height: 50px;
-                background: rgba(255,255,255,0.2);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 24px;
-            ">
-                <i class="fas fa-bell-slash"></i>
-            </div>
-            <div style="flex: 1;">
-                <strong style="font-size: 16px;">🔕 Notificações bloqueadas</strong>
-                <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">
-                    Você não está recebendo alertas de provas e resultados
-                </p>
-            </div>
-            <button onclick="this.parentElement.parentElement.remove()" style="
-                background: none;
-                border: none;
-                color: white;
-                font-size: 20px;
-                cursor: pointer;
-                opacity: 0.7;
-            ">×</button>
-        </div>
-        
-        <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-            <p style="margin: 0 0 10px; font-size: 14px;">
-                <i class="fas fa-lock"></i> 
-                <strong>Como ativar no Microsoft Edge:</strong>
-            </p>
-            <ol style="margin: 0; padding-left: 20px; font-size: 13px;">
-                <li>Clique no <strong>cadeado 🔒</strong> ao lado da URL</li>
-                <li>Vá em <strong>"Permissões para este site"</strong></li>
-                <li>Em <strong>"Notificações"</strong>, escolha <strong>"Permitir"</strong></li>
-                <li>Recarregue a página</li>
-            </ol>
-        </div>
-        
-        <button onclick="window.location.reload()" style="
-            width: 100%;
-            padding: 12px;
-            background: white;
-            color: #667eea;
-            border: none;
-            border-radius: 30px;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        ">
-            <i class="fas fa-sync-alt"></i>
-            Já permiti - Recarregar
-        </button>
-    `;
-    
-    document.body.appendChild(banner);
-    
-    // Adicionar animação
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideUp {
-            from { transform: translateY(100px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// ============================================
-// NOTIFICAÇÕES PUSH PARA CELULAR - VERSÃO CORRIGIDA
-// ============================================
-
-// Função corrigida para converter chave VAPID
-function urlBase64ToUint8Array(base64String) {
-    try {
-        console.log('🔑 Convertendo chave VAPID...');
-        
-        // Adicionar padding se necessário
-        while (base64String.length % 4 !== 0) {
-            base64String += '=';
-        }
-        
-        // Substituir caracteres URL-safe
-        base64String = base64String.replace(/\-/g, '+').replace(/_/g, '/');
-        
-        // Decodificar
-        const rawData = window.atob(base64String);
-        const outputArray = new Uint8Array(rawData.length);
-        
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        
-        console.log('✅ Chave VAPID convertida com sucesso!');
-        return outputArray;
-        
-    } catch (error) {
-        console.error('❌ Erro ao decodificar chave VAPID:', error);
-        console.log('🔑 Chave recebida:', base64String);
-        console.log('📏 Tamanho da chave:', base64String.length);
-        
-        // Retornar null em vez de quebrar
-        return null;
-    }
-}
-
-// Função para solicitar permissão
-async function solicitarPermissaoNotificacao() {
-    try {
-        console.log('📱 Solicitando permissão de notificação...');
-        const permission = await Notification.requestPermission();
-        
-        console.log('📋 Resposta:', permission);
-        
-        if (permission === 'granted') {
-            console.log('✅ Permissão concedida!');
-            await registrarPushSubscription();
-            mostrarNotificacaoBoasVindas();
-        } else {
-            console.log('❌ Permissão negada');
-        }
-    } catch (error) {
-        console.error('❌ Erro ao solicitar permissão:', error);
-    }
-}
-
-// Registrar inscrição push
-async function registrarPushSubscription() {
-    try {
-        // Aguardar service worker estar pronto
-        const registration = await navigator.serviceWorker.ready;
-        
-        // Verificar se já tem inscrição
-        let subscription = await registration.pushManager.getSubscription();
-        
-        if (!subscription) {
-            console.log('🆕 Criando nova inscrição push...');
-            
-            // ⚠️ ATENÇÃO: COLE AQUI A NOVA CHAVE VAPID GERADA!
-            const vapidPublicKey = urlBase64ToUint8Array('BD9Y62W9893kKxr6cT92YFlAHyQt07fDyhE27-z7dB3VDez-urDqvuay9hEiTpILKjYqRsZhlGaSbQS2RWXewr4');
-            
-            // Verificar se a chave é válida
-            if (!vapidPublicKey) {
-                throw new Error('Chave VAPID inválida');
-            }
-            
-            subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: vapidPublicKey
-            });
-            
-            console.log('✅ Inscrição criada:', subscription);
-            
-            // Enviar para o servidor
-            const response = await fetch('/api/push/subscribe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                },
-                body: JSON.stringify(subscription)
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                console.log('✅ Inscrição enviada ao servidor');
-            } else {
-                console.warn('⚠️ Servidor não respondeu OK, mas inscrição local criada');
-            }
-            
-        } else {
-            console.log('✅ Já inscrito em push');
-        }
-    } catch (error) {
-        console.error('❌ Erro ao registrar push:', error);
-        
-        // Mostrar mensagem mais amigável
-        if (error.message.includes('Chave VAPID inválida')) {
-            console.log('💡 Dica: A chave VAPID está incorreta. Gere uma nova com: npx web-push generate-vapid-keys');
-        } else if (error.name === 'InvalidAccessError') {
-            console.log('💡 Dica: Chave VAPID inválida ou mal formatada. Verifique a chave.');
-        }
-    }
-}
-
-// Função principal
-(async function() {
-    console.log('📱 Verificando suporte a push...');
-    
-    // Verificar se o navegador suporta
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-        console.log('📱 Push não suportado neste navegador');
-        return;
-    }
-
-    console.log('📱 Push notifications disponível');
-
-    // Verificar status atual
-    if (Notification.permission === 'granted') {
-        console.log('✅ Notificações já permitidas');
-        await registrarPushSubscription();
-    } else if (Notification.permission === 'default') {
-        // Nunca perguntou - perguntar após 3 segundos
-        setTimeout(solicitarPermissaoNotificacao, 3000);
-    } else {
-        // Bloqueado - mostrar botão flutuante
-        setTimeout(mostrarBotaoAtivarNotificacoes, 5000);
-    }
-})();
-
-// Mostrar notificação de boas-vindas
-function mostrarNotificacaoBoasVindas() {
-    if (Notification.permission === 'granted') {
-        new Notification('📱 Notificações ativadas!', {
-            body: 'Você receberá alertas de provas, resultados e mensagens importantes',
-            icon: '/icons/favicon.ico',
-            badge: '/icons/favicon.ico',
-            vibrate: [200, 100, 200],
-            tag: 'boas-vindas-push',
-            silent: false,
-            requireInteraction: false
-        });
-    }
-}
-
-// Mostrar botão flutuante para quando está bloqueado
-function mostrarBotaoAtivarNotificacoes() {
-    if (document.getElementById('push-banner')) return;
-    
-    const banner = document.createElement('div');
-    banner.id = 'push-banner';
-    banner.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white;
-        padding: 20px;
-        border-radius: 16px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        z-index: 10000;
-        animation: slideUp 0.3s ease;
-        max-width: 400px;
-        margin: 0 auto;
-    `;
-    
-    banner.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px;">
-                <i class="fas fa-bell-slash"></i>
-            </div>
-            <div style="flex: 1;">
-                <strong style="font-size: 16px;">🔕 Notificações bloqueadas</strong>
-                <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">
-                    Você não está recebendo alertas de provas e resultados
-                </p>
-            </div>
-            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; opacity: 0.7;">×</button>
-        </div>
-        
-        <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-            <p style="margin: 0 0 10px; font-size: 14px;">
-                <i class="fas fa-lock"></i> 
-                <strong>Como ativar no navegador:</strong>
-            </p>
-            <ol style="margin: 0; padding-left: 20px; font-size: 13px;">
-                <li>Clique no <strong>cadeado 🔒</strong> ao lado da URL</li>
-                <li>Vá em <strong>"Permissões para este site"</strong></li>
-                <li>Em <strong>"Notificações"</strong>, escolha <strong>"Permitir"</strong></li>
-                <li>Recarregue a página</li>
-            </ol>
-        </div>
-        
-        <button onclick="window.location.reload()" style="width: 100%; padding: 12px; background: white; color: #667eea; border: none; border-radius: 30px; font-weight: bold; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <i class="fas fa-sync-alt"></i>
-            Já permiti - Recarregar
-        </button>
-    `;
-    
-    document.body.appendChild(banner);
-}
-
-// Função para testar (opcional)
-window.testarNotificacao = function() {
-    if (Notification.permission === 'granted') {
-        new Notification('🔔 Teste manual', {
-            body: 'Notificação de teste',
-            icon: '/icons/favicon.ico'
-        });
-        console.log('✅ Notificação enviada');
-    } else {
-        console.log('❌ Sem permissão');
-        solicitarPermissaoNotificacao();
-    }
-};
-</script>
-
-<script>
-// ============================================
-// SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-// ============================================
-
-(function() {
-    // Só ativar em telas menores que 768px
-    if (window.innerWidth > 768) {
-        console.log('📐 Desktop detectado - escalonamento desativado');
-        return;
-    }
-    
-    console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-    
-    // Função para calcular a escala baseada na largura (apenas mobile)
-    function calcularEscalaMobile() {
-        const width = window.innerWidth;
-        
-        // Largura de referência para mobile (768px)
-        const baseWidth = 768;
-        
-        // Calcular escala (nunca menor que 0.5 e nunca maior que 1)
-        let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-        
-        // Ajustes específicos para faixas de tamanho
-        if (width <= 320) escala = 0.55;
-        else if (width <= 360) escala = 0.6;
-        else if (width <= 400) escala = 0.65;
-        else if (width <= 500) escala = 0.75;
-        else if (width <= 600) escala = 0.85;
-        else if (width <= 700) escala = 0.95;
-        else escala = 1;
-        
-        return escala;
-    }
-    
-    // Função para aplicar a escala
-    function aplicarEscalaMobile() {
-        // Só aplicar se ainda estiver em mobile
+    (function() {
         if (window.innerWidth > 768) return;
         
-        const escala = calcularEscalaMobile();
+        function aplicarEscala() {
+            const width = window.innerWidth;
+            let escala = Math.max(0.5, Math.min(1, width / 768));
+            
+            if (width <= 320) escala = 0.55;
+            else if (width <= 360) escala = 0.6;
+            else if (width <= 400) escala = 0.65;
+            else if (width <= 500) escala = 0.75;
+            else if (width <= 600) escala = 0.85;
+            else if (width <= 700) escala = 0.95;
+            else escala = 1;
+            
+            document.documentElement.style.setProperty('--scale-ratio', escala);
+        }
         
-        // Atualizar variável CSS
-        document.documentElement.style.setProperty('--scale-ratio', escala);
-        document.documentElement.style.setProperty('--current-width', window.innerWidth);
+        aplicarEscala();
         
-        console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-    }
-    
-    // Aplicar inicial
-    aplicarEscalaMobile();
-    
-    // Aplicar ao redimensionar (com debounce)
-    let timeout;
-    window.addEventListener('resize', function() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // Verificar se ainda está em mobile
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            } else {
-                // Se passou para desktop, resetar escala
-                document.documentElement.style.setProperty('--scale-ratio', '1');
-                console.log('📐 Modo desktop - escala resetada');
-            }
-        }, 100);
-    });
-    
-    // Também aplicar quando orientação mudar
-    window.addEventListener('orientationchange', function() {
-        setTimeout(() => {
-            if (window.innerWidth <= 768) {
-                aplicarEscalaMobile();
-            }
-        }, 200);
-    });
-    
-    console.log('✅ Sistema de escalonamento mobile ativo!');
-    
-})();
-</script>
+        let timeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                if (window.innerWidth <= 768) {
+                    aplicarEscala();
+                } else {
+                    document.documentElement.style.setProperty('--scale-ratio', '1');
+                }
+            }, 100);
+        });
+    })();
+    </script>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="js/websocket-manager.js"></script>  <!-- NOVO: carrega PRIMEIRO -->
-    <script src="js/admin.js"></script>               <!-- EXISTENTE: carrega DEPOIS -->
+    <script src="js/websocket-manager.js"></script>
+    <script src="js/admin.js"></script>
     <script src="/js/admin-cozinha-monitoramento.js"></script>
     <script src="js/admin-enfermaria-monitoramento.js"></script>
-    <!-- ===== MÓDULO BANCO DE DADOS ===== -->
-    <link rel="stylesheet" href="css/admin-banco-dados.css">
     <script src="js/admin-banco-dados.js"></script>
 
-    <!-- ============================================ -->
-    <!-- 📱 BOTTOM NAVIGATION — NAVEGAÇÃO INFERIOR   -->
-    <!-- ============================================ -->
+    <!-- BOTTOM NAVIGATION -->
     <nav class="bottom-nav" id="bottomNav">
         <a href="#" class="bottom-nav-item active" data-section="dashboard" onclick="event.preventDefault(); admin.switchSection('dashboard'); admin.updateBottomNav('dashboard');">
-            <div class="nav-icon-wrapper">
-                <i class="fas fa-home"></i>
-            </div>
+            <div class="nav-icon-wrapper"><i class="fas fa-home"></i></div>
             <span class="nav-label">Início</span>
         </a>
 
         <a href="#" class="bottom-nav-item" data-section="usuarios" onclick="event.preventDefault(); admin.switchSection('usuarios'); admin.updateBottomNav('usuarios');">
-            <div class="nav-icon-wrapper">
-                <i class="fas fa-users"></i>
-            </div>
+            <div class="nav-icon-wrapper"><i class="fas fa-users"></i></div>
             <span class="nav-label">Usuários</span>
         </a>
 
         <a href="#" class="bottom-nav-item" data-section="provas" onclick="event.preventDefault(); admin.switchSection('provas'); admin.updateBottomNav('provas');">
-            <div class="nav-icon-wrapper">
-                <i class="fas fa-file-alt"></i>
-            </div>
+            <div class="nav-icon-wrapper"><i class="fas fa-file-alt"></i></div>
             <span class="nav-label">Provas</span>
         </a>
 
         <a href="#" class="bottom-nav-item" data-section="turmas" onclick="event.preventDefault(); admin.switchSection('turmas'); admin.updateBottomNav('turmas');">
-            <div class="nav-icon-wrapper">
-                <i class="fas fa-school"></i>
-            </div>
+            <div class="nav-icon-wrapper"><i class="fas fa-school"></i></div>
             <span class="nav-label">Turmas</span>
         </a>
 
         <a href="#" class="bottom-nav-item" data-section="menu" onclick="event.preventDefault(); admin.abrirMenuCompleto();">
-            <div class="nav-icon-wrapper">
-                <i class="fas fa-bars"></i>
-            </div>
+            <div class="nav-icon-wrapper"><i class="fas fa-bars"></i></div>
             <span class="nav-label">Menu</span>
         </a>
     </nav>
 
-    <!-- ============================================ -->
-    <!-- 📱 MENU COMPLETO (Bottom Sheet Moderno)     -->
-    <!-- ============================================ -->
-     <div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="admin.fecharMenuCompleto()"></div>
+    <!-- MENU MOBILE COMPLETO -->
+    <div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="admin.fecharMenuCompleto()"></div>
     <div class="mobile-menu-sheet" id="mobileMenuSheet">
-        <!-- Header com LOGO -->
         <div class="mobile-menu-logo-header">
             <div class="mobile-menu-logo">
-                <div class="logo-icon">
-                    <i class="fas fa-crown"></i>
-                </div>
+                <div class="logo-icon"><i class="fas fa-crown"></i></div>
                 <div class="logo-text">
                     <strong>EducaPleno</strong>
                     <small>Gestão Educacional</small>
@@ -2331,7 +1466,6 @@ window.testarNotificacao = function() {
             </button>
         </div>
         
-        <!-- Card do usuário com FOTO -->
         <div class="mobile-menu-user-card">
             <div class="mobile-menu-avatar" id="mobileMenuAvatar">
                 <i class="fas fa-user-shield"></i>
@@ -2348,253 +1482,24 @@ window.testarNotificacao = function() {
             </button>
         </div>
         
-        <!-- Busca -->
         <div class="mobile-menu-search">
             <i class="fas fa-search"></i>
             <input type="text" placeholder="Buscar funcionalidade..." id="mobileMenuSearch" oninput="admin.filtrarMenuMobile(this.value)">
         </div>
         
-        <!-- Lista -->
-        <div class="mobile-menu-list" id="mobileMenuList">
-            <!-- Preenchido via JS -->
-        </div>
+        <div class="mobile-menu-list" id="mobileMenuList"></div>
     </div>
 
+    <!-- SERVICE WORKER -->
     <script>
-// ============================================
-// RESET DE ACESSOS - VERSÃO COMPLETA
-// ============================================
-(function() {
-    const btnReset = document.getElementById('btnResetAcessos');
-    
-    if (!btnReset) return;
-    
-    btnReset.addEventListener('click', async function() {
-        // Confirmar com modal personalizado
-        const confirmar = await mostrarModalConfirmacao(
-            '⚠️ RESET DE ACESSOS',
-            `Você está prestes a <strong>resetar os acessos de TODOS os usuários</strong> (exceto Super Admins).<br><br>
-            <span style="color: #f59e0b;">Isso significa que:</span>
-            <ul style="text-align: left; margin-top: 10px;">
-                <li>✅ Todos receberão uma notificação</li>
-                <li>✅ Serão desconectados imediatamente</li>
-                <li>✅ Precisarão fazer login novamente</li>
-                <li>❌ Esta ação <strong>NÃO PODE SER DESFEITA</strong></li>
-            </ul>
-            <br>
-            <strong>Deseja continuar?</strong>`
-        );
-        
-        if (!confirmar) return;
-        
-        try {
-            // Mostrar loading
-            btnReset.disabled = true;
-            btnReset.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetando acessos...';
-            
-            const token = localStorage.getItem('auth_token');
-            
-            const response = await fetch('/api/admin/reset-access', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                // Mostrar modal de sucesso com estatísticas
-                await mostrarModalSucesso(
-                    '✅ RESET CONCLUÍDO!',
-                    `<strong style="font-size: 1.3rem; color: #10b981;">${data.totalAfetados} usuários foram afetados!</strong><br><br>
-                    <div style="background: #1f2937; padding: 15px; border-radius: 12px;">
-                        <h4 style="color: #f59e0b; margin-bottom: 10px;">📊 ESTATÍSTICAS:</h4>
-                        <ul style="list-style: none; padding: 0;">
-                            <li style="margin: 8px 0;">👤 <strong>Alunos:</strong> ${data.estatisticas?.alunos || 0}</li>
-                            <li style="margin: 8px 0;">👨‍🏫 <strong>Professores:</strong> ${data.estatisticas?.professores || 0}</li>
-                            <li style="margin: 8px 0;">👑 <strong>Admins:</strong> ${data.estatisticas?.admins || 0}</li>
-                        </ul>
-                    </div>
-                    <br>
-                    <span style="color: #10b981;">✅ Notificações enviadas para todos os afetados</span>`
-                );
-                
-                // Perguntar se quer sair agora
-                const querSair = await confirm('Deseja sair agora para testar como será a experiência do usuário?');
-                if (querSair) {
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('user_data');
-                    window.location.href = 'login.html';
-                }
-            } else {
-                throw new Error(data.error || 'Erro ao resetar');
-            }
-            
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            alert('❌ Erro ao resetar acessos: ' + error.message);
-        } finally {
-            btnReset.disabled = false;
-            btnReset.innerHTML = '<i class="fas fa-sync-alt"></i> Resetar Acessos';
-        }
-    });
-    
-    // ===== FUNÇÕES AUXILIARES PARA MODAIS =====
-    
-    function mostrarModalConfirmacao(titulo, mensagem) {
-        return new Promise((resolve) => {
-            let modal = document.getElementById('modalResetConfirmacao');
-            
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'modalResetConfirmacao';
-                modal.className = 'modal';
-                modal.innerHTML = `
-                    <div class="modal-content" style="max-width: 500px;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-                            <h2 id="modalConfirmTitulo">⚠️ ATENÇÃO!</h2>
-                            <button class="modal-close" onclick="document.getElementById('modalResetConfirmacao').style.display='none'; resolve(false)">&times;</button>
-                        </div>
-                        <div class="modal-body" style="padding: 25px; background: #1f2937; color: white;">
-                            <div id="modalConfirmMensagem"></div>
-                        </div>
-                        <div class="modal-footer" style="background: #111827; padding: 20px; display: flex; gap: 12px;">
-                            <button class="btn-cancel" id="modalConfirmCancelar" style="flex:1; background: #6b7280; color: white; border: none; padding: 12px; border-radius: 40px; font-weight: 600; cursor: pointer;">Cancelar</button>
-                            <button class="btn-danger" id="modalConfirmConfirmar" style="flex:1; background: #f59e0b; color: white; border: none; padding: 12px; border-radius: 40px; font-weight: 600; cursor: pointer;">Confirmar</button>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-            }
-            
-            document.getElementById('modalConfirmTitulo').innerHTML = titulo;
-            document.getElementById('modalConfirmMensagem').innerHTML = mensagem;
-            
-            modal.style.display = 'flex';
-            
-            document.getElementById('modalConfirmCancelar').onclick = () => {
-                modal.style.display = 'none';
-                resolve(false);
-            };
-            
-            document.getElementById('modalConfirmConfirmar').onclick = () => {
-                modal.style.display = 'none';
-                resolve(true);
-            };
-            
-            modal.querySelector('.modal-close').onclick = () => {
-                modal.style.display = 'none';
-                resolve(false);
-            };
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('✅ Service Worker ativo'))
+                .catch(err => console.log('❌ Erro:', err));
         });
     }
-    
-    function mostrarModalSucesso(titulo, mensagem) {
-        return new Promise((resolve) => {
-            let modal = document.getElementById('modalResetSucesso');
-            
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'modalResetSucesso';
-                modal.className = 'modal';
-                modal.innerHTML = `
-                    <div class="modal-content" style="max-width: 500px;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669);">
-                            <h2 id="modalSucessoTitulo">✅ Sucesso!</h2>
-                            <button class="modal-close" onclick="document.getElementById('modalResetSucesso').style.display='none'; resolve()">&times;</button>
-                        </div>
-                        <div class="modal-body" style="padding: 25px; background: #1f2937; color: white;">
-                            <div id="modalSucessoMensagem"></div>
-                        </div>
-                        <div class="modal-footer" style="background: #111827; padding: 20px;">
-                            <button class="btn-primary" id="modalSucessoOk" style="background: #10b981; color: white; border: none; padding: 12px 30px; border-radius: 40px; font-weight: 600; cursor: pointer; margin: 0 auto;">OK</button>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-            }
-            
-            document.getElementById('modalSucessoTitulo').innerHTML = titulo;
-            document.getElementById('modalSucessoMensagem').innerHTML = mensagem;
-            
-            modal.style.display = 'flex';
-            
-            document.getElementById('modalSucessoOk').onclick = () => {
-                modal.style.display = 'none';
-                resolve();
-            };
-            
-            modal.querySelector('.modal-close').onclick = () => {
-                modal.style.display = 'none';
-                resolve();
-            };
-        });
-    }
-})();
     </script>
-
-    <script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
-
-window.addEventListener('online', () => console.log('🌐 Online'));
-window.addEventListener('offline', () => console.log('📴 Offline'));
-
-
-</script>
-
-<script>
-// Forçar carregamento da foto de perfil
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🔄 Carregando foto de perfil...');
-    
-    setTimeout(async function() {
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-            console.log('❌ Token não encontrado');
-            return;
-        }
-        
-        const imgElement = document.getElementById('adminFotoPerfil');
-        const iconElement = document.getElementById('adminAvatarIcon');
-        
-        if (!imgElement) {
-            console.log('❌ Elemento adminFotoPerfil não encontrado');
-            return;
-        }
-        
-        try {
-            const response = await fetch('/api/perfil/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-            
-            console.log('📦 Dados do perfil:', data);
-            
-            if (data.success && data.perfil && data.perfil.fotoPerfil) {
-                console.log('✅ Foto encontrada! Aplicando...');
-                imgElement.src = data.perfil.fotoPerfil;
-                imgElement.style.display = 'block';
-                if (iconElement) {
-                    iconElement.style.display = 'none';
-                }
-                console.log('✅ Foto aplicada com sucesso!');
-            } else {
-                console.log('📸 Nenhuma foto cadastrada');
-            }
-        } catch (error) {
-            console.error('❌ Erro ao carregar foto:', error);
-        }
-    }, 500);
-});
-</script>
 
 </body>
 </html>

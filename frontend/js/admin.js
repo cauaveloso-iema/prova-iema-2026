@@ -3906,7 +3906,7 @@ class AdminPanel {
 
     // ============ USUÁRIOS ============
 
-    // ============ LOAD USUÁRIOS (VERSÃO CORRIGIDA) ============
+    // ============ LOAD USUÁRIOS (VERSÃO CORRIGIDA - SEM ERRO DE TURMA) ============
     async loadUsuarios() {
         const contentArea = document.getElementById('contentArea');
         
@@ -3922,78 +3922,118 @@ class AdminPanel {
                 <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
             `;
 
-            // BUSCAR DADOS DO BACKEND
-            console.log('📡 Buscando usuários com filtros:', { role, search, status, turma, page, limit });
-            
             const token = localStorage.getItem('auth_token');
             
-            // CONSTRUIR URL COM TODOS OS PARÂMETROS
+            // 🔥 BUSCAR USUÁRIOS
             let url = `${this.apiBase}/usuarios?page=${page}&limit=${limit}`;
             
             if (search && search.trim() !== '') {
                 url += `&search=${encodeURIComponent(search.trim())}`;
             }
-            
             if (role && role !== 'todos') {
                 url += `&role=${role}`;
             }
-            
-            // 🔥 ADICIONAR STATUS
             if (status && status !== 'todos') {
                 url += `&status=${status}`;
-                console.log(`   ✅ Adicionando status=${status} à URL`);
             }
-            
-            // 🔥 ADICIONAR TURMA
             if (turma && turma !== 'todas' && turma !== '') {
                 url += `&turma=${encodeURIComponent(turma)}`;
-                console.log(`   ✅ Adicionando turma=${turma} à URL`);
             }
             
             console.log('🔗 URL final:', url);
             
-            const response = await fetch(url, {
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            // 🔥 BUSCAR USUÁRIOS E TODAS AS TURMAS EM PARALELO (SEM ROTA CONFLITANTE)
+            const [responseUsuarios, responseTodosAlunos] = await Promise.all([
+                fetch(url, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                }),
+                // 🔥 Buscar TODOS os alunos (não apenas da página) para extrair todas as turmas
+                fetch(`${this.apiBase}/usuarios?role=aluno&limit=5000`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                })
+            ]);
             
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status}`);
+            if (!responseUsuarios.ok) {
+                throw new Error(`Erro HTTP: ${responseUsuarios.status}`);
             }
             
-            const data = await response.json();
+            const data = await responseUsuarios.json();
             console.log('📦 Dados recebidos:', data);
 
             if (!data.success) throw new Error(data.error || 'Erro ao carregar usuários');
 
+            // 🔥 EXTRAIR TODAS AS TURMAS ÚNICAS DOS ALUNOS
+            let todasTurmas = [];
+            try {
+                const todosAlunosData = await responseTodosAlunos.json();
+                if (todosAlunosData.success && todosAlunosData.usuarios) {
+                    const turmasSet = new Set();
+                    todosAlunosData.usuarios.forEach(aluno => {
+                        if (aluno.turma && aluno.turma.trim() !== '') {
+                            turmasSet.add(aluno.turma.trim());
+                        }
+                    });
+                    todasTurmas = Array.from(turmasSet).sort();
+                    console.log(`✅ ${todasTurmas.length} turmas carregadas de ${todosAlunosData.usuarios.length} alunos`);
+                }
+            } catch (e) {
+                console.error('❌ Erro ao processar turmas:', e);
+            }
+
             // ARMAZENAR DADOS
             this.usuarios = data.usuarios || [];
+            this.todasTurmasUsuarios = todasTurmas;
 
-            // CALCULAR ESTATÍSTICAS COM OS DADOS FILTRADOS
+            // 🔥 CALCULAR ESTATÍSTICAS — TODOS OS PERFIS (CORRIGIDO)
             const totalUsuarios = this.usuarios.length;
             const usuariosAtivos = this.usuarios.filter(u => u.ativo === true).length;
             const usuariosInativos = this.usuarios.filter(u => u.ativo === false).length;
-            const totalAlunos = this.usuarios.filter(u => u.role === 'aluno').length;
-            const totalProfessores = this.usuarios.filter(u => u.role === 'professor').length;
-            const totalAdmins = this.usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length;
             const comAcessibilidade = this.usuarios.filter(u => u.precisaAcessibilidade === true).length;
+
+            // 🔥 CONTAGEM POR PERFIL
+            const contagemPorRole = {
+                aluno: 0,
+                professor: 0,
+                admin: 0,
+                super_admin: 0,
+                setor_pedagogico: 0,
+                coordenacao_patio: 0,
+                cozinha: 0,
+                gestao_geral: 0,
+                enfermaria: 0,
+                supervisao: 0,
+                psicologia: 0,
+                'assistente-social': 0,
+                protagonismo: 0,
+                biblioteca: 0,
+                secretaria: 0
+            };
+
+            this.usuarios.forEach(u => {
+                if (contagemPorRole.hasOwnProperty(u.role)) {
+                    contagemPorRole[u.role]++;
+                }
+            });
 
             // RENDERIZAR HTML
             contentArea.innerHTML = this.renderUsuariosProfissional({
-                role, search, page, limit,
+                role, search, page, limit, status, turma,
                 usuarios: this.usuarios,
                 pagination: data.pagination,
                 total: totalUsuarios,
+                todasTurmas: todasTurmas,
                 estatisticas: {
                     total: totalUsuarios,
                     ativos: usuariosAtivos,
                     inativos: usuariosInativos,
-                    alunos: totalAlunos,
-                    professores: totalProfessores,
-                    admins: totalAdmins,
-                    acessibilidade: comAcessibilidade
+                    acessibilidade: comAcessibilidade,
+                    contagemPorRole: contagemPorRole
                 }
             });
 
@@ -4001,6 +4041,7 @@ class AdminPanel {
             this.configurarEventosFiltrosUsuarios();
 
             console.log('✅ Usuários carregados:', this.usuarios.length);
+            console.log('✅ Total de turmas disponíveis:', todasTurmas.length);
 
         } catch (error) {
             console.error('❌ Erro ao carregar usuários:', error);
@@ -4008,10 +4049,30 @@ class AdminPanel {
         }
     }
 
-    // ============ RENDERIZAR USUÁRIOS (VERSÃO PROFISSIONAL CORRIGIDA) ============
-    renderUsuariosProfissional({ role, search, page, limit, usuarios, pagination, total, estatisticas }) {
-        // Obter lista de turmas únicas dos usuários
-        const turmasUnicas = [...new Set(usuarios.filter(u => u.turma && u.turma !== '').map(u => u.turma))].sort();
+    // ============ RENDERIZAR USUÁRIOS (VERSÃO COM TODOS OS PERFIS) ============
+    renderUsuariosProfissional({ role, search, page, limit, status, turma, usuarios, pagination, total, todasTurmas, estatisticas }) {
+        // 🔥 Usar a lista completa de turmas
+        const turmasUnicas = todasTurmas && todasTurmas.length > 0 
+            ? todasTurmas 
+            : [...new Set(usuarios.filter(u => u.turma && u.turma !== '').map(u => u.turma))].sort();
+        
+        // 🔥 Contagem por perfil (fallback se não vier nas estatísticas)
+        const contagem = estatisticas.contagemPorRole || {
+            aluno: usuarios.filter(u => u.role === 'aluno').length,
+            professor: usuarios.filter(u => u.role === 'professor').length,
+            admin: usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
+            setor_pedagogico: usuarios.filter(u => u.role === 'setor_pedagogico').length,
+            coordenacao_patio: usuarios.filter(u => u.role === 'coordenacao_patio').length,
+            cozinha: usuarios.filter(u => u.role === 'cozinha').length,
+            gestao_geral: usuarios.filter(u => u.role === 'gestao_geral').length,
+            enfermaria: usuarios.filter(u => u.role === 'enfermaria').length,
+            supervisao: usuarios.filter(u => u.role === 'supervisao').length,
+            psicologia: usuarios.filter(u => u.role === 'psicologia').length,
+            'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
+            protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
+            biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+        };
         
         return `
             <div class="usuarios-container">
@@ -4032,19 +4093,16 @@ class AdminPanel {
                             <i class="fas fa-sync-alt"></i>
                         </button>
                         
-                        <!-- BOTÃO - GERENCIAR TURMAS -->
-                        <button class="btn-header" onclick="admin.abrirModalGerenciarTurmas()" title="Gerenciar Turmas (Inativar/Excluir alunos por turma)" style="background: #f59e0b; color: white;">
+                        <button class="btn-header" onclick="admin.abrirModalGerenciarTurmas()" title="Gerenciar Turmas" style="background: #f59e0b; color: white;">
                             <i class="fas fa-school"></i>
                             <span>Gerenciar Turmas</span>
                         </button>
                         
-                        <!-- BOTÃO - UPLOAD DE ALUNOS -->
-                        <button class="btn-header" onclick="admin.abrirModalUploadUsuarios()" title="Upload de Alunos por Excel" style="background: #10b981; color: white;">
+                        <button class="btn-header" onclick="admin.abrirModalUploadUsuarios()" title="Upload de Alunos" style="background: #10b981; color: white;">
                             <i class="fas fa-file-excel"></i>
                             <span>Upload Alunos</span>
                         </button>
 
-                        <!-- UPLOAD PROFESSORES-->
                         <button class="btn-header" onclick="admin.abrirModalUploadProfessores()" title="Upload de Professores" style="background: #3b82f6; color: white;">
                             <i class="fas fa-chalkboard-teacher"></i>
                             <span>Upload Professores</span>
@@ -4057,76 +4115,78 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- CARDS DE ESTATÍSTICAS -->
+                <!-- 🔥 CARDS DE ESTATÍSTICAS - APENAS PRINCIPAIS (6 CARDS) -->
                 <div class="stats-grid">
+                    <!-- Total -->
                     <div class="stat-card primary" onclick="admin.filtrarUsuariosPorRole('todos')">
-                        <div class="stat-icon">
-                            <i class="fas fa-users"></i>
-                        </div>
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Total de Usuários</span>
-                            <span class="stat-value" id="totalUsuariosCard">${estatisticas.total}</span>
+                            <span class="stat-value">${estatisticas.total}</span>
                             <span class="stat-detail">${estatisticas.ativos} ativos • ${estatisticas.inativos} inativos</span>
                         </div>
                     </div>
 
-                    <div class="stat-card success" onclick="admin.filtrarUsuariosPorRole('ativo')">
-                        <div class="stat-icon">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Ativos</span>
-                            <span class="stat-value" id="ativosCard">${estatisticas.ativos}</span>
-                            <span class="stat-detail">Podem acessar</span>
-                        </div>
-                    </div>
-
-                    <div class="stat-card danger" onclick="admin.filtrarUsuariosPorRole('inativo')">
-                        <div class="stat-icon">
-                            <i class="fas fa-pause-circle"></i>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Inativos</span>
-                            <span class="stat-value" id="inativosCard">${estatisticas.inativos}</span>
-                            <span class="stat-detail">Bloqueados</span>
-                        </div>
-                    </div>
-
-                    <div class="stat-card info" onclick="admin.filtrarUsuariosPorRole('aluno')">
-                        <div class="stat-icon">
+                    <!-- Alunos -->
+                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('aluno')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #10b981, #059669);">
                             <i class="fas fa-user-graduate"></i>
                         </div>
                         <div class="stat-content">
                             <span class="stat-label">Alunos</span>
-                            <span class="stat-value" id="alunosCard">${estatisticas.alunos}</span>
-                            <span class="stat-detail">${estatisticas.acessibilidade} com acessibilidade</span>
+                            <span class="stat-value">${contagem.aluno || 0}</span>
+                            <span class="stat-detail">${estatisticas.acessibilidade} com acessib.</span>
                         </div>
                     </div>
 
-                    <div class="stat-card warning" onclick="admin.filtrarUsuariosPorRole('professor')">
-                        <div class="stat-icon">
+                    <!-- Professores -->
+                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('professor')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #f59e0b, #d97706);">
                             <i class="fas fa-chalkboard-teacher"></i>
                         </div>
                         <div class="stat-content">
                             <span class="stat-label">Professores</span>
-                            <span class="stat-value" id="professoresCard">${estatisticas.professores}</span>
+                            <span class="stat-value">${contagem.professor || 0}</span>
                             <span class="stat-detail">Com matrícula</span>
                         </div>
                     </div>
 
-                    <div class="stat-card" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer;" onclick="admin.filtrarUsuariosPorRole('admin')">
+                    <!-- Admins -->
+                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('admin')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
                         <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #1e3a8a, #1e40af);">
                             <i class="fas fa-user-tie"></i>
                         </div>
                         <div class="stat-content">
                             <span class="stat-label">Admins</span>
-                            <span class="stat-value" id="adminsCard">${estatisticas.admins}</span>
+                            <span class="stat-value">${contagem.admin || 0}</span>
                             <span class="stat-detail">Administradores</span>
+                        </div>
+                    </div>
+
+                    <!-- Ativos -->
+                    <div class="stat-card success" onclick="admin.filtrarUsuariosPorRole('ativo')">
+                        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Ativos</span>
+                            <span class="stat-value">${estatisticas.ativos}</span>
+                            <span class="stat-detail">Podem acessar</span>
+                        </div>
+                    </div>
+
+                    <!-- 🔥 BOTÃO "VER TODOS OS PERFIS" -->
+                    <div class="stat-card" onclick="admin.abrirModalTodosPerfis()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(99,102,241,0.3); display: flex; align-items: center; gap: 20px; cursor: pointer; border: none; color: white;">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: rgba(255,255,255,0.2);">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label" style="color: rgba(255,255,255,0.9);">Todos os Perfis</span>
+                            <span class="stat-value" style="color: white;">14</span>
+                            <span class="stat-detail" style="color: rgba(255,255,255,0.85);">Clique para ver todos →</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- BARRA DE FILTROS COM TURMA -->
+                <!-- BARRA DE FILTROS -->
                 <div class="filters-card">
                     <div class="filters-header">
                         <div class="filters-title">
@@ -4143,7 +4203,8 @@ class AdminPanel {
                             <div class="input-wrapper">
                                 <input type="text" id="searchUsuarios" 
                                     placeholder="Nome, email, CPF ou matrícula..." 
-                                    value="${search || ''}">
+                                    value="${search || ''}"
+                                    autocomplete="off">
                                 <i class="fas fa-search input-icon"></i>
                                 ${search ? `
                                     <button class="input-clear" onclick="document.getElementById('searchUsuarios').value=''; admin.aplicarFiltrosUsuarios()">
@@ -4165,33 +4226,36 @@ class AdminPanel {
                                 <option value="cozinha" ${role === 'cozinha' ? 'selected' : ''}>🍽️ Cozinha</option>
                                 <option value="gestao_geral" ${role === 'gestao_geral' ? 'selected' : ''}>📊 Gestão Geral</option>
                                 <option value="enfermaria" ${role === 'enfermaria' ? 'selected' : ''}>🏥 Enfermaria</option>
-                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
-                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
                                 <option value="supervisao" ${role === 'supervisao' ? 'selected' : ''}>🛡️ Supervisão</option>
                                 <option value="psicologia" ${role === 'psicologia' ? 'selected' : ''}>🧠 Psicologia</option>
                                 <option value="assistente-social" ${role === 'assistente-social' ? 'selected' : ''}>🤝 Assistente Social</option>
                                 <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>⭐ Protagonismo</option>
                                 <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>📚 Biblioteca</option>
                                 <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>🎓 Secretaria</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
+                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
                             </select>
                         </div>
                         
                         <!-- Status -->
                         <div class="filter-group">
                             <label><i class="fas fa-circle"></i> Status</label>
-                            <select id="filterStatus" class="filter-select" onchange="admin.filtrarPorStatusUsuario()">
-                                <option value="todos" ${this.filtros.usuarios.status === 'todos' ? 'selected' : ''}>Todos</option>
-                                <option value="ativo" ${this.filtros.usuarios.status === 'ativo' ? 'selected' : ''}>✅ Ativos</option>
-                                <option value="inativo" ${this.filtros.usuarios.status === 'inativo' ? 'selected' : ''}>⏸️ Inativos</option>
+                            <select id="filterStatus" class="filter-select">
+                                <option value="todos" ${status === 'todos' ? 'selected' : ''}>Todos</option>
+                                <option value="ativo" ${status === 'ativo' ? 'selected' : ''}>✅ Ativos</option>
+                                <option value="inativo" ${status === 'inativo' ? 'selected' : ''}>⏸️ Inativos</option>
                             </select>
                         </div>
                         
                         <!-- Turma -->
                         <div class="filter-group">
-                            <label><i class="fas fa-school"></i> Turma</label>
-                            <select id="filterTurma" class="filter-select" onchange="admin.filtrarPorTurma()">
-                                <option value="todas" ${this.filtros.usuarios.turma === 'todas' ? 'selected' : ''}>Todas as turmas</option>
-                                ${turmasUnicas.map(t => `<option value="${t}" ${this.filtros.usuarios.turma === t ? 'selected' : ''}>${t}</option>`).join('')}
+                            <label>
+                                <i class="fas fa-school"></i> Turma
+                                ${turmasUnicas.length > 0 ? `<span style="background: #1e3a8a; color: white; padding: 1px 6px; border-radius: 10px; font-size: 10px; margin-left: 4px;">${turmasUnicas.length}</span>` : ''}
+                            </label>
+                            <select id="filterTurma" class="filter-select">
+                                <option value="todas" ${turma === 'todas' ? 'selected' : ''}>Todas as turmas (${turmasUnicas.length})</option>
+                                ${turmasUnicas.map(t => `<option value="${t}" ${turma === t ? 'selected' : ''}>${t}</option>`).join('')}
                             </select>
                         </div>
                         
@@ -4223,31 +4287,14 @@ class AdminPanel {
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th onclick="admin.ordenarUsuariosPor('nome')" class="sortable">
-                                        Nome <i class="fas fa-sort" id="sort-nome"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarUsuariosPor('email')" class="sortable">
-                                        Email <i class="fas fa-sort" id="sort-email"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarUsuariosPor('role')" class="sortable">
-                                        Perfil <i class="fas fa-sort" id="sort-role"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarUsuariosPor('matricula')" class="sortable">
-                                        Matrícula <i class="fas fa-sort" id="sort-matricula"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarUsuariosPor('cpf')" class="sortable">
-                                        CPF <i class="fas fa-sort" id="sort-cpf"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarUsuariosPor('telefone')" class="sortable">
-                                        Telefone <i class="fas fa-sort" id="sort-telefone"></i>
-                                    </th>
-                                    <!-- 🔥 COLUNA TURMA REMOVIDA -->
-                                    <th onclick="admin.ordenarUsuariosPor('status')" class="sortable">
-                                        Status <i class="fas fa-sort" id="sort-status"></i>
-                                    </th>
-                                    <th onclick="admin.ordenarUsuariosPor('data')" class="sortable">
-                                        Data <i class="fas fa-sort" id="sort-data"></i>
-                                    </th>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Perfil</th>
+                                    <th>Matrícula</th>
+                                    <th>CPF</th>
+                                    <th>Telefone</th>
+                                    <th>Status</th>
+                                    <th>Data</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -4257,7 +4304,6 @@ class AdminPanel {
                         </table>
                     </div>
 
-                    <!-- Paginação com texto corrigido -->
                     ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'usuarios') : ''}
                 </div>
             </div>
@@ -4336,43 +4382,50 @@ class AdminPanel {
                 }
                 .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
                 
+                /* 🔥 STATS GRID COMPACTO - TODOS OS PERFIS */
                 .stats-grid {
                     display: grid;
-                    grid-template-columns: repeat(6, 1fr);
-                    gap: 20px;
+                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                    gap: 15px;
                     margin-bottom: 30px;
                 }
+                
                 .stat-card {
                     background: white;
-                    border-radius: 16px;
-                    padding: 20px;
+                    border-radius: 14px;
+                    padding: 16px;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
                     display: flex;
                     align-items: center;
-                    gap: 20px;
+                    gap: 14px;
                     transition: all 0.3s;
-                    border: 1px solid rgba(0,0,0,0.05);
+                    border: 1px solid rgba(0,0,0,0.04);
                     cursor: pointer;
                 }
-                .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+                .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 16px rgba(0,0,0,0.08); }
+                
+                .stat-icon {
+                    width: 48px; height: 48px;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 20px;
+                    color: white;
+                    flex-shrink: 0;
+                }
+                
+                /* Cores específicas dos cards base */
                 .stat-card.primary .stat-icon { background: linear-gradient(135deg, #1e3a8a, #1e40af); }
                 .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
                 .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
                 .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
                 .stat-card.danger .stat-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
-                .stat-icon {
-                    width: 60px; height: 60px;
-                    border-radius: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 24px;
-                    color: white;
-                }
-                .stat-content { flex: 1; }
-                .stat-label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
-                .stat-value { display: block; font-size: 28px; font-weight: 700; color: #1f2937; line-height: 1.2; }
-                .stat-detail { font-size: 11px; color: #9ca3af; }
+                
+                .stat-content { flex: 1; min-width: 0; }
+                .stat-label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 3px; font-weight: 500; }
+                .stat-value { display: block; font-size: 22px; font-weight: 700; color: #1f2937; line-height: 1.1; }
+                .stat-detail { font-size: 10px; color: #9ca3af; display: block; margin-top: 2px; }
                 
                 .filters-card {
                     background: white;
@@ -4505,8 +4558,6 @@ class AdminPanel {
                     background: #f9fafb;
                     border-bottom: 2px solid #e5e7eb;
                 }
-                .data-table th.sortable { cursor: pointer; transition: background 0.2s; }
-                .data-table th.sortable:hover { background: #f3f4f6; }
                 .data-table td {
                     padding: 15px 20px;
                     border-bottom: 1px solid #e5e7eb;
@@ -4515,101 +4566,16 @@ class AdminPanel {
                 }
                 .data-table tr:hover td { background: #f9fafb; }
                 
-                .role-badge {
-                    display: inline-block;
-                    padding: 4px 10px;
-                    border-radius: 30px;
-                    font-size: 11px;
-                    font-weight: 600;
-                }
-                .role-badge.super_admin { background: #1e3a8a; color: white; }
-                .role-badge.admin { background: #3b82f6; color: white; }
-                .role-badge.professor { background: #f59e0b; color: white; }
-                .role-badge.aluno { background: #10b981; color: white; }
-                .role-badge.setor_pedagogico { background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; }
-                .role-badge.setor_pedagogico i { color: white; margin-right: 4px; }
-                .role-badge.gestao_geral { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; }
-                .role-badge.coordenacao_patio { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-                .role-badge.cozinha { background: linear-gradient(135deg, #10b981, #059669); color: white; }
-                .role-badge.enfermaria { background: linear-gradient(135deg, #0891b2, #06b6d4); color: white; }
-                
-                .status-badge {
-                    display: inline-block;
-                    padding: 4px 10px;
-                    border-radius: 30px;
-                    font-size: 11px;
-                    font-weight: 600;
-                }
-                .status-badge.active { background: #d1fae5; color: #065f46; }
-                .status-badge.inactive { background: #fee2e2; color: #991b1b; }
-                
-                .badge-acessibilidade {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    width: 20px;
-                    height: 20px;
-                    background: #3b82f6;
-                    color: white;
-                    border-radius: 50%;
-                    font-size: 10px;
-                    margin-left: 5px;
-                }
-                
-                .action-buttons { display: flex; gap: 5px; }
-                .btn-icon {
-                    width: 32px; height: 32px;
-                    border: none;
-                    border-radius: 6px;
-                    background: transparent;
-                    color: #6c757d;
-                    cursor: pointer;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.2s;
-                }
-                .btn-icon:hover { background: #e9ecef; color: #1e3a8a; }
-                .btn-icon.warning:hover { color: #f59e0b; }
-                .btn-icon.success:hover { color: #10b981; }
-                .btn-icon.danger:hover { color: #dc3545; }
-                
-                .pagination-professional {
-                    padding: 16px 20px;
-                    border-top: 1px solid #e5e7eb;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 15px;
-                }
-                .pagination-info { font-size: 13px; color: #6b7280; }
-                .pagination-controls { display: flex; gap: 8px; align-items: center; }
-                .btn-page {
-                    min-width: 38px; height: 38px;
-                    border: 1px solid #e5e7eb;
-                    background: white;
-                    border-radius: 10px;
-                    cursor: pointer;
-                    font-size: 13px;
-                    font-weight: 500;
-                    color: #4b5563;
-                    transition: all 0.2s;
-                }
-                .btn-page:hover { background: #f3f4f6; border-color: #1e3a8a; color: #1e3a8a; }
-                .btn-page.active { background: #1e3a8a; border-color: #1e3a8a; color: white; }
-                
                 @media (max-width: 1200px) {
                     .stats-grid { grid-template-columns: repeat(3, 1fr); }
-                }
-                @media (max-width: 1024px) {
-                    .filters-grid { grid-template-columns: 1fr; }
+                    .filters-grid { grid-template-columns: 1fr 1fr; }
                 }
                 @media (max-width: 768px) {
                     .stats-grid { grid-template-columns: repeat(2, 1fr); }
                     .usuarios-header { flex-direction: column; align-items: flex-start; }
-                    .header-actions { width: 100%; }
+                    .header-actions { width: 100%; display: flex; gap: 10px; flex-wrap: wrap; }
                     .btn-header { flex: 1; }
+                    .filters-grid { grid-template-columns: 1fr; }
                 }
             </style>
         `;
@@ -9089,12 +9055,11 @@ class AdminPanel {
     }
 
     // ============ MÉTODOS AUXILIARES PARA USUÁRIOS ============
-
-    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO CORRIGIDA - SEM DUPLICAÇÃO) ============
+    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO COM BUSCA EM TEMPO REAL) ============
     configurarEventosFiltrosUsuarios() {
-        console.log('🔧 Configurando eventos dos filtros...');
+        console.log('🔧 Configurando eventos dos filtros com busca em tempo real...');
         
-        // Busca com debounce
+        // Busca com debounce e filtro LOCAL (sem recarregar a página)
         const searchInput = document.getElementById('searchUsuarios');
         if (searchInput) {
             // Remover listeners anteriores clonando e substituindo
@@ -9102,14 +9067,34 @@ class AdminPanel {
             searchInput.parentNode.replaceChild(novoSearch, searchInput);
             
             let timeout;
-            novoSearch.addEventListener('keyup', (e) => {
+            novoSearch.addEventListener('input', (e) => {
                 clearTimeout(timeout);
+                const termo = e.target.value;
+                
+                // Atualizar o filtro imediatamente
+                this.filtros.usuarios.search = termo;
+                
+                // Mostrar/ocultar botão de limpar
+                const clearBtn = novoSearch.parentElement.querySelector('.input-clear');
+                if (clearBtn) {
+                    clearBtn.style.display = termo ? 'flex' : 'none';
+                }
+                
+                // Debounce para filtrar (300ms é mais responsivo)
                 timeout = setTimeout(() => {
-                    console.log('🔍 Buscando por:', novoSearch.value);
-                    this.filtros.usuarios.search = novoSearch.value;
-                    this.filtros.usuarios.page = 1;
-                    this.loadUsuarios();
-                }, 500);
+                    this.filtrarTabelaUsuariosLocal();
+                }, 300);
+            });
+            
+            // Manter o foco no campo após filtrar
+            novoSearch.addEventListener('focus', () => {
+                this._buscaUsuariosAtiva = true;
+            });
+            
+            novoSearch.addEventListener('blur', () => {
+                setTimeout(() => {
+                    this._buscaUsuariosAtiva = false;
+                }, 200);
             });
         }
         
@@ -9123,11 +9108,11 @@ class AdminPanel {
                 console.log('🔄 Perfil alterado:', value);
                 this.filtros.usuarios.role = value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios();
+                this.filtrarTabelaUsuariosLocal();
             });
         }
         
-        // 🔥 CORREÇÃO: Configurar select de Status (SEM DISPARAR EVENTO DUPLICADO)
+        // Configurar select de Status
         const statusSelect = document.getElementById('filterStatus');
         if (statusSelect) {
             const novoStatusSelect = statusSelect.cloneNode(true);
@@ -9137,11 +9122,11 @@ class AdminPanel {
                 console.log('🔄 Status alterado para:', value);
                 this.filtros.usuarios.status = value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios();
+                this.filtrarTabelaUsuariosLocal();
             });
         }
         
-        // 🔥 CORREÇÃO: Configurar select de Turma (SEM DISPARAR EVENTO DUPLICADO)
+        // Configurar select de Turma
         const turmaSelect = document.getElementById('filterTurma');
         if (turmaSelect) {
             const novoTurmaSelect = turmaSelect.cloneNode(true);
@@ -9151,13 +9136,352 @@ class AdminPanel {
                 console.log('🔄 Turma alterada para:', value);
                 this.filtros.usuarios.turma = value;
                 this.filtros.usuarios.page = 1;
-                this.loadUsuarios();
+                this.filtrarTabelaUsuariosLocal();
             });
         }
     }
 
+    // ============ ABRIR MODAL COM TODOS OS PERFIS ============
+    abrirModalTodosPerfis() {
+        // Contar todos os perfis
+        const usuarios = this.usuarios || [];
+        
+        const contagem = {
+            aluno: usuarios.filter(u => u.role === 'aluno').length,
+            professor: usuarios.filter(u => u.role === 'professor').length,
+            admin: usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
+            setor_pedagogico: usuarios.filter(u => u.role === 'setor_pedagogico').length,
+            coordenacao_patio: usuarios.filter(u => u.role === 'coordenacao_patio').length,
+            cozinha: usuarios.filter(u => u.role === 'cozinha').length,
+            gestao_geral: usuarios.filter(u => u.role === 'gestao_geral').length,
+            enfermaria: usuarios.filter(u => u.role === 'enfermaria').length,
+            supervisao: usuarios.filter(u => u.role === 'supervisao').length,
+            psicologia: usuarios.filter(u => u.role === 'psicologia').length,
+            'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
+            protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
+            biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+        };
+        
+        const perfis = [
+            { role: 'aluno', label: 'Alunos', icon: '👨‍🎓', cor: '#10b981', bg: '#d1fae5' },
+            { role: 'professor', label: 'Professores', icon: '👨‍🏫', cor: '#f59e0b', bg: '#fef3c7' },
+            { role: 'admin', label: 'Administradores', icon: '👑', cor: '#3b82f6', bg: '#dbeafe' },
+            { role: 'setor_pedagogico', label: 'Setor Pedagógico', icon: '👩‍🏫', cor: '#a855f7', bg: '#f3e8ff' },
+            { role: 'coordenacao_patio', label: 'Coord. Pátio', icon: '🏃', cor: '#f97316', bg: '#ffedd5' },
+            { role: 'cozinha', label: 'Cozinha', icon: '🍽️', cor: '#10b981', bg: '#d1fae5' },
+            { role: 'gestao_geral', label: 'Gestão Geral', icon: '📊', cor: '#1e40af', bg: '#dbeafe' },
+            { role: 'enfermaria', label: 'Enfermaria', icon: '🏥', cor: '#0891b2', bg: '#cffafe' },
+            { role: 'supervisao', label: 'Supervisão', icon: '🛡️', cor: '#1e3a8a', bg: '#dbeafe' },
+            { role: 'psicologia', label: 'Psicologia', icon: '🧠', cor: '#0d9488', bg: '#ccfbf1' },
+            { role: 'assistente-social', label: 'Assist. Social', icon: '🤝', cor: '#7c3aed', bg: '#ede9fe' },
+            { role: 'protagonismo', label: 'Protagonismo', icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
+            { role: 'biblioteca', label: 'Biblioteca', icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
+            { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' }
+        ];
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 10px;">
+                <p style="color: #6b7280; font-size: 13px; margin-bottom: 20px; text-align: center;">
+                    <i class="fas fa-info-circle"></i> Clique em um perfil para filtrar a tabela
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                    ${perfis.map(p => `
+                        <div onclick="admin.closeModal(); admin.filtrarUsuariosPorRole('${p.role}');"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 14px;
+                                padding: 16px;
+                                background: #f9fafb;
+                                border-radius: 12px;
+                                border-left: 4px solid ${p.cor};
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateX(4px)'; this.style.background='#f3f4f6'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';"
+                            onmouseout="this.style.transform='translateX(0)'; this.style.background='#f9fafb'; this.style.boxShadow='none';">
+                            
+                            <div style="
+                                width: 48px;
+                                height: 48px;
+                                background: ${p.bg};
+                                border-radius: 12px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 22px;
+                                flex-shrink: 0;
+                            ">${p.icon}</div>
+                            
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 600; color: #1f2937; font-size: 14px;">${p.label}</div>
+                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+                                    ${contagem[p.role] || 0} ${contagem[p.role] === 1 ? 'usuário' : 'usuários'}
+                                </div>
+                            </div>
+                            
+                            <i class="fas fa-chevron-right" style="color: #d1d5db; font-size: 12px;"></i>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-layer-group"></i> Todos os Perfis';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+    }
+
+    // ============ FILTRAR TABELA DE USUÁRIOS LOCALMENTE (SEM RECARREGAR) ============
+    filtrarTabelaUsuariosLocal() {
+        console.log('🔍 Filtrando tabela localmente...');
+        
+        if (!this.usuarios || this.usuarios.length === 0) {
+            console.log('⚠️ Nenhum usuário carregado para filtrar');
+            return;
+        }
+        
+        const { search, role, status, turma } = this.filtros.usuarios;
+        
+        // Filtrar a lista de usuários já carregada
+        let usuariosFiltrados = [...this.usuarios];
+        
+        // Filtro de busca
+        if (search && search.trim() !== '') {
+            const termo = search.toLowerCase().trim();
+            usuariosFiltrados = usuariosFiltrados.filter(u => {
+                const nome = (u.nome || '').toLowerCase();
+                const email = (u.email || '').toLowerCase();
+                const cpf = (u.cpf || '').replace(/\D/g, '');
+                const matricula = (u.matricula || '').toLowerCase();
+                const cpfTermo = termo.replace(/\D/g, '');
+                
+                return nome.includes(termo) || 
+                    email.includes(termo) || 
+                    matricula.includes(termo) ||
+                    (cpfTermo && cpf.includes(cpfTermo));
+            });
+        }
+        
+        // Filtro de perfil
+        if (role && role !== 'todos') {
+            if (role === 'admin') {
+                usuariosFiltrados = usuariosFiltrados.filter(u => u.role === 'admin' || u.role === 'super_admin');
+            } else if (role === 'ativo') {
+                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === true);
+            } else if (role === 'inativo') {
+                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === false);
+            } else {
+                usuariosFiltrados = usuariosFiltrados.filter(u => u.role === role);
+            }
+        }
+        
+        // Filtro de status
+        if (status && status !== 'todos') {
+            if (status === 'ativo') {
+                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === true);
+            } else if (status === 'inativo') {
+                usuariosFiltrados = usuariosFiltrados.filter(u => u.ativo === false);
+            }
+        }
+        
+        // Filtro de turma
+        if (turma && turma !== 'todas' && turma !== '') {
+            usuariosFiltrados = usuariosFiltrados.filter(u => u.turma === turma);
+        }
+        
+        // Ordenar por nome
+        usuariosFiltrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+        
+        console.log(`✅ ${usuariosFiltrados.length} usuários após filtro local`);
+        
+        // Atualizar apenas o corpo da tabela
+        const tbody = document.getElementById('tabelaUsuariosBody');
+        if (tbody) {
+            tbody.innerHTML = this.gerarLinhasUsuarios(usuariosFiltrados);
+        }
+        
+        // Atualizar contador
+        const itemsCounter = document.getElementById('itemsCounter');
+        if (itemsCounter) {
+            itemsCounter.textContent = `${usuariosFiltrados.length} ${usuariosFiltrados.length === 1 ? 'registro' : 'registros'}`;
+        }
+        
+        // Atualizar badge de resultados
+        const resultadosBadge = document.getElementById('resultadosBadge');
+        if (resultadosBadge) {
+            resultadosBadge.textContent = `${usuariosFiltrados.length} ${usuariosFiltrados.length === 1 ? 'usuário' : 'usuários'}`;
+        }
+        
+        // Restaurar o foco no campo de busca
+        const searchInput = document.getElementById('searchUsuarios');
+        if (searchInput && document.activeElement === searchInput) {
+            const cursorPos = searchInput.selectionStart;
+            searchInput.focus();
+            searchInput.setSelectionRange(cursorPos, cursorPos);
+        }
+    }
+
+    // ============ CONFIGURAR EVENTOS DOS FILTROS (VERSÃO CORRIGIDA) ============
+    configurarEventosFiltrosUsuarios() {
+        console.log('🔧 Configurando eventos dos filtros com busca em tempo real...');
+        
+        // Busca com debounce (SEM recarregar a página)
+        const searchInput = document.getElementById('searchUsuarios');
+        if (searchInput) {
+            const novoSearch = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(novoSearch, searchInput);
+            
+            let timeout;
+            novoSearch.addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                this.filtros.usuarios.search = e.target.value;
+                
+                // Mostrar/ocultar botão de limpar
+                const clearBtn = novoSearch.parentElement.querySelector('.input-clear');
+                if (clearBtn) {
+                    clearBtn.style.display = e.target.value ? 'flex' : 'none';
+                }
+                
+                timeout = setTimeout(() => {
+                    this.filtrarTabelaUsuariosLocal();
+                }, 300);
+            });
+        }
+        
+        // Perfil
+        const roleSelect = document.getElementById('filterRole');
+        if (roleSelect) {
+            const novoRoleSelect = roleSelect.cloneNode(true);
+            roleSelect.parentNode.replaceChild(novoRoleSelect, roleSelect);
+            novoRoleSelect.addEventListener('change', (e) => {
+                this.filtros.usuarios.role = e.target.value;
+                this.filtros.usuarios.page = 1;
+                this.filtrarTabelaUsuariosLocal();
+            });
+        }
+        
+        // Status
+        const statusSelect = document.getElementById('filterStatus');
+        if (statusSelect) {
+            const novoStatusSelect = statusSelect.cloneNode(true);
+            statusSelect.parentNode.replaceChild(novoStatusSelect, statusSelect);
+            novoStatusSelect.addEventListener('change', (e) => {
+                this.filtros.usuarios.status = e.target.value;
+                this.filtros.usuarios.page = 1;
+                this.filtrarTabelaUsuariosLocal();
+            });
+        }
+        
+        // Turma
+        const turmaSelect = document.getElementById('filterTurma');
+        if (turmaSelect) {
+            const novoTurmaSelect = turmaSelect.cloneNode(true);
+            turmaSelect.parentNode.replaceChild(novoTurmaSelect, turmaSelect);
+            novoTurmaSelect.addEventListener('change', (e) => {
+                this.filtros.usuarios.turma = e.target.value;
+                this.filtros.usuarios.page = 1;
+                this.filtrarTabelaUsuariosLocal();
+            });
+        }
+    }
+
+    // ============ APLICAR FILTROS (CORRIGIDO) ============
+    aplicarFiltrosUsuarios() {
+        console.log('🔍 Aplicando filtros...');
+        
+        this.filtros.usuarios.search = document.getElementById('searchUsuarios')?.value || '';
+        this.filtros.usuarios.role = document.getElementById('filterRole')?.value || 'todos';
+        this.filtros.usuarios.status = document.getElementById('filterStatus')?.value || 'todos';
+        this.filtros.usuarios.turma = document.getElementById('filterTurma')?.value || 'todas';
+        this.filtros.usuarios.page = 1;
+        
+        // 🔥 MUDANÇA: usar filtro local em vez de recarregar tudo
+        this.filtrarTabelaUsuariosLocal();
+    }
+
+    // ============ ATUALIZAR CARDS DE USUÁRIOS COM DADOS FILTRADOS ============
+    atualizarCardsUsuariosFiltrados(usuarios) {
+        const total = usuarios.length;
+        const ativos = usuarios.filter(u => u.ativo === true).length;
+        const inativos = usuarios.filter(u => u.ativo === false).length;
+        const comAcessibilidade = usuarios.filter(u => u.precisaAcessibilidade === true).length;
+        
+        // 🔥 Contagem por role
+        const contagem = {
+            aluno: usuarios.filter(u => u.role === 'aluno').length,
+            professor: usuarios.filter(u => u.role === 'professor').length,
+            admin: usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
+            setor_pedagogico: usuarios.filter(u => u.role === 'setor_pedagogico').length,
+            coordenacao_patio: usuarios.filter(u => u.role === 'coordenacao_patio').length,
+            cozinha: usuarios.filter(u => u.role === 'cozinha').length,
+            gestao_geral: usuarios.filter(u => u.role === 'gestao_geral').length,
+            enfermaria: usuarios.filter(u => u.role === 'enfermaria').length,
+            supervisao: usuarios.filter(u => u.role === 'supervisao').length,
+            psicologia: usuarios.filter(u => u.role === 'psicologia').length,
+            'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
+            protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
+            biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+        };
+        
+        // Atualizar os cards
+        const updates = {
+            'totalUsuariosCard': total,
+            'ativosCard': ativos,
+            'inativosCard': inativos,
+            'alunosCard': contagem.aluno,
+            'professoresCard': contagem.professor,
+            'adminsCard': contagem.admin,
+            'pedagogicoCard': contagem.setor_pedagogico,
+            'patioCard': contagem.coordenacao_patio,
+            'cozinhaCard': contagem.cozinha,
+            'gestaoGeralCard': contagem.gestao_geral,
+            'enfermariaCard': contagem.enfermaria,
+            'supervisaoCard': contagem.supervisao,
+            'psicologiaCard': contagem.psicologia,
+            'assistenteSocialCard': contagem['assistente-social'],
+            'protagonismoCard': contagem.protagonismo,
+            'bibliotecaCard': contagem.biblioteca,
+            'secretariaCard': contagem.secretaria
+        };
+        
+        for (const [id, valor] of Object.entries(updates)) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = valor;
+        }
+    }
+
+    // ============ ATUALIZAR CARDS DE USUÁRIOS COM DADOS FILTRADOS ============
+    atualizarCardsUsuariosFiltrados(usuarios) {
+        const total = usuarios.length;
+        const ativos = usuarios.filter(u => u.ativo === true).length;
+        const inativos = usuarios.filter(u => u.ativo === false).length;
+        const alunos = usuarios.filter(u => u.role === 'aluno').length;
+        const professores = usuarios.filter(u => u.role === 'professor').length;
+        const admins = usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length;
+        
+        // Atualizar os cards
+        const totalEl = document.getElementById('totalUsuariosCard');
+        const ativosEl = document.getElementById('ativosCard');
+        const inativosEl = document.getElementById('inativosCard');
+        const alunosEl = document.getElementById('alunosCard');
+        const professoresEl = document.getElementById('professoresCard');
+        const adminsEl = document.getElementById('adminsCard');
+        
+        if (totalEl) totalEl.textContent = total;
+        if (ativosEl) ativosEl.textContent = ativos;
+        if (inativosEl) inativosEl.textContent = inativos;
+        if (alunosEl) alunosEl.textContent = alunos;
+        if (professoresEl) professoresEl.textContent = professores;
+        if (adminsEl) adminsEl.textContent = admins;
+    }
+
     // ============ APLICAR FILTROS ============
-    // ============ APLICAR FILTROS (VERSÃO SIMPLIFICADA) ============
+    // ============ APLICAR FILTROS (VERSÃO COM FILTRO LOCAL) ============
     aplicarFiltrosUsuarios() {
         console.log('🔍 Aplicando filtros...');
         
@@ -9170,8 +9494,8 @@ class AdminPanel {
         
         console.log('📋 Filtros aplicados:', this.filtros.usuarios);
         
-        // Carregar usuários
-        this.loadUsuarios();
+        // Usar filtro local em vez de recarregar
+        this.filtrarTabelaUsuariosLocal();
     }
 
     // ============ LIMPAR FILTROS ============
@@ -9197,7 +9521,12 @@ class AdminPanel {
         if (statusSelect) statusSelect.value = 'todos';
         if (turmaSelect) turmaSelect.value = 'todas';
         
-        this.loadUsuarios();
+        // Esconder botão de limpar
+        const clearBtn = document.querySelector('.input-clear');
+        if (clearBtn) clearBtn.style.display = 'none';
+        
+        // Usar filtro local
+        this.filtrarTabelaUsuariosLocal();
     }
 
     // ============ FILTRAR POR TURMA ============
@@ -9432,6 +9761,109 @@ class AdminPanel {
                 </tr>
             `;
         }).join('');
+    }
+
+    // ============ ABRIR MODAL COM TODOS OS PERFIS (QR CODES) ============
+    abrirModalTodosPerfisQR() {
+        // Contar todos os perfis dos QR Codes
+        const usuarios = this.qrCodesUsuarios || [];
+        
+        const contagem = {
+            aluno: usuarios.filter(u => u.role === 'aluno').length,
+            professor: usuarios.filter(u => u.role === 'professor').length,
+            admin: usuarios.filter(u => u.role === 'admin' || u.role === 'super_admin').length,
+            setor_pedagogico: usuarios.filter(u => u.role === 'setor_pedagogico').length,
+            coordenacao_patio: usuarios.filter(u => u.role === 'coordenacao_patio').length,
+            cozinha: usuarios.filter(u => u.role === 'cozinha').length,
+            gestao_geral: usuarios.filter(u => u.role === 'gestao_geral').length,
+            enfermaria: usuarios.filter(u => u.role === 'enfermaria').length,
+            supervisao: usuarios.filter(u => u.role === 'supervisao').length,
+            psicologia: usuarios.filter(u => u.role === 'psicologia').length,
+            'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
+            protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
+            biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+        };
+        
+        const perfis = [
+            { role: 'aluno', label: 'Alunos', icon: '👨‍🎓', cor: '#10b981', bg: '#d1fae5' },
+            { role: 'professor', label: 'Professores', icon: '👨‍🏫', cor: '#f59e0b', bg: '#fef3c7' },
+            { role: 'admin', label: 'Administradores', icon: '👑', cor: '#3b82f6', bg: '#dbeafe' },
+            { role: 'setor_pedagogico', label: 'Setor Pedagógico', icon: '👩‍🏫', cor: '#a855f7', bg: '#f3e8ff' },
+            { role: 'coordenacao_patio', label: 'Coord. Pátio', icon: '🏃', cor: '#f97316', bg: '#ffedd5' },
+            { role: 'cozinha', label: 'Cozinha', icon: '🍽️', cor: '#10b981', bg: '#d1fae5' },
+            { role: 'gestao_geral', label: 'Gestão Geral', icon: '📊', cor: '#1e40af', bg: '#dbeafe' },
+            { role: 'enfermaria', label: 'Enfermaria', icon: '🏥', cor: '#0891b2', bg: '#cffafe' },
+            { role: 'supervisao', label: 'Supervisão', icon: '🛡️', cor: '#1e3a8a', bg: '#dbeafe' },
+            { role: 'psicologia', label: 'Psicologia', icon: '🧠', cor: '#0d9488', bg: '#ccfbf1' },
+            { role: 'assistente-social', label: 'Assist. Social', icon: '🤝', cor: '#7c3aed', bg: '#ede9fe' },
+            { role: 'protagonismo', label: 'Protagonismo', icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
+            { role: 'biblioteca', label: 'Biblioteca', icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
+            { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' }
+        ];
+        
+        const modalBody = document.getElementById('modalBody');
+        modalBody.innerHTML = `
+            <div style="padding: 10px;">
+                <p style="color: #6b7280; font-size: 13px; margin-bottom: 20px; text-align: center;">
+                    <i class="fas fa-info-circle"></i> Clique em um perfil para filtrar os QR Codes
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                    ${perfis.map(p => `
+                        <div onclick="admin.closeModal(); admin.filtrarQRPorRole('${p.role}');"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 14px;
+                                padding: 16px;
+                                background: #f9fafb;
+                                border-radius: 12px;
+                                border-left: 4px solid ${p.cor};
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateX(4px)'; this.style.background='#f3f4f6'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)';"
+                            onmouseout="this.style.transform='translateX(0)'; this.style.background='#f9fafb'; this.style.boxShadow='none';">
+                            
+                            <div style="
+                                width: 48px;
+                                height: 48px;
+                                background: ${p.bg};
+                                border-radius: 12px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 22px;
+                                flex-shrink: 0;
+                            ">${p.icon}</div>
+                            
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 600; color: #1f2937; font-size: 14px;">${p.label}</div>
+                                <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+                                    ${contagem[p.role] || 0} ${contagem[p.role] === 1 ? 'QR Code' : 'QR Codes'}
+                                </div>
+                            </div>
+                            
+                            <i class="fas fa-chevron-right" style="color: #d1d5db; font-size: 12px;"></i>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-layer-group"></i> Todos os Perfis - QR Codes';
+        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.openModal();
+    }
+
+    // ============ FILTRAR QR CODES POR STATUS ============
+    filtrarQRPorStatus(status) {
+        const select = document.getElementById('filtroStatusQR');
+        if (select) {
+            select.value = status || 'todos';
+        }
+        this.aplicarFiltrosQR();
     }
 
     // ============================================
@@ -38076,33 +38508,77 @@ class AdminPanel {
                     </div>
                 </div>
 
+                <!-- CARDS DE ESTATÍSTICAS - MESMO PADRÃO DOS USUÁRIOS -->
                 <div class="stats-grid">
+                    <!-- Total -->
                     <div class="stat-card primary" onclick="admin.filtrarQRPorRole('todos')">
-                        <div class="stat-icon"><i class="fas fa-qrcode"></i></div>
+                        <div class="stat-icon">
+                            <i class="fas fa-qrcode"></i>
+                        </div>
                         <div class="stat-content">
                             <span class="stat-label">Total de QR Codes</span>
                             <span class="stat-value" id="statTotalQR">${total}</span>
+                            <span class="stat-detail">${this.qrCodesUsuarios.filter(u => u.ativo !== false).length} ativos</span>
                         </div>
                     </div>
-                    <div class="stat-card success" onclick="admin.filtrarQRPorRole('aluno')">
-                        <div class="stat-icon"><i class="fas fa-user-graduate"></i></div>
+
+                    <!-- Alunos -->
+                    <div class="stat-card" onclick="admin.filtrarQRPorRole('aluno')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #10b981, #059669);">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
                         <div class="stat-content">
                             <span class="stat-label">Alunos</span>
                             <span class="stat-value" id="statAlunosQR">${porRole.alunos}</span>
+                            <span class="stat-detail">Com QR Code</span>
                         </div>
                     </div>
-                    <div class="stat-card warning" onclick="admin.filtrarQRPorRole('professor')">
-                        <div class="stat-icon"><i class="fas fa-chalkboard-teacher"></i></div>
+
+                    <!-- Professores -->
+                    <div class="stat-card" onclick="admin.filtrarQRPorRole('professor')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
                         <div class="stat-content">
                             <span class="stat-label">Professores</span>
                             <span class="stat-value" id="statProfessoresQR">${porRole.professores}</span>
+                            <span class="stat-detail">Com QR Code</span>
                         </div>
                     </div>
-                    <div class="stat-card info" onclick="admin.filtrarQRPorRole('admin')">
-                        <div class="stat-icon"><i class="fas fa-user-shield"></i></div>
+
+                    <!-- Admins -->
+                    <div class="stat-card" onclick="admin.filtrarQRPorRole('admin')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
                         <div class="stat-content">
-                            <span class="stat-label">Administradores</span>
+                            <span class="stat-label">Admins</span>
                             <span class="stat-value" id="statAdminsQR">${porRole.admins}</span>
+                            <span class="stat-detail">Administradores</span>
+                        </div>
+                    </div>
+
+                    <!-- Ativos -->
+                    <div class="stat-card success" onclick="admin.filtrarQRPorStatus('ativo')">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label">Ativos</span>
+                            <span class="stat-value">${this.qrCodesUsuarios.filter(u => u.ativo !== false).length}</span>
+                            <span class="stat-detail">Podem acessar</span>
+                        </div>
+                    </div>
+
+                    <!-- 🔥 BOTÃO "VER TODOS OS PERFIS" -->
+                    <div class="stat-card" onclick="admin.abrirModalTodosPerfisQR()" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(139,92,246,0.3); display: flex; align-items: center; gap: 20px; cursor: pointer; border: none; color: white;">
+                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: rgba(255,255,255,0.2);">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="stat-content">
+                            <span class="stat-label" style="color: rgba(255,255,255,0.9);">Todos os Perfis</span>
+                            <span class="stat-value" style="color: white;">14</span>
+                            <span class="stat-detail" style="color: rgba(255,255,255,0.85);">Clique para ver todos →</span>
                         </div>
                     </div>
                 </div>
@@ -41012,7 +41488,7 @@ class AdminPanel {
         }
     }
 
-    // ============ CARREGAR FOTO DE PERFIL DO ADMIN ============
+    // ============ CARREGAR FOTO DE PERFIL DO ADMIN (CORRIGIDA) ============
     async carregarFotoPerfilAdmin() {
         try {
             const token = localStorage.getItem('auth_token');
@@ -41027,25 +41503,22 @@ class AdminPanel {
             const data = await response.json();
             console.log('📦 Resposta do perfil:', data);
             
-            // 🔥 BUSCAR OS ELEMENTOS NOVAMENTE (garantir que existem)
-            const imgElement = document.getElementById('adminFotoPerfil');
-            const iconElement = document.getElementById('adminAvatarIcon');
+            // 🔥 USAR LET em vez de CONST para poder reatribuir
+            let imgElement = document.getElementById('adminFotoPerfil');
+            let iconElement = document.getElementById('adminAvatarIcon');
             
+            // Se não existirem, tentar recriar no avatar
             if (!imgElement || !iconElement) {
                 console.warn('⚠️ Elementos não encontrados, tentando recriar...');
                 const avatarDiv = document.getElementById('adminAvatar');
                 if (avatarDiv) {
                     avatarDiv.innerHTML = `
-                        <img id="adminFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; display: none;">
+                        <img id="adminFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; display: none; border-radius: 50%;">
                         <i id="adminAvatarIcon" class="fas fa-user-shield" style="font-size: 24px; color: white; position: relative; z-index: 2;"></i>
                     `;
-                    // Tentar pegar novamente
-                    const newImg = document.getElementById('adminFotoPerfil');
-                    const newIcon = document.getElementById('adminAvatarIcon');
-                    if (newImg && newIcon) {
-                        imgElement = newImg;
-                        iconElement = newIcon;
-                    }
+                    // 🔥 Reatribuir com LET funciona
+                    imgElement = document.getElementById('adminFotoPerfil');
+                    iconElement = document.getElementById('adminAvatarIcon');
                 }
             }
             
