@@ -5038,7 +5038,6 @@ body {
     gap: 16px;
 }
 
-/* ===== INFO (esquerda) ===== */
 .pagination-info {
     font-size: 13px;
     color: #6b7280;
@@ -5052,14 +5051,12 @@ body {
     margin: 0 2px;
 }
 
-/* ===== CONTROLES (direita) ===== */
 .pagination-controls {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-/* Botões de navegação (‹ ›) */
 .btn-pagination {
     width: 38px;
     height: 38px;
@@ -5093,14 +5090,12 @@ body {
     background: #f9fafb;
 }
 
-/* Grupo de páginas */
 .pagination-pages {
     display: flex;
     align-items: center;
     gap: 4px;
 }
 
-/* Botões de número de página */
 .btn-page {
     min-width: 38px;
     height: 38px;
@@ -5137,7 +5132,6 @@ body {
     cursor: default;
 }
 
-/* Reticências */
 .page-ellipsis {
     display: flex;
     align-items: center;
@@ -5149,10 +5143,6 @@ body {
     font-weight: 600;
     user-select: none;
 }
-
-/* ============================================================================
-   📱 RESPONSIVIDADE DA PAGINAÇÃO
-   ============================================================================ */
 
 @media (max-width: 768px) {
     .pagination-professional {
@@ -5177,20 +5167,5 @@ body {
         min-width: 34px;
         height: 34px;
         font-size: 12px;
-    }
-}
-
-@media (max-width: 480px) {
-    /* Esconde páginas do meio para não quebrar no mobile */
-    .pagination-pages .btn-page:not(.active):not(:first-child):not(:last-child) {
-        display: none;
-    }
-    
-    .pagination-pages .page-ellipsis {
-        display: none;
-    }
-    
-    .pagination-info {
-        font-size: 11px;
     }
 }
