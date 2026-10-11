@@ -101,6 +101,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.log('✅ Enfermaria autenticada:', userData.nome);
     
+    // 🆕 Verifica se veio com ?verificar=ID
+    const verificarAtendimentoId = new URLSearchParams(window.location.search).get('verificar');
+    
     safeSetText('userName', userData.nome || 'Usuário');
     safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
     
@@ -118,6 +121,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await iniciarScannerAutomatico();
     
+    // 🆕 Polling de atendimentos +24h
+    setTimeout(() => atualizarContadorAtendimentosAntigos(), 5000);
+    setInterval(() => atualizarContadorAtendimentosAntigos(), 60000);
+    
     setInterval(() => {
         if (safeGet('ativos')?.classList.contains('active')) {
             carregarAtendimentosAtivos();
@@ -127,10 +134,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 30000);
     
+    // 🆕 Se veio com ?verificar=ID, abre modal direto
+    if (verificarAtendimentoId) {
+        setTimeout(async () => {
+            const urlLimpa = new URL(window.location.href);
+            urlLimpa.searchParams.delete('verificar');
+            window.history.replaceState({}, '', urlLimpa.toString());
+            await abrirModalVerificacao24h();
+        }, 2500);
+    }
+    
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
         configurarFiltrosAtendimentosRecentes();
         carregarAtendimentosRecentes(1);
+        atualizarContadorAtendimentosAntigos();
+    });
+    
+    safeGet('ativos-tab')?.addEventListener('shown.bs.tab', () => {
+        carregarAtendimentosAtivos();
+        atualizarContadorAtendimentosAntigos();
     });
     
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
@@ -665,12 +688,20 @@ async function carregarAtendimentosAtivos() {
         if (data.success && Array.isArray(data.atendimentos) && data.atendimentos.length > 0) {
             container.innerHTML = data.atendimentos.map(a => {
                 const estaMascarado = a._mascarado === true;
+                const tempo = formatarTempoAtendimentoFront(a.tempoAtendimento || 0);
                 
                 return `
                 <div class="list-group-item" data-id="${a.id}" ${estaMascarado ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
                     ${estaMascarado ? `
                         <div style="background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px;">
                             <i class="fas fa-lock"></i> <strong>Conteúdo protegido</strong> — criado por ${escapeHTML(a._criadorNome || 'outro profissional')}
+                        </div>
+                    ` : ''}
+                    ${a.alerta24hAtivo ? `
+                        <div style="background: #fef2f2; border-left: 3px solid #dc2626; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i>
+                            <strong style="color: #991b1b;">Atendimento há mais de 24h!</strong>
+                            <span style="color: #991b1b; font-size: 11px;">${a.totalAlertas24h || 0} alerta(s) enviado(s)</span>
                         </div>
                     ` : ''}
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -681,11 +712,11 @@ async function carregarAtendimentosAtivos() {
                             <div>
                                 <strong>${escapeHTML(a.alunoNome || '')}</strong>
                                 <br><small class="text-muted">Turma: ${escapeHTML(a.alunoTurma || '-')}</small>
-                                <br><small class="text-muted">
-                                    <i class="fas fa-clock"></i> Há ${a.tempoAtendimento || 0} minutos
+                                <br><small class="text-muted ${tempo.critico ? 'text-danger fw-bold' : ''}">
+                                    <i class="fas fa-clock"></i> ${tempo.texto}
                                 </small>
                                 <br>
-                                <span class="badge bg-warning text-dark">Em atendimento</span>
+                                <span class="badge ${tempo.critico ? 'bg-danger' : 'bg-warning text-dark'}">Em atendimento</span>
                             </div>
                         </div>
                         <div class="d-flex flex-wrap gap-1 justify-content-end">
@@ -694,6 +725,12 @@ async function carregarAtendimentosAtivos() {
                                     title="Ver detalhes">
                                 <i class="fas fa-eye"></i> Ver
                             </button>
+                            
+                            ${a.alerta24hAtivo ? `
+                                <button class="btn btn-sm btn-danger" onclick="abrirModalVerificacao24h()" title="Verificar 24h">
+                                    <i class="fas fa-exclamation-triangle"></i> Verificar
+                                </button>
+                            ` : ''}
                             
                             ${!estaMascarado ? `
                                 <button class="btn btn-sm btn-secondary" 
@@ -738,9 +775,309 @@ async function carregarAtendimentosAtivos() {
                 </div>
             `;
         }
+        
+        // 🆕 Atualiza o contador de atendimentos +24h
+        atualizarContadorAtendimentosAntigos();
     } catch (error) {
         console.error('Erro:', error);
         container.innerHTML = '<div class="mostrarToast mostrarToast-danger">Erro ao carregar atendimentos</div>';
+    }
+}
+
+// ============================================
+// 🆕 HELPER: FORMATAÇÃO DE TEMPO (frontend)
+// ============================================
+function formatarTempoAtendimentoFront(minutos) {
+    if (minutos < 60) {
+        return { texto: `${minutos} min`, critico: false, nivel: minutos >= 45 ? 'atencao' : 'normal' };
+    }
+    if (minutos < 1440) {
+        const h = Math.floor(minutos / 60), m = minutos % 60;
+        const texto = m > 0 ? `${h}h ${m}min` : `${h}h`;
+        return { texto, critico: false, nivel: minutos >= 720 ? 'alerta' : 'atencao' };
+    }
+    const d = Math.floor(minutos / 1440);
+    const h = Math.floor((minutos % 1440) / 60);
+    const m = minutos % 60;
+    let texto = `${d}d`;
+    if (h > 0) texto += ` ${h}h`;
+    if (m > 0) texto += ` ${m}min`;
+    return { texto, critico: true, nivel: 'critico' };
+}
+
+// ============================================
+// 🆕 ATUALIZAR CONTADOR DE ATENDIMENTOS +24H
+// ============================================
+async function atualizarContadorAtendimentosAntigos() {
+    try {
+        const response = await fetch(`/api/enfermaria/atendimentos-antigos?t=${Date.now()}`, {
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Cache-Control': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        if (!data.success) return;
+        
+        const total = data.total || 0;
+        
+        const totalEl = document.getElementById('totalAtendimentosAntigos');
+        if (totalEl) totalEl.textContent = String(total);
+        
+        const badge = document.getElementById('badgeAtendimentosAntigos');
+        if (badge) {
+            if (total > 0) {
+                badge.textContent = total;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        const alerta = document.getElementById('alertaAtendimentosAntigos');
+        if (alerta) {
+            if (total > 0) {
+                alerta.style.display = 'block';
+                alerta.innerHTML = `
+                    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 24px;"></i>
+                            <div style="flex: 1;">
+                                <strong style="color: #991b1b; font-size: 15px;">⚠️ ${total} atendimento(s) há mais de 24h sem finalizar!</strong>
+                                <p style="margin: 4px 0 0; font-size: 13px; color: #991b1b;">
+                                    Estes alunos ainda constam como "Em Atendimento" na enfermaria. Verifique se precisam ser finalizados.
+                                </p>
+                            </div>
+                            <button onclick="abrirModalVerificacao24h()" 
+                                    class="btn btn-sm btn-danger"
+                                    style="border-radius: 8px; white-space: nowrap;">
+                                <i class="fas fa-clipboard-check"></i> Verificar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                alerta.style.display = 'none';
+                alerta.innerHTML = '';
+            }
+        }
+        
+        const card = document.getElementById('cardAtendimentosAntigos');
+        if (card) {
+            if (total > 0) card.classList.add('tem-alerta');
+            else card.classList.remove('tem-alerta');
+        }
+        
+        if (total > 0 && !sessionStorage.getItem('alerta24hNotificadoEnf')) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification('⚠️ Atendimentos há mais de 24h na Enfermaria', {
+                        body: `Você tem ${total} atendimento(s) em andamento há mais de 24h. Verifique se já foram finalizados.`,
+                        icon: '/icons/favicon.ico',
+                        tag: 'alerta-24h-enf'
+                    });
+                } catch (e) {}
+            }
+            sessionStorage.setItem('alerta24hNotificadoEnf', 'true');
+        }
+    } catch (error) {
+        console.warn('[CARD-24H-ENF] Erro:', error);
+    }
+}
+
+// ============================================
+// 🆕 MODAL DE VERIFICAÇÃO DE ATENDIMENTOS >24H
+// ============================================
+async function abrirModalVerificacao24h() {
+    try {
+        const response = await fetch('/api/enfermaria/atendimentos-antigos?t=' + Date.now(), {
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Cache-Control': 'no-cache'
+            }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
+            mostrarToast('✅ Nenhum atendimento há mais de 24h para verificar!', 'success');
+            const modalAntigo = safeGet('modalVerificacao24h');
+            if (modalAntigo) {
+                const inst = bootstrap.Modal.getInstance(modalAntigo);
+                if (inst) inst.hide();
+                setTimeout(() => modalAntigo.remove(), 300);
+            }
+            return;
+        }
+        
+        const lista = data.atendimentos;
+        
+        const oldModal = safeGet('modalVerificacao24h');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalVerificacao24h" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #dc2626, #991b1b); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-clock"></i> 
+                                Verificação de Atendimentos (>24h)
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 20px;"></i>
+                                    <div>
+                                        <strong style="color: #991b1b;">Atenção!</strong>
+                                        <p style="margin: 4px 0 0; font-size: 13px; color: #991b1b;">
+                                            Estes alunos ainda constam como "Em Atendimento" na enfermaria há mais de 24h. 
+                                            Verifique se o atendimento foi finalizado ou se ainda está em curso.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${lista.map(a => `
+                                <div class="card mb-3" style="border-left: 4px solid ${a.nivelAlerta === 'critico' ? '#dc2626' : '#f59e0b'};">
+                                    <div class="card-body">
+                                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                            <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                                                 style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;"
+                                                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                                            <div style="flex: 1;">
+                                                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
+                                                    <div>
+                                                        <h5 style="margin: 0 0 4px; color: #065f46;">${escapeHTML(a.alunoNome)}</h5>
+                                                        <small style="color: #6b7280;">
+                                                            <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                                            ${a.alunoMatricula ? ` • <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula)}` : ''}
+                                                        </small>
+                                                    </div>
+                                                    <div style="text-align: right;">
+                                                        <div style="background: #fef2f2; color: #991b1b; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
+                                                            <i class="fas fa-clock"></i> ${escapeHTML(a.tempoTexto)}
+                                                        </div>
+                                                        ${a.totalAlertas24h > 0 ? `
+                                                            <div style="font-size: 10px; color: #9ca3af; margin-top: 4px;">
+                                                                ${a.totalAlertas24h} alerta(s) enviado(s)
+                                                            </div>
+                                                        ` : ''}
+                                                    </div>
+                                                </div>
+                                                
+                                                <div style="background: #f9fafb; padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 13px; color: #374151;">
+                                                    <strong>Queixa:</strong> ${escapeHTML((a.queixa || '').substring(0, 200))}${(a.queixa || '').length > 200 ? '...' : ''}
+                                                </div>
+                                                
+                                                <div style="font-size: 11px; color: #9ca3af; margin-top: 6px;">
+                                                    <i class="fas fa-user"></i> Registrado por ${escapeHTML(a.registradoPorNome || '-')} 
+                                                    • <i class="fas fa-calendar"></i> ${new Date(a.dataHoraEntrada).toLocaleString('pt-BR')}
+                                                </div>
+                                                
+                                                <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+                                                    <button class="btn btn-sm btn-success" 
+                                                            onclick="verificarAtendimento24h('${a.id}', 'ja_encerrou')">
+                                                        <i class="fas fa-check-circle"></i> Já encerrou
+                                                    </button>
+                                                    <button class="btn btn-sm btn-warning" 
+                                                            onclick="verificarAtendimento24h('${a.id}', 'manter_aberto')">
+                                                        <i class="fas fa-clock"></i> Manter aberto (+20min)
+                                                    </button>
+                                                    <button class="btn btn-sm btn-info" 
+                                                            onclick="verAtendimento('${a.id}')">
+                                                        <i class="fas fa-eye"></i> Ver detalhes
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(safeGet('modalVerificacao24h'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao abrir verificação 24h:', error);
+        mostrarToast('Erro ao carregar atendimentos antigos');
+    }
+}
+
+// ============================================
+// 🆕 VERIFICAR ATENDIMENTO DE 24H
+// ============================================
+async function verificarAtendimento24h(atendimentoId, acao) {
+    try {
+        let desfecho = 'retornou_sala';
+        let observacoes = '';
+        
+        if (acao === 'ja_encerrou') {
+            const opcao = prompt(
+                `Qual o desfecho do atendimento?\n\nDigite o número:\n1 - Retornou para Sala de Aula\n2 - Encaminhado para Gestão Geral\n3 - Liberado com o Responsável\n4 - Liberado com o Coordenador de Pátio\n5 - Outros`,
+                '1'
+            );
+            
+            if (opcao === null) return;
+            
+            const mapa = {
+                '1': 'retornou_sala',
+                '2': 'encaminhado_gestao',
+                '3': 'liberado_responsavel',
+                '4': 'liberado_coordenador',
+                '5': 'outros'
+            };
+            
+            desfecho = mapa[opcao] || 'retornou_sala';
+            observacoes = prompt('Observações finais (opcional):', '') || '';
+        } else {
+            const confirmar = await confirm('Manter o atendimento aberto?\n\nVocê será lembrado novamente em 20 minutos.');
+            if (!confirmar) return;
+        }
+        
+        const response = await fetch(`/api/enfermaria/atendimento/${atendimentoId}/verificar-24h`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ acao, desfecho, observacoes })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarToast(`✅ ${data.message}`);
+            
+            await abrirModalVerificacao24h();
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+            atualizarContadorAtendimentosAntigos();
+            
+            if (acao === 'ja_encerrou') {
+                carregarAtendimentosRecentes(1);
+            }
+        } else {
+            mostrarToast('❌ ' + (data.error || 'Erro ao verificar'));
+        }
+    } catch (error) {
+        console.error('Erro ao verificar atendimento 24h:', error);
+        mostrarToast('Erro ao verificar atendimento');
     }
 }
 
@@ -3101,3 +3438,9 @@ window.verAtendimento = verAtendimento;
 window.editarAtendimento = editarAtendimento;
 window.imprimirAtendimentoIndividual = imprimirAtendimentoIndividual;
 window.excluirAtendimento = excluirAtendimento;
+
+// 🆕 Verificação 24h
+window.abrirModalVerificacao24h = abrirModalVerificacao24h;
+window.verificarAtendimento24h = verificarAtendimento24h;
+window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;
+window.formatarTempoAtendimentoFront = formatarTempoAtendimentoFront;

@@ -72,7 +72,7 @@
             border-radius: 50%; animation: spin 0.8s linear infinite;
         }
 
-        /* ASSINATURA DIGITAL (CANVAS TRADICIONAL - MANTIDO PARA COMPATIBILIDADE) */
+        /* ASSINATURA DIGITAL */
         .assinatura-wrapper { margin-top: 15px; }
         .assinatura-container {
             position: relative; width: 100%; height: 150px;
@@ -94,19 +94,13 @@
         .assinatura-placeholder span { font-size: 14px; }
         .assinatura-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
 
-        /* 🆕 CHECKBOX DE ASSINATURA VIA QR CODE */
-        .assinatura-qr-wrapper {
-            margin-top: 20px;
-        }
-        .assinatura-qr-wrapper .form-check {
-            transition: all 0.3s ease;
-        }
+        .assinatura-qr-wrapper { margin-top: 20px; }
+        .assinatura-qr-wrapper .form-check { transition: all 0.3s ease; }
         .assinatura-qr-wrapper .form-check:hover {
             background: #eef2ff !important;
             border-color: #c7d2fe !important;
         }
 
-        /* 🆕 MODAL DE ASSINATURA QR */
         @keyframes spinQR { to { transform: rotate(360deg); } }
         #modalAssinaturaQR .modal-content { border: none; overflow: hidden; }
         #modalAssinaturaQR img#qrCodeImage { image-rendering: pixelated; }
@@ -122,7 +116,6 @@
         }
         .btn-copiar-link:hover { background: #e2e8f0; border-color: #94a3b8; }
 
-        /* MODAL DETALHES */
         .detalhe-atendimento .info-row {
             display: flex; padding: 8px 0; border-bottom: 1px solid #f3f4f6;
         }
@@ -142,7 +135,6 @@
         }
         .assinatura-preview img { max-height: 80px; max-width: 100%; }
 
-        /* FILTROS EM ANDAMENTO */
         .filtros-andamento {
             background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
             border-radius: 12px;
@@ -151,40 +143,19 @@
             border: 1px solid #ddd6fe;
         }
         .filtros-andamento .filtro-titulo {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-            gap: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
         }
-        .filtros-andamento .filtro-titulo h6 {
-            margin: 0;
-            color: #7c3aed;
-            font-weight: 700;
-            font-size: 14px;
-        }
+        .filtros-andamento .filtro-titulo h6 { margin: 0; color: #7c3aed; font-weight: 700; font-size: 14px; }
         .filtros-andamento .filtro-titulo .contador-resultados {
-            background: #7c3aed;
-            color: white;
-            font-size: 12px;
-            padding: 3px 12px;
-            border-radius: 20px;
-            font-weight: 700;
+            background: #7c3aed; color: white; font-size: 12px;
+            padding: 3px 12px; border-radius: 20px; font-weight: 700;
         }
         .filtros-andamento .filtro-titulo .contador-resultados.zero { background: #9ca3af; }
-        .filtros-andamento .form-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #5b21b6;
-            margin-bottom: 4px;
-        }
+        .filtros-andamento .form-label { font-size: 12px; font-weight: 600; color: #5b21b6; margin-bottom: 4px; }
         .filtros-andamento .form-control,
         .filtros-andamento .form-select {
-            font-size: 13px;
-            border: 1px solid #c4b5fd;
-            border-radius: 8px;
-            background: white;
+            font-size: 13px; border: 1px solid #c4b5fd; border-radius: 8px; background: white;
         }
         .filtros-andamento .form-control:focus,
         .filtros-andamento .form-select:focus {
@@ -192,53 +163,31 @@
             box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
         }
         .filtros-andamento .btn-limpar-filtros {
-            background: white;
-            border: 1px solid #8b5cf6;
-            color: #7c3aed;
-            font-size: 12px;
-            padding: 4px 12px;
-            border-radius: 20px;
-            transition: all 0.2s;
-            font-weight: 600;
+            background: white; border: 1px solid #8b5cf6; color: #7c3aed;
+            font-size: 12px; padding: 4px 12px; border-radius: 20px;
+            transition: all 0.2s; font-weight: 600;
         }
         .filtros-andamento .btn-limpar-filtros:hover { background: #8b5cf6; color: white; }
         .filtros-andamento .btn-limpar-filtros:disabled { opacity: 0.5; cursor: not-allowed; }
         .filtro-avancado-toggle {
-            background: transparent;
-            border: 1px dashed #8b5cf6;
-            color: #7c3aed;
-            font-size: 12px;
-            padding: 6px 12px;
-            border-radius: 8px;
-            width: 100%;
-            margin-top: 8px;
-            transition: all 0.2s;
-            font-weight: 600;
+            background: transparent; border: 1px dashed #8b5cf6; color: #7c3aed;
+            font-size: 12px; padding: 6px 12px; border-radius: 8px;
+            width: 100%; margin-top: 8px; transition: all 0.2s; font-weight: 600;
         }
         .filtro-avancado-toggle:hover { background: #ede9fe; }
         .chips-filtros-ativos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
         .chip-filtro {
-            background: #7c3aed;
-            color: white;
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 20px;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: 600;
+            background: #7c3aed; color: white; font-size: 11px;
+            padding: 4px 10px; border-radius: 20px;
+            display: inline-flex; align-items: center; gap: 6px; font-weight: 600;
         }
         .chip-filtro i.fa-times { cursor: pointer; opacity: 0.8; font-size: 10px; }
         .chip-filtro i.fa-times:hover { opacity: 1; }
 
         .estado-vazio-filtro {
-            text-align: center;
-            padding: 40px 20px;
-            color: #9ca3af;
+            text-align: center; padding: 40px 20px; color: #9ca3af;
         }
-        .estado-vazio-filtro i {
-            font-size: 48px; color: #cbd5e1; margin-bottom: 12px; display: block;
-        }
+        .estado-vazio-filtro i { font-size: 48px; color: #cbd5e1; margin-bottom: 12px; display: block; }
         .estado-vazio-filtro p { margin: 0; font-size: 14px; }
         .estado-vazio-filtro .btn { margin-top: 12px; }
 
@@ -246,6 +195,19 @@
         @keyframes fadeInItem {
             from { opacity: 0; transform: translateY(-5px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 🆕 CARD DE ATENDIMENTOS +24H */
+        .metric-card.metric-card-alerta {
+            border-left: 4px solid #dc2626 !important;
+            position: relative;
+        }
+        .metric-card.metric-card-alerta .metric-value { color: #dc2626 !important; }
+        .metric-card.metric-card-alerta .metric-label { color: #991b1b !important; font-weight: 700; }
+        .metric-card.metric-card-alerta.tem-alerta { animation: pulsaAlerta 2s infinite; }
+        @keyframes pulsaAlerta {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
         }
 
         @media (max-width: 768px) {
@@ -267,7 +229,7 @@
                 </div>
             </div>
             <div class="btn-actions">
-                <!-- 🔔 SINO ÚNICO (NOTIFICAÇÕES + LEMBRETES) -->
+                <!-- 🔔 SINO -->
                 <div class="notificacoes-container">
                     <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações e Lembretes">
                         <i class="fas fa-bell"></i>
@@ -281,10 +243,10 @@
                                 Notificações
                             </h3>
                             <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
                                 <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
@@ -307,7 +269,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- FIM DO SINO -->
 
                 <a href="https://drive.google.com/file/d/10L7dA1aUy0yVnO4vE59qAm6_vQENy0fw/view?usp=sharing" 
                    target="_blank" class="btn-icon" style="
@@ -440,7 +401,6 @@
                             </div>
                         </div>
                         
-                        <!-- Info do Aluno -->
                         <div id="alunoInfo" style="display: none;">
                             <div class="aluno-card">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -465,7 +425,6 @@
                             </div>
                         </div>
                         
-                        <!-- Formulário -->
                         <div id="formRegistro" class="form-container" style="display: none;">
                             <h5><i class="fas fa-plus-circle"></i> Registrar Ocorrência</h5>
                             
@@ -555,7 +514,6 @@
                                           placeholder="Informações complementares..."></textarea>
                             </div>
 
-                            <!-- 🆕 ASSINATURA VIA QR CODE (SESSÃO) -->
                             <div class="assinatura-qr-wrapper">
                                 <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
                                     <input class="form-check-input" type="checkbox" 
@@ -583,7 +541,7 @@
                         </div>
                     </div>
                     
-                    <!-- ABA EM ANDAMENTO (COM FILTROS) -->
+                    <!-- ABA EM ANDAMENTO -->
                     <div class="tab-pane fade" id="ativos" role="tabpanel">
                         <div class="filtros-andamento">
                             <div class="filtro-titulo">
@@ -613,10 +571,10 @@
                                     <select id="filtroAndamentoTipo" class="form-select form-select-sm">
                                         <option value="">Todos os tipos</option>
                                         <option value="evasao_escolar">Evasão Escolar</option>
-                                        <option value="desinteresse_aprendizado">Desinteresse pelo Aprendizado</option>
-                                        <option value="problemas_disciplina">Problemas com Disciplina</option>
-                                        <option value="insubordinacao_limites">Insubordinação a Limites</option>
-                                        <option value="vulnerabilidade_drogas">Vulnerabilidade às Drogas</option>
+                                        <option value="desinteresse_aprendizado">Desinteresse</option>
+                                        <option value="problemas_disciplina">Problemas Disciplina</option>
+                                        <option value="insubordinacao_limites">Insubordinação</option>
+                                        <option value="vulnerabilidade_drogas">Vulnerabilidade Drogas</option>
                                         <option value="atitudes_agressivas">Atitudes Agressivas</option>
                                         <option value="baixo_rendimento">Baixo Rendimento</option>
                                         <option value="encaminhamento">Encaminhamento</option>
@@ -695,33 +653,48 @@
                     
                     <!-- ABA DASHBOARD -->
                     <div class="tab-pane fade" id="dashboard" role="tabpanel">
+
+                        <!-- 🆕 ALERTA DE ATENDIMENTOS +24H -->
+                        <div id="alertaAtendimentosAntigos" style="display: none;"></div>
+
                         <div class="row mb-4">
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-calendar-day fa-2x text-primary mb-2"></i>
                                     <div class="metric-value" id="totalHoje">0</div>
                                     <div class="metric-label">Hoje</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-clock fa-2x text-warning mb-2"></i>
                                     <div class="metric-value" id="totalEmAndamento">0</div>
                                     <div class="metric-label">Em Andamento</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                                     <div class="metric-value" id="totalFinalizadosHoje">0</div>
                                     <div class="metric-label">Finalizados Hoje</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
                                     <div class="metric-value" id="totalGeral">0</div>
                                     <div class="metric-label">Total Geral</div>
+                                </div>
+                            </div>
+
+                            <!-- 🆕 CARD DE ATENDIMENTOS +24H -->
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="metric-card metric-card-alerta" id="cardAtendimentosAntigos">
+                                    <i class="fas fa-exclamation-triangle fa-2x mb-2" style="color: #dc2626;"></i>
+                                    <div class="metric-value" id="totalAtendimentosAntigos">0</div>
+                                    <div class="metric-label">Há +24h Abertos</div>
+                                    <span class="badge bg-danger" id="badgeAtendimentosAntigos" 
+                                          style="display: none; position: absolute; top: 8px; right: 8px;">0</span>
                                 </div>
                             </div>
                         </div>
@@ -798,10 +771,10 @@
                                         <select id="filtroConcluidosTipo" class="form-select form-select-sm">
                                             <option value="">Todos os tipos</option>
                                             <option value="evasao_escolar">Evasão Escolar</option>
-                                            <option value="desinteresse_aprendizado">Desinteresse pelo Aprendizado</option>
-                                            <option value="problemas_disciplina">Problemas com Disciplina</option>
-                                            <option value="insubordinacao_limites">Insubordinação a Limites</option>
-                                            <option value="vulnerabilidade_drogas">Vulnerabilidade às Drogas</option>
+                                            <option value="desinteresse_aprendizado">Desinteresse</option>
+                                            <option value="problemas_disciplina">Problemas Disciplina</option>
+                                            <option value="insubordinacao_limites">Insubordinação</option>
+                                            <option value="vulnerabilidade_drogas">Vulnerabilidade Drogas</option>
                                             <option value="atitudes_agressivas">Atitudes Agressivas</option>
                                             <option value="baixo_rendimento">Baixo Rendimento</option>
                                             <option value="encaminhamento">Encaminhamento</option>

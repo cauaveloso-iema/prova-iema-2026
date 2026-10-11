@@ -288,6 +288,44 @@
         }
         .btn-copiar-link:hover { background: #e2e8f0; border-color: #94a3b8; }
 
+        /* ============================================ */
+        /* 🆕 CARD DE ATENDIMENTOS +24H                  */
+        /* ============================================ */
+        .metric-card.metric-card-alerta {
+            border-left: 4px solid #dc2626 !important;
+            position: relative;
+        }
+        .metric-card.metric-card-alerta .metric-value {
+            color: #dc2626 !important;
+        }
+        .metric-card.metric-card-alerta .metric-label {
+            color: #991b1b !important;
+            font-weight: 700;
+        }
+        .metric-card.metric-card-alerta.tem-alerta {
+            animation: pulsaAlerta 2s infinite;
+        }
+        @keyframes pulsaAlerta {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+        }
+
+        /* ============================================ */
+        /* 🆕 ALERTA DE ATENDIMENTOS >24H               */
+        /* ============================================ */
+        .alerta-24h-container {
+            background: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         @media (max-width: 768px) {
             .filtros-andamento { padding: 12px; }
             .filtros-andamento .row { gap: 8px; }
@@ -572,8 +610,6 @@
 
                             <!-- ============================================ -->
                             <!-- 🔥 CHECKBOX DE ASSINATURA VIA QR CODE         -->
-                            <!-- O ID DEVE SER assistenteSocialNecessitaAssinatura -->
-                            <!-- para combinar com o JS (psicologia.js)        -->
                             <!-- ============================================ -->
                             <div class="checkbox-assinatura-box mb-3">
                                 <div class="form-check d-flex align-items-start">
@@ -731,33 +767,48 @@
 
                     <!-- ABA DASHBOARD -->
                     <div class="tab-pane fade" id="dashboard" role="tabpanel">
+
+                        <!-- 🆕 ALERTA DE ATENDIMENTOS +24H (injetado via JS) -->
+                        <div id="alertaAtendimentosAntigos" style="display: none;"></div>
+
                         <div class="row mb-4">
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-calendar-day fa-2x text-primary mb-2"></i>
                                     <div class="metric-value" id="totalHoje">0</div>
                                     <div class="metric-label">Hoje</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-clock fa-2x text-warning mb-2"></i>
                                     <div class="metric-value" id="totalEmAndamento">0</div>
                                     <div class="metric-label">Em Andamento</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                                     <div class="metric-value" id="totalFinalizadosHoje">0</div>
                                     <div class="metric-label">Finalizados Hoje</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 col-lg-2 mb-3">
                                 <div class="metric-card">
                                     <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
                                     <div class="metric-value" id="totalGeral">0</div>
                                     <div class="metric-label">Total Geral</div>
+                                </div>
+                            </div>
+
+                            <!-- 🆕 CARD DE ATENDIMENTOS +24H -->
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="metric-card metric-card-alerta" id="cardAtendimentosAntigos">
+                                    <i class="fas fa-exclamation-triangle fa-2x mb-2" style="color: #dc2626;"></i>
+                                    <div class="metric-value" id="totalAtendimentosAntigos">0</div>
+                                    <div class="metric-label">Há +24h Abertos</div>
+                                    <span class="badge bg-danger" id="badgeAtendimentosAntigos" 
+                                          style="display: none; position: absolute; top: 8px; right: 8px;">0</span>
                                 </div>
                             </div>
                         </div>

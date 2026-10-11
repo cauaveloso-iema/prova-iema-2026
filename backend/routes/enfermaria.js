@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const AtendimentoEnfermaria = require('../models/AtendimentoEnfermaria');
+const Notificacao = require('../models/Notificacao');
 const { descriptografar } = require('../utils/criptografia');
 
 // ============================================
@@ -74,6 +76,138 @@ function adminPodeModificar(atendimento, req) {
     permitido: false,
     motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
   };
+}
+
+// ============================================
+// 🆕 HELPER: FORMATAR TEMPO DE ATENDIMENTO
+// Regra:
+//   - < 60 min  → "X min"
+//   - < 24h     → "Xh Ymin"
+//   - >= 24h    → "Xd Yh Zmin"
+// ============================================
+function formatarTempoAtendimento(dataEntrada) {
+  if (!dataEntrada) return { minutos: 0, texto: '0 min', nivel: 'normal' };
+  
+  const agora = new Date();
+  const entrada = new Date(dataEntrada);
+  const diffMs = agora - entrada;
+  const minutosTotal = Math.floor(diffMs / 60000);
+  
+  if (minutosTotal < 0) {
+    return { minutos: 0, texto: 'agora', nivel: 'normal' };
+  }
+  
+  if (minutosTotal < 60) {
+    return {
+      minutos: minutosTotal,
+      texto: `${minutosTotal} min`,
+      nivel: minutosTotal >= 45 ? 'atencao' : 'normal'
+    };
+  }
+  
+  if (minutosTotal < 1440) {
+    const horas = Math.floor(minutosTotal / 60);
+    const mins = minutosTotal % 60;
+    const texto = mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
+    return {
+      minutos: minutosTotal,
+      texto,
+      nivel: minutosTotal >= 720 ? 'alerta' : 'atencao'
+    };
+  }
+  
+  const dias = Math.floor(minutosTotal / 1440);
+  const horasRestantes = Math.floor((minutosTotal % 1440) / 60);
+  const minsRestantes = minutosTotal % 60;
+  
+  let texto = `${dias}d`;
+  if (horasRestantes > 0) texto += ` ${horasRestantes}h`;
+  if (minsRestantes > 0) texto += ` ${minsRestantes}min`;
+  
+  return {
+    minutos: minutosTotal,
+    texto,
+    nivel: 'critico'
+  };
+}
+
+// ============================================
+// 🆕 HELPER: CRIAR NOTIFICAÇÃO INTERNA
+// ============================================
+async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link, icone, cor, metadata }) {
+  try {
+    const TIPOS_VALIDOS = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
+    const tipoFinal = TIPOS_VALIDOS.includes(tipo) ? tipo : 'sistema';
+    
+    const notif = new Notificacao({
+      usuarioId,
+      titulo,
+      mensagem,
+      tipo: tipoFinal,
+      link: link || '/enfermaria.html',
+      icone: icone || '⏰',
+      cor: cor || '#f59e0b',
+      lida: false,
+      metadata: metadata || {}
+    });
+    await notif.save();
+    return notif;
+  } catch (e) {
+    console.error('[NOTIF] Erro ao salvar notificação:', e.message);
+    throw e;
+  }
+}
+
+// ============================================
+// 🆕 HELPER: PROCESSAR ALERTAS DE 24H
+// ============================================
+async function processarAlertas24h() {
+  try {
+    const atendimentos = await AtendimentoEnfermaria.buscarAtendimentosParaAlerta();
+    
+    if (atendimentos.length === 0) return { processados: 0 };
+    
+    let processados = 0;
+    
+    for (const atendimento of atendimentos) {
+      const registradoPor = atendimento.entrada?.registradoPor;
+      if (!registradoPor) continue;
+      
+      const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
+      
+      try {
+        await criarNotificacaoInterna({
+          usuarioId: registradoPor._id || registradoPor,
+          titulo: '⏰ Atendimento na Enfermaria há mais de 24h',
+          mensagem: `O aluno ${atendimento.alunoNome} (${atendimento.alunoTurma || '-'}) está na enfermaria desde ${new Date(atendimento.entrada.dataHora).toLocaleString('pt-BR')} — já são ${tempo.texto}. Verifique se o atendimento foi finalizado.`,
+          tipo: 'sistema',
+          link: `/enfermaria.html?verificar=${atendimento._id}`,
+          icone: '⏰',
+          cor: '#dc2626',
+          metadata: {
+            atendimentoId: atendimento._id.toString(),
+            alunoId: atendimento.alunoId.toString(),
+            alunoNome: atendimento.alunoNome,
+            minutosEmAndamento: tempo.minutos,
+            tempoTexto: tempo.texto
+          }
+        });
+        
+        atendimento.ultimoAlerta24h = new Date();
+        atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
+        await atendimento.save();
+        
+        processados++;
+      } catch (e) {
+        console.error(`[ALERTA 24H] Falha para ${atendimento.alunoNome}:`, e.message);
+      }
+    }
+    
+    return { processados };
+  } catch (error) {
+    console.error('Erro ao processar alertas 24h:', error);
+    return { processados: 0, erro: error.message };
+  }
 }
 
 // ============================================
@@ -313,6 +447,7 @@ router.post('/saida', authenticateToken, verificarEnfermaria, async (req, res) =
       registradoPorNome: enfermeiro?.nome || req.userNome || 'Enfermeiro'
     };
     atendimento.status = 'finalizado';
+    atendimento.alerta24hReconhecido = true;
     atendimento.updatedAt = new Date();
     
     await atendimento.save();
@@ -392,7 +527,6 @@ router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
       updatedAt: atendimento.updatedAt
     };
 
-    // 🔒 MASCARAR PARA SUPER_ADMIN
     const payloadMascarado = mascararParaAdmin(payload, req);
     
     res.json({
@@ -406,7 +540,7 @@ router.get('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
-// ✏️ EDITAR ATENDIMENTO (🚫 BLOQUEIO PARA SUPER_ADMIN)
+// ✏️ EDITAR ATENDIMENTO
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -427,7 +561,6 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     }
 
-    // 🚫 BLOQUEIO: super_admin só edita os que ele mesmo criou
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
       return res.status(403).json({ 
@@ -524,7 +657,7 @@ router.put('/atendimento/:id', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
-// 🗑️ EXCLUIR ATENDIMENTO (🚫 BLOQUEIO PARA SUPER_ADMIN)
+// 🗑️ EXCLUIR ATENDIMENTO
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -534,7 +667,6 @@ router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async 
       return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     }
 
-    // 🚫 BLOQUEIO: super_admin só exclui os que ele mesmo criou
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
       return res.status(403).json({ 
@@ -561,9 +693,6 @@ router.delete('/atendimento/:id', authenticateToken, verificarEnfermaria, async 
 // ============================================
 // 📊 DASHBOARD
 // ============================================
-// ============================================
-// 📊 DASHBOARD
-// ============================================
 router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
     const hoje = new Date();
@@ -585,6 +714,14 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
     
     const ultimos30Dias = new Date();
     ultimos30Dias.setDate(ultimos30Dias.getDate() - 30);
+    
+    // 🆕 Conta atendimentos +24h
+    const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const atendimentosAntigos = await AtendimentoEnfermaria.countDocuments({
+      status: 'em_atendimento',
+      alerta24hReconhecido: false,
+      'entrada.dataHora': { $lte: limite24h }
+    });
     
     const desfechos = await AtendimentoEnfermaria.aggregate([
       { $match: { 'saida.desfecho': { $exists: true }, 'entrada.dataHora': { $gte: ultimos30Dias } } },
@@ -618,9 +755,7 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       { $sort: { count: -1 } }, { $limit: 5 }
     ]);
     
-    // ============================================
-    // 🆕 QUEIXAS COMUNS - DESCRIPTOGRAFADAS
-    // ============================================
+    // Queixas comuns - descriptografadas
     const queixasRaw = await AtendimentoEnfermaria.aggregate([
       { $match: { 'entrada.dataHora': { $gte: ultimos30Dias } } },
       { $group: { _id: '$entrada.queixa', count: { $sum: 1 } } },
@@ -628,17 +763,13 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       { $limit: 20 }
     ]);
     
-    // 🔓 Descriptografa cada queixa e agrupa as que ficarem iguais
     const queixasMap = new Map();
     queixasRaw.forEach(q => {
       let texto = q._id;
       try {
         texto = descriptografar(q._id);
-      } catch (e) {
-        // Se falhar, mantém o valor bruto
-      }
+      } catch (e) {}
       
-      // Trunca para agrupar queixas parecidas
       const textoChave = (texto || '').substring(0, 50).trim();
       
       if (queixasMap.has(textoChave)) {
@@ -648,13 +779,11 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       }
     });
     
-    // Ordena por count e pega as 5 mais comuns
     const queixasOrdenadas = Array.from(queixasMap.entries())
       .map(([queixa, count]) => ({ queixa, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
     
-    // 🔒 MASCARAR para super_admin
     const queixasParaEnviar = ROLES_MASCARADOS.includes(req.userRole)
       ? queixasOrdenadas.map(q => ({
           queixa: '🔒 Conteúdo protegido',
@@ -689,7 +818,8 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       metricas: {
         hoje: atendimentosHoje, semana: atendimentosSemana,
         mes: atendimentosMes, total: totalAtendimentos,
-        tempoMedioMinutos: mediaMinutos
+        tempoMedioMinutos: mediaMinutos,
+        atendimentosAntigos
       },
       desfechos: desfechos.map(d => ({
         tipo: d._id,
@@ -705,7 +835,7 @@ router.get('/dashboard', authenticateToken, verificarEnfermaria, async (req, res
       tendencias: {
         ultimos7Dias,
         porTurma: porTurma.map(t => ({ turma: t._id || 'Sem turma', count: t.count })),
-        queixasComuns: queixasParaEnviar,  // 🆕 com mascaramento
+        queixasComuns: queixasParaEnviar,
         distribuicaoHoraria: horasDistribuicao
       }
     });
@@ -884,7 +1014,7 @@ router.get('/relatorio/geral', authenticateToken, verificarEnfermaria, async (re
 });
 
 // ============================================
-// 📋 LISTAR ATENDIMENTOS (COM PAGINAÇÃO + BUSCA NO BACKEND)
+// 📋 LISTAR ATENDIMENTOS (COM PAGINAÇÃO + BUSCA)
 // ============================================
 router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) => {
   try {
@@ -893,31 +1023,27 @@ router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) =
       status, 
       dataInicio, 
       dataFim, 
-      busca,         // 🆕 busca por nome/matrícula
+      busca,
       page = 1, 
       limit = 20 
     } = req.query;
     
     let query = {};
     
-    // Filtro por turma
     if (turma && turma.trim() !== '') {
       query.alunoTurma = turma;
     }
     
-    // Filtro por status
     if (status && status !== 'todos') {
       query.status = status;
     }
     
-    // Filtro por período
     if (dataInicio || dataFim) {
       query['entrada.dataHora'] = {};
       if (dataInicio) query['entrada.dataHora'].$gte = new Date(dataInicio);
       if (dataFim) query['entrada.dataHora'].$lte = new Date(dataFim + 'T23:59:59');
     }
     
-    // 🆕 BUSCA por nome OU matrícula (no banco, em TODOS os registros)
     if (busca && busca.trim() !== '') {
       const termo = busca.trim();
       query.$or = [
@@ -980,7 +1106,6 @@ router.get('/listar', authenticateToken, verificarEnfermaria, async (req, res) =
       updatedAt: a.updatedAt
     }));
 
-    // 🔒 MASCARAR PARA SUPER_ADMIN
     const listaMascarada = mascararParaAdmin(lista, req);
     
     res.json({
@@ -1007,26 +1132,32 @@ router.get('/atendimentos-ativos', authenticateToken, verificarEnfermaria, async
   try {
     const atendimentos = await AtendimentoEnfermaria.find({ status: 'em_atendimento' }).sort({ 'entrada.dataHora': -1 });
     
-    const lista = atendimentos.map(a => ({
-      id: a._id,
-      alunoId: a.alunoId,
-      alunoNome: a.alunoNome,
-      alunoTurma: a.alunoTurma,
-      alunoFoto: a.alunoFoto,
-      queixa: a.entrada.queixa,
-      dataHoraEntrada: a.entrada.dataHora,
-      tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
-      registradoPor: a.entrada.registradoPor,
-      registradoPorNome: a.entrada.registradoPorNome,
-      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
-      entrada: {
+    const lista = atendimentos.map(a => {
+      const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      return {
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoTurma: a.alunoTurma,
+        alunoFoto: a.alunoFoto,
         queixa: a.entrada.queixa,
-        observacoes: a.entrada.observacoes,
-        registradoPor: a.entrada.registradoPor
-      }
-    }));
+        dataHoraEntrada: a.entrada.dataHora,
+        tempoAtendimento: tempo.minutos,
+        tempoTexto: tempo.texto,
+        nivelTempo: tempo.nivel,
+        alerta24hAtivo: tempo.minutos >= 1440 && !a.alerta24hReconhecido,
+        totalAlertas24h: a.totalAlertas24h || 0,
+        registradoPor: a.entrada.registradoPor,
+        registradoPorNome: a.entrada.registradoPorNome,
+        _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
+        entrada: {
+          queixa: a.entrada.queixa,
+          observacoes: a.entrada.observacoes,
+          registradoPor: a.entrada.registradoPor
+        }
+      };
+    });
 
-    // 🔒 MASCARAR PARA SUPER_ADMIN
     const listaMascarada = mascararParaAdmin(lista, req);
     
     res.json({
@@ -1038,5 +1169,232 @@ router.get('/atendimentos-ativos', authenticateToken, verificarEnfermaria, async
     res.status(500).json({ success: false, error: 'Erro ao buscar atendimentos: ' + error.message });
   }
 });
+
+// ============================================
+// 🆕 LISTAR ATENDIMENTOS COM MAIS DE 24H
+// ============================================
+router.get('/atendimentos-antigos', authenticateToken, verificarEnfermaria, async (req, res) => {
+  try {
+    const agora = new Date();
+    const limite24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
+    
+    const atendimentos = await AtendimentoEnfermaria.find({
+      status: 'em_atendimento',
+      alerta24hReconhecido: false,
+      'entrada.dataHora': { $lte: limite24h }
+    }).sort({ 'entrada.dataHora': 1 });
+    
+    const lista = atendimentos.map(a => {
+      const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      return {
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoFoto: a.alunoFoto,
+        queixa: a.entrada.queixa,
+        dataHoraEntrada: a.entrada.dataHora,
+        tempoTexto: tempo.texto,
+        minutosEmAndamento: tempo.minutos,
+        nivelAlerta: tempo.nivel,
+        registradoPorNome: a.entrada.registradoPorNome,
+        registradoPor: a.entrada.registradoPor,
+        ultimoAlerta24h: a.ultimoAlerta24h,
+        totalAlertas24h: a.totalAlertas24h || 0,
+        alerta24hReconhecido: a.alerta24hReconhecido,
+        _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido',
+        entrada: {
+          queixa: a.entrada.queixa,
+          observacoes: a.entrada.observacoes,
+          registradoPor: a.entrada.registradoPor
+        }
+      };
+    });
+    
+    const listaMascarada = mascararParaAdmin(lista, req);
+    
+    res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// 🆕 VERIFICAR ATENDIMENTO DE 24H
+// ============================================
+router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarEnfermaria, async (req, res) => {
+  try {
+    const { acao, desfecho, desfechoOutrosTexto, coordenadorPatioNome, observacoes } = req.body;
+    const atendimentoId = req.params.id;
+    
+    if (!['ja_encerrou', 'manter_aberto'].includes(acao)) {
+      return res.status(400).json({ success: false, error: 'Ação inválida. Use "ja_encerrou" ou "manter_aberto".' });
+    }
+    
+    const atendimento = await AtendimentoEnfermaria.findById(atendimentoId);
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    if (atendimento.status !== 'em_atendimento') {
+      return res.status(400).json({ success: false, error: 'Atendimento não está em andamento' });
+    }
+    
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
+    }
+    
+    const enfermeiro = await User.findById(req.userId).select('nome');
+    const nomeResponsavel = enfermeiro?.nome || req.userNome || 'Enfermaria';
+    
+    if (acao === 'ja_encerrou') {
+      const desfechosValidos = ['retornou_sala', 'encaminhado_gestao', 'liberado_responsavel', 'liberado_coordenador', 'outros'];
+      const desfechoFinal = desfechosValidos.includes(desfecho) ? desfecho : 'outros';
+      
+      atendimento.saida = {
+        dataHora: new Date(),
+        desfecho: desfechoFinal,
+        desfechoOutrosTexto: desfechoFinal === 'outros' ? (desfechoOutrosTexto || `Encerrado após verificação de atendimento antigo (>24h) por ${nomeResponsavel}`) : undefined,
+        coordenadorPatioNome: desfechoFinal === 'liberado_coordenador' ? (coordenadorPatioNome || nomeResponsavel) : undefined,
+        observacoes: observacoes || `Verificado e encerrado por ${nomeResponsavel} em ${new Date().toLocaleString('pt-BR')}`,
+        registradoPor: req.userId,
+        registradoPorNome: nomeResponsavel
+      };
+      atendimento.status = 'finalizado';
+      atendimento.alerta24hReconhecido = true;
+      atendimento.updatedAt = new Date();
+      
+      await atendimento.save();
+      
+      return res.json({
+        success: true,
+        message: 'Atendimento encerrado com sucesso!',
+        atendimento: {
+          id: atendimento._id,
+          status: 'finalizado',
+          desfecho: desfechoFinal,
+          dataHoraSaida: atendimento.saida.dataHora
+        }
+      });
+    }
+    
+    const proximoAlerta = new Date(Date.now() + 20 * 60 * 1000);
+    atendimento.ultimoAlerta24h = proximoAlerta;
+    atendimento.updatedAt = new Date();
+    await atendimento.save();
+    
+    return res.json({
+      success: true,
+      message: 'Atendimento mantido aberto. Você será lembrado novamente em 20 minutos.',
+      proximoAlerta,
+      atendimento: {
+        id: atendimento._id,
+        status: 'em_atendimento',
+        proximoAlerta
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao verificar atendimento 24h:', error);
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// 🆕 PROCESSAR ALERTAS 24H (CHAMADA MANUAL / CRON)
+// ============================================
+router.post('/processar-alertas-24h', async (req, res) => {
+  try {
+    const resultado = await processarAlertas24h();
+    res.json({ success: true, ...resultado });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🧪 ENDPOINT DE TESTE — CRIAR ATENDIMENTO COM DATA ANTIGA
+// ============================================
+router.post('/teste/criar-atendimento-antigo', authenticateToken, verificarEnfermaria, async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ success: false, error: 'Endpoint desabilitado em produção' });
+    }
+    
+    const { alunoId, horasAtras = 26, queixa = '🧪 TESTE AUTOMÁTICO — criado com atraso' } = req.body;
+    
+    if (!alunoId) return res.status(400).json({ success: false, error: 'alunoId obrigatório' });
+    
+    const aluno = await User.findById(alunoId);
+    if (!aluno || aluno.role !== 'aluno') return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
+    
+    const enfermeiro = await User.findById(req.userId).select('nome');
+    const dataAntiga = new Date(Date.now() - horasAtras * 60 * 60 * 1000);
+    
+    const atendimento = new AtendimentoEnfermaria({
+      alunoId: aluno._id,
+      alunoNome: aluno.nome,
+      alunoMatricula: aluno.matricula,
+      alunoTurma: aluno.turma || 'Não informada',
+      alunoCurso: aluno.curso || 'Não informado',
+      alunoFoto: aluno.fotoPerfil,
+      entrada: {
+        dataHora: dataAntiga,
+        queixa,
+        observacoes: 'Gerado pelo endpoint de teste',
+        registradoPor: req.userId,
+        registradoPorNome: enfermeiro?.nome || req.userNome || 'Enfermaria'
+      },
+      status: 'em_atendimento',
+      ultimoAlerta24h: null,
+      alerta24hReconhecido: false,
+      totalAlertas24h: 0
+    });
+    
+    await atendimento.save();
+    
+    res.json({
+      success: true,
+      message: `Atendimento de teste criado com ${horasAtras}h de atraso`,
+      atendimento: {
+        id: atendimento._id,
+        alunoNome: aluno.nome,
+        dataHora: dataAntiga,
+        horasAtras
+      }
+    });
+  } catch (error) {
+    console.error('Erro no endpoint de teste:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🆕 SCHEDULER: PROCESSAMENTO PERIÓDICO DE ALERTAS 24H
+// ============================================
+let schedulerInterval = null;
+
+function iniciarSchedulerAlertas24h() {
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+  }
+  
+  setTimeout(async () => {
+    await processarAlertas24h();
+  }, 30000);
+  
+  schedulerInterval = setInterval(async () => {
+    await processarAlertas24h();
+  }, 5 * 60 * 1000);
+  
+  console.log('⏰ [SCHEDULER ENF] Agendador de alertas 24h iniciado (a cada 5 min)');
+}
+
+iniciarSchedulerAlertas24h();
+
+router.pararScheduler = () => {
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+    schedulerInterval = null;
+  }
+};
 
 module.exports = router;

@@ -195,6 +195,23 @@ const AtendimentoPsicologiaSchema = new mongoose.Schema({
     default: false
   },
   
+  // ============================================
+  // 🆕 CONTROLE DE ALERTAS DE 24H
+  // ============================================
+  ultimoAlerta24h: {
+    type: Date,
+    default: null,
+    index: true
+  },
+  totalAlertas24h: {
+    type: Number,
+    default: 0
+  },
+  alerta24hReconhecido: {
+    type: Boolean,
+    default: false
+  },
+  
   anexos: [{
     nome: String,
     url: String,
@@ -231,6 +248,8 @@ AtendimentoPsicologiaSchema.index({ createdAt: -1 });
 AtendimentoPsicologiaSchema.index({ temRemarcacaoPendente: 1, status: 1 });
 AtendimentoPsicologiaSchema.index({ 'remarcacoes.status': 1 });
 AtendimentoPsicologiaSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
+// 🆕 Índice para busca de atendimentos antigos
+AtendimentoPsicologiaSchema.index({ status: 1, 'entrada.dataHora': 1, ultimoAlerta24h: 1 });
 
 // ============================================
 // MIDDLEWARE: PRE-SAVE
@@ -279,6 +298,27 @@ AtendimentoPsicologiaSchema.statics.getTipoTarefaLabel = function(tipo) {
 };
 
 // ============================================
+// 🆕 BUSCAR ATENDIMENTOS QUE PRECISAM DE ALERTA 24H
+// Retorna atendimentos em andamento há mais de 24h
+// cujo último alerta foi há 20 min ou mais (ou nunca)
+// ============================================
+AtendimentoPsicologiaSchema.statics.buscarAtendimentosParaAlerta = async function() {
+  const agora = new Date();
+  const limite24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000); // 24h atrás
+  const intervaloAlerta = new Date(agora.getTime() - 20 * 60 * 1000); // 20 min atrás
+  
+  return await this.find({
+    status: 'em_andamento',
+    alerta24hReconhecido: false,
+    'entrada.dataHora': { $lte: limite24h },
+    $or: [
+      { ultimoAlerta24h: null },
+      { ultimoAlerta24h: { $lte: intervaloAlerta } }
+    ]
+  }).populate('entrada.registradoPor', 'nome email');
+};
+
+// ============================================
 // MÉTODOS DE INSTÂNCIA
 // ============================================
 AtendimentoPsicologiaSchema.methods.adicionarRemarcacao = function(dados) {
@@ -307,5 +347,5 @@ AtendimentoPsicologiaSchema.methods.adicionarRemarcacao = function(dados) {
 module.exports = mongoose.model(
   'AtendimentoPsicologia',
   AtendimentoPsicologiaSchema,
-  'atendimentopsicologias'  // ⚠️ CONFIRME o nome no passo anterior!
+  'atendimentopsicologias'
 );

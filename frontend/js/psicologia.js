@@ -386,6 +386,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // ============================================
+    // 🆕 VERIFICA SE VEIO COM ?verificar=ID
+    // (link direto da notificação de +24h)
+    // ============================================
+    const verificarAtendimentoId = new URLSearchParams(window.location.search).get('verificar');
+    
+    // ============================================
     // ⬇️ SÓ DAQUI PRA BAIXO É O FLUXO NORMAL (com login)
     // ============================================
     if (!token) { 
@@ -433,6 +439,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 3000);
 
+    // ============================================
+    // 🔄 POLLING PRINCIPAL (30s)
+    // ============================================
     setInterval(() => {
         if (safeGet('ativos')?.classList.contains('active')) {
             carregarAtendimentosAtivos();
@@ -450,12 +459,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 60000);
 
+    // ============================================
+    // 🆕 POLLING DE ATENDIMENTOS +24H (1 min)
+    // Atualiza o contador e dispara alertas visuais
+    // ============================================
+    setTimeout(() => atualizarContadorAtendimentosAntigos(), 5000);
+    setInterval(() => atualizarContadorAtendimentosAntigos(), 60000);
+
+    // ============================================
+    // 🆕 SE VEIO COM ?verificar=ID, ABRE MODAL DIRETO
+    // ============================================
+    if (verificarAtendimentoId) {
+        // Aguarda um tempo pra tudo carregar e abre o modal
+        setTimeout(async () => {
+            console.log('🔔 Abrindo verificação direta do atendimento:', verificarAtendimentoId);
+            
+            // Limpa a URL pra não reabrir em refresh
+            const urlLimpa = new URL(window.location.href);
+            urlLimpa.searchParams.delete('verificar');
+            window.history.replaceState({}, '', urlLimpa.toString());
+            
+            // Abre o modal de verificação
+            await abrirModalVerificacao24h();
+        }, 2500);
+    }
+
+    // ============================================
+    // LISTENERS DE ABAS
+    // ============================================
     safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboard();
         carregarAtendimentosConcluidos(1);
+        atualizarContadorAtendimentosAntigos();
     });
     safeGet('relatorios-tab')?.addEventListener('shown.bs.tab', () => carregarTurmasParaRelatorio());
-    safeGet('ativos-tab')?.addEventListener('shown.bs.tab', () => carregarAtendimentosAtivos());
+    safeGet('ativos-tab')?.addEventListener('shown.bs.tab', () => {
+        carregarAtendimentosAtivos();
+        atualizarContadorAtendimentosAntigos();
+    });
 
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
     safeGet('modoManualBtn')?.addEventListener('click', () => setModo('manual'));
@@ -2314,6 +2355,9 @@ function reiniciarScannerAutomatico() {
 // ============================================
 // ATENDIMENTOS ATIVOS
 // ============================================
+// ============================================
+// ATENDIMENTOS ATIVOS
+// ============================================
 async function carregarAtendimentosAtivos() {
     const container = safeGet('listaAtendimentosAtivos');
     if (!container) return;
@@ -2328,9 +2372,338 @@ async function carregarAtendimentosAtivos() {
         popularFiltroTurmasAndamento();
         aplicarFiltrosAndamento();
         atualizarBadgeTabAtivos(__atendimentosAtivosBrutos.length);
+        
+        // 🆕 Atualiza contador de atendimentos antigos (>24h) no dashboard
+        atualizarContadorAtendimentosAntigos();
     } catch (error) {
         console.error('Erro:', error);
         container.innerHTML = `<div class="mostrarToastConcluido mostrarToastConcluido-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
+    }
+}
+
+// ============================================
+// 🆕 ATUALIZAR CONTADOR DE ATENDIMENTOS +24H
+// ============================================
+async function atualizarContadorAtendimentosAntigos() {
+    try {
+        // 1. Busca do backend (com cache-buster para evitar cache)
+        const response = await fetch(`/api/psicologia/atendimentos-antigos?t=${Date.now()}`, {
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Cache-Control': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) {
+            console.warn(`[CARD-24H] HTTP ${response.status}`);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.warn('[CARD-24H] success=false');
+            return;
+        }
+        
+        const total = data.total || 0;
+        console.log(`[CARD-24H] Total do backend: ${total}`);
+        
+        // ============================================
+        // 2. Atualiza CONTADOR principal (o número)
+        // ============================================
+        const totalEl = document.getElementById('totalAtendimentosAntigos');
+        if (totalEl) {
+            totalEl.textContent = String(total);
+            console.log(`[CARD-24H] ✅ Contador atualizado para: ${total}`);
+        } else {
+            console.warn('[CARD-24H] ❌ Elemento #totalAtendimentosAntigos não encontrado');
+        }
+        
+        // ============================================
+        // 3. Atualiza BADGE (bolinha vermelha no canto)
+        // ============================================
+        const badge = document.getElementById('badgeAtendimentosAntigos');
+        if (badge) {
+            if (total > 0) {
+                badge.textContent = total;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        // ============================================
+        // 4. Atualiza ALERTA VERMELHO (aviso grande no topo)
+        // ============================================
+        const alerta = document.getElementById('alertaAtendimentosAntigos');
+        if (alerta) {
+            if (total > 0) {
+                alerta.style.display = 'block';
+                alerta.innerHTML = `
+                    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 24px;"></i>
+                            <div style="flex: 1;">
+                                <strong style="color: #991b1b; font-size: 15px;">⚠️ ${total} atendimento(s) há mais de 24h em andamento!</strong>
+                                <p style="margin: 4px 0 0; font-size: 13px; color: #991b1b;">
+                                    Verifique se já foram encerrados para manter os registros atualizados.
+                                </p>
+                            </div>
+                            <button onclick="abrirModalVerificacao24h()" 
+                                    class="btn btn-sm btn-danger"
+                                    style="border-radius: 8px; white-space: nowrap;">
+                                <i class="fas fa-clipboard-check"></i> Verificar
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                alerta.style.display = 'none';
+                alerta.innerHTML = '';
+            }
+        }
+        
+        // ============================================
+        // 5. Adiciona/remove classe de PULSO no card
+        // ============================================
+        const card = document.getElementById('cardAtendimentosAntigos');
+        if (card) {
+            if (total > 0) {
+                card.classList.add('tem-alerta');
+            } else {
+                card.classList.remove('tem-alerta');
+            }
+        }
+        
+        // ============================================
+        // 6. Notificação push (uma vez por sessão)
+        // ============================================
+        if (total > 0 && !sessionStorage.getItem('alerta24hNotificado')) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification('⚠️ Atendimentos há mais de 24h', {
+                        body: `Você tem ${total} atendimento(s) em andamento há mais de 24h. Verifique se já foram encerrados.`,
+                        icon: '/icons/favicon.ico',
+                        tag: 'alerta-24h'
+                    });
+                } catch (e) {
+                    console.warn('[CARD-24H] Erro ao enviar push:', e);
+                }
+            }
+            sessionStorage.setItem('alerta24hNotificado', 'true');
+        }
+        
+    } catch (error) {
+        console.error('[CARD-24H] ❌ Erro:', error);
+    }
+}
+
+// ============================================
+// 🆕 MODAL DE VERIFICAÇÃO DE ATENDIMENTOS >24H
+// ============================================
+async function abrirModalVerificacao24h() {
+    try {
+        const response = await fetch('/api/psicologia/atendimentos-antigos', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success || !data.atendimentos || data.atendimentos.length === 0) {
+            mostrarToastConcluido('✅ Nenhum atendimento há mais de 24h para verificar!', 'success');
+            return;
+        }
+        
+        const lista = data.atendimentos;
+        
+        const oldModal = safeGet('modalVerificacao24h');
+        if (oldModal) oldModal.remove();
+        
+        const modalHtml = `
+            <div class="modal fade" id="modalVerificacao24h" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #dc2626, #991b1b); color: white;">
+                            <h5 class="modal-title">
+                                <i class="fas fa-clock"></i> 
+                                Verificação de Atendimentos (>24h)
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 20px;"></i>
+                                    <div>
+                                        <strong style="color: #991b1b;">Atenção!</strong>
+                                        <p style="margin: 4px 0 0; font-size: 13px; color: #991b1b;">
+                                            Os atendimentos abaixo estão em andamento há mais de 24h. 
+                                            Verifique se já foram encerrados ou se precisam continuar abertos.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${lista.map(a => `
+                                <div class="card mb-3" style="border-left: 4px solid ${a.nivelAlerta === 'critico' ? '#dc2626' : '#f59e0b'};">
+                                    <div class="card-body">
+                                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                            <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                                                 style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;"
+                                                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                                            <div style="flex: 1;">
+                                                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
+                                                    <div>
+                                                        <h5 style="margin: 0 0 4px; color: #0f766e;">${escapeHTML(a.alunoNome)}</h5>
+                                                        <small style="color: #6b7280;">
+                                                            <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                                            ${a.alunoMatricula ? ` • <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula)}` : ''}
+                                                        </small>
+                                                    </div>
+                                                    <div style="text-align: right;">
+                                                        <div style="background: #fef2f2; color: #991b1b; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
+                                                            <i class="fas fa-clock"></i> ${escapeHTML(a.tempoTexto)}
+                                                        </div>
+                                                        ${a.totalAlertas24h > 0 ? `
+                                                            <div style="font-size: 10px; color: #9ca3af; margin-top: 4px;">
+                                                                ${a.totalAlertas24h} alerta(s) enviado(s)
+                                                            </div>
+                                                        ` : ''}
+                                                    </div>
+                                                </div>
+                                                
+                                                <div style="margin-top: 8px;">
+                                                    <span class="badge" style="background: #14b8a6; font-size: 11px;">
+                                                        ${escapeHTML(a.tipoTarefaLabel)}
+                                                    </span>
+                                                    <span class="badge" style="background: ${a.gravidade === 'critica' ? '#dc2626' : a.gravidade === 'alta' ? '#f59e0b' : '#6b7280'}; font-size: 11px;">
+                                                        ${escapeHTML((a.gravidade || 'media').toUpperCase())}
+                                                    </span>
+                                                    <span class="badge" style="background: #6b7280; font-size: 11px;">
+                                                        ${escapeHTML((a.prioridade || 'normal').toUpperCase())}
+                                                    </span>
+                                                </div>
+                                                
+                                                <div style="background: #f9fafb; padding: 8px 10px; border-radius: 6px; margin-top: 8px; font-size: 13px; color: #374151;">
+                                                    ${escapeHTML((a.descricao || '').substring(0, 200))}${(a.descricao || '').length > 200 ? '...' : ''}
+                                                </div>
+                                                
+                                                <div style="font-size: 11px; color: #9ca3af; margin-top: 6px;">
+                                                    <i class="fas fa-user"></i> Registrado por ${escapeHTML(a.registradoPorNome || '-')} 
+                                                    • <i class="fas fa-calendar"></i> ${new Date(a.dataHoraEntrada).toLocaleString('pt-BR')}
+                                                </div>
+                                                
+                                                <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+                                                    <button class="btn btn-sm btn-success" 
+                                                            onclick="verificarAtendimento24h('${a.id}', 'ja_encerrou')">
+                                                        <i class="fas fa-check-circle"></i> Já encerrou
+                                                    </button>
+                                                    <button class="btn btn-sm btn-warning" 
+                                                            onclick="verificarAtendimento24h('${a.id}', 'manter_aberto')">
+                                                        <i class="fas fa-clock"></i> Manter aberto (+20min)
+                                                    </button>
+                                                    <button class="btn btn-sm btn-info" 
+                                                            onclick="verAtendimento('${a.id}')">
+                                                        <i class="fas fa-eye"></i> Ver detalhes
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = new bootstrap.Modal(safeGet('modalVerificacao24h'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Erro ao abrir verificação 24h:', error);
+        mostrarToastConcluido('Erro ao carregar atendimentos antigos', 'error');
+    }
+}
+
+// 🆕 Verificar atendimento de 24h
+async function verificarAtendimento24h(atendimentoId, acao) {
+    try {
+        let resultado = 'resolvido';
+        let observacoes = '';
+        
+        if (acao === 'ja_encerrou') {
+            // Pergunta o resultado
+            const resultadosOpcoes = `
+                <option value="resolvido">✅ Resolvido</option>
+                <option value="em_acompanhamento">🔄 Em Acompanhamento</option>
+                <option value="reincidente">⚠️ Reincidente</option>
+                <option value="encaminhado">↗️ Encaminhado</option>
+                <option value="pendente">⏳ Pendente</option>
+            `;
+            
+            const resultadoEscolhido = prompt(
+                `Qual o resultado do atendimento?\n\nDigite o número:\n1 - Resolvido\n2 - Em Acompanhamento\n3 - Reincidente\n4 - Encaminhado\n5 - Pendente`,
+                '1'
+            );
+            
+            if (resultadoEscolhido === null) return; // Cancelou
+            
+            const mapa = {
+                '1': 'resolvido',
+                '2': 'em_acompanhamento',
+                '3': 'reincidente',
+                '4': 'encaminhado',
+                '5': 'pendente'
+            };
+            
+            resultado = mapa[resultadoEscolhido] || 'resolvido';
+            
+            observacoes = prompt('Observações finais (opcional):', '') || '';
+        } else {
+            const confirmar = await confirm(
+                'Manter o atendimento aberto?\n\n' +
+                'Você será lembrado novamente em 20 minutos.'
+            );
+            if (!confirmar) return;
+        }
+        
+        const response = await fetch(`/api/psicologia/atendimento/${atendimentoId}/verificar-24h`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ acao, resultado, observacoes })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarToastConcluido(`✅ ${data.message}`, 'success');
+            
+            // Recarrega a lista
+            await abrirModalVerificacao24h();
+            carregarAtendimentosAtivos();
+            carregarDashboard();
+            
+            // Se encerrou, recarrega concluídos
+            if (acao === 'ja_encerrou') {
+                carregarAtendimentosConcluidos(1);
+            }
+        } else {
+            mostrarToastConcluido('❌ ' + (data.error || 'Erro ao verificar'), 'error');
+        }
+    } catch (error) {
+        console.error('Erro ao verificar atendimento 24h:', error);
+        mostrarToastConcluido('Erro ao verificar atendimento', 'error');
     }
 }
 
@@ -2368,9 +2741,19 @@ function renderizarListaAtendimentosAtivos(lista) {
     const prioridadeIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baixa: '🟢' };
 
     container.innerHTML = lista.map(a => {
-        // 🔒 Detecta se está mascarado
         const estaMascarado = a._mascarado === true;
         const podeEditar = !estaMascarado;
+        
+        // 🆕 Define cor do badge de tempo baseado no nível
+        const tempoBadgeClass = {
+            'normal': 'bg-secondary',
+            'atencao': 'bg-warning text-dark',
+            'alerta': 'bg-orange text-white',
+            'critico': 'bg-danger'
+        }[a.nivelTempo] || 'bg-secondary';
+        
+        // 🆕 Ícone do tempo
+        const tempoIcon = a.nivelTempo === 'critico' ? 'fa-exclamation-triangle' : 'fa-clock';
         
         return `
         <div class="list-group-item filtrado" ${estaMascarado ? 'style="border-left: 4px solid #f59e0b;"' : ''}>
@@ -2379,6 +2762,15 @@ function renderizarListaAtendimentosAtivos(lista) {
                     <i class="fas fa-lock"></i> <strong>Conteúdo protegido</strong> — criado por ${escapeHTML(a._criadorNome || 'outro profissional')}
                 </div>
             ` : ''}
+            
+            ${a.alerta24hAtivo ? `
+                <div style="background: #fef2f2; border-left: 3px solid #dc2626; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i>
+                    <strong style="color: #991b1b;">Atendimento há mais de 24h!</strong>
+                    <span style="color: #991b1b; font-size: 11px;">${a.totalAlertas24h || 0} alerta(s) enviado(s)</span>
+                </div>
+            ` : ''}
+            
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-3">
                     <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome || '?')}" 
@@ -2397,12 +2789,20 @@ function renderizarListaAtendimentosAtivos(lista) {
                     </div>
                 </div>
                 <div class="text-end">
-                    <small class="text-muted d-block"><i class="fas fa-clock"></i> Há ${a.tempoAtendimento || 0} min</small>
+                    <small class="d-block ${a.nivelTempo === 'critico' ? 'text-danger fw-bold' : 'text-muted'}">
+                        <i class="fas ${tempoIcon}"></i> ${escapeHTML(a.tempoTexto || '0 min')}
+                    </small>
                     <div class="mt-2 d-flex gap-1 flex-wrap justify-content-end">
                         <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Ver detalhes">
                             <i class="fas fa-eye"></i> Ver
                         </button>
                         <button class="btn btn-sm btn-success" onclick="imprimirAtendimento('${a.id}')" title="Imprimir"><i class="fas fa-print"></i></button>
+                        
+                        ${a.alerta24hAtivo ? `
+                            <button class="btn btn-sm btn-danger" onclick="abrirModalVerificacao24h()" title="Verificar 24h">
+                                <i class="fas fa-exclamation-triangle"></i> Verificar
+                            </button>
+                        ` : ''}
                         
                         ${podeEditar ? `
                             <button class="btn btn-sm btn-secondary" onclick="abrirEditarAtendimento('${a.id}')" title="Editar">
@@ -5389,3 +5789,8 @@ window.refazerAssinaturaPsico = refazerAssinaturaPsico;
 window.mostrarTelaAssinatura = mostrarTelaAssinatura;
 window.limparAssinaturaTela = limparAssinaturaTela;
 window.salvarAssinaturaTela = salvarAssinaturaTela;
+
+// 🆕 Verificação 24h
+window.abrirModalVerificacao24h = abrirModalVerificacao24h;
+window.verificarAtendimento24h = verificarAtendimento24h;
+window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;

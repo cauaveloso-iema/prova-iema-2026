@@ -35,7 +35,7 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
     
-    // 🆕 Auditoria de edição
+    // Auditoria de edição
     editadoEm: { type: Date, default: null },
     editadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     editadoPorNome: { type: String, default: null }
@@ -64,7 +64,7 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
     
-    // 🆕 Auditoria de edição
+    // Auditoria de edição
     editadoEm: { type: Date, default: null },
     editadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     editadoPorNome: { type: String, default: null }
@@ -75,6 +75,23 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
     type: String,
     enum: ['em_atendimento', 'finalizado'],
     default: 'em_atendimento'
+  },
+  
+  // ============================================
+  // 🆕 CONTROLE DE ALERTAS DE 24H
+  // ============================================
+  ultimoAlerta24h: {
+    type: Date,
+    default: null,
+    index: true
+  },
+  totalAlertas24h: {
+    type: Number,
+    default: 0
+  },
+  alerta24hReconhecido: {
+    type: Boolean,
+    default: false
   },
   
   // Metadados
@@ -92,6 +109,8 @@ const AtendimentoEnfermariaSchema = new mongoose.Schema({
 AtendimentoEnfermariaSchema.index({ alunoId: 1, status: 1 });
 AtendimentoEnfermariaSchema.index({ alunoTurma: 1, createdAt: -1 });
 AtendimentoEnfermariaSchema.index({ createdAt: -1 });
+// 🆕 Índice para busca de atendimentos antigos
+AtendimentoEnfermariaSchema.index({ status: 1, 'entrada.dataHora': 1, ultimoAlerta24h: 1 });
 
 // ============================================
 // MÉTODOS ESTÁTICOS
@@ -103,6 +122,25 @@ AtendimentoEnfermariaSchema.statics.alunoEmAtendimento = async function(alunoId)
 
 AtendimentoEnfermariaSchema.statics.getAtendimentoAtivo = async function(alunoId) {
   return await this.findOne({ alunoId, status: 'em_atendimento' }).sort({ createdAt: -1 });
+};
+
+// ============================================
+// 🆕 BUSCAR ATENDIMENTOS QUE PRECISAM DE ALERTA 24H
+// ============================================
+AtendimentoEnfermariaSchema.statics.buscarAtendimentosParaAlerta = async function() {
+  const agora = new Date();
+  const limite24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
+  const intervaloAlerta = new Date(agora.getTime() - 20 * 60 * 1000);
+  
+  return await this.find({
+    status: 'em_atendimento',
+    alerta24hReconhecido: false,
+    'entrada.dataHora': { $lte: limite24h },
+    $or: [
+      { ultimoAlerta24h: null },
+      { ultimoAlerta24h: { $lte: intervaloAlerta } }
+    ]
+  });
 };
 
 module.exports = mongoose.model('AtendimentoEnfermaria', AtendimentoEnfermariaSchema);

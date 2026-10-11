@@ -2,46 +2,31 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const AtendimentoPsicologia = require('../models/AtendimentoPsicologia');
 const SessaoAssinatura = require('../models/SessaoAssinatura');
+const Notificacao = require('../models/Notificacao');
 
 // ============================================
 // 🔒 HELPER: MASCARAR DADOS SENSÍVEIS
 // ============================================
-// REGRA:
-//   - psicologia        → vê TUDO sempre (é o profissional)
-//   - super_admin       → SÓ vê o que ELE criou
-//   - admin             → nem tem acesso ao módulo
-// ============================================
 const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
-
-// 🔥 APENAS super_admin é mascarado
 const ROLES_MASCARADOS = ['super_admin'];
 
 function mascararParaAdmin(dados, req) {
   if (!req?.userRole || !ROLES_MASCARADOS.includes(req.userRole)) {
     return dados;
   }
-  
-  if (Array.isArray(dados)) {
-    return dados.map(item => mascararItem(item, req));
-  }
-  
+  if (Array.isArray(dados)) return dados.map(item => mascararItem(item, req));
   return mascararItem(dados, req);
 }
 
 function mascararItem(item, req) {
   if (!item) return item;
-  
   const obj = item.toObject ? item.toObject() : JSON.parse(JSON.stringify(item));
-  
   const adminId = req.userId?.toString();
-  const criadorId = (
-    obj.entrada?.registradoPor || 
-    obj.registradoPorId || 
-    obj.criadoPor
-  )?.toString();
+  const criadorId = (obj.entrada?.registradoPor || obj.registradoPorId || obj.criadoPor)?.toString();
   
   if (criadorId && adminId && criadorId === adminId) {
     obj._mascarado = false;
@@ -52,35 +37,23 @@ function mascararItem(item, req) {
   obj._mascarado = true;
   obj._criadoPorMim = false;
   
-  // ===== entrada =====
   if (obj.entrada) {
     if (obj.entrada.descricao) obj.entrada.descricao = MASCARA_TEXTO;
     if (obj.entrada.observacoes) obj.entrada.observacoes = MASCARA_TEXTO;
     if (obj.entrada.assinaturaBase64) obj.entrada.assinaturaBase64 = null;
   }
-  
-  // ===== descricao direta (na lista) =====
   if (obj.descricao) obj.descricao = MASCARA_TEXTO;
-  
-  // ===== saida =====
   if (obj.saida) {
     if (obj.saida.resultadoTexto) obj.saida.resultadoTexto = MASCARA_TEXTO;
     if (obj.saida.observacoesFinais) obj.saida.observacoesFinais = MASCARA_TEXTO;
   }
-  
-  // ===== detalhes (TODOS) =====
   if (obj.detalhes && typeof obj.detalhes === 'object') {
     Object.keys(obj.detalhes).forEach(chave => {
       const valor = obj.detalhes[chave];
-      if (Array.isArray(valor)) {
-        obj.detalhes[chave] = [MASCARA_TEXTO];
-      } else if (valor !== undefined && valor !== null && valor !== '') {
-        obj.detalhes[chave] = MASCARA_TEXTO;
-      }
+      if (Array.isArray(valor)) obj.detalhes[chave] = [MASCARA_TEXTO];
+      else if (valor !== undefined && valor !== null && valor !== '') obj.detalhes[chave] = MASCARA_TEXTO;
     });
   }
-  
-  // ===== remarcações =====
   if (Array.isArray(obj.remarcacoes)) {
     obj.remarcacoes = obj.remarcacoes.map(rem => {
       const nova = { ...rem };
@@ -89,26 +62,152 @@ function mascararItem(item, req) {
       return nova;
     });
   }
-  
   return obj;
 }
 
 function adminPodeModificar(atendimento, req) {
-  if (!ROLES_MASCARADOS.includes(req.userRole)) {
-    return { permitido: true };
-  }
-  
+  if (!ROLES_MASCARADOS.includes(req.userRole)) return { permitido: true };
   const adminId = req.userId?.toString();
   const criadorId = atendimento?.entrada?.registradoPor?.toString();
-  
-  if (criadorId === adminId) {
-    return { permitido: true };
-  }
-  
+  if (criadorId === adminId) return { permitido: true };
   return {
     permitido: false,
     motivo: 'Você não pode editar/excluir atendimentos criados por outros profissionais.'
   };
+}
+
+// ============================================
+// HELPER: FORMATAR TEMPO DE ATENDIMENTO
+// Regra:
+//   - < 60 min  → "X min"
+//   - < 24h     → "Xh Ymin"
+//   - >= 24h    → "Xd Yh Zmin"
+// ============================================
+function formatarTempoAtendimento(dataEntrada) {
+  if (!dataEntrada) return { minutos: 0, texto: '0 min', nivel: 'normal' };
+  
+  const agora = new Date();
+  const entrada = new Date(dataEntrada);
+  const diffMs = agora - entrada;
+  const minutosTotal = Math.floor(diffMs / 60000);
+  
+  if (minutosTotal < 0) {
+    return { minutos: 0, texto: 'agora', nivel: 'normal' };
+  }
+  
+  if (minutosTotal < 60) {
+    return {
+      minutos: minutosTotal,
+      texto: `${minutosTotal} min`,
+      nivel: minutosTotal >= 45 ? 'atencao' : 'normal'
+    };
+  }
+  
+  if (minutosTotal < 1440) {
+    const horas = Math.floor(minutosTotal / 60);
+    const mins = minutosTotal % 60;
+    const texto = mins > 0 ? `${horas}h ${mins}min` : `${horas}h`;
+    return {
+      minutos: minutosTotal,
+      texto,
+      nivel: minutosTotal >= 720 ? 'alerta' : 'atencao'
+    };
+  }
+  
+  const dias = Math.floor(minutosTotal / 1440);
+  const horasRestantes = Math.floor((minutosTotal % 1440) / 60);
+  const minsRestantes = minutosTotal % 60;
+  
+  let texto = `${dias}d`;
+  if (horasRestantes > 0) texto += ` ${horasRestantes}h`;
+  if (minsRestantes > 0) texto += ` ${minsRestantes}min`;
+  
+  return {
+    minutos: minutosTotal,
+    texto,
+    nivel: 'critico'
+  };
+}
+
+// ============================================
+// HELPER: CRIAR NOTIFICAÇÃO INTERNA
+// ============================================
+async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link, icone, cor, metadata }) {
+  try {
+    const TIPOS_VALIDOS = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
+    const tipoFinal = TIPOS_VALIDOS.includes(tipo) ? tipo : 'sistema';
+    
+    const notif = new Notificacao({
+      usuarioId,
+      titulo,
+      mensagem,
+      tipo: tipoFinal,
+      link: link || '/psicologia.html',
+      icone: icone || '⏰',
+      cor: cor || '#f59e0b',
+      lida: false,
+      metadata: metadata || {}
+    });
+    await notif.save();
+    return notif;
+  } catch (e) {
+    console.error('[NOTIF] Erro ao salvar notificação:', e.message);
+    throw e;
+  }
+}
+
+// ============================================
+// HELPER: PROCESSAR ALERTAS DE 24H
+// ============================================
+async function processarAlertas24h() {
+  try {
+    const atendimentos = await AtendimentoPsicologia.buscarAtendimentosParaAlerta();
+    
+    if (atendimentos.length === 0) return { processados: 0 };
+    
+    let processados = 0;
+    
+    for (const atendimento of atendimentos) {
+      const registradoPor = atendimento.entrada?.registradoPor;
+      
+      if (!registradoPor) continue;
+      
+      const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
+      const tipoLabel = AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa);
+      
+      try {
+        await criarNotificacaoInterna({
+          usuarioId: registradoPor._id || registradoPor,
+          titulo: '⏰ Atendimento há mais de 24h em andamento',
+          mensagem: `O atendimento de ${atendimento.alunoNome} (${tipoLabel}) está em andamento há ${tempo.texto}. Verifique se já foi encerrado.`,
+          tipo: 'sistema',
+          link: `/psicologia.html?verificar=${atendimento._id}`,
+          icone: '⏰',
+          cor: '#dc2626',
+          metadata: {
+            atendimentoId: atendimento._id.toString(),
+            alunoId: atendimento.alunoId.toString(),
+            alunoNome: atendimento.alunoNome,
+            minutosEmAndamento: tempo.minutos,
+            tempoTexto: tempo.texto
+          }
+        });
+        
+        atendimento.ultimoAlerta24h = new Date();
+        atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
+        await atendimento.save();
+        
+        processados++;
+      } catch (e) {
+        console.error(`[ALERTA 24H] Falha para ${atendimento.alunoNome}:`, e.message);
+      }
+    }
+    
+    return { processados };
+  } catch (error) {
+    console.error('Erro ao processar alertas 24h:', error);
+    return { processados: 0, erro: error.message };
+  }
 }
 
 // ============================================
@@ -134,7 +233,6 @@ const authenticateToken = (req, res, next) => {
 };
 
 const verificarPsicologia = (req, res, next) => {
-  // 🔥 Apenas psicologia e super_admin acessam
   const allowedRoles = ['psicologia', 'super_admin'];
   if (!allowedRoles.includes(req.userRole)) {
     return res.status(403).json({
@@ -146,7 +244,7 @@ const verificarPsicologia = (req, res, next) => {
 };
 
 // ============================================
-// 🔥 HELPER: Timezone Brasil (UTC-3)
+// HELPER: Timezone Brasil (UTC-3)
 // ============================================
 function inicioDoDiaBrasil(dataStr) {
   return new Date(dataStr + 'T00:00:00.000-03:00');
@@ -396,8 +494,6 @@ router.post('/aplicar-assinatura', authenticateToken, verificarPsicologia, async
     
     await atendimento.save();
     
-    console.log(`✅ Assinatura aplicada ao atendimento ${atendimentoId} (sessão ${sessaoId})`);
-    
     res.json({
       success: true,
       message: 'Assinatura aplicada com sucesso!',
@@ -433,7 +529,6 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
       return res.status(400).json({ success: false, error: 'Atendimento já finalizado' });
     }
     
-    // 🚫 super_admin só finaliza os que ele mesmo criou
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
       return res.status(403).json({ 
@@ -455,6 +550,7 @@ router.post('/finalizar', authenticateToken, verificarPsicologia, async (req, re
     };
     atendimento.status = 'finalizado';
     atendimento.updatedAt = new Date();
+    atendimento.alerta24hReconhecido = true;
     
     await atendimento.save();
     
@@ -491,7 +587,6 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
     const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
-    // 🚫 super_admin só remarca os que ele mesmo criou
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
       return res.status(403).json({ 
@@ -512,7 +607,7 @@ router.post('/remarcar', authenticateToken, verificarPsicologia, async (req, res
     const psicologo = await User.findById(req.userId).select('nome');
     
     const remarcacao = {
-      id: new (require('mongoose').Types.ObjectId)(),
+      id: new mongoose.Types.ObjectId(),
       dataRemarcacao,
       horarioRemarcacao,
       motivoRemarcacao,
@@ -657,7 +752,6 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
     
     if (!atendimento) return res.status(404).json({ success: false, error: 'Remarcação não encontrada' });
     
-    // 🚫 super_admin só finaliza remarcação dos que ele mesmo criou
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
       return res.status(403).json({ 
@@ -679,6 +773,7 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
     
     if (acao === 'realizado' && atendimento.status === 'em_andamento') {
       atendimento.status = 'finalizado';
+      atendimento.alerta24hReconhecido = true;
       atendimento.saida = {
         dataHora: new Date(),
         resultado: 'resolvido',
@@ -698,6 +793,131 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarPsicologia, as
     
     res.json({ success: true, message: mensagem });
   } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// LISTAR ATENDIMENTOS COM MAIS DE 24H
+// ============================================
+router.get('/atendimentos-antigos', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const agora = new Date();
+    const limite24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
+    
+    const atendimentos = await AtendimentoPsicologia.find({
+      status: 'em_andamento',
+      alerta24hReconhecido: false,
+      'entrada.dataHora': { $lte: limite24h }
+    }).sort({ 'entrada.dataHora': 1 });
+    
+    const lista = atendimentos.map(a => {
+      const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      return {
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoFoto: a.alunoFoto,
+        tipoTarefa: a.tipoTarefa,
+        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+        descricao: a.entrada.descricao,
+        gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade,
+        dataHoraEntrada: a.entrada.dataHora,
+        tempoTexto: tempo.texto,
+        minutosEmAndamento: tempo.minutos,
+        nivelAlerta: tempo.nivel,
+        registradoPorNome: a.entrada.registradoPorNome,
+        registradoPor: a.entrada.registradoPor,
+        ultimoAlerta24h: a.ultimoAlerta24h,
+        totalAlertas24h: a.totalAlertas24h || 0,
+        alerta24hReconhecido: a.alerta24hReconhecido
+      };
+    });
+    
+    res.json({ success: true, total: lista.length, atendimentos: lista });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Erro: ' + error.message });
+  }
+});
+
+// ============================================
+// VERIFICAR ATENDIMENTO DE 24H
+// Ações: 'ja_encerrou' | 'manter_aberto'
+// ============================================
+router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarPsicologia, async (req, res) => {
+  try {
+    const { acao, resultado, observacoes } = req.body;
+    const atendimentoId = req.params.id;
+    
+    if (!['ja_encerrou', 'manter_aberto'].includes(acao)) {
+      return res.status(400).json({ success: false, error: 'Ação inválida. Use "ja_encerrou" ou "manter_aberto".' });
+    }
+    
+    const atendimento = await AtendimentoPsicologia.findById(atendimentoId);
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    if (atendimento.status !== 'em_andamento') {
+      return res.status(400).json({ success: false, error: 'Atendimento não está em andamento' });
+    }
+    
+    const check = adminPodeModificar(atendimento, req);
+    if (!check.permitido) {
+      return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
+    }
+    
+    const psicologo = await User.findById(req.userId).select('nome');
+    const nomeResponsavel = psicologo?.nome || req.userNome || 'Psicologia';
+    
+    if (acao === 'ja_encerrou') {
+      const resultadosValidos = ['resolvido', 'em_acompanhamento', 'reincidente', 'encaminhado', 'pendente'];
+      const resultadoFinal = resultadosValidos.includes(resultado) ? resultado : 'resolvido';
+      
+      atendimento.saida = {
+        dataHora: new Date(),
+        resultado: resultadoFinal,
+        resultadoTexto: 'Encerrado após verificação de atendimento antigo (>24h)',
+        observacoesFinais: observacoes || `Verificado e encerrado por ${nomeResponsavel} em ${new Date().toLocaleString('pt-BR')}`,
+        registradoPor: req.userId,
+        registradoPorNome: nomeResponsavel
+      };
+      atendimento.status = 'finalizado';
+      atendimento.alerta24hReconhecido = true;
+      atendimento.updatedAt = new Date();
+      
+      await atendimento.save();
+      
+      return res.json({
+        success: true,
+        message: 'Atendimento encerrado com sucesso!',
+        atendimento: {
+          id: atendimento._id,
+          status: 'finalizado',
+          resultado: resultadoFinal,
+          dataHoraSaida: atendimento.saida.dataHora
+        }
+      });
+    }
+    
+    // ação === 'manter_aberto'
+    const proximoAlerta = new Date(Date.now() + 20 * 60 * 1000);
+    atendimento.ultimoAlerta24h = proximoAlerta;
+    atendimento.updatedAt = new Date();
+    await atendimento.save();
+    
+    return res.json({
+      success: true,
+      message: 'Atendimento mantido aberto. Você será lembrado novamente em 20 minutos.',
+      proximoAlerta,
+      atendimento: {
+        id: atendimento._id,
+        status: 'em_andamento',
+        proximoAlerta
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao verificar atendimento 24h:', error);
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
@@ -734,6 +954,13 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
         $gte: inicioDoDiaBrasil(hojeStr),
         $lte: fimDoDiaBrasil(hojeStr)
       }
+    });
+    
+    const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const atendimentosAntigos = await AtendimentoPsicologia.countDocuments({
+      status: 'em_andamento',
+      alerta24hReconhecido: false,
+      'entrada.dataHora': { $lte: limite24h }
     });
     
     const porTipo = await AtendimentoPsicologia.aggregate([
@@ -807,7 +1034,8 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
         mes: atendimentosMes,
         total,
         emAndamento,
-        finalizadosHoje
+        finalizadosHoje,
+        atendimentosAntigos
       },
       porTipo: porTipo.map(t => ({
         tipo: t._id,
@@ -836,40 +1064,45 @@ router.get('/dashboard', authenticateToken, verificarPsicologia, async (req, res
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS ATIVOS (🔒 MASCARADO PARA SUPER_ADMIN)
+// LISTAR ATENDIMENTOS ATIVOS
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimentos = await AtendimentoPsicologia.find({ status: 'em_andamento' })
       .sort({ prioridade: -1, 'entrada.dataHora': -1 });
     
-    const lista = atendimentos.map(a => ({
-      id: a._id,
-      alunoId: a.alunoId,
-      alunoNome: a.alunoNome,
-      alunoTurma: a.alunoTurma,
-      alunoFoto: a.alunoFoto,
-      tipoTarefa: a.tipoTarefa,
-      tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-      descricao: a.entrada.descricao,
-      gravidade: a.entrada.gravidade,
-      prioridade: a.prioridade,
-      dataHoraEntrada: a.entrada.dataHora,
-      tempoAtendimento: Math.floor((new Date() - new Date(a.entrada.dataHora)) / 60000),
-      temRemarcacaoPendente: a.temRemarcacaoPendente || false,
-      temAssinatura: !!(a.entrada?.assinaturaBase64),
-      statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
-      // 🔑 Para o mask funcionar
-      entrada: {
+    const lista = atendimentos.map(a => {
+      const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      return {
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoTurma: a.alunoTurma,
+        alunoFoto: a.alunoFoto,
+        tipoTarefa: a.tipoTarefa,
+        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
         descricao: a.entrada.descricao,
-        observacoes: a.entrada.observacoes,
-        registradoPor: a.entrada.registradoPor,
-        registradoPorNome: a.entrada.registradoPorNome
-      },
-      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
-    }));
+        gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade,
+        dataHoraEntrada: a.entrada.dataHora,
+        tempoAtendimento: tempo.minutos,
+        tempoTexto: tempo.texto,
+        nivelTempo: tempo.nivel,
+        alerta24hAtivo: tempo.minutos >= 1440 && !a.alerta24hReconhecido,
+        totalAlertas24h: a.totalAlertas24h || 0,
+        temRemarcacaoPendente: a.temRemarcacaoPendente || false,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+        entrada: {
+          descricao: a.entrada.descricao,
+          observacoes: a.entrada.observacoes,
+          registradoPor: a.entrada.registradoPor,
+          registradoPorNome: a.entrada.registradoPorNome
+        },
+        _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
+      };
+    });
     
-    // 🔒 Mascara para super_admin
     const listaMascarada = mascararParaAdmin(lista, req);
     
     res.json({
@@ -883,7 +1116,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarPsicologia, async
 });
 
 // ============================================
-// LISTAR TODOS OS ATENDIMENTOS (🔒 MASCARADO + BUSCA NO BACKEND)
+// LISTAR TODOS OS ATENDIMENTOS
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
@@ -895,8 +1128,8 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
       turma, 
       dataInicio, 
       dataFim,
-      busca,          // 🔥 busca por nome/matrícula
-      resultado       // 🔥 filtro por resultado final
+      busca,
+      resultado
     } = req.query;
     
     let query = {};
@@ -910,7 +1143,6 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
       if (dataFim) query['entrada.dataHora'].$lte = fimDoDiaBrasil(dataFim);
     }
     
-    // 🔥 Busca por nome OU matrícula
     if (busca && busca.trim() !== '') {
       const termo = busca.trim();
       query.$or = [
@@ -919,7 +1151,6 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
       ];
     }
     
-    // 🔥 Filtro por resultado
     if (resultado && resultado !== 'todos' && resultado !== '') {
       query['saida.resultado'] = resultado;
     }
@@ -945,47 +1176,50 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
       ...turmasAlunos
     ])].sort();
     
-    const lista = atendimentos.map(a => ({
-      id: a._id,
-      alunoId: a.alunoId,
-      alunoNome: a.alunoNome,
-      alunoMatricula: a.alunoMatricula,
-      alunoTurma: a.alunoTurma,
-      alunoCurso: a.alunoCurso,
-      tipoTarefa: a.tipoTarefa,
-      tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-      descricao: a.entrada.descricao,
-      gravidade: a.entrada.gravidade,
-      prioridade: a.prioridade,
-      status: a.status,
-      dataEntrada: a.entrada.dataHora,
-      dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
-      registradoPor: a.entrada.registradoPorNome,
-      registradoPorId: a.entrada.registradoPor,
-      temAssinatura: !!(a.entrada?.assinaturaBase64),
-      statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
-      saida: a.saida ? {
-        dataHora: a.saida.dataHora,
-        dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
-        resultado: a.saida.resultado,
-        resultadoTexto: {
-          'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
-          'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
-        }[a.saida.resultado] || a.saida.resultado,
-        observacoesFinais: a.saida.observacoesFinais,
-        registradoPor: a.saida.registradoPorNome
-      } : null,
-      createdAt: a.createdAt,
-      // 🔑 Para o mask
-      entrada: {
+    const lista = atendimentos.map(a => {
+      const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+      return {
+        id: a._id,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoCurso: a.alunoCurso,
+        tipoTarefa: a.tipoTarefa,
+        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
         descricao: a.entrada.descricao,
-        observacoes: a.entrada.observacoes,
-        registradoPor: a.entrada.registradoPor
-      },
-      _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
-    }));
+        gravidade: a.entrada.gravidade,
+        prioridade: a.prioridade,
+        status: a.status,
+        dataEntrada: a.entrada.dataHora,
+        dataEntradaFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
+        tempoTexto: tempo.texto,
+        tempoMinutos: tempo.minutos,
+        registradoPor: a.entrada.registradoPorNome,
+        registradoPorId: a.entrada.registradoPor,
+        temAssinatura: !!(a.entrada?.assinaturaBase64),
+        statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+        saida: a.saida ? {
+          dataHora: a.saida.dataHora,
+          dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
+          resultado: a.saida.resultado,
+          resultadoTexto: {
+            'resolvido': 'Resolvido', 'em_acompanhamento': 'Em Acompanhamento',
+            'reincidente': 'Reincidente', 'encaminhado': 'Encaminhado', 'pendente': 'Pendente'
+          }[a.saida.resultado] || a.saida.resultado,
+          observacoesFinais: a.saida.observacoesFinais,
+          registradoPor: a.saida.registradoPorNome
+        } : null,
+        createdAt: a.createdAt,
+        entrada: {
+          descricao: a.entrada.descricao,
+          observacoes: a.entrada.observacoes,
+          registradoPor: a.entrada.registradoPor
+        },
+        _criadorNome: a.entrada?.registradoPorNome || 'Desconhecido'
+      };
+    });
     
-    // 🔒 Mascara para super_admin
     const listaMascarada = mascararParaAdmin(lista, req);
     
     res.json({
@@ -1003,12 +1237,14 @@ router.get('/atendimentos', authenticateToken, verificarPsicologia, async (req, 
 });
 
 // ============================================
-// BUSCAR ATENDIMENTO POR ID (🔒 MASCARADO PARA SUPER_ADMIN)
+// BUSCAR ATENDIMENTO POR ID
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimento = await AtendimentoPsicologia.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
     
     const payload = {
       id: atendimento._id,
@@ -1048,10 +1284,14 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
       remarcacoes: atendimento.remarcacoes || [],
       temRemarcacaoPendente: atendimento.temRemarcacaoPendente || false,
       anexos: atendimento.anexos,
-      createdAt: atendimento.createdAt
+      createdAt: atendimento.createdAt,
+      tempoTexto: tempo.texto,
+      tempoMinutos: tempo.minutos,
+      nivelTempo: tempo.nivel,
+      alerta24hAtivo: tempo.minutos >= 1440 && !atendimento.alerta24hReconhecido,
+      totalAlertas24h: atendimento.totalAlertas24h || 0
     };
     
-    // 🔒 Mascara para super_admin
     const payloadMascarado = mascararParaAdmin(payload, req);
     
     res.json({ success: true, atendimento: payloadMascarado });
@@ -1061,14 +1301,13 @@ router.get('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 });
 
 // ============================================
-// EDITAR ATENDIMENTO (🚫 BLOQUEADO PARA SUPER_ADMIN NÃO-CRIADOR)
+// EDITAR ATENDIMENTO
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimento = await AtendimentoPsicologia.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
-    // 🚫 super_admin só edita os que ele mesmo criou
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
       return res.status(403).json({ 
@@ -1078,7 +1317,14 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
       });
     }
     
-    const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
+    const { descricao, observacoes, gravidade, prioridade, detalhes, status, saida, tipoTarefa } = req.body;
+    
+    if (tipoTarefa && [
+      'escuta_acolhimento', 'manejo_crises_emocionais', 'atividades_grupos',
+      'acoes_atividades_saude', 'acoes_socioemocionais_culturais', 'outros'
+    ].includes(tipoTarefa)) {
+      atendimento.tipoTarefa = tipoTarefa;
+    }
     
     if (descricao) atendimento.entrada.descricao = descricao;
     if (observacoes !== undefined) atendimento.entrada.observacoes = observacoes;
@@ -1089,6 +1335,9 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
     
     if (saida) {
       atendimento.saida = { ...atendimento.saida, ...saida, registradoPor: req.userId, registradoPorNome: req.userNome };
+      if (atendimento.status === 'finalizado') {
+        atendimento.alerta24hReconhecido = true;
+      }
     }
     
     atendimento.updatedAt = new Date();
@@ -1101,14 +1350,13 @@ router.put('/atendimento/:id', authenticateToken, verificarPsicologia, async (re
 });
 
 // ============================================
-// EXCLUIR ATENDIMENTO (🚫 BLOQUEADO PARA SUPER_ADMIN NÃO-CRIADOR)
+// EXCLUIR ATENDIMENTO
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
     const atendimento = await AtendimentoPsicologia.findById(req.params.id);
     if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
     
-    // 🚫 super_admin só exclui os que ele mesmo criou
     const check = adminPodeModificar(atendimento, req);
     if (!check.permitido) {
       return res.status(403).json({ 
@@ -1119,7 +1367,6 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
     }
     
     await AtendimentoPsicologia.findByIdAndDelete(req.params.id);
-    console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id})`);
     res.json({ success: true, message: 'Atendimento excluído com sucesso' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
@@ -1127,11 +1374,10 @@ router.delete('/atendimento/:id', authenticateToken, verificarPsicologia, async 
 });
 
 // ============================================
-// EXCLUSÃO EM MASSA (APENAS PSICOLOGIA)
+// EXCLUSÃO EM MASSA
 // ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicologia, async (req, res) => {
   try {
-    // 🚫 super_admin NÃO pode excluir em massa
     if (req.userRole === 'super_admin') {
       return res.status(403).json({ 
         success: false, 
@@ -1159,7 +1405,6 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarPsicolog
     }
 
     const resultado = await AtendimentoPsicologia.deleteMany(filtro);
-    console.log(`🗑️ EXCLUSÃO EM MASSA: ${resultado.deletedCount} excluídos`);
 
     res.json({
       success: true,
@@ -1210,15 +1455,19 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarPsicologia, 
         emAndamento: atendimentos.filter(a => a.status === 'em_andamento').length,
         finalizados: atendimentos.filter(a => a.status === 'finalizado').length
       },
-      atendimentos: atendimentos.map(a => ({
-        id: a._id, tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade, status: a.status,
-        dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
-        temAssinatura: !!(a.entrada?.assinaturaBase64),
-        assinaturaBase64: a.entrada?.assinaturaBase64 || null
-      }))
+      atendimentos: atendimentos.map(a => {
+        const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        return {
+          id: a._id, tipoTarefa: a.tipoTarefa,
+          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
+          gravidade: a.entrada.gravidade, status: a.status,
+          dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
+          tempoTexto: tempo.texto,
+          temAssinatura: !!(a.entrada?.assinaturaBase64),
+          assinaturaBase64: a.entrada?.assinaturaBase64 || null
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
@@ -1266,13 +1515,17 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarPsicologia, as
         }))
       },
       porAluno: Object.values(porAluno).sort((a, b) => b.total - a.total),
-      atendimentos: atendimentos.map(a => ({
-        id: a._id, alunoNome: a.alunoNome,
-        tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade, status: a.status
-      }))
+      atendimentos: atendimentos.map(a => {
+        const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        return {
+          id: a._id, alunoNome: a.alunoNome,
+          tipoTarefa: a.tipoTarefa,
+          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          dataEntrada: a.entrada.dataHora, descricao: a.entrada.descricao,
+          gravidade: a.entrada.gravidade, status: a.status,
+          tempoTexto: tempo.texto
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
@@ -1346,37 +1599,75 @@ router.get('/relatorio/geral', authenticateToken, verificarPsicologia, async (re
         count
       })).sort((a, b) => b.count - a.count),
       porGravidade,
-      registros: atendimentos.map(a => ({
-        id: a._id,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora,
-        dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
-        descricao: a.entrada.descricao,
-        gravidade: a.entrada.gravidade,
-        prioridade: a.prioridade,
-        status: a.status,
-        temAssinatura: !!(a.entrada?.assinaturaBase64),
-        assinaturaBase64: a.entrada?.assinaturaBase64 || null,
-        registradoPorNome: a.entrada?.registradoPorNome
-      })),
-      atendimentos: atendimentos.slice(0, 100).map(a => ({
-        id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
-        tipoTarefa: a.tipoTarefa,
-        tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
-        dataEntrada: a.entrada.dataHora,
-        descricao: a.entrada.descricao.substring(0, 100),
-        gravidade: a.entrada.gravidade, status: a.status,
-        temAssinatura: !!(a.entrada?.assinaturaBase64),
-        assinaturaBase64: a.entrada?.assinaturaBase64 || null
-      }))
+      registros: atendimentos.map(a => {
+        const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        return {
+          id: a._id,
+          alunoNome: a.alunoNome,
+          alunoMatricula: a.alunoMatricula,
+          alunoTurma: a.alunoTurma,
+          tipoTarefa: a.tipoTarefa,
+          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          dataEntrada: a.entrada.dataHora,
+          dataFormatada: new Date(a.entrada.dataHora).toLocaleDateString('pt-BR'),
+          descricao: a.entrada.descricao,
+          gravidade: a.entrada.gravidade,
+          prioridade: a.prioridade,
+          status: a.status,
+          tempoTexto: tempo.texto,
+          temAssinatura: !!(a.entrada?.assinaturaBase64),
+          assinaturaBase64: a.entrada?.assinaturaBase64 || null,
+          registradoPorNome: a.entrada?.registradoPorNome
+        };
+      }),
+      atendimentos: atendimentos.slice(0, 100).map(a => {
+        const tempo = formatarTempoAtendimento(a.entrada.dataHora);
+        return {
+          id: a._id, alunoNome: a.alunoNome, alunoTurma: a.alunoTurma,
+          tipoTarefa: a.tipoTarefa,
+          tipoTarefaLabel: AtendimentoPsicologia.getTipoTarefaLabel(a.tipoTarefa),
+          dataEntrada: a.entrada.dataHora,
+          descricao: a.entrada.descricao.substring(0, 100),
+          gravidade: a.entrada.gravidade, status: a.status,
+          tempoTexto: tempo.texto,
+          temAssinatura: !!(a.entrada?.assinaturaBase64),
+          assinaturaBase64: a.entrada?.assinaturaBase64 || null
+        };
+      })
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Erro: ' + error.message });
   }
 });
+
+// ============================================
+// SCHEDULER: PROCESSAMENTO PERIÓDICO DE ALERTAS 24H
+// ============================================
+let schedulerInterval = null;
+
+function iniciarSchedulerAlertas24h() {
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+  }
+  
+  setTimeout(async () => {
+    await processarAlertas24h();
+  }, 30000);
+  
+  schedulerInterval = setInterval(async () => {
+    await processarAlertas24h();
+  }, 5 * 60 * 1000);
+  
+  console.log('⏰ [SCHEDULER] Agendador de alertas 24h iniciado (a cada 5 min)');
+}
+
+iniciarSchedulerAlertas24h();
+
+router.pararScheduler = () => {
+  if (schedulerInterval) {
+    clearInterval(schedulerInterval);
+    schedulerInterval = null;
+  }
+};
 
 module.exports = router;

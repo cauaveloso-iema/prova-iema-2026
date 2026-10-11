@@ -182,6 +182,23 @@ const AtendimentoAssistenteSocialSchema = new mongoose.Schema({
     default: false
   },
   
+  // ============================================
+  // 🆕 CONTROLE DE ALERTAS DE 24H
+  // ============================================
+  ultimoAlerta24h: {
+    type: Date,
+    default: null,
+    index: true
+  },
+  totalAlertas24h: {
+    type: Number,
+    default: 0
+  },
+  alerta24hReconhecido: {
+    type: Boolean,
+    default: false
+  },
+  
   anexos: [{
     nome: String,
     url: String,
@@ -218,6 +235,8 @@ AtendimentoAssistenteSocialSchema.index({ createdAt: -1 });
 AtendimentoAssistenteSocialSchema.index({ temRemarcacaoPendente: 1, status: 1 });
 AtendimentoAssistenteSocialSchema.index({ 'remarcacoes.status': 1 });
 AtendimentoAssistenteSocialSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
+// 🆕 Índice para busca de atendimentos antigos
+AtendimentoAssistenteSocialSchema.index({ status: 1, 'entrada.dataHora': 1, ultimoAlerta24h: 1 });
 
 // ============================================
 // MIDDLEWARE: PRE-SAVE
@@ -271,6 +290,25 @@ AtendimentoAssistenteSocialSchema.statics.getTipoTarefaLabel = function(tipo) {
 };
 
 // ============================================
+// 🆕 BUSCAR ATENDIMENTOS QUE PRECISAM DE ALERTA 24H
+// ============================================
+AtendimentoAssistenteSocialSchema.statics.buscarAtendimentosParaAlerta = async function() {
+  const agora = new Date();
+  const limite24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
+  const intervaloAlerta = new Date(agora.getTime() - 20 * 60 * 1000);
+  
+  return await this.find({
+    status: 'em_andamento',
+    alerta24hReconhecido: false,
+    'entrada.dataHora': { $lte: limite24h },
+    $or: [
+      { ultimoAlerta24h: null },
+      { ultimoAlerta24h: { $lte: intervaloAlerta } }
+    ]
+  });
+};
+
+// ============================================
 // MÉTODOS DE INSTÂNCIA
 // ============================================
 AtendimentoAssistenteSocialSchema.methods.adicionarRemarcacao = function(dados) {
@@ -294,10 +332,10 @@ AtendimentoAssistenteSocialSchema.methods.adicionarRemarcacao = function(dados) 
 };
 
 // ============================================
-// EXPORT — força o nome EXATO da coleção
+// EXPORT
 // ============================================
 module.exports = mongoose.model(
   'AtendimentoAssistenteSocial',
   AtendimentoAssistenteSocialSchema,
-  'atendimentoassistentesocials'  // ← nome REAL da coleção no MongoDB
+  'atendimentoassistentesocials'
 );
