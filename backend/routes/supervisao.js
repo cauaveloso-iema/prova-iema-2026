@@ -111,19 +111,47 @@ async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link
   return notif;
 }
 
+// ============================================
+// PROCESSAR ALERTAS 24H
+// Envia 1 notificação por dia por atendimento
+// ============================================
 async function processarAlertas24h() {
   const atendimentos = await AtendimentoSupervisao.buscarAtendimentosParaAlerta();
-  if (atendimentos.length === 0) return { processados: 0 };
+  if (atendimentos.length === 0) return { processados: 0, pulados: 0 };
+  
   let processados = 0;
+  let pulados = 0;
+  const agora = new Date();
+  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000; // 24 horas entre alertas
+  
   for (const atendimento of atendimentos) {
     const registradoPor = atendimento.entrada?.registradoPor;
     if (!registradoPor) continue;
+    
+    // 🛡️ Só envia se passou 24h desde o último alerta
+    if (atendimento.ultimoAlerta24h) {
+      const diff = agora - new Date(atendimento.ultimoAlerta24h);
+      if (diff < INTERVALO_MINIMO_MS) {
+        pulados++;
+        continue;
+      }
+    }
+    
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
     const tipoLabel = AtendimentoSupervisao.getTipoTarefaLabel(atendimento.tipoTarefa);
+    const totalAlertas = (atendimento.totalAlertas24h || 0) + 1;
+    const nivelLabel = totalAlertas === 1 
+      ? '24h' 
+      : totalAlertas === 2 
+        ? '48h' 
+        : totalAlertas === 3 
+          ? '72h' 
+          : `${totalAlertas * 24}h`;
+    
     try {
       await criarNotificacaoInterna({
         usuarioId: registradoPor._id || registradoPor,
-        titulo: '⏰ Ocorrência em Supervisão há mais de 24h',
+        titulo: `⏰ Ocorrência em Supervisão há mais de ${nivelLabel}`,
         mensagem: `A ocorrência de ${atendimento.alunoNome} (${tipoLabel}) está em andamento há ${tempo.texto}. Verifique se precisa de desfecho.`,
         tipo: 'sistema',
         link: `/supervisao.html?verificar=${atendimento._id}`,
@@ -134,18 +162,22 @@ async function processarAlertas24h() {
           alunoId: atendimento.alunoId.toString(),
           alunoNome: atendimento.alunoNome,
           minutosEmAndamento: tempo.minutos,
-          textoTexto: tempo.texto
+          textoTexto: tempo.texto,
+          nivelAlerta: nivelLabel
         }
       });
-      atendimento.ultimoAlerta24h = new Date();
-      atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
+      
+      atendimento.ultimoAlerta24h = agora;
+      atendimento.totalAlertas24h = totalAlertas;
       await atendimento.save();
+      
       processados++;
     } catch (e) {
       console.error(`[ALERTA 24H] Falha para ${atendimento.alunoNome}:`, e.message);
     }
   }
-  return { processados };
+  
+  return { processados, pulados };
 }
 
 const authenticateToken = (req, res, next) => {

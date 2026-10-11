@@ -132,24 +132,45 @@ async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link
 
 // ============================================
 // PROCESSAR ALERTAS 24H
+// Envia 1 notificação por dia por atendimento
 // ============================================
 async function processarAlertas24h() {
   const atendimentos = await AtendimentoPsicologia.buscarAtendimentosParaAlerta();
-  if (atendimentos.length === 0) return { processados: 0 };
+  if (atendimentos.length === 0) return { processados: 0, pulados: 0 };
   
   let processados = 0;
+  let pulados = 0;
+  const agora = new Date();
+  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000; // 24 horas entre alertas
   
   for (const atendimento of atendimentos) {
     const registradoPor = atendimento.entrada?.registradoPor;
     if (!registradoPor) continue;
     
+    // 🛡️ Só envia se passou 24h desde o último alerta
+    if (atendimento.ultimoAlerta24h) {
+      const diff = agora - new Date(atendimento.ultimoAlerta24h);
+      if (diff < INTERVALO_MINIMO_MS) {
+        pulados++;
+        continue;
+      }
+    }
+    
     const tempo = formatarTempoAtendimento(atendimento.entrada.dataHora);
     const tipoLabel = AtendimentoPsicologia.getTipoTarefaLabel(atendimento.tipoTarefa);
+    const totalAlertas = (atendimento.totalAlertas24h || 0) + 1;
+    const nivelLabel = totalAlertas === 1 
+      ? '24h' 
+      : totalAlertas === 2 
+        ? '48h' 
+        : totalAlertas === 3 
+          ? '72h' 
+          : `${totalAlertas * 24}h`;
     
     try {
       await criarNotificacaoInterna({
         usuarioId: registradoPor._id || registradoPor,
-        titulo: '⏰ Atendimento há mais de 24h em andamento',
+        titulo: `⏰ Atendimento há mais de ${nivelLabel} em andamento`,
         mensagem: `O atendimento de ${atendimento.alunoNome} (${tipoLabel}) está em andamento há ${tempo.texto}. Verifique se já foi encerrado.`,
         tipo: 'sistema',
         link: `/psicologia.html?verificar=${atendimento._id}`,
@@ -160,12 +181,13 @@ async function processarAlertas24h() {
           alunoId: atendimento.alunoId.toString(),
           alunoNome: atendimento.alunoNome,
           minutosEmAndamento: tempo.minutos,
-          tempoTexto: tempo.texto
+          tempoTexto: tempo.texto,
+          nivelAlerta: nivelLabel
         }
       });
       
-      atendimento.ultimoAlerta24h = new Date();
-      atendimento.totalAlertas24h = (atendimento.totalAlertas24h || 0) + 1;
+      atendimento.ultimoAlerta24h = agora;
+      atendimento.totalAlertas24h = totalAlertas;
       await atendimento.save();
       
       processados++;
@@ -174,7 +196,7 @@ async function processarAlertas24h() {
     }
   }
   
-  return { processados };
+  return { processados, pulados };
 }
 
 // ============================================
