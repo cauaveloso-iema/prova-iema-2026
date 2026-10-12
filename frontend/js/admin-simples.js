@@ -1733,12 +1733,30 @@ class AdminSimples {
         try {
             const token = localStorage.getItem('auth_token');
 
-            const response = await fetch('/api/admin/dashboard', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // 🔥 BUSCAR DASHBOARD, EIXOS E CURSOS EM PARALELO
+            const [response, eixosRes, cursosRes] = await Promise.all([
+                fetch('/api/admin/dashboard', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch('/api/admin/eixos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch('/api/admin/cursos', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
 
             const data = await response.json();
+            const eixosData = await eixosRes.json();
+            const cursosData = await cursosRes.json();
+
             const stats = data.success ? data.data : this.getDadosExemplo();
+
+            // 🔥 ARMAZENAR EIXOS E CURSOS NO ESTADO
+            this.eixos = eixosData.success ? (eixosData.eixos || []) : [];
+            this.cursos = cursosData.success ? (cursosData.cursos || []) : [];
+
+            console.log(`✅ Dashboard: ${this.eixos.length} eixos, ${this.cursos.length} cursos`);
 
             const hora = new Date().getHours();
             let saudacao = 'Bom dia';
