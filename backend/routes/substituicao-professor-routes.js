@@ -110,6 +110,22 @@ function validarEmailInstitucional(email) {
 }
 
 // ============================================
+// 🔥 HELPER CRÍTICO: Sanitizar eixo para o Mongoose
+// ============================================
+// PROBLEMA: O schema do User tem `enum` no campo eixo.
+// Ao receber string vazia "", null ou undefined, o Mongoose rejeita
+// porque nenhum desses valores está no enum.
+// 
+// SOLUÇÃO: Retornar `undefined` quando vazio — o Mongoose IGNORA campos undefined.
+// Retornar o valor válido (string trimada) quando preenchido.
+function sanitizarEixo(eixo) {
+    if (eixo === undefined || eixo === null) return undefined;
+    const eixoStr = String(eixo).trim();
+    if (eixoStr === '') return undefined;
+    return eixoStr;
+}
+
+// ============================================
 // ROTAS EXISTENTES
 // ============================================
 
@@ -724,6 +740,11 @@ router.post('/professores', authenticateToken, verificarPermissaoModulo, async (
             });
         }
         
+        // 🔥 CORREÇÃO CRÍTICA: sanitizar eixo (undefined em vez de string vazia)
+        const eixoLimpo = sanitizarEixo(eixo);
+        
+        console.log(`🔍 Eixo recebido: ${JSON.stringify(eixo)} → sanitizado: ${JSON.stringify(eixoLimpo)}`);
+        
         // ============ CRIAR USUÁRIO ============
         const novoProfessor = new User({
             nome: nome.trim(),
@@ -731,7 +752,7 @@ router.post('/professores', authenticateToken, verificarPermissaoModulo, async (
             cpf: cpfLimpo,
             telefone: telefone ? telefone.replace(/\D/g, '') : '',
             matricula: matricula.trim(),
-            eixo: eixo || '',
+            eixo: eixoLimpo,                            // ✅ undefined se vazio
             departamento: departamento || '',
             titulacao: titulacao || '',
             password: password,
@@ -893,7 +914,20 @@ router.put('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
         if (cpf !== undefined) professor.cpf = cpf.replace(/\D/g, '');
         if (telefone !== undefined) professor.telefone = telefone.replace(/\D/g, '');
         if (matricula !== undefined) professor.matricula = matricula.trim();
-        if (eixo !== undefined) professor.eixo = eixo || '';
+        
+        // 🔥 CORREÇÃO CRÍTICA: sanitizar eixo (undefined em vez de string vazia)
+        if (eixo !== undefined) {
+            const eixoLimpo = sanitizarEixo(eixo);
+            console.log(`🔍 Eixo no PUT: recebido=${JSON.stringify(eixo)} → sanitizado=${JSON.stringify(eixoLimpo)}`);
+            
+            if (eixoLimpo !== undefined) {
+                professor.eixo = eixoLimpo;
+            } else {
+                // Se era undefined antes, não mexe. Se tinha valor, remove.
+                professor.eixo = undefined;
+            }
+        }
+        
         if (departamento !== undefined) professor.departamento = departamento || '';
         if (titulacao !== undefined) professor.titulacao = titulacao || '';
         if (ativo !== undefined) professor.ativo = ativo;
