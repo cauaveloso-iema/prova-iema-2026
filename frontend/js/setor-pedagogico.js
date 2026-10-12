@@ -6022,6 +6022,37 @@ class SetorPedagogico {
 
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="sp-registrar">
+                        
+                        <!-- 🔥 NOVO CARD: GERENCIAR PROFESSORES -->
+                        <div class="card mb-3" style="border: 2px solid #e0e7ff; background: linear-gradient(135deg, #f8faff 0%, #eef2ff 100%);">
+                            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <div style="
+                                        width: 55px; height: 55px; border-radius: 12px;
+                                        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                                        color: white; display: flex; align-items: center;
+                                        justify-content: center; font-size: 24px;
+                                        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+                                    ">
+                                        <i class="fas fa-users-cog"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-1" style="color: #1e293b; font-weight: 700;">
+                                            Gerenciar Professores
+                                        </h5>
+                                        <small class="text-muted">
+                                            Visualize, cadastre, edite ou exclua professores do sistema
+                                        </small>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" 
+                                        onclick="setorPedagogico.abrirGerenciarProfessores()"
+                                        style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; border-radius: 10px; padding: 10px 22px; font-weight: 600; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+                                    <i class="fas fa-user-plus me-2"></i> Gerenciar Professores
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="card mb-3" id="cardProfessorAusente">
                             <div class="card-body">
                                 <div class="etapa-header">
@@ -6500,6 +6531,7 @@ class SetorPedagogico {
             });
         }, 200);
     }
+
         // ============================================================================
     // 🔥 SUBSTITUIÇÃO DE PROFESSORES - PARTE 2 (PROFESSORES + TURMAS + HORÁRIO)
     // ============================================================================
@@ -7686,6 +7718,906 @@ class SetorPedagogico {
             this.renderizarUltimasSubstituicoes(data.ultimasSubstituicoes);
         } catch (error) {
             console.error('Erro no dashboard:', error);
+        }
+    }
+
+    // ============================================================================
+    // 🔥 GERENCIAMENTO DE PROFESSORES (CRUD)
+    // ============================================================================
+
+    async abrirGerenciarProfessores() {
+        // Remove modal anterior se existir
+        const antigo = document.getElementById('modalGerenciarProfessores');
+        if (antigo) antigo.remove();
+
+        const modalHtml = `
+            <div class="modal fade" id="modalGerenciarProfessores" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+                    <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                        
+                        <!-- HEADER -->
+                        <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 22px 28px;">
+                            <div style="display: flex; align-items: center; gap: 14px;">
+                                <div style="width: 46px; height: 46px; background: rgba(255,255,255,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+                                    <i class="fas fa-users-cog" style="font-size: 22px;"></i>
+                                </div>
+                                <div>
+                                    <h5 class="modal-title mb-0" style="font-weight: 700; letter-spacing: 0.3px;">Gerenciar Professores</h5>
+                                    <small style="opacity: 0.85; font-size: 13px;">Cadastre, edite e gerencie o corpo docente</small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <!-- BARRA DE AÇÕES + FILTROS -->
+                        <div style="background: #f8fafc; border-bottom: 1px solid #e5e7eb; padding: 18px 28px;">
+                            
+                            <!-- Linha 1: Busca + Botão Novo -->
+                            <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 240px; position: relative;">
+                                    <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px;"></i>
+                                    <input type="text" id="buscaGerenciarProfessores" 
+                                        placeholder="Buscar por nome, email ou matrícula..."
+                                        style="width: 100%; padding: 11px 16px 11px 44px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: all 0.2s; background: white;">
+                                </div>
+                                <button class="btn" onclick="setorPedagogico.abrirFormProfessor()" 
+                                        style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 11px 22px; border-radius: 10px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(16,185,129,0.3); transition: all 0.2s; white-space: nowrap;">
+                                    <i class="fas fa-plus"></i> Novo Professor
+                                </button>
+                            </div>
+
+                            <!-- Linha 2: Filtros -->
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                                <span style="font-size: 13px; color: #64748b; font-weight: 600; margin-right: 4px;">
+                                    <i class="fas fa-filter"></i> Filtros:
+                                </span>
+                                
+                                <select id="filtroStatusProfessor" class="form-select form-select-sm" 
+                                        style="width: auto; min-width: 140px; padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
+                                    <option value="todos">Todos os status</option>
+                                    <option value="ativo">✓ Ativos</option>
+                                    <option value="inativo">✗ Inativos</option>
+                                </select>
+
+                                <select id="filtroEixoProfessor" class="form-select form-select-sm" 
+                                        style="width: auto; min-width: 160px; padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
+                                    <option value="todos">Todos os eixos</option>
+                                </select>
+
+                                <select id="ordenacaoProfessor" class="form-select form-select-sm" 
+                                        style="width: auto; min-width: 160px; padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
+                                    <option value="nome_asc">Nome (A-Z)</option>
+                                    <option value="nome_desc">Nome (Z-A)</option>
+                                    <option value="recente">Mais recentes</option>
+                                    <option value="antigo">Mais antigos</option>
+                                </select>
+
+                                <button class="btn btn-sm" onclick="setorPedagogico.limparFiltrosProfessores()"
+                                        style="background: white; border: 2px solid #e5e7eb; border-radius: 8px; padding: 7px 14px; font-size: 13px; color: #64748b; font-weight: 600;">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- CONTADOR -->
+                        <div style="padding: 12px 28px; background: white; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+                            <small style="color: #64748b; font-size: 13px; font-weight: 500;" id="contadorProfessoresGerenciar">
+                                <i class="fas fa-spinner fa-spin"></i> Carregando...
+                            </small>
+                        </div>
+
+                        <!-- LISTA -->
+                        <div class="modal-body" style="padding: 20px 28px; background: #f8fafc; max-height: 55vh; overflow-y: auto;">
+                            <div id="listaGerenciarProfessores">
+                                <div class="text-center py-5">
+                                    <div class="loading-spinner"></div>
+                                    <p class="text-muted mt-2">Carregando professores...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FOOTER -->
+                        <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 28px; background: white;">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
+                                    style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
+                                <i class="fas fa-times me-2"></i> Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        this.modalGerenciarInstance = new bootstrap.Modal(document.getElementById('modalGerenciarProfessores'));
+        this.modalGerenciarInstance.show();
+
+        // Carrega a lista
+        await this.carregarProfessoresGerenciar();
+
+        // Popula filtro de eixos
+        await this.popularFiltroEixosProfessores();
+
+        // ============ EVENTOS ============
+        const buscaInput = document.getElementById('buscaGerenciarProfessores');
+        if (buscaInput) {
+            // Efeito de foco
+            buscaInput.addEventListener('focus', function() {
+                this.style.borderColor = '#6366f1';
+                this.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)';
+            });
+            buscaInput.addEventListener('blur', function() {
+                this.style.borderColor = '#e5e7eb';
+                this.style.boxShadow = 'none';
+            });
+
+            let timeout;
+            buscaInput.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    this.carregarProfessoresGerenciar();
+                }, 400);
+            });
+        }
+
+        // Eventos dos filtros
+        ['filtroStatusProfessor', 'filtroEixoProfessor', 'ordenacaoProfessor'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => this.carregarProfessoresGerenciar());
+        });
+
+        // Limpa a instância ao fechar
+        document.getElementById('modalGerenciarProfessores').addEventListener('hidden.bs.modal', () => {
+            this.modalGerenciarInstance = null;
+        });
+    }
+
+    async popularFiltroEixosProfessores() {
+        try {
+            const select = document.getElementById('filtroEixoProfessor');
+            if (!select) return;
+
+            // Eixos vindos da lista carregada
+            const eixos = [...new Set(
+                (this.substituicaoState.professores || [])
+                    .map(p => p.eixo)
+                    .filter(e => e && e !== 'Não definido')
+            )].sort();
+
+            select.innerHTML = '<option value="todos">Todos os eixos</option>' +
+                eixos.map(e => `<option value="${this.escapeHtml(e)}">${this.escapeHtml(e)}</option>`).join('');
+        } catch (error) {
+            console.warn('Erro ao popular eixos:', error);
+        }
+    }
+
+    async carregarProfessoresGerenciar() {
+        const container = document.getElementById('listaGerenciarProfessores');
+        const contador = document.getElementById('contadorProfessoresGerenciar');
+        if (!container) return;
+
+        const busca = document.getElementById('buscaGerenciarProfessores')?.value || '';
+        const filtroStatus = document.getElementById('filtroStatusProfessor')?.value || 'todos';
+        const filtroEixo = document.getElementById('filtroEixoProfessor')?.value || 'todos';
+        const ordenacao = document.getElementById('ordenacaoProfessor')?.value || 'nome_asc';
+
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div style="width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;"></div>
+                <p class="text-muted mt-2" style="font-size: 14px;">Carregando professores...</p>
+            </div>
+        `;
+
+        try {
+            // ============ BUSCAR (mesma rota da substituição) ============
+            const url = busca 
+                ? `/api/substituicao-professor/professores?busca=${encodeURIComponent(busca)}`
+                : '/api/substituicao-professor/professores';
+
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao carregar');
+            }
+
+            // Guarda na state para referência
+            this.substituicaoState.professores = data.professores || [];
+
+            // ============ APLICAR FILTROS NO CLIENTE ============
+            let professoresFiltrados = [...(data.professores || [])];
+
+            // Filtro por status
+            if (filtroStatus === 'ativo') {
+                professoresFiltrados = professoresFiltrados.filter(p => p.ativo !== false);
+            } else if (filtroStatus === 'inativo') {
+                professoresFiltrados = professoresFiltrados.filter(p => p.ativo === false);
+            }
+
+            // Filtro por eixo
+            if (filtroEixo !== 'todos') {
+                professoresFiltrados = professoresFiltrados.filter(p => 
+                    (p.eixo || 'Não definido') === filtroEixo
+                );
+            }
+
+            // Ordenação
+            professoresFiltrados.sort((a, b) => {
+                switch (ordenacao) {
+                    case 'nome_asc':
+                        return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+                    case 'nome_desc':
+                        return (b.nome || '').localeCompare(a.nome || '', 'pt-BR');
+                    case 'recente':
+                        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+                    case 'antigo':
+                        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+                    default:
+                        return 0;
+                }
+            });
+
+            // Atualiza contador
+            if (contador) {
+                const total = professoresFiltrados.length;
+                const totalGeral = data.total || 0;
+                const temFiltros = busca || filtroStatus !== 'todos' || filtroEixo !== 'todos';
+                
+                contador.innerHTML = temFiltros
+                    ? `<i class="fas fa-info-circle" style="color: #6366f1;"></i> Mostrando <strong>${total}</strong> de ${totalGeral} professor(es)`
+                    : `<i class="fas fa-users" style="color: #6366f1;"></i> <strong>${total}</strong> professor(es) cadastrado(s)`;
+            }
+
+            if (professoresFiltrados.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; background: white; border-radius: 12px; border: 2px dashed #e5e7eb;">
+                        <i class="fas fa-user-slash" style="font-size: 52px; color: #cbd5e1; margin-bottom: 16px;"></i>
+                        <h5 style="color: #475569; font-weight: 600; margin-bottom: 6px;">Nenhum professor encontrado</h5>
+                        <p style="color: #94a3b8; font-size: 14px; margin: 0;">Tente ajustar os filtros ou cadastre um novo professor.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // ============ RENDERIZAR ============
+            container.innerHTML = professoresFiltrados.map(p => `
+                <div class="professor-item-gerenciar" style="
+                    display: flex; align-items: center; gap: 15px;
+                    padding: 16px 18px; margin-bottom: 10px;
+                    background: white; border: 1px solid #e5e7eb;
+                    border-radius: 12px; transition: all 0.2s;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+                " onmouseover="this.style.borderColor='#c7d2fe'; this.style.boxShadow='0 4px 12px rgba(99,102,241,0.1)'; this.style.transform='translateY(-1px)';" 
+                onmouseout="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; this.style.transform='translateY(0)';">
+                    
+                    <div style="
+                        width: 50px; height: 50px; border-radius: 12px;
+                        background: linear-gradient(135deg, #1e3c72, #2a5298);
+                        color: white; display: flex; align-items: center;
+                        justify-content: center; font-weight: 700; font-size: 20px;
+                        flex-shrink: 0;
+                    ">
+                        ${(p.nome || '?').charAt(0).toUpperCase()}
+                    </div>
+
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <span style="font-weight: 700; font-size: 15px; color: #1e293b;">
+                                ${this.escapeHtml(p.nome)}
+                            </span>
+                            ${p.ativo === false 
+                                ? '<span style="background: #fee2e2; color: #991b1b; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">Inativo</span>'
+                                : '<span style="background: #dcfce7; color: #166534; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">Ativo</span>'
+                            }
+                        </div>
+                        <div style="font-size: 12px; color: #64748b; display: flex; flex-wrap: wrap; gap: 12px;">
+                            <span><i class="fas fa-envelope" style="opacity: 0.6;"></i> ${this.escapeHtml(p.email || 'Sem email')}</span>
+                            ${p.matricula ? `<span><i class="fas fa-id-card" style="opacity: 0.6;"></i> ${this.escapeHtml(p.matricula)}</span>` : ''}
+                            ${p.eixo && p.eixo !== 'Não definido' ? `<span><i class="fas fa-sitemap" style="opacity: 0.6;"></i> ${this.escapeHtml(p.eixo)}</span>` : ''}
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                        <button class="btn" 
+                                onclick="setorPedagogico.verProfessor('${p.id}')"
+                                title="Visualizar"
+                                style="width: 38px; height: 38px; padding: 0; background: #eff6ff; color: #2563eb; border: none; border-radius: 9px; font-size: 14px; transition: all 0.2s;"
+                                onmouseover="this.style.background='#dbeafe';" 
+                                onmouseout="this.style.background='#eff6ff';">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn" 
+                                onclick="setorPedagogico.abrirFormProfessor('${p.id}')"
+                                title="Editar"
+                                style="width: 38px; height: 38px; padding: 0; background: #fef3c7; color: #d97706; border: none; border-radius: 9px; font-size: 14px; transition: all 0.2s;"
+                                onmouseover="this.style.background='#fde68a';" 
+                                onmouseout="this.style.background='#fef3c7';">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn" 
+                                onclick="setorPedagogico.excluirProfessor('${p.id}', '${this.escapeHtml(p.nome)}')"
+                                title="Excluir"
+                                style="width: 38px; height: 38px; padding: 0; background: #fee2e2; color: #dc2626; border: none; border-radius: 9px; font-size: 14px; transition: all 0.2s;"
+                                onmouseover="this.style.background='#fecaca';" 
+                                onmouseout="this.style.background='#fee2e2';">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            container.innerHTML = `
+                <div style="background: #fee2e2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; text-align: center;">
+                    <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 32px; margin-bottom: 10px;"></i>
+                    <h6 style="color: #991b1b; margin: 0 0 6px; font-weight: 700;">Erro ao carregar professores</h6>
+                    <p style="color: #7f1d1d; font-size: 13px; margin: 0;">${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    async verProfessor(id) {
+        // Fecha o modal gerenciar
+        if (this.modalGerenciarInstance) {
+            this.modalGerenciarInstance.hide();
+            await new Promise(resolve => setTimeout(resolve, 350));
+        }
+
+        try {
+            const response = await fetch(`/api/substituicao-professor/professores/${id}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar');
+
+            const u = data.professor;
+            const antigo = document.getElementById('modalVerProfessor');
+            if (antigo) antigo.remove();
+
+            const modalHtml = `
+                <div class="modal fade" id="modalVerProfessor" tabindex="-1" data-bs-backdrop="static">
+                    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                        <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                            
+                            <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 22px 28px;">
+                                <div style="display: flex; align-items: center; gap: 14px;">
+                                    <div style="width: 46px; height: 46px; background: rgba(255,255,255,0.18); border-radius: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+                                        <i class="fas fa-user-circle" style="font-size: 22px;"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="modal-title mb-0" style="font-weight: 700;">Detalhes do Professor</h5>
+                                        <small style="opacity: 0.9; font-size: 13px;">Informações completas do cadastro</small>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white" 
+                                        onclick="setorPedagogico.fecharVerProfessor()"></button>
+                            </div>
+
+                            <div class="modal-body" style="padding: 28px;">
+                                <!-- Cabeçalho do professor -->
+                                <div style="text-align: center; padding-bottom: 24px; border-bottom: 1px solid #f1f5f9; margin-bottom: 24px;">
+                                    ${u.fotoPerfil 
+                                        ? `<img src="${u.fotoPerfil}" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #e5e7eb; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">`
+                                        : `<div style="width: 90px; height: 90px; border-radius: 50%; background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 38px; font-weight: 700; box-shadow: 0 4px 12px rgba(30,60,114,0.25);">${(u.nome || '?').charAt(0).toUpperCase()}</div>`
+                                    }
+                                    <h4 style="margin: 16px 0 6px; font-weight: 700; color: #1e293b;">${this.escapeHtml(u.nome)}</h4>
+                                    <p style="color: #64748b; margin: 0 0 10px; font-size: 14px;">
+                                        <i class="fas fa-envelope"></i> ${this.escapeHtml(u.email)}
+                                    </p>
+                                    <span style="display: inline-block; padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; ${u.ativo ? 'background: #dcfce7; color: #166534;' : 'background: #fee2e2; color: #991b1b;'}">
+                                        <i class="fas fa-${u.ativo ? 'check-circle' : 'ban'}"></i>
+                                        ${u.ativo ? 'Ativo' : 'Inativo'}
+                                    </span>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">Matrícula</small>
+                                            <span style="color: #1e293b; font-weight: 600;">${this.escapeHtml(u.matricula || 'Não informada')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">CPF</small>
+                                            <span style="color: #1e293b; font-weight: 600;">${this.escapeHtml(u.cpf || 'Não informado')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">Telefone</small>
+                                            <span style="color: #1e293b; font-weight: 600;">${this.escapeHtml(u.telefone || 'Não informado')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">Eixo</small>
+                                            <span style="color: #1e293b; font-weight: 600;">${this.escapeHtml(u.eixo || 'Não definido')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">Departamento</small>
+                                            <span style="color: #1e293b; font-weight: 600;">${this.escapeHtml(u.departamento || 'Não informado')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">Titulação</small>
+                                            <span style="color: #1e293b; font-weight: 600;">${this.escapeHtml(u.titulacao || 'Não informada')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">2FA</small>
+                                            <span style="color: #1e293b; font-weight: 600;">
+                                                <i class="fas fa-${u.twoFactorEnabled ? 'shield-alt' : 'shield'}"></i>
+                                                ${u.twoFactorEnabled ? 'Ativado' : 'Desativado'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div style="background: #f8fafc; padding: 14px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                                            <small style="color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 4px;">Cadastrado em</small>
+                                            <span style="color: #1e293b; font-weight: 600;">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 28px; background: #f8fafc;">
+                                <button type="button" class="btn btn-secondary" 
+                                        onclick="setorPedagogico.fecharVerProfessor()"
+                                        style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
+                                    <i class="fas fa-arrow-left me-2"></i> Voltar
+                                </button>
+                                <button type="button" class="btn btn-warning" 
+                                        onclick="setorPedagogico.fecharVerProfessor(function(){ setorPedagogico.abrirFormProfessor('${u.id}'); })"
+                                        style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
+                                    <i class="fas fa-edit me-2"></i> Editar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            this.modalVerProfessorInstance = new bootstrap.Modal(document.getElementById('modalVerProfessor'));
+            this.modalVerProfessorInstance.show();
+
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('Erro ao carregar professor: ' + error.message, 'error');
+            this.reabrirModalGerenciar();
+        }
+    }
+
+    fecharVerProfessor(callback) {
+        const modal = document.getElementById('modalVerProfessor');
+        if (modal && this.modalVerProfessorInstance) {
+            this.modalVerProfessorInstance.hide();
+            setTimeout(() => {
+                modal.remove();
+                if (typeof callback === 'function') {
+                    callback();
+                } else {
+                    this.reabrirModalGerenciar();
+                }
+            }, 350);
+        }
+    }
+
+    limparFiltrosProfessores() {
+        const busca = document.getElementById('buscaGerenciarProfessores');
+        if (busca) busca.value = '';
+        
+        const status = document.getElementById('filtroStatusProfessor');
+        if (status) status.value = 'todos';
+        
+        const eixo = document.getElementById('filtroEixoProfessor');
+        if (eixo) eixo.value = 'todos';
+        
+        const ord = document.getElementById('ordenacaoProfessor');
+        if (ord) ord.value = 'nome_asc';
+        
+        this.carregarProfessoresGerenciar();
+    }
+
+    async abrirFormProfessor(id = null) {
+        const editando = !!id;
+        let professor = null;
+
+        // ============ 🔥 FECHA O MODAL DE GERENCIAR ============
+        const modalGerenciar = document.getElementById('modalGerenciarProfessores');
+        if (modalGerenciar && this.modalGerenciarInstance) {
+            this.modalGerenciarInstance.hide();
+            // Aguarda a animação do Bootstrap terminar (~300ms)
+            await new Promise(resolve => setTimeout(resolve, 350));
+        }
+
+        if (editando) {
+            try {
+                const response = await fetch(`/api/substituicao-professor/professores/${id}`, {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Erro');
+                professor = data.professor;
+            } catch (error) {
+                this.showToast('Erro ao carregar professor: ' + error.message, 'error');
+                // Reabre o modal gerenciar se der erro
+                this.reabrirModalGerenciar();
+                return;
+            }
+        }
+
+        const antigo = document.getElementById('modalFormProfessor');
+        if (antigo) antigo.remove();
+
+        const modalHtml = `
+            <div class="modal fade" id="modalFormProfessor" tabindex="-1" data-bs-backdrop="static">
+                <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                        
+                        <div class="modal-header" style="background: linear-gradient(135deg, ${editando ? '#f59e0b 0%, #d97706 100%' : '#10b981 0%, #059669 100%'}); color: white; border: none; padding: 22px 28px;">
+                            <div style="display: flex; align-items: center; gap: 14px;">
+                                <div style="width: 46px; height: 46px; background: rgba(255,255,255,0.18); border-radius: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+                                    <i class="fas fa-${editando ? 'user-edit' : 'user-plus'}" style="font-size: 20px;"></i>
+                                </div>
+                                <div>
+                                    <h5 class="modal-title mb-0" style="font-weight: 700;">
+                                        ${editando ? 'Editar Professor' : 'Novo Professor'}
+                                    </h5>
+                                    <small style="opacity: 0.9; font-size: 13px;">
+                                        ${editando ? 'Atualize os dados do professor' : 'Preencha os dados do novo professor'}
+                                    </small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white" 
+                                    onclick="setorPedagogico.fecharFormProfessor()"></button>
+                        </div>
+
+                        <div class="modal-body" style="padding: 28px;">
+                            <input type="hidden" id="formProfessorId" value="${editando ? professor.id : ''}">
+
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        Nome Completo <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" id="formProfessorNome" class="form-control" 
+                                        value="${editando ? this.escapeHtml(professor.nome) : ''}" required>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        Matrícula <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" id="formProfessorMatricula" class="form-control" 
+                                        value="${editando ? this.escapeHtml(professor.matricula || '') : ''}" required>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        Email Institucional <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="email" id="formProfessorEmail" class="form-control" 
+                                        placeholder="nome@iemasaoluiscentro.net"
+                                        value="${editando ? this.escapeHtml(professor.email) : ''}" required>
+                                    <small class="text-muted" style="font-size: 11px;">Deve terminar com @iemasaoluiscentro.net</small>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        CPF <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" id="formProfessorCPF" class="form-control" 
+                                        placeholder="000.000.000-00" maxlength="14"
+                                        value="${editando ? this.escapeHtml(professor.cpf || '') : ''}" required>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        Telefone
+                                    </label>
+                                    <input type="text" id="formProfessorTelefone" class="form-control" 
+                                        placeholder="(00) 00000-0000" maxlength="15"
+                                        value="${editando ? this.escapeHtml(professor.telefone || '') : ''}">
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        Eixo
+                                    </label>
+                                    <input type="text" id="formProfessorEixo" class="form-control" 
+                                        placeholder="Ex: Natureza, Humanas..."
+                                        value="${editando ? this.escapeHtml(professor.eixo || '') : ''}">
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        Departamento
+                                    </label>
+                                    <input type="text" id="formProfessorDepartamento" class="form-control" 
+                                        value="${editando ? this.escapeHtml(professor.departamento || '') : ''}">
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                        Titulação
+                                    </label>
+                                    <select id="formProfessorTitulacao" class="form-select">
+                                        <option value="">Selecione...</option>
+                                        <option value="Graduação" ${editando && professor.titulacao === 'Graduação' ? 'selected' : ''}>Graduação</option>
+                                        <option value="Especialização" ${editando && professor.titulacao === 'Especialização' ? 'selected' : ''}>Especialização</option>
+                                        <option value="Mestrado" ${editando && professor.titulacao === 'Mestrado' ? 'selected' : ''}>Mestrado</option>
+                                        <option value="Doutorado" ${editando && professor.titulacao === 'Doutorado' ? 'selected' : ''}>Doutorado</option>
+                                    </select>
+                                </div>
+
+                                ${!editando ? `
+                                    <div class="col-md-6">
+                                        <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
+                                            Senha Inicial <span class="text-danger">*</span>
+                                        </label>
+                                        <div style="position: relative;">
+                                            <input type="password" id="formProfessorSenha" class="form-control" 
+                                                placeholder="Mínimo 6 caracteres" required>
+                                            <button type="button" onclick="toggleSenhaVisivel('formProfessorSenha', this)"
+                                                    style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #64748b; padding: 4px;">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <small class="text-muted" style="font-size: 11px;">O professor deverá trocar no primeiro login</small>
+                                    </div>
+                                ` : ''}
+
+                                <div class="col-12">
+                                    <div style="background: #f8fafc; border-radius: 10px; padding: 14px 16px; border: 1px solid #e5e7eb;">
+                                        <div class="form-check form-switch" style="margin: 0;">
+                                            <input class="form-check-input" type="checkbox" id="formProfessorAtivo" 
+                                                ${(!editando || professor.ativo) ? 'checked' : ''}>
+                                            <label class="form-check-label" for="formProfessorAtivo" style="font-weight: 600; font-size: 14px; cursor: pointer;">
+                                                Professor Ativo
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 28px; background: #f8fafc;">
+                            <button type="button" class="btn btn-secondary" onclick="setorPedagogico.fecharFormProfessor()"
+                                    style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
+                                <i class="fas fa-arrow-left me-2"></i> Voltar
+                            </button>
+                            <button type="button" class="btn btn-${editando ? 'warning' : 'success'}" 
+                                    onclick="setorPedagogico.salvarProfessor()" id="btnSalvarProfessor"
+                                    style="padding: 10px 24px; border-radius: 10px; font-weight: 600;">
+                                <i class="fas fa-save me-2"></i> ${editando ? 'Salvar Alterações' : 'Cadastrar Professor'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        this.modalFormProfessorInstance = new bootstrap.Modal(document.getElementById('modalFormProfessor'));
+        this.modalFormProfessorInstance.show();
+
+        // ============ MÁSCARAS ============
+        setTimeout(() => {
+            const cpfInput = document.getElementById('formProfessorCPF');
+            const telInput = document.getElementById('formProfessorTelefone');
+            
+            if (cpfInput) {
+                cpfInput.addEventListener('input', function() {
+                    this.value = this.value.replace(/\D/g, '')
+                        .replace(/(\d{3})(\d)/, '$1.$2')
+                        .replace(/(\d{3})(\d)/, '$1.$2')
+                        .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                });
+            }
+            
+            if (telInput) {
+                telInput.addEventListener('input', function() {
+                    let v = this.value.replace(/\D/g, '').slice(0, 11);
+                    if (v.length > 10) v = v.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                    else if (v.length > 6) v = v.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+                    else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+                    this.value = v;
+                });
+            }
+        }, 200);
+
+        // Handler do fechamento
+        document.getElementById('modalFormProfessor').addEventListener('hidden.bs.modal', () => {
+            this.modalFormProfessorInstance = null;
+        });
+    }
+
+    // ============ FECHAR FORM E VOLTAR AO GERENCIAR ============
+    fecharFormProfessor() {
+        const modalForm = document.getElementById('modalFormProfessor');
+        if (modalForm && this.modalFormProfessorInstance) {
+            this.modalFormProfessorInstance.hide();
+            setTimeout(() => {
+                modalForm.remove();
+                this.reabrirModalGerenciar();
+            }, 350);
+        }
+    }
+
+    // ============ REABRIR MODAL GERENCIAR ============
+    async reabrirModalGerenciar() {
+        // Só reabre se ainda existir o modal no DOM
+        const modalGerenciar = document.getElementById('modalGerenciarProfessores');
+        if (modalGerenciar) {
+            this.modalGerenciarInstance = new bootstrap.Modal(modalGerenciar);
+            this.modalGerenciarInstance.show();
+            // Recarrega a lista (para atualizar após edição/criação)
+            await this.carregarProfessoresGerenciar();
+        } else {
+            // Se foi removido, reabre tudo do zero
+            await this.abrirGerenciarProfessores();
+        }
+    }
+
+    async salvarProfessor() {
+        const id = document.getElementById('formProfessorId')?.value;
+        const editando = !!id;
+
+        const nome = document.getElementById('formProfessorNome')?.value.trim();
+        const matricula = document.getElementById('formProfessorMatricula')?.value.trim();
+        const email = document.getElementById('formProfessorEmail')?.value.trim();
+        const cpf = document.getElementById('formProfessorCPF')?.value.trim();
+        const telefone = document.getElementById('formProfessorTelefone')?.value.trim();
+        const eixo = document.getElementById('formProfessorEixo')?.value.trim();
+        const departamento = document.getElementById('formProfessorDepartamento')?.value.trim();
+        const titulacao = document.getElementById('formProfessorTitulacao')?.value;
+        const ativo = document.getElementById('formProfessorAtivo')?.checked;
+
+        // Validações
+        if (!nome || nome.length < 3) {
+            this.showToast('⚠️ Nome deve ter pelo menos 3 caracteres', 'warning');
+            return;
+        }
+        if (!matricula) {
+            this.showToast('⚠️ Matrícula é obrigatória', 'warning');
+            return;
+        }
+        if (!email || !email.endsWith('@iemasaoluiscentro.net')) {
+            this.showToast('⚠️ Email deve ser institucional (@iemasaoluiscentro.net)', 'warning');
+            return;
+        }
+        if (!cpf || cpf.replace(/\D/g, '').length !== 11) {
+            this.showToast('⚠️ CPF inválido', 'warning');
+            return;
+        }
+
+        let senha = null;
+        if (!editando) {
+            senha = document.getElementById('formProfessorSenha')?.value;
+            if (!senha || senha.length < 6) {
+                this.showToast('⚠️ Senha deve ter pelo menos 6 caracteres', 'warning');
+                return;
+            }
+        }
+
+        const btn = document.getElementById('btnSalvarProfessor');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Salvando...';
+        }
+
+        try {
+            const payload = {
+                nome,
+                matricula,
+                email,
+                cpf: cpf.replace(/\D/g, ''),
+                telefone: telefone ? telefone.replace(/\D/g, '') : '',
+                eixo,
+                departamento,
+                titulacao,
+                ativo
+            };
+
+            if (!editando) {
+                payload.password = senha;
+            }
+
+            const url = editando 
+                ? `/api/substituicao-professor/professores/${id}` 
+                : '/api/substituicao-professor/professores';
+            
+            const method = editando ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao salvar');
+            }
+
+            // Fecha modal e reabre o gerenciar
+            const modalForm = document.getElementById('modalFormProfessor');
+            if (modalForm && this.modalFormProfessorInstance) {
+                this.modalFormProfessorInstance.hide();
+                setTimeout(() => {
+                    modalForm.remove();
+                    this.reabrirModalGerenciar();
+                }, 350);
+            }
+
+            this.showToast(
+                editando ? '✅ Professor atualizado com sucesso!' : '✅ Professor cadastrado com sucesso!',
+                'success'
+            );
+
+            // Recarrega lista de professores da substituição também
+            await this.carregarProfessoresSubstituicao();
+
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fas fa-save me-2"></i> ${editando ? 'Salvar Alterações' : 'Cadastrar Professor'}`;
+            }
+        }
+    }
+
+    async excluirProfessor(id, nome) {
+        const confirmar = await this.confirmarAcao(
+            `⚠️ Tem certeza que deseja EXCLUIR o professor "${nome}"?\n\nEsta ação não pode ser desfeita!`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            const response = await fetch(`/api/substituicao-professor/professores/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Erro ao excluir');
+            }
+
+            this.showToast('✅ Professor excluído com sucesso!', 'success');
+            await this.carregarProfessoresGerenciar();
+            await this.carregarProfessoresSubstituicao();
+
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            
+            if (error.message.includes('vínculos') || error.message.includes('dados associados')) {
+                this.showToast(
+                    '⚠️ Este professor possui vínculos no sistema.\n\nRecomendação: Desative-o ao invés de excluir.',
+                    'warning'
+                );
+            } else {
+                this.showToast('❌ ' + error.message, 'error');
+            }
         }
     }
     
@@ -9062,6 +9994,22 @@ class SetorPedagogico {
                 item.classList.add('active');
             }
         });
+    }
+}
+
+// ============================================================================
+// 🔓 HELPER GLOBAL: MOSTRAR/OCULTAR SENHA
+// ============================================================================
+function toggleSenhaVisivel(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    } else {
+        input.type = 'password';
+        btn.innerHTML = '<i class="fas fa-eye"></i>';
     }
 }
 

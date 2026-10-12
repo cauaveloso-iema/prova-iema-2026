@@ -990,3 +990,107 @@ input[type="password"]::-ms-clear {
 .btn-microsoft:hover {
     border-color: #00a4ef;
 }
+
+/* ============================================================
+   🔥 CORREÇÃO: EVITAR "TREMOR" DO CONTAINER AO DIGITAR
+   ============================================================ */
+
+/* 1. Reservar o espaço da scrollbar SEMPRE (evita layout shift) */
+html {
+    overflow-y: scroll; /* scrollbar sempre presente */
+    scrollbar-gutter: stable; /* reserva o espaço, evitando pulo */
+}
+
+/* 2. Evitar shift horizontal quando o conteúdo do input cresce */
+.login-container {
+    /* Mantém a largura fixa mesmo com scrollbar aparecendo */
+    scrollbar-gutter: stable both-edges;
+    
+    /* Remove a animação de entrada que pode causar repaint ao digitar */
+    animation: fadeInUp 0.8s ease;
+    animation-fill-mode: both;
+    
+    /* Força uma camada de composição (GPU) - evita repaint */
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    
+    /* Previne mudança de largura quando a scrollbar interna aparece */
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 440px; /* Reforça o limite */
+}
+
+/* 3. Impedir que o input "empurre" o layout ao digitar */
+.form-control,
+.password-wrapper input {
+    /* Fixa largura e evita que o texto ultrapasse */
+    width: 100%;
+    max-width: 100%;
+    min-width: 0; /* 🔥 ESSENCIAL: impede crescimento em flex/grid */
+    
+    /* Evita o "salto" quando o texto fica grande */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    
+    /* Impede zoom automático em iOS ao focar (que causa reflow) */
+    font-size: 16px;
+}
+
+/* Em desktop volta ao tamanho original */
+@media (min-width: 769px) {
+    .form-control,
+    .password-wrapper input {
+        font-size: 14px;
+    }
+}
+
+/* 4. Fixar a altura do label (evita movimento vertical) */
+.form-group label {
+    display: block;
+    height: 20px;
+    line-height: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 5. Evitar que o autocomplete do Chrome "empurre" o layout */
+.form-control:-webkit-autofill,
+.form-control:-webkit-autofill:hover,
+.form-control:-webkit-autofill:focus {
+    /* Remove a mudança brusca de cor/estilo */
+    -webkit-text-fill-color: var(--gray-800);
+    -webkit-box-shadow: 0 0 0px 1000px var(--gray-50) inset;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+/* 6. Previne "tremor" do background animado durante digitação */
+.background-animated,
+.particles {
+    /* Força composição em GPU e evita repaint no typing */
+    will-change: transform;
+    transform: translateZ(0);
+    pointer-events: none;
+}
+
+/* 7. Evita que o container centralize de novo quando conteúdo muda */
+body {
+    /* Fixa a altura da viewport para evitar reflow */
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+}
+
+/* 8. Desabilita transições que podem causar "lag visual" */
+.login-container,
+.login-container * {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 0.2s;
+}
+
+/* ⚠️ IMPORTANTE: remove transition de `all` do olhinho (senão treme) */
+.toggle-password {
+    transition: color 0.2s ease, opacity 0.25s ease, transform 0.25s ease !important;
+}

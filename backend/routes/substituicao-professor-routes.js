@@ -81,8 +81,36 @@ function getHorariosDe(s) {
     return [];
 }
 
+// Validar CPF (dígitos verificadores)
+function validarCPF(cpf) {
+    if (!cpf) return false;
+    const cpfLimpo = String(cpf).replace(/\D/g, '');
+    if (cpfLimpo.length !== 11) return false;
+    if (/^(\d)\1{10}$/.test(cpfLimpo)) return false;
+    
+    let soma = 0;
+    for (let i = 0; i < 9; i++) soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
+    let resto = (soma * 10) % 11;
+    if (resto === 10 || resto === 11) resto = 0;
+    if (resto !== parseInt(cpfLimpo.charAt(9))) return false;
+    
+    soma = 0;
+    for (let i = 0; i < 10; i++) soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
+    resto = (soma * 10) % 11;
+    if (resto === 10 || resto === 11) resto = 0;
+    if (resto !== parseInt(cpfLimpo.charAt(10))) return false;
+    
+    return true;
+}
+
+// Validar email institucional
+function validarEmailInstitucional(email) {
+    if (!email) return false;
+    return email.toLowerCase().endsWith('@iemasaoluiscentro.net');
+}
+
 // ============================================
-// ROTAS
+// ROTAS EXISTENTES
 // ============================================
 
 router.get('/verificar-permissao', authenticateToken, async (req, res) => {
@@ -447,7 +475,6 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$professorAusenteId', nome: { $first: '$professorAusenteNome' }, eixo: { $first: '$professorAusenteEixo' }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$professorSubstitutoId', nome: { $first: '$professorSubstitutoNome' }, eixo: { $first: '$professorSubstitutoEixo' }, count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
             Substituicao.aggregate([{ $match: filtro }, { $group: { _id: '$turma', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 15 }]),
-            // ⭐ Agregação por horário usando $unwind
             Substituicao.aggregate([
                 { $match: filtro },
                 { $addFields: { 
@@ -562,6 +589,426 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
             }))
         });
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// 🔥 NOVAS ROTAS: GERENCIAMENTO DE PROFESSORES PELO SETOR PEDAGÓGICO
+// (CRUD completo usando a mesma verificação de permissão do módulo)
+// ============================================================================
+
+// ============================================
+// 🔍 BUSCAR PROFESSOR POR ID (com detalhes completos)
+// ============================================
+router.get('/professores/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
+    try {
+        const User = getUserModel();
+        const { id } = req.params;
+        
+        // Validar ObjectId
+        if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ success: false, error: 'ID inválido' });
+        }
+        
+        const professor = await User.findById(id)
+            .select('nome email cpf telefone matricula eixo departamento titulacao ativo role fotoPerfil createdAt updatedAt twoFactorEnabled lastLogin')
+            .lean();
+        
+        if (!professor) {
+            return res.status(404).json({ success: false, error: 'Professor não encontrado' });
+        }
+        
+        // Garantir que é professor (ou admin que também pode dar aula)
+        if (professor.role !== 'professor') {
+            return res.status(400).json({ 
+                success: false, 
+                error: `Este usuário não é um professor (role: ${professor.role})` 
+            });
+        }
+        
+        res.json({
+            success: true,
+            professor: {
+                id: professor._id,
+                nome: professor.nome || '',
+                email: professor.email || '',
+                cpf: professor.cpf || '',
+                telefone: professor.telefone || '',
+                matricula: professor.matricula || '',
+                eixo: professor.eixo || '',
+                departamento: professor.departamento || '',
+                titulacao: professor.titulacao || '',
+                ativo: professor.ativo !== false,
+                role: professor.role,
+                fotoPerfil: professor.fotoPerfil || null,
+                twoFactorEnabled: professor.twoFactorEnabled || false,
+                lastLogin: professor.lastLogin || null,
+                createdAt: professor.createdAt,
+                updatedAt: professor.updatedAt
+            }
+        });
+    } catch (error) {
+        console.error('❌ Erro ao buscar professor:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// ➕ CRIAR NOVO PROFESSOR
+// ============================================
+router.post('/professores', authenticateToken, verificarPermissaoModulo, async (req, res) => {
+    try {
+        const User = getUserModel();
+        const {
+            nome, email, cpf, telefone, matricula,
+            eixo, departamento, titulacao,
+            password, ativo
+        } = req.body;
+        
+        console.log(`📝 [SETOR PEDAGÓGICO] Criando professor: ${email}`);
+        
+        // ============ VALIDAÇÕES ============
+        if (!nome || nome.trim().length < 3) {
+            return res.status(400).json({ success: false, error: 'Nome deve ter pelo menos 3 caracteres' });
+        }
+        
+        if (!email) {
+            return res.status(400).json({ success: false, error: 'Email é obrigatório' });
+        }
+        
+        if (!validarEmailInstitucional(email)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Email deve ser institucional (@iemasaoluiscentro.net)' 
+            });
+        }
+        
+        if (!matricula || matricula.trim() === '') {
+            return res.status(400).json({ success: false, error: 'Matrícula é obrigatória' });
+        }
+        
+        if (!cpf) {
+            return res.status(400).json({ success: false, error: 'CPF é obrigatório' });
+        }
+        
+        if (!validarCPF(cpf)) {
+            return res.status(400).json({ success: false, error: 'CPF inválido' });
+        }
+        
+        if (!password || password.length < 6) {
+            return res.status(400).json({ success: false, error: 'Senha deve ter pelo menos 6 caracteres' });
+        }
+        
+        // ============ VERIFICAR DUPLICATAS ============
+        const cpfLimpo = cpf.replace(/\D/g, '');
+        const emailLower = email.toLowerCase().trim();
+        
+        const existente = await User.findOne({
+            $or: [
+                { email: emailLower },
+                { cpf: cpfLimpo },
+                { matricula: matricula.trim() }
+            ]
+        });
+        
+        if (existente) {
+            let campo = 'dados';
+            if (existente.email === emailLower) campo = 'email';
+            else if (existente.cpf === cpfLimpo) campo = 'CPF';
+            else if (existente.matricula === matricula.trim()) campo = 'matrícula';
+            
+            return res.status(400).json({ 
+                success: false, 
+                error: `Já existe um usuário cadastrado com este ${campo}` 
+            });
+        }
+        
+        // ============ CRIAR USUÁRIO ============
+        const novoProfessor = new User({
+            nome: nome.trim(),
+            email: emailLower,
+            cpf: cpfLimpo,
+            telefone: telefone ? telefone.replace(/\D/g, '') : '',
+            matricula: matricula.trim(),
+            eixo: eixo || '',
+            departamento: departamento || '',
+            titulacao: titulacao || '',
+            password: password,
+            role: 'professor',
+            ativo: ativo !== false,
+            forcePasswordChange: true, // Deve trocar no primeiro login
+            passwordChangedAt: null,
+            loginAttempts: 0,
+            lockUntil: null,
+            twoFactorEnabled: false,
+            twoFactorBackupCodes: [],
+            twoFactorBackupCodesShown: false,
+            twoFactorSecret: null,
+            twoFactorTempSecret: null,
+            telefoneVerificado: false
+        });
+        
+        await novoProfessor.save();
+        
+        console.log(`✅ Professor criado: ${novoProfessor.email} (ID: ${novoProfessor._id})`);
+        
+        // ============ CRIAR NOTIFICAÇÃO ============
+        try {
+            const Notificacao = require('../models/Notificacao');
+            const notif = new Notificacao({
+                usuarioId: novoProfessor._id,
+                tipo: 'sistema',
+                titulo: '👋 Bem-vindo ao EducaPleno!',
+                mensagem: `Sua conta de professor foi criada. Você deverá trocar sua senha no primeiro login.`,
+                icone: '🎓',
+                cor: '#3b82f6',
+                link: '/trocar-senha.html',
+                prioridade: 4
+            });
+            await notif.save();
+        } catch (notifErr) {
+            console.warn('⚠️ Erro ao criar notificação:', notifErr.message);
+        }
+        
+        res.status(201).json({
+            success: true,
+            message: 'Professor cadastrado com sucesso! Ele deverá trocar a senha no primeiro login.',
+            professor: {
+                id: novoProfessor._id,
+                nome: novoProfessor.nome,
+                email: novoProfessor.email,
+                matricula: novoProfessor.matricula,
+                eixo: novoProfessor.eixo,
+                ativo: novoProfessor.ativo,
+                forcePasswordChange: novoProfessor.forcePasswordChange
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao criar professor:', error);
+        
+        // Tratamento de erros específicos do Mongoose
+        if (error.code === 11000) {
+            const campo = Object.keys(error.keyPattern || {})[0] || 'campo';
+            return res.status(400).json({ 
+                success: false, 
+                error: `Já existe um usuário com este ${campo}` 
+            });
+        }
+        
+        if (error.name === 'ValidationError') {
+            const msgs = Object.values(error.errors).map(e => e.message);
+            return res.status(400).json({ 
+                success: false, 
+                error: msgs.join('; ') 
+            });
+        }
+        
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// ✏️ EDITAR PROFESSOR
+// ============================================
+router.put('/professores/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
+    try {
+        const User = getUserModel();
+        const { id } = req.params;
+        const {
+            nome, email, cpf, telefone, matricula,
+            eixo, departamento, titulacao, ativo
+        } = req.body;
+        
+        console.log(`✏️ [SETOR PEDAGÓGICO] Editando professor ${id}`);
+        
+        // Validar ObjectId
+        if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ success: false, error: 'ID inválido' });
+        }
+        
+        const professor = await User.findById(id);
+        
+        if (!professor) {
+            return res.status(404).json({ success: false, error: 'Professor não encontrado' });
+        }
+        
+        if (professor.role !== 'professor') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Este usuário não é um professor' 
+            });
+        }
+        
+        // ============ VALIDAÇÕES ============
+        if (nome !== undefined && (!nome || nome.trim().length < 3)) {
+            return res.status(400).json({ success: false, error: 'Nome deve ter pelo menos 3 caracteres' });
+        }
+        
+        if (email !== undefined) {
+            if (!validarEmailInstitucional(email)) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Email deve ser institucional (@iemasaoluiscentro.net)' 
+                });
+            }
+            
+            const emailLower = email.toLowerCase().trim();
+            if (emailLower !== professor.email) {
+                const emailEmUso = await User.findOne({ email: emailLower, _id: { $ne: id } });
+                if (emailEmUso) {
+                    return res.status(400).json({ success: false, error: 'Email já está em uso' });
+                }
+            }
+        }
+        
+        if (cpf !== undefined) {
+            if (!validarCPF(cpf)) {
+                return res.status(400).json({ success: false, error: 'CPF inválido' });
+            }
+            
+            const cpfLimpo = cpf.replace(/\D/g, '');
+            if (cpfLimpo !== professor.cpf) {
+                const cpfEmUso = await User.findOne({ cpf: cpfLimpo, _id: { $ne: id } });
+                if (cpfEmUso) {
+                    return res.status(400).json({ success: false, error: 'CPF já está em uso' });
+                }
+            }
+        }
+        
+        if (matricula !== undefined) {
+            const matTrim = matricula.trim();
+            if (matTrim !== professor.matricula) {
+                const matEmUso = await User.findOne({ matricula: matTrim, _id: { $ne: id } });
+                if (matEmUso) {
+                    return res.status(400).json({ success: false, error: 'Matrícula já está em uso' });
+                }
+            }
+        }
+        
+        // ============ ATUALIZAR CAMPOS ============
+        if (nome !== undefined) professor.nome = nome.trim();
+        if (email !== undefined) professor.email = email.toLowerCase().trim();
+        if (cpf !== undefined) professor.cpf = cpf.replace(/\D/g, '');
+        if (telefone !== undefined) professor.telefone = telefone.replace(/\D/g, '');
+        if (matricula !== undefined) professor.matricula = matricula.trim();
+        if (eixo !== undefined) professor.eixo = eixo || '';
+        if (departamento !== undefined) professor.departamento = departamento || '';
+        if (titulacao !== undefined) professor.titulacao = titulacao || '';
+        if (ativo !== undefined) professor.ativo = ativo;
+        
+        await professor.save();
+        
+        console.log(`✅ Professor ${professor.email} atualizado`);
+        
+        res.json({
+            success: true,
+            message: 'Professor atualizado com sucesso!',
+            professor: {
+                id: professor._id,
+                nome: professor.nome,
+                email: professor.email,
+                cpf: professor.cpf,
+                telefone: professor.telefone,
+                matricula: professor.matricula,
+                eixo: professor.eixo,
+                departamento: professor.departamento,
+                titulacao: professor.titulacao,
+                ativo: professor.ativo
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao editar professor:', error);
+        
+        if (error.code === 11000) {
+            const campo = Object.keys(error.keyPattern || {})[0] || 'campo';
+            return res.status(400).json({ 
+                success: false, 
+                error: `Já existe um usuário com este ${campo}` 
+            });
+        }
+        
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
+// 🗑️ EXCLUIR PROFESSOR
+// ============================================
+router.delete('/professores/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
+    try {
+        const User = getUserModel();
+        const { id } = req.params;
+        
+        console.log(`🗑️ [SETOR PEDAGÓGICO] Excluindo professor ${id}`);
+        
+        // Validar ObjectId
+        if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ success: false, error: 'ID inválido' });
+        }
+        
+        const professor = await User.findById(id);
+        
+        if (!professor) {
+            return res.status(404).json({ success: false, error: 'Professor não encontrado' });
+        }
+        
+        if (professor.role !== 'professor') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Este usuário não é um professor' 
+            });
+        }
+        
+        // ============ VERIFICAR VÍNCULOS ============
+        const Prova = require('../models/Prova');
+        const Turma = require('../models/Turma');
+        
+        const [totalProvas, totalTurmas, totalSubstituicoes] = await Promise.all([
+            Prova.countDocuments({ userId: id }),
+            Turma.countDocuments({ professorId: id }),
+            require('../models/SubstituicaoProfessor').countDocuments({
+                $or: [
+                    { professorAusenteId: id },
+                    { professorSubstitutoId: id }
+                ]
+            })
+        ]);
+        
+        const totalVinculos = totalProvas + totalTurmas + totalSubstituicoes;
+        
+        if (totalVinculos > 0) {
+            let detalhes = [];
+            if (totalProvas > 0) detalhes.push(`${totalProvas} prova(s)`);
+            if (totalTurmas > 0) detalhes.push(`${totalTurmas} turma(s)`);
+            if (totalSubstituicoes > 0) detalhes.push(`${totalSubstituicoes} substituição(ões)`);
+            
+            return res.status(400).json({
+                success: false,
+                error: `Este professor possui vínculos: ${detalhes.join(', ')}. Não é possível excluir.`,
+                sugestao: 'Recomendamos DESATIVAR o professor em vez de excluí-lo. Assim o histórico é mantido.',
+                vinculos: {
+                    provas: totalProvas,
+                    turmas: totalTurmas,
+                    substituicoes: totalSubstituicoes
+                }
+            });
+        }
+        
+        // ============ EXCLUIR ============
+        await User.findByIdAndDelete(id);
+        
+        console.log(`✅ Professor ${professor.email} excluído permanentemente`);
+        
+        res.json({
+            success: true,
+            message: `Professor "${professor.nome}" excluído com sucesso!`
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao excluir professor:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
