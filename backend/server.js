@@ -25,6 +25,7 @@ const fs = require('fs');
 const Groq = require("groq-sdk");
 const http = require('http');
 const cookieParser = require('cookie-parser');
+const logger = require('./utils/logger');
 
 // ============================================================================
 // FORÇAR FUSO HORÁRIO (LOGO NA PRIMEIRA LINHA)
@@ -75,19 +76,19 @@ function verificarArquivosModelos() {
 // Função para carregar os modelos (VERSÃO COMPLETA)
 async function loadFaceModels() {
     if (modelsLoaded) {
-        console.log('✅ Modelos já carregados anteriormente');
+        logger.info('✅ Modelos já carregados anteriormente');
         return true;
     }
     
-    console.log('='.repeat(60));
-    console.log('🔄 INICIANDO CARREGAMENTO DOS MODELOS DE RECONHECIMENTO FACIAL');
-    console.log('📁 Diretório dos modelos:', MODELS_PATH);
-    console.log('='.repeat(60));
+    logger.info('='.repeat(60));
+    logger.info('🔄 INICIANDO CARREGAMENTO DOS MODELOS DE RECONHECIMENTO FACIAL');
+    logger.info('📁 Diretório dos modelos:', MODELS_PATH);
+    logger.info('='.repeat(60));
     
     // Verificar se o diretório existe
     if (!fs.existsSync(MODELS_PATH)) {
-        console.error('❌ Diretório de modelos não encontrado!');
-        console.log('📁 Criando diretório:', MODELS_PATH);
+        logger.error('❌ Diretório de modelos não encontrado!');
+        logger.info('📁 Criando diretório:', MODELS_PATH);
         fs.mkdirSync(MODELS_PATH, { recursive: true });
     }
     
@@ -95,64 +96,64 @@ async function loadFaceModels() {
     const arquivosFaltando = verificarArquivosModelos();
     
     if (arquivosFaltando.length > 0) {
-        console.error('❌ Arquivos de modelo ausentes:');
-        arquivosFaltando.forEach(arquivo => console.error('   -', arquivo));
-        console.log('\n📥 Para baixar os modelos, execute:');
-        console.log('   node download-models-complete.js');
-        console.log('='.repeat(60));
+        logger.error('❌ Arquivos de modelo ausentes:');
+        arquivosFaltando.forEach(arquivo => logger.error('   -', arquivo));
+        logger.info('\n📥 Para baixar os modelos, execute:');
+        logger.info('   node download-models-complete.js');
+        logger.info('='.repeat(60));
         return false;
     }
     
-    console.log('✅ Todos os arquivos de modelo encontrados');
-    console.log('='.repeat(60));
+    logger.info('✅ Todos os arquivos de modelo encontrados');
+    logger.info('='.repeat(60));
     
     try {
         // PASSO 1: Carregar TinyFaceDetector (para detecção rápida)
-        console.log('📦 PASSO 1: Carregando TinyFaceDetector...');
+        logger.info('📦 PASSO 1: Carregando TinyFaceDetector...');
         const startTime1 = Date.now();
         await faceapi.nets.tinyFaceDetector.loadFromDisk(MODELS_PATH);
         const time1 = Date.now() - startTime1;
-        console.log(`✅ TinyFaceDetector carregado em ${time1}ms`);
+        logger.info(`✅ TinyFaceDetector carregado em ${time1}ms`);
         
         // PASSO 2: Carregar FaceLandmark68 (para landmarks faciais)
-        console.log('📦 PASSO 2: Carregando FaceLandmark68...');
+        logger.info('📦 PASSO 2: Carregando FaceLandmark68...');
         const startTime2 = Date.now();
         await faceapi.nets.faceLandmark68Net.loadFromDisk(MODELS_PATH);
         const time2 = Date.now() - startTime2;
-        console.log(`✅ FaceLandmark68 carregado em ${time2}ms`);
+        logger.info(`✅ FaceLandmark68 carregado em ${time2}ms`);
         
         // PASSO 3: Carregar FaceRecognitionNet (PARA GERAR DESCRIPTORS!)
-        console.log('📦 PASSO 3: Carregando FaceRecognitionNet...');
+        logger.info('📦 PASSO 3: Carregando FaceRecognitionNet...');
         const startTime3 = Date.now();
         await faceapi.nets.faceRecognitionNet.loadFromDisk(MODELS_PATH);
         const time3 = Date.now() - startTime3;
-        console.log(`✅ FaceRecognitionNet carregado em ${time3}ms`);
+        logger.info(`✅ FaceRecognitionNet carregado em ${time3}ms`);
         
         const tempoTotal = time1 + time2 + time3;
         
-        console.log('='.repeat(60));
-        console.log('✅ TODOS OS MODELOS CARREGADOS COM SUCESSO!');
-        console.log(`⏱️  Tempo total: ${tempoTotal}ms`);
-        console.log('📊 Modelos disponíveis:');
-        console.log('   - TinyFaceDetector (detecção rápida)');
-        console.log('   - FaceLandmark68 (pontos faciais)');
-        console.log('   - FaceRecognitionNet (descriptors)');
-        console.log('='.repeat(60));
+        logger.info('='.repeat(60));
+        logger.info('✅ TODOS OS MODELOS CARREGADOS COM SUCESSO!');
+        logger.info(`⏱️  Tempo total: ${tempoTotal}ms`);
+        logger.info('📊 Modelos disponíveis:');
+        logger.info('   - TinyFaceDetector (detecção rápida)');
+        logger.info('   - FaceLandmark68 (pontos faciais)');
+        logger.info('   - FaceRecognitionNet (descriptors)');
+        logger.info('='.repeat(60));
         
         modelsLoaded = true;
         return true;
         
     } catch (error) {
-        console.error('❌ ERRO AO CARREGAR MODELOS:');
-        console.error('   Nome:', error.name);
-        console.error('   Mensagem:', error.message);
-        console.error('   Stack:', error.stack);
-        console.log('='.repeat(60));
-        console.log('💡 SOLUÇÕES:');
-        console.log('   1. Verifique se os arquivos de modelo existem em:', MODELS_PATH);
-        console.log('   2. Execute: node download-models-complete.js');
-        console.log('   3. Verifique as permissões de leitura dos arquivos');
-        console.log('='.repeat(60));
+        logger.error('❌ ERRO AO CARREGAR MODELOS:');
+        logger.error('   Nome:', error.name);
+        logger.error('   Mensagem:', error.message);
+        logger.error('   Stack:', error.stack);
+        logger.info('='.repeat(60));
+        logger.info('💡 SOLUÇÕES:');
+        logger.info('   1. Verifique se os arquivos de modelo existem em:', MODELS_PATH);
+        logger.info('   2. Execute: node download-models-complete.js');
+        logger.info('   3. Verifique as permissões de leitura dos arquivos');
+        logger.info('='.repeat(60));
         
         return false;
     }
@@ -170,14 +171,14 @@ function getModelStatus() {
 
 // Chamar no startup com tratamento de erro
 (async () => {
-    console.log('🚀 Inicializando sistema de reconhecimento facial...');
+    logger.info('🚀 Inicializando sistema de reconhecimento facial...');
     const loaded = await loadFaceModels();
     
     if (!loaded) {
-        console.warn('⚠️  Sistema de reconhecimento facial não está totalmente funcional!');
-        console.log('💡 O cadastro de Face ID pode não funcionar corretamente.');
+        logger.warn('⚠️  Sistema de reconhecimento facial não está totalmente funcional!');
+        logger.info('💡 O cadastro de Face ID pode não funcionar corretamente.');
     } else {
-        console.log('✅ Sistema de reconhecimento facial pronto para uso!');
+        logger.info('✅ Sistema de reconhecimento facial pronto para uso!');
     }
 })();
 
@@ -221,7 +222,7 @@ function sanitizarJwtExpiracao(valor) {
         }
     }
     
-    console.warn(`⚠️ jwtExpiracao inválido: "${valor}". Usando padrão "${padrao}"`);
+    logger.warn(`⚠️ jwtExpiracao inválido: "${valor}". Usando padrão "${padrao}"`);
     return padrao;
 }
 
@@ -252,12 +253,12 @@ const loggerService = new LoggerService(server);
 // ============================================================================
 // AGORA TODOS OS CONSOLE.LOG SERÃO CAPTURADOS (INCLUINDO OS PRIMEIROS)
 // ============================================================================
-console.log('🌍 FUSO HORÁRIO FORÇADO PARA:', process.env.TZ);
-console.log('🕒 HORA ATUAL DO SERVIDOR (local):', new Date().toString());
-console.log('🕒 HORA ATUAL DO SERVIDOR (ISO):', new Date().toISOString());
-console.log('='.repeat(60));
-console.log('🚀 Servidor iniciando...');
-console.log('📝 LoggerService ativo desde o boot!');
+logger.info('🌍 FUSO HORÁRIO FORÇADO PARA:', process.env.TZ);
+logger.info('🕒 HORA ATUAL DO SERVIDOR (local):', new Date().toString());
+logger.info('🕒 HORA ATUAL DO SERVIDOR (ISO):', new Date().toISOString());
+logger.info('='.repeat(60));
+logger.info('🚀 Servidor iniciando...');
+logger.info('📝 LoggerService ativo desde o boot!');
 
 // ============================================================================
 // CRIAÇÃO DE DIRETÓRIOS NECESSÁRIOS
@@ -272,17 +273,17 @@ const dirs = [
 dirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
-        console.log(`📁 Diretório criado: ${dir}`);
+        logger.info(`📁 Diretório criado: ${dir}`);
     }
 });
 
 // ============================================================================
 // LOGS DE DEPURAÇÃO INICIAL
 // ============================================================================
-console.log('📁 Diretório atual:', __dirname);
-console.log('🔍 Procurando .env em:', path.join(__dirname, '..', '.env'));
-console.log('🔑 Chave encontrada?:', process.env.OPENROUTER_API_KEY ? '✅ Sim' : '❌ Não');
-console.log('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Configurada' : '❌ Não configurada');
+logger.info('📁 Diretório atual:', __dirname);
+logger.info('🔍 Procurando .env em:', path.join(__dirname, '..', '.env'));
+logger.info('🔑 Chave encontrada?:', process.env.OPENROUTER_API_KEY ? '✅ Sim' : '❌ Não');
+logger.info('🔑 OpenRouter API Key:', process.env.OPENROUTER_API_KEY ? '✅ Configurada' : '❌ Não configurada');
 
 // ============================================================================
 // IMPORTAÇÃO DE SERVIÇOS
@@ -312,12 +313,12 @@ try {
             process.env.TWILIO_ACCOUNT_SID,
             process.env.TWILIO_AUTH_TOKEN
         );
-        console.log('✅ Twilio client inicializado com sucesso');
+        logger.info('✅ Twilio client inicializado com sucesso');
     } else {
-        console.warn('⚠️ Credenciais Twilio não configuradas');
+        logger.warn('⚠️ Credenciais Twilio não configuradas');
     }
 } catch (error) {
-    console.error('❌ Erro ao inicializar Twilio:', error.message);
+    logger.error('❌ Erro ao inicializar Twilio:', error.message);
 }
 
 async function enviarSmsTwilio(telefone, mensagem) {
@@ -333,9 +334,9 @@ async function enviarSmsTwilio(telefone, mensagem) {
             numeroDestino = `+55${telefone.replace(/\D/g, '')}`;
         }
 
-        console.log('📱 Enviando SMS...');
-        console.log('   Para:', numeroDestino);
-        console.log('   Mensagem:', mensagem.substring(0, 30) + '...');
+        logger.info('📱 Enviando SMS...');
+        logger.info('   Para:', numeroDestino);
+        logger.info('   Mensagem:', mensagem.substring(0, 30) + '...');
         
         // Validar formato do número
         const telefoneLimpo = numeroDestino.replace(/\D/g, '');
@@ -346,14 +347,14 @@ async function enviarSmsTwilio(telefone, mensagem) {
         // PRIORIDADE 1: Usar Messaging Service (recomendado)
         if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
             try {
-                console.log('📤 Tentando com Messaging Service...');
+                logger.info('📤 Tentando com Messaging Service...');
                 const message = await twilioClient.messages.create({
                     body: mensagem,
                     messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
                     to: numeroDestino
                 });
                 
-                console.log(`✅ SMS enviado via Messaging Service! SID: ${message.sid}`);
+                logger.info(`✅ SMS enviado via Messaging Service! SID: ${message.sid}`);
                 return { 
                     success: true, 
                     sid: message.sid, 
@@ -361,7 +362,7 @@ async function enviarSmsTwilio(telefone, mensagem) {
                     via: 'messaging_service'
                 };
             } catch (error) {
-                console.log('⚠️ Erro no Messaging Service:', error.message);
+                logger.info('⚠️ Erro no Messaging Service:', error.message);
                 // Se falhar, tenta com número direto
             }
         }
@@ -369,14 +370,14 @@ async function enviarSmsTwilio(telefone, mensagem) {
         // PRIORIDADE 2: Usar número direto
         if (process.env.TWILIO_PHONE_NUMBER) {
             try {
-                console.log('📤 Tentando com número direto...');
+                logger.info('📤 Tentando com número direto...');
                 const message = await twilioClient.messages.create({
                     body: mensagem,
                     from: process.env.TWILIO_PHONE_NUMBER,
                     to: numeroDestino
                 });
                 
-                console.log(`✅ SMS enviado via número direto! SID: ${message.sid}`);
+                logger.info(`✅ SMS enviado via número direto! SID: ${message.sid}`);
                 return { 
                     success: true, 
                     sid: message.sid, 
@@ -384,7 +385,7 @@ async function enviarSmsTwilio(telefone, mensagem) {
                     via: 'numero_direto'
                 };
             } catch (error) {
-                console.log('⚠️ Erro no número direto:', error.message);
+                logger.info('⚠️ Erro no número direto:', error.message);
                 throw error;
             }
         }
@@ -392,15 +393,15 @@ async function enviarSmsTwilio(telefone, mensagem) {
         throw new Error('Nenhuma configuração de SMS encontrada');
         
     } catch (error) {
-        console.error('❌ Erro Twilio:', error.message);
+        logger.error('❌ Erro Twilio:', error.message);
         
         // Fallback - mostra o código no console
         const codigoMatch = mensagem.match(/\d{6}/);
         const codigo = codigoMatch ? codigoMatch[0] : '123456';
         
-        console.log(`\n🔧 FALLBACK - Código seria: ${codigo}`);
-        console.log(`🔧 Motivo: ${error.message}\n`);
-        console.log('💡 DICA: Verifique as credenciais no .env');
+        logger.info(`\n🔧 FALLBACK - Código seria: ${codigo}`);
+        logger.info(`🔧 Motivo: ${error.message}\n`);
+        logger.info('💡 DICA: Verifique as credenciais no .env');
         
         return { 
             success: true,  // Mantém true para não quebrar o fluxo
@@ -467,7 +468,7 @@ app.use(cors({
     if (origensPermitidas.includes(origin)) {
       return callback(null, true);
     }
-    console.warn(`🚫 CORS bloqueado para origem: ${origin}`);
+    logger.warn(`🚫 CORS bloqueado para origem: ${origin}`);
     return callback(new Error('Origem não permitida pelo CORS'));
   },
   credentials: true,
@@ -514,14 +515,14 @@ app.use((req, res, next) => {
 // ============================================================================
 app.post('/api/onesignal/vincular-kodular', async (req, res) => {
     try {
-        console.log('='.repeat(60));
-        console.log('📱 [KODULAR] Requisição de vínculo recebida');
-        console.log('   Body completo:', JSON.stringify(req.body));
+        logger.info('='.repeat(60));
+        logger.info('📱 [KODULAR] Requisição de vínculo recebida');
+        logger.info('   Body completo:', JSON.stringify(req.body));
 
         const { playerId, token } = req.body;
 
         if (!playerId) {
-            console.error('❌ playerId não informado');
+            logger.error('❌ playerId não informado');
             return res.status(400).json({
                 success: false,
                 error: 'playerId é obrigatório'
@@ -529,22 +530,22 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
         }
 
         if (!token) {
-            console.error('❌ token não informado');
+            logger.error('❌ token não informado');
             return res.status(400).json({
                 success: false,
                 error: 'token é obrigatório'
             });
         }
 
-        console.log(`   📱 playerId: ${playerId.substring(0, 20)}...`);
-        console.log(`   🔑 token: ${token.substring(0, 30)}...`);
+        logger.info(`   📱 playerId: ${playerId.substring(0, 20)}...`);
+        logger.info(`   🔑 token: ${token.substring(0, 30)}...`);
 
         // Verificar JWT
         let decoded;
         try {
             decoded = jwt.verify(token, process.env.JWT_SECRET);
         } catch (jwtError) {
-            console.error('❌ Token inválido:', jwtError.message);
+            logger.error('❌ Token inválido:', jwtError.message);
             return res.status(401).json({
                 success: false,
                 error: 'Token inválido ou expirado',
@@ -553,19 +554,19 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
         }
 
         const userId = decoded.id;
-        console.log(`   ✅ Token válido para userId: ${userId}`);
+        logger.info(`   ✅ Token válido para userId: ${userId}`);
 
         // Buscar usuário
         const user = await User.findById(userId);
         if (!user) {
-            console.error(`❌ Usuário ${userId} não encontrado`);
+            logger.error(`❌ Usuário ${userId} não encontrado`);
             return res.status(404).json({
                 success: false,
                 error: 'Usuário não encontrado'
             });
         }
 
-        console.log(`   👤 Usuário: ${user.nome} (${user.email}) - ${user.role}`);
+        logger.info(`   👤 Usuário: ${user.nome} (${user.email}) - ${user.role}`);
 
         // Verificar se o playerId já está com outro usuário
         const outroUsuario = await User.findOne({
@@ -574,7 +575,7 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
         });
 
         if (outroUsuario) {
-            console.log(`   ⚠️ PlayerId já estava com ${outroUsuario.nome}. Desvinculando...`);
+            logger.info(`   ⚠️ PlayerId já estava com ${outroUsuario.nome}. Desvinculando...`);
             await User.findByIdAndUpdate(outroUsuario._id, {
                 $unset: { onesignalPlayerId: 1 }
             });
@@ -582,7 +583,7 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
 
         // Verificar se já está vinculado ao mesmo usuário
         if (user.onesignalPlayerId === playerId) {
-            console.log(`   ℹ️ Já estava vinculado ao mesmo playerId`);
+            logger.info(`   ℹ️ Já estava vinculado ao mesmo playerId`);
             return res.json({
                 success: true,
                 message: 'Dispositivo já estava vinculado',
@@ -602,8 +603,8 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
         user.ultimaValidacaoPush = new Date();
         await user.save();
 
-        console.log(`   ✅ VÍNCULO REALIZADO COM SUCESSO!`);
-        console.log('='.repeat(60));
+        logger.info(`   ✅ VÍNCULO REALIZADO COM SUCESSO!`);
+        logger.info('='.repeat(60));
 
         res.json({
             success: true,
@@ -619,7 +620,7 @@ app.post('/api/onesignal/vincular-kodular', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro geral no vínculo Kodular:', error);
+        logger.error('❌ Erro geral no vínculo Kodular:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -664,7 +665,7 @@ app.post('/api/onesignal/verificar-vinculo', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao verificar vínculo:', error);
+        logger.error('❌ Erro ao verificar vínculo:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -754,7 +755,7 @@ const verificarPermissaoSuperAdmin = async (req, res, next) => {
         
         next();
     } catch (error) {
-        console.error('❌ Erro na verificação de permissão:', error);
+        logger.error('❌ Erro na verificação de permissão:', error);
         next();
     }
 };
@@ -804,9 +805,9 @@ app.use('/api/admin/monitoramento', monitoramentoRoutes);
 let groq;
 if (process.env.GROQ_API_KEY) {
   groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  console.log('✅ Groq configurado com sucesso');
+  logger.info('✅ Groq configurado com sucesso');
 } else {
-  console.warn('⚠️ Groq API key não configurada');
+  logger.warn('⚠️ Groq API key não configurada');
 }
 
 // ============================================================================
@@ -834,7 +835,7 @@ const lgpdRoutes = require('./routes/lgpd');
 let Config;
 try {
   Config = mongoose.model('Config');
-  console.log('✅ Modelo Config já existe');
+  logger.info('✅ Modelo Config já existe');
 } catch {
   const ConfigSchema = new mongoose.Schema({
     chave: { type: String, required: true, unique: true, trim: true },
@@ -853,7 +854,7 @@ try {
   ConfigSchema.index({ atualizadoEm: -1 });
 
   Config = mongoose.model('Config', ConfigSchema);
-  console.log('✅ Modelo Config criado com sucesso!');
+  logger.info('✅ Modelo Config criado com sucesso!');
 }
 
 // Modelo Resultado
@@ -1019,7 +1020,7 @@ LocalizacaoSchema.index({ tipoRefeicao: 1, timestamp: -1 });
 LocalizacaoSchema.index({ alunoId: 1, tipoRefeicao: 1, timestamp: -1 });
 
 const Localizacao = mongoose.models.Localizacao || mongoose.model('Localizacao', LocalizacaoSchema);
-console.log('✅ Modelo Localizacao atualizado com campos de refeição');
+logger.info('✅ Modelo Localizacao atualizado com campos de refeição');
 
 // ============ ROTAS DE PUSH ============
 const pushRoutes = require('./routes/push-routes');
@@ -1129,7 +1130,7 @@ app.use('/api/biblioteca-publica', bibliotecaPublicaRoutes);
 
 const loginSocialRoutes = require('./routes/login');
 app.use('/api/login-social', loginSocialRoutes);
-console.log('✅ Rotas de login-social registradas');
+logger.info('✅ Rotas de login-social registradas');
 
 // ============================================
 //SECRETARIA
@@ -1149,7 +1150,7 @@ app.use('/api/sessoes-assinatura', sessaoAssinaturaRoutes);
 
 async function testarModelosDisponiveis(groq) {
   if (!groq) {
-    console.error('❌ Groq não inicializado');
+    logger.error('❌ Groq não inicializado');
     return [];
   }
   
@@ -1165,8 +1166,8 @@ async function testarModelosDisponiveis(groq) {
     "allam-2-7b"
   ];
 
-  console.log('🔍 Testando modelos disponíveis na Groq...');
-  console.log('='.repeat(50));
+  logger.info('🔍 Testando modelos disponíveis na Groq...');
+  logger.info('='.repeat(50));
   
   const modelosFuncionais = [];
   const modelosDescontinuados = [];
@@ -1174,7 +1175,7 @@ async function testarModelosDisponiveis(groq) {
   
   for (const modelo of modelosParaTestar) {
     try {
-      console.log(`  Testando: ${modelo}`);
+      logger.info(`  Testando: ${modelo}`);
       
       const completion = await groq.chat.completions.create({
         model: modelo,
@@ -1185,10 +1186,10 @@ async function testarModelosDisponiveis(groq) {
       
       if (completion.choices && completion.choices.length > 0) {
         modelosFuncionais.push(modelo);
-        console.log(`  ✅ ${modelo} - Disponível e funcionando`);
+        logger.info(`  ✅ ${modelo} - Disponível e funcionando`);
       } else {
         modelosErro.push(modelo);
-        console.log(`  ⚠️ ${modelo} - Resposta vazia`);
+        logger.info(`  ⚠️ ${modelo} - Resposta vazia`);
       }
       
     } catch (error) {
@@ -1196,16 +1197,16 @@ async function testarModelosDisponiveis(groq) {
       
       if (errorMsg.includes('decommissioned') || errorMsg.includes('discontinued')) {
         modelosDescontinuados.push(modelo);
-        console.log(`  ❌ ${modelo} - Descontinuado`);
+        logger.info(`  ❌ ${modelo} - Descontinuado`);
       } else if (errorMsg.includes('not found') || errorMsg.includes('404')) {
         modelosErro.push(modelo);
-        console.log(`  ❌ ${modelo} - Não encontrado (404)`);
+        logger.info(`  ❌ ${modelo} - Não encontrado (404)`);
       } else if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
-        console.log(`  ⏳ ${modelo} - Rate limit, pulando...`);
+        logger.info(`  ⏳ ${modelo} - Rate limit, pulando...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
       } else {
         modelosErro.push(modelo);
-        console.log(`  ⚠️ ${modelo} - Erro: ${errorMsg.substring(0, 80)}`);
+        logger.info(`  ⚠️ ${modelo} - Erro: ${errorMsg.substring(0, 80)}`);
       }
     }
     
@@ -1213,34 +1214,34 @@ async function testarModelosDisponiveis(groq) {
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   
-  console.log('='.repeat(50));
-  console.log('📊 RESULTADO DO TESTE DE MODELOS:');
-  console.log('-'.repeat(50));
+  logger.info('='.repeat(50));
+  logger.info('📊 RESULTADO DO TESTE DE MODELOS:');
+  logger.info('-'.repeat(50));
   
-  console.log('\n✅ MODELOS FUNCIONAIS:');
+  logger.info('\n✅ MODELOS FUNCIONAIS:');
   if (modelosFuncionais.length > 0) {
-    modelosFuncionais.forEach(modelo => console.log(`  • ${modelo}`));
+    modelosFuncionais.forEach(modelo => logger.info(`  • ${modelo}`));
   } else {
-    console.log('  ⚠️ Nenhum modelo funcional encontrado!');
+    logger.info('  ⚠️ Nenhum modelo funcional encontrado!');
   }
   
-  console.log('\n❌ MODELOS DESCONTINUADOS:');
+  logger.info('\n❌ MODELOS DESCONTINUADOS:');
   if (modelosDescontinuados.length > 0) {
-    modelosDescontinuados.forEach(modelo => console.log(`  • ${modelo}`));
+    modelosDescontinuados.forEach(modelo => logger.info(`  • ${modelo}`));
   } else {
-    console.log('  Nenhum modelo descontinuado');
+    logger.info('  Nenhum modelo descontinuado');
   }
   
-  console.log('\n⚠️ MODELOS COM ERRO:');
+  logger.info('\n⚠️ MODELOS COM ERRO:');
   if (modelosErro.length > 0) {
-    modelosErro.forEach(modelo => console.log(`  • ${modelo}`));
+    modelosErro.forEach(modelo => logger.info(`  • ${modelo}`));
   } else {
-    console.log('  Nenhum modelo com erro');
+    logger.info('  Nenhum modelo com erro');
   }
   
-  console.log('='.repeat(50));
-  console.log(`📈 Total: ${modelosFuncionais.length} funcionais, ${modelosDescontinuados.length} descontinuados, ${modelosErro.length} com erro`);
-  console.log('='.repeat(50));
+  logger.info('='.repeat(50));
+  logger.info(`📈 Total: ${modelosFuncionais.length} funcionais, ${modelosDescontinuados.length} descontinuados, ${modelosErro.length} com erro`);
+  logger.info('='.repeat(50));
   
   return modelosFuncionais;
 }
@@ -1267,8 +1268,8 @@ const connectToDatabase = async () => {
   const IS_PRODUCTION = ENV === 'production';
   const IS_DEVELOPMENT = ENV === 'development';
   
-  console.log('='.repeat(60));
-  console.log(`🚀 AMBIENTE DETECTADO: ${ENV.toUpperCase()}`);
+  logger.info('='.repeat(60));
+  logger.info(`🚀 AMBIENTE DETECTADO: ${ENV.toUpperCase()}`);
   
   let connectionUri;
   let databaseType = 'Desconhecido';
@@ -1276,21 +1277,21 @@ const connectToDatabase = async () => {
   if (IS_PRODUCTION) {
     connectionUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
     databaseType = 'MongoDB Atlas (NUVEM)';
-    console.log('🌐 PRODUÇÃO: Conectando ao MongoDB Atlas');
+    logger.info('🌐 PRODUÇÃO: Conectando ao MongoDB Atlas');
   } else if (IS_DEVELOPMENT) {
     connectionUri = process.env.MONGODB_LOCAL_URI || 'mongodb://localhost:27017/provas_online_local';
     databaseType = 'MongoDB Local';
-    console.log('💻 DESENVOLVIMENTO: Conectando ao MongoDB Local');
+    logger.info('💻 DESENVOLVIMENTO: Conectando ao MongoDB Local');
   } else {
     connectionUri = process.env.MONGODB_URI;
     databaseType = 'Configuração padrão';
-    console.log('⚙️ Usando configuração padrão do .env');
+    logger.info('⚙️ Usando configuração padrão do .env');
   }
   
   const safeUri = connectionUri ? connectionUri.replace(/\/\/[^@]+@/, '//***@') : 'Não configurada';
-  console.log(`🗄️ URI: ${safeUri}`);
-  console.log(`📊 Tipo: ${databaseType}`);
-  console.log('='.repeat(60));
+  logger.info(`🗄️ URI: ${safeUri}`);
+  logger.info(`📊 Tipo: ${databaseType}`);
+  logger.info('='.repeat(60));
   
   // 🔥 OPÇÕES OTIMIZADAS PARA RENDER + ATLAS
   const options = {
@@ -1322,15 +1323,15 @@ const connectToDatabase = async () => {
   // 🔥 FUNÇÃO PARA TENTAR CONECTAR COM RETRY
   const tentarConectar = async (uri, tentativa = 1, maxTentativas = 3) => {
     try {
-      console.log(`🔄 Tentativa ${tentativa}/${maxTentativas} de conexão...`);
+      logger.info(`🔄 Tentativa ${tentativa}/${maxTentativas} de conexão...`);
       await mongoose.connect(uri, options);
       return true;
     } catch (error) {
-      console.error(`❌ Tentativa ${tentativa} falhou: ${error.message}`);
+      logger.error(`❌ Tentativa ${tentativa} falhou: ${error.message}`);
       
       if (tentativa < maxTentativas) {
         const espera = tentativa * 3000; // 3s, 6s, 9s...
-        console.log(`⏳ Aguardando ${espera}ms antes de tentar novamente...`);
+        logger.info(`⏳ Aguardando ${espera}ms antes de tentar novamente...`);
         await new Promise(resolve => setTimeout(resolve, espera));
         return tentarConectar(uri, tentativa + 1, maxTentativas);
       }
@@ -1340,7 +1341,7 @@ const connectToDatabase = async () => {
   };
   
   try {
-    console.log('🔄 Iniciando conexão com o banco de dados...');
+    logger.info('🔄 Iniciando conexão com o banco de dados...');
     
     // 🔥 TENTAR CONECTAR COM RETRY AUTOMÁTICO
     await tentarConectar(connectionUri, 1, 3);
@@ -1349,19 +1350,19 @@ const connectToDatabase = async () => {
     const host = mongoose.connection.host;
     const isAtlas = host.includes('mongodb.net');
     
-    console.log('='.repeat(60));
-    console.log('✅ CONEXÃO ESTABELECIDA COM SUCESSO!');
-    console.log(`📁 Banco: ${db.databaseName}`);
-    console.log(`📍 Host: ${host}`);
-    console.log(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
-    console.log(`🎯 Buffer Timeout: ${mongoose.get('bufferTimeoutMS')}ms`);
-    console.log('='.repeat(60));
+    logger.info('='.repeat(60));
+    logger.info('✅ CONEXÃO ESTABELECIDA COM SUCESSO!');
+    logger.info(`📁 Banco: ${db.databaseName}`);
+    logger.info(`📍 Host: ${host}`);
+    logger.info(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas (NUVEM)' : 'MongoDB Local'}`);
+    logger.info(`🎯 Buffer Timeout: ${mongoose.get('bufferTimeoutMS')}ms`);
+    logger.info('='.repeat(60));
     
     // ⏰ Iniciar cron jobs de retenção LGPD
     try {
       retencaoService.iniciarCronJobs();
     } catch (error) {
-      console.warn('⚠️ Erro ao iniciar cron jobs LGPD:', error.message);
+      logger.warn('⚠️ Erro ao iniciar cron jobs LGPD:', error.message);
     }
     
     // ============================================
@@ -1373,20 +1374,20 @@ const connectToDatabase = async () => {
     
     mongoose.connection.on('disconnected', () => {
       if (reconectando) {
-        console.log('⏭️ Reconexão já em andamento, ignorando evento...');
+        logger.info('⏭️ Reconexão já em andamento, ignorando evento...');
         return;
       }
       
       reconectando = true;
-      console.log('⚠️ MongoDB desconectado! Tentando reconectar em 5 segundos...');
+      logger.info('⚠️ MongoDB desconectado! Tentando reconectar em 5 segundos...');
       
       setTimeout(async () => {
         try {
-          console.log('🔄 Tentando reconectar ao MongoDB...');
+          logger.info('🔄 Tentando reconectar ao MongoDB...');
           await mongoose.connect(connectionUri, options);
-          console.log('✅ Reconexão bem-sucedida!');
+          logger.info('✅ Reconexão bem-sucedida!');
         } catch (err) {
-          console.error('❌ Falha na reconexão:', err.message);
+          logger.error('❌ Falha na reconexão:', err.message);
         } finally {
           reconectando = false;
         }
@@ -1394,20 +1395,20 @@ const connectToDatabase = async () => {
     });
 
     mongoose.connection.on('error', (err) => {
-      console.error('❌ Erro no MongoDB:', err.message);
+      logger.error('❌ Erro no MongoDB:', err.message);
     });
 
     mongoose.connection.on('reconnected', () => {
-      console.log('✅ MongoDB reconectado com sucesso!');
+      logger.info('✅ MongoDB reconectado com sucesso!');
       reconectando = false;
     });
 
     mongoose.connection.on('timeout', () => {
-      console.warn('⏰ Timeout na conexão com MongoDB');
+      logger.warn('⏰ Timeout na conexão com MongoDB');
     });
 
     mongoose.connection.on('close', () => {
-      console.log('🔌 Conexão com MongoDB fechada');
+      logger.info('🔌 Conexão com MongoDB fechada');
     });
     
     // ============================================
@@ -1417,15 +1418,15 @@ const connectToDatabase = async () => {
       const matriculasManager = require('./matriculas');
       await matriculasManager.importarDadosIniciais();
     } catch (error) {
-      console.warn('⚠️ Erro ao importar matrículas:', error.message);
+      logger.warn('⚠️ Erro ao importar matrículas:', error.message);
       // Não lança o erro - o sistema continua funcionando
     }
     
     // Testar modelos Groq em background (não bloqueia)
     if (groq) {
       setTimeout(() => {
-        testarModelosDisponiveis().catch(err => {
-          console.warn('⚠️ Erro ao testar modelos Groq:', err.message);
+        testarModelosDisponiveis(groq).catch(err => {
+          logger.warn('⚠️ Erro ao testar modelos Groq:', err.message);
         });
       }, 5000); // Esperar 5s após conectar
     }
@@ -1433,15 +1434,15 @@ const connectToDatabase = async () => {
     return true; // ✅ SUCESSO
     
   } catch (error) {
-    console.error('='.repeat(60));
-    console.error('❌ ERRO NA CONEXÃO PRINCIPAL:', error.message);
-    console.error('='.repeat(60));
+    logger.error('='.repeat(60));
+    logger.error('❌ ERRO NA CONEXÃO PRINCIPAL:', error.message);
+    logger.error('='.repeat(60));
     
     // ============================================
     // FALLBACK PARA DESENVOLVIMENTO
     // ============================================
     if (IS_DEVELOPMENT) {
-      console.log('🔄 DESENVOLVIMENTO: Tentando fallback para Atlas...');
+      logger.info('🔄 DESENVOLVIMENTO: Tentando fallback para Atlas...');
       
       try {
         const fallbackUri = process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI;
@@ -1451,19 +1452,19 @@ const connectToDatabase = async () => {
         }
         
         await mongoose.connect(fallbackUri, options);
-        console.log('✅ Fallback para Atlas bem-sucedido');
+        logger.info('✅ Fallback para Atlas bem-sucedido');
         return true;
         
       } catch (fallbackError) {
-        console.error('❌ Todos os fallbacks falharam:', fallbackError.message);
-        console.log('💡 SOLUÇÃO:');
-        console.log('   1. Inicie o MongoDB local: mongod');
-        console.log('   2. Ou verifique sua conexão com a internet');
-        console.log('   3. Ou verifique se MONGODB_ATLAS_URI está no .env');
+        logger.error('❌ Todos os fallbacks falharam:', fallbackError.message);
+        logger.info('💡 SOLUÇÃO:');
+        logger.info('   1. Inicie o MongoDB local: mongod');
+        logger.info('   2. Ou verifique sua conexão com a internet');
+        logger.info('   3. Ou verifique se MONGODB_ATLAS_URI está no .env');
         
         // 🔥 EM DESENVOLVIMENTO, NÃO MATA O SERVIDOR
         // Deixa o servidor rodar mesmo sem banco (útil para debug)
-        console.warn('⚠️ Servidor continuará rodando SEM banco de dados');
+        logger.warn('⚠️ Servidor continuará rodando SEM banco de dados');
         return false;
       }
     }
@@ -1472,28 +1473,28 @@ const connectToDatabase = async () => {
     // FALLBACK PARA PRODUÇÃO (RENDER)
     // ============================================
     if (IS_PRODUCTION) {
-      console.error('❌ PRODUÇÃO: Conexão com Atlas falhou!');
-      console.log('💡 Verificações sugeridas:');
-      console.log('   1. IP do Render está na whitelist do Atlas?');
-      console.log('   2. A URI do MongoDB está correta nas variáveis de ambiente?');
-      console.log('   3. O cluster do Atlas está ativo (não pausado)?');
+      logger.error('❌ PRODUÇÃO: Conexão com Atlas falhou!');
+      logger.info('💡 Verificações sugeridas:');
+      logger.info('   1. IP do Render está na whitelist do Atlas?');
+      logger.info('   2. A URI do MongoDB está correta nas variáveis de ambiente?');
+      logger.info('   3. O cluster do Atlas está ativo (não pausado)?');
       
       // 🔥 TENTAR FALLBACK TAMBÉM EM PRODUÇÃO
       const fallbackUri = process.env.MONGODB_URI;
       
       if (fallbackUri && fallbackUri !== connectionUri) {
-        console.log('🔄 Tentando URI alternativa em produção...');
+        logger.info('🔄 Tentando URI alternativa em produção...');
         try {
           await mongoose.connect(fallbackUri, options);
-          console.log('✅ Fallback em produção bem-sucedido');
+          logger.info('✅ Fallback em produção bem-sucedido');
           return true;
         } catch (fallbackError) {
-          console.error('❌ Fallback também falhou:', fallbackError.message);
+          logger.error('❌ Fallback também falhou:', fallbackError.message);
         }
       }
       
       // Em produção, NÃO joga o erro (deixa o servidor rodar e tentar reconectar)
-      console.warn('⚠️ Servidor continuará rodando. Tentará reconectar automaticamente.');
+      logger.warn('⚠️ Servidor continuará rodando. Tentará reconectar automaticamente.');
       return false;
     }
   }
@@ -1512,24 +1513,24 @@ const iniciarConexaoComRetry = async () => {
   const INTERVALO_ENTRE_TENTATIVAS = 5000; // 5 segundos
   
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_INICIAIS; tentativa++) {
-    console.log(`\n🔁 Tentativa de conexão inicial ${tentativa}/${MAX_TENTATIVAS_INICIAIS}...`);
+    logger.info(`\n🔁 Tentativa de conexão inicial ${tentativa}/${MAX_TENTATIVAS_INICIAIS}...`);
     
     const sucesso = await connectToDatabase();
     
     if (sucesso) {
       databaseReady = true;
-      console.log('✅ Banco de dados pronto para uso!');
+      logger.info('✅ Banco de dados pronto para uso!');
       return true;
     }
     
     if (tentativa < MAX_TENTATIVAS_INICIAIS) {
-      console.log(`⏳ Aguardando ${INTERVALO_ENTRE_TENTATIVAS / 1000}s antes da próxima tentativa...`);
+      logger.info(`⏳ Aguardando ${INTERVALO_ENTRE_TENTATIVAS / 1000}s antes da próxima tentativa...`);
       await new Promise(resolve => setTimeout(resolve, INTERVALO_ENTRE_TENTATIVAS));
     }
   }
   
-  console.error('❌ Todas as tentativas iniciais de conexão falharam!');
-  console.warn('⚠️ O servidor continuará rodando e tentará reconectar automaticamente.');
+  logger.error('❌ Todas as tentativas iniciais de conexão falharam!');
+  logger.warn('⚠️ O servidor continuará rodando e tentará reconectar automaticamente.');
   return false;
 };
 
@@ -1674,7 +1675,7 @@ const authenticateToken = (req, res, next) => {
         });
       }
     } catch (dbError) {
-      console.error('❌ Erro ao verificar tokenVersion:', dbError);
+      logger.error('❌ Erro ao verificar tokenVersion:', dbError);
     }
 
     req.userId = decoded.id;
@@ -1720,7 +1721,7 @@ const rastrearAtividade = async (req, res, next) => {
         ).catch(err => {
             // Silenciar erros para não afetar a requisição
             if (process.env.NODE_ENV === 'development') {
-                console.warn('⚠️ Erro ao atualizar lastActive:', err.message);
+                logger.warn('⚠️ Erro ao atualizar lastActive:', err.message);
             }
         });
     }
@@ -1742,7 +1743,7 @@ app.post('/api/auth/login', async (req, res) => {
     
     // ===== CASO 1: REQUISIÇÃO COM TOKEN TEMPORÁRIO (2FA) =====
     if (tempToken) {
-      console.log('🔐 Requisição com token temporário recebida');
+      logger.info('🔐 Requisição com token temporário recebida');
       
       try {
         // Verificar se o token é válido
@@ -1750,7 +1751,7 @@ app.post('/api/auth/login', async (req, res) => {
         
         // Verificar se é um token temporário para 2FA
         if (decoded.temp && decoded.purpose === '2fa') {
-          console.log(`✅ Token temporário válido para usuário: ${decoded.id}`);
+          logger.info(`✅ Token temporário válido para usuário: ${decoded.id}`);
           
           // Buscar usuário pelo ID do token
           const user = await User.findById(decoded.id)
@@ -1781,7 +1782,7 @@ app.post('/api/auth/login', async (req, res) => {
             motivo = 'SMS';
             user.twoFactorTempSecret = null; // Limpar após uso
             await user.save();
-            console.log('✅ Código SMS válido');
+            logger.info('✅ Código SMS válido');
           }
           
           // 2. Verificar código TOTP (QR Code - Google Authenticator)
@@ -1801,7 +1802,7 @@ app.post('/api/auth/login', async (req, res) => {
                 if (verified) {
                   isValid = true;
                   motivo = 'TOTP (QR Code) - Temporário';
-                  console.log('✅ Código TOTP temporário válido');
+                  logger.info('✅ Código TOTP temporário válido');
                   
                   // Se for primeira ativação
                   if (!user.twoFactorEnabled) {
@@ -1815,7 +1816,7 @@ app.post('/api/auth/login', async (req, res) => {
                     user.twoFactorBackupCodes = backupCodes;
                     user.twoFactorTempSecret = null;
                     await user.save();
-                    console.log('✅ 2FA ativado com sucesso via QR Code');
+                    logger.info('✅ 2FA ativado com sucesso via QR Code');
                   } else {
                     user.twoFactorTempSecret = null;
                     await user.save();
@@ -1835,11 +1836,11 @@ app.post('/api/auth/login', async (req, res) => {
                 if (verified) {
                   isValid = true;
                   motivo = 'TOTP (QR Code) - Permanente';
-                  console.log('✅ Código TOTP permanente válido');
+                  logger.info('✅ Código TOTP permanente válido');
                 }
               }
             } catch (error) {
-              console.error('❌ Erro ao verificar TOTP:', error.message);
+              logger.error('❌ Erro ao verificar TOTP:', error.message);
             }
           }
           
@@ -1849,18 +1850,18 @@ app.post('/api/auth/login', async (req, res) => {
             motivo = 'backup';
             user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(c => c !== twoFactorCode);
             await user.save();
-            console.log('✅ Código de backup válido');
+            logger.info('✅ Código de backup válido');
           }
           
           // 4. Verificar código secreto permanente
           if (!isValid && user.twoFactorSecret && user.twoFactorSecret === twoFactorCode) {
             isValid = true;
             motivo = 'secreto';
-            console.log('✅ Código secreto válido');
+            logger.info('✅ Código secreto válido');
           }
           
           if (!isValid) {
-            console.log('❌ Código inválido:', twoFactorCode);
+            logger.info('❌ Código inválido:', twoFactorCode);
             return res.status(401).json({
               success: false,
               error: 'Código 2FA inválido'
@@ -1923,9 +1924,9 @@ app.post('/api/auth/login', async (req, res) => {
             redirectTo = '/login.html';
           }
           
-          console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
+          logger.info(`✅ 2FA verificado via ${motivo} para ${user.email}`);
           if (user.twoFactorBackupCodes) {
-            console.log(`📊 Códigos de backup restantes: ${user.twoFactorBackupCodes.length}`);
+            logger.info(`📊 Códigos de backup restantes: ${user.twoFactorBackupCodes.length}`);
           }
           
           return res.json({
@@ -1943,7 +1944,7 @@ app.post('/api/auth/login', async (req, res) => {
           });
         }
       } catch (err) {
-        console.error('❌ Erro ao verificar token temporário:', err.message);
+        logger.error('❌ Erro ao verificar token temporário:', err.message);
         return res.status(401).json({
           success: false,
           error: 'Token temporário inválido ou expirado'
@@ -1952,7 +1953,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     // ===== CASO 2: LOGIN NORMAL (SEM TOKEN) =====
-    console.log('📝 Requisição de login normal');
+    logger.info('📝 Requisição de login normal');
     
     // Buscar configurações de segurança
     const [configTentativas, configBloqueio, configJwt, config2FA] = await Promise.all([
@@ -1968,7 +1969,7 @@ app.post('/api/auth/login', async (req, res) => {
     const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto); // 🔥 SANITIZA
     const exigir2FA = config2FA ? config2FA.valor : false;
     
-    console.log(`🔐 Configuração 2FA: ${exigir2FA ? 'ATIVADO' : 'DESATIVADO'}`);
+    logger.info(`🔐 Configuração 2FA: ${exigir2FA ? 'ATIVADO' : 'DESATIVADO'}`);
     
     // Buscar usuário por email ou CPF
     let user;
@@ -1991,7 +1992,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     if (!user) {
-      console.log(`❌ Usuário não encontrado com ${campoBusca} fornecido`);
+      logger.info(`❌ Usuário não encontrado com ${campoBusca} fornecido`);
       return res.status(401).json({ 
         success: false, 
         error: `${campoBusca === 'email' ? 'Email' : 'CPF'} ou senha incorretos` 
@@ -2054,11 +2055,11 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     if (perfisCom2FA.includes(user.role)) {
-      console.log(`🔐 2FA exigido para ${user.role} ${user.email}`);
+      logger.info(`🔐 2FA exigido para ${user.role} ${user.email}`);
       
       // Verificar códigos de backup
       if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
-          console.log('🆕 Usuário sem códigos de backup - gerando 10 agora...');
+          logger.info('🆕 Usuário sem códigos de backup - gerando 10 agora...');
           const backupCodes = [];
           for (let i = 0; i < 10; i++) {
               backupCodes.push(generateBackupCode());
@@ -2066,7 +2067,7 @@ app.post('/api/auth/login', async (req, res) => {
           user.twoFactorBackupCodes = backupCodes;
           user.twoFactorBackupCodesShown = false;
           await user.save();
-        console.log('✅ 10 códigos de backup gerados');
+        logger.info('✅ 10 códigos de backup gerados');
       }
       
       // Gerar token TEMPORÁRIO
@@ -2094,7 +2095,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     // ===== USUÁRIOS SEM 2FA =====
-    console.log(`✅ Login bem-sucedido para usuário ${user.email} (${user.role})`);
+    logger.info(`✅ Login bem-sucedido para usuário ${user.email} (${user.role})`);
     
     const authToken = jwt.sign(
       { 
@@ -2168,7 +2169,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Erro no login:', error);
+    logger.error('❌ Erro no login:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erro no servidor: ' + error.message 
@@ -2209,9 +2210,9 @@ app.post('/api/auth/2fa/enable', authenticateToken, async (req, res) => {
     const telefoneLimpo = user.telefone.replace(/\D/g, '');
     const mensagem = `🔐 ${user.nome}, seu código de verificação do EducaPleno é: ${codigo}. Válido por 5 minutos.`;
 
-    console.log('📱 Tentando enviar SMS...');
-    console.log(`   Para: ${telefoneLimpo}`);
-    console.log(`   Código: ${codigo}`);
+    logger.info('📱 Tentando enviar SMS...');
+    logger.info(`   Para: ${telefoneLimpo}`);
+    logger.info(`   Código: ${codigo}`);
     
     // ENVIAR SMS USANDO A FUNÇÃO CORRIGIDA
     const resultado = await enviarSmsTwilio(telefoneLimpo, mensagem);
@@ -2233,7 +2234,7 @@ app.post('/api/auth/2fa/enable', authenticateToken, async (req, res) => {
     }
     
   } catch (error) {
-    console.error('❌ Erro ao ativar 2FA:', error);
+    logger.error('❌ Erro ao ativar 2FA:', error);
     return res.status(500).json({
       success: false,
       error: 'Erro interno: ' + error.message
@@ -2254,7 +2255,7 @@ app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (
         
         const { userId } = req.params;
         
-        console.log(`🔑 Admin ${req.userId} gerando 10 códigos de backup para usuário ${userId}`);
+        logger.info(`🔑 Admin ${req.userId} gerando 10 códigos de backup para usuário ${userId}`);
         
         const user = await User.findById(userId).select(
             '+twoFactorEnabled +twoFactorBackupCodes +twoFactorBackupCodesShown'
@@ -2286,10 +2287,10 @@ app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (
         user.twoFactorBackupCodesShown = false; // Reset para mostrar na próxima vez
         await user.save();
         
-        console.log(`✅ Admin gerou 10 códigos para ${user.email}:`, backupCodes);
+        logger.info(`✅ Admin gerou 10 códigos para ${user.email}:`, backupCodes);
         
         // Log da ação do admin
-        console.log(`📝 LOG: Admin ${req.userId} gerou códigos para ${user.email} em ${new Date().toISOString()}`);
+        logger.info(`📝 LOG: Admin ${req.userId} gerou códigos para ${user.email} em ${new Date().toISOString()}`);
         
         res.json({
             success: true,
@@ -2304,7 +2305,7 @@ app.post('/api/admin/2fa/gerar-backup-codes/:userId', authenticateToken, async (
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -2327,7 +2328,7 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
             });
         }
         
-        console.log(`📨 Usuário ${usuario.nome} (${usuario.email}) solicitou novos códigos de backup`);
+        logger.info(`📨 Usuário ${usuario.nome} (${usuario.email}) solicitou novos códigos de backup`);
         
         // Buscar TODOS os admins
         const admins = await User.find({ 
@@ -2370,7 +2371,7 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
                 
                 await notificacao.save();
                 notificacoes.push(notificacao);
-                console.log(`✅ Notificação criada para admin ${admin._id}`);
+                logger.info(`✅ Notificação criada para admin ${admin._id}`);
                 
                 // 🔥 ENVIAR PUSH SE ATIVADO
                 if (pushAtivado) {
@@ -2390,7 +2391,7 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
                 }
                 
             } catch (error) {
-                console.error(`❌ Erro ao notificar admin ${admin._id}:`, error.message);
+                logger.error(`❌ Erro ao notificar admin ${admin._id}:`, error.message);
             }
         }
         
@@ -2402,7 +2403,7 @@ app.post('/api/backup/solicitar', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao solicitar backup:', error);
+        logger.error('❌ Erro ao solicitar backup:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -2441,7 +2442,7 @@ app.get('/api/admin/2fa/usuarios', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -2484,7 +2485,7 @@ app.get('/api/admin/2fa/ver-codigos/:userId', authenticateToken, async (req, res
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -2574,8 +2575,8 @@ app.post('/api/auth/2fa/verify', authenticateToken, async (req, res) => {
         
         await user.save();
         
-        console.log(`✅ 2FA ativado para usuário ${user.email}`);
-        console.log(`🔑 10 códigos de backup gerados:`, backupCodes);
+        logger.info(`✅ 2FA ativado para usuário ${user.email}`);
+        logger.info(`🔑 10 códigos de backup gerados:`, backupCodes);
         
         res.json({
             success: true,
@@ -2588,7 +2589,7 @@ app.post('/api/auth/2fa/verify', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao verificar 2FA:', error);
+        logger.error('❌ Erro ao verificar 2FA:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao ativar 2FA: ' + error.message
@@ -2599,7 +2600,7 @@ app.post('/api/auth/2fa/verify', authenticateToken, async (req, res) => {
 // ============ ROTA PARA BUSCAR CÓDIGOS DE BACKUP (VERSÃO COM SALVAMENTO GARANTIDO) ============
 app.get('/api/auth/2fa/backup-codes', authenticateToken, async (req, res) => {
     try {
-        console.log('🔍 Buscando códigos de backup para:', req.userId, 'temp:', req.tokenTemp);
+        logger.info('🔍 Buscando códigos de backup para:', req.userId, 'temp:', req.tokenTemp);
         
         // Buscar usuário COM o campo (+twoFactorBackupCodes)
         const user = await User.findById(req.userId).select(
@@ -2616,7 +2617,7 @@ app.get('/api/auth/2fa/backup-codes', authenticateToken, async (req, res) => {
         // 🔥 CORREÇÃO: Se for token TEMPORÁRIO (2FA), sempre retornar
         // os códigos, independente do twoFactorBackupCodesShown
         if (req.tokenTemp === true) {
-            console.log('🔑 Token temporário 2FA - retornando códigos');
+            logger.info('🔑 Token temporário 2FA - retornando códigos');
             
             if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
                 return res.status(400).json({
@@ -2630,7 +2631,7 @@ app.get('/api/auth/2fa/backup-codes', authenticateToken, async (req, res) => {
             if (user.twoFactorBackupCodesShown !== true) {
                 user.twoFactorBackupCodesShown = true;
                 await user.save();
-                console.log('✅ twoFactorBackupCodesShown marcado como true');
+                logger.info('✅ twoFactorBackupCodesShown marcado como true');
                 
                 return res.json({
                     success: true,
@@ -2691,7 +2692,7 @@ app.get('/api/auth/2fa/backup-codes', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao buscar códigos de backup:', error);
+        logger.error('❌ Erro ao buscar códigos de backup:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -2744,9 +2745,9 @@ app.use(async (req, res, next) => {
             const start = Date.now();
             const requestId = Math.random().toString(36).substring(7);
             
-            console.log(`\n🔍 [DEBUG-${requestId}] ${req.method} ${req.path}`);
-            console.log(`   👤 Usuário: ${req.userId || 'Não autenticado'} (${req.userRole || 'N/A'})`);
-            console.log(`   📦 Query:`, req.query);
+            logger.info(`\n🔍 [DEBUG-${requestId}] ${req.method} ${req.path}`);
+            logger.info(`   👤 Usuário: ${req.userId || 'Não autenticado'} (${req.userRole || 'N/A'})`);
+            logger.info(`   📦 Query:`, req.query);
             
             // Não logar body de upload de arquivos (muito grande)
             if (!req.path.includes('/upload/') && req.body && Object.keys(req.body).length > 0) {
@@ -2756,7 +2757,7 @@ app.use(async (req, res, next) => {
                 if (bodyCopy.token) bodyCopy.token = '***';
                 if (bodyCopy.authorization) bodyCopy.authorization = '***';
                 
-                console.log(`   📝 Body:`, bodyCopy);
+                logger.info(`   📝 Body:`, bodyCopy);
             }
             
             // Interceptar o método res.json para logar a resposta
@@ -2766,16 +2767,16 @@ app.use(async (req, res, next) => {
                 
                 // Log da resposta (resumido)
                 const statusColor = res.statusCode >= 400 ? '\x1b[31m' : '\x1b[32m';
-                console.log(`   ${statusColor}✅ Resposta (${duration}ms) - Status: ${res.statusCode}\x1b[0m`);
+                logger.info(`   ${statusColor}✅ Resposta (${duration}ms) - Status: ${res.statusCode}\x1b[0m`);
                 
                 // Log detalhado apenas para erros ou se for pequeno
                 if (res.statusCode >= 400 || (data && JSON.stringify(data).length < 500)) {
-                    console.log(`   📤 Dados:`, data);
+                    logger.info(`   📤 Dados:`, data);
                 } else {
-                    console.log(`   📤 Resposta muito grande (${JSON.stringify(data).length} bytes)`);
+                    logger.info(`   📤 Resposta muito grande (${JSON.stringify(data).length} bytes)`);
                 }
                 
-                console.log(`🔍 [DEBUG-${requestId}] Fim da requisição\n`);
+                logger.info(`🔍 [DEBUG-${requestId}] Fim da requisição\n`);
                 
                 return originalJson.call(this, data);
             };
@@ -2784,7 +2785,7 @@ app.use(async (req, res, next) => {
         next();
         
     } catch (error) {
-        console.error('❌ Erro no middleware de debug:', error);
+        logger.error('❌ Erro no middleware de debug:', error);
         next();
     }
 });
@@ -2814,7 +2815,7 @@ app.post('/api/auth/2fa/generate-qr', authenticateToken, async (req, res) => {
     user.twoFactorTempSecret = novoSegredo;
     await user.save();
     
-    console.log(`✅ NOVO QR CODE gerado para ${user.email}: ${novoSegredo.substring(0, 10)}...`);
+    logger.info(`✅ NOVO QR CODE gerado para ${user.email}: ${novoSegredo.substring(0, 10)}...`);
 
     // Gerar QR Code
     const otpauth = speakeasy.otpauthURL({
@@ -2834,7 +2835,7 @@ app.post('/api/auth/2fa/generate-qr', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao gerar QR Code:', error);
+    logger.error('❌ Erro ao gerar QR Code:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao gerar QR Code: ' + error.message
@@ -2915,7 +2916,7 @@ app.post('/api/auth/2fa/verify-totp', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -2999,7 +3000,7 @@ app.post('/api/auth/2fa/validate-totp', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao validar TOTP:', error);
+        logger.error('❌ Erro ao validar TOTP:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -3124,7 +3125,7 @@ const manutencaoMiddleware = async (req, res, next) => {
         return res.redirect('/manutencao.html');
         
     } catch (error) {
-        console.error('❌ Erro no middleware de manutenção:', error);
+        logger.error('❌ Erro no middleware de manutenção:', error);
         next();
     }
 };
@@ -3148,7 +3149,7 @@ app.get('/api/sistema/status', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao verificar status:', error);
+        logger.error('❌ Erro ao verificar status:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -3202,7 +3203,7 @@ app.post('/api/upload/temp', authenticateToken, uploadMiddleware.single('arquivo
     });
     
   } catch (error) {
-    console.error('❌ Erro no upload:', error);
+    logger.error('❌ Erro no upload:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao fazer upload do arquivo: ' + error.message
@@ -3217,7 +3218,7 @@ async function processarAnexosParaIA(anexos) {
       return "Nenhum anexo fornecido.";
     }
     
-    console.log(`📂 Processando ${anexos.length} anexos para IA...`);
+    logger.info(`📂 Processando ${anexos.length} anexos para IA...`);
     
     let contextoFormatado = `## 📎 INFORMAÇÕES DOS ANEXOS FORNECIDOS:\n\n`;
     
@@ -3292,12 +3293,12 @@ async function processarAnexosParaIA(anexos) {
     contextoFormatado += `4. **SIGA o EXEMPLO** - Problema de negócio com duas situações comparadas\n`;
     contextoFormatado += `5. **NÃO copie exatamente** - Crie variações, mas mantenha o estilo\n\n`;
     
-    console.log(`✅ Contexto de anexos formatado: ${contextoFormatado.length} caracteres`);
+    logger.info(`✅ Contexto de anexos formatado: ${contextoFormatado.length} caracteres`);
     
     return contextoFormatado;
     
   } catch (error) {
-    console.error('❌ Erro ao processar anexos para IA:', error);
+    logger.error('❌ Erro ao processar anexos para IA:', error);
     return "Erro ao processar anexos fornecidos.";
   }
 }
@@ -3350,7 +3351,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao buscar usuário:', error);
+    logger.error('Erro ao buscar usuário:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao buscar informações do usuário'
@@ -3368,7 +3369,7 @@ app.put('/api/users/me', authenticateToken, async (req, res) => {
       outraCondicao
     } = req.body;
     
-    console.log(`🔄 Atualizando usuário ${userId} com acessibilidade:`, {
+    logger.info(`🔄 Atualizando usuário ${userId} com acessibilidade:`, {
       precisaAcessibilidade,
       condicaoAcessibilidade,
       outraCondicao
@@ -3399,8 +3400,8 @@ app.put('/api/users/me', authenticateToken, async (req, res) => {
     
     await user.save();
     
-    console.log('✅ Usuário atualizado com sucesso!');
-    console.log('🎯 Nova configuração de acessibilidade:', {
+    logger.info('✅ Usuário atualizado com sucesso!');
+    logger.info('🎯 Nova configuração de acessibilidade:', {
       precisa: user.precisaAcessibilidade,
       condicao: user.condicaoAcessibilidade
     });
@@ -3420,7 +3421,7 @@ app.put('/api/users/me', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Erro ao atualizar usuário:', error);
+    logger.error('❌ Erro ao atualizar usuário:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao atualizar usuário: ' + error.message
@@ -3435,7 +3436,7 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
     const usuarioId = req.userId;
     const usuarioRole = req.userRole;
     
-    console.log(`📤 Usuário ${usuarioId} (${usuarioRole}) solicitando publicação da prova ${provaId}`);
+    logger.info(`📤 Usuário ${usuarioId} (${usuarioRole}) solicitando publicação da prova ${provaId}`);
     
     // Verificar se é admin ou super_admin
     const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
@@ -3484,7 +3485,7 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
     const config = await Config.findOne({ chave: 'provas.habilitarEnvioProva' });
     const habilitarEnvio = config ? config.valor : true; // Padrão: true
     
-    console.log(`📢 Configuração de envio: ${habilitarEnvio ? 'HABILITADO' : 'DESABILITADO'}`);
+    logger.info(`📢 Configuração de envio: ${habilitarEnvio ? 'HABILITADO' : 'DESABILITADO'}`);
     
     // 🔥 PUBLICAR A PROVA (sempre publicada)
     prova.publicada = true;
@@ -3497,7 +3498,7 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
         prova.status = 'ativa'; // Status normal para provas ativas
         await prova.save();
         
-        console.log(`✅ Prova ${provaId} publicada e ENVIADA para alunos!`);
+        logger.info(`✅ Prova ${provaId} publicada e ENVIADA para alunos!`);
         
         // Buscar turma para notificar alunos
         let turma = null;
@@ -3551,11 +3552,11 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
                 );
               }
             } catch (notifError) {
-              console.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, notifError.message);
+              logger.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, notifError.message);
             }
           }
           
-          console.log(`✅ ${alunos.length} alunos notificados sobre nova prova`);
+          logger.info(`✅ ${alunos.length} alunos notificados sobre nova prova`);
         }
         
         res.json({
@@ -3579,7 +3580,7 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
         // 🔥 IMPORTANTE: NÃO mudar o status para ativo quando envio desabilitado
         await prova.save();
         
-        console.log(`⚠️ Prova ${provaId} publicada mas NÃO ENVIADA (envio desabilitado) - status mantido como rascunho`);
+        logger.info(`⚠️ Prova ${provaId} publicada mas NÃO ENVIADA (envio desabilitado) - status mantido como rascunho`);
         
         res.json({
           success: true,
@@ -3598,7 +3599,7 @@ app.post('/api/professor/provas/:provaId/publicar', authenticateToken, async (re
     }
     
   } catch (error) {
-    console.error('❌ Erro ao publicar prova:', error);
+    logger.error('❌ Erro ao publicar prova:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao publicar prova: ' + error.message
@@ -3623,7 +3624,7 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
         const usuarioRole = req.userRole;
         const updates = req.body;
         
-        console.log(`✏️ Usuário ${usuarioId} (${usuarioRole}) editando prova ${provaId}`);
+        logger.info(`✏️ Usuário ${usuarioId} (${usuarioRole}) editando prova ${provaId}`);
         
         const prova = await Prova.findById(provaId);
         if (!prova) {
@@ -3682,7 +3683,7 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
         
         await prova.save();
         
-        console.log(`✅ Prova ${provaId} atualizada com sucesso`);
+        logger.info(`✅ Prova ${provaId} atualizada com sucesso`);
         
         // ===== 🔥 SE HOUVER MUDANÇAS SIGNIFICATIVAS E A PROVA JÁ FOI PUBLICADA, NOTIFICAR ALUNOS =====
         if (tinhaMudancas && prova.publicada) {
@@ -3729,14 +3730,14 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
                                 );
                             }
                         } catch (notifError) {
-                            console.error('⚠️ Erro ao notificar aluno:', notifError.message);
+                            logger.error('⚠️ Erro ao notificar aluno:', notifError.message);
                         }
                     }
                     
-                    console.log(`✅ ${alunos.length} alunos notificados sobre atualização da prova`);
+                    logger.info(`✅ ${alunos.length} alunos notificados sobre atualização da prova`);
                 }
             } catch (notifError) {
-                console.error('⚠️ Erro ao notificar alunos:', notifError.message);
+                logger.error('⚠️ Erro ao notificar alunos:', notifError.message);
             }
         }
         
@@ -3754,7 +3755,7 @@ app.put('/api/professor/provas/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao editar prova:', error);
+        logger.error('❌ Erro ao editar prova:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao editar prova: ' + error.message
@@ -3831,7 +3832,7 @@ app.put('/api/provas/:id/questoes', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao atualizar questões:', error);
+    logger.error('Erro ao atualizar questões:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erro interno ao atualizar questões' 
@@ -3852,9 +3853,9 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
             });
         }
 
-        console.log('='.repeat(60));
-        console.log(`🧹 Admin ${req.userId} (${req.userRole}) iniciando limpeza de imagens`);
-        console.log('='.repeat(60));
+        logger.info('='.repeat(60));
+        logger.info(`🧹 Admin ${req.userId} (${req.userRole}) iniciando limpeza de imagens`);
+        logger.info('='.repeat(60));
 
         const uploadsDir = path.join(__dirname, 'uploads');
         const imagensDir = path.join(__dirname, 'uploads', 'imagens-questoes');
@@ -3862,7 +3863,7 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
         // ========================================================================
         // 1. COLETAR TODAS AS IMAGENS REFERENCIADAS NO BANCO DE DADOS
         // ========================================================================
-        console.log('📊 Coletando imagens referenciadas no banco...');
+        logger.info('📊 Coletando imagens referenciadas no banco...');
 
         const imagensEmUso = new Set();
 
@@ -3926,12 +3927,12 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
 
         // 1.5 - QR Codes (armazenados como base64, não como arquivo)
 
-        console.log(`   ✅ ${imagensEmUso.size} imagens referenciadas no banco`);
+        logger.info(`   ✅ ${imagensEmUso.size} imagens referenciadas no banco`);
 
         // ========================================================================
         // 2. LISTAR ARQUIVOS FÍSICOS NA PASTA DE UPLOADS
         // ========================================================================
-        console.log('📁 Verificando arquivos físicos...');
+        logger.info('📁 Verificando arquivos físicos...');
 
         const extensoesImagem = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
         const arquivosParaDeletar = [];
@@ -3998,8 +3999,8 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
             }
         }
 
-        console.log(`   📊 ${totalArquivos} imagens encontradas`);
-        console.log(`   🗑️ ${arquivosParaDeletar.length} imagens não utilizadas`);
+        logger.info(`   📊 ${totalArquivos} imagens encontradas`);
+        logger.info(`   🗑️ ${arquivosParaDeletar.length} imagens não utilizadas`);
 
         // ========================================================================
         // 3. DELETAR ARQUIVOS NÃO UTILIZADOS
@@ -4009,20 +4010,20 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
         const erros = [];
 
         if (arquivosParaDeletar.length > 0) {
-            console.log('🗑️ Deletando arquivos não utilizados...');
+            logger.info('🗑️ Deletando arquivos não utilizados...');
 
             for (const arquivo of arquivosParaDeletar) {
                 try {
                     fs.unlinkSync(arquivo.caminho);
                     deletados++;
-                    console.log(`   ✅ Deletado: ${arquivo.pasta}/${arquivo.nome}`);
+                    logger.info(`   ✅ Deletado: ${arquivo.pasta}/${arquivo.nome}`);
                 } catch (error) {
                     errosDelecao++;
                     erros.push({
                         arquivo: arquivo.nome,
                         erro: error.message
                     });
-                    console.error(`   ❌ Erro ao deletar ${arquivo.nome}:`, error.message);
+                    logger.error(`   ❌ Erro ao deletar ${arquivo.nome}:`, error.message);
                 }
             }
         }
@@ -4043,13 +4044,13 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
         // ========================================================================
         // 5. RETORNAR RESULTADO
         // ========================================================================
-        console.log('='.repeat(60));
-        console.log('✅ LIMPEZA CONCLUÍDA');
-        console.log(`   📊 Total de imagens: ${totalArquivos}`);
-        console.log(`   🗑️ Deletadas: ${deletados}`);
-        console.log(`   💾 Espaço liberado: ${tamanhoFormatado}`);
-        console.log(`   ❌ Erros: ${errosDelecao}`);
-        console.log('='.repeat(60));
+        logger.info('='.repeat(60));
+        logger.info('✅ LIMPEZA CONCLUÍDA');
+        logger.info(`   📊 Total de imagens: ${totalArquivos}`);
+        logger.info(`   🗑️ Deletadas: ${deletados}`);
+        logger.info(`   💾 Espaço liberado: ${tamanhoFormatado}`);
+        logger.info(`   ❌ Erros: ${errosDelecao}`);
+        logger.info('='.repeat(60));
 
         res.json({
             success: true,
@@ -4067,8 +4068,8 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
         });
 
     } catch (error) {
-        console.error('❌ Erro na limpeza de imagens:', error);
-        console.error('Stack:', error.stack);
+        logger.error('❌ Erro na limpeza de imagens:', error);
+        logger.error('Stack:', error.stack);
         
         res.status(500).json({
             success: false,
@@ -4123,7 +4124,7 @@ app.post('/api/turmas', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao criar turma:', error);
+    logger.error('Erro ao criar turma:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao criar turma'
@@ -4148,7 +4149,7 @@ app.get('/api/turmas', authenticateToken, async (req, res) => {
         const curso = await Curso.findOne({ nome: aluno.curso }).populate('eixoId');
         if (curso && curso.eixoId) {
           eixoDoAluno = curso.eixoId.nome;
-          console.log(`🎯 Eixo do aluno: ${eixoDoAluno}`);
+          logger.info(`🎯 Eixo do aluno: ${eixoDoAluno}`);
         }
       }
       
@@ -4207,7 +4208,7 @@ app.get('/api/turmas', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao listar turmas:', error);
+    logger.error('❌ Erro ao listar turmas:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -4257,7 +4258,7 @@ app.post('/api/turmas/entrar', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao entrar na turma:', error);
+    logger.error('Erro ao entrar na turma:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao entrar na turma'
@@ -4272,7 +4273,7 @@ app.get('/api/turmas/:id', authenticateToken, async (req, res) => {
         const userId = req.userId;
         const userRole = req.userRole;
         
-        console.log(`🔍 Buscando turma: ${turmaId} para usuário: ${userId} (${userRole})`);
+        logger.info(`🔍 Buscando turma: ${turmaId} para usuário: ${userId} (${userRole})`);
         
         // 🔥 ADICIONAR PERMISSÃO PARA SETOR_PEDAGOGICO
         const isPermitted = userRole === 'professor' || 
@@ -4347,7 +4348,7 @@ app.get('/api/turmas/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar turma:', error);
+        logger.error('❌ Erro ao buscar turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao buscar turma: ' + error.message
@@ -4405,7 +4406,7 @@ app.get('/api/turmas/:id/alunos', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar alunos:', error);
+        logger.error('❌ Erro ao buscar alunos:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao buscar alunos'
@@ -4454,7 +4455,7 @@ app.get('/api/turmas/:id/provas', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Erro ao buscar provas:', error);
+    logger.error('❌ Erro ao buscar provas:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno ao buscar provas'
@@ -4492,7 +4493,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         isProfessorDaTurma = turma.professorId.toString() === req.userId;
     }
     
-    console.log('🔍 Verificação de permissão (prova-v2):', {
+    logger.info('🔍 Verificação de permissão (prova-v2):', {
         isAdmin,
         isProfessorDaTurma,
         userId: req.userId,
@@ -4530,7 +4531,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
     try {
       anexos = JSON.parse(anexosData);
     } catch (error) {
-      console.warn('⚠️ Erro ao parsear anexos:', error);
+      logger.warn('⚠️ Erro ao parsear anexos:', error);
     }
 
     // Processar arquivos enviados
@@ -4556,7 +4557,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
               });
               return;
             } catch (e) {
-              console.warn('⚠️ Não foi possível ler arquivo de texto:', e.message);
+              logger.warn('⚠️ Não foi possível ler arquivo de texto:', e.message);
             }
           } else if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
             tipo = 'imagem';
@@ -4663,8 +4664,8 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
       });
     }
 
-    console.log(`🤖 Professor ${req.userId} solicitando prova tipo ${tipoProva} sobre: "${conteudo}"`);
-    console.log(`📎 Anexos recebidos: ${anexos.length}`);
+    logger.info(`🤖 Professor ${req.userId} solicitando prova tipo ${tipoProva} sobre: "${conteudo}"`);
+    logger.info(`📎 Anexos recebidos: ${anexos.length}`);
     
     // 🔥 FIM DAS VALIDAÇÕES - SE CHEGOU AQUI, PASSOU EM TODAS AS VALIDAÇÕES
 
@@ -4691,7 +4692,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
         _id: { $in: turma.alunos || [] }
       }).select('_id nome email matricula onesignalPlayerId');
       
-      console.log(`📚 Prova normal - Será enviada para ${alunosDestino.length} aluno(s)`);
+      logger.info(`📚 Prova normal - Será enviada para ${alunosDestino.length} aluno(s)`);
     }
 
     let questoesValidadas = [];
@@ -4836,11 +4837,11 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
 
       const contextoAnexos = await processarAnexosParaIA(anexos);
       
-      console.log(`📋 Contexto de anexos gerado: ${contextoAnexos.length} caracteres`);
+      logger.info(`📋 Contexto de anexos gerado: ${contextoAnexos.length} caracteres`);
 
       const detectarArea = (conteudo) => {
         if (!conteudo || typeof conteudo !== 'string') {
-          console.log('⚠️ Conteúdo vazio para detectar área, usando "geral"');
+          logger.info('⚠️ Conteúdo vazio para detectar área, usando "geral"');
           return 'geral';
         }
         
@@ -4871,7 +4872,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
           }
         }
 
-        console.log(`🔍 Área detectada: ${areaEncontrada} (${maxMatches} correspondências)`);
+        logger.info(`🔍 Área detectada: ${areaEncontrada} (${maxMatches} correspondências)`);
         return areaEncontrada;
       };
 
@@ -4882,7 +4883,7 @@ app.post('/api/turmas/:id/prova-v2', authenticateToken, uploadMultiple, async (r
 
       for (const modelo of modelosAtuais) {
         try {
-          console.log(`🔄 Tentando modelo: ${modelo}`);
+          logger.info(`🔄 Tentando modelo: ${modelo}`);
           
           let systemPrompt;
           
@@ -5080,11 +5081,11 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
           });
           
           modeloUsado = modelo;
-          console.log(`✅ Modelo ${modelo} funcionou!`);
+          logger.info(`✅ Modelo ${modelo} funcionou!`);
           break;
           
         } catch (modeloError) {
-          console.log(`❌ Modelo ${modelo} falhou: ${modeloError.message.substring(0, 100)}`);
+          logger.info(`❌ Modelo ${modelo} falhou: ${modeloError.message.substring(0, 100)}`);
           continue;
         }
       }
@@ -5094,7 +5095,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       }
 
       const resposta = completion.choices[0].message.content;
-      console.log(`📄 Resposta da IA (Groq - ${modeloUsado}):`, resposta.substring(0, 300));
+      logger.info(`📄 Resposta da IA (Groq - ${modeloUsado}):`, resposta.substring(0, 300));
 
       let jsonString = resposta;
       
@@ -5113,7 +5114,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         jsonString = jsonString.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
         dados = JSON.parse(jsonString);
       } catch (parseError) {
-        console.error('❌ Erro no parse, tentando corrigir...');
+        logger.error('❌ Erro no parse, tentando corrigir...');
         
         try {
           const cleanedJson = jsonString
@@ -5127,12 +5128,12 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
           if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
             const finalJson = cleanedJson.substring(startIndex, endIndex + 1);
             dados = JSON.parse(finalJson);
-            console.log('✅ JSON corrigido com sucesso');
+            logger.info('✅ JSON corrigido com sucesso');
           } else {
             throw new Error('JSON incompleto ou mal formado');
           }
         } catch (secondError) {
-          console.error('❌ Falha na correção do JSON:', secondError.message);
+          logger.error('❌ Falha na correção do JSON:', secondError.message);
           throw new Error('IA não retornou JSON válido após tentativas de correção');
         }
       }
@@ -5150,7 +5151,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         throw new Error('Nenhuma questão encontrada na resposta da IA');
       }
 
-      console.log(`📊 ${questoesArray.length} questões recebidas da IA`);
+      logger.info(`📊 ${questoesArray.length} questões recebidas da IA`);
 
       const questoesProcessadas = [];
       
@@ -5158,7 +5159,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         const questao = questoesArray[i];
         
         if (!questao || typeof questao !== 'object') {
-          console.warn(`⚠️ Questão ${i + 1} inválida, pulando...`);
+          logger.warn(`⚠️ Questão ${i + 1} inválida, pulando...`);
           continue;
         }
 
@@ -5334,10 +5335,10 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       }
 
       questoesValidadas = questoesProcessadas;
-      console.log(`✅ ${questoesValidadas.length} questões processadas da IA (Groq)`);
+      logger.info(`✅ ${questoesValidadas.length} questões processadas da IA (Groq)`);
 
     } catch (iaError) {
-      console.error('❌ Erro na IA, usando fallback:', iaError.message);
+      logger.error('❌ Erro na IA, usando fallback:', iaError.message);
       
       const areaFallback = areaDetectada && areaDetectada in exemplosPorArea ? areaDetectada : 'geral';
       
@@ -5392,34 +5393,34 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
         }
       }
       
-      console.log(`✅ ${questoesValidadas.length} questões criadas via fallback (área: ${areaFallback})`);
+      logger.info(`✅ ${questoesValidadas.length} questões criadas via fallback (área: ${areaFallback})`);
     }
 
     // ===== 🔥 CORREÇÃO CRÍTICA: DECIDIR QUAL PROFESSOR USAR =====
     let professorDaProva;
 
-    console.log(`🔍 Criando prova - Usuário: ${req.userId} (${req.userRole})`);
-    console.log(`🔍 ProfessorId recebido do frontend: ${professorId || 'NÃO FORNECIDO'}`);
+    logger.info(`🔍 Criando prova - Usuário: ${req.userId} (${req.userRole})`);
+    logger.info(`🔍 ProfessorId recebido do frontend: ${professorId || 'NÃO FORNECIDO'}`);
 
     if (isAdmin && professorId) {
         // ✅ Admin/Super Admin está criando para outro professor
         professorDaProva = professorId;
-        console.log(`✅ Admin/Super Admin criando prova para professor ID: ${professorId}`);
+        logger.info(`✅ Admin/Super Admin criando prova para professor ID: ${professorId}`);
         
         // Verificar se o professor realmente existe
         const professorExiste = await User.findById(professorId);
         if (!professorExiste) {
-            console.log(`❌ Professor com ID ${professorId} não encontrado!`);
+            logger.info(`❌ Professor com ID ${professorId} não encontrado!`);
             return res.status(400).json({
                 success: false,
                 error: 'Professor selecionado não encontrado no sistema'
             });
         }
-        console.log(`✅ Professor verificado: ${professorExiste.nome} (${professorExiste.email})`);
+        logger.info(`✅ Professor verificado: ${professorExiste.nome} (${professorExiste.email})`);
         
     } else if (isAdmin && !professorId) {
         // Admin/Super Admin tentou criar sem selecionar professor
-        console.log(`❌ Admin tentou criar prova sem selecionar professor`);
+        logger.info(`❌ Admin tentou criar prova sem selecionar professor`);
         return res.status(400).json({
             success: false,
             error: 'Selecione um professor responsável pela prova'
@@ -5428,10 +5429,10 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     } else {
         // ✅ Professor criando sua própria prova
         professorDaProva = req.userId;
-        console.log(`✅ Professor criando própria prova: ${req.userId}`);
+        logger.info(`✅ Professor criando própria prova: ${req.userId}`);
     }
 
-    console.log(`👨‍🏫 Professor final da prova: ${professorDaProva}`);
+    logger.info(`👨‍🏫 Professor final da prova: ${professorDaProva}`);
 
     // ========== CRIAR PROVA COM O PROFESSOR CORRETO ==========
     const prova = new Prova({
@@ -5474,10 +5475,10 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     turma.provas.push(prova._id);
     await turma.save();
 
-    console.log(`✅ ${req.userRole === 'admin' ? 'Admin' : 'Professor'} ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada})`);
-    console.log(`👨‍🏫 Professor atribuído: ${professorDaProva}`);
-    console.log(`🎯 Alunos alvo: ${alunosDestino.length} alunos`);
-    console.log(`⏱️ Duração: ${duracaoMinutos} minutos (validada pelas configurações)`);
+    logger.info(`✅ ${req.userRole === 'admin' ? 'Admin' : 'Professor'} ${req.userId} criou prova ${prova._id} do tipo ${tipoProva} (área: ${areaDetectada})`);
+    logger.info(`👨‍🏫 Professor atribuído: ${professorDaProva}`);
+    logger.info(`🎯 Alunos alvo: ${alunosDestino.length} alunos`);
+    logger.info(`⏱️ Duração: ${duracaoMinutos} minutos (validada pelas configurações)`);
 
     // ===== 🔥 ADICIONAR NOTIFICAÇÃO QUANDO A PROVA É CRIADA =====
     // IGUAL ÀS OUTRAS ROTAS DE NOTIFICAÇÃO
@@ -5517,7 +5518,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
                 });
                 
                 await notificacao.save();
-                console.log(`✅ Notificação criada para aluno ${aluno.nome}`);
+                logger.info(`✅ Notificação criada para aluno ${aluno.nome}`);
                 
                 // Push se ativado
                 if (pushAtivado && oneSignal && aluno.onesignalPlayerId) {
@@ -5533,11 +5534,11 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
                     );
                 }
             } catch (notifError) {
-                console.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, notifError.message);
+                logger.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, notifError.message);
             }
         }
         
-        console.log(`✅ ${alunosDestino.length} alunos notificados sobre nova prova criada`);
+        logger.info(`✅ ${alunosDestino.length} alunos notificados sobre nova prova criada`);
     }
 
     let mensagemSucesso = '';
@@ -5580,7 +5581,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     });
 
   } catch (error) {
-    console.error('❌ Erro geral ao criar prova:', error);
+    logger.error('❌ Erro geral ao criar prova:', error);
     res.status(500).json({
       success: false,
       error: 'Erro ao criar prova: ' + error.message
@@ -5644,7 +5645,7 @@ app.post('/api/upload/imagem', authenticateToken, async (req, res) => {
         
         const imageUrl = `/uploads/imagens-questoes/${fileName}`;
         
-        console.log(`✅ Imagem salva: ${imageUrl} por ${req.userId}`);
+        logger.info(`✅ Imagem salva: ${imageUrl} por ${req.userId}`);
         
         res.json({
             success: true,
@@ -5657,7 +5658,7 @@ app.post('/api/upload/imagem', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro no upload:', error);
+        logger.error('❌ Erro no upload:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao processar imagem'
@@ -5675,7 +5676,7 @@ async function obterDimensoesImagem(caminhoArquivo) {
             height: dimensions.height
         };
     } catch (error) {
-        console.warn('⚠️ Não foi possível obter dimensões da imagem:', error.message);
+        logger.warn('⚠️ Não foi possível obter dimensões da imagem:', error.message);
         return { width: 0, height: 0 };
     }
 }
@@ -5687,7 +5688,7 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     const alunoId = req.userId;
     const { respostas, tempoGasto } = req.body;
     
-    console.log(`📤 Aluno ${alunoId} enviando respostas para prova ${provaId}`);
+    logger.info(`📤 Aluno ${alunoId} enviando respostas para prova ${provaId}`);
     
     if (!respostas || !Array.isArray(respostas)) {
       return res.status(400).json({ 
@@ -5746,7 +5747,7 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     
     const notaCalculada = prova.questoes.length > 0 ? (acertos / prova.questoes.length) * 10 : 0;
     
-    console.log(`📊 Resultado calculado: ${acertos}/${prova.questoes.length} acertos | Nota: ${notaCalculada.toFixed(2)}`);
+    logger.info(`📊 Resultado calculado: ${acertos}/${prova.questoes.length} acertos | Nota: ${notaCalculada.toFixed(2)}`);
     
     const user = await User.findById(alunoId);
     
@@ -5759,9 +5760,9 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     const correcaoAutomatica = configCorrecaoAutomatica?.valor !== false;
     const liberacaoAutomatica = configLiberacaoAutomatica?.valor || false;
     
-    console.log(`⚙️ Configurações de correção:`);
-    console.log(`   - Correção automática: ${correcaoAutomatica ? 'ATIVADA' : 'DESATIVADA'}`);
-    console.log(`   - Liberação automática: ${liberacaoAutomatica ? 'ATIVADA' : 'DESATIVADA'}`);
+    logger.info(`⚙️ Configurações de correção:`);
+    logger.info(`   - Correção automática: ${correcaoAutomatica ? 'ATIVADA' : 'DESATIVADA'}`);
+    logger.info(`   - Liberação automática: ${liberacaoAutomatica ? 'ATIVADA' : 'DESATIVADA'}`);
     
     let notaLiberada = false;
     let status = 'pendente';
@@ -5773,7 +5774,7 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
       } else {
         notaLiberada = false;
         status = 'pendente';
-        console.log(`⏳ Nota calculada mas não liberada (liberação automática desativada)`);
+        logger.info(`⏳ Nota calculada mas não liberada (liberação automática desativada)`);
       }
     } else {
       notaLiberada = false;
@@ -5798,7 +5799,7 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     });
     
     await resultado.save();
-    console.log(`✅ Resultado salvo com ID: ${resultado._id} (nota: ${notaCalculada.toFixed(2)})`);
+    logger.info(`✅ Resultado salvo com ID: ${resultado._id} (nota: ${notaCalculada.toFixed(2)})`);
     
     // ATUALIZAR ESTATÍSTICAS DA PROVA
     prova.totalParticipantes = (prova.totalParticipantes || 0) + 1;
@@ -5813,7 +5814,7 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     
     await prova.save();
     
-    console.log(`📈 Aluno ${alunoId} finalizou a prova ${provaId}. Nota: ${notaCalculada.toFixed(2)}`);
+    logger.info(`📈 Aluno ${alunoId} finalizou a prova ${provaId}. Nota: ${notaCalculada.toFixed(2)}`);
     
     // 🔥 REMOVIDA A NOTIFICAÇÃO QUE ESTAVA CAUSANDO ERRO!
     
@@ -5833,7 +5834,7 @@ app.post('/api/provas/:id/responder', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Erro detalhado ao finalizar prova:', error);
+    logger.error('❌ Erro detalhado ao finalizar prova:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erro interno ao finalizar prova: ' + error.message 
@@ -5898,7 +5899,7 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
             const turmaAtiva = prova.turmaId ? prova.turmaId.ativa : true;
             
             if (!turmaAtiva) {
-                console.log(`⏸️ Prova ${prova.titulo} ignorada - turma inativa`);
+                logger.info(`⏸️ Prova ${prova.titulo} ignorada - turma inativa`);
                 continue;
             }
             
@@ -6010,7 +6011,7 @@ app.get('/api/aluno/provas/pendentes', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar provas pendentes:', error);
+        logger.error('❌ Erro ao listar provas pendentes:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao listar provas pendentes: ' + error.message
@@ -6031,7 +6032,7 @@ app.get('/api/config/envio-provas', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar configuração de envio:', error);
+        logger.error('❌ Erro ao buscar configuração de envio:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao buscar configuração: ' + error.message
@@ -6053,7 +6054,7 @@ app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, asyn
             });
         }
         
-        console.log(`📝 Aluno ${alunoId} solicitando correção da prova ${provaId}`);
+        logger.info(`📝 Aluno ${alunoId} solicitando correção da prova ${provaId}`);
         
         // Buscar prova
         const prova = await Prova.findById(provaId)
@@ -6122,7 +6123,7 @@ app.get('/api/aluno/provas/:provaId/correcao-detalhada', authenticateToken, asyn
         res.json(correcaoData);
         
     } catch (error) {
-        console.error('Erro ao buscar correção detalhada:', error);
+        logger.error('Erro ao buscar correção detalhada:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao buscar correção: ' + error.message
@@ -6143,7 +6144,7 @@ app.get('/api/professor/provas', authenticateToken, async (req, res) => {
 
     const professorId = req.userId;
     
-    console.log(`📋 Buscando provas do professor ${professorId}`);
+    logger.info(`📋 Buscando provas do professor ${professorId}`);
     
     // FILTRAR: Mostrar apenas provas publicadas por padrão
     // Mas permitir ver rascunhos se solicitado
@@ -6268,7 +6269,7 @@ app.get('/api/professor/provas', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar provas do professor:', error);
+    logger.error('Erro ao buscar provas do professor:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor: ' + error.message
@@ -6289,7 +6290,7 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
 
     const professorId = req.userId;
     
-    console.log(`📋 Professor ${professorId} solicitando provas pendentes de correção`);
+    logger.info(`📋 Professor ${professorId} solicitando provas pendentes de correção`);
 
     // 🔥 CORREÇÃO: Buscar provas pelo professor (era `turmaId: { $in: turmaIds }`)
     const query = isAdmin ? { publicada: true } : { userId: professorId, publicada: true };
@@ -6400,8 +6401,8 @@ app.get('/api/professor/provas/pendentes-correcao', authenticateToken, async (re
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar provas pendentes de correção:', error);
-    console.error('   Stack:', error.stack);
+    logger.error('❌ Erro ao buscar provas pendentes de correção:', error);
+    logger.error('   Stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor: ' + error.message
@@ -6417,8 +6418,8 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
     const professorId = req.userId;
     const { alunoId, nota, liberarNota = true, motivo = null } = req.body;
 
-    console.log(`📝 Professor ${professorId} corrigindo prova ${provaId} do aluno ${alunoId}`);
-    console.log(`   Nota: ${nota} | Liberar: ${liberarNota} | Motivo: ${motivo || 'nenhum'}`);
+    logger.info(`📝 Professor ${professorId} corrigindo prova ${provaId} do aluno ${alunoId}`);
+    logger.info(`   Nota: ${nota} | Liberar: ${liberarNota} | Motivo: ${motivo || 'nenhum'}`);
 
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
     if (!isAdmin && req.userRole !== 'professor') {
@@ -6481,10 +6482,10 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
     const notaMudou = (notaAnterior !== null && notaAnterior !== undefined) &&
                       Math.abs(parseFloat(notaAnterior) - notaNumber) > 0.001;
 
-    console.log(`   📊 Estado anterior:`);
-    console.log(`      - Estava liberada: ${estavaLiberada}`);
-    console.log(`      - Nota anterior: ${notaAnterior}`);
-    console.log(`      - Nota mudou: ${notaMudou}`);
+    logger.info(`   📊 Estado anterior:`);
+    logger.info(`      - Estava liberada: ${estavaLiberada}`);
+    logger.info(`      - Nota anterior: ${notaAnterior}`);
+    logger.info(`      - Nota mudou: ${notaMudou}`);
 
     // Atualizar ProvaRealizada
     if (provaRealizada) {
@@ -6493,7 +6494,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
       provaRealizada.notaLiberada = liberarNota;
       if (motivo) provaRealizada.notaManualObservacao = motivo;
       await provaRealizada.save();
-      console.log(`   ✅ ProvaRealizada atualizada`);
+      logger.info(`   ✅ ProvaRealizada atualizada`);
     }
 
     // Atualizar Resultado
@@ -6503,7 +6504,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
       resultado.porcentagem = ((notaNumber / 10) * 100).toFixed(1);
       if (motivo) resultado.observacoes = motivo;
       await resultado.save();
-      console.log(`   ✅ Resultado atualizado`);
+      logger.info(`   ✅ Resultado atualizado`);
     }
 
     // Atualizar estatísticas da prova (apenas se liberando)
@@ -6571,7 +6572,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         });
 
         await notificacao.save();
-        console.log(`   ✅ Aluno ${aluno?.nome || alunoId} notificado sobre REVOGAÇÃO`);
+        logger.info(`   ✅ Aluno ${aluno?.nome || alunoId} notificado sobre REVOGAÇÃO`);
 
         if (pushAtivado && oneSignal && aluno?.onesignalPlayerId) {
           await oneSignal.enviarPush(
@@ -6608,7 +6609,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         });
 
         await notificacao.save();
-        console.log(`   ✅ Aluno ${aluno?.nome || alunoId} notificado sobre LIBERAÇÃO`);
+        logger.info(`   ✅ Aluno ${aluno?.nome || alunoId} notificado sobre LIBERAÇÃO`);
 
         if (pushAtivado && oneSignal && aluno?.onesignalPlayerId) {
           await oneSignal.enviarPush(
@@ -6647,7 +6648,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         });
 
         await notificacao.save();
-        console.log(`   ✅ Aluno ${aluno?.nome || alunoId} notificado sobre ALTERAÇÃO`);
+        logger.info(`   ✅ Aluno ${aluno?.nome || alunoId} notificado sobre ALTERAÇÃO`);
 
         if (pushAtivado && oneSignal && aluno?.onesignalPlayerId) {
           await oneSignal.enviarPush(
@@ -6664,7 +6665,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
         }
       }
     } catch (notifError) {
-      console.warn('⚠️ Erro ao notificar aluno:', notifError.message);
+      logger.warn('⚠️ Erro ao notificar aluno:', notifError.message);
     }
 
     // ============================================================
@@ -6697,7 +6698,7 @@ app.post('/api/professor/provas/:provaId/corrigir', authenticateToken, async (re
     });
 
   } catch (error) {
-    console.error('❌ Erro ao corrigir prova:', error);
+    logger.error('❌ Erro ao corrigir prova:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno ao corrigir prova: ' + error.message
@@ -6712,7 +6713,7 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
     const provaId = req.params.provaId;
     const professorId = req.userId;
     
-    console.log(`📝 Professor ${professorId} liberando todas as notas da prova ${provaId}`);
+    logger.info(`📝 Professor ${professorId} liberando todas as notas da prova ${provaId}`);
     
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
     if (!isAdmin && req.userRole !== 'professor') {
@@ -6770,7 +6771,7 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
     
     const totalLiberados = contadorProvas + contadorResultados;
     
-    console.log(`✅ ${totalLiberados} notas liberadas para a prova ${provaId}`);
+    logger.info(`✅ ${totalLiberados} notas liberadas para a prova ${provaId}`);
     
     // ===== 🔥 NOTIFICAR TODOS OS ALUNOS =====
     if (totalLiberados > 0) {
@@ -6826,11 +6827,11 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
             }
           }
         } catch (notifError) {
-          console.error('⚠️ Erro ao notificar aluno:', notifError.message);
+          logger.error('⚠️ Erro ao notificar aluno:', notifError.message);
         }
       }
       
-      console.log(`✅ ${todosAlunos.length} alunos notificados sobre liberação de notas`);
+      logger.info(`✅ ${todosAlunos.length} alunos notificados sobre liberação de notas`);
     }
     
     res.json({
@@ -6847,7 +6848,7 @@ app.post('/api/professor/provas/:provaId/liberar-notas', authenticateToken, asyn
     });
     
   } catch (error) {
-    console.error('❌ Erro ao liberar notas:', error);
+    logger.error('❌ Erro ao liberar notas:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno ao liberar notas: ' + error.message
@@ -6861,7 +6862,7 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
     const provaId = req.params.id;
     const alunoId = req.userId;
     
-    console.log(`📋 Aluno ${alunoId} solicitando prova ${provaId} para realizar`);
+    logger.info(`📋 Aluno ${alunoId} solicitando prova ${provaId} para realizar`);
     
     const prova = await Prova.findById(provaId);
     
@@ -6894,9 +6895,9 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
       const dataLimiteFimDia = new Date(dataLimite);
       dataLimiteFimDia.setHours(23, 59, 59, 999);
       
-      console.log(`📅 Verificando data limite:`);
-      console.log(`   Agora: ${agora.toLocaleString('pt-BR')}`);
-      console.log(`   Data limite (fim do dia): ${dataLimiteFimDia.toLocaleString('pt-BR')}`);
+      logger.info(`📅 Verificando data limite:`);
+      logger.info(`   Agora: ${agora.toLocaleString('pt-BR')}`);
+      logger.info(`   Data limite (fim do dia): ${dataLimiteFimDia.toLocaleString('pt-BR')}`);
       
       if (agora > dataLimiteFimDia) {
         const dataFormatada = dataLimiteFimDia.toLocaleDateString('pt-BR', {
@@ -6950,8 +6951,8 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
       }))
     };
     
-    console.log(`✅ Prova ${provaId} enviada para aluno ${alunoId}`);
-    console.log(`📋 Informações da prova: ${prova.horarioInicio} às ${prova.horarioTermino} (${prova.duracaoMinutos} minutos)`);
+    logger.info(`✅ Prova ${provaId} enviada para aluno ${alunoId}`);
+    logger.info(`📋 Informações da prova: ${prova.horarioInicio} às ${prova.horarioTermino} (${prova.duracaoMinutos} minutos)`);
     
     res.json({ 
       success: true, 
@@ -6959,7 +6960,7 @@ app.get('/api/provas/:id/realizar', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao carregar prova:', error);
+    logger.error('Erro ao carregar prova:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erro ao carregar prova' 
@@ -7161,7 +7162,7 @@ app.get('/api/aluno/provas', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro detalhado ao listar provas do aluno:', error);
+        logger.error('❌ Erro detalhado ao listar provas do aluno:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar provas: ' + error.message,
@@ -7323,7 +7324,7 @@ app.get('/api/aluno/provas/:provaId/cancelamento-detailed', authenticateToken, a
         res.json(detalhes);
 
     } catch (error) {
-        console.error('❌ Erro ao buscar detalhes de cancelamento:', error);
+        logger.error('❌ Erro ao buscar detalhes de cancelamento:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao buscar detalhes do cancelamento: ' + error.message
@@ -7517,7 +7518,7 @@ app.get('/api/professor/provas/:provaId/cancelamento-detailed', authenticateToke
         res.json(detalhes);
 
     } catch (error) {
-        console.error('❌ Erro ao buscar detalhes de cancelamento (professor):', error);
+        logger.error('❌ Erro ao buscar detalhes de cancelamento (professor):', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao buscar detalhes do cancelamento: ' + error.message
@@ -7532,7 +7533,7 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
         const { alunoId, nota, observacao } = req.body;
         const professorId = req.userId;
         
-        console.log(`📝 Professor ${professorId} atribuindo NOTA MANUAL para prova ${provaId}, aluno ${alunoId}, nota: ${nota}`);
+        logger.info(`📝 Professor ${professorId} atribuindo NOTA MANUAL para prova ${provaId}, aluno ${alunoId}, nota: ${nota}`);
         
         // ========== 1. VALIDAÇÕES INICIAIS ==========
         const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
@@ -7582,29 +7583,29 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
             turma = await Turma.findById(prova.turmaId);
             
             if (turma) {
-                console.log(`🔍 Verificando turma: ${turma.nome}`);
+                logger.info(`🔍 Verificando turma: ${turma.nome}`);
                 
                 // Verificar se o aluno está na turma
                 if (turma.alunos) {
                     alunoNaTurma = turma.alunos.some(a => a.toString() === alunoId);
                 }
                 
-                console.log(`   Aluno ${aluno.nome} está na turma? ${alunoNaTurma ? 'SIM ✅' : 'NÃO ❌'}`);
+                logger.info(`   Aluno ${aluno.nome} está na turma? ${alunoNaTurma ? 'SIM ✅' : 'NÃO ❌'}`);
                 
                 // 🔥 SE NÃO ESTIVER NA TURMA, ADICIONAR AUTOMATICAMENTE
                 if (!alunoNaTurma) {
-                    console.log(`➕ Adicionando aluno ${aluno.nome} (${alunoId}) à turma ${turma.nome}...`);
+                    logger.info(`➕ Adicionando aluno ${aluno.nome} (${alunoId}) à turma ${turma.nome}...`);
                     
                     turma.alunos = turma.alunos || [];
                     turma.alunos.push(alunoId);
                     await turma.save();
                     
                     alunoNaTurma = true;
-                    console.log(`✅ Aluno adicionado à turma com sucesso!`);
-                    console.log(`   Agora a turma tem ${turma.alunos.length} alunos`);
+                    logger.info(`✅ Aluno adicionado à turma com sucesso!`);
+                    logger.info(`   Agora a turma tem ${turma.alunos.length} alunos`);
                 }
             } else {
-                console.log(`⚠️ Turma não encontrada para a prova`);
+                logger.info(`⚠️ Turma não encontrada para a prova`);
             }
         }
         
@@ -7635,7 +7636,7 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
         const dataAgora = new Date();
         
         if (provaRealizada) {
-            console.log(`📝 ProvaRealizada existente encontrada para aluno ${aluno.nome}`);
+            logger.info(`📝 ProvaRealizada existente encontrada para aluno ${aluno.nome}`);
             
             // Atualizar com nota manual
             provaRealizada.notaManual = notaNumber;
@@ -7648,9 +7649,9 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
             provaRealizada.tipoNota = provaRealizada.nota !== null && provaRealizada.nota !== undefined ? 'ambas' : 'manual';
             
             await provaRealizada.save();
-            console.log(`✅ ProvaRealizada atualizada com nota manual: ${notaNumber}`);
+            logger.info(`✅ ProvaRealizada atualizada com nota manual: ${notaNumber}`);
         } else {
-            console.log(`📝 Criando nova ProvaRealizada para aluno ${aluno.nome}`);
+            logger.info(`📝 Criando nova ProvaRealizada para aluno ${aluno.nome}`);
             
             const novaProvaRealizada = new ProvaRealizada({
                 provaId: provaId,
@@ -7673,16 +7674,16 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
             });
             
             provaRealizada = await novaProvaRealizada.save();
-            console.log(`✅ Nova ProvaRealizada criada com nota manual: ${notaNumber}`);
+            logger.info(`✅ Nova ProvaRealizada criada com nota manual: ${notaNumber}`);
         }
         
         // ========== 6. VERIFICAR SE SALVOU ==========
         const verificar = await ProvaRealizada.findOne({ provaId, alunoId });
-        console.log(`🔍 VERIFICAÇÃO FINAL:`);
-        console.log(`   - ProvaRealizada.notaManual: ${verificar?.notaManual}`);
-        console.log(`   - ProvaRealizada.notaManualLiberada: ${verificar?.notaManualLiberada}`);
-        console.log(`   - ProvaRealizada.tipoNota: ${verificar?.tipoNota}`);
-        console.log(`   - ProvaRealizada.status: ${verificar?.status}`);
+        logger.info(`🔍 VERIFICAÇÃO FINAL:`);
+        logger.info(`   - ProvaRealizada.notaManual: ${verificar?.notaManual}`);
+        logger.info(`   - ProvaRealizada.notaManualLiberada: ${verificar?.notaManualLiberada}`);
+        logger.info(`   - ProvaRealizada.tipoNota: ${verificar?.tipoNota}`);
+        logger.info(`   - ProvaRealizada.status: ${verificar?.status}`);
         
         // ========== 7. ATUALIZAR ESTATÍSTICAS DA PROVA ==========
         const todasProvasRealizadas = await ProvaRealizada.find({ provaId });
@@ -7721,10 +7722,10 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
         prova.mediaGeral = countNotas > 0 ? totalNotas / countNotas : 0;
         await prova.save();
         
-        console.log(`📊 Estatísticas atualizadas:`);
-        console.log(`   - Média automática: ${prova.mediaNotasAutomaticas.toFixed(2)} (${totalNotasAutomaticas} alunos)`);
-        console.log(`   - Média manual: ${prova.mediaNotasManuais.toFixed(2)} (${totalNotasManuais} alunos)`);
-        console.log(`   - Média geral: ${prova.mediaGeral.toFixed(2)} (${countNotas} notas)`);
+        logger.info(`📊 Estatísticas atualizadas:`);
+        logger.info(`   - Média automática: ${prova.mediaNotasAutomaticas.toFixed(2)} (${totalNotasAutomaticas} alunos)`);
+        logger.info(`   - Média manual: ${prova.mediaNotasManuais.toFixed(2)} (${totalNotasManuais} alunos)`);
+        logger.info(`   - Média geral: ${prova.mediaGeral.toFixed(2)} (${countNotas} notas)`);
         
         // ========== 8. NOTIFICAR ALUNO ==========
         try {
@@ -7746,10 +7747,10 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
             });
             
             await notificacao.save();
-            console.log(`✅ Notificação salva para aluno ${aluno.nome}`);
+            logger.info(`✅ Notificação salva para aluno ${aluno.nome}`);
             
         } catch (notifError) {
-            console.error('⚠️ Erro ao notificar aluno:', notifError.message);
+            logger.error('⚠️ Erro ao notificar aluno:', notifError.message);
         }
         
         // ========== 9. RETORNAR RESPOSTA ==========
@@ -7772,8 +7773,8 @@ app.post('/api/professor/provas/:provaId/nota-manual', authenticateToken, async 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao atribuir nota manual:', error);
-        console.error('Stack trace:', error.stack);
+        logger.error('❌ Erro ao atribuir nota manual:', error);
+        logger.error('Stack trace:', error.stack);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao atribuir nota manual: ' + error.message
@@ -7787,15 +7788,15 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     const provaId = req.params.id;
     const alunoId = req.userId;
     
-    console.log(`🔐 ===== VALIDANDO ACESSO À PROVA =====`);
-    console.log(`   🆔 Prova ID: ${provaId}`);
-    console.log(`   🆔 Aluno ID: ${alunoId}`);
+    logger.info(`🔐 ===== VALIDANDO ACESSO À PROVA =====`);
+    logger.info(`   🆔 Prova ID: ${provaId}`);
+    logger.info(`   🆔 Aluno ID: ${alunoId}`);
     
     // ========== BUSCAR DADOS DO ALUNO ==========
     const aluno = await User.findById(alunoId).select('precisaAcessibilidade condicaoAcessibilidade role nome email');
     
     if (!aluno) {
-      console.log(`   ❌ Aluno não encontrado`);
+      logger.info(`   ❌ Aluno não encontrado`);
       return res.status(404).json({
         success: false,
         error: 'Aluno não encontrado'
@@ -7806,7 +7807,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     const configFaceId = await Config.findOne({ chave: 'seguranca.exigirFaceIdProvas' });
     const exigirFaceId = configFaceId ? configFaceId.valor : false;
     
-    console.log(`   👤 Configuração Face ID: ${exigirFaceId ? 'ATIVADO' : 'DESATIVADO'}`);
+    logger.info(`   👤 Configuração Face ID: ${exigirFaceId ? 'ATIVADO' : 'DESATIVADO'}`);
     
     // ========== BUSCAR PROVA ==========
     const prova = await Prova.findById(provaId)
@@ -7815,7 +7816,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       .select('+tipoProva +adaptada +alternativas +titulo +conteudo +duracaoMinutos +dataLimite +horarioInicio +horarioTermino +quantidadeQuestoes +status +publicada');
     
     if (!prova) {
-      console.log(`   ❌ Prova não encontrada`);
+      logger.info(`   ❌ Prova não encontrada`);
       return res.status(404).json({
         success: false,
         error: 'Prova não encontrada'
@@ -7868,14 +7869,14 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
         const alunoPorId = turma.alunos.some(a => a._id.toString() === alunoId.toString());
         
         if (!alunoPorId) {
-            console.log(`🚫 BLOQUEADO: Aluno não está na turma desta prova`);
+            logger.info(`🚫 BLOQUEADO: Aluno não está na turma desta prova`);
             return res.status(403).json({
                 success: false,
                 error: 'Você não está matriculado na turma desta prova.'
             });
         }
         
-        console.log(`✅ Aluno autorizado a acessar a prova`);
+        logger.info(`✅ Aluno autorizado a acessar a prova`);
     }
     
     // ========== VERIFICAR SE O ALUNO JÁ REALIZOU ESTA PROVA ==========
@@ -7885,7 +7886,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     });
     
     if (provaRealizada) {
-      console.log(`   🚫 BLOQUEADO: Aluno já realizou esta prova em ${provaRealizada.dataRealizacao}`);
+      logger.info(`   🚫 BLOQUEADO: Aluno já realizou esta prova em ${provaRealizada.dataRealizacao}`);
       return res.status(400).json({
         success: false,
         error: 'Você já realizou esta prova.',
@@ -7899,7 +7900,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     });
     
     if (resultado) {
-      console.log(`   🚫 BLOQUEADO: Aluno já tem resultado registrado para esta prova`);
+      logger.info(`   🚫 BLOQUEADO: Aluno já tem resultado registrado para esta prova`);
       return res.status(400).json({
         success: false,
         error: 'Você já realizou esta prova.'
@@ -8005,8 +8006,8 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
       process.env.JWT_SECRET
     );
     
-    console.log(`   ✅ ACESSO AUTORIZADO!`);
-    console.log(`   🎟️ Token gerado: ${provaToken.substring(0, 30)}...`);
+    logger.info(`   ✅ ACESSO AUTORIZADO!`);
+    logger.info(`   🎟️ Token gerado: ${provaToken.substring(0, 30)}...`);
     
     // ========== RETORNAR SUCESSO COM DADOS DA PROVA ==========
     res.json({
@@ -8048,7 +8049,7 @@ app.get('/api/provas/:id/acesso', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ ERRO AO VALIDAR ACESSO À PROVA:', error.message);
+    logger.error('❌ ERRO AO VALIDAR ACESSO À PROVA:', error.message);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor'
@@ -8123,7 +8124,7 @@ app.get('/realizar-prova.html', async (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/realizar-prova.html'));
     
   } catch (error) {
-    console.error('Erro na rota realizar-prova:', error);
+    logger.error('Erro na rota realizar-prova:', error);
     res.status(500).send('Erro interno do servidor');
   }
 });
@@ -8182,7 +8183,7 @@ app.get('/api/provas/dados', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Erro ao obter dados da prova:', error);
+    logger.error('Erro ao obter dados da prova:', error);
     
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
@@ -8212,7 +8213,7 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     }
 
     const professorId = req.userId;
-    console.log(`📊 Professor ${professorId} buscando resultados (incluindo notas manuais)`);
+    logger.info(`📊 Professor ${professorId} buscando resultados (incluindo notas manuais)`);
 
     // Buscar provas do professor
     const provas = await Prova.find({ userId: professorId })
@@ -8245,11 +8246,11 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
         .populate('alunoId', 'nome email matricula')
         .lean();
 
-      console.log(`   Prova "${prova.titulo}": ${provasRealizadas.length} registros`);
+      logger.info(`   Prova "${prova.titulo}": ${provasRealizadas.length} registros`);
 
       for (const pr of provasRealizadas) {
         if (!pr.alunoId) {
-          console.warn(`⚠️ ProvaRealizada ${pr._id} sem referência de aluno`);
+          logger.warn(`⚠️ ProvaRealizada ${pr._id} sem referência de aluno`);
           continue;
         }
 
@@ -8342,10 +8343,10 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
       }))
     };
 
-    console.log(`✅ Resultados carregados: ${resultadosCompletos.length} registros`);
-    console.log(`   - Notas automáticas: ${estatisticas.totalNotasAutomaticas}`);
-    console.log(`   - Notas manuais: ${estatisticas.totalNotasManuais}`);
-    console.log(`   - Média geral: ${estatisticas.mediaGeral}`);
+    logger.info(`✅ Resultados carregados: ${resultadosCompletos.length} registros`);
+    logger.info(`   - Notas automáticas: ${estatisticas.totalNotasAutomaticas}`);
+    logger.info(`   - Notas manuais: ${estatisticas.totalNotasManuais}`);
+    logger.info(`   - Média geral: ${estatisticas.mediaGeral}`);
 
     return res.json({
       success: true,
@@ -8355,8 +8356,8 @@ app.get('/api/professor/resultados', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erro crítico ao buscar resultados:', error);
-    console.error('Stack:', error.stack);
+    logger.error('❌ Erro crítico ao buscar resultados:', error);
+    logger.error('Stack:', error.stack);
     
     return res.status(500).json({
       success: false,
@@ -8376,7 +8377,7 @@ app.get('/api/aluno/provas/:provaId/resultado', authenticateToken, async (req, r
         const provaId = req.params.provaId;
         const alunoId = req.userId;
 
-        console.log(`🔍 Aluno ${alunoId} solicitando resultado da prova ${provaId}`);
+        logger.info(`🔍 Aluno ${alunoId} solicitando resultado da prova ${provaId}`);
 
         if (req.userRole !== 'aluno') {
             return res.status(403).json({
@@ -8416,7 +8417,7 @@ app.get('/api/aluno/provas/:provaId/resultado', authenticateToken, async (req, r
 
         // Primeiro verificar no Resultado
         if (resultado) {
-            console.log(`📊 Resultado encontrado: notaLiberada=${resultado.notaLiberada}, nota=${resultado.nota}`);
+            logger.info(`📊 Resultado encontrado: notaLiberada=${resultado.notaLiberada}, nota=${resultado.nota}`);
             
             // CORREÇÃO: Verificar explicitamente se notaLiberada é true
             if (resultado.notaLiberada === true && resultado.nota !== null && resultado.nota !== undefined) {
@@ -8426,13 +8427,13 @@ app.get('/api/aluno/provas/:provaId/resultado', authenticateToken, async (req, r
                     tipo: 'resultado',
                     dados: resultado
                 };
-                console.log(`✅ Nota liberada encontrada no Resultado: ${nota}`);
+                logger.info(`✅ Nota liberada encontrada no Resultado: ${nota}`);
             }
         }
 
         // Se ainda não encontrou nota liberada, verificar na ProvaRealizada
         if (!notaLiberada && provaRealizada) {
-            console.log(`📊 ProvaRealizada encontrada: notaLiberada=${provaRealizada.notaLiberada}, nota=${provaRealizada.nota}`);
+            logger.info(`📊 ProvaRealizada encontrada: notaLiberada=${provaRealizada.notaLiberada}, nota=${provaRealizada.nota}`);
             
             // CORREÇÃO: Verificar explicitamente se notaLiberada é true
             if (provaRealizada.notaLiberada === true && provaRealizada.nota !== null && provaRealizada.nota !== undefined) {
@@ -8442,7 +8443,7 @@ app.get('/api/aluno/provas/:provaId/resultado', authenticateToken, async (req, r
                     tipo: 'prova_realizada',
                     dados: provaRealizada
                 };
-                console.log(`✅ Nota liberada encontrada na ProvaRealizada: ${nota}`);
+                logger.info(`✅ Nota liberada encontrada na ProvaRealizada: ${nota}`);
             }
         }
 
@@ -8462,7 +8463,7 @@ app.get('/api/aluno/provas/:provaId/resultado', authenticateToken, async (req, r
                 porcentagem = ((acertos / total) * 100).toFixed(1);
             }
             
-            console.log(`✅ Nota ${nota} liberada para o aluno ${alunoId}`);
+            logger.info(`✅ Nota ${nota} liberada para o aluno ${alunoId}`);
             
             return res.json({
                 success: true,
@@ -8492,7 +8493,7 @@ app.get('/api/aluno/provas/:provaId/resultado', authenticateToken, async (req, r
         }
         
         // Se chegou aqui, a nota não foi liberada ainda
-        console.log(`⏳ Nota ainda não liberada para o aluno ${alunoId}`);
+        logger.info(`⏳ Nota ainda não liberada para o aluno ${alunoId}`);
         
         return res.json({
             success: true,
@@ -8508,7 +8509,7 @@ app.get('/api/aluno/provas/:provaId/resultado', authenticateToken, async (req, r
         });
 
     } catch (error) {
-        console.error('❌ Erro detalhado ao buscar resultado do aluno:', error);
+        logger.error('❌ Erro detalhado ao buscar resultado do aluno:', error);
         
         if (error.name === 'CastError') {
             return res.status(400).json({
@@ -8598,7 +8599,7 @@ app.get('/api/aluno/resultados', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar resultados do aluno:', error);
+    logger.error('Erro ao buscar resultados do aluno:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor'
@@ -8684,7 +8685,7 @@ app.get('/api/professor/resultados/notas-alunos', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Erro ao buscar notas:', error);
+        logger.error('Erro ao buscar notas:', error);
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -8770,7 +8771,7 @@ app.get('/api/resultados/:resultadoId', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar detalhes do resultado:', error);
+    logger.error('Erro ao buscar detalhes do resultado:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor'
@@ -8873,7 +8874,7 @@ app.get('/api/turmas/:turmaId/resultados', authenticateToken, async (req, res) =
     });
 
   } catch (error) {
-    console.error('Erro ao buscar resultados da turma:', error);
+    logger.error('Erro ao buscar resultados da turma:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor'
@@ -8914,9 +8915,9 @@ app.post('/api/qrcode/gerar', authenticateToken, async (req, res) => {
                 user.qrCodeUsuarioGeradoEm = new Date();
                 user.qrCodeUsuarioTipo = user.role;
                 await user.save();
-                console.log(`✅ QR Code salvo no banco para ${user.nome} (${user.email})`);
+                logger.info(`✅ QR Code salvo no banco para ${user.nome} (${user.email})`);
             } else {
-                console.warn(`⚠️ Usuário ${userId} não encontrado para salvar QR Code`);
+                logger.warn(`⚠️ Usuário ${userId} não encontrado para salvar QR Code`);
             }
         }
         
@@ -8928,7 +8929,7 @@ app.post('/api/qrcode/gerar', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao gerar QR Code:', error);
+        logger.error('❌ Erro ao gerar QR Code:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -8943,7 +8944,7 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
     const professorId = req.userId;
     const alunoId = req.query.alunoId; // Parâmetro opcional para filtrar por aluno
     
-    console.log(`📊 Buscando resultados da prova ${provaId}`);
+    logger.info(`📊 Buscando resultados da prova ${provaId}`);
     
     // Verificar permissões
     const prova = await Prova.findById(provaId);
@@ -8961,7 +8962,7 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
 
     // Se for admin ou super_admin, libera acesso total
     if (isAdmin) {
-      console.log(`✅ ${req.userRole} acessando resultados da prova ${provaId}`);
+      logger.info(`✅ ${req.userRole} acessando resultados da prova ${provaId}`);
     } 
     // Se não for admin, verificar permissões normais
     else if (!isProfessor && !isProfessorDaProva) {
@@ -8974,7 +8975,7 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
     // ========== BUSCAR TODOS OS ALUNOS DA TURMA ==========
     const turma = await Turma.findById(prova.turmaId).populate('alunos', 'nome email matricula');
     const todosAlunosTurma = turma?.alunos || [];
-    console.log(`📋 Turma tem ${todosAlunosTurma.length} alunos no total`);
+    logger.info(`📋 Turma tem ${todosAlunosTurma.length} alunos no total`);
     
     // ========== BUSCAR RESULTADOS EXISTENTES ==========
     let query = { provaId: provaId };
@@ -9217,7 +9218,7 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
       mediaGeral: mediaGeral.toFixed(1)
     };
     
-    console.log(`📊 Estatísticas:
+    logger.info(`📊 Estatísticas:
       - Total alunos: ${estatisticas.totalAlunos}
       - Com nota automática: ${estatisticas.alunosComNotaAutomatica}
       - Com nota manual: ${estatisticas.alunosComNotaManual}
@@ -9240,7 +9241,7 @@ app.get('/api/provas/:provaId/resultados', authenticateToken, async (req, res) =
     });
     
   } catch (error) {
-    console.error('❌ Erro ao buscar resultados da prova:', error);
+    logger.error('❌ Erro ao buscar resultados da prova:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno ao buscar resultados: ' + error.message
@@ -9274,7 +9275,7 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
     const userId = req.userId;
     const userRole = req.userRole;
     
-    console.log(`🔍 Usuário ${userId} (${userRole}) solicitando detalhes da prova ${provaId}`);
+    logger.info(`🔍 Usuário ${userId} (${userRole}) solicitando detalhes da prova ${provaId}`);
 
     // Buscar prova com turma e professor
     const prova = await Prova.findById(provaId)
@@ -9294,7 +9295,7 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
     
     // ADMIN E SUPER ADMIN PODEM VER QUALQUER PROVA
     if (isAdmin) {
-      console.log(`✅ Admin ${userId} acessando prova ${provaId} - ACESSO LIBERADO`);
+      logger.info(`✅ Admin ${userId} acessando prova ${provaId} - ACESSO LIBERADO`);
       
       // Preparar dados da prova
       const dadosProva = {
@@ -9347,7 +9348,7 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
     // Se não é admin, verificar as permissões normais
     // Se é professor da prova
     if (isProfessorDaProva) {
-      console.log(`✅ Professor ${userId} acessando própria prova ${provaId}`);
+      logger.info(`✅ Professor ${userId} acessando própria prova ${provaId}`);
       
       const dadosProva = {
         id: prova._id,
@@ -9399,14 +9400,14 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
     if (userRole === 'aluno' && prova.turmaId) {
       const turma = await Turma.findById(prova.turmaId._id);
       if (!turma || !turma.alunos.includes(userId)) {
-        console.log(`❌ Aluno ${userId} não está na turma da prova ${provaId}`);
+        logger.info(`❌ Aluno ${userId} não está na turma da prova ${provaId}`);
         return res.status(403).json({
           success: false,
           error: 'Você não está matriculado na turma desta prova'
         });
       }
 
-      console.log(`✅ Aluno ${userId} acessando prova ${provaId}`);
+      logger.info(`✅ Aluno ${userId} acessando prova ${provaId}`);
 
       const dadosProva = {
         id: prova._id,
@@ -9454,14 +9455,14 @@ app.get('/api/provas/:id', authenticateToken, async (req, res) => {
     }
 
     // Se chegou aqui, não tem permissão
-    console.log(`❌ Usuário ${userId} (${userRole}) sem permissão para acessar prova ${provaId}`);
+    logger.info(`❌ Usuário ${userId} (${userRole}) sem permissão para acessar prova ${provaId}`);
     return res.status(403).json({
       success: false,
       error: 'Você não tem permissão para acessar esta prova'
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar detalhes da prova:', error);
+    logger.error('❌ Erro ao buscar detalhes da prova:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno ao buscar detalhes da prova: ' + error.message
@@ -9596,7 +9597,7 @@ app.get('/api/provas/:id/correcao', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar dados para correção:', error);
+    logger.error('❌ Erro ao buscar dados para correção:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno ao buscar dados para correção: ' + error.message
@@ -9610,7 +9611,7 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
     const provaId = req.params.provaId;
     const professorId = req.userId;
     
-    console.log(`📝 Professor ${professorId} liberando TODAS as notas da prova ${provaId}`);
+    logger.info(`📝 Professor ${professorId} liberando TODAS as notas da prova ${provaId}`);
     
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
     if (!isAdmin && req.userRole !== 'professor') {
@@ -9654,7 +9655,7 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
     
     const totalLiberados = (resultadoUpdate.modifiedCount || 0) + (provaRealizadaUpdate.modifiedCount || 0);
     
-    console.log(`✅ ${totalLiberados} notas liberadas para a prova ${provaId}`);
+    logger.info(`✅ ${totalLiberados} notas liberadas para a prova ${provaId}`);
     
     res.json({
       success: true,
@@ -9669,7 +9670,7 @@ app.post('/api/provas/:provaId/liberar-notas-todos', authenticateToken, async (r
     });
     
   } catch (error) {
-    console.error('❌ Erro ao liberar notas:', error);
+    logger.error('❌ Erro ao liberar notas:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno ao liberar notas: ' + error.message
@@ -9684,7 +9685,7 @@ app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res)
         const usuarioId = req.userId;
         const usuarioRole = req.userRole;
         
-        console.log(`🗑️ Tentativa de exclusão da prova ${provaId} pelo usuário ${usuarioId} (${usuarioRole})`);
+        logger.info(`🗑️ Tentativa de exclusão da prova ${provaId} pelo usuário ${usuarioId} (${usuarioRole})`);
         
         // Buscar a prova
         const prova = await Prova.findById(provaId);
@@ -9710,18 +9711,18 @@ app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res)
         const totalResultados = await Resultado.countDocuments({ provaId: provaId });
         const totalProvasRealizadas = await ProvaRealizada.countDocuments({ provaId: provaId });
         
-        console.log(`📊 Prova "${prova.titulo}" tem ${totalResultados} resultados e ${totalProvasRealizadas} provas realizadas`);
+        logger.info(`📊 Prova "${prova.titulo}" tem ${totalResultados} resultados e ${totalProvasRealizadas} provas realizadas`);
         
         // Remover todos os resultados associados
         if (totalResultados > 0) {
             await Resultado.deleteMany({ provaId: provaId });
-            console.log(`✅ ${totalResultados} resultados excluídos`);
+            logger.info(`✅ ${totalResultados} resultados excluídos`);
         }
         
         // Remover todas as provas realizadas associadas
         if (totalProvasRealizadas > 0) {
             await ProvaRealizada.deleteMany({ provaId: provaId });
-            console.log(`✅ ${totalProvasRealizadas} provas realizadas excluídas`);
+            logger.info(`✅ ${totalProvasRealizadas} provas realizadas excluídas`);
         }
         
         // Remover a prova das turmas
@@ -9730,13 +9731,13 @@ app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res)
                 { _id: prova.turmaId },
                 { $pull: { provas: provaId } }
             );
-            console.log(`✅ Prova removida da turma ${prova.turmaId}`);
+            logger.info(`✅ Prova removida da turma ${prova.turmaId}`);
         }
         
         // Excluir a prova
         await Prova.deleteOne({ _id: provaId });
         
-        console.log(`✅ Prova ${provaId} excluída com sucesso`);
+        logger.info(`✅ Prova ${provaId} excluída com sucesso`);
         
         res.json({
             success: true,
@@ -9749,7 +9750,7 @@ app.delete('/api/professor/provas/:provaId', authenticateToken, async (req, res)
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir prova:', error);
+        logger.error('❌ Erro ao excluir prova:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao excluir prova: ' + error.message
@@ -9765,7 +9766,7 @@ app.post('/api/monitor/inicio', authenticateToken, async (req, res) => {
     const { provaId, timestamp, userAgent, screenResolution, windowSize } = req.body;
     
     // Aqui você pode salvar no banco de dados
-    console.log('📊 Início de prova monitorado:', {
+    logger.info('📊 Início de prova monitorado:', {
       alunoId: req.userId,
       provaId,
       timestamp,
@@ -9776,7 +9777,7 @@ app.post('/api/monitor/inicio', authenticateToken, async (req, res) => {
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Erro ao registrar início:', error);
+    logger.error('Erro ao registrar início:', error);
     res.status(500).json({ success: false, error: 'Erro interno' });
   }
 });
@@ -9787,7 +9788,7 @@ app.post('/api/monitor/violacao', authenticateToken, async (req, res) => {
     const { provaId, tipo, dados, timestamp } = req.body;
     
     // Aqui você pode salvar no banco de dados
-    console.log('⚠️ Violação registrada:', {
+    logger.info('⚠️ Violação registrada:', {
       alunoId: req.userId,
       provaId,
       tipo,
@@ -9797,7 +9798,7 @@ app.post('/api/monitor/violacao', authenticateToken, async (req, res) => {
     
     // Se for prova cancelada, notificar professor
     if (tipo === 'prova_cancelada') {
-      console.log('🚫 PROVA CANCELADA:', req.userId, dados);
+      logger.info('🚫 PROVA CANCELADA:', req.userId, dados);
       
       // ===== 🔥 NOTIFICAR PROFESSOR SOBRE CANCELAMENTO =====
       try {
@@ -9846,17 +9847,17 @@ app.post('/api/monitor/violacao', authenticateToken, async (req, res) => {
             );
           }
           
-          console.log(`✅ Professor ${prova.userId.email} notificado sobre cancelamento`);
+          logger.info(`✅ Professor ${prova.userId.email} notificado sobre cancelamento`);
         }
       } catch (notifError) {
-        console.error('⚠️ Erro ao notificar professor:', notifError.message);
+        logger.error('⚠️ Erro ao notificar professor:', notifError.message);
       }
     }
     
     res.json({ success: true });
     
   } catch (error) {
-    console.error('Erro ao registrar violação:', error);
+    logger.error('Erro ao registrar violação:', error);
     res.status(500).json({ success: false, error: 'Erro interno' });
   }
 });
@@ -9882,7 +9883,7 @@ app.get('/api/monitor/logs/:provaId', authenticateToken, async (req, res) => {
       mensagem: 'Em desenvolvimento - os logs serão salvos no banco de dados'
     });
   } catch (error) {
-    console.error('Erro ao buscar logs:', error);
+    logger.error('Erro ao buscar logs:', error);
     res.status(500).json({ success: false, error: 'Erro interno' });
   }
 });
@@ -9894,8 +9895,8 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         const alunoId = req.userId;
         const { motivo, estatisticas, respostasAtuais, tempoTotal } = req.body;
         
-        console.log(`🚫 Tentativa de cancelamento - Prova: ${provaId}, Aluno: ${alunoId}`);
-        console.log(`📝 Motivo recebido: "${motivo}"`);
+        logger.info(`🚫 Tentativa de cancelamento - Prova: ${provaId}, Aluno: ${alunoId}`);
+        logger.info(`📝 Motivo recebido: "${motivo}"`);
         
         // ========== VERIFICAR SE PROVA JÁ FOI FINALIZADA ==========
         const [resultadoExistente, provaRealizadaExistente] = await Promise.all([
@@ -9904,7 +9905,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         ]);
         
         if (resultadoExistente || provaRealizadaExistente) {
-            console.log(`⏭️ Prova já foi finalizada - cancelamento ignorado`);
+            logger.info(`⏭️ Prova já foi finalizada - cancelamento ignorado`);
             return res.json({
                 success: true,
                 message: 'Prova já foi finalizada',
@@ -9919,7 +9920,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         ]);
         
         if (canceladaExistente || resultadoCanceladoExistente) {
-            console.log(`⏭️ Prova já foi cancelada anteriormente`);
+            logger.info(`⏭️ Prova já foi cancelada anteriormente`);
             return res.json({
                 success: true,
                 message: 'Prova já foi cancelada',
@@ -9964,8 +9965,8 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         const isViolacao = palavrasViolacao.some(palavra => motivoLower.includes(palavra)) ||
                           (estatisticas?.avisos > 0);
 
-        console.log(`⚠️ Tipo de cancelamento: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO EXPIRADO'}`);
-        console.log(`📝 Motivo: "${motivo}"`);
+        logger.info(`⚠️ Tipo de cancelamento: ${isViolacao ? 'VIOLAÇÃO' : 'PRAZO EXPIRADO'}`);
+        logger.info(`📝 Motivo: "${motivo}"`);
 
         // ========== CRIAR REGISTROS DE CANCELAMENTO ==========
         const provaCancelada = new ProvaRealizada({
@@ -10007,7 +10008,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         
         await Promise.all([provaCancelada.save(), resultadoCancelado.save()]);
         
-        console.log(`✅ Registros de cancelamento criados com motivo: "${motivo}"`);
+        logger.info(`✅ Registros de cancelamento criados com motivo: "${motivo}"`);
         
         // ========== NOTIFICAR PROFESSOR (usando a variável global Config) ==========
         if (prova.userId) {
@@ -10045,14 +10046,14 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
                     });
                     
                     await notificacao.save();
-                    console.log(`✅ Professor notificado: ${professor.email}`);
+                    logger.info(`✅ Professor notificado: ${professor.email}`);
                 }
             } catch (notifError) {
-                console.error('⚠️ Erro ao notificar professor:', notifError.message);
+                logger.error('⚠️ Erro ao notificar professor:', notifError.message);
             }
         }
         
-        console.log(`✅ Prova cancelada com sucesso: ${aluno.nome} - ${prova.titulo} - Motivo: "${motivo}"`);
+        logger.info(`✅ Prova cancelada com sucesso: ${aluno.nome} - ${prova.titulo} - Motivo: "${motivo}"`);
         
         res.json({
             success: true,
@@ -10063,7 +10064,7 @@ app.post('/api/provas/:provaId/cancelar', authenticateToken, async (req, res) =>
         });
         
     } catch (error) {
-        console.error('❌ Erro ao cancelar prova:', error);
+        logger.error('❌ Erro ao cancelar prova:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -10111,7 +10112,7 @@ app.get('/api/aluno/provas/:provaId/detalhes-cancelamento', authenticateToken, a
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar detalhes do cancelamento:', error);
+        logger.error('❌ Erro ao buscar detalhes do cancelamento:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -10175,7 +10176,7 @@ app.get('/api/professor/notificacoes/cancelamentos', authenticateToken, async (r
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar notificações de cancelamento:', error);
+        logger.error('❌ Erro ao buscar notificações de cancelamento:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -10193,7 +10194,7 @@ const backupService = new BackupService();
 
 // Funções auxiliares para sincronização
 async function handleCreate(collection, data, token, req) {
-    console.log(`📝 Sincronizando CREATE em ${collection}`);
+    logger.info(`📝 Sincronizando CREATE em ${collection}`);
     
     switch (collection) {
         case 'respostas':
@@ -10208,7 +10209,7 @@ async function handleCreate(collection, data, token, req) {
                 });
                 
                 if (provaRealizadaExistente) {
-                    console.log('✅ Já existe, atualizando...');
+                    logger.info('✅ Já existe, atualizando...');
                     provaRealizadaExistente.respostas = data.respostas;
                     provaRealizadaExistente.tempoGasto = data.tempoGasto;
                     provaRealizadaExistente.dataRealizacao = new Date(data.timestamp || Date.now());
@@ -10280,14 +10281,14 @@ async function handleCreate(collection, data, token, req) {
                         });
                         
                         await resultado.save();
-                        console.log(`✅ Resultado criado: ${resultado._id}`);
+                        logger.info(`✅ Resultado criado: ${resultado._id}`);
                     }
                     
-                    console.log(`✅ Prova realizada criada: ${provaRealizada._id}`);
+                    logger.info(`✅ Prova realizada criada: ${provaRealizada._id}`);
                     return { tipo: 'create', id: provaRealizada._id };
                 }
             } catch (error) {
-                console.error('❌ Erro ao criar resposta:', error);
+                logger.error('❌ Erro ao criar resposta:', error);
                 throw error;
             }
             break;
@@ -10303,7 +10304,7 @@ async function handleCreate(collection, data, token, req) {
 }
 
 async function handleUpdate(collection, data, token, req) {
-    console.log(`✏️ Sincronizando UPDATE em ${collection}`);
+    logger.info(`✏️ Sincronizando UPDATE em ${collection}`);
     
     switch (collection) {
         case 'respostas':
@@ -10328,7 +10329,7 @@ async function handleUpdate(collection, data, token, req) {
 }
 
 async function handleDelete(collection, data, token, req) {
-    console.log(`🗑️ Sincronizando DELETE em ${collection}`);
+    logger.info(`🗑️ Sincronizando DELETE em ${collection}`);
     
     switch (collection) {
         case 'respostas':
@@ -10352,7 +10353,7 @@ app.post('/api/sync/:collection', authenticateToken, async (req, res) => {
         const { collection } = req.params;
         const { action, data, syncId } = req.body;
         
-        console.log(`🔄 Recebendo sincronização: ${collection}.${action} (${syncId})`);
+        logger.info(`🔄 Recebendo sincronização: ${collection}.${action} (${syncId})`);
         
         let result;
         switch (action) {
@@ -10373,7 +10374,7 @@ app.post('/api/sync/:collection', authenticateToken, async (req, res) => {
         }
         
         // Registrar log de sincronização bem-sucedida
-        console.log(`✅ Sincronização ${syncId} concluída com sucesso`);
+        logger.info(`✅ Sincronização ${syncId} concluída com sucesso`);
         
         res.json({ 
             success: true, 
@@ -10383,7 +10384,7 @@ app.post('/api/sync/:collection', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro na sincronização:', error);
+        logger.error('❌ Erro na sincronização:', error);
         
         res.status(500).json({ 
             success: false, 
@@ -10408,7 +10409,7 @@ app.get('/api/sync/status', authenticateToken, (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao verificar status:', error);
+        logger.error('❌ Erro ao verificar status:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao verificar status' 
@@ -10427,7 +10428,7 @@ app.post('/api/backup/manual', authenticateToken, async (req, res) => {
           });
         }
         
-        console.log(`🔄 Backup manual solicitado por ${req.userId}`);
+        logger.info(`🔄 Backup manual solicitado por ${req.userId}`);
         
         const backupService = new BackupService();
         await backupService.connectDB();
@@ -10444,7 +10445,7 @@ app.post('/api/backup/manual', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro no backup manual:', error);
+        logger.error('❌ Erro no backup manual:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao fazer backup: ' + error.message 
@@ -10473,7 +10474,7 @@ app.get('/api/backup/list', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar backups:', error);
+        logger.error('❌ Erro ao listar backups:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao listar backups' 
@@ -10501,7 +10502,7 @@ app.post('/api/backup/restore/:filename', authenticateToken, async (req, res) =>
             });
         }
         
-        console.log(`🔄 Restauração solicitada: ${filename} por ${req.userId}`);
+        logger.info(`🔄 Restauração solicitada: ${filename} por ${req.userId}`);
         
         const backupService = new BackupService();
         await backupService.connectDB();
@@ -10515,7 +10516,7 @@ app.post('/api/backup/restore/:filename', authenticateToken, async (req, res) =>
         });
         
     } catch (error) {
-        console.error('❌ Erro na restauração:', error);
+        logger.error('❌ Erro na restauração:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao restaurar backup: ' + error.message 
@@ -10546,7 +10547,7 @@ app.post('/api/provas/offline/save', authenticateToken, async (req, res) => {
         const { provaId, respostas, tempoGasto } = req.body;
         const alunoId = req.userId;
         
-        console.log(`💾 Salvando prova offline: aluno ${alunoId}, prova ${provaId}`);
+        logger.info(`💾 Salvando prova offline: aluno ${alunoId}, prova ${provaId}`);
         
         // Aqui você salvaria no banco local do aluno
         // Mas também colocamos na fila de sincronização
@@ -10579,7 +10580,7 @@ app.post('/api/provas/offline/save', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao salvar offline:', error);
+        logger.error('❌ Erro ao salvar offline:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao salvar prova offline' 
@@ -10608,7 +10609,7 @@ app.get('/api/provas/offline/pending', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao verificar pendentes:', error);
+        logger.error('❌ Erro ao verificar pendentes:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao verificar provas pendentes' 
@@ -10632,11 +10633,11 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
             });
         }
         
-        console.log('\n📨 ===== NOVA SOLICITAÇÃO DE RECUPERAÇÃO =====');
-        console.log('📧 Identificador recebido:', identifier);
-        console.log('🕒 Hora:', new Date().toLocaleString('pt-BR'));
-        console.log('🌐 IP:', req.ip);
-        console.log('==============================================\n');
+        logger.info('\n📨 ===== NOVA SOLICITAÇÃO DE RECUPERAÇÃO =====');
+        logger.info('📧 Identificador recebido:', identifier);
+        logger.info('🕒 Hora:', new Date().toLocaleString('pt-BR'));
+        logger.info('🌐 IP:', req.ip);
+        logger.info('==============================================\n');
         
         let user;
         
@@ -10652,17 +10653,17 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
         
         // Por segurança, sempre retornar sucesso mesmo se usuário não existir
         if (!user) {
-            console.log('⚠️  Usuário não encontrado (retornando sucesso por segurança)');
+            logger.info('⚠️  Usuário não encontrado (retornando sucesso por segurança)');
             return res.json({
                 success: true,
                 message: 'Se o email/CPF estiver cadastrado, você receberá um código de recuperação'
             });
         }
         
-        console.log('🎯 Usuário encontrado:');
-        console.log('   Email:', user.email);
-        console.log('   Nome:', user.nome);
-        console.log('   ID:', user._id);
+        logger.info('🎯 Usuário encontrado:');
+        logger.info('   Email:', user.email);
+        logger.info('   Nome:', user.nome);
+        logger.info('   ID:', user._id);
         
         // Gerar código de 6 dígitos
         const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -10677,8 +10678,8 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
             { expiresIn: '15m' } // Código válido por 15 minutos
         );
         
-        console.log('🔐 Código gerado:', code);
-        console.log('🔑 Token gerado:', token.substring(0, 50) + '...');
+        logger.info('🔐 Código gerado:', code);
+        logger.info('🔑 Token gerado:', token.substring(0, 50) + '...');
         
         // Armazenar código temporariamente
         resetCodes.set(user._id.toString(), {
@@ -10693,7 +10694,7 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
         cleanupExpiredCodes();
         
         // ===== ENVIAR EMAIL COM O SERVIÇO UNIFICADO =====
-        console.log('\n🚀 Inicializando serviço de email unificado...');
+        logger.info('\n🚀 Inicializando serviço de email unificado...');
         
         // 🔥 USAR O NOVO SERVIÇO UNIFICADO
         const EmailService = require('./services/email-service');
@@ -10702,7 +10703,7 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
         // Inicializar o serviço (importante!)
         await emailService.init();
         
-        console.log('📧 Enviando email de recuperação via:', emailService.tipo || 'Resend');
+        logger.info('📧 Enviando email de recuperação via:', emailService.tipo || 'Resend');
         
         const emailResult = await emailService.sendPasswordResetEmail(
             user.email,
@@ -10710,10 +10711,10 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
             code
         );
         
-        console.log('\n📊 RESULTADO DO ENVIO:');
-        console.log('Sucesso:', emailResult.success ? '✅' : '❌');
-        console.log('Serviço:', emailResult.service || emailService.tipo || 'Resend');
-        console.log('ID:', emailResult.messageId || 'N/A');
+        logger.info('\n📊 RESULTADO DO ENVIO:');
+        logger.info('Sucesso:', emailResult.success ? '✅' : '❌');
+        logger.info('Serviço:', emailResult.service || emailService.tipo || 'Resend');
+        logger.info('ID:', emailResult.messageId || 'N/A');
         
         // Preparar resposta
         const response = {
@@ -10729,11 +10730,11 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
         
         // Em desenvolvimento ou se email falhou, incluir código para testes
         if (process.env.NODE_ENV !== 'production' || !emailResult.success) {
-            console.log('\n🔓 [MODO DEV/TESTE] Para testes, use este código:');
-            console.log('📧 Email:', user.email);
-            console.log('🔢 Código:', code);
-            console.log('⏰ Validade: 15 minutos');
-            console.log('💡 Use este código na página de recuperação');
+            logger.info('\n🔓 [MODO DEV/TESTE] Para testes, use este código:');
+            logger.info('📧 Email:', user.email);
+            logger.info('🔢 Código:', code);
+            logger.info('⏰ Validade: 15 minutos');
+            logger.info('💡 Use este código na página de recuperação');
             
             // Incluir código na resposta apenas em desenvolvimento
             if (process.env.NODE_ENV !== 'production') {
@@ -10743,16 +10744,16 @@ app.post('/api/auth/reset-password/request', async (req, res) => {
             }
         }
         
-        console.log('\n✅ Solicitação processada com sucesso!');
-        console.log('==============================================\n');
+        logger.info('\n✅ Solicitação processada com sucesso!');
+        logger.info('==============================================\n');
         
         res.json(response);
         
     } catch (error) {
-        console.error('\n🔥 ERRO CRÍTICO NA RECUPERAÇÃO:');
-        console.error('Mensagem:', error.message);
-        console.error('Stack:', error.stack);
-        console.error('====================================\n');
+        logger.error('\n🔥 ERRO CRÍTICO NA RECUPERAÇÃO:');
+        logger.error('Mensagem:', error.message);
+        logger.error('Stack:', error.stack);
+        logger.error('====================================\n');
         
         res.status(500).json({
             success: false,
@@ -10773,11 +10774,11 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
             });
         }
         
-        console.log('\n🔍 ===== VERIFICAÇÃO DE CÓDIGO =====');
-        console.log('📧 Identificador:', identifier);
-        console.log('🔢 Código recebido:', code);
-        console.log('🕒 Hora:', new Date().toLocaleString('pt-BR'));
-        console.log('====================================\n');
+        logger.info('\n🔍 ===== VERIFICAÇÃO DE CÓDIGO =====');
+        logger.info('📧 Identificador:', identifier);
+        logger.info('🔢 Código recebido:', code);
+        logger.info('🕒 Hora:', new Date().toLocaleString('pt-BR'));
+        logger.info('====================================\n');
         
         let user;
         
@@ -10790,20 +10791,20 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
         }
         
         if (!user) {
-            console.log('❌ Usuário não encontrado');
+            logger.info('❌ Usuário não encontrado');
             return res.status(404).json({
                 success: false,
                 error: 'Usuário não encontrado'
             });
         }
         
-        console.log('👤 Usuário encontrado:', user.email);
+        logger.info('👤 Usuário encontrado:', user.email);
         
         // Verificar código
         const resetData = resetCodes.get(user._id.toString());
         
         if (!resetData) {
-            console.log('❌ Código não encontrado para este usuário');
+            logger.info('❌ Código não encontrado para este usuário');
             return res.status(400).json({
                 success: false,
                 error: 'Código não encontrado. Solicite um novo código.'
@@ -10812,7 +10813,7 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
         
         // Verificar tentativas
         if (resetData.attempts >= resetData.maxAttempts) {
-            console.log(`❌ Muitas tentativas (${resetData.attempts}/${resetData.maxAttempts})`);
+            logger.info(`❌ Muitas tentativas (${resetData.attempts}/${resetData.maxAttempts})`);
             resetCodes.delete(user._id.toString());
             return res.status(429).json({
                 success: false,
@@ -10822,7 +10823,7 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
         
         // Verificar expiração
         if (resetData.expiresAt < Date.now()) {
-            console.log('❌ Código expirado');
+            logger.info('❌ Código expirado');
             resetCodes.delete(user._id.toString());
             return res.status(400).json({
                 success: false,
@@ -10836,7 +10837,7 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
             resetCodes.set(user._id.toString(), resetData);
             
             const attemptsLeft = resetData.maxAttempts - resetData.attempts;
-            console.log(`❌ Código inválido. Tentativas: ${resetData.attempts}/${resetData.maxAttempts}`);
+            logger.info(`❌ Código inválido. Tentativas: ${resetData.attempts}/${resetData.maxAttempts}`);
             
             return res.status(400).json({
                 success: false,
@@ -10850,14 +10851,14 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
             try {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
                 if (decoded.userId !== user._id.toString() || decoded.code !== code) {
-                    console.log('❌ Token JWT inválido');
+                    logger.info('❌ Token JWT inválido');
                     return res.status(400).json({
                         success: false,
                         error: 'Token inválido'
                     });
                 }
             } catch (jwtError) {
-                console.log('❌ Token JWT expirado ou inválido:', jwtError.message);
+                logger.info('❌ Token JWT expirado ou inválido:', jwtError.message);
                 return res.status(400).json({
                     success: false,
                     error: 'Token inválido ou expirado'
@@ -10881,9 +10882,9 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
         // Marcar código como usado
         resetCodes.delete(user._id.toString());
         
-        console.log('✅ Código verificado com sucesso!');
-        console.log('🔑 Novo token gerado:', resetToken.substring(0, 50) + '...');
-        console.log('====================================\n');
+        logger.info('✅ Código verificado com sucesso!');
+        logger.info('🔑 Novo token gerado:', resetToken.substring(0, 50) + '...');
+        logger.info('====================================\n');
         
         res.json({
             success: true,
@@ -10896,10 +10897,10 @@ app.post('/api/auth/reset-password/verify', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('\n🔥 ERRO NA VERIFICAÇÃO DO CÓDIGO:');
-        console.error('Mensagem:', error.message);
-        console.error('Stack:', error.stack);
-        console.error('====================================\n');
+        logger.error('\n🔥 ERRO NA VERIFICAÇÃO DO CÓDIGO:');
+        logger.error('Mensagem:', error.message);
+        logger.error('Stack:', error.stack);
+        logger.error('====================================\n');
         
         res.status(500).json({
             success: false,
@@ -10927,10 +10928,10 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
             });
         }
         
-        console.log('\n🔄 ===== REDEFINIÇÃO DE SENHA =====');
-        console.log('📧 Identificador:', identifier);
-        console.log('🕒 Hora:', new Date().toLocaleString('pt-BR'));
-        console.log('====================================\n');
+        logger.info('\n🔄 ===== REDEFINIÇÃO DE SENHA =====');
+        logger.info('📧 Identificador:', identifier);
+        logger.info('🕒 Hora:', new Date().toLocaleString('pt-BR'));
+        logger.info('====================================\n');
         
         let user;
         
@@ -10943,35 +10944,35 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
         }
         
         if (!user) {
-            console.log('❌ Usuário não encontrado');
+            logger.info('❌ Usuário não encontrado');
             return res.status(404).json({
                 success: false,
                 error: 'Usuário não encontrado'
             });
         }
         
-        console.log('👤 Usuário encontrado:', user.email);
+        logger.info('👤 Usuário encontrado:', user.email);
         
         // Verificar token se fornecido
         if (token) {
             try {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
                 if (decoded.userId !== user._id.toString()) {
-                    console.log('❌ Token JWT não pertence ao usuário');
+                    logger.info('❌ Token JWT não pertence ao usuário');
                     return res.status(400).json({
                         success: false,
                         error: 'Token inválido'
                     });
                 }
                 if (!decoded.codeVerified) {
-                    console.log('❌ Código não foi verificado');
+                    logger.info('❌ Código não foi verificado');
                     return res.status(400).json({
                         success: false,
                         error: 'Código não verificado'
                     });
                 }
             } catch (jwtError) {
-                console.log('❌ Token JWT expirado ou inválido:', jwtError.message);
+                logger.info('❌ Token JWT expirado ou inválido:', jwtError.message);
                 return res.status(400).json({
                     success: false,
                     error: 'Token inválido ou expirado'
@@ -10982,7 +10983,7 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
         // Verificar se a nova senha é igual à antiga
         const isSamePassword = await user.comparePassword(newPassword);
         if (isSamePassword) {
-            console.log('❌ Nova senha é igual à senha atual');
+            logger.info('❌ Nova senha é igual à senha atual');
             return res.status(400).json({
                 success: false,
                 error: 'A nova senha não pode ser igual à senha atual'
@@ -10994,22 +10995,22 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
         user.passwordChangedAt = new Date();
         await user.save();
         
-        console.log(`✅ Senha atualizada para ${user.email}`);
+        logger.info(`✅ Senha atualizada para ${user.email}`);
         
         // Enviar email de confirmação
         try {
             await emailService.sendPasswordChangedEmail(user.email, user.nome);
-            console.log('📧 Email de confirmação enviado');
+            logger.info('📧 Email de confirmação enviado');
         } catch (emailError) {
-            console.error('⚠️  Erro ao enviar email de confirmação:', emailError.message);
+            logger.error('⚠️  Erro ao enviar email de confirmação:', emailError.message);
             // Não falhar o processo se o email falhar
         }
         
         // Invalidar todos os tokens JWT do usuário (opcional)
         // Em produção, você pode querer adicionar o token a uma blacklist
         
-        console.log('\n✅ Senha redefinida com sucesso!');
-        console.log('====================================\n');
+        logger.info('\n✅ Senha redefinida com sucesso!');
+        logger.info('====================================\n');
         
         res.json({
             success: true,
@@ -11022,10 +11023,10 @@ app.post('/api/auth/reset-password/confirm', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('\n🔥 ERRO AO REDEFINIR SENHA:');
-        console.error('Mensagem:', error.message);
-        console.error('Stack:', error.stack);
-        console.error('====================================\n');
+        logger.error('\n🔥 ERRO AO REDEFINIR SENHA:');
+        logger.error('Mensagem:', error.message);
+        logger.error('Stack:', error.stack);
+        logger.error('====================================\n');
         
         res.status(500).json({
             success: false,
@@ -11047,7 +11048,7 @@ function cleanupExpiredCodes() {
     }
     
     if (cleaned > 0) {
-        console.log(`🧹 Limpeza: ${cleaned} códigos expirados removidos`);
+        logger.info(`🧹 Limpeza: ${cleaned} códigos expirados removidos`);
     }
 }
 
@@ -11167,7 +11168,7 @@ app.post('/api/chatbot/message', authenticateToken, async (req, res) => {
         res.json(result);
 
     } catch (error) {
-        console.error('❌ Erro no chatbot:', error);
+        logger.error('❌ Erro no chatbot:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao processar mensagem do chatbot',
@@ -11194,7 +11195,7 @@ app.post('/api/chatbot/public/message', async (req, res) => {
         res.json(result);
 
     } catch (error) {
-        console.error('❌ Erro no chatbot público:', error);
+        logger.error('❌ Erro no chatbot público:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao processar mensagem do chatbot',
@@ -11246,7 +11247,7 @@ app.get('/api/chatbot/context', authenticateToken, (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao obter contexto:', error);
+        logger.error('❌ Erro ao obter contexto:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao obter contexto'
@@ -11382,7 +11383,7 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
                     stats.totalSecretaria = count;    // 🔥 CORRIGIDO
                     break;
                 default:
-                    console.log(`   ⚠️ Role não mapeado: ${role} (${count} usuários)`);
+                    logger.info(`   ⚠️ Role não mapeado: ${role} (${count} usuários)`);
             }
         });
 
@@ -11512,7 +11513,7 @@ app.get('/api/admin/dashboard', authenticateToken, isSuperAdmin, async (req, res
         });
 
     } catch (error) {
-        console.error('❌ Erro no dashboard admin:', error);
+        logger.error('❌ Erro no dashboard admin:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao carregar dados do dashboard: ' + error.message 
@@ -11575,7 +11576,7 @@ app.get('/api/admin/usuarios-online', authenticateToken, isSuperAdmin, async (re
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar usuários online:', error);
+        logger.error('❌ Erro ao listar usuários online:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar usuários online: ' + error.message
@@ -11641,7 +11642,7 @@ app.get('/api/admin/usuarios-app', authenticateToken, isSuperAdmin, async (req, 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar usuários do app:', error);
+        logger.error('❌ Erro ao listar usuários do app:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar usuários do app: ' + error.message
@@ -11689,7 +11690,7 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
                 { matricula: { $regex: search, $options: 'i' } },
                 { cpf: { $regex: search, $options: 'i' } }
             ];
-            console.log(`   🔍 Buscando por: "${search}"`);
+            logger.info(`   🔍 Buscando por: "${search}"`);
         }
                 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -11747,7 +11748,7 @@ app.get('/api/admin/usuarios', authenticateToken, isSuperAdmin, async (req, res)
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar usuários:', error);
+        logger.error('❌ Erro ao listar usuários:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro interno ao listar usuários: ' + error.message 
@@ -11760,7 +11761,7 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, verificarPermis
     try {
         const userData = req.body;
         
-        console.log('📝 Admin criando usuário:', userData.email);
+        logger.info('📝 Admin criando usuário:', userData.email);
         
         // Admin não pode criar super_admin
         if (req.userRole === 'admin' && userData.role === 'super_admin') {
@@ -11879,8 +11880,8 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, verificarPermis
         
         await user.save();
 
-        console.log(`✅ Usuário criado pelo admin: ${user.email}`);
-        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
+        logger.info(`✅ Usuário criado pelo admin: ${user.email}`);
+        logger.info(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
 
         res.status(201).json({
             success: true,
@@ -11896,7 +11897,7 @@ app.post('/api/admin/usuarios', authenticateToken, isSuperAdmin, verificarPermis
         });
 
     } catch (error) {
-        console.error('❌ Erro ao criar usuário:', error);
+        logger.error('❌ Erro ao criar usuário:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -11906,7 +11907,7 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
     try {
         const { id } = req.params;
         
-        console.log(`🔍 Admin ${req.userId} buscando usuário ${id}`);
+        logger.info(`🔍 Admin ${req.userId} buscando usuário ${id}`);
         
         // 🔥 CORREÇÃO: Incluir TODOS os campos de perfil + QR CODE
         const user = await User.findById(id)
@@ -11929,7 +11930,7 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
         }
         
         // 🔥 ADICIONAR LOG PARA VERIFICAR SE OS CAMPOS VIERAM
-        console.log('📦 Dados do usuário retornados:', {
+        logger.info('📦 Dados do usuário retornados:', {
             nome: user.nome,
             email: user.email,
             fotoPerfil: user.fotoPerfil ? '✅ EXISTE' : '❌ NÃO',
@@ -12004,7 +12005,7 @@ app.get('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, async (req, 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar usuário:', error);
+        logger.error('❌ Erro ao buscar usuário:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao buscar usuário: ' + error.message 
@@ -12018,7 +12019,7 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificarPer
         const { id } = req.params;
         const updates = req.body;
         
-        console.log(`✏️ Admin ${req.userId} editando usuário ${id}`);
+        logger.info(`✏️ Admin ${req.userId} editando usuário ${id}`);
         
         // Impedir que admin altere seu próprio role para super_admin
         if (req.userRole === 'admin' && updates.role === 'super_admin') {
@@ -12093,7 +12094,7 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificarPer
             { new: true }
         ).select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
         
-        console.log(`✅ Usuário ${id} atualizado com sucesso`);
+        logger.info(`✅ Usuário ${id} atualizado com sucesso`);
         
         res.json({ 
             success: true, 
@@ -12108,7 +12109,7 @@ app.put('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificarPer
         });
 
     } catch (error) {
-        console.error('❌ Erro ao atualizar usuário:', error);
+        logger.error('❌ Erro ao atualizar usuário:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao atualizar usuário: ' + error.message 
@@ -12122,7 +12123,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         const { id } = req.params;
         const { novaSenha } = req.body;
         
-        console.log(`🔑 Admin ${req.userId} resetando senha do usuário ${id}`);
+        logger.info(`🔑 Admin ${req.userId} resetando senha do usuário ${id}`);
         
         // Verificar se o alvo é super_admin
         const targetUser = await User.findById(id);
@@ -12168,7 +12169,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             }, { timestamps: true });
             
             ConfigModel = mongoose.model('Config', ConfigSchema);
-            console.log('✅ Modelo Config criado dinamicamente na rota de reset');
+            logger.info('✅ Modelo Config criado dinamicamente na rota de reset');
         }
         
         // Buscar configurações de senha usando o modelo obtido
@@ -12231,8 +12232,8 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         user.passwordChangedAt = null;
         await user.save();
         
-        console.log(`✅ Senha resetada para usuário ${user.email}`);
-        console.log(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
+        logger.info(`✅ Senha resetada para usuário ${user.email}`);
+        logger.info(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
         
         // VERIFICAR CONFIGURAÇÕES DE PUSH
         const configDoc = await ConfigModel.findOne({ chave: 'notificacoes' });
@@ -12270,7 +12271,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
             }
             
         } catch (notifError) {
-            console.warn('⚠️ Erro ao criar notificação:', notifError.message);
+            logger.warn('⚠️ Erro ao criar notificação:', notifError.message);
         }
         
         res.json({
@@ -12280,7 +12281,7 @@ app.post('/api/admin/usuarios/:id/reset-password', authenticateToken, isSuperAdm
         });
         
     } catch (error) {
-        console.error('❌ Erro ao resetar senha:', error);
+        logger.error('❌ Erro ao resetar senha:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao resetar senha: ' + error.message 
@@ -12294,7 +12295,7 @@ app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin
         const { id } = req.params;
         const { ativo } = req.body;
         
-        console.log(`🔄 Admin ${req.userId} alterando status do usuário ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        logger.info(`🔄 Admin ${req.userId} alterando status do usuário ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
         
         const user = await User.findById(id);
         
@@ -12324,7 +12325,7 @@ app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin
         user.ativo = ativo;
         await user.save();
         
-        console.log(`✅ Usuário ${user.email} agora está ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        logger.info(`✅ Usuário ${user.email} agora está ${ativo ? 'ATIVO' : 'INATIVO'}`);
         
         res.json({
             success: true,
@@ -12337,7 +12338,7 @@ app.put('/api/admin/usuarios/:id/toggle-status', authenticateToken, isSuperAdmin
         });
         
     } catch (error) {
-        console.error('❌ Erro ao alterar status:', error);
+        logger.error('❌ Erro ao alterar status:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao alterar status: ' + error.message 
@@ -12350,7 +12351,7 @@ app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificar
     try {
         const { id } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} tentando excluir usuário ${id}`);
+        logger.info(`🗑️ Admin ${req.userId} tentando excluir usuário ${id}`);
         
         const user = await User.findById(id);
         
@@ -12401,7 +12402,7 @@ app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificar
 
         await User.findByIdAndDelete(id);
 
-        console.log(`✅ Usuário ${user.email} excluído permanentemente`);
+        logger.info(`✅ Usuário ${user.email} excluído permanentemente`);
 
         res.json({ 
             success: true, 
@@ -12409,7 +12410,7 @@ app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificar
         });
 
     } catch (error) {
-        console.error('❌ Erro ao deletar usuário:', error);
+        logger.error('❌ Erro ao deletar usuário:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao deletar usuário: ' + error.message 
@@ -12420,7 +12421,7 @@ app.delete('/api/admin/usuarios/:id', authenticateToken, isSuperAdmin, verificar
 // ============ BUSCAR PROFESSORES PARA SELECT (usado em várias partes) ============
 app.get('/api/admin/professores-lista', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`📋 Admin ${req.userId} buscando lista de professores`);
+        logger.info(`📋 Admin ${req.userId} buscando lista de professores`);
         
         const professores = await User.find({ 
             role: 'professor',
@@ -12438,7 +12439,7 @@ app.get('/api/admin/professores-lista', authenticateToken, isSuperAdmin, async (
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar professores:', error);
+        logger.error('❌ Erro ao buscar professores:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao buscar professores: ' + error.message 
@@ -12479,7 +12480,7 @@ app.get('/api/admin/alunos-lista', authenticateToken, isSuperAdmin, async (req, 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar alunos:', error);
+        logger.error('❌ Erro ao buscar alunos:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao buscar alunos: ' + error.message 
@@ -12515,7 +12516,7 @@ app.get('/api/admin/usuarios/estatisticas', authenticateToken, isSuperAdmin, asy
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar estatísticas:', error);
+        logger.error('❌ Erro ao buscar estatísticas:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Erro ao buscar estatísticas: ' + error.message 
@@ -12567,7 +12568,7 @@ app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) =
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar turmas:', error);
+        logger.error('❌ Erro ao listar turmas:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -12585,7 +12586,7 @@ app.delete('/api/admin/turmas/:id', authenticateToken, async (req, res) => {
         
         const turmaId = req.params.id;
         
-        console.log(`🗑️ Admin ${req.userId} excluindo turma ${turmaId}`);
+        logger.info(`🗑️ Admin ${req.userId} excluindo turma ${turmaId}`);
         
         // Buscar turma
         const turma = await Turma.findById(turmaId);
@@ -12600,7 +12601,7 @@ app.delete('/api/admin/turmas/:id', authenticateToken, async (req, res) => {
         const provasAssociadas = await Prova.find({ turmaId: turmaId });
         
         // Remover tudo (provas e resultados)
-        console.log(`🔧 Removendo ${provasAssociadas.length} provas associadas...`);
+        logger.info(`🔧 Removendo ${provasAssociadas.length} provas associadas...`);
         
         for (const prova of provasAssociadas) {
             // Remover resultados
@@ -12621,7 +12622,7 @@ app.delete('/api/admin/turmas/:id', authenticateToken, async (req, res) => {
         // Excluir a turma
         await Turma.findByIdAndDelete(turmaId);
         
-        console.log(`✅ Turma ${turmaId} excluída com sucesso`);
+        logger.info(`✅ Turma ${turmaId} excluída com sucesso`);
         
         res.json({
             success: true,
@@ -12633,7 +12634,7 @@ app.delete('/api/admin/turmas/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir turma:', error);
+        logger.error('❌ Erro ao excluir turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao excluir turma: ' + error.message
@@ -12686,7 +12687,7 @@ app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) =
         res.json({ success: true, provas: provasComEstatisticas });
 
     } catch (error) {
-        console.error('❌ Erro ao listar provas:', error);
+        logger.error('❌ Erro ao listar provas:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -12705,8 +12706,8 @@ app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
         const provaId = req.params.id;
         const updates = req.body;
         
-        console.log(`✏️ Admin ${req.userId} editando prova ${provaId}`);
-        console.log('📦 Dados recebidos:', {
+        logger.info(`✏️ Admin ${req.userId} editando prova ${provaId}`);
+        logger.info('📦 Dados recebidos:', {
             titulo: updates.titulo,
             conteudo: updates.conteudo,
             dataLimite: updates.dataLimite,
@@ -12743,18 +12744,18 @@ app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
                 // Apenas data, usar 23:59:59 do dia
                 prova.dataLimite = new Date(`${updates.dataLimite}T23:59:59`);
             }
-            console.log(`📅 Data limite atualizada: ${prova.dataLimite.toLocaleString('pt-BR')}`);
+            logger.info(`📅 Data limite atualizada: ${prova.dataLimite.toLocaleString('pt-BR')}`);
         }
         
         // 🔥 ATUALIZAR HORÁRIOS (CRÍTICO!)
         if (updates.horarioInicio) {
             prova.horarioInicio = updates.horarioInicio;
-            console.log(`⏰ Horário início atualizado: ${prova.horarioInicio}`);
+            logger.info(`⏰ Horário início atualizado: ${prova.horarioInicio}`);
         }
         
         if (updates.horarioTermino) {
             prova.horarioTermino = updates.horarioTermino;
-            console.log(`⏰ Horário término atualizado: ${prova.horarioTermino}`);
+            logger.info(`⏰ Horário término atualizado: ${prova.horarioTermino}`);
         }
         
         // Atualizar duração
@@ -12766,13 +12767,13 @@ app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
         if (updates.questoes && Array.isArray(updates.questoes)) {
             prova.questoes = updates.questoes;
             prova.quantidadeQuestoes = updates.questoes.length;
-            console.log(`📝 ${prova.quantidadeQuestoes} questões atualizadas`);
+            logger.info(`📝 ${prova.quantidadeQuestoes} questões atualizadas`);
         }
         
         await prova.save();
         
-        console.log(`✅ Prova ${provaId} atualizada com sucesso`);
-        console.log(`   Horários salvos: ${prova.horarioInicio} - ${prova.horarioTermino}`);
+        logger.info(`✅ Prova ${provaId} atualizada com sucesso`);
+        logger.info(`   Horários salvos: ${prova.horarioInicio} - ${prova.horarioTermino}`);
         
         res.json({
             success: true,
@@ -12788,7 +12789,7 @@ app.put('/api/admin/provas/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao editar prova:', error);
+        logger.error('❌ Erro ao editar prova:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao editar prova: ' + error.message
@@ -12824,7 +12825,7 @@ app.get('/api/admin/backups', authenticateToken, isSuperAdmin, async (req, res) 
         res.json({ success: true, backups: files });
 
     } catch (error) {
-        console.error('❌ Erro ao listar backups:', error);
+        logger.error('❌ Erro ao listar backups:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -12884,7 +12885,7 @@ app.post('/api/admin/backups/criar', authenticateToken, isSuperAdmin, async (req
         });
 
     } catch (error) {
-        console.error('❌ Erro ao criar backup:', error);
+        logger.error('❌ Erro ao criar backup:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -12933,7 +12934,7 @@ app.post('/api/admin/backups/restaurar/:arquivo', authenticateToken, isSuperAdmi
         });
 
     } catch (error) {
-        console.error('❌ Erro ao restaurar backup:', error);
+        logger.error('❌ Erro ao restaurar backup:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -12943,11 +12944,11 @@ app.get('/api/admin/backups/download/:arquivo', authenticateToken, isSuperAdmin,
     try {
         const { arquivo } = req.params;
         
-        console.log(`📥 Admin ${req.userId} tentando baixar backup: ${arquivo}`);
+        logger.info(`📥 Admin ${req.userId} tentando baixar backup: ${arquivo}`);
         
         // Validar nome do arquivo (segurança)
         if (arquivo.includes('..') || arquivo.includes('/') || arquivo.includes('\\')) {
-            console.warn(`🚫 Tentativa de path traversal: ${arquivo}`);
+            logger.warn(`🚫 Tentativa de path traversal: ${arquivo}`);
             return res.status(400).json({
                 success: false,
                 error: 'Nome de arquivo inválido'
@@ -12955,11 +12956,11 @@ app.get('/api/admin/backups/download/:arquivo', authenticateToken, isSuperAdmin,
         }
         
         const backupPath = path.join(__dirname, 'backups', arquivo);
-        console.log('📁 Caminho do arquivo:', backupPath);
+        logger.info('📁 Caminho do arquivo:', backupPath);
         
         // Verificar se o arquivo existe
         if (!fs.existsSync(backupPath)) {
-            console.warn(`❌ Arquivo não encontrado: ${backupPath}`);
+            logger.warn(`❌ Arquivo não encontrado: ${backupPath}`);
             return res.status(404).json({
                 success: false,
                 error: 'Arquivo de backup não encontrado'
@@ -12968,7 +12969,7 @@ app.get('/api/admin/backups/download/:arquivo', authenticateToken, isSuperAdmin,
         
         // Obter estatísticas do arquivo
         const stats = fs.statSync(backupPath);
-        console.log(`📊 Tamanho: ${stats.size} bytes`);
+        logger.info(`📊 Tamanho: ${stats.size} bytes`);
         
         // Configurar headers para download
         res.setHeader('Content-Type', 'application/gzip');
@@ -12982,7 +12983,7 @@ app.get('/api/admin/backups/download/:arquivo', authenticateToken, isSuperAdmin,
         fileStream.pipe(res);
         
         fileStream.on('error', (error) => {
-            console.error('❌ Erro ao enviar arquivo:', error);
+            logger.error('❌ Erro ao enviar arquivo:', error);
             if (!res.headersSent) {
                 res.status(500).json({
                     success: false,
@@ -12992,11 +12993,11 @@ app.get('/api/admin/backups/download/:arquivo', authenticateToken, isSuperAdmin,
         });
         
         fileStream.on('end', () => {
-            console.log(`✅ Download concluído: ${arquivo}`);
+            logger.info(`✅ Download concluído: ${arquivo}`);
         });
         
     } catch (error) {
-        console.error('❌ Erro ao baixar backup:', error);
+        logger.error('❌ Erro ao baixar backup:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao baixar backup: ' + error.message
@@ -13061,7 +13062,7 @@ app.post('/api/admin/backups/confirmar-restauracao', authenticateToken, isSuperA
         });
 
     } catch (error) {
-        console.error('❌ Erro na restauração:', error);
+        logger.error('❌ Erro na restauração:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -13071,11 +13072,11 @@ app.delete('/api/admin/backups/excluir/:arquivo', authenticateToken, isSuperAdmi
     try {
         const { arquivo } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} excluindo backup: ${arquivo}`);
+        logger.info(`🗑️ Admin ${req.userId} excluindo backup: ${arquivo}`);
         
         // Validar nome do arquivo (segurança)
         if (arquivo.includes('..') || arquivo.includes('/') || arquivo.includes('\\')) {
-            console.warn(`🚫 Tentativa de path traversal: ${arquivo}`);
+            logger.warn(`🚫 Tentativa de path traversal: ${arquivo}`);
             return res.status(400).json({
                 success: false,
                 error: 'Nome de arquivo inválido'
@@ -13095,7 +13096,7 @@ app.delete('/api/admin/backups/excluir/:arquivo', authenticateToken, isSuperAdmi
         // Excluir o arquivo
         fs.unlinkSync(backupPath);
         
-        console.log(`✅ Backup excluído com sucesso: ${arquivo}`);
+        logger.info(`✅ Backup excluído com sucesso: ${arquivo}`);
         
         res.json({
             success: true,
@@ -13103,7 +13104,7 @@ app.delete('/api/admin/backups/excluir/:arquivo', authenticateToken, isSuperAdmi
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir backup:', error);
+        logger.error('❌ Erro ao excluir backup:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao excluir backup: ' + error.message
@@ -13148,7 +13149,7 @@ app.get('/api/admin/monitoramento/violacoes', authenticateToken, isSuperAdmin, a
         });
 
     } catch (error) {
-        console.error('❌ Erro no monitoramento:', error);
+        logger.error('❌ Erro no monitoramento:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -13225,7 +13226,7 @@ app.get('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) =
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar turmas (admin):', error);
+        logger.error('❌ Erro ao listar turmas (admin):', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -13257,7 +13258,7 @@ app.post('/api/admin/turmas', authenticateToken, isSuperAdmin, async (req, res) 
         });
 
     } catch (error) {
-        console.error('❌ Erro ao criar turma (admin):', error);
+        logger.error('❌ Erro ao criar turma (admin):', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -13296,7 +13297,7 @@ app.put('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
                     _id: { $in: turma.alunos } 
                 }).select('_id onesignalPlayerId nome');
                 
-                console.log(`📢 Turma ${turma.nome} ${statusTexto} - Notificando ${alunos.length} alunos`);
+                logger.info(`📢 Turma ${turma.nome} ${statusTexto} - Notificando ${alunos.length} alunos`);
                 
                 for (const aluno of alunos) {
                     try {
@@ -13334,14 +13335,14 @@ app.put('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
                             );
                         }
                     } catch (alunoError) {
-                        console.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, alunoError.message);
+                        logger.error(`⚠️ Erro ao notificar aluno ${aluno._id}:`, alunoError.message);
                     }
                 }
                 
-                console.log(`✅ ${alunos.length} alunos notificados sobre mudança de status da turma`);
+                logger.info(`✅ ${alunos.length} alunos notificados sobre mudança de status da turma`);
                 
             } catch (notifError) {
-                console.error('⚠️ Erro ao notificar alunos:', notifError.message);
+                logger.error('⚠️ Erro ao notificar alunos:', notifError.message);
             }
         }
 
@@ -13362,7 +13363,7 @@ app.put('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
         });
 
     } catch (error) {
-        console.error('❌ Erro ao atualizar turma (admin):', error);
+        logger.error('❌ Erro ao atualizar turma (admin):', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -13458,7 +13459,7 @@ app.get('/api/admin/provas', authenticateToken, isSuperAdmin, async (req, res) =
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar provas (admin):', error);
+        logger.error('❌ Erro ao listar provas (admin):', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -13470,7 +13471,7 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
         const usuarioId = req.userId;
         const usuarioRole = req.userRole;
 
-        console.log(`🗑️ Tentativa de exclusão da turma ${turmaId} pelo usuário ${usuarioId} (${usuarioRole})`);
+        logger.info(`🗑️ Tentativa de exclusão da turma ${turmaId} pelo usuário ${usuarioId} (${usuarioRole})`);
 
         const turma = await Turma.findById(turmaId);
         if (!turma) {
@@ -13481,13 +13482,13 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
         }
 
         // 🔥 LOG PARA DEBUG - Ver o que tem no banco
-        console.log('📊 Dados da turma encontrada:');
-        console.log('   professorId:', turma.professorId);
-        console.log('   professorId type:', typeof turma.professorId);
-        console.log('   professorId string:', turma.professorId?.toString());
-        console.log('   usuarioId:', usuarioId);
-        console.log('   usuarioId type:', typeof usuarioId);
-        console.log('   usuarioId string:', usuarioId?.toString());
+        logger.info('📊 Dados da turma encontrada:');
+        logger.info('   professorId:', turma.professorId);
+        logger.info('   professorId type:', typeof turma.professorId);
+        logger.info('   professorId string:', turma.professorId?.toString());
+        logger.info('   usuarioId:', usuarioId);
+        logger.info('   usuarioId type:', typeof usuarioId);
+        logger.info('   usuarioId string:', usuarioId?.toString());
 
         const isAdmin = usuarioRole === 'admin' || usuarioRole === 'super_admin';
         
@@ -13499,13 +13500,13 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
             const professorIdStr = turma.professorId.toString();
             const usuarioIdStr = usuarioId.toString();
             isProfessorDaTurma = professorIdStr === usuarioIdStr;
-            console.log(`   Comparação direta: ${professorIdStr} === ${usuarioIdStr} = ${isProfessorDaTurma}`);
+            logger.info(`   Comparação direta: ${professorIdStr} === ${usuarioIdStr} = ${isProfessorDaTurma}`);
         }
         
         // Tentativa 2: se professorId for um objeto (populado)
         if (!isProfessorDaTurma && turma.professorId && turma.professorId._id) {
             isProfessorDaTurma = turma.professorId._id.toString() === usuarioId.toString();
-            console.log(`   Comparação com _id: ${isProfessorDaTurma}`);
+            logger.info(`   Comparação com _id: ${isProfessorDaTurma}`);
         }
         
         // Tentativa 3: se tiver campo professor (string)
@@ -13517,28 +13518,28 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
             } else if (turma.professor._id) {
                 isProfessorDaTurma = turma.professor._id.toString() === usuarioId.toString();
             }
-            console.log(`   Comparação via professor objeto: ${isProfessorDaTurma}`);
+            logger.info(`   Comparação via professor objeto: ${isProfessorDaTurma}`);
         }
 
-        console.log(`📊 Resultado final - Admin: ${isAdmin}, Professor da Turma: ${isProfessorDaTurma}`);
+        logger.info(`📊 Resultado final - Admin: ${isAdmin}, Professor da Turma: ${isProfessorDaTurma}`);
 
         // Permitir: Admin OU Professor da turma
         if (!isAdmin && !isProfessorDaTurma) {
-            console.log(`🚫 Acesso negado: Usuário ${usuarioId} não é admin nem professor da turma`);
+            logger.info(`🚫 Acesso negado: Usuário ${usuarioId} não é admin nem professor da turma`);
             return res.status(403).json({
                 success: false,
                 error: 'Você não tem permissão para excluir esta turma'
             });
         }
 
-        console.log(`✅ Permissão concedida. Prosseguindo com exclusão...`);
+        logger.info(`✅ Permissão concedida. Prosseguindo com exclusão...`);
 
         // Verificar provas associadas
         const provasAssociadas = await Prova.find({ turmaId: turmaId });
         
         // Se for admin, remover tudo (provas e resultados)
         if (isAdmin) {
-            console.log(`🔧 Admin removendo ${provasAssociadas.length} provas associadas...`);
+            logger.info(`🔧 Admin removendo ${provasAssociadas.length} provas associadas...`);
             
             for (const prova of provasAssociadas) {
                 // Remover resultados
@@ -13568,7 +13569,7 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
         // Excluir a turma
         await Turma.findByIdAndDelete(turmaId);
 
-        console.log(`✅ Turma ${turmaId} excluída com sucesso por ${usuarioId}`);
+        logger.info(`✅ Turma ${turmaId} excluída com sucesso por ${usuarioId}`);
 
         res.json({
             success: true,
@@ -13580,7 +13581,7 @@ app.delete('/api/turmas/:id', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao excluir turma:', error);
+        logger.error('❌ Erro ao excluir turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao excluir turma: ' + error.message
@@ -13715,8 +13716,8 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
         
         await user.save();
         
-        console.log(`✅ Senha alterada com sucesso para usuário: ${user.email}`);
-        console.log(`   🔓 Flag forcePasswordChange removida`);
+        logger.info(`✅ Senha alterada com sucesso para usuário: ${user.email}`);
+        logger.info(`   🔓 Flag forcePasswordChange removida`);
         
         res.json({
             success: true,
@@ -13725,7 +13726,7 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao trocar senha:', error);
+        logger.error('❌ Erro ao trocar senha:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao trocar senha: ' + error.message
@@ -13736,7 +13737,7 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
 // ============ ROTA PARA ADMIN LISTAR TODOS OS RESULTADOS (CORRIGIDA - COM NOTAS MANUAIS) ============
 app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (req, res) => {
   try {
-    console.log('📊 Admin buscando todos os resultados (incluindo notas manuais)');
+    logger.info('📊 Admin buscando todos os resultados (incluindo notas manuais)');
     
     // ========== 1. BUSCAR RESULTADOS DO MODELO Resultado (NOTAS AUTOMÁTICAS) ==========
     const resultados = await Resultado.find()
@@ -13938,7 +13939,7 @@ app.get('/api/admin/todos-resultados', authenticateToken, isSuperAdmin, async (r
     });
     
   } catch (error) {
-    console.error('❌ Erro ao listar todos os resultados:', error);
+    logger.error('❌ Erro ao listar todos os resultados:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -13948,7 +13949,7 @@ app.post('/api/admin/resultados/salvar', authenticateToken, isSuperAdmin, async 
     try {
         const { provaId, alunoId, nota, acertos, total, porcentagem, respostas, notaLiberada } = req.body;
         
-        console.log(`📝 Admin ${req.userId} salvando resultado para prova ${provaId}, aluno ${alunoId}`);
+        logger.info(`📝 Admin ${req.userId} salvando resultado para prova ${provaId}, aluno ${alunoId}`);
         
         // Verificar se já existe um resultado
         let resultado = await Resultado.findOne({
@@ -13967,7 +13968,7 @@ app.post('/api/admin/resultados/salvar', authenticateToken, isSuperAdmin, async 
             resultado.updatedAt = new Date();
             
             await resultado.save();
-            console.log(`✅ Resultado ${resultado._id} atualizado`);
+            logger.info(`✅ Resultado ${resultado._id} atualizado`);
         } else {
             // Buscar nome do aluno
             const aluno = await User.findById(alunoId).select('nome');
@@ -13987,7 +13988,7 @@ app.post('/api/admin/resultados/salvar', authenticateToken, isSuperAdmin, async 
             });
             
             await resultado.save();
-            console.log(`✅ Novo resultado ${resultado._id} criado`);
+            logger.info(`✅ Novo resultado ${resultado._id} criado`);
         }
         
         // Atualizar também na ProvaRealizada para consistência
@@ -14028,7 +14029,7 @@ app.post('/api/admin/resultados/salvar', authenticateToken, isSuperAdmin, async 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao salvar resultado:', error);
+        logger.error('❌ Erro ao salvar resultado:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao salvar resultado: ' + error.message
@@ -14043,22 +14044,22 @@ app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req
         const { id } = req.params;
         const { nota, acertos, total, tempoGasto, observacoes, notaLiberada } = req.body;
 
-        console.log(`📝 Admin ${req.userId} atualizando resultado ${id}`);
-        console.log('   Nova nota:', nota);
-        console.log('   Acertos recebidos:', acertos, '/', total);
+        logger.info(`📝 Admin ${req.userId} atualizando resultado ${id}`);
+        logger.info('   Nova nota:', nota);
+        logger.info('   Acertos recebidos:', acertos, '/', total);
 
         // 🔴 CORREÇÃO 1: Calcular acertos automaticamente baseado na nota
         const acertosCalculados = Math.round((nota / 10) * total);
         
-        console.log(`   🔄 Acertos calculados: ${acertosCalculados} (${nota} / 10 * ${total})`);
+        logger.info(`   🔄 Acertos calculados: ${acertosCalculados} (${nota} / 10 * ${total})`);
 
         // 🔴 CORREÇÃO 2: Validar se os acertos recebidos são consistentes
         let acertosFinais = acertosCalculados;
         
         if (Math.abs(acertos - acertosCalculados) > 1) {
-            console.warn(`⚠️ Inconsistência detectada: recebido ${acertos}, calculado ${acertosCalculados}. Usando valor calculado.`);
+            logger.warn(`⚠️ Inconsistência detectada: recebido ${acertos}, calculado ${acertosCalculados}. Usando valor calculado.`);
         } else if (acertos !== acertosCalculados) {
-            console.log(`ℹ️ Pequena diferença (${acertos} vs ${acertosCalculados}) - mantendo valor original`);
+            logger.info(`ℹ️ Pequena diferença (${acertos} vs ${acertosCalculados}) - mantendo valor original`);
             acertosFinais = acertos;
         }
 
@@ -14096,9 +14097,9 @@ app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req
             
             await resultado.save();
 
-            console.log(`✅ Resultado ${id} atualizado:`);
-            console.log(`   Nota: ${resultado.nota}`);
-            console.log(`   Acertos: ${resultado.acertos}/${resultado.total} (${resultado.porcentagem}%)`);
+            logger.info(`✅ Resultado ${id} atualizado:`);
+            logger.info(`   Nota: ${resultado.nota}`);
+            logger.info(`   Acertos: ${resultado.acertos}/${resultado.total} (${resultado.porcentagem}%)`);
 
             // BUSCAR DADOS PARA NOTIFICAÇÃO
             const aluno = await User.findById(resultado.userId).select('nome email');
@@ -14168,7 +14169,7 @@ app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req
             
             await provaRealizada.save();
 
-            console.log(`✅ ProvaRealizada ${id} atualizada: ${acertosCalculados}/${total} acertos`);
+            logger.info(`✅ ProvaRealizada ${id} atualizada: ${acertosCalculados}/${total} acertos`);
 
             return res.json({
                 success: true,
@@ -14188,7 +14189,7 @@ app.put('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (req
         });
 
     } catch (error) {
-        console.error('❌ Erro ao atualizar resultado:', error);
+        logger.error('❌ Erro ao atualizar resultado:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao atualizar resultado: ' + error.message
@@ -14201,7 +14202,7 @@ app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (
     try {
         const { id } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} excluindo resultado/registro ${id}`);
+        logger.info(`🗑️ Admin ${req.userId} excluindo resultado/registro ${id}`);
 
         let excluidos = {
             resultado: false,
@@ -14220,7 +14221,7 @@ app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (
             excluidos.resultado = true;
             excluidos.resultadoId = id;
             
-            console.log(`✅ Resultado ${id} excluído`);
+            logger.info(`✅ Resultado ${id} excluído`);
             
             // TENTAR 2: Verificar se existe também em ProvaRealizada para o mesmo aluno/prova
             if (userId && provaId) {
@@ -14233,7 +14234,7 @@ app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (
                     await ProvaRealizada.findByIdAndDelete(provaRealizada._id);
                     excluidos.provaRealizada = true;
                     excluidos.provaRealizadaId = provaRealizada._id;
-                    console.log(`✅ ProvaRealizada ${provaRealizada._id} também excluída (mesmo aluno/prova)`);
+                    logger.info(`✅ ProvaRealizada ${provaRealizada._id} também excluída (mesmo aluno/prova)`);
                 }
             }
         } 
@@ -14244,7 +14245,7 @@ app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (
                 await ProvaRealizada.findByIdAndDelete(id);
                 excluidos.provaRealizada = true;
                 excluidos.provaRealizadaId = id;
-                console.log(`✅ ProvaRealizada ${id} excluída`);
+                logger.info(`✅ ProvaRealizada ${id} excluída`);
                 
                 // TENTAR 4: Verificar se existe também em Resultado para o mesmo aluno/prova
                 if (provaRealizada.alunoId && provaRealizada.provaId) {
@@ -14257,7 +14258,7 @@ app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (
                         await Resultado.findByIdAndDelete(resultado._id);
                         excluidos.resultado = true;
                         excluidos.resultadoId = resultado._id;
-                        console.log(`✅ Resultado ${resultado._id} também excluído (mesmo aluno/prova)`);
+                        logger.info(`✅ Resultado ${resultado._id} também excluído (mesmo aluno/prova)`);
                     }
                 }
             }
@@ -14302,7 +14303,7 @@ app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (
                     prova.totalParticipantes = totalParticipantes;
                     
                     await prova.save();
-                    console.log(`📊 Estatísticas da prova ${provaId} atualizadas`);
+                    logger.info(`📊 Estatísticas da prova ${provaId} atualizadas`);
                 }
             }
         }
@@ -14324,7 +14325,7 @@ app.delete('/api/admin/resultados/:id', authenticateToken, isSuperAdmin, async (
         });
 
     } catch (error) {
-        console.error('❌ Erro ao excluir resultado:', error);
+        logger.error('❌ Erro ao excluir resultado:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao excluir resultado: ' + error.message
@@ -14337,7 +14338,7 @@ app.get('/api/admin/resultados/:id/cancelamento', authenticateToken, isSuperAdmi
     try {
         const { id } = req.params;
         
-        console.log(`🔍 Admin ${req.userId} buscando detalhes de cancelamento para ID: ${id}`);
+        logger.info(`🔍 Admin ${req.userId} buscando detalhes de cancelamento para ID: ${id}`);
 
         // Tentar buscar em Resultado primeiro
         let registro = await Resultado.findById(id)
@@ -14458,7 +14459,7 @@ app.get('/api/admin/resultados/:id/cancelamento', authenticateToken, isSuperAdmi
         res.json(response);
 
     } catch (error) {
-        console.error('❌ Erro ao buscar detalhes de cancelamento:', error);
+        logger.error('❌ Erro ao buscar detalhes de cancelamento:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -14488,7 +14489,7 @@ app.get('/api/notificacoes/nao-lidas/contador', authenticateToken, async (req, r
         });
 
     } catch (error) {
-        console.error('❌ Erro ao contar notificações:', error);
+        logger.error('❌ Erro ao contar notificações:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -14501,7 +14502,7 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
     try {
         const { usuarioId, tipo, titulo, mensagem, icone, cor, link, prioridade, dados } = req.body;
         
-        console.log(`📝 Criando notificação para usuário ${usuarioId}: ${titulo}`);
+        logger.info(`📝 Criando notificação para usuário ${usuarioId}: ${titulo}`);
         
         // ✅ Validar tipo
         const tiposPermitidos = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
@@ -14551,7 +14552,7 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
         
         await notificacao.save();
 
-        console.log(`✅ Notificação criada com ID: ${notificacao._id}`);
+        logger.info(`✅ Notificação criada com ID: ${notificacao._id}`);
         
         // ✅ VERIFICAR CONFIGURAÇÃO DE PUSH
         const Config = mongoose.model('Config');
@@ -14562,7 +14563,7 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
         
         // ✅ ENVIAR PUSH SE ATIVADO
         if (pushAtivado) {
-            console.log(`📱 Push ativado, enviando para usuário ${usuarioId}...`);
+            logger.info(`📱 Push ativado, enviando para usuário ${usuarioId}...`);
             
             const OneSignalService = require('./services/onesignal-service');
             const oneSignal = new OneSignalService();
@@ -14583,10 +14584,10 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
             );
             
             if (pushResult) {
-                console.log(`✅ Push enviado! ID: ${pushResult.notificationId || pushResult.id}`);
+                logger.info(`✅ Push enviado! ID: ${pushResult.notificationId || pushResult.id}`);
             }
         } else {
-            console.log('📱 Push desativado nas configurações');
+            logger.info('📱 Push desativado nas configurações');
         }
         
         // ✅ RESPOSTA
@@ -14609,7 +14610,7 @@ app.post('/api/notificacoes', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao criar notificação:', error);
+        logger.error('❌ Erro ao criar notificação:', error);
         
         if (error.name === 'ValidationError') {
             return res.status(400).json({
@@ -14646,7 +14647,7 @@ app.put('/api/notificacoes/marcar-todas-lidas', authenticateToken, async (req, r
         });
 
     } catch (error) {
-        console.error('❌ Erro ao marcar todas como lidas:', error);
+        logger.error('❌ Erro ao marcar todas como lidas:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -14656,13 +14657,13 @@ app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res
     try {
         const usuarioId = req.userId;
         
-        console.log(`🗑️ Usuário ${usuarioId} excluindo todas as suas notificações`);
+        logger.info(`🗑️ Usuário ${usuarioId} excluindo todas as suas notificações`);
         
         const resultado = await Notificacao.deleteMany({ 
             usuarioId: usuarioId 
         });
         
-        console.log(`✅ ${resultado.deletedCount} notificações excluídas`);
+        logger.info(`✅ ${resultado.deletedCount} notificações excluídas`);
         
         res.json({
             success: true,
@@ -14671,7 +14672,7 @@ app.delete('/api/notificacoes/limpar-minhas', authenticateToken, async (req, res
         });
         
     } catch (error) {
-        console.error('❌ Erro ao limpar notificações:', error);
+        logger.error('❌ Erro ao limpar notificações:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao limpar notificações: ' + error.message
@@ -14689,7 +14690,7 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
         const { pagina = 1, limite = 50, filtro } = req.query;
         const usuarioId = req.userId;
         
-        console.log(`📋 Buscando todas as notificações do usuário ${usuarioId} - Página: ${pagina}, Limite: ${limite}`);
+        logger.info(`📋 Buscando todas as notificações do usuário ${usuarioId} - Página: ${pagina}, Limite: ${limite}`);
         
         const skip = (parseInt(pagina) - 1) * parseInt(limite);
         
@@ -14727,7 +14728,7 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
             porTipo[item._id] = item.count;
         });
         
-        console.log(`✅ Encontradas ${notificacoes.length} notificações (total: ${total})`);
+        logger.info(`✅ Encontradas ${notificacoes.length} notificações (total: ${total})`);
         
         res.json({
             success: true,
@@ -14747,7 +14748,7 @@ app.get('/api/notificacoes/todas', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar todas as notificações:', error);
+        logger.error('❌ Erro ao buscar todas as notificações:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -14787,7 +14788,7 @@ app.get('/api/notificacoes', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao buscar notificações:', error);
+        logger.error('❌ Erro ao buscar notificações:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -14829,7 +14830,7 @@ app.put('/api/notificacoes/:id/lida', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao marcar como lida:', error);
+        logger.error('❌ Erro ao marcar como lida:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -14858,7 +14859,7 @@ app.delete('/api/notificacoes/:id', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao deletar notificação:', error);
+        logger.error('❌ Erro ao deletar notificação:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -14900,7 +14901,7 @@ app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
             { upsert: true, new: true }
         );
 
-        console.log(`✅ Push ${ativar ? 'ATIVADO' : 'DESATIVADO'} globalmente por admin ${req.userId}`);
+        logger.info(`✅ Push ${ativar ? 'ATIVADO' : 'DESATIVADO'} globalmente por admin ${req.userId}`);
 
         res.json({
             success: true,
@@ -14909,7 +14910,7 @@ app.post('/api/push/admin/toggle', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao alterar push global:', error);
+        logger.error('❌ Erro ao alterar push global:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -14957,7 +14958,7 @@ app.post('/api/usuario/enviar-push', authenticateToken, async (req, res) => {
         }
         
     } catch (error) {
-        console.error('❌ Erro ao enviar push:', error);
+        logger.error('❌ Erro ao enviar push:', error);
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -15019,11 +15020,11 @@ const NotificacaoBotaoService = {
                     const chave = `botao_${prova._id}_${diffMinutos}_${Date.now()}`;
                     
                     if (this.notificacoesEnviadas.has(chave)) {
-                        console.log(`   ⏭️ Notificação ${diffMinutos}min já enviada para "${prova.titulo}"`);
+                        logger.info(`   ⏭️ Notificação ${diffMinutos}min já enviada para "${prova.titulo}"`);
                         continue;
                     }
                     
-                    console.log(`   🔔 BOTÃO: "Disponível em ${diffMinutos}min" detectado!`);
+                    logger.info(`   🔔 BOTÃO: "Disponível em ${diffMinutos}min" detectado!`);
                     
                     // Buscar alunos da turma
                     const turma = await Turma.findById(prova.turmaId).populate('alunos', 'nome onesignalPlayerId');
@@ -15091,30 +15092,30 @@ const NotificacaoBotaoService = {
                                 );
                             }
                             
-                            console.log(`   ✅ Notificação ${diffMinutos}min enviada para ${aluno.nome || aluno._id}`);
+                            logger.info(`   ✅ Notificação ${diffMinutos}min enviada para ${aluno.nome || aluno._id}`);
                             
                         } catch (error) {
-                            console.error(`   ❌ Erro ao notificar aluno:`, error.message);
+                            logger.error(`   ❌ Erro ao notificar aluno:`, error.message);
                         }
                     }
                     
                     this.notificacoesEnviadas.add(chave);
-                    console.log(`   ✅ Notificações ${diffMinutos}min enviadas para ${alunos.length} alunos`);
+                    logger.info(`   ✅ Notificações ${diffMinutos}min enviadas para ${alunos.length} alunos`);
                 }
             }
             
             this.limparCache();
             
         } catch (error) {
-            console.error('❌ Erro no serviço de notificações:', error);
+            logger.error('❌ Erro no serviço de notificações:', error);
         }
     },
     
     iniciar: function() {
-        console.log('='.repeat(60));
-        console.log('⏰ SERVIÇO DE NOTIFICAÇÕES DO BOTÃO INICIADO');
-        console.log('📱 Monitorando "Disponível em 10min" e "Disponível em 5min"');
-        console.log('='.repeat(60));
+        logger.info('='.repeat(60));
+        logger.info('⏰ SERVIÇO DE NOTIFICAÇÕES DO BOTÃO INICIADO');
+        logger.info('📱 Monitorando "Disponível em 10min" e "Disponível em 5min"');
+        logger.info('='.repeat(60));
         
         setTimeout(() => this.verificarNotificacoes(), 5000);
         setInterval(() => this.verificarNotificacoes(), 60 * 1000);
@@ -15187,7 +15188,7 @@ app.post('/api/admin/matriculas-autorizadas', authenticateToken, isSuperAdmin, a
             });
         }
         
-        console.log(`✅ Admin ${req.userId} adicionou matrícula ${matriculaStr}`);
+        logger.info(`✅ Admin ${req.userId} adicionou matrícula ${matriculaStr}`);
         
         res.json({
             success: true,
@@ -15196,7 +15197,7 @@ app.post('/api/admin/matriculas-autorizadas', authenticateToken, isSuperAdmin, a
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -15242,7 +15243,7 @@ app.put('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, isSup
             });
         }
         
-        console.log(`✅ Admin ${req.userId} editou matrícula ${matricula} → ${novaMatriculaStr}`);
+        logger.info(`✅ Admin ${req.userId} editou matrícula ${matricula} → ${novaMatriculaStr}`);
         
         res.json({
             success: true,
@@ -15250,7 +15251,7 @@ app.put('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, isSup
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -15272,7 +15273,7 @@ app.delete('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, is
             });
         }
         
-        console.log(`✅ Admin ${req.userId} excluiu matrícula ${matricula}`);
+        logger.info(`✅ Admin ${req.userId} excluiu matrícula ${matricula}`);
         
         res.json({
             success: true,
@@ -15280,7 +15281,7 @@ app.delete('/api/admin/matriculas-autorizadas/:matricula', authenticateToken, is
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -15352,7 +15353,7 @@ app.get('/api/admin/professores-cadastrados', authenticateToken, isSuperAdmin, a
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar usuários com matrícula:', error);
+        logger.error('❌ Erro ao buscar usuários com matrícula:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao buscar usuários: ' + error.message
@@ -15389,7 +15390,7 @@ app.get('/api/admin/professores', authenticateToken, isSuperAdmin, async (req, r
             .select('nome email matricula eixo ativo createdAt ultimoAcesso')
             .sort({ nome: 1 });
         
-        console.log(`📋 Admin ${req.userId} listou ${professores.length} professores`);
+        logger.info(`📋 Admin ${req.userId} listou ${professores.length} professores`);
         
         res.json({
             success: true,
@@ -15398,7 +15399,7 @@ app.get('/api/admin/professores', authenticateToken, isSuperAdmin, async (req, r
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar professores:', error);
+        logger.error('❌ Erro ao listar professores:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -15409,7 +15410,7 @@ app.put('/api/admin/professores/:id/toggle-status', authenticateToken, isSuperAd
         const { id } = req.params;
         const { ativo } = req.body; // true = ativar, false = inativar
         
-        console.log(`🔄 Admin ${req.userId} alterando status do professor ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        logger.info(`🔄 Admin ${req.userId} alterando status do professor ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
         
         const professor = await User.findById(id);
         
@@ -15430,7 +15431,7 @@ app.put('/api/admin/professores/:id/toggle-status', authenticateToken, isSuperAd
         professor.ativo = ativo;
         await professor.save();
         
-        console.log(`✅ Professor ${professor.nome} agora está ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        logger.info(`✅ Professor ${professor.nome} agora está ${ativo ? 'ATIVO' : 'INATIVO'}`);
         
         res.json({
             success: true,
@@ -15443,7 +15444,7 @@ app.put('/api/admin/professores/:id/toggle-status', authenticateToken, isSuperAd
         });
         
     } catch (error) {
-        console.error('❌ Erro ao alterar status:', error);
+        logger.error('❌ Erro ao alterar status:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -15453,7 +15454,7 @@ app.delete('/api/admin/professores/:id', authenticateToken, isSuperAdmin, async 
     try {
         const { id } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} tentando excluir professor ${id}`);
+        logger.info(`🗑️ Admin ${req.userId} tentando excluir professor ${id}`);
         
         const professor = await User.findById(id);
         
@@ -15492,7 +15493,7 @@ app.delete('/api/admin/professores/:id', authenticateToken, isSuperAdmin, async 
         // Se não tiver vínculos, pode excluir
         await User.findByIdAndDelete(id);
         
-        console.log(`✅ Professor ${professor.nome} excluído permanentemente`);
+        logger.info(`✅ Professor ${professor.nome} excluído permanentemente`);
         
         res.json({
             success: true,
@@ -15500,7 +15501,7 @@ app.delete('/api/admin/professores/:id', authenticateToken, isSuperAdmin, async 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir professor:', error);
+        logger.error('❌ Erro ao excluir professor:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -15510,7 +15511,7 @@ app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, 
     try {
         const { id } = req.params;
         
-        console.log(`🔄 Admin ${req.userId} reativando professor ${id}`);
+        logger.info(`🔄 Admin ${req.userId} reativando professor ${id}`);
         
         const professor = await User.findById(id);
         
@@ -15524,7 +15525,7 @@ app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, 
         professor.ativo = true;
         await professor.save();
         
-        console.log(`✅ Professor ${professor.nome} reativado!`);
+        logger.info(`✅ Professor ${professor.nome} reativado!`);
         
         res.json({
             success: true,
@@ -15537,7 +15538,7 @@ app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao reativar professor:', error);
+        logger.error('❌ Erro ao reativar professor:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -15547,7 +15548,7 @@ app.put('/api/admin/professores/:id/reativar', authenticateToken, isSuperAdmin, 
 // ============ GET - Todas as configurações (apenas admin) - VERSÃO CORRIGIDA ============
 app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req, res) => {
   try {
-    console.log('📋 Admin buscando configurações do sistema');
+    logger.info('📋 Admin buscando configurações do sistema');
     
     // Configurações padrão completas (COM O CAMPO FACE ID)
     const configPadrao = {
@@ -15668,7 +15669,7 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
     try {
       configuracoes = await Config.find().lean();
     } catch (dbError) {
-      console.log('⚠️ Erro ao buscar configs do banco:', dbError.message);
+      logger.info('⚠️ Erro ao buscar configs do banco:', dbError.message);
       return res.json({
         success: true,
         configuracoes: configPadrao,
@@ -15711,25 +15712,25 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
         target[lastKey] = c.valor;
         camposEncontrados.add(c.chave);
         
-        console.log(`✅ Configuração aplicada: ${c.chave} = ${c.valor}`);
+        logger.info(`✅ Configuração aplicada: ${c.chave} = ${c.valor}`);
         
       } catch (pathError) {
-        console.warn(`⚠️ Erro ao processar chave ${c.chave}:`, pathError.message);
+        logger.warn(`⚠️ Erro ao processar chave ${c.chave}:`, pathError.message);
       }
     });
 
     // 🔥 VERIFICAR ESPECIFICAMENTE O CAMPO FACE ID
-    console.log('📊 Campos encontrados no banco:', Array.from(camposEncontrados));
+    logger.info('📊 Campos encontrados no banco:', Array.from(camposEncontrados));
     
     // 🔥 GARANTIR QUE O CAMPO FACE ID EXISTA (buscar diretamente se necessário)
     const faceIdDoc = await Config.findOne({ chave: 'seguranca.exigirFaceIdProvas' }).lean();
     if (faceIdDoc) {
       if (!configObj.seguranca) configObj.seguranca = {};
       configObj.seguranca.exigirFaceIdProvas = faceIdDoc.valor;
-      console.log(`✅ Face ID carregado diretamente: ${faceIdDoc.valor}`);
+      logger.info(`✅ Face ID carregado diretamente: ${faceIdDoc.valor}`);
     }
 
-    console.log('🎯 Objeto seguranca final:', configObj.seguranca);
+    logger.info('🎯 Objeto seguranca final:', configObj.seguranca);
 
     res.json({
       success: true,
@@ -15738,7 +15739,7 @@ app.get('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar configurações:', error);
+    logger.error('❌ Erro ao buscar configurações:', error);
     // Em caso de erro, retornar as configurações padrão (com o campo)
     res.json({
       success: true,
@@ -15753,7 +15754,7 @@ app.put('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
   try {
     const { configuracoes } = req.body;
     
-    console.log('💾 Admin salvando configurações');
+    logger.info('💾 Admin salvando configurações');
     
     if (!configuracoes || typeof configuracoes !== 'object') {
       return res.status(400).json({
@@ -15813,11 +15814,11 @@ app.put('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
         );
         resultados.push(result);
       } catch (itemError) {
-        console.error(`❌ Erro ao salvar ${chave}:`, itemError.message);
+        logger.error(`❌ Erro ao salvar ${chave}:`, itemError.message);
       }
     }
 
-    console.log(`✅ ${resultados.length} configurações salvas`);
+    logger.info(`✅ ${resultados.length} configurações salvas`);
 
     res.json({
       success: true,
@@ -15826,7 +15827,7 @@ app.put('/api/admin/configuracoes', authenticateToken, isSuperAdmin, async (req,
     });
 
   } catch (error) {
-    console.error('❌ Erro ao salvar configurações:', error);
+    logger.error('❌ Erro ao salvar configurações:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -15851,7 +15852,7 @@ app.get('/api/admin/configuracoes/:chave', authenticateToken, isSuperAdmin, asyn
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar configuração:', error);
+    logger.error('❌ Erro ao buscar configuração:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -15883,7 +15884,7 @@ app.put('/api/admin/configuracoes/:chave', authenticateToken, isSuperAdmin, asyn
     });
 
   } catch (error) {
-    console.error('❌ Erro ao atualizar configuração:', error);
+    logger.error('❌ Erro ao atualizar configuração:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -15901,7 +15902,7 @@ app.delete('/api/admin/configuracoes/:chave', authenticateToken, isSuperAdmin, a
     });
 
   } catch (error) {
-    console.error('❌ Erro ao resetar configuração:', error);
+    logger.error('❌ Erro ao resetar configuração:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -15917,7 +15918,7 @@ app.post('/api/admin/configuracoes/reset', authenticateToken, isSuperAdmin, asyn
     });
 
   } catch (error) {
-    console.error('❌ Erro ao resetar configurações:', error);
+    logger.error('❌ Erro ao resetar configurações:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -15934,7 +15935,7 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
       });
     }
 
-    console.log('📧 Teste de email para:', destinatario);
+    logger.info('📧 Teste de email para:', destinatario);
     
     // Aqui você implementaria o envio real
     // Por enquanto, apenas simular sucesso
@@ -15945,7 +15946,7 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
     });
 
   } catch (error) {
-    console.error('❌ Erro ao testar email:', error);
+    logger.error('❌ Erro ao testar email:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -15958,7 +15959,7 @@ app.post('/api/auth/2fa/resend', authenticateToken, async (req, res) => {
     const { userId } = req.body;
     const usuarioId = userId || req.userId;
     
-    console.log(`📱 Reenviando código 2FA para usuário ${usuarioId}`);
+    logger.info(`📱 Reenviando código 2FA para usuário ${usuarioId}`);
     
     const user = await User.findById(usuarioId).select('+twoFactorTempSecret +telefone +nome +role');
     
@@ -16006,9 +16007,9 @@ app.post('/api/auth/2fa/resend', authenticateToken, async (req, res) => {
     const telefoneLimpo = user.telefone.replace(/\D/g, '');
     const mensagem = `🔐 ${user.nome}, seu código de verificação do EDUCAPLENO é: ${codigo}. Válido por 5 minutos.`;
 
-    console.log('📱 Enviando SMS...');
-    console.log(`   Para: ${telefoneLimpo}`);
-    console.log(`   Código: ${codigo}`);
+    logger.info('📱 Enviando SMS...');
+    logger.info(`   Para: ${telefoneLimpo}`);
+    logger.info(`   Código: ${codigo}`);
     
     const resultado = await enviarSmsTwilio(telefoneLimpo, mensagem);
 
@@ -16027,7 +16028,7 @@ app.post('/api/auth/2fa/resend', authenticateToken, async (req, res) => {
     }
     
   } catch (error) {
-    console.error('❌ Erro ao reenviar código:', error);
+    logger.error('❌ Erro ao reenviar código:', error);
     return res.status(500).json({
       success: false,
       error: 'Erro interno: ' + error.message
@@ -16074,7 +16075,7 @@ app.get('/api/admin/solicitacoes-backup', authenticateToken, isSuperAdmin, async
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar solicitações:', error);
+        logger.error('❌ Erro ao buscar solicitações:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -16094,9 +16095,9 @@ app.post('/api/admin/testar-email-enviar', authenticateToken, isSuperAdmin, asyn
             });
         }
 
-        console.log(`\n📧 ===== TESTE DE EMAIL =====`);
-        console.log(`📨 Para: ${destinatario}`);
-        console.log(`📝 Assunto: ${assunto || 'Teste do Sistema'}`);
+        logger.info(`\n📧 ===== TESTE DE EMAIL =====`);
+        logger.info(`📨 Para: ${destinatario}`);
+        logger.info(`📝 Assunto: ${assunto || 'Teste do Sistema'}`);
 
         // Usar o novo serviço unificado
         const EmailService = require('./services/email-service');
@@ -16138,7 +16139,7 @@ app.post('/api/admin/testar-email-enviar', authenticateToken, isSuperAdmin, asyn
         });
 
         if (resultado.success) {
-            console.log(`✅ Email de teste enviado para ${destinatario}`);
+            logger.info(`✅ Email de teste enviado para ${destinatario}`);
             res.json({
                 success: true,
                 message: 'Email de teste enviado com sucesso!',
@@ -16150,7 +16151,7 @@ app.post('/api/admin/testar-email-enviar', authenticateToken, isSuperAdmin, asyn
         }
 
     } catch (error) {
-        console.error('❌ Erro ao enviar email de teste:', error);
+        logger.error('❌ Erro ao enviar email de teste:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -16172,9 +16173,9 @@ app.post('/api/admin/enviar-email-boas-vindas', authenticateToken, isSuperAdmin,
 
         const nomeDestino = nome || destinatario.split('@')[0] || 'Usuário';
 
-        console.log(`\n🎉 ===== EMAIL DE BOAS-VINDAS =====`);
-        console.log(`📨 Para: ${destinatario}`);
-        console.log(`👤 Nome: ${nomeDestino}`);
+        logger.info(`\n🎉 ===== EMAIL DE BOAS-VINDAS =====`);
+        logger.info(`📨 Para: ${destinatario}`);
+        logger.info(`👤 Nome: ${nomeDestino}`);
 
         const EmailService = require('./services/email-service');
         const emailService = new EmailService();
@@ -16184,7 +16185,7 @@ app.post('/api/admin/enviar-email-boas-vindas', authenticateToken, isSuperAdmin,
         const resultado = await emailService.sendWelcomeEmail(destinatario, nomeDestino);
 
         if (resultado.success) {
-            console.log(`✅ Email de boas-vindas enviado para ${destinatario}`);
+            logger.info(`✅ Email de boas-vindas enviado para ${destinatario}`);
             res.json({
                 success: true,
                 message: 'Email de boas-vindas enviado com sucesso!',
@@ -16196,7 +16197,7 @@ app.post('/api/admin/enviar-email-boas-vindas', authenticateToken, isSuperAdmin,
         }
 
     } catch (error) {
-        console.error('❌ Erro ao enviar email de boas-vindas:', error);
+        logger.error('❌ Erro ao enviar email de boas-vindas:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -16243,7 +16244,7 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
         }
 
     } catch (error) {
-        console.error('❌ Erro ao testar email:', error);
+        logger.error('❌ Erro ao testar email:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -16257,7 +16258,7 @@ app.post('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async 
         const turmaId = req.params.id;
         const { alunoId } = req.body;
 
-        console.log(`📝 Admin ${req.userId} adicionando aluno ${alunoId} à turma ${turmaId}`);
+        logger.info(`📝 Admin ${req.userId} adicionando aluno ${alunoId} à turma ${turmaId}`);
 
         // Verificar se a turma existe
         const turma = await Turma.findById(turmaId);
@@ -16297,7 +16298,7 @@ app.post('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async 
         turma.alunos.push(alunoId);
         await turma.save();
 
-        console.log(`✅ Aluno ${aluno.nome} adicionado à turma ${turma.nome}`);
+        logger.info(`✅ Aluno ${aluno.nome} adicionado à turma ${turma.nome}`);
 
         // VERIFICAR CONFIGURAÇÕES DE PUSH
         const Config = mongoose.model('Config');
@@ -16337,7 +16338,7 @@ app.post('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async 
             }
             
         } catch (notifError) {
-            console.warn('⚠️ Erro ao criar notificação:', notifError.message);
+            logger.warn('⚠️ Erro ao criar notificação:', notifError.message);
         }
 
         res.json({
@@ -16356,7 +16357,7 @@ app.post('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async 
         });
 
     } catch (error) {
-        console.error('❌ Erro ao adicionar aluno à turma:', error);
+        logger.error('❌ Erro ao adicionar aluno à turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -16370,7 +16371,7 @@ app.delete('/api/admin/turmas/:id/alunos/:alunoId', authenticateToken, isSuperAd
         const turmaId = req.params.id;
         const alunoId = req.params.alunoId;
 
-        console.log(`🗑️ Admin ${req.userId} removendo aluno ${alunoId} da turma ${turmaId}`);
+        logger.info(`🗑️ Admin ${req.userId} removendo aluno ${alunoId} da turma ${turmaId}`);
 
         // Verificar se a turma existe
         const turma = await Turma.findById(turmaId);
@@ -16402,7 +16403,7 @@ app.delete('/api/admin/turmas/:id/alunos/:alunoId', authenticateToken, isSuperAd
         turma.alunos = turma.alunos.filter(id => id.toString() !== alunoId.toString());
         await turma.save();
 
-        console.log(`✅ Aluno ${aluno.nome} removido da turma ${turma.nome}`);
+        logger.info(`✅ Aluno ${aluno.nome} removido da turma ${turma.nome}`);
 
         // VERIFICAR CONFIGURAÇÕES DE PUSH
         const Config = mongoose.model('Config');
@@ -16442,7 +16443,7 @@ app.delete('/api/admin/turmas/:id/alunos/:alunoId', authenticateToken, isSuperAd
             }
             
         } catch (notifError) {
-            console.warn('⚠️ Erro ao criar notificação:', notifError.message);
+            logger.warn('⚠️ Erro ao criar notificação:', notifError.message);
         }
 
         res.json({
@@ -16461,7 +16462,7 @@ app.delete('/api/admin/turmas/:id/alunos/:alunoId', authenticateToken, isSuperAd
         });
 
     } catch (error) {
-        console.error('❌ Erro ao remover aluno da turma:', error);
+        logger.error('❌ Erro ao remover aluno da turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -16474,7 +16475,7 @@ app.get('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async (
     try {
         const turmaId = req.params.id;
 
-        console.log(`📋 Admin ${req.userId} listando alunos da turma ${turmaId}`);
+        logger.info(`📋 Admin ${req.userId} listando alunos da turma ${turmaId}`);
 
         const turma = await Turma.findById(turmaId)
             .populate('alunos', 'nome email matricula precisaAcessibilidade condicaoAcessibilidade')
@@ -16508,7 +16509,7 @@ app.get('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async (
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar alunos da turma:', error);
+        logger.error('❌ Erro ao listar alunos da turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -16523,7 +16524,7 @@ app.get('/api/admin/turmas/:id/alunos', authenticateToken, isSuperAdmin, async (
 // GET - Listar todos os eixos
 app.get('/api/admin/eixos', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`📋 Admin ${req.userId} listando eixos`);
+        logger.info(`📋 Admin ${req.userId} listando eixos`);
         
         const eixos = await Eixo.find().sort({ label: 1 }).lean();
         
@@ -16533,7 +16534,7 @@ app.get('/api/admin/eixos', authenticateToken, isSuperAdmin, async (req, res) =>
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar eixos:', error);
+        logger.error('❌ Erro ao listar eixos:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar eixos: ' + error.message
@@ -16546,7 +16547,7 @@ app.post('/api/admin/eixos', authenticateToken, isSuperAdmin, async (req, res) =
     try {
         const { nome, label, cor, icone, descricao } = req.body;
         
-        console.log(`📝 Admin ${req.userId} criando eixo: ${nome}`);
+        logger.info(`📝 Admin ${req.userId} criando eixo: ${nome}`);
         
         // Validar campos obrigatórios
         if (!nome || !label) {
@@ -16576,7 +16577,7 @@ app.post('/api/admin/eixos', authenticateToken, isSuperAdmin, async (req, res) =
         
         await eixo.save();
         
-        console.log(`✅ Eixo ${nome} criado com sucesso`);
+        logger.info(`✅ Eixo ${nome} criado com sucesso`);
         
         res.status(201).json({
             success: true,
@@ -16592,7 +16593,7 @@ app.post('/api/admin/eixos', authenticateToken, isSuperAdmin, async (req, res) =
         });
         
     } catch (error) {
-        console.error('❌ Erro ao criar eixo:', error);
+        logger.error('❌ Erro ao criar eixo:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao criar eixo: ' + error.message
@@ -16606,7 +16607,7 @@ app.put('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, res
         const { id } = req.params;
         const { nome, label, cor, icone, descricao } = req.body;
         
-        console.log(`✏️ Admin ${req.userId} atualizando eixo ${id}`);
+        logger.info(`✏️ Admin ${req.userId} atualizando eixo ${id}`);
         
         const eixo = await Eixo.findById(id);
         if (!eixo) {
@@ -16636,7 +16637,7 @@ app.put('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, res
         
         await eixo.save();
         
-        console.log(`✅ Eixo ${eixo.nome} atualizado com sucesso`);
+        logger.info(`✅ Eixo ${eixo.nome} atualizado com sucesso`);
         
         res.json({
             success: true,
@@ -16652,7 +16653,7 @@ app.put('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, res
         });
         
     } catch (error) {
-        console.error('❌ Erro ao atualizar eixo:', error);
+        logger.error('❌ Erro ao atualizar eixo:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao atualizar eixo: ' + error.message
@@ -16665,7 +16666,7 @@ app.delete('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, 
     try {
         const { id } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} excluindo eixo ${id}`);
+        logger.info(`🗑️ Admin ${req.userId} excluindo eixo ${id}`);
         
         // Verificar se existem cursos usando este eixo
         const cursosComEixo = await Curso.countDocuments({ eixoId: id });
@@ -16686,7 +16687,7 @@ app.delete('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, 
             });
         }
         
-        console.log(`✅ Eixo ${eixo.nome} excluído com sucesso`);
+        logger.info(`✅ Eixo ${eixo.nome} excluído com sucesso`);
         
         res.json({
             success: true,
@@ -16694,7 +16695,7 @@ app.delete('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir eixo:', error);
+        logger.error('❌ Erro ao excluir eixo:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao excluir eixo: ' + error.message
@@ -16709,7 +16710,7 @@ app.delete('/api/admin/eixos/:id', authenticateToken, isSuperAdmin, async (req, 
 // GET - Listar todos os cursos
 app.get('/api/admin/cursos', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`📋 Admin ${req.userId} listando cursos`);
+        logger.info(`📋 Admin ${req.userId} listando cursos`);
         
         const cursos = await Curso.find()
             .populate('eixoId', 'nome label cor icone')
@@ -16733,7 +16734,7 @@ app.get('/api/admin/cursos', authenticateToken, isSuperAdmin, async (req, res) =
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar cursos:', error);
+        logger.error('❌ Erro ao listar cursos:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar cursos: ' + error.message
@@ -16746,7 +16747,7 @@ app.post('/api/admin/cursos', authenticateToken, isSuperAdmin, async (req, res) 
     try {
         const { nome, eixoId } = req.body;
         
-        console.log(`📝 Admin ${req.userId} criando curso: ${nome}`);
+        logger.info(`📝 Admin ${req.userId} criando curso: ${nome}`);
         
         // Validar campos obrigatórios
         if (!nome || !eixoId) {
@@ -16783,7 +16784,7 @@ app.post('/api/admin/cursos', authenticateToken, isSuperAdmin, async (req, res) 
         
         await curso.save();
         
-        console.log(`✅ Curso ${curso.nome} criado com sucesso`);
+        logger.info(`✅ Curso ${curso.nome} criado com sucesso`);
         
         // Popular o eixo para retornar dados completos
         const cursoCompleto = await Curso.findById(curso._id).populate('eixoId');
@@ -16801,7 +16802,7 @@ app.post('/api/admin/cursos', authenticateToken, isSuperAdmin, async (req, res) 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao criar curso:', error);
+        logger.error('❌ Erro ao criar curso:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao criar curso: ' + error.message
@@ -16815,7 +16816,7 @@ app.put('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req, re
         const { id } = req.params;
         const { nome, eixoId, ativo } = req.body;
         
-        console.log(`✏️ Admin ${req.userId} atualizando curso ${id}`);
+        logger.info(`✏️ Admin ${req.userId} atualizando curso ${id}`);
         
         const curso = await Curso.findById(id);
         if (!curso) {
@@ -16857,7 +16858,7 @@ app.put('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req, re
         
         await curso.save();
         
-        console.log(`✅ Curso ${curso.nome} atualizado com sucesso`);
+        logger.info(`✅ Curso ${curso.nome} atualizado com sucesso`);
         
         // Popular o eixo para retornar dados completos
         const cursoCompleto = await Curso.findById(curso._id).populate('eixoId');
@@ -16875,7 +16876,7 @@ app.put('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req, re
         });
         
     } catch (error) {
-        console.error('❌ Erro ao atualizar curso:', error);
+        logger.error('❌ Erro ao atualizar curso:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao atualizar curso: ' + error.message
@@ -16888,7 +16889,7 @@ app.delete('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req,
     try {
         const { id } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} excluindo curso ${id}`);
+        logger.info(`🗑️ Admin ${req.userId} excluindo curso ${id}`);
         
         const curso = await Curso.findById(id);
         if (!curso) {
@@ -16921,7 +16922,7 @@ app.delete('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req,
         
         await Curso.findByIdAndDelete(id);
         
-        console.log(`✅ Curso ${curso.nome} excluído com sucesso`);
+        logger.info(`✅ Curso ${curso.nome} excluído com sucesso`);
         
         res.json({
             success: true,
@@ -16929,7 +16930,7 @@ app.delete('/api/admin/cursos/:id', authenticateToken, isSuperAdmin, async (req,
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir curso:', error);
+        logger.error('❌ Erro ao excluir curso:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao excluir curso: ' + error.message
@@ -16947,7 +16948,7 @@ app.post('/api/admin/cursos/:cursoId/turmas', authenticateToken, isSuperAdmin, a
         const { cursoId } = req.params;
         const { codigo, periodo, vagas } = req.body;
         
-        console.log(`📝 Admin ${req.userId} adicionando turma ao curso ${cursoId}`);
+        logger.info(`📝 Admin ${req.userId} adicionando turma ao curso ${cursoId}`);
         
         const curso = await Curso.findById(cursoId);
         if (!curso) {
@@ -16985,7 +16986,7 @@ app.post('/api/admin/cursos/:cursoId/turmas', authenticateToken, isSuperAdmin, a
         curso.turmas.push(novaTurma);
         await curso.save();
         
-        console.log(`✅ Turma ${codigo} adicionada ao curso ${curso.nome}`);
+        logger.info(`✅ Turma ${codigo} adicionada ao curso ${curso.nome}`);
         
         res.status(201).json({
             success: true,
@@ -16994,7 +16995,7 @@ app.post('/api/admin/cursos/:cursoId/turmas', authenticateToken, isSuperAdmin, a
         });
         
     } catch (error) {
-        console.error('❌ Erro ao adicionar turma:', error);
+        logger.error('❌ Erro ao adicionar turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao adicionar turma: ' + error.message
@@ -17008,7 +17009,7 @@ app.put('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSuper
         const { cursoId, turmaId } = req.params;
         const { codigo, periodo, vagas, ativa } = req.body;
         
-        console.log(`✏️ Admin ${req.userId} editando turma ${turmaId} do curso ${cursoId}`);
+        logger.info(`✏️ Admin ${req.userId} editando turma ${turmaId} do curso ${cursoId}`);
         
         const curso = await Curso.findById(cursoId);
         if (!curso) {
@@ -17035,7 +17036,7 @@ app.put('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSuper
         
         await curso.save();
         
-        console.log(`✅ Turma ${turma.codigo} atualizada com sucesso`);
+        logger.info(`✅ Turma ${turma.codigo} atualizada com sucesso`);
         
         res.json({
             success: true,
@@ -17044,7 +17045,7 @@ app.put('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSuper
         });
         
     } catch (error) {
-        console.error('❌ Erro ao editar turma:', error);
+        logger.error('❌ Erro ao editar turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao editar turma: ' + error.message
@@ -17057,7 +17058,7 @@ app.delete('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSu
     try {
         const { cursoId, turmaId } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} removendo turma ${turmaId} do curso ${cursoId}`);
+        logger.info(`🗑️ Admin ${req.userId} removendo turma ${turmaId} do curso ${cursoId}`);
         
         const curso = await Curso.findById(cursoId);
         if (!curso) {
@@ -17082,7 +17083,7 @@ app.delete('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSu
             { $pull: { turmas: { _id: turmaId } } }
         );
         
-        console.log(`✅ Turma ${turma.codigo} removida com sucesso`);
+        logger.info(`✅ Turma ${turma.codigo} removida com sucesso`);
         
         res.json({
             success: true,
@@ -17090,7 +17091,7 @@ app.delete('/api/admin/cursos/:cursoId/turmas/:turmaId', authenticateToken, isSu
         });
         
     } catch (error) {
-        console.error('❌ Erro ao remover turma:', error);
+        logger.error('❌ Erro ao remover turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao remover turma: ' + error.message
@@ -17113,7 +17114,7 @@ app.get('/api/eixos', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar eixos (público):', error);
+        logger.error('❌ Erro ao listar eixos (público):', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar eixos'
@@ -17158,7 +17159,7 @@ app.get('/api/cursos', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar cursos (público):', error);
+        logger.error('❌ Erro ao listar cursos (público):', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar cursos'
@@ -17171,7 +17172,7 @@ app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
     try {
         const turmaId = req.params.id;
         
-        console.log(`🔍 Admin ${req.userId} buscando turma ${turmaId}`);
+        logger.info(`🔍 Admin ${req.userId} buscando turma ${turmaId}`);
         
         const turma = await Turma.findById(turmaId)
             .populate('professorId', 'nome email')
@@ -17223,7 +17224,7 @@ app.get('/api/admin/turmas/:id', authenticateToken, isSuperAdmin, async (req, re
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar turma:', error);
+        logger.error('❌ Erro ao buscar turma:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -17241,7 +17242,7 @@ app.get('/api/admin/faces/todos', authenticateToken, isSuperAdmin, async (req, r
         const { page = 1, limit = 50 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
-        console.log(`📋 Admin ${req.userId} listando faces (página ${page}, limite ${limit})`);
+        logger.info(`📋 Admin ${req.userId} listando faces (página ${page}, limite ${limit})`);
         
         const [faces, total] = await Promise.all([
             FaceID.find()
@@ -17252,7 +17253,7 @@ app.get('/api/admin/faces/todos', authenticateToken, isSuperAdmin, async (req, r
             FaceID.countDocuments()
         ]);
         
-        console.log(`✅ ${faces.length} faces encontradas (total: ${total})`);
+        logger.info(`✅ ${faces.length} faces encontradas (total: ${total})`);
         
         res.json({
             success: true,
@@ -17266,7 +17267,7 @@ app.get('/api/admin/faces/todos', authenticateToken, isSuperAdmin, async (req, r
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar faces:', error);
+        logger.error('❌ Erro ao listar faces:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17276,7 +17277,7 @@ app.get('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res
     try {
         const { id } = req.params;
         
-        console.log(`🔍 Admin ${req.userId} buscando face ${id}`);
+        logger.info(`🔍 Admin ${req.userId} buscando face ${id}`);
         
         const face = await FaceID.findById(id).lean();
         
@@ -17290,7 +17291,7 @@ app.get('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res
         res.json({ success: true, face });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar face:', error);
+        logger.error('❌ Erro ao buscar face:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17309,7 +17310,7 @@ app.get('/api/admin/faces/usuario/:usuarioId', authenticateToken, isSuperAdmin, 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar face por usuário:', error);
+        logger.error('❌ Erro ao buscar face por usuário:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17320,7 +17321,7 @@ app.put('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res
         const { id } = req.params;
         const { ativo, totalValidacoes } = req.body;
         
-        console.log(`✏️ Admin ${req.userId} atualizando face ${id}`);
+        logger.info(`✏️ Admin ${req.userId} atualizando face ${id}`);
         
         const face = await FaceID.findById(id);
         
@@ -17336,7 +17337,7 @@ app.put('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res
         
         await face.save();
         
-        console.log(`✅ Face ${id} atualizada com sucesso`);
+        logger.info(`✅ Face ${id} atualizada com sucesso`);
         
         res.json({
             success: true,
@@ -17344,7 +17345,7 @@ app.put('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, res
         });
         
     } catch (error) {
-        console.error('❌ Erro ao atualizar face:', error);
+        logger.error('❌ Erro ao atualizar face:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17354,7 +17355,7 @@ app.post('/api/admin/faces/:id/registrar-validacao', authenticateToken, isSuperA
     try {
         const { id } = req.params;
         
-        console.log(`📸 Admin ${req.userId} registrando validação manual para face ${id}`);
+        logger.info(`📸 Admin ${req.userId} registrando validação manual para face ${id}`);
         
         const face = await FaceID.findById(id);
         
@@ -17369,7 +17370,7 @@ app.post('/api/admin/faces/:id/registrar-validacao', authenticateToken, isSuperA
         face.ultimaValidacao = new Date();
         await face.save();
         
-        console.log(`✅ Validação registrada para face ${id}. Total: ${face.totalValidacoes}`);
+        logger.info(`✅ Validação registrada para face ${id}. Total: ${face.totalValidacoes}`);
         
         res.json({
             success: true,
@@ -17379,7 +17380,7 @@ app.post('/api/admin/faces/:id/registrar-validacao', authenticateToken, isSuperA
         });
         
     } catch (error) {
-        console.error('❌ Erro ao registrar validação:', error);
+        logger.error('❌ Erro ao registrar validação:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17426,7 +17427,7 @@ app.get('/api/admin/faces/:id/historico', authenticateToken, isSuperAdmin, async
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar histórico:', error);
+        logger.error('❌ Erro ao buscar histórico:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17437,7 +17438,7 @@ app.put('/api/admin/faces/:id/toggle-status', authenticateToken, isSuperAdmin, a
         const { id } = req.params;
         const { ativo } = req.body;
         
-        console.log(`🔄 Admin ${req.userId} alterando status da face ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
+        logger.info(`🔄 Admin ${req.userId} alterando status da face ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
         
         const face = await FaceID.findById(id);
         
@@ -17451,7 +17452,7 @@ app.put('/api/admin/faces/:id/toggle-status', authenticateToken, isSuperAdmin, a
         face.ativo = ativo;
         await face.save();
         
-        console.log(`✅ Status da face ${id} alterado para ${ativo ? 'ativo' : 'inativo'}`);
+        logger.info(`✅ Status da face ${id} alterado para ${ativo ? 'ativo' : 'inativo'}`);
         
         res.json({
             success: true,
@@ -17459,7 +17460,7 @@ app.put('/api/admin/faces/:id/toggle-status', authenticateToken, isSuperAdmin, a
         });
         
     } catch (error) {
-        console.error('❌ Erro ao alterar status:', error);
+        logger.error('❌ Erro ao alterar status:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17469,7 +17470,7 @@ app.delete('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, 
     try {
         const { id } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} excluindo face ${id}`);
+        logger.info(`🗑️ Admin ${req.userId} excluindo face ${id}`);
         
         const face = await FaceID.findByIdAndDelete(id);
         
@@ -17480,7 +17481,7 @@ app.delete('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, 
             });
         }
         
-        console.log(`✅ Face ${id} excluída com sucesso`);
+        logger.info(`✅ Face ${id} excluída com sucesso`);
         
         res.json({
             success: true,
@@ -17488,7 +17489,7 @@ app.delete('/api/admin/faces/:id', authenticateToken, isSuperAdmin, async (req, 
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir face:', error);
+        logger.error('❌ Erro ao excluir face:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17502,7 +17503,7 @@ app.get('/api/admin/localizacoes/ativas', authenticateToken, isSuperAdmin, async
         // Verificar se o modelo Localizacao existe
         const Localizacao = mongoose.models.Localizacao;
         if (!Localizacao) {
-            console.error('❌ Modelo Localizacao não encontrado!');
+            logger.error('❌ Modelo Localizacao não encontrado!');
             return res.status(500).json({
                 success: false,
                 error: 'Modelo de localização não configurado'
@@ -17566,10 +17567,10 @@ app.get('/api/admin/localizacoes/ativas', authenticateToken, isSuperAdmin, async
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar localizações:');
-        console.error('   Nome:', error.name);
-        console.error('   Mensagem:', error.message);
-        console.error('   Stack:', error.stack);
+        logger.error('❌ Erro ao buscar localizações:');
+        logger.error('   Nome:', error.name);
+        logger.error('   Mensagem:', error.message);
+        logger.error('   Stack:', error.stack);
         
         res.status(500).json({
             success: false,
@@ -17584,7 +17585,7 @@ app.get('/api/admin/localizacoes/historico/:alunoId', authenticateToken, isSuper
         const { alunoId } = req.params;
         const { limite = 20 } = req.query;
         
-        console.log(`📋 Admin ${req.userId} buscando histórico de localizações do aluno ${alunoId}`);
+        logger.info(`📋 Admin ${req.userId} buscando histórico de localizações do aluno ${alunoId}`);
         
         const localizacoes = await Localizacao.find({ alunoId })
             .populate('alunoId', 'nome email matricula turma')
@@ -17603,7 +17604,7 @@ app.get('/api/admin/localizacoes/historico/:alunoId', authenticateToken, isSuper
             provaId: l.provaId
         }));
         
-        console.log(`✅ ${resultado.length} registros encontrados`);
+        logger.info(`✅ ${resultado.length} registros encontrados`);
         
         res.json({
             success: true,
@@ -17612,7 +17613,7 @@ app.get('/api/admin/localizacoes/historico/:alunoId', authenticateToken, isSuper
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar histórico:', error);
+        logger.error('❌ Erro ao buscar histórico:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -17707,7 +17708,7 @@ app.get('/api/admin/onesignal/dispositivos', authenticateToken, isSuperAdmin, as
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar dispositivos:', error);
+        logger.error('❌ Erro ao listar dispositivos:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -17741,7 +17742,7 @@ app.get('/api/admin/onesignal/dispositivo/:playerId', authenticateToken, isSuper
         });
 
     } catch (error) {
-        console.error('❌ Erro ao buscar dispositivo:', error);
+        logger.error('❌ Erro ao buscar dispositivo:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -17754,7 +17755,7 @@ app.post('/api/admin/onesignal/vincular', authenticateToken, isSuperAdmin, async
     try {
         const { playerId, usuarioId } = req.body;
         
-        console.log(`🔗 Admin ${req.userId} vinculando dispositivo ${playerId} ao usuário ${usuarioId}`);
+        logger.info(`🔗 Admin ${req.userId} vinculando dispositivo ${playerId} ao usuário ${usuarioId}`);
         
         // Buscar usuário
         const usuario = await User.findById(usuarioId);
@@ -17809,7 +17810,7 @@ app.post('/api/admin/onesignal/vincular', authenticateToken, isSuperAdmin, async
         });
 
     } catch (error) {
-        console.error('❌ Erro ao vincular dispositivo:', error);
+        logger.error('❌ Erro ao vincular dispositivo:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -17822,7 +17823,7 @@ app.post('/api/admin/onesignal/desvincular/:playerId', authenticateToken, isSupe
     try {
         const { playerId } = req.params;
         
-        console.log(`🔓 Admin ${req.userId} desvinculando dispositivo ${playerId}`);
+        logger.info(`🔓 Admin ${req.userId} desvinculando dispositivo ${playerId}`);
         
         // Buscar usuário com este player ID
         const usuario = await User.findOne({ onesignalPlayerId: playerId });
@@ -17850,7 +17851,7 @@ app.post('/api/admin/onesignal/desvincular/:playerId', authenticateToken, isSupe
         });
 
     } catch (error) {
-        console.error('❌ Erro ao desvincular dispositivo:', error);
+        logger.error('❌ Erro ao desvincular dispositivo:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -17863,7 +17864,7 @@ app.delete('/api/admin/onesignal/dispositivo/:playerId', authenticateToken, isSu
     try {
         const { playerId } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} deletando dispositivo ${playerId} do OneSignal`);
+        logger.info(`🗑️ Admin ${req.userId} deletando dispositivo ${playerId} do OneSignal`);
         
         // Remover do banco se estiver vinculado
         await User.findOneAndUpdate(
@@ -17887,7 +17888,7 @@ app.delete('/api/admin/onesignal/dispositivo/:playerId', authenticateToken, isSu
         });
 
     } catch (error) {
-        console.error('❌ Erro ao deletar dispositivo:', error);
+        logger.error('❌ Erro ao deletar dispositivo:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -17901,7 +17902,7 @@ app.post('/api/admin/onesignal/testar/:playerId', authenticateToken, isSuperAdmi
         const { playerId } = req.params;
         const { titulo, mensagem } = req.body;
         
-        console.log(`📱 Admin ${req.userId} enviando teste para ${playerId}`);
+        logger.info(`📱 Admin ${req.userId} enviando teste para ${playerId}`);
         
         // Buscar admin
         const admin = await User.findById(req.userId).select('nome');
@@ -17934,7 +17935,7 @@ app.post('/api/admin/onesignal/testar/:playerId', authenticateToken, isSuperAdmi
         });
 
     } catch (error) {
-        console.error('❌ Erro ao enviar teste:', error);
+        logger.error('❌ Erro ao enviar teste:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -17965,7 +17966,7 @@ app.get('/api/admin/onesignal/estatisticas', authenticateToken, isSuperAdmin, as
         });
 
     } catch (error) {
-        console.error('❌ Erro ao buscar estatísticas:', error);
+        logger.error('❌ Erro ao buscar estatísticas:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -17980,9 +17981,9 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
     try {
         const { playerId, token } = req.body;
         
-        console.log(`\n🔗 [LINK] Vínculo por clique na notificação`);
-        console.log(`   📱 PlayerId: ${playerId?.substring(0, 20)}...`);
-        console.log(`   🔑 Token: ${token ? '✅ Presente' : '❌ Ausente'}`);
+        logger.info(`\n🔗 [LINK] Vínculo por clique na notificação`);
+        logger.info(`   📱 PlayerId: ${playerId?.substring(0, 20)}...`);
+        logger.info(`   🔑 Token: ${token ? '✅ Presente' : '❌ Ausente'}`);
         
         if (!playerId) {
             return res.status(400).json({
@@ -18027,7 +18028,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
         });
         
         if (outroUsuario) {
-            console.log(`   🔄 Desvinculando de ${outroUsuario.nome}`);
+            logger.info(`   🔄 Desvinculando de ${outroUsuario.nome}`);
             await User.findByIdAndUpdate(outroUsuario._id, {
                 $unset: { onesignalPlayerId: 1, ultimaValidacaoPush: 1 }
             });
@@ -18038,7 +18039,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
         user.ultimaValidacaoPush = new Date();
         await user.save();
         
-        console.log(`   ✅ VÍNCULO REALIZADO: ${user.nome} (${user.email})`);
+        logger.info(`   ✅ VÍNCULO REALIZADO: ${user.nome} (${user.email})`);
         
         // Criar notificação interna
         try {
@@ -18055,7 +18056,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
             });
             await notificacao.save();
         } catch (notifErr) {
-            console.warn('   ⚠️ Erro ao criar notificação:', notifErr.message);
+            logger.warn('   ⚠️ Erro ao criar notificação:', notifErr.message);
         }
         
         res.json({
@@ -18069,7 +18070,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18091,7 +18092,7 @@ app.post('/api/admin/onesignal/enviar-massa', authenticateToken, isSuperAdmin, a
             });
         }
         
-        console.log(`📤 Enviando push em massa para ${playerIds.length} dispositivos`);
+        logger.info(`📤 Enviando push em massa para ${playerIds.length} dispositivos`);
         
         const LOTE = 2000;
         let enviados = 0;
@@ -18140,7 +18141,7 @@ app.post('/api/admin/onesignal/enviar-massa', authenticateToken, isSuperAdmin, a
                 }
                 
             } catch (error) {
-                console.error(`❌ Erro no lote ${i}-${i + LOTE}:`, error.message);
+                logger.error(`❌ Erro no lote ${i}-${i + LOTE}:`, error.message);
                 erros += lote.length;
             }
         }
@@ -18153,7 +18154,7 @@ app.post('/api/admin/onesignal/enviar-massa', authenticateToken, isSuperAdmin, a
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18168,9 +18169,9 @@ app.post('/api/admin/onesignal/enviar-massa', authenticateToken, isSuperAdmin, a
 // ============================================================================
 app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log('='.repeat(60));
-        console.log(`📨 Admin ${req.userId} solicitando vínculo em massa...`);
-        console.log('='.repeat(60));
+        logger.info('='.repeat(60));
+        logger.info(`📨 Admin ${req.userId} solicitando vínculo em massa...`);
+        logger.info('='.repeat(60));
         
         // 1. Buscar dispositivos do OneSignal
         const dispositivosResp = await oneSignalAdmin.listarDispositivos(300, 0);
@@ -18180,7 +18181,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
         }
         
         const todosDispositivos = dispositivosResp.players || dispositivosResp.dispositivos || [];
-        console.log(`📱 ${todosDispositivos.length} dispositivos no OneSignal`);
+        logger.info(`📱 ${todosDispositivos.length} dispositivos no OneSignal`);
         
         // 2. Buscar usuários que JÁ têm playerId vinculado
         const usuariosVinculados = await User.find({
@@ -18195,7 +18196,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
             return pid && !playerIdsVinculados.has(pid);
         });
         
-        console.log(`📱 ${dispositivosOrfaos.length} órfãos encontrados`);
+        logger.info(`📱 ${dispositivosOrfaos.length} órfãos encontrados`);
         
         if (dispositivosOrfaos.length === 0) {
             return res.json({
@@ -18220,7 +18221,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
         let erros = 0;
         const errosDetalhes = [];
         
-        console.log(`\n📱 ENVIANDO PUSH PARA ${dispositivosOrfaos.length} DISPOSITIVOS...`);
+        logger.info(`\n📱 ENVIANDO PUSH PARA ${dispositivosOrfaos.length} DISPOSITIVOS...`);
         
         for (const dispositivo of dispositivosOrfaos) {
             const playerId = dispositivo.id || dispositivo.playerId;
@@ -18252,7 +18253,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
                 
                 if (resultado && resultado.success) {
                     enviados++;
-                    console.log(`   ✅ Push: ${playerId.substring(0, 20)}...`);
+                    logger.info(`   ✅ Push: ${playerId.substring(0, 20)}...`);
                 } else {
                     erros++;
                     errosDetalhes.push({
@@ -18272,12 +18273,12 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
             }
         }
         
-        console.log(`\n✅ Push: ${enviados} enviados | ${erros} erros`);
+        logger.info(`\n✅ Push: ${enviados} enviados | ${erros} erros`);
         
         // ============================================================
         // 6. CRIAR NOTIFICAÇÕES INTERNAS
         // ============================================================
-        console.log(`\n🔔 CRIANDO NOTIFICAÇÕES INTERNAS...`);
+        logger.info(`\n🔔 CRIANDO NOTIFICAÇÕES INTERNAS...`);
         
         let notificacoesInternasCriadas = 0;
         let notificacoesComLinkEspecifico = 0;
@@ -18289,7 +18290,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
                 _id: { $ne: req.userId }
             }).select('_id nome role onesignalPlayerId');
             
-            console.log(`   📋 ${usuariosParaNotificar.length} usuários ativos`);
+            logger.info(`   📋 ${usuariosParaNotificar.length} usuários ativos`);
             
             for (const u of usuariosParaNotificar) {
                 try {
@@ -18332,12 +18333,12 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
                     notificacoesInternasCriadas++;
                     
                 } catch (err) {
-                    console.warn(`   ⚠️ Erro ao notificar ${u.nome}:`, err.message);
+                    logger.warn(`   ⚠️ Erro ao notificar ${u.nome}:`, err.message);
                 }
             }
             
         } catch (notifErr) {
-            console.error('❌ Erro ao criar notificações internas:', notifErr);
+            logger.error('❌ Erro ao criar notificações internas:', notifErr);
         }
         
         // ============================================================
@@ -18355,7 +18356,7 @@ app.post('/api/admin/onesignal/solicitar-vinculo-massa', authenticateToken, isSu
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18370,9 +18371,9 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
     try {
         const { playerId, token } = req.body;
         
-        console.log(`\n🔗 [LINK] Vínculo por clique na notificação`);
-        console.log(`   📱 PlayerId: ${playerId?.substring(0, 20)}...`);
-        console.log(`   🔑 Token: ${token ? '✅ Presente' : '❌ Ausente'}`);
+        logger.info(`\n🔗 [LINK] Vínculo por clique na notificação`);
+        logger.info(`   📱 PlayerId: ${playerId?.substring(0, 20)}...`);
+        logger.info(`   🔑 Token: ${token ? '✅ Presente' : '❌ Ausente'}`);
         
         if (!playerId) {
             return res.status(400).json({
@@ -18414,7 +18415,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
         });
         
         if (outroUsuario) {
-            console.log(`   🔄 Desvinculando de ${outroUsuario.nome}`);
+            logger.info(`   🔄 Desvinculando de ${outroUsuario.nome}`);
             await User.findByIdAndUpdate(outroUsuario._id, {
                 $unset: { onesignalPlayerId: 1, ultimaValidacaoPush: 1 }
             });
@@ -18424,7 +18425,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
         user.ultimaValidacaoPush = new Date();
         await user.save();
         
-        console.log(`   ✅ VÍNCULO REALIZADO: ${user.nome} (${user.email})`);
+        logger.info(`   ✅ VÍNCULO REALIZADO: ${user.nome} (${user.email})`);
         
         try {
             const Notificacao = mongoose.model('Notificacao');
@@ -18440,7 +18441,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
             });
             await notificacao.save();
         } catch (notifErr) {
-            console.warn('   ⚠️ Erro ao criar notificação:', notifErr.message);
+            logger.warn('   ⚠️ Erro ao criar notificação:', notifErr.message);
         }
         
         res.json({
@@ -18454,7 +18455,7 @@ app.post('/api/onesignal/vincular-por-link', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18551,7 +18552,7 @@ app.get('/api/admin/provas/:provaId/resultados', authenticateToken, async (req, 
     });
     
   } catch (error) {
-    console.error('❌ Erro:', error);
+    logger.error('❌ Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -18589,7 +18590,7 @@ app.get('/api/eixos/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar eixo:', error);
+        logger.error('❌ Erro ao buscar eixo:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18639,7 +18640,7 @@ app.get('/api/aluno/curso-completo', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar curso do aluno:', error);
+        logger.error('❌ Erro ao buscar curso do aluno:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18658,7 +18659,7 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
             });
         }
 
-        console.log(`🔄 Super Admin ${req.userId} iniciando reset de acessos...`);
+        logger.info(`🔄 Super Admin ${req.userId} iniciando reset de acessos...`);
 
         // Buscar o admin que está fazendo o reset
         const admin = await User.findById(req.userId).select('nome email');
@@ -18712,7 +18713,7 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
                 });
                 
                 await notificacao.save();
-                console.log(`✅ Notificação enviada para ${user.email}`);
+                logger.info(`✅ Notificação enviada para ${user.email}`);
                 
                 // 🔥 ENVIAR PUSH SE ATIVADO
                 if (pushAtivado && oneSignal && user.onesignalPlayerId) {
@@ -18728,7 +18729,7 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
                 }
                 
             } catch (notifError) {
-                console.warn(`⚠️ Erro ao notificar ${user.email}:`, notifError.message);
+                logger.warn(`⚠️ Erro ao notificar ${user.email}:`, notifError.message);
             }
             
             // Contar por role
@@ -18737,7 +18738,7 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
             else if (user.role === 'admin') estatisticas.admins++;
         }
 
-        console.log(`✅ Reset concluído! ${contador} usuários afetados`);
+        logger.info(`✅ Reset concluído! ${contador} usuários afetados`);
 
         res.json({
             success: true,
@@ -18748,7 +18749,7 @@ app.post('/api/admin/reset-access', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Erro ao resetar acessos:', error);
+        logger.error('❌ Erro ao resetar acessos:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18765,7 +18766,7 @@ app.post('/api/push/subscribe', authenticateToken, async (req, res) => {
         // Aqui você salva a subscription no banco de dados
         // associada ao usuário userId
         
-        console.log(`📱 Nova inscrição push para usuário ${userId}`);
+        logger.info(`📱 Nova inscrição push para usuário ${userId}`);
         
         res.json({
             success: true,
@@ -18773,7 +18774,7 @@ app.post('/api/push/subscribe', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao salvar inscrição:', error);
+        logger.error('❌ Erro ao salvar inscrição:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -18842,11 +18843,11 @@ app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
     try {
         const { usuarioId, imagem } = req.body;
         
-        console.log('='.repeat(50));
-        console.log('📸 CADASTRANDO FACE ID');
-        console.log('📌 Usuário ID:', usuarioId);
-        console.log('📦 Tamanho da imagem:', Math.round(imagem?.length / 1024 || 0), 'KB');
-        console.log('='.repeat(50));
+        logger.info('='.repeat(50));
+        logger.info('📸 CADASTRANDO FACE ID');
+        logger.info('📌 Usuário ID:', usuarioId);
+        logger.info('📦 Tamanho da imagem:', Math.round(imagem?.length / 1024 || 0), 'KB');
+        logger.info('='.repeat(50));
         
         if (!usuarioId || !imagem) {
             return res.status(400).json({
@@ -18866,11 +18867,11 @@ app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
 
         // Verificar modelos
         if (!modelsLoaded) {
-            console.log('⏳ Carregando modelos...');
+            logger.info('⏳ Carregando modelos...');
             await loadFaceModels();
         }
 
-        console.log('🔍 Detectando face...');
+        logger.info('🔍 Detectando face...');
         
         // Converter base64 para buffer
         const imageBuffer = Buffer.from(imagem, 'base64');
@@ -18892,7 +18893,7 @@ app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
             });
         }
 
-        console.log('✅ Face detectada, computando descriptor...');
+        logger.info('✅ Face detectada, computando descriptor...');
         
         // 2. Calcular o descriptor (face recognition)
         // Nota: Em algumas versões, você precisa carregar a faceRecognitionNet
@@ -18908,8 +18909,8 @@ app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
         // Descriptor é um array de 128 números
         const faceDescriptor = Array.from(descriptorResult);
         
-        console.log(`✅ Descriptor gerado: ${faceDescriptor.length} valores`);
-        console.log(`   Primeiros valores: ${faceDescriptor.slice(0, 5).join(', ')}...`);
+        logger.info(`✅ Descriptor gerado: ${faceDescriptor.length} valores`);
+        logger.info(`   Primeiros valores: ${faceDescriptor.slice(0, 5).join(', ')}...`);
         
         // Gerar hash da imagem
         const crypto = require('crypto');
@@ -18938,7 +18939,7 @@ app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
             faceExistente.faceDescriptor = faceDescriptor;
             faceExistente.dataCadastro = new Date();
             await faceExistente.save();
-            console.log('✅ Registro atualizado');
+            logger.info('✅ Registro atualizado');
         } else {
             const novaFace = new FaceID({
                 usuarioId,
@@ -18948,7 +18949,7 @@ app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
                 dataCadastro: new Date()
             });
             await novaFace.save();
-            console.log('✅ Novo registro criado');
+            logger.info('✅ Novo registro criado');
         }
         
         res.json({
@@ -18958,7 +18959,7 @@ app.post('/api/auth/cadastrar-face', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro no cadastro:', error);
+        logger.error('❌ Erro no cadastro:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno: ' + error.message
@@ -18974,7 +18975,7 @@ app.post('/api/auth/testar-deteccao', authenticateToken, async (req, res) => {
     try {
         const { imagem } = req.body;
         
-        console.log('🧪 TESTANDO DETECÇÃO FACIAL');
+        logger.info('🧪 TESTANDO DETECÇÃO FACIAL');
         
         if (!imagem) {
             return res.status(400).json({ error: 'Imagem não fornecida' });
@@ -19048,7 +19049,7 @@ app.get('/api/auth/verificar-face/:usuarioId', authenticateToken, async (req, re
         });
         
     } catch (error) {
-        console.error('❌ Erro ao verificar face:', error);
+        logger.error('❌ Erro ao verificar face:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -19063,11 +19064,11 @@ app.post('/api/auth/validar-camera', authenticateToken, async (req, res) => {
     try {
         const { usuarioId, frames, acoes, timestamps, localizacao } = req.body;
         
-        console.log('='.repeat(50));
-        console.log('🔍 VALIDAÇÃO FACIAL - MODO SEGURO');
-        console.log('📌 Usuário ID:', usuarioId);
-        console.log(`📦 Frames recebidos: ${frames?.length || 0}`);
-        console.log('='.repeat(50));
+        logger.info('='.repeat(50));
+        logger.info('🔍 VALIDAÇÃO FACIAL - MODO SEGURO');
+        logger.info('📌 Usuário ID:', usuarioId);
+        logger.info(`📦 Frames recebidos: ${frames?.length || 0}`);
+        logger.info('='.repeat(50));
         
         if (!usuarioId || !frames || frames.length < 6) {  // Mínimo 6 frames (2 ações x 3 frames)
             return res.status(400).json({
@@ -19146,14 +19147,14 @@ app.post('/api/auth/validar-camera', authenticateToken, async (req, res) => {
         const reconhecido = melhorDistancia < threshold;
         const temMovimento = variabilidadeMedia > 0.015;  // Menor que antes (0.02) mas ainda seguro
         
-        console.log(`📊 RESULTADOS:`);
-        console.log(`   Frames válidos: ${resultadosValidos.length}/${frames.length}`);
-        console.log(`   Melhor distância: ${melhorDistancia.toFixed(4)}`);
-        console.log(`   Média distâncias: ${mediaDistancias.toFixed(4)}`);
-        console.log(`   Variabilidade: ${variabilidadeMedia.toFixed(4)}`);
-        console.log(`   Similaridade: ${similaridade.toFixed(1)}%`);
-        console.log(`   Reconhecido: ${reconhecido ? '✅' : '❌'}`);
-        console.log(`   Movimento: ${temMovimento ? '✅' : '❌'}`);
+        logger.info(`📊 RESULTADOS:`);
+        logger.info(`   Frames válidos: ${resultadosValidos.length}/${frames.length}`);
+        logger.info(`   Melhor distância: ${melhorDistancia.toFixed(4)}`);
+        logger.info(`   Média distâncias: ${mediaDistancias.toFixed(4)}`);
+        logger.info(`   Variabilidade: ${variabilidadeMedia.toFixed(4)}`);
+        logger.info(`   Similaridade: ${similaridade.toFixed(1)}%`);
+        logger.info(`   Reconhecido: ${reconhecido ? '✅' : '❌'}`);
+        logger.info(`   Movimento: ${temMovimento ? '✅' : '❌'}`);
         
         // 🔥 VALIDAÇÃO FINAL (segura)
         const aprovado = reconhecido && temMovimento;
@@ -19188,7 +19189,7 @@ app.post('/api/auth/validar-camera', authenticateToken, async (req, res) => {
         }
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -19250,7 +19251,7 @@ app.post('/api/auth/validar-camera-stream', authenticateToken, async (req, res) 
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -19292,7 +19293,7 @@ app.get('/api/admin/faces/:usuarioId', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar face:', error);
+        logger.error('❌ Erro ao buscar face:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -19308,12 +19309,12 @@ app.post('/api/provas/registrar-localizacao', authenticateToken, async (req, res
         const { provaId, latitude, longitude, accuracy } = req.body;
         const alunoId = req.userId;
         
-        console.log('='.repeat(50));
-        console.log('📍 Registrando localização');
-        console.log(`   Prova ID: ${provaId}`);
-        console.log(`   Aluno ID: ${alunoId}`);
-        console.log(`   Coordenadas: ${latitude}, ${longitude} (precisão: ${accuracy}m)`);
-        console.log('='.repeat(50));
+        logger.info('='.repeat(50));
+        logger.info('📍 Registrando localização');
+        logger.info(`   Prova ID: ${provaId}`);
+        logger.info(`   Aluno ID: ${alunoId}`);
+        logger.info(`   Coordenadas: ${latitude}, ${longitude} (precisão: ${accuracy}m)`);
+        logger.info('='.repeat(50));
         
         // Validar coordenadas
         if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
@@ -19326,7 +19327,7 @@ app.post('/api/provas/registrar-localizacao', authenticateToken, async (req, res
         // Garantir que o modelo Localizacao existe
         const Localizacao = mongoose.models.Localizacao;
         if (!Localizacao) {
-            console.error('❌ Modelo Localizacao não encontrado!');
+            logger.error('❌ Modelo Localizacao não encontrado!');
             return res.status(500).json({
                 success: false,
                 error: 'Modelo de localização não configurado'
@@ -19355,10 +19356,10 @@ app.post('/api/provas/registrar-localizacao', authenticateToken, async (req, res
                     provaRealizada.estatisticasCancelamento.timestamp = new Date().toISOString();
                     
                     await provaRealizada.save();
-                    console.log('✅ Localização atualizada na prova realizada');
+                    logger.info('✅ Localização atualizada na prova realizada');
                 }
             } catch (provaError) {
-                console.warn('⚠️ Erro ao atualizar prova realizada:', provaError.message);
+                logger.warn('⚠️ Erro ao atualizar prova realizada:', provaError.message);
             }
         }
         
@@ -19373,7 +19374,7 @@ app.post('/api/provas/registrar-localizacao', authenticateToken, async (req, res
         });
         
         await localizacao.save();
-        console.log(`✅ Localização salva no histórico (ID: ${localizacao._id})`);
+        logger.info(`✅ Localização salva no histórico (ID: ${localizacao._id})`);
         
         res.json({
             success: true,
@@ -19382,10 +19383,10 @@ app.post('/api/provas/registrar-localizacao', authenticateToken, async (req, res
         });
         
     } catch (error) {
-        console.error('❌ Erro ao registrar localização:');
-        console.error('   Nome:', error.name);
-        console.error('   Mensagem:', error.message);
-        console.error('   Stack:', error.stack);
+        logger.error('❌ Erro ao registrar localização:');
+        logger.error('   Nome:', error.name);
+        logger.error('   Mensagem:', error.message);
+        logger.error('   Stack:', error.stack);
         
         res.status(500).json({
             success: false,
@@ -19508,7 +19509,7 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar perfil:', error);
+        logger.error('❌ Erro ao buscar perfil:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao buscar perfil: ' + error.message
@@ -19522,8 +19523,8 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         const userId = req.userId;
         const updates = req.body;
         
-        console.log(`✏️ Usuário ${userId} (${req.userRole}) atualizando perfil`);
-        console.log('📦 Dados recebidos:', updates);
+        logger.info(`✏️ Usuário ${userId} (${req.userRole}) atualizando perfil`);
+        logger.info('📦 Dados recebidos:', updates);
         
         // Campos permitidos para atualização (todos os perfis)
         const camposPermitidos = [
@@ -19621,7 +19622,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         // Adicionar data de atualização
         dadosAtualizar.ultimaAtualizacaoPerfil = new Date();
         
-        console.log('💾 Salvando dados:', dadosAtualizar);
+        logger.info('💾 Salvando dados:', dadosAtualizar);
         
         // Atualizar usuário
         const user = await User.findByIdAndUpdate(
@@ -19637,9 +19638,9 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
             });
         }
         
-        console.log(`✅ Perfil do usuário ${user.email} atualizado`);
-        console.log(`   perfilAlimentar: ${user.perfilAlimentar}`);
-        console.log(`   refeicoesQueParticipa: ${user.refeicoesQueParticipa}`);
+        logger.info(`✅ Perfil do usuário ${user.email} atualizado`);
+        logger.info(`   perfilAlimentar: ${user.perfilAlimentar}`);
+        logger.info(`   refeicoesQueParticipa: ${user.refeicoesQueParticipa}`);
         
         // Preparar resposta com dados do perfil
         const perfilAtualizado = {
@@ -19711,7 +19712,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao atualizar perfil:', error);
+        logger.error('❌ Erro ao atualizar perfil:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao atualizar perfil: ' + error.message
@@ -19770,7 +19771,7 @@ app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('
         // Remover arquivo temporário
         fs.unlinkSync(file.path);
         
-        console.log(`✅ Foto de perfil atualizada para ${user.nome} (${user.email})`);
+        logger.info(`✅ Foto de perfil atualizada para ${user.nome} (${user.email})`);
         
         res.json({
             success: true,
@@ -19780,7 +19781,7 @@ app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('
         });
         
     } catch (error) {
-        console.error('❌ Erro no upload da foto:', error);
+        logger.error('❌ Erro no upload da foto:', error);
         // Limpar arquivo se existir
         if (req.file && req.file.path && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
@@ -19812,7 +19813,7 @@ app.delete('/api/perfil/remover-foto', authenticateToken, async (req, res) => {
             });
         }
         
-        console.log(`🗑️ Foto de perfil removida para ${user.nome} (${user.email})`);
+        logger.info(`🗑️ Foto de perfil removida para ${user.nome} (${user.email})`);
         
         res.json({
             success: true,
@@ -19820,7 +19821,7 @@ app.delete('/api/perfil/remover-foto', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao remover foto:', error);
+        logger.error('❌ Erro ao remover foto:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao remover foto de perfil: ' + error.message
@@ -19861,7 +19862,7 @@ app.get('/api/perfil/publico/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar perfil público:', error);
+        logger.error('❌ Erro ao buscar perfil público:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao buscar perfil: ' + error.message
@@ -19876,7 +19877,7 @@ app.get('/api/perfil/publico/:id', authenticateToken, async (req, res) => {
 // 1. Dashboard do setor pedagógico
 app.get('/api/setor-pedagogico/dashboard', authenticateToken, verificarPermissaoSetorPedagogico, async (req, res) => {
     try {
-        console.log(`📋 Setor Pedagógico ${req.userId} acessando dashboard`);
+        logger.info(`📋 Setor Pedagógico ${req.userId} acessando dashboard`);
         
         // Estatísticas gerais
         const [totalAlunos, totalAlunosComAcessibilidade, totalProfessores, totalTurmas, totalProvas] = await Promise.all([
@@ -19915,7 +19916,7 @@ app.get('/api/setor-pedagogico/dashboard', authenticateToken, verificarPermissao
         });
         
     } catch (error) {
-        console.error('❌ Erro no dashboard do setor pedagógico:', error);
+        logger.error('❌ Erro no dashboard do setor pedagógico:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -19994,7 +19995,7 @@ app.get('/api/setor-pedagogico/alunos-acessibilidade', authenticateToken, verifi
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar alunos com acessibilidade:', error);
+        logger.error('❌ Erro ao listar alunos com acessibilidade:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -20057,7 +20058,7 @@ app.get('/api/setor-pedagogico/aluno/:id', authenticateToken, verificarPermissao
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar detalhes do aluno:', error);
+        logger.error('❌ Erro ao buscar detalhes do aluno:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -20146,7 +20147,7 @@ app.get('/api/setor-pedagogico/provas', authenticateToken, verificarPermissaoSet
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar provas:', error);
+        logger.error('❌ Erro ao listar provas:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -20210,7 +20211,7 @@ app.get('/api/setor-pedagogico/provas/:id/visualizar', authenticateToken, verifi
         });
         
     } catch (error) {
-        console.error('❌ Erro ao visualizar prova:', error);
+        logger.error('❌ Erro ao visualizar prova:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -20285,7 +20286,7 @@ app.get('/api/setor-pedagogico/relatorio/acessibilidade', authenticateToken, ver
         });
         
     } catch (error) {
-        console.error('❌ Erro ao gerar relatório:', error);
+        logger.error('❌ Erro ao gerar relatório:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -20456,7 +20457,7 @@ app.get('/corrigir-prova', async (req, res) => {
         const frontendPath = path.join(__dirname, '../frontend/corrigir-prova.html');
         
         if (!fs.existsSync(frontendPath)) {
-            console.error('❌ Arquivo corrigir-prova.html não encontrado em:', frontendPath);
+            logger.error('❌ Arquivo corrigir-prova.html não encontrado em:', frontendPath);
             return res.status(404).send('Página não encontrada');
         }
         
@@ -20477,7 +20478,7 @@ app.get('/corrigir-prova', async (req, res) => {
         res.send(html);
         
     } catch (error) {
-        console.error('❌ Erro ao carregar página de correção:', error);
+        logger.error('❌ Erro ao carregar página de correção:', error);
         res.status(500).send(`
             <!DOCTYPE html>
             <html>
@@ -20509,15 +20510,15 @@ let pythonProcess = null;
 let omrServerReady = false;
 
 function iniciarServidorOMR() {
-    console.log('='.repeat(60));
-    console.log('🐍 Iniciando servidor OMR Python...');
+    logger.info('='.repeat(60));
+    logger.info('🐍 Iniciando servidor OMR Python...');
     
     const omrPath = path.join(__dirname, 'omr_server.py');
-    console.log('📁 Caminho:', omrPath);
+    logger.info('📁 Caminho:', omrPath);
     
     if (!fs.existsSync(omrPath)) {
-        console.error('❌ Arquivo omr_server.py não encontrado em:', omrPath);
-        console.log('💡 Certifique-se de que o arquivo está em backend/omr_server.py');
+        logger.error('❌ Arquivo omr_server.py não encontrado em:', omrPath);
+        logger.info('💡 Certifique-se de que o arquivo está em backend/omr_server.py');
         return;
     }
     
@@ -20536,13 +20537,13 @@ function iniciarServidorOMR() {
         pythonProcess.on('message', function(message) {
             const cleanMsg = message.toString().trim();
             if (cleanMsg) {
-                console.log('   [OMR]', cleanMsg);
+                logger.info('   [OMR]', cleanMsg);
                 
                 if (cleanMsg.includes('Running on http://127.0.0.1:5001') || 
                     cleanMsg.includes('Running on http://localhost:5001') ||
                     cleanMsg.includes('Pronto para receber requisicoes')) {
                     omrServerReady = true;
-                    console.log('✅ Servidor OMR Python iniciado e pronto!');
+                    logger.info('✅ Servidor OMR Python iniciado e pronto!');
                 }
             }
         });
@@ -20550,33 +20551,33 @@ function iniciarServidorOMR() {
         pythonProcess.stderr.on('data', function(data) {
             const errorMsg = data.toString().trim();
             if (errorMsg) {
-                console.error('   [OMR ERROR]', errorMsg);
+                logger.error('   [OMR ERROR]', errorMsg);
             }
         });
         
         pythonProcess.on('error', function(err) {
-            console.error('❌ Erro no servidor OMR:', err.message);
+            logger.error('❌ Erro no servidor OMR:', err.message);
             omrServerReady = false;
         });
         
         pythonProcess.on('close', function(code) {
-            console.log(`⚠️ Servidor OMR fechado (código: ${code})`);
+            logger.info(`⚠️ Servidor OMR fechado (código: ${code})`);
             omrServerReady = false;
             pythonProcess = null;
         });
         
-        console.log('✅ Servidor OMR Python iniciado (aguardando inicialização...)');
+        logger.info('✅ Servidor OMR Python iniciado (aguardando inicialização...)');
         
         setTimeout(() => {
             if (omrServerReady) {
-                console.log('✅ Servidor OMR pronto para uso!');
+                logger.info('✅ Servidor OMR pronto para uso!');
             } else {
-                console.log('⚠️ Servidor OMR ainda não respondeu, mas continuará tentando...');
+                logger.info('⚠️ Servidor OMR ainda não respondeu, mas continuará tentando...');
             }
         }, 5000);
         
     } catch (error) {
-        console.error('❌ Falha ao iniciar servidor OMR:', error.message);
+        logger.error('❌ Falha ao iniciar servidor OMR:', error.message);
     }
 }
 
@@ -20589,7 +20590,7 @@ setTimeout(() => {
 // ROTAS DO OMR (DEVEM FICAR ANTES DO FRONTEND ESTÁTICO)
 // ============================================================================
 
-console.log('🔧 REGISTRANDO ROTAS OMR...');
+logger.info('🔧 REGISTRANDO ROTAS OMR...');
 
 // Função para verificar status do OMR
 app.get('/api/omr/status', (req, res) => {
@@ -20611,7 +20612,7 @@ app.post('/api/omr/detect', express.json({ limit: '50mb' }), async (req, res) =>
             });
         }
         
-        console.log('📤 Enviando requisição para servidor OMR Python...');
+        logger.info('📤 Enviando requisição para servidor OMR Python...');
         
         // Usar fetch (Node.js 18+) ou node-fetch
         let fetchModule;
@@ -20634,11 +20635,11 @@ app.post('/api/omr/detect', express.json({ limit: '50mb' }), async (req, res) =>
         });
         
         const data = await response.json();
-        console.log('✅ Resposta recebida do OMR');
+        logger.info('✅ Resposta recebida do OMR');
         res.json(data);
         
     } catch (error) {
-        console.error('❌ Erro no proxy OMR:', error);
+        logger.error('❌ Erro no proxy OMR:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -20676,7 +20677,7 @@ app.get('/api/omr/test', async (req, res) => {
     }
 });
 
-console.log('✅ Rotas OMR registradas com sucesso!');
+logger.info('✅ Rotas OMR registradas com sucesso!');
 
 // ============================================================================
 // ROTAS OMR DEBUG - ADMIN (LÊ DA PASTA backend/debug_omr)
@@ -20694,9 +20695,9 @@ const OMR_IMAGES_URL = '/api/omr/imagens'; // Rota para servir as imagens
 // Garantir que a pasta existe
 if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
     fs.mkdirSync(OMR_DEBUG_FOLDER, { recursive: true });
-    console.log('📁 Pasta debug_omr criada em:', OMR_DEBUG_FOLDER);
+    logger.info('📁 Pasta debug_omr criada em:', OMR_DEBUG_FOLDER);
 } else {
-    console.log('📁 Pasta debug_omr encontrada em:', OMR_DEBUG_FOLDER);
+    logger.info('📁 Pasta debug_omr encontrada em:', OMR_DEBUG_FOLDER);
 }
 
 // Função para formatar bytes
@@ -20749,7 +20750,7 @@ function extrairInfoDoNome(nomeArquivo) {
 // ============ 1. LISTAR TODAS AS IMAGENS OMR ============
 app.get('/api/admin/omr/imagens', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`📋 Admin ${req.userId} listando imagens OMR da pasta: ${OMR_DEBUG_FOLDER}`);
+        logger.info(`📋 Admin ${req.userId} listando imagens OMR da pasta: ${OMR_DEBUG_FOLDER}`);
         
         // Verificar se a pasta existe
         if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
@@ -20769,7 +20770,7 @@ app.get('/api/admin/omr/imagens', authenticateToken, isSuperAdmin, async (req, r
             imageExtensions.includes(path.extname(file).toLowerCase())
         );
         
-        console.log(`📊 Encontrados ${imageFiles.length} arquivos de imagem`);
+        logger.info(`📊 Encontrados ${imageFiles.length} arquivos de imagem`);
         
         // Obter informações detalhadas de cada arquivo
         const imagens = await Promise.all(imageFiles.map(async (file) => {
@@ -20815,7 +20816,7 @@ app.get('/api/admin/omr/imagens', authenticateToken, isSuperAdmin, async (req, r
             resultados: imagens.filter(i => i.tipo === 'resultado').length
         };
         
-        console.log(`✅ Retornando ${imagens.length} imagens (${estatisticas.originais} originais, ${estatisticas.processadas} processadas, ${estatisticas.resultados} com resultado)`);
+        logger.info(`✅ Retornando ${imagens.length} imagens (${estatisticas.originais} originais, ${estatisticas.processadas} processadas, ${estatisticas.resultados} com resultado)`);
         
         res.json({
             success: true,
@@ -20825,7 +20826,7 @@ app.get('/api/admin/omr/imagens', authenticateToken, isSuperAdmin, async (req, r
         });
         
     } catch (error) {
-        console.error('❌ Erro ao listar imagens OMR:', error);
+        logger.error('❌ Erro ao listar imagens OMR:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao listar imagens: ' + error.message
@@ -20838,7 +20839,7 @@ app.delete('/api/admin/omr/imagens/:nomeArquivo', authenticateToken, isSuperAdmi
     try {
         const { nomeArquivo } = req.params;
         
-        console.log(`🗑️ Admin ${req.userId} excluindo imagem OMR: ${nomeArquivo}`);
+        logger.info(`🗑️ Admin ${req.userId} excluindo imagem OMR: ${nomeArquivo}`);
         
         // Validar nome do arquivo (segurança)
         if (nomeArquivo.includes('..') || nomeArquivo.includes('/') || nomeArquivo.includes('\\')) {
@@ -20859,7 +20860,7 @@ app.delete('/api/admin/omr/imagens/:nomeArquivo', authenticateToken, isSuperAdmi
         
         fs.unlinkSync(filePath);
         
-        console.log(`✅ Imagem ${nomeArquivo} excluída com sucesso`);
+        logger.info(`✅ Imagem ${nomeArquivo} excluída com sucesso`);
         
         res.json({
             success: true,
@@ -20867,7 +20868,7 @@ app.delete('/api/admin/omr/imagens/:nomeArquivo', authenticateToken, isSuperAdmi
         });
         
     } catch (error) {
-        console.error('❌ Erro ao excluir imagem:', error);
+        logger.error('❌ Erro ao excluir imagem:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao excluir imagem: ' + error.message
@@ -20878,7 +20879,7 @@ app.delete('/api/admin/omr/imagens/:nomeArquivo', authenticateToken, isSuperAdmi
 // ============ 3. LIMPAR TODAS AS IMAGENS OMR ============
 app.delete('/api/admin/omr/limpar', authenticateToken, isSuperAdmin, async (req, res) => {
     try {
-        console.log(`🗑️ Admin ${req.userId} limpando TODAS as imagens OMR`);
+        logger.info(`🗑️ Admin ${req.userId} limpando TODAS as imagens OMR`);
         
         const files = await readdir(OMR_DEBUG_FOLDER);
         let deletados = 0;
@@ -20893,7 +20894,7 @@ app.delete('/api/admin/omr/limpar', authenticateToken, isSuperAdmin, async (req,
             }
         }
         
-        console.log(`✅ ${deletados} arquivos excluídos da pasta debug_omr`);
+        logger.info(`✅ ${deletados} arquivos excluídos da pasta debug_omr`);
         
         res.json({
             success: true,
@@ -20902,7 +20903,7 @@ app.delete('/api/admin/omr/limpar', authenticateToken, isSuperAdmin, async (req,
         });
         
     } catch (error) {
-        console.error('❌ Erro ao limpar imagens:', error);
+        logger.error('❌ Erro ao limpar imagens:', error);
         res.status(500).json({
             success: false,
             error: 'Erro ao limpar imagens: ' + error.message
@@ -20910,8 +20911,8 @@ app.delete('/api/admin/omr/limpar', authenticateToken, isSuperAdmin, async (req,
     }
 });
 
-console.log('✅ Rotas OMR Debug registradas com sucesso!');
-console.log(`📁 Pasta debug_omr: ${OMR_DEBUG_FOLDER}`);
+logger.info('✅ Rotas OMR Debug registradas com sucesso!');
+logger.info(`📁 Pasta debug_omr: ${OMR_DEBUG_FOLDER}`);
 
 // ============ ROTA PARA OBTER QR CODE DO USUÁRIO LOGADO ============
 app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
@@ -20995,7 +20996,7 @@ app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar QR Code:', error);
+        logger.error('❌ Erro ao buscar QR Code:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -21047,7 +21048,7 @@ app.get('/api/identificar-usuario/:id', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -21060,8 +21061,8 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
     try {
         const { alunoId } = req.params;
         
-        console.log(`📱 Buscando QR Code do aluno: ${alunoId}`);
-        console.log(`   Solicitado por: ${req.userRole} (${req.userId})`);
+        logger.info(`📱 Buscando QR Code do aluno: ${alunoId}`);
+        logger.info(`   Solicitado por: ${req.userRole} (${req.userId})`);
         
         // 🔥 PERFIS AUTORIZADOS A VISUALIZAR O QR CODE DE ALUNOS
         const perfisAutorizados = [
@@ -21082,7 +21083,7 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
         ];
         
         if (!perfisAutorizados.includes(req.userRole)) {
-            console.warn(`⚠️ [QRCODE] Acesso negado para role: ${req.userRole}`);
+            logger.warn(`⚠️ [QRCODE] Acesso negado para role: ${req.userRole}`);
             return res.status(403).json({
                 success: false,
                 error: 'Acesso negado. Seu perfil não tem permissão para visualizar QR Codes de alunos.'
@@ -21108,13 +21109,13 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
             });
         }
         
-        console.log(`👤 Aluno: ${aluno.nome}`);
-        console.log(`📱 QR Code no banco: ${aluno.qrCodeUsuario ? '✅ SIM' : '❌ NÃO'}`);
-        console.log(`📏 Tamanho: ${aluno.qrCodeUsuario?.length || 0} caracteres`);
+        logger.info(`👤 Aluno: ${aluno.nome}`);
+        logger.info(`📱 QR Code no banco: ${aluno.qrCodeUsuario ? '✅ SIM' : '❌ NÃO'}`);
+        logger.info(`📏 Tamanho: ${aluno.qrCodeUsuario?.length || 0} caracteres`);
         
         // Se não tiver QR Code, gerar agora (fallback)
         if (!aluno.qrCodeUsuario) {
-            console.log(`🆕 Gerando QR Code para ${aluno.nome} (fallback)`);
+            logger.info(`🆕 Gerando QR Code para ${aluno.nome} (fallback)`);
             
             const QRCode = require('qrcode');
             const IS_LOCALHOST = process.env.NODE_ENV === 'development';
@@ -21139,7 +21140,7 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
             aluno.qrCodeUsuarioTipo = 'aluno';
             await aluno.save();
             
-            console.log(`✅ QR Code gerado e salvo no banco`);
+            logger.info(`✅ QR Code gerado e salvo no banco`);
         }
         
         res.json({
@@ -21155,7 +21156,7 @@ app.get('/api/aluno/qrcode/:alunoId', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro ao buscar QR Code:', error);
+        logger.error('❌ Erro ao buscar QR Code:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -21178,7 +21179,7 @@ app.get('/api/coordenacao-patio/turmas', authenticateToken, async (req, res) => 
             });
         }
 
-        console.log(`📋 Coordenação de Pátio ${req.userId} listando turmas`);
+        logger.info(`📋 Coordenação de Pátio ${req.userId} listando turmas`);
 
         // Buscar todas as turmas ativas
         const turmas = await Turma.find({ ativa: true })
@@ -21196,7 +21197,7 @@ app.get('/api/coordenacao-patio/turmas', authenticateToken, async (req, res) => 
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar turmas:', error);
+        logger.error('❌ Erro ao listar turmas:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -21217,7 +21218,7 @@ app.get('/api/coordenacao-patio/alunos', authenticateToken, async (req, res) => 
 
         const { turma } = req.query;
         
-        console.log(`📋 Coordenação de Pátio ${req.userId} buscando alunos da turma: ${turma}`);
+        logger.info(`📋 Coordenação de Pátio ${req.userId} buscando alunos da turma: ${turma}`);
 
         let query = { role: 'aluno', ativo: true };
         
@@ -21255,7 +21256,7 @@ app.get('/api/coordenacao-patio/alunos', authenticateToken, async (req, res) => 
         });
 
     } catch (error) {
-        console.error('❌ Erro ao listar alunos:', error);
+        logger.error('❌ Erro ao listar alunos:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -21275,11 +21276,11 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
 
         const { id } = req.params;
         
-        console.log(`🔍 Coordenação de Pátio ${req.userId} buscando aluno: ${id}`);
+        logger.info(`🔍 Coordenação de Pátio ${req.userId} buscando aluno: ${id}`);
 
         // Validar se o ID é válido (24 caracteres hexadecimais)
         if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-            console.log(`❌ ID inválido: ${id}`);
+            logger.info(`❌ ID inválido: ${id}`);
             return res.status(400).json({
                 success: false,
                 error: 'ID de usuário inválido'
@@ -21292,18 +21293,18 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
             .lean();
 
         if (!aluno) {
-            console.log(`❌ Usuário com ID ${id} não encontrado no banco`);
+            logger.info(`❌ Usuário com ID ${id} não encontrado no banco`);
             return res.status(404).json({
                 success: false,
                 error: 'Usuário não encontrado no sistema'
             });
         }
 
-        console.log(`✅ Usuário encontrado: ${aluno.nome} (${aluno.role})`);
+        logger.info(`✅ Usuário encontrado: ${aluno.nome} (${aluno.role})`);
 
         // Verificar se é aluno - retornar mensagem amigável se não for
         if (aluno.role !== 'aluno') {
-            console.log(`⚠️ Usuário ${aluno.nome} não é aluno (role: ${aluno.role})`);
+            logger.info(`⚠️ Usuário ${aluno.nome} não é aluno (role: ${aluno.role})`);
             return res.status(400).json({
                 success: false,
                 error: `Este QR Code pertence a um ${aluno.role === 'professor' ? 'professor' : 'funcionário'}. Apenas alunos podem registrar refeições.`
@@ -21351,7 +21352,7 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
                     jaComeu = !!registroExistente;
                 }
             } catch (err) {
-                console.warn('⚠️ Erro ao verificar registro:', err.message);
+                logger.warn('⚠️ Erro ao verificar registro:', err.message);
                 jaComeu = false;
             }
         }
@@ -21385,7 +21386,7 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
                 });
             }
         } catch (err) {
-            console.warn('⚠️ Erro ao contar refeições:', err.message);
+            logger.warn('⚠️ Erro ao contar refeições:', err.message);
         }
 
         res.json({
@@ -21416,8 +21417,8 @@ app.get('/api/coordenacao-patio/aluno/:id', authenticateToken, async (req, res) 
         });
 
     } catch (error) {
-        console.error('❌ Erro ao buscar aluno:', error);
-        console.error('Stack:', error.stack);
+        logger.error('❌ Erro ao buscar aluno:', error);
+        logger.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao buscar aluno: ' + error.message
@@ -21438,7 +21439,7 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
 
         const { alunoId, tipoRefeicao } = req.body;
         
-        console.log(`🍽️ Coordenação de Pátio ${req.userId} registrando refeição para aluno ${alunoId}, tipo: ${tipoRefeicao}`);
+        logger.info(`🍽️ Coordenação de Pátio ${req.userId} registrando refeição para aluno ${alunoId}, tipo: ${tipoRefeicao}`);
 
         if (!alunoId || !tipoRefeicao) {
             return res.status(400).json({
@@ -21537,7 +21538,7 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
 
         const nomeRefeicao = tipoRefeicao === 'manha' ? 'Lanche da Manhã' : tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
         
-        console.log(`✅ Refeição ${nomeRefeicao} registrada para ${aluno.nome} (${aluno.matricula})`);
+        logger.info(`✅ Refeição ${nomeRefeicao} registrada para ${aluno.nome} (${aluno.matricula})`);
 
         res.json({
             success: true,
@@ -21550,8 +21551,8 @@ app.post('/api/coordenacao-patio/registrar-refeicao', authenticateToken, async (
         });
 
     } catch (error) {
-        console.error('❌ Erro ao registrar refeição:', error);
-        console.error('Stack:', error.stack);
+        logger.error('❌ Erro ao registrar refeição:', error);
+        logger.error('Stack:', error.stack);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao registrar refeição: ' + error.message
@@ -21606,7 +21607,7 @@ app.get('/api/coordenacao-patio/registros-hoje', authenticateToken, async (req, 
         });
 
     } catch (error) {
-        console.error('❌ Erro ao buscar registros:', error);
+        logger.error('❌ Erro ao buscar registros:', error);
         res.status(500).json({
             success: false,
             error: 'Erro interno ao buscar registros: ' + error.message
@@ -21652,7 +21653,7 @@ app.get('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -21689,7 +21690,7 @@ app.put('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
         await registro.save();
         
         // Registrar log da edição
-        console.log(`✏️ Registro ${req.params.id} editado por ${req.userId} (${req.userRole})`);
+        logger.info(`✏️ Registro ${req.params.id} editado por ${req.userId} (${req.userRole})`);
         
         res.json({
             success: true,
@@ -21698,7 +21699,7 @@ app.put('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -21725,7 +21726,7 @@ app.delete('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
         }
         
         // Registrar log da exclusão
-        console.log(`🗑️ Registro ${req.params.id} excluído por ${req.userId} (${req.userRole})`);
+        logger.info(`🗑️ Registro ${req.params.id} excluído por ${req.userId} (${req.userRole})`);
         
         res.json({
             success: true,
@@ -21733,7 +21734,7 @@ app.delete('/api/cozinha/registro/:id', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        logger.error('❌ Erro:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -21748,10 +21749,10 @@ setInterval(async () => {
         const resultado = await service.verificarNotificacoesCalendario();
         
         if (resultado.notificacoesEnviadas > 0) {
-            console.log(`✅ ${resultado.notificacoesEnviadas} notificações enviadas!`);
+            logger.info(`✅ ${resultado.notificacoesEnviadas} notificações enviadas!`);
         }
     } catch (error) {
-        console.error('❌ Erro no verificador de notificações:', error);
+        logger.error('❌ Erro no verificador de notificações:', error);
     }
 }, 60000); // 60 segundos = 1 minuto
 
@@ -21809,7 +21810,7 @@ app.get('/', async (req, res) => {
         }
         
     } catch (error) {
-        console.error('❌ Erro na rota raiz:', error);
+        logger.error('❌ Erro na rota raiz:', error);
         return res.redirect('/login.html');
     }
 });
@@ -21836,32 +21837,32 @@ app.get('*', (req, res) => {
 
 // ============ INICIAR SERVIDOR ============
 server.listen(PORT, '0.0.0.0', () => {
-  console.log('='.repeat(50));
-  console.log(`🚀 EDUCAPLENO ONLINE - PRODUÇÃO`);
-  console.log(`📡 Servidor rodando na porta: ${PORT}`);
-  console.log(`🌐 URL: https://prova-iema-2026.onrender.com`);
-  console.log('Servidor Local:http://localhost:3000/login.html');
-  console.log(`🗄️  Banco de Dados: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
-  console.log(`🔐 Autenticação: ${process.env.JWT_SECRET ? '✅ Configurada' : '⚠️  Configurar JWT_SECRET'}`);
-  console.log('🔐 ===== CONFORMIDADE LGPD =====');
-  console.log(`   • Criptografia: ${process.env.ENCRYPTION_KEY ? '✅' : '❌'} (AES-256-GCM)`);
-  console.log(`   • Retenção: ${process.env.RETENCAO_VISITAS_ANOS || 2} anos`);
-  console.log(`   • DPO: ${process.env.DPO_EMAIL || 'não configurado'}`);
-  console.log(`   • Cron jobs: ✅`);
-  console.log('=================================');
-  console.log(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
-  console.log('='.repeat(50));
-  console.log('\n📊 Principais rotas disponíveis:');
-  console.log('  • POST /api/auth/register - Registrar usuário');
-  console.log('  • POST /api/auth/login - Login');
-  console.log('  • GET  /api/aluno/provas/pendentes - Provas pendentes do aluno');
-  console.log('  • POST /api/provas/:id/responder - Responder prova');
-  console.log('  • GET  /api/professor/provas - Provas do professor');
-  console.log('  • GET  /api/professor/resultados - Resultados do professor');
-  console.log('  • GET  /api/aluno/resultados - Resultados do aluno');
-  console.log('='.repeat(50));
+  logger.info('='.repeat(50));
+  logger.info(`🚀 EDUCAPLENO ONLINE - PRODUÇÃO`);
+  logger.info(`📡 Servidor rodando na porta: ${PORT}`);
+  logger.info(`🌐 URL: https://prova-iema-2026.onrender.com`);
+  logger.info('Servidor Local:http://localhost:3000/login.html');
+  logger.info(`🗄️  Banco de Dados: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
+  logger.info(`🔐 Autenticação: ${process.env.JWT_SECRET ? '✅ Configurada' : '⚠️  Configurar JWT_SECRET'}`);
+  logger.info('🔐 ===== CONFORMIDADE LGPD =====');
+  logger.info(`   • Criptografia: ${process.env.ENCRYPTION_KEY ? '✅' : '❌'} (AES-256-GCM)`);
+  logger.info(`   • Retenção: ${process.env.RETENCAO_VISITAS_ANOS || 2} anos`);
+  logger.info(`   • DPO: ${process.env.DPO_EMAIL || 'não configurado'}`);
+  logger.info(`   • Cron jobs: ✅`);
+  logger.info('=================================');
+  logger.info(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
+  logger.info('='.repeat(50));
+  logger.info('\n📊 Principais rotas disponíveis:');
+  logger.info('  • POST /api/auth/register - Registrar usuário');
+  logger.info('  • POST /api/auth/login - Login');
+  logger.info('  • GET  /api/aluno/provas/pendentes - Provas pendentes do aluno');
+  logger.info('  • POST /api/provas/:id/responder - Responder prova');
+  logger.info('  • GET  /api/professor/provas - Provas do professor');
+  logger.info('  • GET  /api/professor/resultados - Resultados do professor');
+  logger.info('  • GET  /api/aluno/resultados - Resultados do aluno');
+  logger.info('='.repeat(50));
 });
 
 server.timeout = 120000; // 2 minutos de timeout
 server.keepAliveTimeout = 120000;
-console.log('⏱️ Timeout do servidor configurado para 2 minutos');
+logger.info('⏱️ Timeout do servidor configurado para 2 minutos');
