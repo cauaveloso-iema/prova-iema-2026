@@ -935,6 +935,35 @@ router.put('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
 });
 
 // ============================================
+// 📚 LISTAR EIXOS DISPONÍVEIS (para dropdown do form)
+// ============================================
+router.get('/eixos', authenticateToken, verificarPermissaoModulo, async (req, res) => {
+    try {
+        const Eixo = require('../models/Eixo');
+        
+        const eixos = await Eixo.find({ ativo: true })
+            .select('nome label cor icone')
+            .sort({ label: 1 })
+            .lean();
+        
+        res.json({
+            success: true,
+            eixos: eixos.map(e => ({
+                id: e._id,
+                nome: e.nome,
+                label: e.label || e.nome,
+                cor: e.cor || '#6366f1',
+                icone: e.icone || 'fa-graduation-cap'
+            })),
+            total: eixos.length
+        });
+    } catch (error) {
+        console.error('❌ Erro ao listar eixos:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================
 // 🗑️ EXCLUIR PROFESSOR
 // ============================================
 router.delete('/professores/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {

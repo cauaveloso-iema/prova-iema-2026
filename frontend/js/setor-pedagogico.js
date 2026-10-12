@@ -7872,22 +7872,28 @@ class SetorPedagogico {
         });
     }
 
+    // ============================================================================
+    // 📚 POPULAR FILTRO DE EIXOS NO GERENCIAR PROFESSORES
+    // ============================================================================
     async popularFiltroEixosProfessores() {
         try {
             const select = document.getElementById('filtroEixoProfessor');
             if (!select) return;
 
-            // Eixos vindos da lista carregada
-            const eixos = [...new Set(
-                (this.substituicaoState.professores || [])
-                    .map(p => p.eixo)
-                    .filter(e => e && e !== 'Não definido')
-            )].sort();
+            // 🔥 Usar a mesma função corrigida (com cache)
+            const eixos = await this.carregarEixosDisponiveis();
 
+            // Montar opções — usa "nome" como value (é o que está salvo no professor)
             select.innerHTML = '<option value="todos">Todos os eixos</option>' +
-                eixos.map(e => `<option value="${this.escapeHtml(e)}">${this.escapeHtml(e)}</option>`).join('');
+                eixos.map(e => `
+                    <option value="${this.escapeHtml(e.nome)}">
+                        ${this.escapeHtml(e.label || e.nome)}
+                    </option>
+                `).join('');
+
+            console.log(`✅ Filtro de eixos populado: ${eixos.length} opções`);
         } catch (error) {
-            console.warn('Erro ao popular eixos:', error);
+            console.warn('Erro ao popular filtro de eixos:', error);
         }
     }
 
@@ -8229,18 +8235,24 @@ class SetorPedagogico {
         this.carregarProfessoresGerenciar();
     }
 
+    // ============================================================================
+    // 👨‍🏫 ABRIR MODAL DE PROFESSOR (NOVO OU EDITAR)
+    // ============================================================================
     async abrirFormProfessor(id = null) {
         const editando = !!id;
         let professor = null;
 
-        // ============ 🔥 FECHA O MODAL DE GERENCIAR ============
+        // 🔥 FECHA O MODAL DE GERENCIAR (evita modal sobre modal)
         const modalGerenciar = document.getElementById('modalGerenciarProfessores');
         if (modalGerenciar && this.modalGerenciarInstance) {
             this.modalGerenciarInstance.hide();
-            // Aguarda a animação do Bootstrap terminar (~300ms)
             await new Promise(resolve => setTimeout(resolve, 350));
         }
 
+        // 🔥 CARREGA OS EIXOS DO BANCO (igual ao modal de Curso)
+        const eixos = await this.carregarEixosDisponiveis();
+
+        // Se está editando, busca os dados do professor
         if (editando) {
             try {
                 const response = await fetch(`/api/substituicao-professor/professores/${id}`, {
@@ -8251,7 +8263,6 @@ class SetorPedagogico {
                 professor = data.professor;
             } catch (error) {
                 this.showToast('Erro ao carregar professor: ' + error.message, 'error');
-                // Reabre o modal gerenciar se der erro
                 this.reabrirModalGerenciar();
                 return;
             }
@@ -8260,11 +8271,36 @@ class SetorPedagogico {
         const antigo = document.getElementById('modalFormProfessor');
         if (antigo) antigo.remove();
 
+        // 🔥 MONTAGEM DAS OPÇÕES DO SELECT DE EIXO (padrão do modal de Curso)
+        const eixoAtual = editando ? (professor.eixo || '') : '';
+        const eixoOptions = `
+            <option value="">— Nenhum eixo selecionado —</option>
+            ${eixos.map(e => `
+                <option value="${this.escapeHtml(e.nome)}"
+                    ${eixoAtual === e.nome ? 'selected' : ''}
+                    style="border-left: 3px solid ${e.cor || '#667eea'};">
+                    ${this.escapeHtml(e.label || e.nome)}
+                </option>
+            `).join('')}
+        `;
+
+        // Aviso quando não há eixos cadastrados
+        const avisoEixos = eixos.length === 0
+            ? `<div style="margin-top: 6px; background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 10px; border-radius: 6px; font-size: 12px; color: #92400e;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Nenhum eixo cadastrado no sistema. Peça ao administrador para cadastrar antes de atribuir.
+            </div>`
+            : `<small style="color: #64748b; font-size: 11px; display: block; margin-top: 4px;">
+                    <i class="fas fa-info-circle"></i>
+                    ${eixos.length} eixo${eixos.length > 1 ? 's' : ''} disponíve${eixos.length > 1 ? 'is' : 'l'} no sistema
+            </small>`;
+
         const modalHtml = `
             <div class="modal fade" id="modalFormProfessor" tabindex="-1" data-bs-backdrop="static">
                 <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
                     <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                        
+
+                        <!-- HEADER -->
                         <div class="modal-header" style="background: linear-gradient(135deg, ${editando ? '#f59e0b 0%, #d97706 100%' : '#10b981 0%, #059669 100%'}); color: white; border: none; padding: 22px 28px;">
                             <div style="display: flex; align-items: center; gap: 14px;">
                                 <div style="width: 46px; height: 46px; background: rgba(255,255,255,0.18); border-radius: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
@@ -8279,81 +8315,107 @@ class SetorPedagogico {
                                     </small>
                                 </div>
                             </div>
-                            <button type="button" class="btn-close btn-close-white" 
+                            <button type="button" class="btn-close btn-close-white"
                                     onclick="setorPedagogico.fecharFormProfessor()"></button>
+                        </div>
+
+                        <!-- AVISO DE CAMPOS OBRIGATÓRIOS -->
+                        <div style="padding: 12px 28px; background: #eff6ff; border-bottom: 1px solid #dbeafe;">
+                            <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #1e40af;">
+                                <i class="fas fa-info-circle"></i>
+                                <span>
+                                    Os campos marcados com <strong style="color: #dc2626; font-size: 14px;">*</strong> são de <strong>preenchimento obrigatório</strong>.
+                                </span>
+                            </div>
                         </div>
 
                         <div class="modal-body" style="padding: 28px;">
                             <input type="hidden" id="formProfessorId" value="${editando ? professor.id : ''}">
 
                             <div class="row g-3">
+                                <!-- NOME (OBRIGATÓRIO) -->
                                 <div class="col-md-8">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
-                                        Nome Completo <span class="text-danger">*</span>
+                                        Nome Completo <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
                                     </label>
-                                    <input type="text" id="formProfessorNome" class="form-control" 
+                                    <input type="text" id="formProfessorNome" class="form-control"
+                                        placeholder="Nome completo do professor"
                                         value="${editando ? this.escapeHtml(professor.nome) : ''}" required>
                                 </div>
 
+                                <!-- MATRÍCULA (OBRIGATÓRIO) -->
                                 <div class="col-md-4">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
-                                        Matrícula <span class="text-danger">*</span>
+                                        Matrícula <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
                                     </label>
-                                    <input type="text" id="formProfessorMatricula" class="form-control" 
+                                    <input type="text" id="formProfessorMatricula" class="form-control"
+                                        placeholder="Ex: 123456"
                                         value="${editando ? this.escapeHtml(professor.matricula || '') : ''}" required>
                                 </div>
 
+                                <!-- EMAIL (OBRIGATÓRIO) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
-                                        Email Institucional <span class="text-danger">*</span>
+                                        Email Institucional <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
                                     </label>
-                                    <input type="email" id="formProfessorEmail" class="form-control" 
+                                    <input type="email" id="formProfessorEmail" class="form-control"
                                         placeholder="nome@iemasaoluiscentro.net"
                                         value="${editando ? this.escapeHtml(professor.email) : ''}" required>
                                     <small class="text-muted" style="font-size: 11px;">Deve terminar com @iemasaoluiscentro.net</small>
                                 </div>
 
+                                <!-- CPF (OBRIGATÓRIO) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
-                                        CPF <span class="text-danger">*</span>
+                                        CPF <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
                                     </label>
-                                    <input type="text" id="formProfessorCPF" class="form-control" 
+                                    <input type="text" id="formProfessorCPF" class="form-control"
                                         placeholder="000.000.000-00" maxlength="14"
                                         value="${editando ? this.escapeHtml(professor.cpf || '') : ''}" required>
                                 </div>
 
+                                <!-- TELEFONE (OPCIONAL) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Telefone
+                                        <span style="color: #94a3b8; font-size: 11px; font-weight: 500; margin-left: 6px;">(opcional)</span>
                                     </label>
-                                    <input type="text" id="formProfessorTelefone" class="form-control" 
+                                    <input type="text" id="formProfessorTelefone" class="form-control"
                                         placeholder="(00) 00000-0000" maxlength="15"
                                         value="${editando ? this.escapeHtml(professor.telefone || '') : ''}">
                                 </div>
 
+                                <!-- 🔥 EIXO (OPCIONAL) - DROPDOWN IGUAL AO DE CURSOS -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Eixo
+                                        <span style="color: #94a3b8; font-size: 11px; font-weight: 500; margin-left: 6px;">(opcional)</span>
                                     </label>
-                                    <input type="text" id="formProfessorEixo" class="form-control" 
-                                        placeholder="Ex: Natureza, Humanas..."
-                                        value="${editando ? this.escapeHtml(professor.eixo || '') : ''}">
+                                    <select id="formProfessorEixo" class="form-select" ${eixos.length === 0 ? 'disabled' : ''}>
+                                        ${eixoOptions}
+                                    </select>
+                                    ${avisoEixos}
                                 </div>
 
+                                <!-- DEPARTAMENTO (OPCIONAL) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Departamento
+                                        <span style="color: #94a3b8; font-size: 11px; font-weight: 500; margin-left: 6px;">(opcional)</span>
                                     </label>
-                                    <input type="text" id="formProfessorDepartamento" class="form-control" 
+                                    <input type="text" id="formProfessorDepartamento" class="form-control"
+                                        placeholder="Ex: Ciências da Natureza"
                                         value="${editando ? this.escapeHtml(professor.departamento || '') : ''}">
                                 </div>
 
+                                <!-- TITULAÇÃO (OPCIONAL) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Titulação
+                                        <span style="color: #94a3b8; font-size: 11px; font-weight: 500; margin-left: 6px;">(opcional)</span>
                                     </label>
                                     <select id="formProfessorTitulacao" class="form-select">
-                                        <option value="">Selecione...</option>
+                                        <option value="">— Não informada —</option>
                                         <option value="Graduação" ${editando && professor.titulacao === 'Graduação' ? 'selected' : ''}>Graduação</option>
                                         <option value="Especialização" ${editando && professor.titulacao === 'Especialização' ? 'selected' : ''}>Especialização</option>
                                         <option value="Mestrado" ${editando && professor.titulacao === 'Mestrado' ? 'selected' : ''}>Mestrado</option>
@@ -8361,14 +8423,16 @@ class SetorPedagogico {
                                     </select>
                                 </div>
 
+                                <!-- SENHA INICIAL (OBRIGATÓRIO - só ao criar) -->
                                 ${!editando ? `
                                     <div class="col-md-6">
                                         <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
-                                            Senha Inicial <span class="text-danger">*</span>
+                                            Senha Inicial <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
                                         </label>
                                         <div style="position: relative;">
-                                            <input type="password" id="formProfessorSenha" class="form-control" 
-                                                placeholder="Mínimo 6 caracteres" required>
+                                            <input type="password" id="formProfessorSenha" class="form-control"
+                                                placeholder="Mínimo 6 caracteres" required
+                                                style="padding-right: 45px;">
                                             <button type="button" onclick="toggleSenhaVisivel('formProfessorSenha', this)"
                                                     style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #64748b; padding: 4px;">
                                                 <i class="fas fa-eye"></i>
@@ -8378,13 +8442,15 @@ class SetorPedagogico {
                                     </div>
                                 ` : ''}
 
+                                <!-- STATUS ATIVO (OPCIONAL) -->
                                 <div class="col-12">
                                     <div style="background: #f8fafc; border-radius: 10px; padding: 14px 16px; border: 1px solid #e5e7eb;">
                                         <div class="form-check form-switch" style="margin: 0;">
-                                            <input class="form-check-input" type="checkbox" id="formProfessorAtivo" 
+                                            <input class="form-check-input" type="checkbox" id="formProfessorAtivo"
                                                 ${(!editando || professor.ativo) ? 'checked' : ''}>
                                             <label class="form-check-label" for="formProfessorAtivo" style="font-weight: 600; font-size: 14px; cursor: pointer;">
                                                 Professor Ativo
+                                                <span style="color: #94a3b8; font-size: 11px; font-weight: 500; margin-left: 6px;">(desmarque para inativar)</span>
                                             </label>
                                         </div>
                                     </div>
@@ -8392,12 +8458,13 @@ class SetorPedagogico {
                             </div>
                         </div>
 
+                        <!-- FOOTER -->
                         <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 28px; background: #f8fafc;">
                             <button type="button" class="btn btn-secondary" onclick="setorPedagogico.fecharFormProfessor()"
                                     style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
                                 <i class="fas fa-arrow-left me-2"></i> Voltar
                             </button>
-                            <button type="button" class="btn btn-${editando ? 'warning' : 'success'}" 
+                            <button type="button" class="btn btn-${editando ? 'warning' : 'success'}"
                                     onclick="setorPedagogico.salvarProfessor()" id="btnSalvarProfessor"
                                     style="padding: 10px 24px; border-radius: 10px; font-weight: 600;">
                                 <i class="fas fa-save me-2"></i> ${editando ? 'Salvar Alterações' : 'Cadastrar Professor'}
@@ -8416,7 +8483,7 @@ class SetorPedagogico {
         setTimeout(() => {
             const cpfInput = document.getElementById('formProfessorCPF');
             const telInput = document.getElementById('formProfessorTelefone');
-            
+
             if (cpfInput) {
                 cpfInput.addEventListener('input', function() {
                     this.value = this.value.replace(/\D/g, '')
@@ -8425,7 +8492,7 @@ class SetorPedagogico {
                         .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
                 });
             }
-            
+
             if (telInput) {
                 telInput.addEventListener('input', function() {
                     let v = this.value.replace(/\D/g, '').slice(0, 11);
@@ -8479,26 +8546,35 @@ class SetorPedagogico {
         const email = document.getElementById('formProfessorEmail')?.value.trim();
         const cpf = document.getElementById('formProfessorCPF')?.value.trim();
         const telefone = document.getElementById('formProfessorTelefone')?.value.trim();
-        const eixo = document.getElementById('formProfessorEixo')?.value.trim();
+        const eixo = document.getElementById('formProfessorEixo')?.value || '';  // ✅ OPCIONAL
         const departamento = document.getElementById('formProfessorDepartamento')?.value.trim();
         const titulacao = document.getElementById('formProfessorTitulacao')?.value;
         const ativo = document.getElementById('formProfessorAtivo')?.checked;
 
-        // Validações
+        // ============ VALIDAÇÕES (apenas campos obrigatórios) ============
         if (!nome || nome.length < 3) {
-            this.showToast('⚠️ Nome deve ter pelo menos 3 caracteres', 'warning');
+            this.showToast('⚠️ Nome é obrigatório (mínimo 3 caracteres)', 'warning');
+            document.getElementById('formProfessorNome')?.focus();
             return;
         }
         if (!matricula) {
             this.showToast('⚠️ Matrícula é obrigatória', 'warning');
+            document.getElementById('formProfessorMatricula')?.focus();
             return;
         }
-        if (!email || !email.endsWith('@iemasaoluiscentro.net')) {
+        if (!email) {
+            this.showToast('⚠️ Email é obrigatório', 'warning');
+            document.getElementById('formProfessorEmail')?.focus();
+            return;
+        }
+        if (!email.endsWith('@iemasaoluiscentro.net')) {
             this.showToast('⚠️ Email deve ser institucional (@iemasaoluiscentro.net)', 'warning');
+            document.getElementById('formProfessorEmail')?.focus();
             return;
         }
         if (!cpf || cpf.replace(/\D/g, '').length !== 11) {
-            this.showToast('⚠️ CPF inválido', 'warning');
+            this.showToast('⚠️ CPF é obrigatório e deve ter 11 dígitos', 'warning');
+            document.getElementById('formProfessorCPF')?.focus();
             return;
         }
 
@@ -8506,7 +8582,8 @@ class SetorPedagogico {
         if (!editando) {
             senha = document.getElementById('formProfessorSenha')?.value;
             if (!senha || senha.length < 6) {
-                this.showToast('⚠️ Senha deve ter pelo menos 6 caracteres', 'warning');
+                this.showToast('⚠️ Senha é obrigatória (mínimo 6 caracteres)', 'warning');
+                document.getElementById('formProfessorSenha')?.focus();
                 return;
             }
         }
@@ -8524,9 +8601,9 @@ class SetorPedagogico {
                 email,
                 cpf: cpf.replace(/\D/g, ''),
                 telefone: telefone ? telefone.replace(/\D/g, '') : '',
-                eixo,
-                departamento,
-                titulacao,
+                eixo: eixo || '',        // ✅ Envia vazio se não escolhido
+                departamento: departamento || '',
+                titulacao: titulacao || '',
                 ativo
             };
 
@@ -8555,7 +8632,6 @@ class SetorPedagogico {
                 throw new Error(data.error || 'Erro ao salvar');
             }
 
-            // Fecha modal e reabre o gerenciar
             const modalForm = document.getElementById('modalFormProfessor');
             if (modalForm && this.modalFormProfessorInstance) {
                 this.modalFormProfessorInstance.hide();
@@ -8570,7 +8646,6 @@ class SetorPedagogico {
                 'success'
             );
 
-            // Recarrega lista de professores da substituição também
             await this.carregarProfessoresSubstituicao();
 
         } catch (error) {
@@ -8618,6 +8693,54 @@ class SetorPedagogico {
             } else {
                 this.showToast('❌ ' + error.message, 'error');
             }
+        }
+    }
+
+    // ============================================================================
+    // 📚 CARREGAR EIXOS DISPONÍVEIS (com cache) — VERSÃO CORRIGIDA
+    // ============================================================================
+    async carregarEixosDisponiveis() {
+        // Cache em memória (evita múltiplas requisições)
+        if (this._eixosCache && this._eixosCache.length > 0) {
+            return this._eixosCache;
+        }
+
+        try {
+            const token = localStorage.getItem('auth_token');
+
+            // 🔥 ROTA CORRETA (mesma que o admin.js usa e funciona)
+            const response = await fetch('/api/admin/eixos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                console.error(`❌ Erro HTTP ${response.status} ao carregar eixos`);
+                return [];
+            }
+
+            const data = await response.json();
+
+            if (data.success && Array.isArray(data.eixos)) {
+                // 🔥 Normalizar estrutura do eixo
+                this._eixosCache = data.eixos.map(e => ({
+                    _id: e._id,
+                    nome: e.nome,
+                    label: e.label || e.nome,
+                    cor: e.cor || '#667eea',
+                    icone: e.icone || 'fa-graduation-cap',
+                    descricao: e.descricao || ''
+                }));
+
+                console.log(`✅ ${this._eixosCache.length} eixos carregados com sucesso`);
+                return this._eixosCache;
+            }
+
+            console.warn('⚠️ Resposta sem eixos válidos:', data);
+            return [];
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar eixos:', error);
+            return [];
         }
     }
     
