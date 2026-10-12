@@ -8546,12 +8546,17 @@ class SetorPedagogico {
         const email = document.getElementById('formProfessorEmail')?.value.trim();
         const cpf = document.getElementById('formProfessorCPF')?.value.trim();
         const telefone = document.getElementById('formProfessorTelefone')?.value.trim();
-        const eixo = document.getElementById('formProfessorEixo')?.value || '';  // ✅ OPCIONAL
+        
+        // 🔥 CORREÇÃO PRINCIPAL — converter "" em undefined
+        const eixoRaw = document.getElementById('formProfessorEixo')?.value || '';
+        const eixo = eixoRaw.trim() !== '' ? eixoRaw.trim() : undefined;
+        //    ↑ Se vazio, vira undefined (o Mongoose não valida undefined contra enum)
+        
         const departamento = document.getElementById('formProfessorDepartamento')?.value.trim();
         const titulacao = document.getElementById('formProfessorTitulacao')?.value;
         const ativo = document.getElementById('formProfessorAtivo')?.checked;
 
-        // ============ VALIDAÇÕES (apenas campos obrigatórios) ============
+        // ============ VALIDAÇÕES ============
         if (!nome || nome.length < 3) {
             this.showToast('⚠️ Nome é obrigatório (mínimo 3 caracteres)', 'warning');
             document.getElementById('formProfessorNome')?.focus();
@@ -8601,7 +8606,7 @@ class SetorPedagogico {
                 email,
                 cpf: cpf.replace(/\D/g, ''),
                 telefone: telefone ? telefone.replace(/\D/g, '') : '',
-                eixo: eixo || '',        // ✅ Envia vazio se não escolhido
+                eixo: eixo,              // 🔥 undefined se vazio — não envia ""
                 departamento: departamento || '',
                 titulacao: titulacao || '',
                 ativo
@@ -8611,10 +8616,10 @@ class SetorPedagogico {
                 payload.password = senha;
             }
 
-            const url = editando 
-                ? `/api/substituicao-professor/professores/${id}` 
+            const url = editando
+                ? `/api/substituicao-professor/professores/${id}`
                 : '/api/substituicao-professor/professores';
-            
+
             const method = editando ? 'PUT' : 'POST';
 
             const response = await fetch(url, {
