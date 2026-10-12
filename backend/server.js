@@ -225,6 +225,17 @@ function sanitizarJwtExpiracao(valor) {
     return padrao;
 }
 
+// ============ FUNÇÃO AUXILIAR PARA EXPIRAÇÃO DO JWT ============
+// Adicione ANTES do server.listen()
+function parseJwtExpiration(expiration) {
+  if (typeof expiration === 'number') return expiration;
+  const match = expiration.match(/^(\d+)([hH])$/);
+  if (match) {
+    return parseInt(match[1]) * 60 * 60;
+  }
+  return 24 * 60 * 60; // 24 horas padrão
+}
+
 // ============================================================================
 // INICIALIZAÇÃO DO EXPRESS E SERVIDOR
 // ============================================================================
@@ -441,9 +452,24 @@ app.use((req, res, next) => {
 
 app.use(compression());
 
-// CORS
+const origensPermitidas = [
+  'https://prova-iema-2026.onrender.com',
+  'https://www.educapleno.com',
+  'https://educapleno.com',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Permite requisições sem origin (ex: Postman, apps nativos)
+    if (!origin) return callback(null, true);
+    if (origensPermitidas.includes(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`🚫 CORS bloqueado para origem: ${origin}`);
+    return callback(new Error('Origem não permitida pelo CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -761,7 +787,7 @@ app.use(session({
     ttl: 24 * 60 * 60
   }),
   cookie: {
-    secure: false,
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000
   }
@@ -1708,443 +1734,6 @@ app.use('/api', rastrearAtividade);
 // ROTAS PÚBLICAS
 // ============================================================================
 
-// ============ ROTA DE LOGIN COM 2FA (VERSÃO CORRIGIDA) ============
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password, cpf, twoFactorCode, token: tempToken } = req.body;
-    
-    // ===== CASO 1: REQUISIÇÃO COM TOKEN TEMPORÁRIO (2FA) =====
-    if (tempToken) {
-      console.log('🔐 Requisição com token temporário recebida');
-      
-      try {
-        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
-        
-        if (decoded.temp && decoded.purpose === '2fa') {
-          console.log(`✅ Token temporário válido para usuário: ${decoded.id}`);
-          
-          const user = await User.findById(decoded.id)
-            .select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +twoFactorTempSecret +nome +email +role +telefone');
-          
-          if (!user) {
-            return res.status(401).json({
-              success: false,
-              error: 'Usuário não encontrado'
-            });
-          }
-          
-          if (!twoFactorCode) {
-            return res.status(400).json({
-              success: false,
-              error: 'Código 2FA não fornecido'
-            });
-          }
-          
-          // ========== VERIFICAÇÃO DE CÓDIGO 2FA ==========
-          let isValid = false;
-          let motivo = '';
-          
-          // 1. Verificar código temporário (SMS atual)
-          if (user.twoFactorTempSecret && user.twoFactorTempSecret === twoFactorCode) {
-            isValid = true;
-            motivo = 'SMS';
-            user.twoFactorTempSecret = null;
-            await user.save();
-            console.log('✅ Código SMS válido');
-          }
-          
-          // 2. Verificar código TOTP (QR Code - Google Authenticator)
-          if (!isValid && (user.twoFactorSecret || user.twoFactorTempSecret)) {
-            try {
-              const speakeasy = require('speakeasy');
-              
-              if (user.twoFactorTempSecret) {
-                const verified = speakeasy.totp.verify({
-                  secret: user.twoFactorTempSecret,
-                  encoding: 'base32',
-                  token: twoFactorCode,
-                  window: 1
-                });
-                
-                if (verified) {
-                  isValid = true;
-                  motivo = 'TOTP (QR Code) - Temporário';
-                  console.log('✅ Código TOTP temporário válido');
-                  
-                  if (!user.twoFactorEnabled) {
-                    const backupCodes = [];
-                    for (let i = 0; i < 10; i++) {
-                      backupCodes.push(generateBackupCode());
-                    }
-                    
-                    user.twoFactorEnabled = true;
-                    user.twoFactorSecret = user.twoFactorTempSecret;
-                    user.twoFactorBackupCodes = backupCodes;
-                    user.twoFactorTempSecret = null;
-                    await user.save();
-                    console.log('✅ 2FA ativado com sucesso via QR Code');
-                  } else {
-                    user.twoFactorTempSecret = null;
-                    await user.save();
-                  }
-                }
-              }
-              
-              if (!isValid && user.twoFactorSecret && user.twoFactorEnabled) {
-                const verified = speakeasy.totp.verify({
-                  secret: user.twoFactorSecret,
-                  encoding: 'base32',
-                  token: twoFactorCode,
-                  window: 1
-                });
-                
-                if (verified) {
-                  isValid = true;
-                  motivo = 'TOTP (QR Code) - Permanente';
-                  console.log('✅ Código TOTP permanente válido');
-                }
-              }
-            } catch (error) {
-              console.error('❌ Erro ao verificar TOTP:', error.message);
-            }
-          }
-          
-          // 3. Verificar código de backup
-          if (!isValid && user.twoFactorBackupCodes && user.twoFactorBackupCodes.includes(twoFactorCode)) {
-            isValid = true;
-            motivo = 'backup';
-            user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(c => c !== twoFactorCode);
-            await user.save();
-            console.log('✅ Código de backup válido');
-          }
-          
-          // 4. Verificar código secreto permanente
-          if (!isValid && user.twoFactorSecret && user.twoFactorSecret === twoFactorCode) {
-            isValid = true;
-            motivo = 'secreto';
-            console.log('✅ Código secreto válido');
-          }
-          
-          if (!isValid) {
-            console.log('❌ Código inválido:', twoFactorCode);
-            return res.status(401).json({
-              success: false,
-              error: 'Código 2FA inválido'
-            });
-          }
-          
-          // Buscar configuração de expiração do JWT
-          const configJwt = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
-          const jwtExpiracaoBruto = configJwt ? configJwt.valor : '24h';
-          const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto);
-          
-          const authToken = jwt.sign(
-            { 
-              id: user._id, 
-              role: user.role,
-              nome: user.nome,
-              twoFactorEnabled: user.twoFactorEnabled
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: jwtExpiracao }
-          );
-          
-          // Definir redirecionamento
-          let redirectTo = '';
-          if (user.forcePasswordChange) {
-            redirectTo = '/trocar-senha.html';
-          } else if (user.role === 'super_admin') {
-            redirectTo = '/admin.html';
-          } else if (user.role === 'admin') {
-            redirectTo = '/admin-simples.html';
-          } else if (user.role === 'professor') {
-            redirectTo = '/index.html';
-          } else if (user.role === 'setor_pedagogico') {
-            redirectTo = '/setor-pedagogico.html';
-          } else if (user.role === 'coordenacao_patio') {
-            redirectTo = '/coordenacao-patio.html';
-          } else if (user.role === 'cozinha') {
-            redirectTo = '/cozinha-dashboard.html';
-          } else if (user.role === 'gestao_geral') {
-            redirectTo = '/gestao-geral.html';
-          } else if (user.role === 'enfermaria') {
-            redirectTo = '/enfermaria.html';
-          } else if (user.role === 'supervisao') {
-            redirectTo = '/supervisao.html';
-          } else if (user.role === 'biblioteca') {
-            redirectTo = '/biblioteca.html';
-          } else if (user.role === 'psicologia') {
-            redirectTo = '/psicologia.html';
-          } else if (user.role === 'protagonismo') {
-            redirectTo = '/protagonismo.html';
-          } else if (user.role === 'secretaria') {
-            redirectTo = '/secretaria.html';
-          } else if (user.role === 'assistente-social') {
-            redirectTo = '/assistente-social.html';
-          } else if (user.role === 'aluno') {
-            redirectTo = '/aluno.html';
-          } else {
-            redirectTo = '/login.html';
-          }
-          
-          console.log(`✅ 2FA verificado via ${motivo} para ${user.email}`);
-          
-          return res.json({
-            success: true,
-            token: authToken,
-            user: {
-              id: user._id,
-              nome: user.nome,
-              email: user.email,
-              role: user.role,
-              twoFactorEnabled: user.twoFactorEnabled,
-              telefone: user.telefone
-            },
-            redirectTo: redirectTo
-          });
-        }
-      } catch (err) {
-        console.error('❌ Erro ao verificar token temporário:', err.message);
-        return res.status(401).json({
-          success: false,
-          error: 'Token temporário inválido ou expirado'
-        });
-      }
-    }
-    
-    // ===== CASO 2: LOGIN NORMAL (SEM TOKEN) =====
-    console.log('📝 Requisição de login normal');
-    
-    // Buscar configurações de segurança
-    const [configTentativas, configBloqueio, configJwt, config2FA] = await Promise.all([
-      Config.findOne({ chave: 'seguranca.tentativasLogin' }),
-      Config.findOne({ chave: 'seguranca.bloqueioTempo' }),
-      Config.findOne({ chave: 'seguranca.jwtExpiracao' }),
-      Config.findOne({ chave: 'seguranca.doisFatores' })
-    ]);
-    
-    const maxTentativas = configTentativas ? configTentativas.valor : 5;
-    const tempoBloqueio = configBloqueio ? configBloqueio.valor : 15;
-    const jwtExpiracaoBruto = configJwt ? configJwt.valor : '24h';
-    const jwtExpiracao = sanitizarJwtExpiracao(jwtExpiracaoBruto);
-    const exigir2FA = config2FA ? config2FA.valor : false;
-    
-    console.log(`🔐 Configuração 2FA global: ${exigir2FA ? 'ATIVADO' : 'DESATIVADO'}`);
-    
-    // Buscar usuário por email ou CPF
-    let user;
-    let campoBusca = '';
-    
-    if (email) {
-      user = await User.findOne({ email: email.toLowerCase() })
-        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome +tokenVersion');
-      campoBusca = 'email';
-    } else if (cpf) {
-      const cpfNumeros = cpf.replace(/\D/g, '');
-      user = await User.findOne({ cpf: cpfNumeros })
-        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome +tokenVersion');
-      campoBusca = 'CPF';
-    } else {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Email ou CPF é obrigatório' 
-      });
-    }
-    
-    if (!user) {
-      console.log(`❌ Usuário não encontrado com ${campoBusca} fornecido`);
-      return res.status(401).json({ 
-        success: false, 
-        error: `${campoBusca === 'email' ? 'Email' : 'CPF'} ou senha incorretos` 
-      });
-    }
-    
-    // Verificar se usuário está bloqueado
-    if (user.lockUntil && user.lockUntil > Date.now()) {
-      const minutosRestantes = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      return res.status(401).json({ 
-        success: false, 
-        error: `Usuário bloqueado. Tente novamente em ${minutosRestantes} minutos.` 
-      });
-    }
-    
-    // Verificar se usuário está ativo
-    if (!user.ativo) {
-      return res.status(401).json({ 
-        success: false, 
-        error: 'Usuário inativo. Entre em contato com a administração.' 
-      });
-    }
-    
-    // Verificar senha
-    const isMatch = await user.comparePassword(password);
-    
-    if (!isMatch) {
-      user.loginAttempts = (user.loginAttempts || 0) + 1;
-      
-      if (user.loginAttempts >= maxTentativas) {
-        user.lockUntil = Date.now() + (tempoBloqueio * 60 * 1000);
-        user.loginAttempts = 0;
-        await user.save();
-        
-        return res.status(401).json({ 
-          success: false, 
-          error: `Muitas tentativas. Usuário bloqueado por ${tempoBloqueio} minutos.` 
-        });
-      }
-      
-      await user.save();
-      
-      const tentativasRestantes = maxTentativas - user.loginAttempts;
-      return res.status(401).json({ 
-        success: false, 
-        error: `${campoBusca === 'email' ? 'Email' : 'CPF'} ou senha incorretos. ${tentativasRestantes} tentativa(s) restante(s).` 
-      });
-    }
-    
-    // Login bem-sucedido
-    user.loginAttempts = 0;
-    user.lockUntil = null;
-    user.lastLogin = new Date();
-    await user.save();
-    
-    // ===== VERIFICAR SE DEVE EXIGIR 2FA =====
-    // Regras:
-    //   🅰️ super_admin → SEMPRE exige 2FA (fixo)
-    //   🅱️ admin, professor, etc. → só exige se `seguranca.doisFatores = true`
-    // ============================================================
-    let exige2FAAgora = false;
-
-    if (user.role === 'super_admin') {
-      // Super Admin sempre exige
-      exige2FAAgora = true;
-      console.log(`🔐 2FA OBRIGATÓRIO para super_admin ${user.email}`);
-    } else {
-      // Outros perfis seguem a config global
-      exige2FAAgora = exigir2FA;
-      console.log(`${exige2FAAgora ? '🔐 2FA exigido' : '✅ 2FA dispensado'} para ${user.role} ${user.email} (config global: ${exigir2FA})`);
-    }
-
-    if (exige2FAAgora) {
-      // Verificar códigos de backup
-      if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
-        console.log('🆕 Usuário sem códigos de backup - gerando 10 agora...');
-        const backupCodes = [];
-        for (let i = 0; i < 10; i++) {
-          backupCodes.push(generateBackupCode());
-        }
-        user.twoFactorBackupCodes = backupCodes;
-        user.twoFactorBackupCodesShown = false;
-        await user.save();
-        console.log('✅ 10 códigos de backup gerados');
-      }
-      
-      // Gerar token TEMPORÁRIO
-      const tempAuthToken = jwt.sign(
-        { 
-          id: user._id,
-          temp: true,
-          purpose: '2fa',
-          role: user.role,
-          nome: user.nome
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '10m' }
-      );
-      
-      return res.json({
-        success: true,
-        requiresTwoFactor: true,
-        userId: user._id,
-        token: tempAuthToken,
-        message: '2FA necessário'
-      });
-    }
-    
-    // ===== USUÁRIOS SEM 2FA =====
-    console.log(`✅ Login bem-sucedido para usuário ${user.email} (${user.role})`);
-    
-    const authToken = jwt.sign(
-      { 
-        id: user._id, 
-        role: user.role,
-        nome: user.nome,
-        twoFactorEnabled: user.twoFactorEnabled,
-        tokenVersion: user.tokenVersion || 0
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: jwtExpiracao }
-    );
-    
-    res.cookie('auth_token', authToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: parseJwtExpiration(jwtExpiracao) * 1000
-    });
-    
-    // Definir redirecionamento
-    let redirectTo = '';
-    if (user.forcePasswordChange) {
-      redirectTo = '/trocar-senha.html';
-    } else if (user.role === 'super_admin') {
-      redirectTo = '/admin.html';
-    } else if (user.role === 'admin') {
-      redirectTo = '/admin-simples.html';
-    } else if (user.role === 'professor') {
-      redirectTo = '/index.html';
-    } else if (user.role === 'setor_pedagogico') {
-      redirectTo = '/setor-pedagogico.html';
-    } else if (user.role === 'coordenacao_patio') {
-      redirectTo = '/coordenacao-patio.html';
-    } else if (user.role === 'cozinha') {
-      redirectTo = '/cozinha-dashboard.html';
-    } else if (user.role === 'gestao_geral') {
-      redirectTo = '/gestao-geral.html';
-    } else if (user.role === 'enfermaria') {
-      redirectTo = '/enfermaria.html';
-    } else if (user.role === 'supervisao') {
-      redirectTo = '/supervisao.html';
-    } else if (user.role === 'biblioteca') {
-      redirectTo = '/biblioteca.html';
-    } else if (user.role === 'psicologia') {
-      redirectTo = '/psicologia.html';
-    } else if (user.role === 'assistente-social') {
-      redirectTo = '/assistente-social.html';
-    } else if (user.role === 'protagonismo') {
-      redirectTo = '/protagonismo.html';
-    } else if (user.role === 'secretaria') {
-      redirectTo = '/secretaria.html';
-    } else if (user.role === 'aluno') {
-      redirectTo = '/aluno.html';
-    } else {
-      redirectTo = '/login.html';
-    }
-    
-    res.json({
-      success: true,
-      token: authToken,
-      requiresTwoFactor: false,
-      user: {
-        id: user._id,
-        nome: user.nome,
-        email: user.email,
-        role: user.role,
-        twoFactorEnabled: user.twoFactorEnabled,
-        telefone: user.telefone
-      },
-      redirectTo: redirectTo
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro no login:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Erro no servidor: ' + error.message 
-    });
-  }
-});
-
 // ============ ROTA PÚBLICA DE LOGIN ============
 // ============ ROTA DE LOGIN COM 2FA (VERSÃO CORRIGIDA - SEM ENVIO DUPLICADO) ============
 app.post('/api/auth/login', async (req, res) => {
@@ -2298,7 +1887,7 @@ app.post('/api/auth/login', async (req, res) => {
           
           // 🔥 CORREÇÃO: Definir redirecionamento para todos os perfis
           let redirectTo = '';
-          if (user.forcePasswordChange) {
+          if (user.forcePasswordChange === true) {
             redirectTo = '/trocar-senha.html';
           } else if (user.role === 'super_admin') {
             redirectTo = '/admin.html';
@@ -2313,7 +1902,7 @@ app.post('/api/auth/login', async (req, res) => {
           } else if (user.role === 'cozinha') {
             redirectTo = '/cozinha-dashboard.html';
           } else if (user.role === 'gestao_geral') {
-            redirectTo = '/gestao-gestal.html';
+            redirectTo = '/gestao-geral.html';
           } else if (user.role === 'enfermaria') {
             redirectTo = '/enfermaria.html';
           } else if (user.role === 'supervisao') {
@@ -2527,7 +2116,7 @@ app.post('/api/auth/login', async (req, res) => {
     
     // 🔥 CORREÇÃO: Definir redirecionamento para todos os perfis
     let redirectTo = '';
-    if (user.forcePasswordChange) {
+    if (user.forcePasswordChange === true) {
       redirectTo = '/trocar-senha.html';
     } else if (user.role === 'super_admin') {
       redirectTo = '/admin.html';
@@ -3380,7 +2969,7 @@ app.post('/api/auth/2fa/validate-totp', authenticateToken, async (req, res) => {
         );
 
         // Definir redirecionamento
-        if (user.forcePasswordChange) {
+        if (user.forcePasswordChange === true) {
             redirectTo = '/trocar-senha.html';
         } else if (user.role === 'super_admin') {
             redirectTo = '/admin.html';
@@ -16361,16 +15950,6 @@ app.post('/api/admin/testar-email', authenticateToken, isSuperAdmin, async (req,
   }
 });
 
-// ============ FUNÇÃO AUXILIAR PARA EXPIRAÇÃO DO JWT ============
-// Adicione ANTES do server.listen()
-function parseJwtExpiration(expiration) {
-  if (typeof expiration === 'number') return expiration;
-  const match = expiration.match(/^(\d+)([hH])$/);
-  if (match) {
-    return parseInt(match[1]) * 60 * 60;
-  }
-  return 24 * 60 * 60; // 24 horas padrão
-}
 
 // ============ ROTA PARA REENVIAR CÓDIGO 2FA ============
 // ============ ROTA PARA REENVIAR CÓDIGO 2FA (CORRIGIDA) ============

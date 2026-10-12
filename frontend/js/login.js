@@ -143,6 +143,9 @@ function salvarLembrar(identificador, senha) {
     }
 }
 
+// ============================================================
+// 🔥 FUNÇÕES "LEMBRAR DE MIM"
+// ============================================================
 function carregarLembrar() {
     try {
         const rememberMe = localStorage.getItem('remember_me');
@@ -150,39 +153,65 @@ function carregarLembrar() {
         const senhaCodificada = localStorage.getItem('remembered_password');
         const timestamp = localStorage.getItem('remember_me_timestamp');
 
-        if (rememberMe === 'true' && identifier) {
-            if (timestamp) {
-                const diasPassados = (Date.now() - parseInt(timestamp)) / (1000 * 60 * 60 * 24);
-                if (diasPassados > 30) {
-                    console.log('⚠️ "Lembrar de mim" expirado');
-                    limparLembrar();
-                    return false;
-                }
-            }
-
-            document.getElementById('loginIdentifier').value = identifier;
-
-            if (senhaCodificada) {
-                try {
-                    const senha = atob(senhaCodificada);
-                    document.getElementById('loginPassword').value = senha;
-                } catch (e) {
-                    console.error('❌ Erro ao decodificar senha:', e);
-                    document.getElementById('loginPassword').value = senhaCodificada;
-                }
-            }
-
-            document.getElementById('rememberMe').checked = true;
-
-            if (typeof window.atualizarVisibilidadeBotaoSenha === 'function') {
-                window.atualizarVisibilidadeBotaoSenha();
-            }
-
-            return true;
+        // Se o checkbox não estava marcado, não faz nada
+        if (rememberMe !== 'true' || !identifier) {
+            return false;
         }
-        return false;
+
+        // ✅ Verificar expiração (30 dias)
+        if (timestamp) {
+            const diasPassados = (Date.now() - parseInt(timestamp)) / (1000 * 60 * 60 * 24);
+            if (diasPassados > 30) {
+                console.log('⚠️ "Lembrar de mim" expirado — limpando dados salvos');
+                limparLembrar();
+                return false;
+            }
+        }
+
+        // ✅ Sempre preenche o identificador (email ou CPF)
+        document.getElementById('loginIdentifier').value = identifier;
+
+        // ✅ Só marca o checkbox SE tiver senha salva E ela for decodificada com sucesso
+        if (senhaCodificada) {
+            try {
+                const senha = atob(senhaCodificada);
+
+                // Validação: se a senha decodificada estiver vazia, não faz sentido marcar
+                if (senha && senha.length > 0) {
+                    document.getElementById('loginPassword').value = senha;
+                    document.getElementById('rememberMe').checked = true;
+                    console.log('✅ "Lembrar de mim" restaurado (com senha)');
+                } else {
+                    // Senha vazia/corrompida → não marca o checkbox
+                    console.warn('⚠️ Senha salva está vazia — não marcando "Lembrar de mim"');
+                    document.getElementById('rememberMe').checked = false;
+                    localStorage.removeItem('remembered_password');
+                }
+            } catch (e) {
+                console.error('❌ Erro ao decodificar senha salva:', e);
+                // Se falhou ao decodificar, NÃO marca o checkbox
+                document.getElementById('rememberMe').checked = false;
+                // Remove a senha corrompida para não tentar de novo
+                localStorage.removeItem('remembered_password');
+            }
+        } else {
+            // ✅ Tem identificador salvo, mas NÃO tem senha → NÃO marca o checkbox
+            console.log('ℹ️ Identificador restaurado, mas sem senha salva — checkbox desmarcado');
+            document.getElementById('rememberMe').checked = false;
+        }
+
+        // ✅ Atualiza a visibilidade do botão de mostrar/ocultar senha
+        if (typeof window.atualizarVisibilidadeBotaoSenha === 'function') {
+            window.atualizarVisibilidadeBotaoSenha();
+        }
+
+        return true;
+
     } catch (e) {
         console.error('❌ Erro ao carregar "Lembrar de mim":', e);
+        // Em caso de erro, garante que o checkbox fica desmarcado
+        const checkbox = document.getElementById('rememberMe');
+        if (checkbox) checkbox.checked = false;
         return false;
     }
 }
