@@ -29,12 +29,25 @@
     --shadow-focus: 0 0 0 4px rgba(37, 99, 235, 0.10);
     --radius: 12px;
     --radius-lg: 20px;
-    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* ✅ CORRIGIDO: transições específicas (antes era "all" e causava tremor) */
+    --transition: background-color 0.25s ease,
+                  border-color 0.25s ease,
+                  color 0.25s ease,
+                  box-shadow 0.25s ease,
+                  opacity 0.25s ease;
+}
+
+/* ✅ NOVO: reserva o espaço da scrollbar - evita o "pulo" ao digitar */
+html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
 }
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -43,6 +56,7 @@ body {
     position: relative;
     overflow: hidden;
     background: #0f172a;
+    overflow-x: hidden;
 }
 
 /* ============================================================
@@ -57,6 +71,10 @@ body {
     z-index: 0;
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
     overflow: hidden;
+    /* ✅ GPU: evita repaint durante digitação */
+    transform: translateZ(0);
+    will-change: transform;
+    pointer-events: none;
 }
 
 .bg-gradient-1 {
@@ -120,6 +138,9 @@ body {
     z-index: 0;
     pointer-events: none;
     overflow: hidden;
+    /* ✅ GPU */
+    transform: translateZ(0);
+    will-change: transform;
 }
 
 .particle {
@@ -163,14 +184,22 @@ body {
     position: relative;
     z-index: 1;
     border: 1px solid rgba(255, 255, 255, 0.10);
-    transition: var(--transition);
+    /* ❌ REMOVIDO: transition: var(--transition); - causava tremor */
     animation: fadeInUp 0.8s ease;
+    animation-fill-mode: both;
     max-height: 98vh;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 0;
-}
 
-/* REMOVIDO O HOVER DO CONTAINER */
+    /* ✅ GPU: força composição, evita repaint durante digitação */
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+
+    /* ✅ Reserva o espaço da scrollbar interna (evita pulo lateral) */
+    scrollbar-gutter: stable;
+}
 
 .recovery-container::-webkit-scrollbar {
     width: 4px;
@@ -194,6 +223,7 @@ body {
     border-radius: var(--radius-lg);
     z-index: -1;
     filter: blur(4px);
+    pointer-events: none;
 }
 
 @keyframes fadeInUp {
@@ -257,7 +287,11 @@ body {
     border: none;
     border-radius: calc(var(--radius) - 4px);
     background: transparent;
-    transition: var(--transition);
+
+    /* ✅ Transição ESPECÍFICA (antes era `all` e causava tremor) */
+    transition: color 0.2s ease,
+                background-color 0.2s ease,
+                box-shadow 0.2s ease;
 }
 
 .recovery-tab.active {
@@ -301,14 +335,18 @@ body {
 }
 
 .form-group label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 13px;
     font-weight: 600;
     color: var(--gray-700);
     margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    height: 20px;                 /* ✅ Altura fixa (evita pulo vertical) */
+    line-height: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .form-group label i {
@@ -316,17 +354,28 @@ body {
     font-size: 14px;
 }
 
+/* ============================================================
+   FORM CONTROL - COM TRANSIÇÃO ESPECÍFICA
+   ============================================================ */
 .form-control {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;                 /* ✅ ESSENCIAL: impede crescimento em flex/grid */
     padding: 11px 14px;
     background: var(--gray-50);
     border: 2px solid var(--gray-200);
     border-radius: var(--radius);
-    font-size: 14px;
+    font-size: 16px;              /* ✅ 16px evita zoom automático em iOS */
     font-family: inherit;
     color: var(--gray-800);
-    transition: var(--transition);
     outline: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    /* ✅ Transição ESPECÍFICA - não usa `all` */
+    transition: background-color 0.2s ease,
+                border-color 0.2s ease,
+                box-shadow 0.2s ease;
 }
 
 .form-control::placeholder {
@@ -337,7 +386,15 @@ body {
     border-color: var(--primary);
     background: var(--white);
     box-shadow: var(--shadow-focus);
-    /* REMOVIDO transform: translateY(-1px) */
+}
+
+/* ✅ Autofill do Chrome: evita o "flash" de mudança de estilo */
+.form-control:-webkit-autofill,
+.form-control:-webkit-autofill:hover,
+.form-control:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--gray-800);
+    -webkit-box-shadow: 0 0 0px 1000px var(--gray-50) inset;
+    transition: background-color 5000s ease-in-out 0s;
 }
 
 small {
@@ -376,7 +433,7 @@ small {
 }
 
 /* ============================================================
-   CÓDIGO INPUTS
+   CÓDIGO INPUTS - COM TRANSIÇÃO ESPECÍFICA
    ============================================================ */
 .code-inputs {
     display: flex;
@@ -394,17 +451,21 @@ small {
     background: var(--gray-50);
     border: 2px solid var(--gray-200);
     border-radius: var(--radius);
-    transition: var(--transition);
     outline: none;
     font-family: inherit;
     color: var(--gray-800);
+
+    /* ✅ Transição ESPECÍFICA */
+    transition: background-color 0.2s ease,
+                border-color 0.2s ease,
+                box-shadow 0.2s ease,
+                color 0.2s ease;
 }
 
 .code-input:focus {
     border-color: var(--primary);
     background: var(--white);
     box-shadow: var(--shadow-focus);
-    /* REMOVIDO transform: translateY(-2px) */
 }
 
 .code-input.filled {
@@ -423,6 +484,9 @@ small {
     padding: 10px;
     background: var(--gray-50);
     border-radius: var(--radius);
+    transition: color 0.2s ease,
+                background-color 0.2s ease,
+                border-color 0.2s ease;
 }
 
 .timer.warning {
@@ -433,7 +497,7 @@ small {
 }
 
 /* ============================================================
-   BOTÕES
+   BOTÕES - COM TRANSIÇÃO ESPECÍFICA
    ============================================================ */
 .btn-recovery {
     width: 100%;
@@ -446,27 +510,29 @@ small {
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
-    transition: var(--transition);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     box-shadow: 0 4px 16px rgba(37, 99, 235, 0.20);
+
+    /* ✅ Transição ESPECÍFICA */
+    transition: box-shadow 0.2s ease,
+                background 0.2s ease,
+                opacity 0.2s ease;
 }
 
-.btn-recovery:hover {
-    /* REMOVIDO transform: translateY(-2px) */
+.btn-recovery:hover:not(:disabled) {
     box-shadow: 0 8px 28px rgba(37, 99, 235, 0.30);
 }
 
-.btn-recovery:active {
+.btn-recovery:active:not(:disabled) {
     transform: scale(0.98);
 }
 
 .btn-recovery:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    transform: none;
 }
 
 /* ============================================================
@@ -487,7 +553,10 @@ small {
     gap: 6px;
     padding: 8px 12px;
     border-radius: 6px;
-    transition: var(--transition);
+
+    /* ✅ Transição ESPECÍFICA */
+    transition: background-color 0.2s ease,
+                color 0.2s ease;
 }
 
 .resend-link a:hover {
@@ -526,7 +595,9 @@ small {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    transition: var(--transition);
+
+    /* ✅ Transição ESPECÍFICA */
+    transition: color 0.2s ease;
 }
 
 .back-to-login a:hover {
@@ -596,11 +667,13 @@ small {
     gap: 8px;
     border: 1px solid #059669;
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-    transition: var(--transition);
+
+    /* ✅ Transição ESPECÍFICA */
+    transition: box-shadow 0.2s ease,
+                background 0.2s ease;
 }
 
 .download-app a:hover {
-    /* REMOVIDO transform: translateY(-2px) */
     box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
 }
 
@@ -630,7 +703,7 @@ small {
     }
 
     .form-control {
-        font-size: 13px;
+        font-size: 16px;             /* ✅ Mantém 16px no mobile */
         padding: 10px 12px;
     }
 
@@ -714,7 +787,7 @@ small {
     }
 
     .form-control {
-        font-size: 12px;
+        font-size: 16px;             /* ✅ Mantém 16px mesmo em 360px */
         padding: 8px 10px;
     }
 
@@ -722,4 +795,36 @@ small {
         font-size: 13px;
         padding: 10px;
     }
+}
+
+/* ============================================================
+   🔥 CORREÇÃO FINAL: PREVENIR TREMOR DURANTE DIGITAÇÃO
+   ============================================================ */
+
+/* 1. Inputs sempre com 16px ou mais (evita zoom iOS) */
+input,
+select,
+textarea {
+    font-size: 16px;
+}
+
+@media (min-width: 769px) {
+    /* Em desktop, volta ao tamanho normal */
+    .form-control,
+    .code-input {
+        font-size: 14px;
+    }
+    .code-input {
+        font-size: 20px;
+    }
+}
+
+/* 2. Previne reflow no container ao digitar */
+.tab-content.active {
+    contain: layout style paint;
+}
+
+/* 3. Container principal: evita que elementos internos mexam o layout externo */
+.recovery-container {
+    contain: layout style;
 }
