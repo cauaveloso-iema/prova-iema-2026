@@ -1,3 +1,4 @@
+// models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -75,18 +76,19 @@ const UserSchema = new mongoose.Schema({
   onesignalPlayerId: {
     type: String,
     default: null
-},
-ultimaValidacaoPush: {
+  },
+  ultimaValidacaoPush: {
     type: Date,
     default: null
-},
-role: {
-  type: String,
-  enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria'], // ADICIONADO
-  default: 'aluno'
-},
+  },
+  
+  role: {
+    type: String,
+    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria'],
+    default: 'aluno'
+  },
 
-tokenExpired: { type: Boolean, default: false },
+  tokenExpired: { type: Boolean, default: false },
 
   // ========== CAMPOS DE PERFIL COMPLETO ==========
   fotoPerfil: {
@@ -190,7 +192,7 @@ tokenExpired: { type: Boolean, default: false },
     default: null
   },
 
-    // ========== QR CODE DO USUÁRIO (GERADO NO CADASTRO PARA TODOS) ==========
+  // ========== QR CODE DO USUÁRIO (GERADO NO CADASTRO PARA TODOS) ==========
   qrCodeUsuario: {
     type: String,
     default: null,
@@ -220,58 +222,51 @@ tokenExpired: { type: Boolean, default: false },
       default: []
   },
 
-// ========== CAMPOS DE SUPERUSUÁRIO ==========
-isSuperUser: {
-  type: Boolean,
-  default: false
-},
-superUserPermissions: {
-  type: [String],
-  enum: [
-    'manage_users',
-    'manage_professors',
-    'manage_turmas',
-    'manage_provas',
-    'view_logs',
-    'manage_backups',
-    'manage_system',
-    'manage_acessibilidade'
-  ],
-  default: []
-},
-superUserCreatedAt: {
-  type: Date
-},
-superUserCreatedBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'User'
-},
-superUserApprovedAt: {
-  type: Date
-},
-superUserApprovedBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'User'
-},
-superUserLastAction: {
-  type: Date
-},
+  // ========== CAMPOS DE SUPERUSUÁRIO ==========
+  isSuperUser: {
+    type: Boolean,
+    default: false
+  },
+  superUserPermissions: {
+    type: [String],
+    enum: [
+      'manage_users',
+      'manage_professors',
+      'manage_turmas',
+      'manage_provas',
+      'view_logs',
+      'manage_backups',
+      'manage_system',
+      'manage_acessibilidade'
+    ],
+    default: []
+  },
+  superUserCreatedAt: {
+    type: Date
+  },
+  superUserCreatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  superUserApprovedAt: {
+    type: Date
+  },
+  superUserApprovedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  superUserLastAction: {
+    type: Date
+  },
   
-  // ========== ✅ EIXO CORRIGIDO COM TODOS OS VALORES ==========
+  // ========== ✅ EIXO DINÂMICO (SEM ENUM) ==========
+  // O enum foi REMOVIDO para permitir que o Super Admin crie novos eixos
+  // pelo painel. A validação de "eixo existente" deve ser feita no controller
+  // consultando a coleção 'Eixo'.
   eixo: {
     type: String,
-    enum: [
-      'natureza',
-      'humanas', 
-      'linguagens',
-      'desenvolvimento',
-      'gestao',
-      'producao',
-      'turismo',
-      'ambiente',
-      null
-    ],
-    default: null
+    default: null,
+    trim: true
   },
   
   matricula: {
@@ -279,10 +274,12 @@ superUserLastAction: {
     unique: true,
     sparse: true
   },
+  
   turma: {
     type: String,
     default: null
   },
+  
   turmas: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Turma'
@@ -337,7 +334,7 @@ superUserLastAction: {
     type: Date
   },
   
-  // ========== NOVOS CAMPOS PARA 2FA (ADICIONAR AQUI) ==========
+  // ========== CAMPOS PARA 2FA ==========
   telefoneVerificado: {
     type: Boolean,
     default: false
@@ -359,9 +356,9 @@ superUserLastAction: {
   },
 
   twoFactorBackupCodesShown: {
-  type: Boolean,
-  default: false
-},
+    type: Boolean,
+    default: false
+  },
   
   twoFactorTempSecret: {
     type: String,
@@ -513,6 +510,7 @@ UserSchema.index({ cpf: 1 });
 UserSchema.index({ telefone: 1 });
 UserSchema.index({ matricula: 1 });
 UserSchema.index({ role: 1 });
-UserSchema.index({ precisaAcessibilidade: 1 }); // NOVO ÍNDICE
+UserSchema.index({ precisaAcessibilidade: 1 });
+UserSchema.index({ eixo: 1 }); // índice para filtros por eixo
 
 module.exports = mongoose.model('User', UserSchema);
