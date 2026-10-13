@@ -2881,13 +2881,36 @@ class AdminSimples {
             .replace(/\n/g, '\\n');
     }
 
-    // ============ ABRIR MODAL USUÁRIO ============
-    abrirModalUsuario(usuario = null) {
+    // ============ ABRIR MODAL USUÁRIO (COM CURSOS DO BANCO) ============
+    async abrirModalUsuario(usuario = null) {
         console.log('📝 Abrindo modal usuário. Dados:', usuario);
 
         if (usuario && usuario.role === 'super_admin') {
             this.showToast('❌ Não é possível editar Super Admins', 'error');
             return;
+        }
+
+        // 🔥 BUSCAR CURSOS DO BANCO DE DADOS
+        let cursosDoBanco = [];
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            console.log('📚 Buscando cursos do banco...');
+            
+            const response = await fetch('/api/admin/cursos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.cursos) {
+                cursosDoBanco = data.cursos;
+                console.log(`✅ ${cursosDoBanco.length} cursos carregados:`, cursosDoBanco.map(c => c.nome));
+            } else {
+                console.warn('⚠️ Nenhum curso encontrado no banco');
+            }
+        } catch (error) {
+            console.error('❌ Erro ao buscar cursos:', error);
         }
 
         const modalBody = document.getElementById('modalBody');
@@ -2900,30 +2923,42 @@ class AdminSimples {
         const cpf = usuario?.cpf || '';
         const telefone = usuario?.telefone || '';
         const matricula = usuario?.matricula || '';
-        const curso = usuario?.curso || '';
+        const cursoSelecionado = usuario?.curso || '';
         const turma = usuario?.turma || '';
         const eixo = usuario?.eixo || '';
 
-        const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;');
+        const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 
-        const nomeStr = escapeStr(nome);
-        const emailStr = escapeStr(email);
-        const cpfStr = escapeStr(cpf);
-        const telefoneStr = escapeStr(telefone);
-        const matriculaStr = escapeStr(matricula);
-        const cursoStr = escapeStr(curso);
-        const turmaStr = escapeStr(turma);
+        // 🔥 GERAR OPÇÕES DE CURSOS DINAMICAMENTE
+        const gerarOpcoesCursos = () => {
+            if (!cursosDoBanco || cursosDoBanco.length === 0) {
+                return '<option value="">Nenhum curso disponível</option>';
+            }
+            
+            let options = '<option value="">Selecione um curso...</option>';
+            const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
+            
+            cursosOrdenados.forEach(curso => {
+                const isAtivo = curso.ativo !== false;
+                if (!isAtivo) return;
+                
+                const selected = cursoSelecionado === curso.nome ? 'selected' : '';
+                options += `<option value="${escapeStr(curso.nome)}" ${selected}>${curso.nome}</option>`;
+            });
+            
+            return options;
+        };
 
         const conteudoHTML = `
             <form id="formUsuario">
                 <div class="form-group">
                     <label>Nome</label>
-                    <input type="text" id="nomeUsuario" class="form-control" value="${nomeStr}" required>
+                    <input type="text" id="nomeUsuario" class="form-control" value="${escapeStr(nome)}" required>
                 </div>
                 
                 <div class="form-group">
                     <label>Email</label>
-                    <input type="email" id="emailUsuario" class="form-control" value="${emailStr}" required>
+                    <input type="email" id="emailUsuario" class="form-control" value="${escapeStr(email)}" required>
                 </div>
                 
                 <div class="form-row">
@@ -2960,28 +2995,31 @@ class AdminSimples {
                 <div class="form-row">
                     <div class="form-group">
                         <label>CPF</label>
-                        <input type="text" id="cpfUsuario" class="form-control" value="${cpfStr}" placeholder="Apenas números">
+                        <input type="text" id="cpfUsuario" class="form-control" value="${escapeStr(cpf)}" placeholder="Apenas números">
                     </div>
                     <div class="form-group">
                         <label>Telefone</label>
-                        <input type="text" id="telefoneUsuario" class="form-control" value="${telefoneStr}" placeholder="(99) 99999-9999">
+                        <input type="text" id="telefoneUsuario" class="form-control" value="${escapeStr(telefone)}" placeholder="(99) 99999-9999">
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label>Matrícula</label>
-                    <input type="text" id="matriculaUsuario" class="form-control" value="${matriculaStr}">
+                    <input type="text" id="matriculaUsuario" class="form-control" value="${escapeStr(matricula)}">
                 </div>
                 
                 <div id="alunoFields" style="${role === 'aluno' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
                             <label>Curso</label>
-                            <input type="text" id="cursoUsuario" class="form-control" value="${cursoStr}">
+                            <select id="cursoUsuario" class="form-control">
+                                ${gerarOpcoesCursos()}
+                            </select>
+                            ${cursosDoBanco.length === 0 ? '<small style="color: #ef4444;">⚠️ Nenhum curso encontrado no banco. Contate o administrador.</small>' : ''}
                         </div>
                         <div class="form-group">
                             <label>Turma</label>
-                            <input type="text" id="turmaUsuario" class="form-control" value="${turmaStr}">
+                            <input type="text" id="turmaUsuario" class="form-control" value="${escapeStr(turma)}" placeholder="Ex: 101, 102">
                         </div>
                     </div>
                 </div>

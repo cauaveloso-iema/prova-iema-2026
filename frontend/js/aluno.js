@@ -455,13 +455,43 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Exemplo: Mostrar mensagem especial quando o aluno carregar a página
+// ============================================
+// 💡 MENSAGEM AUTOMÁTICA DO CHATBOT (CORRIGIDA)
+// ============================================
+// Aguarda o chatbot estar 100% inicializado antes de enviar a mensagem.
+// Faz retry automático (até 20 tentativas de 500ms = 10 segundos).
+// ============================================
 document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(() => {
-        if (window.chatbot) {
-            window.chatbot.sendSystemMessage("💡 Dica: Você pode usar o assistente para tirar dúvidas sobre suas provas!");
+    let tentativas = 0;
+    const maxTentativas = 20; // 20 × 500ms = até 10 segundos de espera
+    const mensagemDica = "💡 Dica: Você pode usar o assistente para tirar dúvidas sobre suas provas!";
+    
+    const tentarEnviarMensagem = () => {
+        tentativas++;
+        
+        // Verificar se o chatbot existe E se o método está disponível
+        if (window.chatbot && typeof window.chatbot.sendSystemMessage === 'function') {
+            // ✅ Chatbot pronto! Enviar mensagem
+            try {
+                window.chatbot.sendSystemMessage(mensagemDica);
+                console.log('✅ [aluno.js] Mensagem do sistema enviada ao chatbot com sucesso!');
+            } catch (error) {
+                console.error('❌ [aluno.js] Erro ao enviar mensagem ao chatbot:', error);
+            }
+            return;
         }
-    }, 3000);
+        
+        // Chatbot ainda não está pronto? Tentar novamente
+        if (tentativas < maxTentativas) {
+            console.log(`⏳ [aluno.js] Aguardando chatbot... (${tentativas}/${maxTentativas})`);
+            setTimeout(tentarEnviarMensagem, 500);
+        } else {
+            console.warn('⚠️ [aluno.js] Chatbot não disponível após 10s - desistindo');
+        }
+    };
+    
+    // Primeira tentativa após 1.5s (o chatbot tem 1s de delay na inicialização)
+    setTimeout(tentarEnviarMensagem, 1500);
 });
 
 // ========== FUNÇÕES DO MENU MOBILE ==========

@@ -153,9 +153,7 @@ class SistemaProvasChatbot {
             const token = localStorage.getItem('auth_token');
             if (token) {
                 console.log('📍 Página raiz com token - tentando buscar perfil...');
-                // Tentar buscar perfil do usuário
                 this.buscarPerfilDoUsuario();
-                // Enquanto isso, retorna 'padrao'
                 return 'padrao';
             }
         }
@@ -1264,6 +1262,24 @@ Site: educapleno.com
             if (messagesContainer) messagesContainer.innerHTML = '';
             this.addMessage('system', '🗑️ Histórico limpo.', 'info');
             setTimeout(() => this.showWelcomeMessage(), 500);
+        }
+    }
+
+    // ============================================
+    // ENVIAR MENSAGEM DE SISTEMA (NOVO MÉTODO)
+    // ============================================
+    sendSystemMessage(mensagem) {
+        if (!mensagem) return;
+        
+        // Log no console
+        console.log('📢 [chatbot system]', mensagem);
+        
+        // Adicionar como mensagem do sistema no chat
+        this.addMessage('system', mensagem, 'info');
+        
+        // Se o chat estiver fechado, mostrar notificação no badge
+        if (!this.isOpen) {
+            this.showNotification();
         }
     }
 

@@ -10634,10 +10634,8 @@ class AdminPanel {
 
     // ============ MODAL USUÁRIO ============
 
-    // ============ ABRIR MODAL USUÁRIO (VERSÃO CORRIGIDA - CURSOS DO BANCO) ============
+    // ============ ABRIR MODAL USUÁRIO (CURSOS DO BANCO) ============
     async abrirModalUsuario(usuarioId = null) {
-        console.log('🔍 Abrindo modal para usuário ID:', usuarioId);
-        
         let usuario = null;
         
         if (usuarioId) {
@@ -10651,26 +10649,21 @@ class AdminPanel {
                 
                 if (data.success) {
                     usuario = data.user;
-                    console.log('✅ Usuário carregado do backend:', usuario);
                 } else {
                     throw new Error(data.error || 'Erro ao carregar usuário');
                 }
             } catch (error) {
-                console.error('❌ Erro ao buscar usuário:', error);
                 this.showToast('❌ Erro ao carregar dados do usuário', 'error');
                 return;
             }
         }
 
-        // 🔥 BUSCAR CURSOS DO BANCO DE DADOS
+        // Buscar cursos do banco
         let cursosDoBanco = [];
-        let isLoadingCursos = true;
         
         try {
             const token = localStorage.getItem('auth_token');
-            console.log('📚 Buscando cursos do banco...');
-            
-            const response = await fetch('/api/cursos', {
+            const response = await fetch('/api/admin/cursos', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -10678,19 +10671,11 @@ class AdminPanel {
             
             if (data.success && data.cursos) {
                 cursosDoBanco = data.cursos;
-                console.log(`✅ ${cursosDoBanco.length} cursos carregados do banco:`, cursosDoBanco.map(c => c.nome));
-            } else {
-                console.warn('⚠️ Nenhum curso encontrado no banco');
-                cursosDoBanco = [];
             }
         } catch (error) {
             console.error('❌ Erro ao buscar cursos:', error);
-            cursosDoBanco = [];
-        } finally {
-            isLoadingCursos = false;
         }
 
-        // Extrair valores com segurança
         const nome = usuario?.nome || '';
         const email = usuario?.email || '';
         const role = usuario?.role || 'aluno';
@@ -10706,29 +10691,22 @@ class AdminPanel {
         const titulacao = usuario?.titulacao || '';
         const precisaAcessibilidade = usuario?.precisaAcessibilidade || false;
         const atribuicoes = usuario?.atribuicoes || '';
-        
-        // CAMPOS DE PERFIL ALIMENTAR
         const perfilAlimentar = usuario?.perfilAlimentar || 'nao_informado';
-        const refeicoesQueParticipa = usuario?.refeicoesQueParticipa || [];
+        const refeicoesQueParticipa = usuario?.refeicoesParticipa || [];
         
-        // Escapar valores
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         
-        // 🔥 GERAR OPÇÕES DE CURSOS DINAMICAMENTE A PARTIR DO BANCO
         const gerarOpcoesCursos = () => {
             if (!cursosDoBanco || cursosDoBanco.length === 0) {
                 return '<option value="">Nenhum curso disponível</option>';
             }
             
             let options = '<option value="">Selecione um curso...</option>';
-            
-            // Ordenar cursos por nome
             const cursosOrdenados = [...cursosDoBanco].sort((a, b) => a.nome.localeCompare(b.nome));
             
             cursosOrdenados.forEach(curso => {
-                // Verificar se o curso está ativo
                 const isAtivo = curso.ativo !== false;
-                if (!isAtivo) return; // Pular cursos inativos
+                if (!isAtivo) return;
                 
                 const selected = cursoSelecionado === curso.nome ? 'selected' : '';
                 options += `<option value="${escapeStr(curso.nome)}" ${selected}>${curso.nome}</option>`;
@@ -10739,7 +10717,6 @@ class AdminPanel {
         
         const modalBody = document.getElementById('modalBody');
         
-        // Criar HTML do conteúdo
         modalBody.innerHTML = `
             <form id="userForm" style="padding: 20px;">
                 <div class="form-group">
@@ -10815,7 +10792,6 @@ class AdminPanel {
                         </div>
                     </div>
                     
-                    <!-- SEÇÃO DE PERFIL ALIMENTAR -->
                     <div style="margin-top: 15px; padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
                         <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #334155;">
                             <i class="fas fa-utensils"></i> Preferências Alimentares
@@ -10852,7 +10828,7 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- Campos específicos para Professor -->
+                <!-- Professor -->
                 <div id="professorFields" class="role-specific" style="${role === 'professor' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -10879,7 +10855,7 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- Campos específicos para Setor Pedagógico -->
+                <!-- Setor Pedagógico -->
                 <div id="setorPedagogicoFields" class="role-specific" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -10897,7 +10873,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Campos específicos para Gestão Geral -->
+                <!-- Gestão Geral -->
                 <div id="gestaoGeralFields" class="role-specific" style="${role === 'gestao_geral' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -10913,7 +10889,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- SUPERVISÃO -->
+                <!-- Supervisão -->
                 <div id="supervisaoFields" class="role-specific" style="${role === 'supervisao' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -10931,7 +10907,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- PSICOLOGIA -->
+                <!-- Psicologia -->
                 <div id="psicologiaFields" class="role-specific" style="${role === 'psicologia' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -10961,7 +10937,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- ASSISTENTE SOCIAL -->
+                <!-- Assistente Social -->
                 <div id="assistenteSocialFields" class="role-specific" style="${role === 'assistente-social' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -10985,7 +10961,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- PROTAGONISMO -->
+                <!-- Protagonismo -->
                 <div id="protagonismoFields" class="role-specific" style="${role === 'protagonismo' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11003,7 +10979,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- BIBLIOTECA -->
+                <!-- Biblioteca -->
                 <div id="bibliotecaFields" class="role-specific" style="${role === 'biblioteca' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11021,7 +10997,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- SECRETARIA -->
+                <!-- Secretaria -->
                 <div id="secretariaFields" class="role-specific" style="${role === 'secretaria' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -11037,7 +11013,7 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- Campos específicos para Coordenação de Pátio -->
+                <!-- Coordenação de Pátio -->
                 <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -11049,7 +11025,7 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Campos específicos para Enfermaria -->
+                <!-- Enfermaria -->
                 <div id="enfermariaFields" class="role-specific" style="${role === 'enfermaria' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11075,7 +11051,7 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- Campos específicos para Cozinha -->
+                <!-- Cozinha -->
                 <div id="cozinhaFields" class="role-specific" style="${role === 'cozinha' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -11107,12 +11083,10 @@ class AdminPanel {
             </form>
         `;
 
-        // Título do modal
         document.getElementById('modalTitle').innerHTML = usuario ? 
             '<i class="fas fa-edit"></i> Editar Usuário' : 
             '<i class="fas fa-user-plus"></i> Novo Usuário';
         
-        // Configurar botão salvar
         setTimeout(() => {
             const modalSaveBtn = document.getElementById('modalSaveBtn');
             if (modalSaveBtn) {
@@ -11120,13 +11094,11 @@ class AdminPanel {
                 modalSaveBtn.style.display = 'inline-block';
             }
             
-            // Configurar toggle dos campos específicos
             const roleSelect = document.getElementById('userRole');
             if (roleSelect) {
                 roleSelect.addEventListener('change', () => this.toggleCamposRole());
             }
             
-            // Configurar toggle das refeições baseado no perfil alimentar
             const perfilSelect = document.getElementById('userPerfilAlimentar');
             if (perfilSelect) {
                 perfilSelect.addEventListener('change', () => {
