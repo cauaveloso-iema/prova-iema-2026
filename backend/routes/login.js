@@ -4,6 +4,10 @@
 // Descrição: Todas as rotas de autenticação, 2FA, login social e recuperação
 //            de senha do EducaPleno.
 //
+// ⚠️ IMPORTANTE:
+//   O modelo Config é obtido via mongoose.model('Config'), pois está
+//   registrado inline no server.js (não existe models/Config.js).
+//
 // Rotas incluídas:
 //   - POST /api/auth/login (login normal + validação 2FA)
 //   - POST /api/auth/logout
@@ -29,10 +33,9 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
+const mongoose = require('mongoose');
 
-const User = require('../models/User');
-
-// 🔥 Logger
+// Logger
 let logger;
 try {
   logger = require('../utils/logger');
@@ -40,25 +43,36 @@ try {
   logger = console;
 }
 
-// 🔥 Config (protegido)
+// ============================================================================
+// IMPORTAÇÃO DE MODELOS
+// ============================================================================
+
+const User = require('../models/User');
+
+// Config — obtido do mongoose (registrado inline no server.js)
 let Config = null;
 try {
-  Config = require('../models/Config');
-  console.log('✅ [login] Model Config carregado');
+  Config = mongoose.model('Config');
+  console.log('✅ [login] Model Config carregado via mongoose');
 } catch (err) {
   console.warn('⚠️ [login] Config não disponível:', err.message);
 }
 
-// 🔥 Notificacao (protegido)
+// Notificacao — preferir arquivo, fallback para mongoose
 let Notificacao = null;
 try {
   Notificacao = require('../models/Notificacao');
   console.log('✅ [login] Model Notificacao carregado');
 } catch (err) {
-  console.warn('⚠️ [login] Notificacao não disponível:', err.message);
+  try {
+    Notificacao = mongoose.model('Notificacao');
+    console.log('✅ [login] Model Notificacao carregado via mongoose');
+  } catch (err2) {
+    console.warn('⚠️ [login] Notificacao não disponível:', err2.message);
+  }
 }
 
-// 🔥 Serviço de Email
+// EmailService
 let EmailService = null;
 try {
   EmailService = require('../services/email-service');
@@ -66,17 +80,17 @@ try {
   console.warn('⚠️ [login] EmailService não disponível:', err.message);
 }
 
-// ============================================
+// ============================================================================
 // CONSTANTES
-// ============================================
+// ============================================================================
 const DOMINIO_INSTITUCIONAL = '@iemasaoluiscentro.net';
 
 // Cache de códigos de reset (em produção, use Redis)
 const resetCodes = new Map();
 
-// ============================================
+// ============================================================================
 // HELPERS
-// ============================================
+// ============================================================================
 
 function sanitizarJwtExpiracao(valor) {
   const padrao = '24h';
@@ -234,7 +248,7 @@ async function enviarSmsTwilio(telefone, mensagem) {
   }
 }
 
-// Middleware de autenticação local (para rotas que precisam de req.userId)
+// Middleware de autenticação local
 const authenticateTokenLocal = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -289,7 +303,16 @@ const authenticateTokenLocal = (req, res, next) => {
 // HEALTH CHECK
 // ============================================================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Login (Auth + Social)' });
+  res.json({
+    success: true,
+    status: 'online',
+    service: 'Login (Auth + Social)',
+    models: {
+      Config: !!Config,
+      Notificacao: !!Notificacao,
+      EmailService: !!EmailService
+    }
+  });
 });
 
 // ============================================================================
@@ -451,7 +474,6 @@ router.post('/auth/login', async (req, res) => {
     // ===== CASO 2: LOGIN NORMAL (SEM TOKEN) =====
     logger.info('📝 Requisição de login normal');
 
-    // Buscar configurações
     let maxTentativas = 5, tempoBloqueio = 15, exigir2FA = false;
     if (Config) {
       const [configTentativas, configBloqueio, config2FA] = await Promise.all([
@@ -468,7 +490,6 @@ router.post('/auth/login', async (req, res) => {
 
     logger.info(`🔐 Configuração 2FA: ${exigir2FA ? 'ATIVADO' : 'DESATIVADO'}`);
 
-    // Buscar usuário
     let user;
     let campoBusca = '';
 
@@ -493,7 +514,6 @@ router.post('/auth/login', async (req, res) => {
       });
     }
 
-    // Verificar bloqueio
     if (user.lockUntil && user.lockUntil > Date.now()) {
       const minutosRestantes = Math.ceil((user.lockUntil - Date.now()) / 60000);
       return res.status(401).json({
@@ -502,7 +522,6 @@ router.post('/auth/login', async (req, res) => {
       });
     }
 
-    // Verificar se está ativo
     if (!user.ativo) {
       return res.status(401).json({
         success: false,
@@ -510,7 +529,6 @@ router.post('/auth/login', async (req, res) => {
       });
     }
 
-    // Verificar senha
     const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
@@ -534,13 +552,12 @@ router.post('/auth/login', async (req, res) => {
       });
     }
 
-    // Login OK
     user.loginAttempts = 0;
     user.lockUntil = null;
     user.lastLogin = new Date();
     await user.save();
 
-    // Verificar se deve exigir 2FA
+    // Verificar 2FA
     const perfisCom2FA = ['super_admin'];
     if (exigir2FA) {
       perfisCom2FA.push(
@@ -783,7 +800,6 @@ router.post('/auth/2fa/resend', authenticateTokenLocal, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
     }
 
-    // Verificar se 2FA é exigido
     let exigir2FA = false;
     if (Config) {
       const config2FA = await Config.findOne({ chave: 'seguranca.doisFatores' });
@@ -1036,7 +1052,7 @@ router.get('/auth/2fa/backup-codes', authenticateTokenLocal, async (req, res) =>
       return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
     }
 
-    // 🔥 CASO 1: Token TEMPORÁRIO (2FA) → sempre retornar
+    // CASO 1: Token TEMPORÁRIO (2FA) → sempre retornar
     if (req.tokenTemp === true) {
       if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
         return res.status(400).json({
@@ -1068,7 +1084,7 @@ router.get('/auth/2fa/backup-codes', authenticateTokenLocal, async (req, res) =>
       });
     }
 
-    // 🔥 CASO 2: Token NORMAL (usuário já autenticado)
+    // CASO 2: Token NORMAL
     if (!user.twoFactorEnabled) {
       return res.status(400).json({ success: false, error: '2FA não está ativado para esta conta' });
     }
@@ -1263,7 +1279,6 @@ router.post('/auth/reset-password/request', async (req, res) => {
 
     cleanupExpiredCodes();
 
-    // Enviar email
     let emailSent = false;
     try {
       if (EmailService) {
@@ -1473,7 +1488,6 @@ router.post('/auth/reset-password/confirm', async (req, res) => {
 
     logger.info(`✅ Senha atualizada para ${user.email}`);
 
-    // Enviar email de confirmação
     try {
       if (EmailService) {
         const emailService = new EmailService();
@@ -1652,18 +1666,14 @@ router.post('/login-social/:provider', async (req, res) => {
     // ============================================================
     // VERIFICAR SE O PERFIL EXIGE 2FA
     // ============================================================
-    // 🅰️ super_admin → SEMPRE exige 2FA (fixo)
-    // 🅱️ Outros perfis → NÃO exige via login social (Google já validou)
-    // ============================================================
     let exige2FA = false;
 
     if (user.role === 'super_admin') {
       exige2FA = true;
       console.log(`🔐 2FA OBRIGATÓRIO para super_admin ${user.email} via login social (${provider})`);
     } else {
-      // Login social dispensa 2FA para perfis operacionais
       exige2FA = false;
-      console.log(`✅ 2FA dispensado para ${user.role} ${user.email} (login social - Google validou)`);
+      console.log(`✅ 2FA dispensado para ${user.role} ${user.email} (login social)`);
     }
 
     if (exige2FA) {
