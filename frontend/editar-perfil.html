@@ -968,9 +968,22 @@
                     
                     if (leitorAtivo) falar('Perfil atualizado com sucesso');
                     
-                    setTimeout(() => {
-                        window.location.href = 'javascript:history.back()';
-                    }, 2000);
+                    // 🔥 VERIFICA SE ESTÁ NO APLICATIVO KODULAR
+                    const isWebView = (typeof window.AppInventor !== 'undefined') || 
+                                    /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent);
+                    
+                    if (isWebView && window.AppInventor && window.AppInventor.setWebViewString) {
+                        // No aplicativo: avisa o Kodular para fechar a tela
+                        console.log('📱 Salvamento concluído. Avisando o aplicativo...');
+                        setTimeout(() => {
+                            window.AppInventor.setWebViewString("SALVAMENTO_CONCLUIDO");
+                        }, 1500);
+                    } else {
+                        // No navegador: comportamento normal
+                        setTimeout(() => {
+                            window.location.href = 'javascript:history.back()';
+                        }, 2000);
+                    }
                     
                 } else {
                     throw new Error(data.error || 'Erro ao salvar perfil');
