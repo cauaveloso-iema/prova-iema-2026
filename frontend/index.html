@@ -7,51 +7,54 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
+    <meta name="mobile-web-app-capable" content="yes">
 
-    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
+    <!-- FAVICON LOCAL -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
+    <!-- Meta básicos -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Dashboard Professor | EducaPleno</title>
+
     <!-- ========== ONE SIGNAL - NOTIFICAÇÕES PUSH ========== -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Professor | EducaPleno</title>
+    <!-- ========== CSS ========== -->
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/index.css">
+    <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <!-- Ícones para PWA -->
     <link rel="icon" type="image/png" sizes="192x192" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
 
-    <!-- CSS GLOBAL -->
-    <link rel="stylesheet" href="css/index.css">
+    <!-- ========== SCRIPTS EXTERNOS ========== -->
+    <!-- Biblioteca para gerar Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    <!-- ===== MOBILE OPTIMIZATION ===== -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <link rel="stylesheet" href="css/mobile.css">
+    <!-- ========== SCRIPTS INTERNOS (ORDEM IMPORTA) ========== -->
+    <!-- 🛡️ Core Security — DEVE SER O PRIMEIRO (proteção global) -->
+    <script src="js/core-security.js"></script>
+    
+    <!-- Sistema de Acessibilidade -->
+    <script src="js/acessibilidade.js"></script>
+    
+    <!-- VLibras Oficial -->
+    <script src="js/vlibras-oficial.js"></script>
+    
+    <!-- Cliente Push -->
+    <script src="js/push-client.js"></script>
+    
+    <!-- Chatbot -->
+    <script src="js/chatbot-frontend.js"></script>
+    
+    <!-- Dialog helper -->
+    <script src="js/dialog-helper.js"></script>
 </head>
-
-<!-- Incluir Font Awesome para ícones -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- Biblioteca para gerar Excel -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-<!-- VLibras Oficial (PRIMEIRO) -->
-<script src="js/vlibras-oficial.js"></script>
-
-<!-- Sistema de Acessibilidade (SEGUNDO) -->
-<script src="js/acessibilidade.js"></script>
-
-<!-- 🔥 CLIENTE PUSH -->
-<script src="js/push-client.js"></script>
-
-<!-- Incluir o chatbot -->
-<script src="js/chatbot-frontend.js"></script>
-<script src="js/dialog-helper.js"></script> 
-<script src="/js/core-security.js"></script>
 
 <body>
     <!-- Loading overlay -->
@@ -68,10 +71,21 @@
     <div class="container">
         <!-- Sidebar -->
         <aside class="sidebar">
+            <!-- LOGO EDUCAPLENO -->
+            <div class="sidebar-logo">
+                <div class="logo-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <div class="logo-text">
+                    <span class="logo-name">EducaPleno</span>
+                    <span class="logo-subtitle">Dashboard do Professor</span>
+                </div>
+            </div>
+
             <div class="professor-info">
                 <div class="professor-avatar" id="professorAvatar">
-                    <img id="professorFotoPerfil" class="foto-perfil-sidebar" style="display: none; width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
-                    <i id="professorAvatarIcon" class="fas fa-chalkboard-teacher" style="font-size: 2rem; color: white;"></i>
+                    <img id="professorFotoPerfil" class="foto-perfil-sidebar" style="display: none; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
+                    <i id="professorAvatarIcon" class="fas fa-chalkboard-teacher" style="font-size: 1.4rem; color: white;"></i>
                 </div>
                 <h3 id="professorNome">Professor</h3>
                 <p id="professorEmail">carregando...</p>
@@ -97,22 +111,36 @@
                 </button>
             </nav>
 
-            <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'" style="
-                margin-top: 1rem;
-                padding: 0.75rem;
-                background: linear-gradient(135deg, #10b981, #059669);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-weight: 600;
-                font-size: 0.9rem;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 0.5rem;
-                transition: all 0.2s;
-            ">
+            <!-- BOTÕES DE AÇÃO RÁPIDA -->
+            <div class="sidebar-actions">
+                <div class="sidebar-actions-label">
+                    <i class="fas fa-bolt"></i> Ações Rápidas
+                </div>
+
+                <button class="sidebar-action-btn btn-acompanhamento" onclick="mostrarTab('acompanhamento')" id="btnAcompanhamentoTopo">
+                    <span class="action-icon">
+                        <i class="fas fa-user-clock"></i>
+                    </span>
+                    <span class="action-text">Acompanhamento</span>
+                    <span id="badgeAcompanhamentoTopo" class="sidebar-badge">0</span>
+                </button>
+
+                <button class="sidebar-action-btn btn-adaptar" onclick="abrirModalUploadAdaptarDocumento()">
+                    <span class="action-icon">
+                        <i class="fas fa-universal-access"></i>
+                    </span>
+                    <span class="action-text">Adaptar Documento</span>
+                </button>
+
+                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="sidebar-action-btn btn-baixar-app">
+                    <span class="action-icon">
+                        <i class="fas fa-download"></i>
+                    </span>
+                    <span class="action-text">Baixar App</span>
+                </a>
+            </div>
+
+            <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'">
                 <i class="fas fa-user-edit"></i> Editar Perfil
             </button>
             
@@ -154,7 +182,7 @@
             <!-- NOTIFICAÇÕES POSICIONADAS NO CANTO SUPERIOR DIREITO -->
             <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <!-- 🔥 INDICADOR DE PUSH -->
+                    <!-- INDICADOR DE PUSH -->
                     <div class="push-indicator-container" id="pushIndicatorContainer" style="display: none;">
                         <div class="push-indicator" title="Push desativado pelo administrador">
                             <i class="fas fa-bell-slash"></i>
@@ -162,204 +190,33 @@
                         </div>
                     </div>
 
-                    <!-- BOTÃO ACOMPANHAMENTO -->
-                    <button onclick="mostrarTab('acompanhamento')" 
-                            id="btnAcompanhamentoTopo"
-                            style="
-                                background: linear-gradient(135deg, #0891b2, #0e7490);
-                                color: white;
-                                border: none;
-                                border-radius: 40px;
-                                padding: 8px 20px;
-                                font-size: 0.9rem;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: inline-flex;
-                                align-items: center;
-                                gap: 10px;
-                                margin-right: 10px;
-                                transition: all 0.3s ease;
-                                box-shadow: 0 4px 10px rgba(8, 145, 178, 0.3);
-                                position: relative;
-                            " 
-                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(8,145,178,0.4)'" 
-                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(8,145,178,0.3)'">
-                        <i class="fas fa-user-clock"></i>
-                        <span>Acompanhamento</span>
-                        <span id="badgeAcompanhamentoTopo" 
-                            style="
-                                background: #ef4444;
-                                color: white;
-                                font-size: 11px;
-                                font-weight: 700;
-                                padding: 2px 8px;
-                                border-radius: 20px;
-                                min-width: 18px;
-                                text-align: center;
-                                display: none;
-                            ">0</span>
-                    </button>
-
-                    <!-- BOTÃO DE ADAPTAÇÃO DE DOCUMENTOS -->
-                    <button onclick="abrirModalUploadAdaptarDocumento()" style="
-                        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                        color: white;
-                        border: none;
-                        border-radius: 40px;
-                        padding: 8px 20px;
-                        font-size: 0.9rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 10px;
-                        margin-right: 10px;
-                        transition: all 0.3s ease;
-                        box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
-                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 15px rgba(139,92,246,0.4)'" 
-                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 10px rgba(139,92,246,0.3)'">
-                        <i class="fas fa-universal-access"></i>
-                        <span>Adaptar Documento</span>
-                    </button>
-
-                    <!-- LINK DO APP -->
-                    <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" style="
-                        background: linear-gradient(135deg, #10b981, #059669);
-                        color: white;
-                        padding: 10px 20px;
-                        border-radius: 30px;
-                        text-decoration: none;
-                        font-size: 0.95rem;
-                        font-weight: 600;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 8px;
-                        border: 2px solid white;
-                        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
-                        margin-right: 10px;
-                    ">
-                        <i class="fas fa-download"></i> Baixar App
-                    </a>
-
                     <div class="notificacoes-container">
-                        <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="
-                            background: #4f46e5;
-                            border: 2px solid white;
-                            border-radius: 50%;
-                            width: 48px;
-                            height: 48px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            cursor: pointer;
-                            transition: all 0.3s;
-                            color: white;
-                            font-size: 1.2rem;
-                            position: relative;
-                            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                        ">
+                        <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn">
                             <i class="fas fa-bell"></i>
-                            <span class="notificacoes-badge" id="notificacoesBadge" style="
-                                position: absolute;
-                                top: -5px;
-                                right: -5px;
-                                background: #dc3545;
-                                color: white;
-                                font-size: 0.7rem;
-                                font-weight: bold;
-                                padding: 2px 6px;
-                                border-radius: 12px;
-                                min-width: 20px;
-                                text-align: center;
-                                border: 2px solid white;
-                                display: none;
-                            ">0</span>
+                            <span class="notificacoes-badge" id="notificacoesBadge" style="display: none;">0</span>
                         </button>
                         
-                        <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
-                            position: absolute;
-                            top: 60px;
-                            right: 0;
-                            width: 380px;
-                            background: white;
-                            border-radius: 16px;
-                            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                            display: none;
-                            z-index: 10000;
-                            overflow: hidden;
-                            border: 1px solid #e5e7eb;
-                        ">
-                            <div class="notificacoes-header" style="
-                                background: linear-gradient(135deg, #4f46e5, #7c3aed);
-                                color: white;
-                                padding: 18px 20px;
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                            ">
-                                <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
-                                    <i class="fas fa-bell"></i> Notificações
-                                </h3>
-                                <button onclick="marcarTodasLidas()" class="btn-marcar-todas" style="
-                                    background: rgba(255,255,255,0.2);
-                                    border: 1px solid rgba(255,255,255,0.3);
-                                    color: white;
-                                    padding: 6px 12px;
-                                    border-radius: 20px;
-                                    font-size: 0.8rem;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 5px;
-                                    border: none;
-                                ">
+                        <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                            <div class="notificacoes-header">
+                                <h3><i class="fas fa-bell"></i> Notificações</h3>
+                                <button onclick="marcarTodasLidas()" class="btn-marcar-todas">
                                     <i class="fas fa-check-double"></i> Marcar todas
                                 </button>
                             </div>
                             
-                            <div class="notificacoes-lista" id="notificacoesLista" style="
-                                max-height: 400px;
-                                overflow-y: auto;
-                                background: #f8fafc;
-                            ">
+                            <div class="notificacoes-lista" id="notificacoesLista">
                                 <div style="text-align: center; padding: 40px; color: #6c757d;">
                                     <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
                                     <p style="font-size: 1rem;">Carregando notificações...</p>
                                 </div>
                             </div>
                             
-                            <div class="notificacao-footer" style="
-                                padding: 12px 20px;
-                                background: white;
-                                border-top: 1px solid #e5e7eb;
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                            ">
-                                <a href="#" onclick="verTodasNotificacoes(event)" style="
-                                    color: #4f46e5;
-                                    text-decoration: none;
-                                    font-size: 0.9rem;
-                                    font-weight: 500;
-                                    display: inline-flex;
-                                    align-items: center;
-                                    gap: 5px;
-                                ">
+                            <div class="notificacao-footer">
+                                <a href="#" onclick="verTodasNotificacoes(event)">
                                     <i class="fas fa-eye"></i> Ver todas
                                 </a>
                                 
-                                <button onclick="limparMinhasNotificacoes(event)" style="
-                                    background: none;
-                                    border: none;
-                                    color: #dc2626;
-                                    font-size: 0.9rem;
-                                    font-weight: 500;
-                                    cursor: pointer;
-                                    display: inline-flex;
-                                    align-items: center;
-                                    gap: 5px;
-                                    padding: 0;
-                                ">
+                                <button onclick="limparMinhasNotificacoes(event)" class="btn-limpar-notificacoes">
                                     <i class="fas fa-trash"></i> Limpar todas
                                 </button>
                             </div>
@@ -677,8 +534,8 @@
                                     <h4><i class="fas fa-list-check"></i> Materiais Adicionados</h4>
                                     <span id="contadorAnexos" class="anexos-count">0</span>
                                     <button onclick="limparTodosAnexos()" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
-                                    <i class="fas fa-trash"></i> Limpar Tudo
-                                </button>
+                                        <i class="fas fa-trash"></i> Limpar Tudo
+                                    </button>
                                 </div>
                                 
                                 <div id="listaAnexos" class="anexos-lista">
@@ -2199,7 +2056,135 @@
 
     <div id="mostrarAlertaGeralGeral" class="mostrarAlertaGeral" style="display: none;"></div>
 
-    <!-- ===== MENU MOBILE PARA PROFESSOR ===== -->
+    <!-- ========== MODAIS FALTANTES (adicionados) ========== -->
+
+    <!-- Modal de Exclusão de Turma -->
+    <div class="modal" id="modalExcluirTurma" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> Excluir Turma
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalExcluirTurma')">&times;</button>
+            </div>
+            <div id="modalExcluirConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="btn btn-danger" onclick="confirmarExclusaoTurma()" style="flex: 1; background: #ef4444; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-trash"></i> Excluir Turma
+                </button>
+                <button class="btn" onclick="fecharModal('modalExcluirTurma')" 
+                        style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes da Turma -->
+    <div class="modal" id="modalDetalhesTurma" style="display: none;">
+        <div class="modal-content" style="max-width: 650px; max-height: 85vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3 style="margin: 0; color: #4f46e5; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-school"></i> Detalhes da Turma
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalDetalhesTurma')">&times;</button>
+            </div>
+            <div id="detalhesTurmaContent" style="padding: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- Modal de Iniciar Prova -->
+    <div class="modal" id="modalIniciarProva" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3 style="margin: 0; color: #4f46e5;">
+                    <i class="fas fa-play-circle"></i> Iniciar Prova
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalIniciarProva')">&times;</button>
+            </div>
+            <div id="modalProvaInfo" style="padding: 20px;"></div>
+            <div style="display: flex; gap: 1rem; padding: 0 20px 20px;">
+                <button class="btn btn-success" onclick="iniciarProvaSelecionada()" style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-play"></i> Iniciar Prova
+                </button>
+                <button class="btn" onclick="fecharModal('modalIniciarProva')" 
+                        style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Entrar em Turma -->
+    <div class="modal" id="modalEntrarTurma" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 style="margin: 0; color: #10b981; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-door-open"></i> Entrar em uma Turma
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalEntrarTurma')">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #374151;">
+                    Código da Turma
+                </label>
+                <input type="text" id="codigoTurma" placeholder="Ex: ABC123" 
+                    style="width: 100%; padding: 14px 18px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; text-align: center; font-weight: 600;"
+                    maxlength="10">
+                <small style="display: block; margin-top: 8px; color: #6b7280; font-size: 0.85rem;">
+                    Digite o código fornecido pelo seu professor
+                </small>
+            </div>
+            <div style="display: flex; gap: 1rem; padding: 0 20px 20px;">
+                <button class="btn btn-success" onclick="entrarNaTurma()" 
+                    style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-sign-in-alt"></i> Entrar
+                </button>
+                <button class="btn" onclick="fecharModal('modalEntrarTurma')" 
+                    style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Exclusão de Prova -->
+    <div class="modal" id="modalExcluirProva" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> Excluir Prova
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalExcluirProva')">&times;</button>
+            </div>
+            <div id="modalExcluirProvaConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button class="btn" onclick="confirmarExclusaoProva()" 
+                    style="flex: 1; background: #ef4444; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-trash"></i> Excluir Prova
+                </button>
+                <button class="btn" onclick="fecharModal('modalExcluirProva')" 
+                    style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição de Prova (Professor) -->
+    <div class="modal" id="modalEditarProvaProfessor" style="display: none;">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px;">
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-edit"></i> Editar Prova
+                </h3>
+                <button class="modal-close" onclick="fecharModal('modalEditarProvaProfessor')" style="color: white; background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <div id="modalEditarProvaConteudo" style="padding: 25px;"></div>
+        </div>
+    </div>
+
+    <!-- ========== MENU MOBILE PARA PROFESSOR ========== -->
     <div class="professor-mobile-menu">
         <button class="professor-mobile-menu-toggle" id="professorMobileMenuToggle">
             <i class="fas fa-bars"></i>
@@ -2210,11 +2195,11 @@
         <div class="professor-mobile-sidebar" id="professorMobileSidebar">
             <div class="professor-mobile-sidebar-header">
                 <div class="professor-mobile-avatar">
-                    <i class="fas fa-chalkboard-teacher"></i>
+                    <i class="fas fa-graduation-cap"></i>
                 </div>
                 <div class="professor-mobile-info">
-                    <h3 id="mobileProfessorNome">Professor</h3>
-                    <p id="mobileProfessorEmail">carregando...</p>
+                    <h3 id="mobileProfessorNome">EducaPleno</h3>
+                    <p id="mobileProfessorEmail">Dashboard do Professor</p>
                 </div>
                 <button class="professor-mobile-close" id="professorMobileClose">
                     <i class="fas fa-times"></i>
@@ -2257,7 +2242,7 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- ========== SCRIPTS FINAIS ========== -->
     <script src="js/toggle-buttons.js"></script>
     <script src="js/draggable.js"></script>
     <script src="js/index.js"></script>

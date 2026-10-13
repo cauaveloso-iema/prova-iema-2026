@@ -1,181 +1,107 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d6efd">
+    <meta name="theme-color" content="#047857">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
-    <!-- 🔥 FAVICON LOCAL (NÃO DEPENDE DE INTERNET) -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
-    <!-- ========== ONE SIGNAL - NOTIFICAÇÕES PUSH ========== -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
-        appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
-        safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
-        notifyButton: {
-            enable: true,
-            position: 'bottom-right',
-            size: 'medium',
-            showCredit: false,
-            text: {
-            'tapTitle': '🔔 Receber Notificações',
-            'message': 'Receba avisos de provas e resultados',
-            'acceptButton': 'PERMITIR',
-            'cancelButton': 'AGORA NÃO'
-            }
-        },
-        welcomeNotification: {
-            title: '🔔 Notificações Ativadas!',
-            message: 'Você receberá avisos de provas e resultados',
-            url: window.location.href
-        },
-        allowLocalhostAsSecureOrigin: true,
-        persistNotification: true,
-        autoResubscribe: true,
-        autoRegister: true
-        });
-        
-        console.log('✅ OneSignal inicializado');
-        
-        // Capturar quando o usuário se inscreve
-        OneSignal.on('subscriptionChange', async function(isSubscribed) {
-        if (isSubscribed) {
-            const playerId = await OneSignal.User.PushSubscription.getId();
-            console.log('📱 Novo player_id:', playerId);
-            
-            // Salvar no backend
-            const token = localStorage.getItem('auth_token');
-            if (token) {
-            fetch('/api/usuario/salvar-player-id', {
-                method: 'POST',
-                headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ playerId })
+        try {
+            await OneSignal.init({
+                appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
+                safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
+                allowLocalhostAsSecureOrigin: true
             });
-            }
-        }
-        });
+            OneSignal.on('subscriptionChange', async function(isSubscribed) {
+                if (isSubscribed) {
+                    const playerId = await OneSignal.User.PushSubscription.id;
+                    const token = localStorage.getItem('auth_token');
+                    if (token) {
+                        fetch('/api/usuario/salvar-player-id', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ playerId })
+                        });
+                    }
+                }
+            });
+        } catch(e) { console.warn('OneSignal:', e); }
     });
     </script>
-    <!-- ========== FIM ONE SIGNAL ========== -->
 
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel do Aluno - EducaPleno</title>
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/aluno-painel.css">
-
-    <!-- ===== MOBILE OPTIMIZATION ===== -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Painel do Aluno - EducaPleno</title>
+    
+    <!-- ⚡ ORDEM IMPORTA: aluno-painel.css POR ÚLTIMO para vencer na cascata -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/mobile.css">
+    <link rel="stylesheet" href="css/aluno-painel.css">
 </head>
 
-<!-- Incluir Font Awesome -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<!-- VLibras Oficial (PRIMEIRO) -->
-<script src="js/vlibras-oficial.js"></script>
-
-<!-- Sistema de Acessibilidade (SEGUNDO) -->
-<script src="js/acessibilidade.js"></script>
-
-<!-- 🔥 CLIENTE PUSH -->
-<script src="js/push-client.js"></script>
-
-<!-- Incluir o chatbot -->
-<script src="js/chatbot-frontend.js"></script>
-<script src="js/dialog-helper.js"></script>
-<script src="/js/core-security.js"></script>
+<script src="js/vlibras-oficial.js" defer></script>
+<script src="js/acessibilidade.js" defer></script>
+<script src="js/push-client.js" defer></script>
+<script src="js/chatbot-frontend.js" defer></script>
+<script src="js/dialog-helper.js" defer></script>
+<script src="/js/core-security.js" defer></script>
 
 <body>
-    <!-- Botão de Logout -->
-    <button class="btn-logout" id="btnLogout">
-        <i class="fas fa-sign-out-alt"></i> Sair
-    </button>
-    
+
+    <div id="global-loader">
+        <div class="spinner"></div>
+        <p id="global-loader-text">Carregando...</p>
+    </div>
+
+    <button class="btn-logout" id="btnLogout" aria-hidden="true"></button>
+
     <div class="container">
-        <!-- Header do Aluno -->
-        <div class="aluno-header">
-            <div class="aluno-info" style="display: flex; align-items: center; gap: 20px;">
-                <!-- Foto de Perfil -->
-                <div class="aluno-foto-container" id="alunoFotoContainer" style="
-                    width: 70px;
-                    height: 70px;
-                    border-radius: 50%;
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 3px solid white;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                    overflow: hidden;
-                ">
-                    <img id="alunoFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="Foto de perfil">
-                    <i id="alunoFotoPlaceholder" class="fas fa-user-graduate" style="font-size: 2rem; color: white;"></i>
+
+        <!-- ============================================================
+             TOPBAR — fundo branco com sombra verde
+             ============================================================ -->
+        <div class="topbar-aluno">
+            <a href="#" class="brand" onclick="event.preventDefault();">
+                <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
+                <div class="brand-text">
+                    <h2>EducaPleno</h2>
+                    <span>Painel do Aluno</span>
                 </div>
-                <div>
-                    <h1><i class="fas fa-user-graduate"></i> Painel do Aluno</h1>
-                    <div class="aluno-details" id="alunoDetails">
-                        <p>Carregando informações...</p>
-                    </div>
-                </div>
+            </a>
+
+            <div class="nav-menu">
+                <button class="nav-item" onclick="scrollSuave('provasPendentes')">
+                    <i class="fas fa-clock"></i><span>Pendentes</span>
+                </button>
+                <button class="nav-item" onclick="scrollSuave('provasConcluidas')">
+                    <i class="fas fa-check-circle"></i><span>Concluídas</span>
+                </button>
+                <button class="nav-item" onclick="scrollSuave('turmasAluno')">
+                    <i class="fas fa-school"></i><span>Turmas</span>
+                </button>
+                <button class="nav-item" onclick="navegarComLoader('calendario.html','Abrindo calendário...')">
+                    <i class="fas fa-calendar-alt"></i><span>Calendário</span>
+                </button>
+                <button class="nav-item" onclick="mostrarModal('modalEntrarTurma')">
+                    <i class="fas fa-sign-in-alt"></i><span>Entrar em Turma</span>
+                </button>
             </div>
-            
-            <!-- Ações do Header -->
-            <div style="display: flex; gap: 15px; align-items: center;">
-                <!-- 🔥 BOTÃO EDITAR PERFIL -->
-                <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    color: white;
-                    border: 2px solid white;
-                    padding: 8px 20px;
-                    border-radius: 30px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.2s;
-                    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-                "
-                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.4)'"
-                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(16,185,129,0.3)'">
-                    <i class="fas fa-user-edit"></i> Editar Perfil
-                </button>
 
-                <!-- Botão Ver Calendário -->
-                <button class="btn-calendario" onclick="window.location.href='calendario.html'" style="
-                    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-                    color: white;
-                    border: 2px solid white;
-                    padding: 8px 20px;
-                    border-radius: 30px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.2s;
-                    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
-                "
-                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(139,92,246,0.4)'"
-                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(139,92,246,0.3)'">
-                    <i class="fas fa-calendar-alt"></i> Ver Calendário
-                </button>
-
-                <!-- 🔥 INDICADOR DE PUSH -->
+            <div class="actions">
                 <div class="push-indicator-container" id="pushIndicatorContainer" style="display: none;">
                     <div class="push-indicator" title="Push desativado pelo administrador">
                         <i class="fas fa-bell-slash"></i>
@@ -183,186 +109,131 @@
                     </div>
                 </div>
 
-                <!-- SISTEMA DE NOTIFICAÇÕES (DESKTOP) -->
-                <div class="notificacoes-container" style="position: relative; display: inline-block;">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="
-                        background: rgba(255,255,255,0.15);
-                        border: 1px solid rgba(255,255,255,0.3);
-                        border-radius: 50%;
-                        width: 48px;
-                        height: 48px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                        color: white;
-                        font-size: 1.2rem;
-                        position: relative;
-                        backdrop-filter: blur(5px);
-                    ">
+                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                   target="_blank"
+                   class="btn-circle-aluno verde"
+                   title="Baixar App">
+                    <i class="fas fa-download"></i>
+                </a>
+
+                <div class="notificacoes-container">
+                    <button class="btn-circle-aluno verde-outline" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações">
                         <i class="fas fa-bell"></i>
-                        <span class="notificacoes-badge" id="notificacoesBadge" style="
-                            position: absolute;
-                            top: -5px;
-                            right: -5px;
-                            background: #dc3545;
-                            color: white;
-                            font-size: 0.7rem;
-                            font-weight: bold;
-                            padding: 3px 6px;
-                            border-radius: 20px;
-                            min-width: 22px;
-                            text-align: center;
-                            border: 2px solid white;
-                            display: none;
-                        ">0</span>
+                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
-                    
-                    <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
-                        position: absolute;
-                        top: 60px;
-                        right: 0;
-                        width: 380px;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-                        display: none;
-                        z-index: 1000;
-                        overflow: hidden;
-                        max-height: 500px;
-                        overflow-y: auto;
-                    ">
-                        <div class="notificacoes-header" style="
-                            padding: 15px 20px;
-                            border-bottom: 1px solid #e5e7eb;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            background: white;
-                            position: sticky;
-                            top: 0;
-                            z-index: 10;
-                        ">
-                            <h3 style="margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-bell" style="color: #3b82f6;"></i>
-                                Notificações
-                            </h3>
-                            <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="
-                                    background: none;
-                                    border: none;
-                                    color: #6b7280;
-                                    cursor: pointer;
-                                    font-size: 0.8rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                    transition: all 0.3s;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                        <div class="notificacoes-header">
+                            <h3><i class="fas fa-bell"></i> Notificações</h3>
+                            <div class="notificacoes-header-actions">
+                                <button onclick="marcarTodasLidas()">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="
-                                    background: none;
-                                    border: none;
-                                    color: #6b7280;
-                                    cursor: pointer;
-                                    font-size: 0.8rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                    transition: all 0.3s;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="limparMinhasNotificacoes(event)">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="
-                                    background: none;
-                                    border: none;
-                                    color: #9ca3af;
-                                    cursor: pointer;
-                                    font-size: 1.2rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="fecharNotificacoes()" class="fechar">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
-                        
-                        <div id="notificacoesLista" style="
-                            max-height: 400px;
-                            overflow-y: auto;
-                        ">
-                            <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <div id="notificacoesLista">
+                            <div class="loading">
+                                <i class="fas fa-spinner fa-spin"></i>
                                 <p>Carregando notificações...</p>
                             </div>
                         </div>
-                        
-                        <div class="notificacao-footer" style="
-                            padding: 12px 20px;
-                            border-top: 1px solid #e5e7eb;
-                            text-align: center;
-                            background: #f9fafb;
-                        ">
-                            <a href="#" onclick="verTodasNotificacoes(event)" style="
-                                color: #3b82f6;
-                                text-decoration: none;
-                                font-size: 0.85rem;
-                                font-weight: 500;
-                                display: inline-flex;
-                                align-items: center;
-                                gap: 5px;
-                            ">
+                        <div class="notificacao-footer">
+                            <a href="#" onclick="verTodasNotificacoes(event)">
                                 <i class="fas fa-eye"></i> Ver todas as notificações
                             </a>
                         </div>
                     </div>
                 </div>
 
-                <!-- LINK DO APP -->
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    color: white;
-                    padding: 8px 16px;
-                    border-radius: 20px;
-                    text-decoration: none;
-                    font-size: 0.9rem;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    border: 2px solid white;
-                    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
-                ">
-                    <i class="fas fa-download"></i> Baixar App
-                </a>
-
-                <!-- Botão Entrar em Turma -->
-                <button class="btn-entrar-turma" id="btnEntrarTurma" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    color: white;
-                    border: 2px solid white;
-                    padding: 8px 20px;
-                    border-radius: 30px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.2s;
-                    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-                "
-                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.4)'"
-                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(16,185,129,0.3)'">
-                    <i class="fas fa-plus-circle"></i> Entrar em Turma
-                </button>
+                <button id="btnEntrarTurma" class="hidden-para-js" aria-hidden="true"></button>
             </div>
         </div>
-        
-        <!-- Provas Pendentes -->
-        <div class="card">
-            <div class="card-header">
-                <h2><i class="fas fa-clock"></i> Provas Pendentes</h2>
+
+        <!-- ============================================================
+             HERO DO ALUNO — verde escuro com contraste alto
+             ============================================================ -->
+        <div class="aluno-hero">
+            <div class="aluno-hero-inner">
+
+                <div class="hero-foto" id="alunoFotoWrapper">
+                    <div class="hero-foto-img" id="alunoFotoContainer">
+                        <img id="alunoFotoPerfil" alt="Foto de perfil">
+                        <i id="alunoFotoPlaceholder" class="fas fa-user-graduate"></i>
+                    </div>
+                    <div class="hero-foto-badge" title="Abrir menu">
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+
+                    <div class="hero-dropdown" id="alunoDropdown">
+                        <div class="dd-header">
+                            <strong id="dropdownNome">Aluno</strong>
+                            <span id="dropdownEmail">email@exemplo.com</span>
+                        </div>
+                        <a href="editar-perfil.html" class="dd-item">
+                            <i class="fas fa-user-edit"></i> Editar Perfil
+                        </a>
+                        <a href="calendario.html" class="dd-item">
+                            <i class="fas fa-calendar-alt"></i> Ver Calendário
+                        </a>
+                        <button class="dd-item" onclick="mostrarModal('modalEntrarTurma'); fecharDropdown();">
+                            <i class="fas fa-sign-in-alt"></i> Entrar em Turma
+                        </button>
+                        <button class="dd-item" onclick="window.open('https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing','_blank')">
+                            <i class="fas fa-download"></i> Baixar App
+                        </button>
+                        <div class="dd-divider"></div>
+                        <button class="dd-item danger" onclick="logout()">
+                            <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+                        </button>
+                    </div>
+                </div>
+
+                <div class="hero-info">
+                    <h1>
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>Painel do Aluno</span>
+                    </h1>
+                    <div class="aluno-details" id="alunoDetails">
+                        <p><i class="fas fa-spinner fa-spin"></i> Carregando informações...</p>
+                    </div>
+                    <div class="hero-chips" id="heroChips"></div>
+                </div>
+
+                <div class="hero-stats">
+                    <div class="hero-stat">
+                        <div class="num" id="statPendentes">0</div>
+                        <div class="lbl">Pendentes</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="num" id="statConcluidas">0</div>
+                        <div class="lbl">Concluídas</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="num" id="statTurmas">0</div>
+                        <div class="lbl">Turmas</div>
+                    </div>
+                </div>
+
             </div>
-            <div class="card-body">
+        </div>
+
+        <!-- ============================================================
+             PROVAS PENDENTES
+             ============================================================ -->
+        <div class="section-card-aluno">
+            <div class="section-header-aluno">
+                <h2>
+                    <i class="fas fa-clock icon-pendente"></i>
+                    Provas Pendentes
+                </h2>
+            </div>
+            <div class="section-body-aluno">
                 <div id="provasPendentes">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
@@ -371,207 +242,113 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Provas Concluídas -->
-        <div class="card" style="margin-top: 30px;">
-            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                <h2><i class="fas fa-check-circle"></i> Provas Concluídas</h2>
-                
-                <!-- FILTROS COMBINADOS: EIXO + PERÍODO + STATUS -->
-                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <!-- Filtro por Eixo/Disciplina -->
-                    <div style="position: relative; min-width: 250px;">
-                        <select id="filtroEixoProvasConcluidas" style="
-                            padding: 10px 35px 10px 15px;
-                            border: 2px solid #e5e7eb;
-                            border-radius: 8px;
-                            font-size: 0.95rem;
-                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
-                            appearance: none;
-                            -webkit-appearance: none;
-                            -moz-appearance: none;
-                            cursor: pointer;
-                            outline: none;
-                            transition: border-color 0.3s;
-                            width: 100%;
-                        ">
-                            <option value="todos">Todas as disciplinas</option>
-                            <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
-                            <option value="biologia" style="padding-left: 20px;">&nbsp;&nbsp;🌿 Biologia</option>
-                            <option value="fisica" style="padding-left: 20px;">&nbsp;&nbsp;⚛️ Física</option>
-                            <option value="quimica" style="padding-left: 20px;">&nbsp;&nbsp;🧪 Química</option>
-                            <option value="matematica" style="padding-left: 20px;">&nbsp;&nbsp;📐 Matemática</option>
-                            <option value="humanas" style="font-weight: 600; background: #fef3c7;">🏛️ Humanas</option>
-                            <option value="filosofia" style="padding-left: 20px;">&nbsp;&nbsp;🤔 Filosofia</option>
-                            <option value="sociologia" style="padding-left: 20px;">&nbsp;&nbsp;👥 Sociologia</option>
-                            <option value="geografia" style="padding-left: 20px;">&nbsp;&nbsp;🌍 Geografia</option>
-                            <option value="historia" style="padding-left: 20px;">&nbsp;&nbsp;📜 História</option>
-                            <option value="linguagens" style="font-weight: 600; background: #f0fdf4;">🎭 Linguagens</option>
-                            <option value="artes" style="padding-left: 20px;">&nbsp;&nbsp;🎨 Artes</option>
-                            <option value="ingles" style="padding-left: 20px;">&nbsp;&nbsp;🇬🇧 Inglês</option>
-                            <option value="educacao fisica" style="padding-left: 20px;">&nbsp;&nbsp;⚽ Educação Física</option>
-                            <option value="espanhol" style="padding-left: 20px;">&nbsp;&nbsp;🇪🇸 Espanhol</option>
-                            <option value="portugues" style="padding-left: 20px;">&nbsp;&nbsp;📖 Português</option>
-                            <option value="desenvolvimento" style="font-weight: 600; background: #f3e8ff;">💻 Desenvolvimento de Sistemas</option>
-                            <option value="redes" style="font-weight: 600; background: #e0f2fe;">🌐 Redes de Computadores</option>
-                            <option value="gestao" style="font-weight: 600; background: #fef9c3;">📊 Gestão e Negócios</option>
-                            <option value="producao" style="font-weight: 600; background: #ffe4e6;">🎬 Produção Cultural e Design</option>
-                            <option value="turismo" style="font-weight: 600; background: #fff7ed;">✈️ Turismo, Hospitalidade e Lazer</option>
-                            <option value="ambiente" style="font-weight: 600; background: #dcfce7;">🌱 Ambiente e Saúde</option>
-                        </select>
-                    </div>
-                    
-                    <!-- FILTRO POR PERÍODO -->
-                    <div style="position: relative; min-width: 150px;">
-                        <select id="filtroPeriodoProvas" style="
-                            padding: 10px 35px 10px 15px;
-                            border: 2px solid #e5e7eb;
-                            border-radius: 8px;
-                            font-size: 0.95rem;
-                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
-                            appearance: none;
-                            -webkit-appearance: none;
-                            -moz-appearance: none;
-                            cursor: pointer;
-                            outline: none;
-                            transition: border-color 0.3s;
-                            width: 100%;
-                        ">
-                            <option value="todos">Todos os períodos</option>
-                            <option value="1">1º Período</option>
-                            <option value="2">2º Período</option>
-                            <option value="3">3º Período</option>
-                            <option value="4">4º Período</option>
-                        </select>
-                    </div>
-                    
-                    <!-- FILTRO POR STATUS -->
-                    <div style="position: relative; min-width: 200px;">
-                        <select id="filtroStatusProvas" style="
-                            padding: 10px 35px 10px 15px;
-                            border: 2px solid #e5e7eb;
-                            border-radius: 8px;
-                            font-size: 0.95rem;
-                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
-                            appearance: none;
-                            -webkit-appearance: none;
-                            -moz-appearance: none;
-                            cursor: pointer;
-                            outline: none;
-                            transition: border-color 0.3s;
-                            width: 100%;
-                            border-left: 3px solid #6b7280;
-                        ">
-                            <option value="todos">📋 Todos os status</option>
-                            <option value="concluidas" style="color: #10b981; font-weight: 500;">✅ Concluídas</option>
-                            <option value="aguardando" style="color: #f59e0b; font-weight: 500;">⏳ Aguardando correção</option>
-                            <option value="canceladas" style="color: #ef4444; font-weight: 600;">❌ Canceladas</option>
-                        </select>
-                    </div>
-                    
-                    <span id="contadorProvasFiltradas" style="
-                        background: #4f46e5;
-                        color: white;
-                        padding: 6px 12px;
-                        border-radius: 20px;
-                        font-size: 0.85rem;
-                        font-weight: 600;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 5px;
-                        white-space: nowrap;
-                    ">
+
+        <!-- ============================================================
+             PROVAS CONCLUÍDAS
+             ============================================================ -->
+        <div class="section-card-aluno">
+            <div class="section-header-aluno">
+                <h2>
+                    <i class="fas fa-check-circle icon-concluida"></i>
+                    Provas Concluídas
+                </h2>
+
+                <div class="filtros-bar">
+                    <select id="filtroEixoProvasConcluidas" class="filtro-select">
+                        <option value="todos">Todas as disciplinas</option>
+                        <option value="natureza">🔬 Natureza e Matemática</option>
+                        <option value="humanas">🏛️ Humanas</option>
+                        <option value="linguagens">🎭 Linguagens</option>
+                        <option value="desenvolvimento">💻 Desenvolvimento de Sistemas</option>
+                        <option value="redes">🌐 Redes de Computadores</option>
+                        <option value="turismo">✈️ Turismo, Eventos e Gastronomia</option>
+                        <option value="gestao">📊 Gestão e Negócios</option>
+                        <option value="producao">🎬 Produção Cultural e Design</option>
+                        <option value="ambiente">🌱 Ambiente e Saúde</option>
+                    </select>
+
+                    <select id="filtroPeriodoProvas" class="filtro-select">
+                        <option value="todos">Todos os períodos</option>
+                        <option value="1">1º Período</option>
+                        <option value="2">2º Período</option>
+                        <option value="3">3º Período</option>
+                        <option value="4">4º Período</option>
+                    </select>
+
+                    <select id="filtroStatusProvas" class="filtro-select">
+                        <option value="todos">📋 Todos os status</option>
+                        <option value="concluidas">✅ Concluídas</option>
+                        <option value="aguardando">⏳ Aguardando</option>
+                        <option value="canceladas">❌ Canceladas</option>
+                    </select>
+
+                    <span class="badge-contador">
                         <i class="fas fa-file-alt"></i>
-                        <span id="contadorNumerico">0</span> provas
+                        <span id="contadorNumerico">0</span>
                     </span>
                 </div>
             </div>
-            
-            <div class="card-body">
+            <div class="section-body-aluno">
                 <div id="provasConcluidas">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando provas concluídas...</p>
                     </div>
                 </div>
-                
-                <div id="backupProvasConcluidas" style="display: none;"></div>
+                <div id="backupProvasConcluidas" style="display:none;"></div>
             </div>
         </div>
-        
-        <!-- Turmas -->
-        <div class="card" style="margin-top: 30px; margin-bottom: 50px;">
-            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                <h2><i class="fas fa-school"></i> Minhas Turmas</h2>
-                
-                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <div style="position: relative; min-width: 250px;">
-                        <select id="filtroEixoTurmas" style="
-                            padding: 10px 35px 10px 15px;
-                            border: 2px solid #e5e7eb;
-                            border-radius: 8px;
-                            font-size: 0.95rem;
-                            background: white url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E') no-repeat right 12px center;
-                            appearance: none;
-                            -webkit-appearance: none;
-                            -moz-appearance: none;
-                            cursor: pointer;
-                            outline: none;
-                            transition: border-color 0.3s;
-                            width: 100%;
-                        ">
-                            <option value="todos">Todas as disciplinas</option>
-                            <option value="natureza" style="font-weight: 600; background: #f0f9ff;">🔬 Natureza e Matemática</option>
-                            <option value="humanas" style="font-weight: 600; background: #fef3c7;">🏛️ Humanas</option>
-                            <option value="linguagens" style="font-weight: 600; background: #f0fdf4;">🎭 Linguagens</option>
-                            <option value="desenvolvimento" style="font-weight: 600; background: #f3e8ff; display: none;">💻 Desenvolvimento de Sistemas</option>
-                            <option value="redes" style="font-weight: 600; background: #e0f2fe; display: none;">🌐 Redes de Computadores</option>
-                            <option value="turismo" style="font-weight: 600; background: #fff7ed; display: none;">✈️ Turismo, Eventos e Gastronomia</option>
-                            <option value="gestao" style="font-weight: 600; background: #fef9c3; display: none;">📊 Gestão e Negócios</option>
-                            <option value="producao" style="font-weight: 600; background: #ffe4e6; display: none;">🎬 Produção Cultural e Design</option>
-                            <option value="ambiente" style="font-weight: 600; background: #dcfce7; display: none;">🌱 Ambiente e Saúde</option>
-                        </select>
-                    </div>
-                    
-                    <span id="contadorTurmasFiltradas" style="
-                        background: #4f46e5;
-                        color: white;
-                        padding: 6px 12px;
-                        border-radius: 20px;
-                        font-size: 0.85rem;
-                        font-weight: 600;
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 5px;
-                    ">
+
+        <!-- ============================================================
+             TURMAS
+             ============================================================ -->
+        <div class="section-card-aluno" style="margin-bottom: 60px;">
+            <div class="section-header-aluno">
+                <h2>
+                    <i class="fas fa-school icon-turmas"></i>
+                    Minhas Turmas
+                </h2>
+
+                <div class="filtros-bar">
+                    <select id="filtroEixoTurmas" class="filtro-select">
+                        <option value="todos">Todas as disciplinas</option>
+                        <option value="natureza">🔬 Natureza e Matemática</option>
+                        <option value="humanas">🏛️ Humanas</option>
+                        <option value="linguagens">🎭 Linguagens</option>
+                        <option value="desenvolvimento">💻 Desenvolvimento de Sistemas</option>
+                        <option value="redes">🌐 Redes de Computadores</option>
+                        <option value="turismo">✈️ Turismo, Eventos e Gastronomia</option>
+                        <option value="gestao">📊 Gestão e Negócios</option>
+                        <option value="producao">🎬 Produção Cultural e Design</option>
+                        <option value="ambiente">🌱 Ambiente e Saúde</option>
+                    </select>
+
+                    <span class="badge-contador">
                         <i class="fas fa-school"></i>
-                        <span id="contadorTurmasNumerico">0</span> turmas
+                        <span id="contadorTurmasNumerico">0</span>
                     </span>
                 </div>
             </div>
-            
-            <div class="card-body">
+            <div class="section-body-aluno">
                 <div id="turmasAluno">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
                         <p>Carregando suas turmas...</p>
                     </div>
                 </div>
-                
-                <div id="backupTurmas" style="display: none;"></div>
+                <div id="backupTurmas" style="display:none;"></div>
             </div>
         </div>
 
-        <!-- Modal de Detalhes da Turma -->
+        <!-- Modal Detalhes da Turma -->
         <div class="modal" id="modalDetalhesTurma">
-            <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-content" style="max-width:600px;">
                 <div class="modal-header">
                     <h3><i class="fas fa-school"></i> Detalhes da Turma</h3>
                     <button class="modal-close" onclick="fecharModal('modalDetalhesTurma')">&times;</button>
                 </div>
-                <div id="detalhesTurmaContent" style="padding: 20px;">
-                </div>
-                <div style="padding: 15px 20px; border-top: 1px solid #e5e7eb; text-align: right;">
+                <div id="detalhesTurmaContent"></div>
+                <div class="modal-footer">
                     <button class="btn-sair-prova" onclick="fecharModal('modalDetalhesTurma')">
                         <i class="fas fa-times"></i> Fechar
                     </button>
@@ -579,8 +356,7 @@
             </div>
         </div>
     </div>
-    
-    <!-- Modal Entrar na Turma -->
+
     <div class="modal" id="modalEntrarTurma">
         <div class="modal-content">
             <div class="modal-header">
@@ -589,36 +365,29 @@
             </div>
             <div class="form-group">
                 <label for="codigoTurma">Código da Turma</label>
-                <input type="text" id="codigoTurma" class="form-control" placeholder="Ex: ABC123" style="text-transform: uppercase;">
-                <small style="color: #6b7280; display: block; margin-top: 5px;">Pergunte ao professor pelo código da turma</small>
+                <input type="text" id="codigoTurma" class="form-control" placeholder="Ex: ABC123" style="text-transform:uppercase;">
+                <small>Pergunte ao professor pelo código da turma</small>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn-iniciar-prova" style="flex: 1;" onclick="entrarNaTurma()">
+            <div class="modal-actions">
+                <button class="btn-iniciar-prova" onclick="entrarNaTurma()">
                     <i class="fas fa-check"></i> Entrar
                 </button>
-                <button class="btn-sair-prova" style="flex: 1;" onclick="fecharModal('modalEntrarTurma')">
+                <button class="btn-sair-prova" onclick="fecharModal('modalEntrarTurma')">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
             </div>
         </div>
     </div>
-    
-    <!-- Modal Iniciar Prova -->
+
     <div class="modal" id="modalIniciarProva">
         <div class="modal-content modal-prova-container">
             <div class="modal-prova-header">
-                <h3>
-                    <i class="fas fa-play-circle"></i> 
-                    Iniciar Prova
-                </h3>
+                <h3><i class="fas fa-play-circle"></i> Iniciar Prova</h3>
                 <button class="modal-prova-close" onclick="fecharModal('modalIniciarProva')">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
-            <div id="modalProvaInfo" class="modal-prova-content">
-            </div>
-            
+            <div id="modalProvaInfo" class="modal-prova-content"></div>
             <div class="modal-prova-footer">
                 <button class="modal-prova-btn-primary" onclick="iniciarProvaSelecionada()">
                     <i class="fas fa-play"></i> Iniciar Prova
@@ -630,51 +399,11 @@
         </div>
     </div>
 
-    <!-- ===== MENU MOBILE FLUTUANTE (DIREITA) ===== -->
-    <div class="fab-menu" id="fabMenuContainer" style="
-        position: fixed;
-        bottom: 25px;
-        right: 25px;
-        left: auto;
-        z-index: 9999;
-        display: none;
-    ">
-        <button class="fab-button" id="fabMenuBtn" style="
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #4f46e5, #3730a3);
-            color: white;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
-            position: relative;
-            transition: all 0.2s;
-        "
-        onmouseover="this.style.transform='scale(1.08)'"
-        onmouseout="this.style.transform='scale(1)'">
+    <!-- MENU MOBILE -->
+    <div class="fab-menu" id="fabMenuContainer">
+        <button class="fab-button" id="fabMenuBtn">
             <i class="fas fa-bars"></i>
-            <!-- 🔥 BADGE DE NOTIFICAÇÕES NO FAB -->
-            <span class="fab-notification-badge" id="fabNotificationBadge" style="
-                position: absolute;
-                top: -5px;
-                right: -5px;
-                background: #dc3545;
-                color: white;
-                font-size: 0.7rem;
-                font-weight: bold;
-                padding: 4px 7px;
-                border-radius: 20px;
-                min-width: 22px;
-                text-align: center;
-                border: 2px solid white;
-                display: none;
-                z-index: 10;
-            ">0</span>
+            <span class="fab-notification-badge" id="fabNotificationBadge">0</span>
         </button>
     </div>
 
@@ -692,27 +421,15 @@
             <div class="menu-item" onclick="window.location.href='calendario.html'">
                 <i class="fas fa-calendar-alt"></i><span>Ver Calendário</span>
             </div>
-            <!-- 🔥 ITEM DE NOTIFICAÇÕES COM BADGE -->
             <div class="menu-item" id="menuItemNotificacoes" onclick="abrirNotificacoesMobile()">
                 <i class="fas fa-bell"></i>
                 <span>Notificações</span>
-                <span class="menu-notification-badge" id="menuNotificationBadge" style="
-                    background: #dc3545;
-                    color: white;
-                    font-size: 0.65rem;
-                    font-weight: bold;
-                    padding: 3px 8px;
-                    border-radius: 20px;
-                    min-width: 20px;
-                    text-align: center;
-                    margin-left: auto;
-                    display: none;
-                ">0</span>
+                <span class="menu-notification-badge" id="menuNotificationBadge">0</span>
             </div>
             <div class="menu-item" onclick="mostrarModal('modalEntrarTurma')">
                 <i class="fas fa-sign-in-alt"></i><span>Entrar em Turma</span>
             </div>
-            <div class="menu-item" onclick="window.open('https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing', '_blank')">
+            <div class="menu-item" onclick="window.open('https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing','_blank')">
                 <i class="fas fa-download"></i><span>Baixar App</span>
             </div>
             <div class="menu-item logout-item" id="logoutMobileBtn">
@@ -721,148 +438,205 @@
         </div>
     </div>
 
-    <!-- 🔥 MODAL DE NOTIFICAÇÕES MOBILE -->
-    <div class="modal-notificacoes-mobile" id="modalNotificacoesMobile" style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        z-index: 10001;
-        display: none;
-        align-items: flex-end;
-        justify-content: center;
-    ">
-        <div class="notificacoes-mobile-content" style="
-            background: white;
-            width: 100%;
-            max-width: 500px;
-            max-height: 85vh;
-            border-radius: 20px 20px 0 0;
-            display: flex;
-            flex-direction: column;
-            animation: slideUpModal 0.3s ease;
-            overflow: hidden;
-        ">
-            <!-- Header do modal -->
-            <div style="
-                padding: 20px;
-                border-bottom: 1px solid #e5e7eb;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: linear-gradient(135deg, #4f46e5, #3730a3);
-                color: white;
-                border-radius: 20px 20px 0 0;
-            ">
-                <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+    <div class="modal-notificacoes-mobile" id="modalNotificacoesMobile">
+        <div class="notificacoes-mobile-content">
+            <div class="notificacoes-mobile-header">
+                <h3>
                     <i class="fas fa-bell"></i>
                     Notificações
-                    <span id="modalNotificacoesBadge" style="
-                        background: rgba(255,255,255,0.3);
-                        padding: 2px 10px;
-                        border-radius: 20px;
-                        font-size: 0.75rem;
-                        display: none;
-                    ">0</span>
+                    <span id="modalNotificacoesBadge">0</span>
                 </h3>
-                <button onclick="fecharModalNotificacoesMobile()" style="
-                    background: rgba(255,255,255,0.2);
-                    border: none;
-                    color: white;
-                    width: 36px;
-                    height: 36px;
-                    border-radius: 50%;
-                    cursor: pointer;
-                    font-size: 1.2rem;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
+                <button onclick="fecharModalNotificacoesMobile()" class="fechar-mobile">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
-            <!-- Ações -->
-            <div style="
-                padding: 12px 20px;
-                border-bottom: 1px solid #e5e7eb;
-                display: flex;
-                justify-content: space-between;
-                background: #f9fafb;
-            ">
-                <button onclick="marcarTodasLidasMobile()" style="
-                    background: none;
-                    border: none;
-                    color: #4f46e5;
-                    cursor: pointer;
-                    font-size: 0.85rem;
-                    font-weight: 500;
-                    padding: 6px 12px;
-                    border-radius: 6px;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                ">
+            <div class="notificacoes-mobile-actions">
+                <button onclick="marcarTodasLidasMobile()">
                     <i class="fas fa-check-double"></i> Marcar todas
                 </button>
-                <button onclick="limparNotificacoesMobile(event)" style="
-                    background: none;
-                    border: none;
-                    color: #ef4444;
-                    cursor: pointer;
-                    font-size: 0.85rem;
-                    font-weight: 500;
-                    padding: 6px 12px;
-                    border-radius: 6px;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                ">
+                <button onclick="limparNotificacoesMobile(event)">
                     <i class="fas fa-trash"></i> Limpar
                 </button>
             </div>
-            
-            <!-- Lista de notificações -->
-            <div id="notificacoesListaMobile" style="
-                flex: 1;
-                overflow-y: auto;
-                padding: 0;
-                min-height: 200px;
-            ">
-                <div style="text-align: center; padding: 40px; color: #6c757d;">
-                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+            <div id="notificacoesListaMobile">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i>
                     <p>Carregando notificações...</p>
                 </div>
             </div>
-            
-            <!-- Footer -->
-            <div style="
-                padding: 15px 20px;
-                border-top: 1px solid #e5e7eb;
-                text-align: center;
-                background: #f9fafb;
-            ">
-                <a href="notificacoes.html" style="
-                    color: #4f46e5;
-                    text-decoration: none;
-                    font-size: 0.9rem;
-                    font-weight: 500;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                ">
+            <div class="notificacoes-mobile-footer">
+                <a href="notificacoes.html">
                     <i class="fas fa-external-link-alt"></i> Ver página completa
                 </a>
             </div>
         </div>
     </div>
 
-    <!-- ===== SCRIPT PRINCIPAL DO ALUNO ===== -->
-    <!-- Todos os scripts inline foram movidos para js/aluno.js -->
+    <script>
+    (function() {
+        'use strict';
+
+        window.scrollSuave = function(id) {
+            const el = document.getElementById(id) || document.getElementById('section-' + id);
+            if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+        };
+
+        window.navegarComLoader = function(url, texto) {
+            const loader = document.getElementById('global-loader');
+            const t = document.getElementById('global-loader-text');
+            if (t && texto) t.textContent = texto;
+            if (loader) loader.classList.add('ativo');
+            setTimeout(() => window.location.href = url, 150);
+        };
+
+        window.fecharDropdown = function() {
+            const d = document.getElementById('alunoDropdown');
+            if (d) d.classList.remove('aberto');
+        };
+
+        window.iniciarVerificacaoPeriodicaFace = function() {
+            console.log('ℹ️ [Patch] iniciarVerificacaoPeriodicaFace (no-op)');
+        };
+
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                if (window.chatbot && typeof window.chatbot.sendSystemMessage !== 'function') {
+                    window.chatbot.sendSystemMessage = function() {};
+                }
+            }, 3500);
+        });
+
+        function renderizarHeroAluno() {
+            try {
+                const u = JSON.parse(localStorage.getItem('user_data') || '{}');
+                if (!u || !u.nome) return;
+
+                const detailsEl = document.getElementById('alunoDetails');
+                const chipsEl = document.getElementById('heroChips');
+
+                if (detailsEl) {
+                    detailsEl.innerHTML = `
+                        <p class="hero-nome">${u.nome}</p>
+                        <p class="hero-email"><i class="fas fa-envelope"></i> ${u.email || ''}</p>
+                    `;
+                }
+
+                if (chipsEl) {
+                    const chips = [];
+                    if (u.curso) chips.push(`<span class="hero-chip"><i class="fas fa-graduation-cap"></i> ${u.curso}</span>`);
+                    if (u.turma) chips.push(`<span class="hero-chip"><i class="fas fa-users"></i> Turma ${u.turma}</span>`);
+                    if (u.periodo) chips.push(`<span class="hero-chip"><i class="fas fa-calendar-week"></i> ${u.periodo}</span>`);
+                    chipsEl.innerHTML = chips.join('');
+                }
+
+                const dn = document.getElementById('dropdownNome');
+                const de = document.getElementById('dropdownEmail');
+                if (dn) dn.textContent = u.nome || 'Aluno';
+                if (de) de.textContent = u.email || '';
+            } catch(e) {}
+        }
+
+        function observarAlunoDetails() {
+            const el = document.getElementById('alunoDetails');
+            if (!el || !window.MutationObserver) {
+                setTimeout(renderizarHeroAluno, 500);
+                return;
+            }
+
+            renderizarHeroAluno();
+
+            const observer = new MutationObserver(() => {
+                const u = JSON.parse(localStorage.getItem('user_data') || '{}');
+                if (u && u.nome) {
+                    const temChips = document.getElementById('heroChips')?.children.length > 0;
+                    if (!temChips) renderizarHeroAluno();
+                }
+            });
+            observer.observe(el, { childList: true, subtree: true });
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            const wrapper = document.getElementById('alunoFotoWrapper');
+            const dropdown = document.getElementById('alunoDropdown');
+
+            if (wrapper && dropdown) {
+                wrapper.addEventListener('click', function(e) {
+                    if (e.target.closest('.hero-dropdown')) return;
+                    e.stopPropagation();
+                    dropdown.classList.toggle('aberto');
+                });
+                document.addEventListener('click', function(e) {
+                    if (!wrapper.contains(e.target)) dropdown.classList.remove('aberto');
+                });
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') dropdown.classList.remove('aberto');
+                });
+            }
+
+            document.addEventListener('click', function(e) {
+                const a = e.target.closest('a');
+                if (!a) return;
+                const href = a.getAttribute('href') || '';
+                const target = a.getAttribute('target');
+                if (target === '_blank' || !href || href.startsWith('#') || href.startsWith('javascript:')) return;
+                if (href.startsWith('mailto:') || href.startsWith('tel:')) return;
+                if (href.startsWith('http') && !href.includes(window.location.hostname)) return;
+                const loader = document.getElementById('global-loader');
+                if (loader) loader.classList.add('ativo');
+            });
+
+            setTimeout(observarAlunoDetails, 300);
+        });
+
+        window.renderizarHeroAluno = renderizarHeroAluno;
+
+    })();
+    </script>
+
     <script src="js/toggle-buttons.js"></script>
     <script src="js/draggable.js"></script>
     <script src="js/aluno.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        function atualizarStatsHero() {
+            try {
+                const pendentes = document.querySelectorAll('#provasPendentes .prova-card').length;
+                const concluidas = document.querySelectorAll('#provasConcluidas .prova-card').length;
+                const turmas = document.querySelectorAll('#turmasAluno .turma-card').length;
+
+                const sp = document.getElementById('statPendentes');
+                const sc = document.getElementById('statConcluidas');
+                const st = document.getElementById('statTurmas');
+
+                if (sp) sp.textContent = pendentes;
+                if (sc) sc.textContent = concluidas;
+                if (st) st.textContent = turmas;
+            } catch(e) {}
+        }
+
+        setInterval(atualizarStatsHero, 2000);
+
+        if (window.MutationObserver) {
+            const observer = new MutationObserver(atualizarStatsHero);
+            ['provasPendentes','provasConcluidas','turmasAluno'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) observer.observe(el, { childList: true, subtree: true });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            atualizarStatsHero();
+            setTimeout(() => {
+                if (window.renderizarHeroAluno) window.renderizarHeroAluno();
+            }, 1500);
+            setTimeout(() => {
+                if (window.renderizarHeroAluno) window.renderizarHeroAluno();
+            }, 3000);
+        });
+    })();
+    </script>
 </body>
 </html>

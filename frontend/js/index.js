@@ -446,6 +446,16 @@ let filtrosAtivos = {
     busca: ''
 };
 
+// 🆕 Cache de eixos do professor
+let eixosProfessorCache = null;
+
+// 🆕 Cache de turmas do professor (com TTL)
+let turmasProfessorCache = {
+    dados: [],
+    timestamp: 0,
+    TTL: 30000 // 30 segundos
+};
+
 // ============================================
 // APLICAR FILTROS DAS PROVAS
 // ============================================
@@ -2761,6 +2771,10 @@ async function verificarAutenticacao() {
             usuario = data.user;
             localStorage.setItem('user_data', JSON.stringify(data.user));
             
+            // 🆕 Limpar caches quando o usuário é identificado
+            limparCacheTurmasProfessor();
+            eixosProfessorCache = null;
+            
             if (usuario.role !== 'professor' && usuario.role !== 'admin') {
                 console.log('❌ Acesso negado - Não é professor');
                 window.location.href = usuario.role === 'aluno' ? 'aluno.html' : 'login.html';
@@ -2927,7 +2941,19 @@ async function carregarTurmasProfessor() {
         
         console.log('📚 Carregando turmas do professor...');
         
-        const response = await fetch('/api/turmas', {
+        // 🔥 Cache com TTL
+        const agora = Date.now();
+        if (turmasProfessorCache.dados.length > 0 && 
+            (agora - turmasProfessorCache.timestamp) < turmasProfessorCache.TTL) {
+            console.log('📦 Usando cache de turmas');
+            turmasProfessor = turmasProfessorCache.dados;
+            atualizarSelectTurmas();
+            atualizarListaTurmas();
+            atualizarEstatisticasTurmas();
+            return;
+        }
+        
+        const response = await fetch('/api/professor/turmas', {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -2940,7 +2966,41 @@ async function carregarTurmasProfessor() {
         const data = await response.json();
         
         if (data.success) {
-            turmasProfessor = data.turmas || [];
+            let turmas = data.turmas || [];
+            
+            console.log(`✅ ${turmas.length} turmas recebidas da API`);
+            
+            // 🔥 FILTRO DO CLIENTE — agora com a função corrigida
+            if (usuario && usuario.id && usuario.role !== 'admin' && usuario.role !== 'super_admin') {
+                const turmasAntes = turmas.length;
+                turmas = turmas.filter(t => turmaPertenceAoProfessor(t, usuario));
+                
+                if (turmas.length !== turmasAntes) {
+                    console.log(`🔍 Filtro cliente: ${turmasAntes} → ${turmas.length}`);
+                } else {
+                    console.log(`✅ Filtro cliente: todas as ${turmasAntes} turmas passaram`);
+                }
+            }
+            
+            // 🔥 Ordenar: eixo do professor primeiro
+            if (usuario && usuario.eixo) {
+                turmas.sort((a, b) => {
+                    const aMatch = a.eixo === usuario.eixo ? 0 : 1;
+                    const bMatch = b.eixo === usuario.eixo ? 0 : 1;
+                    if (aMatch !== bMatch) return aMatch - bMatch;
+                    return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+                });
+                console.log(`🎯 Turmas do eixo "${usuario.eixo}" priorizadas`);
+            } else {
+                turmas.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+            }
+            
+            turmasProfessor = turmas;
+            
+            // Atualizar cache
+            turmasProfessorCache.dados = turmas;
+            turmasProfessorCache.timestamp = agora;
+            
             atualizarSelectTurmas();
             atualizarListaTurmas();
             atualizarEstatisticasTurmas();
@@ -2957,6 +3017,111 @@ async function carregarTurmasProfessor() {
             mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '❌ Erro ao carregar turmas: ' + error.message, 'error');
         }
     }
+}
+
+// ============================================
+// 🆕 CARREGAR EIXOS DO PROFESSOR
+// ============================================
+async function carregarEixosProfessor() {
+    if (eixosProfessorCache && eixosProfessorCache.length > 0) {
+        return eixosProfessorCache;
+    }
+
+    try {
+        const token = localStorage.getItem('auth_token');
+        
+        // 🔥 Rota liberada para professor
+        const response = await fetch('/api/professor/eixos', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            console.error(`❌ Erro HTTP ${response.status} ao carregar eixos`);
+            return [];
+        }
+
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.eixos)) {
+            eixosProfessorCache = data.eixos.map(e => ({
+                _id: e._id,
+                nome: e.nome,
+                label: e.label || e.nome,
+                cor: e.cor || '#667eea',
+                icone: e.icone || 'fa-graduation-cap',
+                descricao: e.descricao || ''
+            }));
+
+            console.log(`✅ ${eixosProfessorCache.length} eixos carregados para o professor`);
+            return eixosProfessorCache;
+        }
+
+        console.warn('⚠️ Resposta sem eixos válidos:', data);
+        return [];
+
+    } catch (error) {
+        console.error('❌ Erro ao carregar eixos:', error);
+        return [];
+    }
+}
+
+// ============================================
+// 🆕 LIMPAR CACHE DE TURMAS
+// ============================================
+function limparCacheTurmasProfessor() {
+    turmasProfessorCache = {
+        dados: [],
+        timestamp: 0,
+        TTL: 30000
+    };
+    console.log('🔄 Cache de turmas do professor limpo');
+}
+
+// ============================================
+// 🆕 VALIDAR SE TURMA PERTENCE AO PROFESSOR
+// ============================================
+function turmaPertenceAoProfessor(turma, professor) {
+    if (!turma || !professor) return false;
+
+    const professorId = String(professor.id || professor._id || professor.userId || '');
+    if (!professorId) return false;
+
+    // 🔥 Extrair o ID do professor da turma, considerando que pode ser:
+    //    - String direta: "6a997..."
+    //    - ObjectId do Mongo
+    //    - Objeto populado: { _id: "6a997...", nome: "...", email: "..." }
+    let turmaProfessorId = null;
+
+    if (turma.professorId) {
+        if (typeof turma.professorId === 'object') {
+            // Objeto populado → pegar ._id ou .id
+            turmaProfessorId = turma.professorId._id || turma.professorId.id;
+        } else {
+            // String ou ObjectId
+            turmaProfessorId = turma.professorId;
+        }
+    } else if (turma.professor) {
+        if (typeof turma.professor === 'object') {
+            turmaProfessorId = turma.professor._id || turma.professor.id;
+        } else {
+            turmaProfessorId = turma.professor;
+        }
+    } else if (turma.criadoPor) {
+        turmaProfessorId = typeof turma.criadoPor === 'object' 
+            ? (turma.criadoPor._id || turma.criadoPor.id) 
+            : turma.criadoPor;
+    } else if (turma.userId) {
+        turmaProfessorId = turma.userId;
+    } else if (turma.ownerId) {
+        turmaProfessorId = turma.ownerId;
+    }
+
+    // Se a turma não tem professor definido, mas o professor é admin, aceitar
+    if (!turmaProfessorId) {
+        return professor.role === 'admin' || professor.role === 'super_admin';
+    }
+
+    return String(turmaProfessorId) === professorId;
 }
 
 function atualizarListaProvas(provas) {
@@ -5989,32 +6154,80 @@ function atualizarSelectTurmas() {
     const selectTurma = document.getElementById('turmaProva');
     if (!selectTurma) return;
     
+    // Limpa completamente
     selectTurma.innerHTML = '<option value="">Selecione uma turma...</option>';
     
-    if (turmasProfessor.length === 0) {
+    if (!turmasProfessor || turmasProfessor.length === 0) {
         selectTurma.innerHTML += `
             <option value="" disabled>
                 ⚠️ Nenhuma turma disponível. Crie uma turma primeiro.
             </option>
         `;
         selectTurma.disabled = true;
+        console.log('⚠️ Nenhuma turma para popular o select');
         return;
     }
     
+    // 🔥 Agrupar turmas por eixo
+    const turmasPorEixo = {};
     turmasProfessor.forEach(turma => {
-        const option = document.createElement('option');
-        option.value = turma.id;
-        option.textContent = `📚 ${turma.nome} - ${turma.disciplina} (${turma.totalAlunos || 0} alunos)`;
-        
-        if (turma.eixo === usuario.eixo) {
-            option.style.fontWeight = 'bold';
-            option.textContent += ` [${turma.eixo === 'natureza' ? '🌿 Natureza' : '📖 Humanas'}]`;
+        const eixo = turma.eixo || 'sem-eixo';
+        if (!turmasPorEixo[eixo]) {
+            turmasPorEixo[eixo] = [];
         }
+        turmasPorEixo[eixo].push(turma);
+    });
+    
+    const eixoProfessor = usuario?.eixo || null;
+    
+    // 🔥 Ordem dos eixos: eixo do professor primeiro
+    const ordemEixos = Object.keys(turmasPorEixo).sort((a, b) => {
+        if (a === eixoProfessor) return -1;
+        if (b === eixoProfessor) return 1;
+        return a.localeCompare(b, 'pt-BR');
+    });
+    
+    // 🔥 Criar optgroups
+    ordemEixos.forEach(eixo => {
+        const turmasDoEixo = turmasPorEixo[eixo];
+        if (turmasDoEixo.length === 0) return;
         
-        selectTurma.appendChild(option);
+        const eixoLabel = eixo === 'sem-eixo' 
+            ? '📁 Sem Eixo Definido' 
+            : (eixo === eixoProfessor 
+                ? `⭐ ${eixo.toUpperCase()} (SEU EIXO)` 
+                : `📚 ${eixo.toUpperCase()}`);
+        
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = eixoLabel;
+        
+        // Ordenar turmas dentro do eixo
+        turmasDoEixo.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+        
+        turmasDoEixo.forEach(turma => {
+            const option = document.createElement('option');
+            option.value = turma.id || turma._id;
+            
+            const nomeTurma = turma.nome || 'Turma sem nome';
+            const disciplina = turma.disciplina || '';
+            const totalAlunos = turma.totalAlunos || 0;
+            
+            option.textContent = `📚 ${nomeTurma}${disciplina ? ` - ${disciplina}` : ''} (${totalAlunos} aluno${totalAlunos !== 1 ? 's' : ''})`;
+            
+            if (eixo === eixoProfessor) {
+                option.style.fontWeight = 'bold';
+                option.style.color = '#4f46e5';
+            }
+            
+            optgroup.appendChild(option);
+        });
+        
+        selectTurma.appendChild(optgroup);
     });
     
     selectTurma.disabled = false;
+    
+    console.log(`✅ Select de turmas populado: ${turmasProfessor.length} turma(s) em ${ordemEixos.length} eixo(s)`);
 }
 
 function atualizarListaTurmas() {
@@ -7190,6 +7403,39 @@ async function excluirTurma(turmaId) {
 function solicitarExclusaoTurma(turmaId, turmaNome) {
     turmaParaExcluir = { id: turmaId, nome: turmaNome };
     
+    // 🔥 Cria o modal se não existir
+    let modal = document.getElementById('modalExcluirTurma');
+    if (!modal) {
+        console.log('📦 Criando modal de exclusão de turma dinamicamente...');
+        
+        modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'modalExcluirTurma';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-exclamation-triangle"></i> Excluir Turma
+                    </h3>
+                    <button class="modal-close" onclick="fecharModal('modalExcluirTurma')">&times;</button>
+                </div>
+                <div id="modalExcluirConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div>
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button class="btn btn-danger" onclick="confirmarExclusaoTurma()" style="flex: 1;">
+                        <i class="fas fa-trash"></i> Excluir Turma
+                    </button>
+                    <button class="btn" onclick="fecharModal('modalExcluirTurma')" 
+                            style="flex: 1; background: #e5e7eb; color: #374151;">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        console.log('✅ Modal criado com sucesso');
+    }
+    
+    // Preenche o conteúdo
     const modalConteudo = document.getElementById('modalExcluirConteudo');
     if (modalConteudo) {
         modalConteudo.innerHTML = `
@@ -7245,11 +7491,26 @@ async function testarRotaExclusao() {
 }
 
 function mostrarModal(id) {
-    document.getElementById(id).style.display = 'flex';
+    const modal = document.getElementById(id);
+    
+    if (!modal) {
+        console.warn(`⚠️ Modal não encontrado no DOM: "${id}"`);
+        console.warn(`   → Verifique se o <div id="${id}"> existe no HTML`);
+        return; // ⚠️ Retorna sem erro ao invés de quebrar
+    }
+    
+    modal.style.display = 'flex';
 }
 
 function fecharModal(id) {
-    document.getElementById(id).style.display = 'none';
+    const modal = document.getElementById(id);
+    
+    if (!modal) {
+        console.warn(`⚠️ Modal não encontrado no DOM: "${id}"`);
+        return;
+    }
+    
+    modal.style.display = 'none';
 }
 
 async function gerarProvaComIA(dadosProva) {
@@ -9169,6 +9430,10 @@ function mostrarTab(tabId) {
 }
 
 function logout() {
+    // 🆕 Limpar caches antes do logout
+    limparCacheTurmasProfessor();
+    eixosProfessorCache = null;
+    
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_data');
     sessionStorage.removeItem('auth_token');
@@ -13245,6 +13510,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     carregarDadosProfessor();
+
+    setTimeout(async () => {
+        // 🔥 Carrega eixos + turmas em paralelo (usa rota do professor)
+        await Promise.all([
+            carregarEixosProfessor(),
+            carregarTurmasProfessor()
+        ]);
+        console.log('✅ Eixos e turmas carregados no bootstrap');
+    }, 500);
 
     setTimeout(() => {
         carregarEixosParaSelect();

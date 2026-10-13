@@ -952,6 +952,11 @@ let filtroPeriodoAtivo = 'todos';
 let filtroPeriodoTurmasAtivo = 'todos';
 let bannerFaceAtivo = false;
 
+// 🔥 VARIÁVEIS DINÂMICAS (vêm do banco)
+let eixoAlunoGlobal = null;       // Eixo do curso do aluno
+let eixosComunsGlobal = [];       // Eixos BNCC (fixos: natureza, humanas, linguagens)
+let _eixoCarregado = false;       // Flag de cache
+
 // Funções do modal
 function mostrarModal(id) {
     document.getElementById(id).style.display = 'flex';
@@ -1321,7 +1326,92 @@ async function carregarProvasPendentes() {
 
 // ========== VARIÁVEL GLOBAL PARA CONTROLAR O FILTRO ==========
 let filtroAtivo = 'todos';
-let eixoAlunoGlobal = '';
+
+
+// ============================================================================
+// 📚 CARREGAR EIXOS DO ALUNO (BNCC fixos + eixo do curso)
+// ============================================================================
+async function carregarEixoEDisciplinasAluno() {
+    if (_eixoCarregado) {
+        return { eixo: eixoAlunoGlobal, eixosComuns: eixosComunsGlobal };
+    }
+
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+            return { eixo: null, eixosComuns: [] };
+        }
+
+        console.log('📚 Buscando eixos do aluno...');
+
+        const response = await fetch(`${API_BASE_URL}/aluno/meu-eixo-turmas`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            eixoAlunoGlobal = data.eixo || null;
+            eixosComunsGlobal = data.eixosComuns || [];
+            _eixoCarregado = true;
+
+            console.log('✅ Eixos comuns (BNCC):', eixosComunsGlobal.map(e => e.nome));
+            console.log('✅ Eixo do curso:', eixoAlunoGlobal?.nome || 'Nenhum');
+
+            return { eixo: eixoAlunoGlobal, eixosComuns: eixosComunsGlobal };
+        }
+
+        _eixoCarregado = true;
+        return { eixo: null, eixosComuns: [] };
+
+    } catch (error) {
+        console.error('❌ Erro ao carregar eixos do aluno:', error);
+        _eixoCarregado = true;
+        return { eixo: null, eixosComuns: [] };
+    }
+}
+
+// ============================================================================
+// 🎨 CONSTRUIR OPÇÕES DO FILTRO (BNCC + EIXO DO CURSO)
+// Reutilizável para os 2 selects (provas concluídas e turmas)
+// ============================================================================
+function construirOpcoesFiltroEixos(select, eixoCurso, eixosComuns) {
+    // 1. Opção "Todos"
+    const optionTodos = document.createElement('option');
+    optionTodos.value = 'todos';
+    optionTodos.textContent = '📚 Todas as disciplinas';
+    select.appendChild(optionTodos);
+
+    // 2. Eixos COMUNS (BNCC) — SEMPRE PRESENTES
+    if (eixosComuns && eixosComuns.length > 0) {
+        eixosComuns.forEach(eixoComum => {
+            const option = document.createElement('option');
+            option.value = eixoComum.nome;
+            option.textContent = eixoComum.label || eixoComum.nome;
+            option.style.fontWeight = '500';
+            select.appendChild(option);
+        });
+    }
+
+    // 3. Separador visual (só se tiver eixo do curso)
+    if (eixoCurso) {
+        const separator = document.createElement('option');
+        separator.disabled = true;
+        separator.textContent = '━━━━━━━━━━━━━━━━━━';
+        separator.style.color = '#9ca3af';
+        select.appendChild(separator);
+
+        // 4. Eixo do CURSO (destacado)
+        const optionCurso = document.createElement('option');
+        optionCurso.value = eixoCurso.nome;
+        optionCurso.textContent = eixoCurso.label || eixoCurso.nome;
+        optionCurso.style.fontWeight = '700';
+        optionCurso.style.color = eixoCurso.cor || '#667eea';
+        optionCurso.style.backgroundColor = '#f0f9ff';
+        select.appendChild(optionCurso);
+    }
+}
+
 
 // ============ CARREGAR PROVAS CONCLUÍDAS ============
 async function carregarProvasConcluidas() {
@@ -1359,191 +1449,91 @@ async function carregarProvasConcluidas() {
     }
 }
 
-// ========== CONFIGURAR FILTROS COM DADOS DO BANCO - VERSÃO SIMPLIFICADA ==========
+// ============================================================================
+// 🎨 CONFIGURAR FILTROS DE PROVAS CONCLUÍDAS (BNCC + eixo do curso)
+// ============================================================================
 async function configurarFiltrosProvasBanco() {
     const filtroSelect = document.getElementById('filtroEixoProvasConcluidas');
-    if (!filtroSelect) return;
-    
+    if (!filtroSelect) {
+        console.warn('⚠️ [filtro] #filtroEixoProvasConcluidas não encontrado');
+        return;
+    }
+
     try {
-        const token = localStorage.getItem('auth_token');
-        
-        // Buscar curso completo do aluno (com eixo)
-        const response = await fetch(`${API_BASE_URL}/aluno/curso-completo`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Erro ao buscar dados do aluno');
-        }
-        
-        console.log('📚 Dados do aluno:', data);
-        
-        let eixoDoAluno = null;
-        if (data.eixo) {
-            eixoDoAluno = data.eixo.nome;
-            console.log(`🎯 Eixo do aluno (do banco): ${eixoDoAluno}`);
-        }
-        
-        // RECRIAR SELECT PARA LIMPAR LISTENERS ANTIGOS
+        // 1. Buscar eixos do banco (BNCC fixos + eixo do curso)
+        const { eixo, eixosComuns } = await carregarEixoEDisciplinasAluno();
+
+        // 2. Clonar select (limpar listeners antigos)
         const novoSelect = filtroSelect.cloneNode(true);
         filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
-        
-        // Limpar opções existentes
         novoSelect.innerHTML = '';
-        
-        // Adicionar opção "Todos"
-        const optionTodos = document.createElement('option');
-        optionTodos.value = 'todos';
-        optionTodos.textContent = 'Todas as disciplinas';
-        novoSelect.appendChild(optionTodos);
-        
-        // ========== EIXOS DA BNCC ==========
-        const eixosBNCC = [
-            { nome: 'natureza', label: '🔬 Natureza e Matemática' },
-            { nome: 'humanas', label: '🏛️ Humanas' },
-            { nome: 'linguagens', label: '🎭 Linguagens' }
-        ];
-        
-        eixosBNCC.forEach(eixo => {
-            const optionEixo = document.createElement('option');
-            optionEixo.value = eixo.nome;
-            optionEixo.textContent = eixo.label;
-            optionEixo.style.fontWeight = '600';
-            novoSelect.appendChild(optionEixo);
-        });
-        
-        // ========== ADICIONAR APENAS O EIXO TÉCNICO DO ALUNO ==========
-        if (eixoDoAluno && !eixosBNCC.some(e => e.nome === eixoDoAluno)) {
-            const labels = {
-                'desenvolvimento': '💻 Desenvolvimento de Sistemas',
-                'redes': '🌐 Redes de Computadores',
-                'turismo': '✈️ Turismo, Eventos e Gastronomia',
-                'gestao': '📊 Gestão e Negócios',
-                'producao': '🎬 Produção Cultural e Design',
-                'ambiente': '🌱 Ambiente e Saúde'
-            };
-            
-            const optionEixoAluno = document.createElement('option');
-            optionEixoAluno.value = eixoDoAluno;
-            optionEixoAluno.textContent = labels[eixoDoAluno] || data.eixo?.label || 'Eixo Técnico';
-            optionEixoAluno.style.fontWeight = '600';
-            optionEixoAluno.style.backgroundColor = '#f0f9ff';
-            novoSelect.appendChild(optionEixoAluno);
-            
-            console.log(`✅ Eixo técnico adicionado: ${eixoDoAluno}`);
-        }
-        
-        // ========== EVENTO DE MUDANÇA DO FILTRO ==========
+
+        // 3. Construir opções
+        construirOpcoesFiltroEixos(novoSelect, eixo, eixosComuns);
+
+        // 4. Evento de mudança
         novoSelect.addEventListener('change', function() {
             filtroAtivo = this.value;
             const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
             aplicarFiltroEStatus(backup);
         });
-        
-        console.log('✅ Filtros configurados: BNCC + eixo do aluno');
-        
+
+        console.log('✅ Filtro de provas concluídas configurado');
+
     } catch (error) {
-        console.error('❌ Erro ao configurar filtros:', error);
-        
-        // Fallback
-        const filtroSelect = document.getElementById('filtroEixoProvasConcluidas');
-        if (filtroSelect) {
-            const novoSelect = filtroSelect.cloneNode(true);
-            filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
-            
-            novoSelect.innerHTML = `
-                <option value="todos">Todas as disciplinas</option>
-                <option value="natureza">🔬 Natureza e Matemática</option>
-                <option value="humanas">🏛️ Humanas</option>
-                <option value="linguagens">🎭 Linguagens</option>
-            `;
-            
-            novoSelect.addEventListener('change', function() {
-                filtroAtivo = this.value;
-                const backup = JSON.parse(localStorage.getItem('backupProvasConcluidas') || '[]');
-                aplicarFiltroEStatus(backup);
-            });
-        }
+        console.error('❌ Erro ao configurar filtro de provas:', error);
     }
 }
 
-// ========== FUNÇÃO PARA APLICAR FILTRO (COM STATUS) ==========
+// ============================================================================
+// 🔍 APLICAR FILTRO NAS PROVAS CONCLUÍDAS (por EIXO)
+// ============================================================================
 function aplicarFiltroEStatus(provas) {
     const container = document.getElementById('provasConcluidas');
     if (!container) return;
-    
+
     const filtroEixo = document.getElementById('filtroEixoProvasConcluidas')?.value || 'todos';
     const filtroPeriodo = document.getElementById('filtroPeriodoProvas')?.value || 'todos';
     const filtroStatus = document.getElementById('filtroStatusProvas')?.value || 'todos';
-    
-    console.log('🔍 Aplicando filtros:', { 
-        eixo: filtroEixo, 
+
+    console.log('🔍 Aplicando filtros:', {
+        eixo: filtroEixo,
         periodo: filtroPeriodo,
-        status: filtroStatus 
+        status: filtroStatus
     });
-    
+
     let provasFiltradas = provas;
-    
+
+    // ============================================
+    // FILTRO POR EIXO
+    // ============================================
     if (filtroEixo !== 'todos') {
+        const eixoLower = filtroEixo.toLowerCase().trim();
+
         provasFiltradas = provasFiltradas.filter(prova => {
-            const conteudo = (prova.conteudo || '').toLowerCase();
-            const titulo = (prova.titulo || '').toLowerCase();
-            const eixoProva = prova.eixo || '';
-            const disciplinaProva = prova.disciplina || '';
-            
-            if (filtroEixo === prova.eixo) {
-                return true;
-            }
-            
-            const palavrasChave = {
-                'biologia': ['biologia', 'bio', 'célula', 'genética', 'evolução'],
-                'fisica': ['física', 'fisica', 'mecânica', 'termodinâmica', 'óptica'],
-                'quimica': ['química', 'quimica', 'átomo', 'molécula', 'reação'],
-                'matematica': ['matemática', 'matematica', 'álgebra', 'geometria', 'cálculo'],
-                'filosofia': ['filosofia', 'ética', 'moral', 'razão'],
-                'sociologia': ['sociologia', 'sociedade', 'cultura', 'classes sociais'],
-                'geografia': ['geografia', 'mapa', 'cartografia', 'clima', 'relevo'],
-                'historia': ['história', 'historia', 'feudalismo', 'renascimento', 'guerra'],
-                'artes': ['artes', 'arte', 'música', 'teatro', 'dança'],
-                'ingles': ['inglês', 'ingles', 'english', 'vocabulary'],
-                'educacao fisica': ['educação física', 'esportes', 'futebol'],
-                'espanhol': ['espanhol', 'español'],
-                'portugues': ['português', 'portugues', 'gramática', 'redação'],
-                'desenvolvimento': ['programação', 'sistemas', 'banco de dados', 'algoritmo', 'software'],
-                'redes': ['rede', 'protocolo', 'tcp/ip', 'roteador', 'switch'],
-                'turismo': ['evento', 'gastronomia', 'turismo', 'guia'],
-                'gestao': ['marketing', 'jurídico', 'gestão', 'negócios'],
-                'producao': ['áudio', 'vídeo', 'publicidade', 'design'],
-                'ambiente': ['ambiente', 'ecologia', 'sustentabilidade', 'reciclagem']
-            };
-            
-            const palavras = palavrasChave[filtroEixo] || [filtroEixo];
-            for (const palavra of palavras) {
-                if (conteudo.includes(palavra) || titulo.includes(palavra) || 
-                    disciplinaProva.toLowerCase().includes(palavra)) {
-                    return true;
-                }
-            }
-            return false;
+            const eixoProva = (prova.eixo || '').toLowerCase().trim();
+            const eixoTurma = (prova.turma?.eixo || '').toLowerCase().trim();
+
+            return eixoProva === eixoLower || eixoTurma === eixoLower;
         });
     }
-    
+
+    // ============================================
+    // FILTRO POR PERÍODO
+    // ============================================
     if (filtroPeriodo !== 'todos') {
-        provasFiltradas = provasFiltradas.filter(prova => 
-            prova.periodo === filtroPeriodo || 
+        provasFiltradas = provasFiltradas.filter(prova =>
+            prova.periodo === filtroPeriodo ||
             (prova.periodo && prova.periodo.toString() === filtroPeriodo)
         );
     }
-    
+
+    // ============================================
+    // FILTRO POR STATUS
+    // ============================================
     if (filtroStatus !== 'todos') {
         if (filtroStatus === 'concluidas') {
-            provasFiltradas = provasFiltradas.filter(p => 
+            provasFiltradas = provasFiltradas.filter(p =>
                 !p.cancelada && p.dataRealizacao && p.notaLiberada && p.nota !== null
             );
         } else if (filtroStatus === 'aguardando') {
@@ -1554,24 +1544,31 @@ function aplicarFiltroEStatus(provas) {
             provasFiltradas = provasFiltradas.filter(p => p.cancelada);
         }
     }
-    
+
+    // ============================================
+    // CONTADOR
+    // ============================================
     const contadorSpan = document.getElementById('contadorNumerico');
-    if (contadorSpan) {
-        contadorSpan.innerText = provasFiltradas.length;
-    }
-    
-    const provasConcluidas = provasFiltradas.filter(p => 
+    if (contadorSpan) contadorSpan.innerText = provasFiltradas.length;
+
+    // ============================================
+    // SEPARAR POR CATEGORIA
+    // ============================================
+    const provasConcluidas = provasFiltradas.filter(p =>
         !p.cancelada && p.dataRealizacao && p.notaLiberada && p.nota !== null
     );
-    
+
     const provasAguardando = provasFiltradas.filter(p =>
         !p.cancelada && p.dataRealizacao && (!p.notaLiberada || p.nota === null)
     );
-    
+
     const provasCanceladas = provasFiltradas.filter(p => p.cancelada);
-    
+
     container.innerHTML = '';
-    
+
+    // ============================================
+    // RENDERIZAR
+    // ============================================
     if (filtroStatus === 'canceladas') {
         if (provasCanceladas.length > 0) {
             renderizarProvasCanceladas(provasCanceladas);
@@ -1586,23 +1583,19 @@ function aplicarFiltroEStatus(provas) {
         }
         return;
     }
-    
-    if (filtroStatus === 'todos' && provasAguardando.length > 0) {
-        renderizarProvasAguardandoCorrecao(provasAguardando);
-    } else if (filtroStatus === 'aguardando' && provasAguardando.length > 0) {
+
+    if ((filtroStatus === 'todos' || filtroStatus === 'aguardando') && provasAguardando.length > 0) {
         renderizarProvasAguardandoCorrecao(provasAguardando);
     }
-    
-    if (filtroStatus === 'todos' || filtroStatus === 'concluidas') {
-        if (provasConcluidas.length > 0) {
-            atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
-        }
+
+    if ((filtroStatus === 'todos' || filtroStatus === 'concluidas') && provasConcluidas.length > 0) {
+        atualizarListaProvas('provasConcluidas', provasConcluidas, 'concluida');
     }
-    
+
     if (filtroStatus === 'todos' && provasCanceladas.length > 0) {
         renderizarProvasCanceladas(provasCanceladas);
     }
-    
+
     if (provasConcluidas.length === 0 && provasAguardando.length === 0 && provasCanceladas.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -3495,7 +3488,7 @@ async function carregarTurmasAluno() {
             
             window.turmasBackup = [...turmas];
             
-            await inicializarFiltroTurmas(eixoDoAluno);
+            await inicializarFiltroTurmas();
             
             const contadorSpan = document.getElementById('contadorTurmasNumerico');
             if (contadorSpan) {
@@ -3676,126 +3669,66 @@ function getEixoTecnicoPorCurso(curso) {
     return null;
 }
 
-// ========== INICIALIZAR FILTRO DE TURMAS ==========
-async function inicializarFiltroTurmas(eixoDoAluno) {
+// ============================================================================
+// 🏫 CONFIGURAR FILTRO DE TURMAS (BNCC + eixo do curso)
+// ============================================================================
+async function inicializarFiltroTurmas(eixoDoAluno = null) {
     const filtroSelect = document.getElementById('filtroEixoTurmas');
-    if (!filtroSelect) return;
-    
+    if (!filtroSelect) {
+        console.warn('⚠️ [filtro] #filtroEixoTurmas não encontrado');
+        return;
+    }
+
     try {
-        console.log(`🔧 Configurando filtro de turmas com eixo: ${eixoDoAluno}`);
-        
+        console.log('🔧 Configurando filtro de turmas...');
+
+        // 1. Buscar eixos
+        const { eixo, eixosComuns } = await carregarEixoEDisciplinasAluno();
+
+        // 2. Clonar select
         const novoSelect = filtroSelect.cloneNode(true);
         filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
-        
         novoSelect.innerHTML = '';
-        
-        const optionTodos = document.createElement('option');
-        optionTodos.value = 'todos';
-        optionTodos.textContent = 'Todas as disciplinas';
-        novoSelect.appendChild(optionTodos);
-        
-        const eixosBNCC = [
-            { nome: 'natureza', label: '🔬 Natureza e Matemática' },
-            { nome: 'humanas', label: '🏛️ Humanas' },
-            { nome: 'linguagens', label: '🎭 Linguagens' }
-        ];
-        
-        eixosBNCC.forEach(eixo => {
-            const optionEixo = document.createElement('option');
-            optionEixo.value = eixo.nome;
-            optionEixo.textContent = eixo.label;
-            optionEixo.style.fontWeight = '600';
-            novoSelect.appendChild(optionEixo);
-        });
-        
-        const separator = document.createElement('option');
-        separator.disabled = true;
-        separator.textContent = '──────────';
-        novoSelect.appendChild(separator);
-        
-        if (eixoDoAluno) {
-            if (!eixosBNCC.some(e => e.nome === eixoDoAluno)) {
-                const optionEixoAluno = document.createElement('option');
-                optionEixoAluno.value = eixoDoAluno;
-                
-                const labels = {
-                    'desenvolvimento': '💻 Desenvolvimento de Sistemas',
-                    'redes': '🌐 Redes de Computadores',
-                    'turismo': '✈️ Turismo, Eventos e Gastronomia',
-                    'gestao': '📊 Gestão e Negócios',
-                    'producao': '🎬 Produção Cultural e Design',
-                    'ambiente': '🌱 Ambiente e Saúde'
-                };
-                
-                optionEixoAluno.textContent = labels[eixoDoAluno] || 'Eixo Técnico';
-                optionEixoAluno.style.fontWeight = '600';
-                optionEixoAluno.style.backgroundColor = '#f0f9ff';
-                novoSelect.appendChild(optionEixoAluno);
-                
-                console.log(`✅ Eixo técnico adicionado ao filtro de turmas: ${eixoDoAluno}`);
-            }
-        } else {
-            console.log('⚠️ Nenhum eixo técnico encontrado para o aluno');
-        }
-        
+
+        // 3. Construir opções
+        construirOpcoesFiltroEixos(novoSelect, eixo, eixosComuns);
+
+        // 4. Evento
         novoSelect.addEventListener('change', function() {
             aplicarFiltroTurmas(this.value);
         });
-        
-        console.log('✅ Filtro de turmas configurado com sucesso');
-        
+
+        console.log('✅ Filtro de turmas configurado');
+
     } catch (error) {
         console.error('❌ Erro ao configurar filtro de turmas:', error);
-        
-        const filtroSelect = document.getElementById('filtroEixoTurmas');
-        if (filtroSelect) {
-            const novoSelect = filtroSelect.cloneNode(true);
-            filtroSelect.parentNode.replaceChild(novoSelect, filtroSelect);
-            
-            novoSelect.innerHTML = `
-                <option value="todos">Todas as disciplinas</option>
-                <option value="natureza">🔬 Natureza e Matemática</option>
-                <option value="humanas">🏛️ Humanas</option>
-                <option value="linguagens">🎭 Linguagens</option>
-            `;
-            
-            novoSelect.addEventListener('change', function() {
-                aplicarFiltroTurmas(this.value);
-            });
-        }
     }
 }
 
-// ========== APLICAR FILTRO NAS TURMAS USANDO EIXO DO BANCO ==========
+// ============================================================================
+// 🔍 APLICAR FILTRO NAS TURMAS (por EIXO)
+// ============================================================================
 function aplicarFiltroTurmas(eixoSelecionado) {
     const container = document.getElementById('turmasAluno');
-    
     if (!container || !window.turmasBackup) return;
-    
-    console.log(`🔍 Aplicando filtro de turmas: ${eixoSelecionado}`);
-    console.log('📦 Turmas disponíveis:', window.turmasBackup.map(t => ({
-        nome: t.nome,
-        eixo: t.eixo,
-        isDoEixoDoAluno: t.isDoEixoDoAluno
-    })));
-    
+
+    console.log(`🔍 Filtrando turmas por eixo: "${eixoSelecionado}"`);
+
     let turmasFiltradas = window.turmasBackup;
-    
+
     if (eixoSelecionado && eixoSelecionado !== 'todos') {
+        const eixoLower = eixoSelecionado.toLowerCase().trim();
         turmasFiltradas = window.turmasBackup.filter(turma => {
-            if (!turma.eixo) return false;
-            
-            return turma.eixo === eixoSelecionado;
+            const eixoTurma = (turma.eixo || '').toLowerCase().trim();
+            return eixoTurma === eixoLower;
         });
-        
-        console.log(`📊 Após filtro: ${turmasFiltradas.length} turmas`);
     }
-    
+
+    console.log(`📊 ${turmasFiltradas.length} turmas após filtro`);
+
     const contadorSpan = document.getElementById('contadorTurmasNumerico');
-    if (contadorSpan) {
-        contadorSpan.innerText = turmasFiltradas.length;
-    }
-    
+    if (contadorSpan) contadorSpan.innerText = turmasFiltradas.length;
+
     renderizarTurmas(turmasFiltradas);
 }
 
@@ -3990,9 +3923,7 @@ async function selecionarProva(provaId) {
     console.log('   horarioTermino:', provaSelecionada.horarioTermino);
     
     try {
-        const token = localStorage.getItem('auth_token');
-        console.log('🔄 Buscando dados completos da prova...');
-        
+        const token = localStorage.getItem('auth_token');        
         const response = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
