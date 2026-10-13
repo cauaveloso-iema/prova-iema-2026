@@ -61,7 +61,8 @@
                         <i class="fas fa-user-graduate"></i>
                     </div>
                     <img id="fotoPerfilImg" class="foto-perfil" style="display: none;" alt="Foto de perfil">
-                    <button class="btn-edit-foto" id="btnEditFoto" onclick="document.getElementById('inputFoto').click()">
+                    <!-- 🔥 ALTERAÇÃO AQUI: onclick chama a função de ponte -->
+                    <button class="btn-edit-foto" id="btnEditFoto" onclick="solicitarFotoAoSite()">
                         <i class="fas fa-camera"></i>
                     </button>
                     <button class="btn-remove-foto" id="btnRemoveFoto" style="display: none;" onclick="removerFotoPerfil()">
@@ -414,6 +415,44 @@
             console.log('🛡️ [Proteção] window.alert sobrescrito (editar-perfil)');
         })();
         
+        // ============================================
+        // 🌉 PONTE DE COMUNICAÇÃO COM O KODULAR
+        // ============================================
+        
+        // Função que o site chama para pedir a foto ao aplicativo
+        function solicitarFotoAoSite() {
+            // Verifica se está rodando dentro do Kodular
+            if (window.AppInventor && window.AppInventor.setWebViewString) {
+                console.log("📤 Solicitando foto ao aplicativo...");
+                window.AppInventor.setWebViewString("ABRIR_GALERIA");
+            } else {
+                // Se estiver no navegador, usa o input padrão
+                console.log("🌐 Navegador detectado. Abrindo seletor padrão.");
+                document.getElementById('inputFoto').click();
+            }
+        }
+
+        // Função que o APLICATIVO chama quando o usuário escolhe a foto
+        function receberFotoDoApp(base64Image) {
+            if (!base64Image) {
+                console.log("❌ Nenhuma imagem recebida do aplicativo.");
+                return;
+            }
+            
+            console.log("📸 Foto recebida do aplicativo via Base64.");
+            
+            // Converte a string Base64 em um Blob/File
+            fetch(base64Image)
+                .then(res => res.blob())
+                .then(blob => {
+                    // Cria um objeto File simulando um upload normal
+                    const file = new File([blob], "foto_perfil.jpg", { type: "image/jpeg" });
+                    // Chama sua função de upload existente
+                    uploadFotoPerfil(file);
+                })
+                .catch(err => console.error("Erro ao processar imagem do app:", err));
+        }
+
         // ============================================
         // CARREGAR DADOS DO PERFIL
         // ============================================
