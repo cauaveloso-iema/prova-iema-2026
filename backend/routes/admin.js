@@ -163,6 +163,10 @@ if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
 // MIDDLEWARES LOCAIS
 // ============================================================================
 
+// ============================================================================
+// MIDDLEWARE DE AUTENTICAÇÃO (atualiza lastActive automaticamente)
+// ============================================================================
+
 const authenticateTokenLocal = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -197,6 +201,12 @@ const authenticateTokenLocal = (req, res, next) => {
           precisaLogin: true
         });
       }
+
+      // 🔥 ATUALIZAR lastActive A CADA REQUISIÇÃO (não bloqueia a resposta)
+      User.findByIdAndUpdate(decoded.id, { 
+        lastActive: new Date() 
+      }).catch(() => {});
+
     } catch (dbError) {
       logger.error('Erro ao verificar tokenVersion:', dbError);
     }
@@ -312,6 +322,10 @@ router.get('/health', (req, res) => {
 // DASHBOARD
 // ============================================================================
 
+// ============================================================================
+// DASHBOARD
+// ============================================================================
+
 router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const userCounts = await User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]);
@@ -376,12 +390,19 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
       }
     });
 
-    const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000);
+    // 🔥 ATUALIZAR lastActive DO PRÓPRIO ADMIN (garante que ele conte como online)
+    await User.findByIdAndUpdate(req.userId, {
+      lastActive: new Date()
+    });
+
+    // 🔥 Janela de 30 minutos
+    const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000);
     stats.usuariosOnline = await User.countDocuments({
       ativo: true,
       $or: [
-        { lastActive: { $gte: cincoMinutosAtras } },
-        { lastLogin: { $gte: cincoMinutosAtras } }
+        { lastActive: { $gte: trintaMinutosAtras } },
+        { lastLogin: { $gte: trintaMinutosAtras } },
+        { _id: req.userId } // 🔥 Inclui o próprio admin
       ]
     });
 
@@ -464,15 +485,26 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
 // USUÁRIOS ONLINE
 // ============================================================================
 
+// ============================================================================
+// USUÁRIOS ONLINE (janela de 30min + inclui o próprio admin)
+// ============================================================================
+
 router.get('/usuarios-online', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
-    const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000);
+    // 🔥 Janela de 30 minutos
+    const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000);
+
+    // 🔥 GARANTIR QUE O PRÓPRIO ADMIN ESTEJA SEMPRE NA LISTA
+    await User.findByIdAndUpdate(req.userId, {
+      lastActive: new Date()
+    });
 
     const usuariosOnline = await User.find({
       ativo: true,
       $or: [
-        { lastActive: { $gte: cincoMinutosAtras } },
-        { lastLogin: { $gte: cincoMinutosAtras } }
+        { lastActive: { $gte: trintaMinutosAtras } },
+        { lastLogin: { $gte: trintaMinutosAtras } },
+        { _id: req.userId } // 🔥 Sempre inclui o próprio admin
       ]
     })
       .select('nome email role matricula turma curso eixo departamento ultimaAtualizacaoPerfil lastActive lastLogin fotoPerfil qrCodeUsuario onesignalPlayerId')
@@ -481,6 +513,7 @@ router.get('/usuarios-online', authenticateTokenLocal, isSuperAdmin, async (req,
 
     const usuariosFormatados = usuariosOnline.map(u => ({
       id: u._id,
+      _id: u._id,
       nome: u.nome || 'Sem nome',
       email: u.email || '',
       role: u.role || 'desconhecido',

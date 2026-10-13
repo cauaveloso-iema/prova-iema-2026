@@ -428,6 +428,11 @@ router.post('/auth/login', async (req, res) => {
             return res.status(401).json({ success: false, error: 'Código 2FA inválido' });
           }
 
+          // 🔥 ATUALIZAR lastActive e lastLogin após 2FA bem-sucedido
+          user.lastActive = new Date();
+          user.lastLogin = new Date();
+          await user.save();
+
           const jwtExpiracao = await obterJwtExpiracao();
 
           const authToken = jwt.sign(
@@ -555,6 +560,7 @@ router.post('/auth/login', async (req, res) => {
     user.loginAttempts = 0;
     user.lockUntil = null;
     user.lastLogin = new Date();
+    user.lastActive = new Date();  // 🔥 ATUALIZAR ATIVIDADE
     await user.save();
 
     // Verificar 2FA
@@ -655,9 +661,46 @@ router.post('/auth/login', async (req, res) => {
 // ============================================================================
 // POST /api/auth/logout
 // ============================================================================
-router.post('/auth/logout', (req, res) => {
-  res.clearCookie('auth_token');
-  res.json({ success: true });
+// ============================================================================
+// POST /api/auth/logout — Marca usuário como OFFLINE
+// ============================================================================
+router.post('/auth/logout', async (req, res) => {
+  try {
+    // 🔥 Tentar marcar o usuário como offline (sem bloquear)
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        if (decoded.id) {
+          await User.findByIdAndUpdate(decoded.id, {
+            lastActive: new Date(0), // Data antiga = offline
+            lastLogin: new Date(0)
+          });
+          logger.info(`🚪 Logout: usuário ${decoded.id} marcado como offline`);
+        }
+      } catch (jwtError) {
+        // Token inválido/expirado — apenas ignora, ainda limpa o cookie
+        logger.info('⚠️ Logout com token inválido (ignorando)');
+      }
+    }
+
+    // 🔥 Limpar cookie de autenticação
+    res.clearCookie('auth_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
+
+    res.json({ success: true, message: 'Logout realizado com sucesso' });
+
+  } catch (error) {
+    logger.error('❌ Erro no logout:', error);
+    res.clearCookie('auth_token');
+    res.json({ success: true, message: 'Logout realizado' });
+  }
 });
 
 // ============================================================================
@@ -981,6 +1024,11 @@ router.post('/auth/2fa/validate-totp', authenticateTokenLocal, async (req, res) 
     if (!verified) {
       return res.status(401).json({ success: false, error: 'Código TOTP inválido' });
     }
+
+    // 🔥 ATUALIZAR lastActive e lastLogin após validação TOTP
+    user.lastActive = new Date();
+    user.lastLogin = new Date();
+    await user.save();
 
     const jwtExpiracao = await obterJwtExpiracao();
 
@@ -1657,6 +1705,7 @@ router.post('/login-social/:provider', async (req, res) => {
 
     // ---------- CASO 3: LOGIN OK ----------
     user.lastLogin = new Date();
+    user.lastActive = new Date();  // 🔥 ATUALIZAR ATIVIDADE
     if (picture && !user.fotoPerfil) {
       user.fotoPerfil = picture;
       user.fotoPerfilTipo = 'url';

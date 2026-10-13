@@ -205,18 +205,28 @@ class AdminPanel {
     async carregarDadosReais() {
         try {
             const response = await fetch(`${this.apiBase}/dashboard`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}` 
+                }
             });
             
-            if (!response.ok) throw new Error('Erro ao carregar dados');
+            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
             
             const data = await response.json();
             
             if (data.success) {
                 this.atualizarEstatisticas(data.data);
+                
+                // 🔥 ATUALIZAR CONTADOR DE USUÁRIOS ONLINE NO CARD
+                const elUsuariosOnline = document.getElementById('usuarios-online');
+                if (elUsuariosOnline && data.data.usuariosOnline !== undefined) {
+                    elUsuariosOnline.textContent = data.data.usuariosOnline;
+                }
+                
+                console.log('✅ Dados do dashboard atualizados');
             }
         } catch (error) {
-            console.error('Erro ao carregar dados reais:', error);
+            console.error('❌ Erro ao carregar dados reais:', error);
         }
     }
 
@@ -3567,12 +3577,11 @@ class AdminPanel {
     }
 
 
-    // ============ ABRIR MODAL DE USUÁRIOS ONLINE ============
+    // ============ ABRIR MODAL DE USUÁRIOS ONLINE (COM FILTROS) ============
     async abrirModalUsuariosOnline() {
         console.log('🟢 Abrindo modal de usuários online...');
         
         try {
-            // Buscar dados da API
             this.showToast('🔄 Carregando usuários online...', 'info');
             
             const token = localStorage.getItem('auth_token');
@@ -3586,145 +3595,166 @@ class AdminPanel {
                 throw new Error(data.error || 'Erro ao carregar usuários');
             }
             
-            const usuarios = data.usuarios || [];
-            const total = data.total || 0;
+            // Guardar no estado
+            this._onlineUsuarios = data.usuarios || [];
+            this._onlineTotal = data.total || 0;
+            this._onlinePerfis = data.porPerfil || {};
             
-            // Se não há ninguém online
-            if (usuarios.length === 0) {
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            this._onlineMeuId = userData.id || userData._id;
+            
+            // Sem usuários
+            if (this._onlineUsuarios.length === 0) {
                 const modalBody = document.getElementById('modalBody');
                 modalBody.innerHTML = `
-                    <div style="padding: 40px 20px; text-align: center;">
-                        <div style="width: 80px; height: 80px; background: #f3f4f6; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-                            <i class="fas fa-user-slash" style="font-size: 36px; color: #9ca3af;"></i>
+                    <div class="online-empty">
+                        <div class="online-empty-icon">
+                            <i class="fas fa-user-slash"></i>
                         </div>
-                        <h3 style="margin: 0 0 8px; color: #1f2937; font-size: 18px;">Nenhum usuário online</h3>
-                        <p style="color: #6b7280; margin: 0; font-size: 14px;">
-                            Nenhum usuário esteve ativo nos últimos 5 minutos.
-                        </p>
+                        <h3>Nenhum usuário online</h3>
+                        <p>Nenhum usuário esteve ativo nos últimos 30 minutos.</p>
                     </div>
                 `;
                 
                 document.getElementById('modalTitle').innerHTML = '<i class="fas fa-signal"></i> Usuários Online';
                 document.getElementById('modalSaveBtn').style.display = 'none';
+                
+                const modalContent = document.querySelector('#modal .modal-content');
+                if (modalContent) modalContent.classList.add('modal-content-wide');
+                
                 this.openModal();
                 return;
             }
             
-            // Montar HTML dos cards
-            let usuariosHtml = '';
-            usuarios.forEach(u => {
-                const iniciais = (u.nome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-                
-                // Ícone e cor por role
-                const roleInfo = this.getRoleInfo(u.role);
-                
-                // Tempo online
-                let tempoTexto = 'Agora';
-                if (u.tempoOnline === 0) tempoTexto = 'Agora';
-                else if (u.tempoOnline === 1) tempoTexto = 'há 1 min';
-                else if (u.tempoOnline < 5) tempoTexto = `há ${u.tempoOnline} min`;
-                else tempoTexto = `há ${u.tempoOnline} min`;
-                
-                // Badge de push
-                const pushBadge = u.temPush 
-                    ? '<span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 20px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;"><i class="fas fa-mobile-alt"></i> Push</span>'
-                    : '<span style="background: #f3f4f6; color: #6b7280; padding: 2px 8px; border-radius: 20px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;"><i class="fas fa-times-circle"></i> Sem push</span>';
-                
-                // Detalhes extras
-                let detalhesExtra = '';
-                if (u.turma) detalhesExtra += `<span><i class="fas fa-users"></i> ${u.turma}</span>`;
-                if (u.matricula) detalhesExtra += `<span><i class="fas fa-id-card"></i> ${u.matricula}</span>`;
-                if (u.departamento) detalhesExtra += `<span><i class="fas fa-building"></i> ${u.departamento}</span>`;
-                
-                // Avatar (foto ou iniciais)
-                const avatarHtml = u.fotoPerfil
-                    ? `<img src="${u.fotoPerfil}" style="width: 100%; height: 100%; object-fit: cover;">`
-                    : `<span style="font-size: 16px; color: white; font-weight: 700;">${iniciais}</span>`;
-                
-                usuariosHtml += `
-                    <div class="usuario-online-card">
-                        <div class="usuario-online-avatar" style="background: ${roleInfo.corGradiente}; position: relative;">
-                            ${avatarHtml}
-                            <span class="online-indicator"></span>
-                        </div>
-                        <div class="usuario-online-content">
-                            <div class="usuario-online-nome">
-                                ${u.nome}
-                                <span class="role-badge-online" style="background: ${roleInfo.corBg}; color: ${roleInfo.corTexto};">
-                                    ${roleInfo.icone} ${roleInfo.label}
-                                </span>
-                            </div>
-                            <div class="usuario-online-email">
-                                <i class="fas fa-envelope"></i> ${u.email}
-                            </div>
-                            <div class="usuario-online-detalhes">
-                                ${detalhesExtra}
-                            </div>
-                            <div class="usuario-online-footer">
-                                <span class="usuario-online-tempo">
-                                    <i class="fas fa-clock"></i> ${tempoTexto}
-                                </span>
-                                ${pushBadge}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
+            // Extrair turmas e cursos únicos
+            const turmasUnicas = [...new Set(
+                this._onlineUsuarios.map(u => u.turma).filter(t => t && t.trim() !== '')
+            )].sort();
             
-            // Modal body
+            const cursosUnicos = [...new Set(
+                this._onlineUsuarios.map(u => u.curso).filter(c => c && c.trim() !== '')
+            )].sort();
+            
             const modalBody = document.getElementById('modalBody');
             modalBody.innerHTML = `
-                <div style="padding: 0; max-height: 75vh; overflow-y: auto;">
-                    <!-- Header de estatísticas -->
-                    <div class="usuarios-online-header">
-                        <div class="usuarios-online-stat">
-                            <div class="stat-icon-wrapper online-pulse-icon">
+                <div class="online-modal">
+                    
+                    <!-- HEADER COM STATS -->
+                    <div class="online-header">
+                        <div class="online-header-main">
+                            <div class="online-header-icon">
                                 <i class="fas fa-signal"></i>
                             </div>
-                            <div>
-                                <div class="stat-valor">${total}</div>
-                                <div class="stat-label">Usuários Online</div>
+                            <div class="online-header-text">
+                                <div class="online-header-value" id="onlineTotalHeader">${this._onlineTotal}</div>
+                                <div class="online-header-label">Usuários Online</div>
                             </div>
                         </div>
                         
-                        <div class="usuarios-online-perfis">
-                            ${Object.entries(data.porPerfil || {}).map(([role, count]) => {
+                        <div class="online-header-chips">
+                            ${Object.entries(this._onlinePerfis).map(([role, count]) => {
                                 const info = this.getRoleInfo(role);
                                 return `
-                                    <div class="perfil-chip" style="background: ${info.corBg}; color: ${info.corTexto};">
-                                        ${info.icone} ${info.label}: <strong>${count}</strong>
+                                    <div class="online-chip" style="background: ${info.corBg}; color: ${info.corTexto};">
+                                        <span>${info.icone}</span>
+                                        <span>${info.label}</span>
+                                        <strong>${count}</strong>
                                     </div>
                                 `;
                             }).join('')}
                         </div>
                     </div>
                     
-                    <!-- Lista de usuários -->
-                    <div class="usuarios-online-lista">
-                        ${usuariosHtml}
+                    <!-- FILTROS -->
+                    <div class="online-filters">
+                        <div class="online-filters-row">
+                            <div class="online-search">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="onlineSearch" 
+                                    placeholder="Buscar por nome, email ou matrícula..."
+                                    oninput="admin.filtrarUsuariosOnline()">
+                            </div>
+                            
+                            <select id="onlineFiltroPerfil" class="online-select" onchange="admin.filtrarUsuariosOnline()">
+                                <option value="todos">👥 Todos os perfis</option>
+                                <option value="aluno">👨‍🎓 Alunos</option>
+                                <option value="professor">👨‍🏫 Professores</option>
+                                <option value="admin">👑 Admin</option>
+                                <option value="super_admin">⭐ Super Admin</option>
+                                <option value="setor_pedagogico">👩‍🏫 Pedagógico</option>
+                                <option value="coordenacao_patio">🏃 Pátio</option>
+                                <option value="cozinha">🍽️ Cozinha</option>
+                                <option value="gestao_geral">📊 Gestão</option>
+                                <option value="enfermaria">🏥 Enfermaria</option>
+                                <option value="supervisao">🛡️ Supervisão</option>
+                                <option value="psicologia">🧠 Psicologia</option>
+                                <option value="assistente-social">🤝 Assist. Social</option>
+                                <option value="protagonismo">⭐ Protagonismo</option>
+                                <option value="biblioteca">📚 Biblioteca</option>
+                                <option value="secretaria">🎓 Secretaria</option>
+                            </select>
+                            
+                            <select id="onlineFiltroTurma" class="online-select" onchange="admin.filtrarUsuariosOnline()" ${turmasUnicas.length === 0 ? 'disabled' : ''}>
+                                <option value="todas">🏫 Todas as turmas</option>
+                                ${turmasUnicas.map(t => `<option value="${t}">${t}</option>`).join('')}
+                            </select>
+                            
+                            <select id="onlineFiltroCurso" class="online-select" onchange="admin.filtrarUsuariosOnline()" ${cursosUnicos.length === 0 ? 'disabled' : ''}>
+                                <option value="todos">📚 Todos os cursos</option>
+                                ${cursosUnicos.map(c => `<option value="${c}">${c}</option>`).join('')}
+                            </select>
+                            
+                            <select id="onlineFiltroPush" class="online-select" onchange="admin.filtrarUsuariosOnline()">
+                                <option value="todos">📱 Todos</option>
+                                <option value="com">✅ Com Push</option>
+                                <option value="sem">❌ Sem Push</option>
+                            </select>
+                            
+                            <button class="online-clear-btn" onclick="admin.limparFiltrosOnline()" title="Limpar filtros">
+                                <i class="fas fa-eraser"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="online-filters-info">
+                            <span id="onlineContador" class="online-counter">
+                                <i class="fas fa-circle" style="color: #10b981; font-size: 8px;"></i>
+                                <strong>${this._onlineTotal}</strong> usuário(s) online
+                            </span>
+                        </div>
                     </div>
                     
-                    <!-- Footer -->
-                    <div style="padding: 12px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 11px;">
-                        <i class="fas fa-info-circle"></i> 
-                        Considera-se "online" usuários ativos nos últimos 5 minutos • 
-                        Atualizado em ${new Date().toLocaleTimeString('pt-BR')}
+                    <!-- LISTA -->
+                    <div class="online-list" id="onlineListaContainer"></div>
+                    
+                    <!-- FOOTER -->
+                    <div class="online-footer">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Usuários ativos nos últimos <strong>30 minutos</strong> • Atualizado às ${new Date().toLocaleTimeString('pt-BR')}</span>
                     </div>
                 </div>
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-signal" style="color: #10b981;"></i> Usuários Online';
             document.getElementById('modalSaveBtn').style.display = 'none';
+            
+            // 🔥 Expandir o modal
+            const modalContent = document.querySelector('#modal .modal-content');
+            if (modalContent) {
+                modalContent.classList.add('modal-content-wide');
+            }
+            
             this.openModal();
             
-            // Auto-refresh a cada 30 segundos enquanto o modal estiver aberto
+            // Renderizar lista inicial
+            this.renderizarListaOnlineFiltrada();
+            
+            // Auto-refresh a cada 30 segundos
             if (this.intervaloUsuariosOnline) {
                 clearInterval(this.intervaloUsuariosOnline);
             }
             this.intervaloUsuariosOnline = setInterval(() => {
                 const modal = document.getElementById('modal');
                 if (modal && modal.style.display === 'flex') {
-                    // Só atualizar se o modal estiver aberto
                     this.atualizarListaUsuariosOnline();
                 } else {
                     clearInterval(this.intervaloUsuariosOnline);
@@ -3735,6 +3765,190 @@ class AdminPanel {
             console.error('❌ Erro ao carregar usuários online:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
+    }
+
+
+    // ============ FILTRAR USUÁRIOS ONLINE ============
+    filtrarUsuariosOnline() {
+        this.renderizarListaOnlineFiltrada();
+    }
+
+
+    // ============ LIMPAR FILTROS ============
+    limparFiltrosOnline() {
+        const ids = ['onlineSearch', 'onlineFiltroPerfil', 'onlineFiltroTurma', 'onlineFiltroCurso', 'onlineFiltroPush'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.tagName === 'SELECT') {
+                el.value = el.querySelector('option').value;
+            } else {
+                el.value = '';
+            }
+        });
+        this.renderizarListaOnlineFiltrada();
+    }
+
+
+    // ============ RENDERIZAR LISTA FILTRADA ============
+    renderizarListaOnlineFiltrada() {
+        const container = document.getElementById('onlineListaContainer');
+        if (!container) return;
+        
+        const usuarios = this._onlineUsuarios || [];
+        const meuId = this._onlineMeuId;
+        
+        const busca = (document.getElementById('onlineSearch')?.value || '').toLowerCase().trim();
+        const filtroPerfil = document.getElementById('onlineFiltroPerfil')?.value || 'todos';
+        const filtroTurma = document.getElementById('onlineFiltroTurma')?.value || 'todas';
+        const filtroCurso = document.getElementById('onlineFiltroCurso')?.value || 'todos';
+        const filtroPush = document.getElementById('onlineFiltroPush')?.value || 'todos';
+        
+        // Filtrar
+        const filtrados = usuarios.filter(u => {
+            if (busca) {
+                const nome = (u.nome || '').toLowerCase();
+                const email = (u.email || '').toLowerCase();
+                const matricula = (u.matricula || '').toLowerCase();
+                if (!nome.includes(busca) && !email.includes(busca) && !matricula.includes(busca)) {
+                    return false;
+                }
+            }
+            
+            if (filtroPerfil !== 'todos') {
+                if (filtroPerfil === 'admin') {
+                    if (u.role !== 'admin' && u.role !== 'super_admin') return false;
+                } else {
+                    if (u.role !== filtroPerfil) return false;
+                }
+            }
+            
+            if (filtroTurma !== 'todas' && (u.turma || '') !== filtroTurma) return false;
+            if (filtroCurso !== 'todos' && (u.curso || '') !== filtroCurso) return false;
+            if (filtroPush === 'com' && !u.temPush) return false;
+            if (filtroPush === 'sem' && u.temPush) return false;
+            
+            return true;
+        });
+        
+        // Contador
+        const contador = document.getElementById('onlineContador');
+        if (contador) {
+            if (filtrados.length === usuarios.length) {
+                contador.innerHTML = `
+                    <i class="fas fa-circle" style="color: #10b981; font-size: 8px;"></i>
+                    <strong>${usuarios.length}</strong> usuário(s) online
+                `;
+            } else {
+                contador.innerHTML = `
+                    <i class="fas fa-filter" style="color: #4f46e5; font-size: 10px;"></i>
+                    Mostrando <strong>${filtrados.length}</strong> de ${usuarios.length}
+                `;
+            }
+        }
+        
+        // Sem resultados
+        if (filtrados.length === 0) {
+            container.innerHTML = `
+                <div class="online-empty-filter">
+                    <i class="fas fa-search"></i>
+                    <h4>Nenhum usuário encontrado</h4>
+                    <p>Tente ajustar os filtros aplicados.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Helper: formatar tempo
+        const formatarTempoOnline = (minutos) => {
+            if (!minutos || minutos < 1) return 'Agora';
+            if (minutos === 1) return 'há 1 minuto';
+            if (minutos < 60) return `há ${minutos} minutos`;
+            
+            const horas = Math.floor(minutos / 60);
+            const minsRestantes = minutos % 60;
+            
+            if (horas === 1) return minsRestantes > 0 ? `há 1h e ${minsRestantes}min` : 'há 1 hora';
+            if (horas < 24) return minsRestantes > 0 ? `há ${horas}h e ${minsRestantes}min` : `há ${horas} horas`;
+            
+            const dias = Math.floor(horas / 24);
+            const horasRestantes = horas % 24;
+            
+            if (dias === 1) return horasRestantes > 0 ? `há 1 dia e ${horasRestantes}h` : 'há 1 dia';
+            return horasRestantes > 0 ? `há ${dias} dias` : `há ${dias} dias`;
+        };
+        
+        // Montar cards
+        let html = '';
+        filtrados.forEach(u => {
+            const uId = u.id || u._id;
+            const ehVoceMesmo = uId === meuId;
+            
+            const iniciais = (u.nome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const roleInfo = this.getRoleInfo(u.role);
+            const tempoTexto = formatarTempoOnline(u.tempoOnline);
+            
+            const pushBadge = u.temPush
+                ? '<span class="online-badge online-badge-push"><i class="fas fa-mobile-alt"></i> Push</span>'
+                : '<span class="online-badge online-badge-no-push"><i class="fas fa-times-circle"></i> Sem Push</span>';
+            
+            const voceBadge = ehVoceMesmo
+                ? '<span class="online-badge online-badge-you"><i class="fas fa-star"></i> VOCÊ</span>'
+                : '';
+            
+            // Detalhes (turma, matrícula, curso)
+            let detalhesArray = [];
+            if (u.turma) detalhesArray.push(`<span><i class="fas fa-users"></i> ${u.turma}</span>`);
+            if (u.matricula) detalhesArray.push(`<span><i class="fas fa-id-card"></i> ${u.matricula}</span>`);
+            if (u.curso) detalhesArray.push(`<span><i class="fas fa-graduation-cap"></i> ${u.curso}</span>`);
+            if (u.departamento) detalhesArray.push(`<span><i class="fas fa-building"></i> ${u.departamento}</span>`);
+            
+            const detalhesHtml = detalhesArray.length > 0
+                ? `<div class="online-detalhes">${detalhesArray.join('')}</div>`
+                : '';
+            
+            const avatarHtml = u.fotoPerfil
+                ? `<img src="${u.fotoPerfil}" alt="${u.nome}">`
+                : `<span>${iniciais}</span>`;
+            
+            html += `
+                <div class="online-card ${ehVoceMesmo ? 'online-card-you' : ''}">
+                    <div class="online-avatar" style="background: ${roleInfo.corGradiente};">
+                        ${avatarHtml}
+                        <span class="online-dot"></span>
+                    </div>
+                    
+                    <div class="online-content">
+                        <div class="online-content-header">
+                            <div class="online-name">
+                                ${u.nome}
+                                ${voceBadge}
+                            </div>
+                            <span class="online-role" style="background: ${roleInfo.corBg}; color: ${roleInfo.corTexto};">
+                                ${roleInfo.icone} ${roleInfo.label}
+                            </span>
+                        </div>
+                        
+                        <div class="online-email">
+                            <i class="fas fa-envelope"></i>
+                            ${u.email}
+                        </div>
+                        
+                        ${detalhesHtml}
+                    </div>
+                    
+                    <div class="online-footer-info">
+                        <div class="online-tempo">
+                            <i class="fas fa-clock"></i>
+                            <span>${tempoTexto}</span>
+                        </div>
+                        ${pushBadge}
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
     }
 
     // ============ ATUALIZAR LISTA DE USUÁRIOS ONLINE ============
@@ -36908,9 +37122,16 @@ class AdminPanel {
             modal.style.display = 'none';
         }
         
+        // 🔥 REMOVER classe especial do modal
+        const modalContent = document.querySelector('#modal .modal-content');
+        if (modalContent) {
+            modalContent.classList.remove('modal-content-wide');
+        }
+        
         const modalSaveBtn = document.getElementById('modalSaveBtn');
         if (modalSaveBtn) {
             modalSaveBtn.style.display = 'inline-block';
+            modalSaveBtn.onclick = null;
         }
     }
 

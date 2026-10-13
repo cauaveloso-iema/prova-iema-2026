@@ -508,25 +508,32 @@ const verificarPermissaoSetorPedagogico = (req, res, next) => {
   next();
 };
 
-// ---------- Rastrear atividade do usuário ----------
-const rastrearAtividade = async (req, res, next) => {
-  if (req.userId) {
-    User.findByIdAndUpdate(
-      req.userId,
-      {
-        lastActive: new Date(),
-        lastLogin: new Date()
-      },
-      { new: false }
-    ).catch(err => {
-      if (IS_DEVELOPMENT) {
-        logger.warn('⚠️ Erro ao atualizar lastActive:', err.message);
+// ---------- Rastrear atividade do usuário (JWT global) ----------
+// ⚠️ Este middleware roda ANTES das rotas, para atualizar lastActive em TODA
+//    requisição autenticada (não apenas naquelas que passam por authenticateToken).
+const rastrearAtividade = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Só atualiza para tokens normais (não temporários de 2FA)
+      if (!decoded.temp && decoded.id) {
+        User.findByIdAndUpdate(decoded.id, {
+          lastActive: new Date()
+        }).catch(() => {});
       }
-    });
+    } catch (err) {
+      // Token inválido — apenas ignora
+    }
   }
+
   next();
 };
 
+// 🔥 Registra ANTES das rotas (para pegar TODAS as requisições autenticadas)
 app.use('/api', rastrearAtividade);
 
 // ============================================================================
