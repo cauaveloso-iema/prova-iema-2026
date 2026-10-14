@@ -482,6 +482,87 @@ router.post('/admin/toggle', authenticateTokenLocal, async (req, res) => {
 });
 
 // ============================================================================
+// ROTA: RECEBER LOGS DE DEBUG DO WEBVIEW
+// ============================================================================
+router.post('/logs-onesignal', authenticateTokenLocal, async (req, res) => {
+    try {
+        const { logs, userAgent } = req.body;
+        const userId = req.userId;
+
+        const fs = require('fs');
+        const path = require('path');
+        const logDir = path.join(__dirname, '..', 'logs', 'onesignal');
+        
+        if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir, { recursive: true });
+        }
+
+        const arquivo = path.join(logDir, `user_${userId}_${Date.now()}.json`);
+        fs.writeFileSync(arquivo, JSON.stringify({
+            userId,
+            userAgent,
+            timestamp: new Date().toISOString(),
+            logs
+        }, null, 2));
+
+        console.log(`📥 Logs OneSignal recebidos de user ${userId}`);
+        console.log(`   Arquivo: ${arquivo}`);
+        console.log(`   Total de logs: ${logs.length}`);
+        
+        // Mostra os últimos 5 logs no console do servidor
+        const ultimos = logs.slice(-5);
+        ultimos.forEach(l => {
+            console.log(`   [${l.tipo}] ${l.mensagem}`);
+        });
+
+        res.json({ success: true, message: 'Logs recebidos' });
+    } catch (error) {
+        console.error('❌ Erro ao salvar logs:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// ROTA: RECEBER LOGS VIA SEND-BEACON (sem header de autenticação)
+// ============================================================================
+router.post('/logs-onesignal-beacon', async (req, res) => {
+    try {
+        const { logs, token } = req.body;
+        
+        // Valida o token manualmente
+        const jwt = require('jsonwebtoken');
+        let userId = null;
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            userId = decoded.id;
+        } catch (e) {
+            return res.status(401).json({ success: false, error: 'Token inválido' });
+        }
+
+        const fs = require('fs');
+        const path = require('path');
+        const logDir = path.join(__dirname, '..', 'logs', 'onesignal');
+        
+        if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir, { recursive: true });
+        }
+
+        const arquivo = path.join(logDir, `user_${userId}_beacon_${Date.now()}.json`);
+        fs.writeFileSync(arquivo, JSON.stringify({
+            userId,
+            origem: 'beacon',
+            timestamp: new Date().toISOString(),
+            logs
+        }, null, 2));
+
+        console.log(`📥 [BEACON] Logs recebidos de user ${userId}`);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
 // EXPORTAR ROUTER
 // ============================================================================
 module.exports = router;

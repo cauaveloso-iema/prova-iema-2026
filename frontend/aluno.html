@@ -13,18 +13,40 @@
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
     <!-- ============================================================ -->
-    <!-- 📱 ONESIGNAL - SDK + VINCULAÇÃO AUTOMÁTICA (CORRIGIDO)       -->
+    <!-- 📱 ONESIGNAL - SDK + VINCULAÇÃO AUTOMÁTICA + LOGS DEBUG      -->
     <!-- ============================================================ -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
     (function() {
         'use strict';
 
-        console.log('📱 [OneSignal] Iniciando sistema de vinculação automática...');
+        // ============================================
+        // 🔍 SISTEMA DE LOG PERSISTENTE
+        // ============================================
+        function logDebug(mensagem, tipo = 'info') {
+            try {
+                const logs = JSON.parse(localStorage.getItem('onesignal_debug_log') || '[]');
+                logs.push({
+                    timestamp: new Date().toISOString(),
+                    tipo: tipo,
+                    mensagem: String(mensagem),
+                    userAgent: navigator.userAgent.substring(0, 120)
+                });
+                if (logs.length > 200) logs.shift();
+                localStorage.setItem('onesignal_debug_log', JSON.stringify(logs));
+                console.log(`[OneSignal][${tipo}]`, mensagem);
+            } catch (e) {
+                console.warn('Erro ao salvar log:', e);
+            }
+        }
+
+        logDebug('🚀 Iniciando sistema de vinculação', 'inicio');
 
         window.OneSignalDeferred = window.OneSignalDeferred || [];
         
         window.OneSignalDeferred.push(async function(OneSignal) {
+            logDebug('✅ SDK do OneSignal carregado', 'sdk_ok');
+            
             try {
                 await OneSignal.init({
                     appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
@@ -33,22 +55,30 @@
                     notifyButton: { enable: false }
                 });
 
-                console.log('✅ [OneSignal] Inicializado com sucesso');
+                logDebug('✅ OneSignal inicializado', 'init_ok');
 
-                // Função principal de vinculação
-                const vincularPlayerId = async (playerId) => {
-                    if (!playerId) return false;
+                // Função de vinculação
+                const vincularPlayerId = async (playerId, origem) => {
+                    logDebug(`📤 [${origem}] Tentando vincular: ${playerId ? playerId.substring(0, 25) + '...' : 'VAZIO'}`, 'vinculacao_inicio');
+                    
+                    if (!playerId) {
+                        logDebug('⚠️ PlayerId vazio, abortando', 'erro');
+                        return false;
+                    }
 
                     const token = localStorage.getItem('auth_token');
+                    logDebug(`🔑 Token presente: ${token ? 'SIM' : 'NÃO'}`, 'token_check');
+                    
                     if (!token) {
-                        console.warn('⚠️ [OneSignal] Token não encontrado.');
+                        logDebug('❌ Token não encontrado. Usuário não está logado.', 'erro');
                         return false;
                     }
 
                     try {
-                        console.log(`📤 [OneSignal] Enviando playerId: ${playerId.substring(0, 20)}...`);
+                        const url = '/api/usuario/salvar-player-id';
+                        logDebug(`🌐 Chamando ${url}`, 'fetch_inicio');
 
-                        const response = await fetch('/api/usuario/salvar-player-id', {
+                        const response = await fetch(url, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${token}`,
@@ -57,103 +87,177 @@
                             body: JSON.stringify({ playerId })
                         });
 
+                        logDebug(`📥 Resposta HTTP: ${response.status}`, 'fetch_resposta');
+
                         const data = await response.json();
+                        logDebug(`📦 Body: ${JSON.stringify(data)}`, 'fetch_body');
 
                         if (data.success) {
-                            console.log('✅ [OneSignal] PlayerId salvo no backend!');
+                            logDebug('✅ VINCULAÇÃO BEM-SUCEDIDA!', 'sucesso');
                             localStorage.setItem('onesignal_player_id', playerId);
                             localStorage.setItem('onesignal_vinculado_em', new Date().toISOString());
-
-                            const jaMostrou = sessionStorage.getItem('onesignal_msg_exibida');
-                            if (!jaMostrou && typeof mostrarMensagemAluno === 'function') {
-                                mostrarMensagemAluno('📱 Dispositivo vinculado para notificações!', 'info');
-                                sessionStorage.setItem('onesignal_msg_exibida', 'true');
-                            }
                             return true;
                         } else {
-                            console.error('❌ [OneSignal] Erro:', data.error);
+                            logDebug(`❌ Erro do servidor: ${data.error}`, 'erro_servidor');
                             return false;
                         }
                     } catch (error) {
-                        console.error('❌ [OneSignal] Erro na requisição:', error);
+                        logDebug(`❌ ERRO na requisição: ${error.message}`, 'erro_fetch');
                         return false;
                     }
                 };
 
-                // Escuta mudanças de inscrição
+                // Evento subscriptionChange
                 OneSignal.on('subscriptionChange', async function(isSubscribed) {
-                    console.log(`🔔 [OneSignal] subscriptionChange: ${isSubscribed ? 'INSCRITO' : 'NÃO'}`);
+                    logDebug(`🔔 subscriptionChange: ${isSubscribed ? 'INSCRITO ✅' : 'NÃO INSCRITO ❌'}`, 'evento');
+                    
                     if (isSubscribed) {
                         try {
                             const playerId = await OneSignal.User.PushSubscription.id;
-                            console.log('📱 [OneSignal] Novo playerId:', playerId);
-                            await vincularPlayerId(playerId);
+                            logDebug(`📱 PlayerId obtido: ${playerId}`, 'playerid_obtido');
+                            await vincularPlayerId(playerId, 'subscriptionChange');
                         } catch (error) {
-                            console.error('❌ [OneSignal] Erro:', error);
+                            logDebug(`❌ Erro ao obter playerId: ${error.message}`, 'erro');
                         }
                     }
                 });
 
-                // Verificação inicial (caso já esteja inscrito)
+                // Verificação inicial
                 const verificarInscricaoAtual = async () => {
+                    logDebug('🔍 Verificando inscrição inicial...', 'verificacao');
+                    
                     try {
                         const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
                         const currentPlayerId = await OneSignal.User.PushSubscription.id;
 
-                        console.log('🔍 [OneSignal] Verificação inicial:');
-                        console.log(`   └─ Inscrito: ${isSubscribed}`);
-                        console.log(`   └─ PlayerId: ${currentPlayerId || 'Nenhum'}`);
+                        logDebug(`   Inscrito: ${isSubscribed}`, 'verificacao');
+                        logDebug(`   PlayerId: ${currentPlayerId || 'NENHUM'}`, 'verificacao');
+                        logDebug(`   Permission: ${Notification.permission}`, 'verificacao');
 
                         if (isSubscribed && currentPlayerId) {
                             const jaVinculado = localStorage.getItem('onesignal_player_id');
                             if (jaVinculado === currentPlayerId) {
-                                console.log('ℹ️ [OneSignal] Já vinculado, pulando...');
+                                logDebug('ℹ️ Já estava vinculado, pulando...', 'info');
                             } else {
-                                console.log('🔄 [OneSignal] Vinculando playerId existente...');
-                                await vincularPlayerId(currentPlayerId);
+                                logDebug('🔄 Vinculando playerId existente...', 'verificacao');
+                                await vincularPlayerId(currentPlayerId, 'verificacao_inicial');
                             }
+                        } else {
+                            logDebug('⚠️ Usuário não está inscrito ainda', 'aviso');
                         }
                     } catch (error) {
-                        console.error('❌ [OneSignal] Erro na verificação:', error);
+                        logDebug(`❌ Erro na verificação: ${error.message}`, 'erro');
                     }
                 };
 
-                setTimeout(verificarInscricaoAtual, 1500);
+                setTimeout(verificarInscricaoAtual, 3000);
 
-                // Retry automático (máx 5 tentativas)
+                // RETRY automático
                 let tentativas = 0;
-                const retryVinculacao = setInterval(async () => {
+                const retry = setInterval(async () => {
                     tentativas++;
-                    const playerId = await OneSignal.User.PushSubscription.id;
-                    const jaVinculado = localStorage.getItem('onesignal_player_id');
-
-                    if (jaVinculado === playerId && playerId) {
-                        clearInterval(retryVinculacao);
+                    if (tentativas > 5) {
+                        logDebug('🛑 Máximo de tentativas atingido', 'fim_retry');
+                        clearInterval(retry);
                         return;
                     }
-                    if (tentativas >= 5) {
-                        clearInterval(retryVinculacao);
-                        return;
-                    }
-                    if (playerId) {
-                        console.log(`🔄 [OneSignal] Tentativa ${tentativas}/5...`);
-                        const sucesso = await vincularPlayerId(playerId);
-                        if (sucesso) clearInterval(retryVinculacao);
-                    }
-                }, 30000);
 
-                window.addEventListener('beforeunload', () => {
-                    clearInterval(retryVinculacao);
-                });
+                    try {
+                        const playerId = await OneSignal.User.PushSubscription.id;
+                        const jaVinculado = localStorage.getItem('onesignal_player_id');
+
+                        if (jaVinculado && playerId && jaVinculado === playerId) {
+                            logDebug('ℹ️ Retry cancelado (já vinculado)', 'info');
+                            clearInterval(retry);
+                            return;
+                        }
+
+                        if (playerId) {
+                            logDebug(`🔄 Retry ${tentativas}/5`, 'retry');
+                            const sucesso = await vincularPlayerId(playerId, `retry_${tentativas}`);
+                            if (sucesso) clearInterval(retry);
+                        } else {
+                            logDebug(`🔄 Retry ${tentativas}/5 - playerId ainda não disponível`, 'retry');
+                        }
+                    } catch (error) {
+                        logDebug(`❌ Erro no retry: ${error.message}`, 'erro');
+                    }
+                }, 15000);
+
+                // Expor função global para o Kodular
+                window.receberPlayerIdDoKodular = async function(playerId) {
+                    logDebug(`📱 [KODULAR] Recebido: ${playerId}`, 'kodular');
+                    await vincularPlayerId(playerId, 'kodular');
+                };
+
+                logDebug('🎉 Sistema de vinculação pronto!', 'pronto');
 
             } catch (error) {
-                console.error('❌ [OneSignal] Erro na inicialização:', error);
+                logDebug(`❌ ERRO FATAL: ${error.message}`, 'erro_fatal');
+            }
+        });
+
+    })();
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- 📤 ENVIO AUTOMÁTICO DE LOGS PARA O BACKEND                   -->
+    <!-- ============================================================ -->
+    <script>
+    (function() {
+        async function enviarLogsParaBackend() {
+            const logs = localStorage.getItem('onesignal_debug_log');
+            const token = localStorage.getItem('auth_token');
+            
+            if (!logs || !token) {
+                console.log('⏭️ Sem logs ou sem token para enviar');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/usuario/logs-onesignal', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        logs: JSON.parse(logs),
+                        userAgent: navigator.userAgent,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    console.log('✅ Logs enviados para o backend');
+                } else {
+                    console.warn('⚠️ Backend recusou logs:', data.error);
+                }
+            } catch (e) {
+                console.error('❌ Erro ao enviar logs:', e);
+            }
+        }
+
+        // Envia após 25 segundos (dá tempo do OneSignal terminar tudo)
+        setTimeout(enviarLogsParaBackend, 25000);
+
+        // Envia também quando o usuário sair da página
+        window.addEventListener('beforeunload', () => {
+            const logs = localStorage.getItem('onesignal_debug_log');
+            const token = localStorage.getItem('auth_token');
+            if (logs && token) {
+                // Usa sendBeacon para garantir envio mesmo ao fechar
+                navigator.sendBeacon(
+                    '/api/usuario/logs-onesignal-beacon',
+                    JSON.stringify({ logs: JSON.parse(logs), token: token })
+                );
             }
         });
     })();
     </script>
     <!-- ============================================================ -->
-    <!-- FIM ONESIGNAL                                                -->
+    <!-- FIM ONESIGNAL + LOGS                                        -->
     <!-- ============================================================ -->
 
     <meta charset="UTF-8">
