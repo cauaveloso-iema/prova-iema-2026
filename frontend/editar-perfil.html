@@ -538,7 +538,12 @@
                 mostrarAlerta('Erro ao carregar perfil. Tente novamente.', 'error');
             }
         }
-        
+
+        function atualizarFotoPerfilNoSite() {
+            console.log("📸 Foto atualizada! Recarregando perfil...");
+            carregarPerfil();
+        }
+                
         // ============================================
         // CARREGAR PREFERÊNCIAS ALIMENTARES
         // ============================================
