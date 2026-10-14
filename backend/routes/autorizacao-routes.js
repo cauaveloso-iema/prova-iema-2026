@@ -142,6 +142,14 @@ function validarCPF(cpf) {
     return { valido: true, cpfLimpo };
 }
 
+// 🆕 Verifica se o tipo exige CPF obrigatório
+// - Autorização: CPF OPCIONAL
+// - Justificativa: CPF OBRIGATÓRIO
+// - 2ª Chamada: CPF OBRIGATÓRIO
+function tipoExigeCPF(tipo) {
+    return tipo === 'justificativa' || tipo === 'segunda_chamada';
+}
+
 // ============================================
 // MIDDLEWARES
 // ============================================
@@ -828,14 +836,29 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         }
 
         // ==========================================
-        // VALIDAÇÃO: CPF DO RESPONSÁVEL OBRIGATÓRIO
+        // 🔥 VALIDAÇÃO DE CPF (regra por tipo)
+        // - Autorização: CPF OPCIONAL (só valida formato se preenchido)
+        // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
         // ==========================================
-        const validacaoCPF = validarCPF(responsavelCPF);
-        if (!validacaoCPF.valido) {
+        const cpfPreenchido = responsavelCPF && responsavelCPF.trim() !== '';
+        const cpfObrigatorio = tipoExigeCPF(tipo);
+
+        if (cpfObrigatorio && !cpfPreenchido) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'CPF do responsável é obrigatório e deve ser válido. ' + (validacaoCPF.erro || '')
+                error: 'CPF do responsável é obrigatório para ' + 
+                       (tipo === 'justificativa' ? 'Justificativa de Falta' : '2ª Chamada')
             });
+        }
+
+        if (cpfPreenchido) {
+            const validacaoCPF = validarCPF(responsavelCPF);
+            if (!validacaoCPF.valido) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'CPF do responsável inválido. ' + (validacaoCPF.erro || '')
+                });
+            }
         }
 
         // Período da falta
@@ -970,7 +993,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             periodoFaltaFim,
             horarioEntrada, horarioSaida,
             responsavelNome: responsavelNome || undefined,
-            responsavelCPF: responsavelCPF,
+            responsavelCPF: responsavelCPF || undefined,
             responsavelTelefone: responsavelTelefone || undefined,
             motivo,
             motivoOutros: motivo === 'outros' ? motivoOutros : undefined,
@@ -1210,16 +1233,37 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.horarioRetorno = hR;
         }
 
-        // Validação CPF
-        if (responsavelCPF !== undefined) {
-            const validacaoCPF = validarCPF(responsavelCPF);
+        // ==========================================
+        // 🔥 VALIDAÇÃO DE CPF NA EDIÇÃO (regra por tipo)
+        // - Autorização: CPF OPCIONAL (só valida formato se preenchido)
+        // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
+        // ==========================================
+        const cpfParaValidar = responsavelCPF !== undefined ? responsavelCPF : a.responsavelCPF;
+        const cpfPreenchido = cpfParaValidar && cpfParaValidar.trim() !== '';
+        const cpfObrigatorio = tipoExigeCPF(a.tipo);
+
+        if (cpfObrigatorio && !cpfPreenchido) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'CPF do responsável é obrigatório para ' + 
+                       (a.tipo === 'justificativa' ? 'Justificativa de Falta' : '2ª Chamada')
+            });
+        }
+
+        if (cpfPreenchido) {
+            const validacaoCPF = validarCPF(cpfParaValidar);
             if (!validacaoCPF.valido) {
                 return res.status(400).json({ 
                     success: false, 
                     error: 'CPF do responsável inválido. ' + (validacaoCPF.erro || '')
                 });
             }
-            a.responsavelCPF = responsavelCPF;
+            if (responsavelCPF !== undefined) {
+                a.responsavelCPF = responsavelCPF;
+            }
+        } else if (responsavelCPF !== undefined && !cpfObrigatorio) {
+            // Autorização: permite limpar o CPF
+            a.responsavelCPF = undefined;
         }
 
         if (horarioEntrada !== undefined) a.horarioEntrada = horarioEntrada;

@@ -42,6 +42,12 @@ const AutorizacaoSchema = new mongoose.Schema({
     assinadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     assinadaPorNome: { type: String, default: null },
     
+    // 🆕 CONTROLE DE VISTO PELA SECRETARIA
+    vistoSecretaria: { type: Boolean, default: false, index: true },
+    vistoSecretariaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    vistoSecretariaPorNome: { type: String, default: null },
+    vistoSecretariaEm: { type: Date, default: null },
+    
     motivo: { type: String, required: true },
     motivoOutros: String,
     
@@ -90,6 +96,7 @@ AutorizacaoSchema.index({ motivo: 1 });
 AutorizacaoSchema.index({ tipoProvaPerdida: 1 });
 AutorizacaoSchema.index({ origemTipo: 1, origemId: 1 });
 AutorizacaoSchema.index({ statusAssinatura: 1, createdAt: -1 });
+AutorizacaoSchema.index({ vistoSecretaria: 1, createdAt: -1 });
 
 // ============================================
 // MIDDLEWARE

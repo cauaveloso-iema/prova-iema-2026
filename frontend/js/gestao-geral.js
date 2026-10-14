@@ -2589,19 +2589,29 @@ async function registrarModulo(modulo) {
         return; 
     }
     
+    // ============================================================
+    // 🔥 CPF DO RESPONSÁVEL — REGRA POR TIPO
+    // - Autorização: CPF OPCIONAL
+    // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
+    // ============================================================
     const responsavelCPF = safeGet(`${I}ResponsavelCPF`)?.value || '';
+    const cpfObrigatorio = (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada');
+    const cpfPreenchido = responsavelCPF && responsavelCPF.trim() !== '';
     
-    if (!responsavelCPF || responsavelCPF.trim() === '') {
+    if (cpfObrigatorio && !cpfPreenchido) {
         notificar('⚠️ CPF do responsável é obrigatório!\n\nPreencha o CPF antes de registrar.', 'error', 5000);
         safeGet(`${I}ResponsavelCPF`)?.focus();
         return;
     }
     
-    const validacaoCPF = validarCPFCliente(responsavelCPF);
-    if (!validacaoCPF.valido) {
-        notificar(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}\n\nVerifique e corrija o CPF antes de continuar.`, 'error', 5000);
-        safeGet(`${I}ResponsavelCPF`)?.focus();
-        return;
+    // Se o CPF foi preenchido (em qualquer tipo), valida o formato
+    if (cpfPreenchido) {
+        const validacaoCPF = validarCPFCliente(responsavelCPF);
+        if (!validacaoCPF.valido) {
+            notificar(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}\n\nVerifique e corrija o CPF antes de continuar.`, 'error', 5000);
+            safeGet(`${I}ResponsavelCPF`)?.focus();
+            return;
+        }
     }
     
     const precisaAssinatura = safeGet(`${modulo}NecessitaAssinatura`)?.checked || false;
@@ -3259,6 +3269,12 @@ async function abrirEditarModulo(modulo, id) {
         const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
         const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
         
+        // 🔥 REGRA DO CPF POR TIPO
+        const cpfObrigatorio = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
+        const cpfLabelHTML = cpfObrigatorio
+            ? 'CPF <span class="text-danger">*</span>'
+            : 'CPF <small class="text-muted">(opcional)</small>';
+        
         const blocoPeriodoFalta = mostrarPeriodoFalta ? `
             <div class="row">
                 <div class="col-md-4 mb-3">
@@ -3389,7 +3405,7 @@ async function abrirEditarModulo(modulo, id) {
                                             <input type="text" id="editModuloResponsavelNome" class="form-control" value="${escapeHTML(a.responsavelNome || '')}">
                                         </div>
                                         <div class="col-md-3 mb-3">
-                                            <label class="form-label">CPF <span class="text-danger">*</span></label>
+                                            <label class="form-label">${cpfLabelHTML}</label>
                                             <input type="text" id="editModuloResponsavelCPF" class="form-control" value="${escapeHTML(a.responsavelCPF || '')}" maxlength="14" oninput="formatarCPF(this)">
                                         </div>
                                         <div class="col-md-3 mb-3">
@@ -3509,17 +3525,27 @@ async function salvarEdicaoModulo() {
         return;
     }
     
-    if (responsavelCPF) {
+    // ============================================================
+    // 🔥 CPF DO RESPONSÁVEL — REGRA POR TIPO (EDIÇÃO)
+    // - Autorização: CPF OPCIONAL
+    // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
+    // ============================================================
+    const cpfObrigatorio = (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada');
+    const cpfPreenchido = responsavelCPF && responsavelCPF.trim() !== '';
+    
+    if (cpfObrigatorio && !cpfPreenchido) {
+        notificar('⚠️ CPF do responsável é obrigatório!', 'error', 5000);
+        safeGet('editModuloResponsavelCPF')?.focus();
+        return;
+    }
+    
+    if (cpfPreenchido) {
         const validacaoCPF = validarCPFCliente(responsavelCPF);
         if (!validacaoCPF.valido) {
             notificar(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}`, 'error', 5000);
             safeGet('editModuloResponsavelCPF')?.focus();
             return;
         }
-    } else {
-        notificar('⚠️ CPF do responsável é obrigatório!', 'error', 5000);
-        safeGet('editModuloResponsavelCPF')?.focus();
-        return;
     }
 
     try {
