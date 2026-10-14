@@ -760,17 +760,24 @@
         // ============================================
         // FOTO DE PERFIL
         // ============================================
-        function carregarFotoPerfil(fotoBase64) {
+        function carregarFotoPerfil(foto) {
             const img = document.getElementById('fotoPerfilImg');
             const placeholder = document.getElementById('fotoPlaceholder');
             const btnRemove = document.getElementById('btnRemoveFoto');
             
-            if (fotoBase64 && fotoBase64.startsWith('data:image')) {
-                img.src = fotoBase64;
+            // Aceita tanto Base64 (data:image/...) quanto URL (/uploads/...)
+            if (foto && (foto.startsWith('data:image') || foto.startsWith('/') || foto.startsWith('http'))) {
+                // Se for uma URL relativa, adiciona o domínio
+                if (foto.startsWith('/')) {
+                    img.src = window.location.origin + foto;
+                } else {
+                    img.src = foto;
+                }
+                
                 img.style.display = 'block';
                 placeholder.style.display = 'none';
                 btnRemove.style.display = 'flex';
-                console.log('✅ Foto de perfil carregada do banco');
+                console.log('✅ Foto de perfil carregada:', foto);
             } else {
                 img.style.display = 'none';
                 placeholder.style.display = 'flex';
