@@ -267,8 +267,6 @@ const Eixo = require('./models/Eixo');
 const Curso = require('./models/Cursos');
 const AuditoriaVisita = require('./models/AuditoriaVisita');
 const ConsentimentoLGPD = require('./models/ConsentimentoLGPD');
-require('./models/OneSignalLog'); // 🔥 ADICIONAR ESTA LINHA
-
 
 // ============================================================================
 // MODELOS INLINE (Config, Resultado, ProvaRealizada, FaceID, Localizacao)

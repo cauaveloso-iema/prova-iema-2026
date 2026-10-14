@@ -9,76 +9,25 @@
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-    <link rel="shortcut icon" type="image/x-icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
-    <!-- ============================================================ -->
-    <!-- 📱 ONESIGNAL - SDK + VINCULAÇÃO AUTOMÁTICA + LOGS DEBUG      -->
-    <!-- ============================================================ -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
-    (function() {
-        'use strict';
-
-        // ============================================
-        // 🔍 SISTEMA DE LOG PERSISTENTE
-        // ============================================
-        function logDebug(mensagem, tipo = 'info') {
-            try {
-                const logs = JSON.parse(localStorage.getItem('onesignal_debug_log') || '[]');
-                logs.push({
-                    timestamp: new Date().toISOString(),
-                    tipo: tipo,
-                    mensagem: String(mensagem),
-                    userAgent: navigator.userAgent.substring(0, 120)
-                });
-                if (logs.length > 200) logs.shift();
-                localStorage.setItem('onesignal_debug_log', JSON.stringify(logs));
-                console.log(`[OneSignal][${tipo}]`, mensagem);
-            } catch (e) {
-                console.warn('Erro ao salvar log:', e);
-            }
-        }
-
-        logDebug('🚀 Iniciando sistema de vinculação', 'inicio');
-
-        window.OneSignalDeferred = window.OneSignalDeferred || [];
-        
-        window.OneSignalDeferred.push(async function(OneSignal) {
-            logDebug('✅ SDK do OneSignal carregado', 'sdk_ok');
-            
-            try {
-                await OneSignal.init({
-                    appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
-                    safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
-                    allowLocalhostAsSecureOrigin: true,
-                    notifyButton: { enable: false }
-                });
-
-                logDebug('✅ OneSignal inicializado', 'init_ok');
-
-                // Função de vinculação
-                const vincularPlayerId = async (playerId, origem) => {
-                    logDebug(`📤 [${origem}] Tentando vincular: ${playerId ? playerId.substring(0, 25) + '...' : 'VAZIO'}`, 'vinculacao_inicio');
-                    
-                    if (!playerId) {
-                        logDebug('⚠️ PlayerId vazio, abortando', 'erro');
-                        return false;
-                    }
-
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+        try {
+            await OneSignal.init({
+                appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
+                safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
+                allowLocalhostAsSecureOrigin: true
+            });
+            OneSignal.on('subscriptionChange', async function(isSubscribed) {
+                if (isSubscribed) {
+                    const playerId = await OneSignal.User.PushSubscription.id;
                     const token = localStorage.getItem('auth_token');
-                    logDebug(`🔑 Token presente: ${token ? 'SIM' : 'NÃO'}`, 'token_check');
-                    
-                    if (!token) {
-                        logDebug('❌ Token não encontrado. Usuário não está logado.', 'erro');
-                        return false;
-                    }
-
-                    try {
-                        const url = '/api/usuario/salvar-player-id';
-                        logDebug(`🌐 Chamando ${url}`, 'fetch_inicio');
-
-                        const response = await fetch(url, {
+                    if (token) {
+                        fetch('/api/usuario/salvar-player-id', {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${token}`,
@@ -86,179 +35,12 @@
                             },
                             body: JSON.stringify({ playerId })
                         });
-
-                        logDebug(`📥 Resposta HTTP: ${response.status}`, 'fetch_resposta');
-
-                        const data = await response.json();
-                        logDebug(`📦 Body: ${JSON.stringify(data)}`, 'fetch_body');
-
-                        if (data.success) {
-                            logDebug('✅ VINCULAÇÃO BEM-SUCEDIDA!', 'sucesso');
-                            localStorage.setItem('onesignal_player_id', playerId);
-                            localStorage.setItem('onesignal_vinculado_em', new Date().toISOString());
-                            return true;
-                        } else {
-                            logDebug(`❌ Erro do servidor: ${data.error}`, 'erro_servidor');
-                            return false;
-                        }
-                    } catch (error) {
-                        logDebug(`❌ ERRO na requisição: ${error.message}`, 'erro_fetch');
-                        return false;
                     }
-                };
-
-                // Evento subscriptionChange
-                OneSignal.on('subscriptionChange', async function(isSubscribed) {
-                    logDebug(`🔔 subscriptionChange: ${isSubscribed ? 'INSCRITO ✅' : 'NÃO INSCRITO ❌'}`, 'evento');
-                    
-                    if (isSubscribed) {
-                        try {
-                            const playerId = await OneSignal.User.PushSubscription.id;
-                            logDebug(`📱 PlayerId obtido: ${playerId}`, 'playerid_obtido');
-                            await vincularPlayerId(playerId, 'subscriptionChange');
-                        } catch (error) {
-                            logDebug(`❌ Erro ao obter playerId: ${error.message}`, 'erro');
-                        }
-                    }
-                });
-
-                // Verificação inicial
-                const verificarInscricaoAtual = async () => {
-                    logDebug('🔍 Verificando inscrição inicial...', 'verificacao');
-                    
-                    try {
-                        const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
-                        const currentPlayerId = await OneSignal.User.PushSubscription.id;
-
-                        logDebug(`   Inscrito: ${isSubscribed}`, 'verificacao');
-                        logDebug(`   PlayerId: ${currentPlayerId || 'NENHUM'}`, 'verificacao');
-                        logDebug(`   Permission: ${Notification.permission}`, 'verificacao');
-
-                        if (isSubscribed && currentPlayerId) {
-                            const jaVinculado = localStorage.getItem('onesignal_player_id');
-                            if (jaVinculado === currentPlayerId) {
-                                logDebug('ℹ️ Já estava vinculado, pulando...', 'info');
-                            } else {
-                                logDebug('🔄 Vinculando playerId existente...', 'verificacao');
-                                await vincularPlayerId(currentPlayerId, 'verificacao_inicial');
-                            }
-                        } else {
-                            logDebug('⚠️ Usuário não está inscrito ainda', 'aviso');
-                        }
-                    } catch (error) {
-                        logDebug(`❌ Erro na verificação: ${error.message}`, 'erro');
-                    }
-                };
-
-                setTimeout(verificarInscricaoAtual, 3000);
-
-                // RETRY automático
-                let tentativas = 0;
-                const retry = setInterval(async () => {
-                    tentativas++;
-                    if (tentativas > 5) {
-                        logDebug('🛑 Máximo de tentativas atingido', 'fim_retry');
-                        clearInterval(retry);
-                        return;
-                    }
-
-                    try {
-                        const playerId = await OneSignal.User.PushSubscription.id;
-                        const jaVinculado = localStorage.getItem('onesignal_player_id');
-
-                        if (jaVinculado && playerId && jaVinculado === playerId) {
-                            logDebug('ℹ️ Retry cancelado (já vinculado)', 'info');
-                            clearInterval(retry);
-                            return;
-                        }
-
-                        if (playerId) {
-                            logDebug(`🔄 Retry ${tentativas}/5`, 'retry');
-                            const sucesso = await vincularPlayerId(playerId, `retry_${tentativas}`);
-                            if (sucesso) clearInterval(retry);
-                        } else {
-                            logDebug(`🔄 Retry ${tentativas}/5 - playerId ainda não disponível`, 'retry');
-                        }
-                    } catch (error) {
-                        logDebug(`❌ Erro no retry: ${error.message}`, 'erro');
-                    }
-                }, 15000);
-
-                // Expor função global para o Kodular
-                window.receberPlayerIdDoKodular = async function(playerId) {
-                    logDebug(`📱 [KODULAR] Recebido: ${playerId}`, 'kodular');
-                    await vincularPlayerId(playerId, 'kodular');
-                };
-
-                logDebug('🎉 Sistema de vinculação pronto!', 'pronto');
-
-            } catch (error) {
-                logDebug(`❌ ERRO FATAL: ${error.message}`, 'erro_fatal');
-            }
-        });
-
-    })();
-    </script>
-
-    <!-- ============================================================ -->
-    <!-- 📤 ENVIO AUTOMÁTICO DE LOGS PARA O BACKEND                   -->
-    <!-- ============================================================ -->
-    <script>
-    (function() {
-        async function enviarLogsParaBackend() {
-            const logs = localStorage.getItem('onesignal_debug_log');
-            const token = localStorage.getItem('auth_token');
-            
-            if (!logs || !token) {
-                console.log('⏭️ Sem logs ou sem token para enviar');
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/usuario/logs-onesignal', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        logs: JSON.parse(logs),
-                        userAgent: navigator.userAgent,
-                        timestamp: new Date().toISOString()
-                    })
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    console.log('✅ Logs enviados para o backend');
-                } else {
-                    console.warn('⚠️ Backend recusou logs:', data.error);
                 }
-            } catch (e) {
-                console.error('❌ Erro ao enviar logs:', e);
-            }
-        }
-
-        // Envia após 25 segundos (dá tempo do OneSignal terminar tudo)
-        setTimeout(enviarLogsParaBackend, 25000);
-
-        // Envia também quando o usuário sair da página
-        window.addEventListener('beforeunload', () => {
-            const logs = localStorage.getItem('onesignal_debug_log');
-            const token = localStorage.getItem('auth_token');
-            if (logs && token) {
-                // Usa sendBeacon para garantir envio mesmo ao fechar
-                navigator.sendBeacon(
-                    '/api/usuario/logs-onesignal-beacon',
-                    JSON.stringify({ logs: JSON.parse(logs), token: token })
-                );
-            }
-        });
-    })();
+            });
+        } catch(e) { console.warn('OneSignal:', e); }
+    });
     </script>
-    <!-- ============================================================ -->
-    <!-- FIM ONESIGNAL + LOGS                                        -->
-    <!-- ============================================================ -->
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
