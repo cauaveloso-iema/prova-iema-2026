@@ -3,9 +3,11 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const RodizioRefeicao = require('../models/RodizioRefeicao');
 const Atraso = require('../models/Atraso');
+const SessaoAssinatura = require('../models/SessaoAssinatura');
 
 // ============================================
 // MIDDLEWARES
@@ -48,8 +50,264 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Gestão Geral',
+    versao: '2.0-assinatura-qr',
     timestamp: new Date().toISOString()
   });
+});
+
+// ============================================
+// 🆕 SESSÕES DE ASSINATURA (QR CODE)
+// ============================================
+
+/**
+ * Cria uma nova sessão de assinatura
+ * Requer autenticação (é o profissional logado que cria)
+ * POST /api/gestao-geral/sessoes-assinatura
+ */
+router.post('/sessoes-assinatura', authenticateToken, verificarGestaoGeral, async (req, res) => {
+  try {
+    const { sessaoId, tipo, dadosAtendimento } = req.body;
+
+    if (!sessaoId || !tipo || !dadosAtendimento) {
+      return res.status(400).json({
+        success: false,
+        error: 'sessaoId, tipo e dadosAtendimento são obrigatórios'
+      });
+    }
+
+    // Valida que userId é um ObjectId válido
+    if (!req.userId || !mongoose.Types.ObjectId.isValid(req.userId)) {
+      console.error('❌ [SESSÃO] userId inválido:', req.userId);
+      return res.status(400).json({
+        success: false,
+        error: 'ID do usuário inválido no token'
+      });
+    }
+
+    // Verifica duplicata
+    const existente = await SessaoAssinatura.findOne({ sessaoId });
+    if (existente) {
+      return res.status(409).json({
+        success: false,
+        error: 'Sessão já existe'
+      });
+    }
+
+    // 🎯 Converte datas para Date se vierem como string
+    const dadosNormalizados = { ...dadosAtendimento };
+    if (dadosNormalizados.dataHora && typeof dadosNormalizados.dataHora === 'string') {
+      const d = new Date(dadosNormalizados.dataHora);
+      dadosNormalizados.dataHora = isNaN(d.getTime()) ? new Date() : d;
+    }
+    if (dadosNormalizados.data && typeof dadosNormalizados.data === 'string') {
+      const d = new Date(dadosNormalizados.data);
+      dadosNormalizados.data = isNaN(d.getTime()) ? new Date() : d;
+    }
+    if (dadosNormalizados.periodoFaltaInicio && typeof dadosNormalizados.periodoFaltaInicio === 'string') {
+      const d = new Date(dadosNormalizados.periodoFaltaInicio);
+      dadosNormalizados.periodoFaltaInicio = isNaN(d.getTime()) ? null : d;
+    }
+    if (dadosNormalizados.periodoFaltaFim && typeof dadosNormalizados.periodoFaltaFim === 'string') {
+      const d = new Date(dadosNormalizados.periodoFaltaFim);
+      dadosNormalizados.periodoFaltaFim = isNaN(d.getTime()) ? null : d;
+    }
+    if (dadosNormalizados.alunoId && typeof dadosNormalizados.alunoId === 'string' 
+        && mongoose.Types.ObjectId.isValid(dadosNormalizados.alunoId)) {
+      dadosNormalizados.alunoId = new mongoose.Types.ObjectId(dadosNormalizados.alunoId);
+    }
+
+    const sessao = new SessaoAssinatura({
+      sessaoId,
+      tipo,
+      status: 'aguardando',              // ✅ enum correto: 'aguardando' (não 'pendente')
+      dadosAtendimento: dadosNormalizados,
+      criadoPor: req.userId,             // ✅ campo obrigatório
+      criadoPorNome: req.userNome || 'Gestão Geral',
+      criadoEm: new Date(),
+      expiraEm: new Date(Date.now() + 30 * 60 * 1000) // 30 minutos
+    });
+
+    await sessao.save();
+
+    console.log(`✅ [GESTÃO] Sessão de assinatura criada: ${sessaoId} (tipo: ${tipo})`);
+
+    res.json({
+      success: true,
+      message: 'Sessão criada com sucesso',
+      sessao: {
+        sessaoId: sessao.sessaoId,
+        tipo: sessao.tipo,
+        status: sessao.status,
+        expiraEm: sessao.expiraEm
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao criar sessão de assinatura:', error);
+    if (error.errors) {
+      console.error('❌ Detalhes:', JSON.stringify(error.errors, null, 2));
+    }
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      detalhes: error.errors ? Object.keys(error.errors).reduce((acc, k) => {
+        acc[k] = error.errors[k].message;
+        return acc;
+      }, {}) : null
+    });
+  }
+});
+
+/**
+ * Busca uma sessão de assinatura pelo ID
+ * PÚBLICO - o responsável acessa sem estar logado
+ * GET /api/gestao-geral/sessoes-assinatura/:sessaoId
+ */
+router.get('/sessoes-assinatura/:sessaoId', async (req, res) => {
+  try {
+    const { sessaoId } = req.params;
+
+    const sessao = await SessaoAssinatura.findOne({ sessaoId });
+
+    if (!sessao) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sessão não encontrada ou expirada'
+      });
+    }
+
+    if (sessao.expiraEm && new Date() > new Date(sessao.expiraEm)) {
+      sessao.status = 'cancelado';
+      await sessao.save();
+      return res.status(404).json({
+        success: false,
+        error: 'Sessão expirada (30 minutos)'
+      });
+    }
+
+    res.json({
+      success: true,
+      sessao: {
+        sessaoId: sessao.sessaoId,
+        tipo: sessao.tipo,
+        status: sessao.status,
+        dadosAtendimento: sessao.dadosAtendimento,
+        assinaturaBase64: sessao.assinaturaBase64 || null,
+        assinadaPorNome: sessao.assinadaPorNome || null,
+        assinadaEm: sessao.assinadaEm || null,
+        expiraEm: sessao.expiraEm
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar sessão:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Registra a assinatura do responsável
+ * PÚBLICO - o responsável envia a assinatura sem estar logado
+ * PUT /api/gestao-geral/sessoes-assinatura/:sessaoId/assinar
+ */
+router.put('/sessoes-assinatura/:sessaoId/assinar', async (req, res) => {
+  try {
+    const { sessaoId } = req.params;
+    const { assinaturaBase64, assinanteNome } = req.body;
+
+    if (!assinaturaBase64) {
+      return res.status(400).json({
+        success: false,
+        error: 'Assinatura é obrigatória'
+      });
+    }
+
+    const sessao = await SessaoAssinatura.findOne({ sessaoId });
+
+    if (!sessao) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sessão não encontrada'
+      });
+    }
+
+    if (sessao.status === 'assinado') {
+      return res.status(400).json({
+        success: false,
+        error: 'Esta sessão já foi assinada'
+      });
+    }
+
+    if (sessao.status === 'cancelado') {
+      return res.status(400).json({
+        success: false,
+        error: 'Esta sessão foi cancelada'
+      });
+    }
+
+    if (sessao.expiraEm && new Date() > new Date(sessao.expiraEm)) {
+      sessao.status = 'cancelado';
+      await sessao.save();
+      return res.status(400).json({
+        success: false,
+        error: 'Sessão expirada'
+      });
+    }
+
+    sessao.assinaturaBase64 = assinaturaBase64;
+    sessao.assinadaPorNome = assinanteNome || 'Responsável';
+    sessao.assinadaEm = new Date();
+    sessao.status = 'assinado';       // ✅ enum correto
+
+    await sessao.save();
+
+    console.log(`✅ [GESTÃO] Assinatura capturada: ${sessaoId} por ${sessao.assinadaPorNome}`);
+
+    res.json({
+      success: true,
+      message: 'Assinatura registrada com sucesso!',
+      sessao: {
+        sessaoId: sessao.sessaoId,
+        status: sessao.status,
+        assinadaPorNome: sessao.assinadaPorNome,
+        assinadaEm: sessao.assinadaEm
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao registrar assinatura:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * Cancela uma sessão de assinatura
+ * Requer autenticação (é o profissional que cancela)
+ * DELETE /api/gestao-geral/sessoes-assinatura/:sessaoId
+ */
+router.delete('/sessoes-assinatura/:sessaoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
+  try {
+    const { sessaoId } = req.params;
+
+    const sessao = await SessaoAssinatura.findOne({ sessaoId });
+
+    if (!sessao) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sessão não encontrada'
+      });
+    }
+
+    sessao.status = 'cancelado';      // ✅ enum correto
+    await sessao.save();
+
+    console.log(`🗑️ [GESTÃO] Sessão cancelada: ${sessaoId}`);
+
+    res.json({
+      success: true,
+      message: 'Sessão cancelada com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao cancelar sessão:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ============================================
@@ -273,7 +531,8 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
     const { 
       alunoId, motivo, descricao, observacoes, detalhes, dataHora,
       precisaAssinatura = false,
-      assinaturaBase64 = ''
+      assinaturaBase64 = '',
+      sessaoAssinaturaId = null
     } = req.body;
     
     if (!descricao || descricao.trim() === '') {
@@ -309,14 +568,45 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       });
     }
     
-    // 🆕 ASSINATURA
+    // 🆕 ASSINATURA VIA QR CODE
     let assinaturaValida = '';
+    let assinadaPorNome = null;
+    let assinadaEm = null;
+    
+    // Se veio assinatura direta (formato base64)
     if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
       if (assinaturaBase64.startsWith('data:image/png;base64,')) {
         if (assinaturaBase64.length > 500 * 1024) {
           return res.status(400).json({ success: false, error: 'Assinatura muito grande (máx 500KB)' });
         }
         assinaturaValida = assinaturaBase64;
+        assinadaPorNome = gestor?.nome || req.userNome || 'Responsável';
+        assinadaEm = new Date();
+      }
+    }
+    
+    // Se veio via sessão de assinatura, busca a assinatura da sessão
+    if (sessaoAssinaturaId && !assinaturaValida) {
+      try {
+        const sessao = await SessaoAssinatura.findOne({ 
+          sessaoId: sessaoAssinaturaId,
+          status: 'assinado'
+        });
+        
+        if (sessao && sessao.assinaturaBase64) {
+          assinaturaValida = sessao.assinaturaBase64;
+          assinadaPorNome = sessao.assinadaPorNome;
+          assinadaEm = sessao.assinadaEm;
+          
+          // Marca sessão como aplicada (não temos esse status no enum, então cancelamos)
+          // Aplica a assinatura e depois cancela a sessão para não ser reutilizada
+          sessao.status = 'cancelado';
+          await sessao.save();
+          
+          console.log(`✅ [GESTÃO] Assinatura da sessão ${sessaoAssinaturaId} aplicada ao atraso`);
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar assinatura da sessão:', e.message);
       }
     }
     
@@ -341,9 +631,10 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       assinaturaBase64: assinaturaValida,
       temAssinatura: assinaturaValida.length > 100,
       statusAssinatura: statusAssinatura,
-      assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
+      assinadaEm: assinadaEm,
       assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
-      assinadaPorNome: assinaturaValida.length > 100 ? (gestor?.nome || req.userNome) : null
+      assinadaPorNome: assinadaPorNome,
+      sessaoAssinaturaId: sessaoAssinaturaId
     });
     
     await atraso.save();
@@ -464,7 +755,7 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
       turma, 
       dataInicio, 
       dataFim,
-      alunoNome  // 🆕 Busca por nome/matrícula
+      alunoNome
     } = req.query;
     
     let query = {};
@@ -477,7 +768,6 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
       query.alunoTurma = turma;
     }
     
-    // 🆕 Busca por nome OU matrícula
     if (alunoNome && alunoNome.trim()) {
       const termoBusca = alunoNome.trim();
       query.$or = [
@@ -492,7 +782,6 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
       if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59.999-03:00');
     }
     
-    // 🔥 Paginação
     const limitNum = parseInt(limit) || 100;
     const pageNum = parseInt(page) || 1;
     const skip = (pageNum - 1) * limitNum;
@@ -572,6 +861,7 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         statusAssinatura: atraso.statusAssinatura,
         assinadaEm: atraso.assinadaEm,
         assinadaPorNome: atraso.assinadaPorNome,
+        sessaoAssinaturaId: atraso.sessaoAssinaturaId || null,
         createdAt: atraso.createdAt,
         updatedAt: atraso.updatedAt
       }

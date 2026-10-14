@@ -6,6 +6,7 @@
 // + CPF Obrigatório com Validação
 // + 🆕 ASSINATURA VIA QR CODE (SESSÃO)
 // + 🆕 PAGINAÇÃO (10 POR PÁGINA)
+// + 🆕 MODO ASSINATURA VIA URL (?assinatura=UUID)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -73,6 +74,9 @@ let telaDesenhando = false;
 let telaLastX = 0;
 let telaLastY = 0;
 
+// ============================================
+// 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
+// ============================================
 (function protegerContraAlertNativo() {
     const alertOriginal = window.alert.bind(window);
     let __alertaEmProgresso = false;
@@ -301,13 +305,28 @@ function validarCPFCliente(cpf) {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     
+    // ============================================
+    // 🆕 VERIFICA PRIMEIRO SE É MODO ASSINATURA
+    // URL: /gestao-geral.html?assinatura=UUID
+    // O responsável NÃO está logado — só vai assinar
+    // ============================================
     const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
     if (modoAssinatura) {
         console.log('📱 Modo assinatura detectado:', modoAssinatura);
+        
+        // 🛡️ FLAG GLOBAL: bloqueia outros scripts
+        window.__MODO_ASSINATURA__ = true;
+        
+        // Remove token temporariamente pra evitar redirects indesejados
+        // (o responsável não precisa estar logado)
+        
         await mostrarTelaAssinatura(modoAssinatura);
-        return;
+        return; // ⚠️ NÃO continua o init normal
     }
     
+    // ============================================
+    // ⬇️ SÓ DAQUI PRA BAIXO É O FLUXO NORMAL (com login)
+    // ============================================
     if (!token) { 
         window.location.href = '/login.html'; 
         return; 
@@ -413,11 +432,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         configurarEventosModulo(modulo);
     });
     
-    setTimeout(() => {
-        ['autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
-            inicializarAssinatura(modulo);
-        });
-    }, 800);
 });
 
 window.addEventListener('beforeunload', () => {
@@ -936,6 +950,7 @@ async function registrarAtraso() {
     
     const precisaAssinatura = safeGet('atrasoNecessitaAssinatura')?.checked || false;
     const assinaturaBase64 = estadoSessaoAssinatura.atraso?.assinaturaCapturada || '';
+    const sessaoAssinaturaId = estadoSessaoAssinatura.atraso?.sessaoId || null;
     
     if (precisaAssinatura && !assinaturaBase64) {
         notificar('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'warning', 5000);
@@ -971,14 +986,15 @@ async function registrarAtraso() {
                     horarioChegada: safeGet('horarioChegada')?.value || ''
                 },
                 precisaAssinatura: precisaAssinatura,
-                assinaturaBase64: assinaturaBase64
+                assinaturaBase64: assinaturaBase64,
+                sessaoAssinaturaId: sessaoAssinaturaId
             })
         });
         const data = await response.json();
         if (data.success) {
             const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
             if (sessaoId) {
-                fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 }).catch(e => console.warn(e));
@@ -1010,7 +1026,7 @@ function limparTela() {
     
     const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
     if (sessaoId) {
-        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+        fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         }).catch(e => console.warn(e));
@@ -1336,6 +1352,18 @@ async function verAtraso(atrasoId) {
         const oldModal = safeGet('modalVerAtraso');
         if (oldModal) oldModal.remove();
         
+        let assinaturaHTML = '';
+        if (a.temAssinatura && a.assinaturaBase64) {
+            assinaturaHTML = `
+                <div class="mb-3">
+                    <strong><i class="fas fa-signature"></i> Assinatura do Responsável:</strong>
+                    <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 10px; padding: 10px; margin-top: 6px;">
+                        <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 120px;" alt="Assinatura">
+                        ${a.assinadaPorNome ? `<p style="margin: 6px 0 0; font-size: 12px; color: #065f46;">Assinado por: <strong>${escapeHTML(a.assinadaPorNome)}</strong></p>` : ''}
+                    </div>
+                </div>`;
+        }
+        
         const modalHtml = `
             <div class="modal fade" id="modalVerAtraso" tabindex="-1">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -1382,6 +1410,8 @@ async function verAtraso(atrasoId) {
                                     </p>
                                 </div>
                             ` : ''}
+                            
+                            ${assinaturaHTML}
                             
                             <div class="mb-3">
                                 <strong><i class="fas fa-user-tie"></i> Registrado por:</strong>
@@ -2589,11 +2619,7 @@ async function registrarModulo(modulo) {
         return; 
     }
     
-    // ============================================================
     // 🔥 CPF DO RESPONSÁVEL — REGRA POR TIPO
-    // - Autorização: CPF OPCIONAL
-    // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
-    // ============================================================
     const responsavelCPF = safeGet(`${I}ResponsavelCPF`)?.value || '';
     const cpfObrigatorio = (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada');
     const cpfPreenchido = responsavelCPF && responsavelCPF.trim() !== '';
@@ -2604,7 +2630,6 @@ async function registrarModulo(modulo) {
         return;
     }
     
-    // Se o CPF foi preenchido (em qualquer tipo), valida o formato
     if (cpfPreenchido) {
         const validacaoCPF = validarCPFCliente(responsavelCPF);
         if (!validacaoCPF.valido) {
@@ -2616,6 +2641,7 @@ async function registrarModulo(modulo) {
     
     const precisaAssinatura = safeGet(`${modulo}NecessitaAssinatura`)?.checked || false;
     const assinaturaBase64 = estadoSessaoAssinatura[modulo]?.assinaturaCapturada || '';
+    const sessaoAssinaturaId = estadoSessaoAssinatura[modulo]?.sessaoId || null;
     
     if (precisaAssinatura && !assinaturaBase64) {
         notificar('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'warning', 5000);
@@ -2646,7 +2672,8 @@ async function registrarModulo(modulo) {
             horarioRetorno: safeGet(`${I}HorarioRetorno`)?.value || '',
             observacoes: safeGet(`${I}Observacoes`)?.value || '',
             assinaturaBase64: assinaturaBase64,
-            precisaAssinatura: precisaAssinatura
+            precisaAssinatura: precisaAssinatura,
+            sessaoAssinaturaId: sessaoAssinaturaId
         };
         
         const r = await fetch('/api/gestao-geral/autorizacao/registrar', {
@@ -2678,7 +2705,7 @@ async function registrarModulo(modulo) {
         
         const sessaoId = estadoSessaoAssinatura[modulo]?.sessaoId;
         if (sessaoId) {
-            fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             }).catch(e => console.warn(e));
@@ -2752,6 +2779,262 @@ async function registrarModulo(modulo) {
     }
 }
 
+// ============================================================================
+// 🎨 CANVAS DE ASSINATURA (FUNÇÕES AUXILIARES)
+// Estas funções são usadas por mostrarTelaAssinatura() e salvarAssinaturaTela()
+// ============================================================================
+
+/**
+ * Redimensiona o canvas quando a tela gira ou muda de tamanho.
+ * Preserva o conteúdo desenhado quando já tem assinatura.
+ */
+function handleResizeCanvasTela() {
+    const canvas = safeGet('canvasAssinatura');
+    const wrapper = safeGet('canvasWrapper');
+    
+    if (!canvas || !wrapper) return;
+    
+    if (!telaTemAssinatura) {
+        // Não tem assinatura ainda — só redimensiona
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1e3c72';
+        telaCtx = ctx;
+    } else {
+        // Já tem assinatura — preserva desenhando em canvas temporário
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(canvas, 0, 0);
+        
+        const rect = wrapper.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1e3c72';
+        telaCtx = ctx;
+        
+        // Redesenha o conteúdo antigo
+        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height, 0, 0, rect.width, rect.height);
+    }
+}
+
+/**
+ * Inicializa o canvas de assinatura e configura os listeners de mouse/toque.
+ */
+function inicializarCanvasTela() {
+    const canvas = safeGet('canvasAssinatura');
+    const wrapper = safeGet('canvasWrapper');
+    const placeholder = safeGet('placeholder');
+    if (!canvas || !wrapper) return;
+    
+    telaCanvas = canvas;
+    telaWrapper = wrapper;
+    telaPlaceholder = placeholder;
+    telaTemAssinatura = false;
+    telaDesenhando = false;
+    
+    const ajustar = () => {
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) { 
+            setTimeout(ajustar, 200); 
+            return; 
+        }
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1e3c72';
+        telaCtx = ctx;
+    };
+    ajustar();
+    
+    window.removeEventListener('resize', handleResizeCanvasTela);
+    window.addEventListener('resize', handleResizeCanvasTela);
+    
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        let cx, cy;
+        if (e.touches?.length > 0) { 
+            cx = e.touches[0].clientX; 
+            cy = e.touches[0].clientY; 
+        } else if (e.changedTouches?.length > 0) { 
+            cx = e.changedTouches[0].clientX; 
+            cy = e.changedTouches[0].clientY; 
+        } else { 
+            cx = e.clientX; 
+            cy = e.clientY; 
+        }
+        return { x: cx - rect.left, y: cy - rect.top };
+    };
+    
+    const iniciar = (e) => {
+        e.preventDefault();
+        telaDesenhando = true;
+        telaTemAssinatura = true;
+        const p = getPos(e);
+        telaLastX = p.x;
+        telaLastY = p.y;
+        wrapper.style.borderColor = '#1e3c72';
+        wrapper.style.borderStyle = 'solid';
+        if (placeholder) placeholder.style.opacity = '0';
+        
+        const btn = safeGet('btnSalvarAssinatura');
+        if (btn) {
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            btn.style.cursor = 'pointer';
+        }
+    };
+    
+    const desenhar = (e) => {
+        if (!telaDesenhando) return;
+        e.preventDefault();
+        const p = getPos(e);
+        telaCtx.beginPath();
+        telaCtx.moveTo(telaLastX, telaLastY);
+        telaCtx.lineTo(p.x, p.y);
+        telaCtx.stroke();
+        telaLastX = p.x;
+        telaLastY = p.y;
+    };
+    
+    const parar = (e) => {
+        if (e?.preventDefault) e.preventDefault();
+        telaDesenhando = false;
+    };
+    
+    canvas.addEventListener('touchstart', iniciar, { passive: false });
+    canvas.addEventListener('touchmove', desenhar, { passive: false });
+    canvas.addEventListener('touchend', parar, { passive: false });
+    canvas.addEventListener('touchcancel', parar, { passive: false });
+    canvas.addEventListener('mousedown', iniciar);
+    canvas.addEventListener('mousemove', desenhar);
+    canvas.addEventListener('mouseup', parar);
+    canvas.addEventListener('mouseleave', () => { 
+        if (telaDesenhando) parar(); 
+    });
+}
+
+/**
+ * Limpa o canvas de assinatura e reseta o estado.
+ */
+function limparAssinaturaTela() {
+    if (!telaCtx || !telaCanvas) return;
+    const rect = telaCanvas.getBoundingClientRect();
+    telaCtx.clearRect(0, 0, rect.width, rect.height);
+    telaTemAssinatura = false;
+    if (telaPlaceholder) telaPlaceholder.style.opacity = '1';
+    if (telaWrapper) {
+        telaWrapper.style.borderColor = '#cbd5e0';
+        telaWrapper.style.borderStyle = 'dashed';
+    }
+    const btn = safeGet('btnSalvarAssinatura');
+    if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#cbd5e0';
+        btn.style.cursor = 'not-allowed';
+    }
+}
+
+/**
+ * Salva a assinatura no backend (envia base64).
+ */
+async function salvarAssinaturaTela() {
+    if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
+    
+    const btn = safeGet('btnSalvarAssinatura');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    }
+    
+    try {
+        const base64 = telaCanvas.toDataURL('image/png');
+        
+        // ⚠️ Rota PÚBLICA — sem token (o responsável não está logado)
+        const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                assinaturaBase64: base64,
+                assinanteNome: 'Responsável'
+            })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+        
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;">
+                <i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i>
+                <h2 style="color: #10b981; margin: 0 0 8px; font-size: 20px;">Assinatura Confirmada!</h2>
+                <p style="color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5;">
+                    A assinatura foi registrada com sucesso.<br>
+                    Você já pode fechar esta janela.
+                </p>
+                <button onclick="window.close()" 
+                        style="padding: 12px 28px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        `;
+        safeGet('telaAssinaturaArea').style.display = 'none';
+        
+        const telaInfo = safeGet('telaAssinaturaInfo');
+        if (telaInfo) {
+            telaInfo.style.flex = '1';
+            telaInfo.style.display = 'flex';
+            telaInfo.style.alignItems = 'center';
+            telaInfo.style.justifyContent = 'center';
+            telaInfo.style.maxHeight = 'none';
+            telaInfo.style.borderLeft = 'none';
+            telaInfo.style.borderRadius = '0 0 16px 16px';
+        }
+        
+    } catch (e) {
+        console.error('Erro ao salvar assinatura:', e);
+        notificar('❌ ' + e.message, 'error');
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+        }
+    }
+}
+
 async function criarJustificativaAutomatica(params) {
     try {
         const {
@@ -2810,7 +3093,7 @@ function limparTelaModulo(modulo) {
     
     const sessaoId = estadoSessaoAssinatura[modulo]?.sessaoId;
     if (sessaoId) {
-        fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+        fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         }).catch(e => console.warn(e));
@@ -2834,9 +3117,6 @@ function reiniciarScannerModulo(modulo) {
 }
 
 // ============================================
-// LISTA COM FILTROS - COM PAGINAÇÃO
-// ============================================
-// ============================================
 // LISTAR MÓDULO - COM PAGINAÇÃO + FILTRO POR PERÍODO DA FALTA
 // ============================================
 async function carregarListaModulo(modulo, pagina = null) {
@@ -2858,7 +3138,6 @@ async function carregarListaModulo(modulo, pagina = null) {
     const dataFim = safeGet(`filtroLista${P}DataFim`)?.value || '';
     const tipoProvaPerdida = safeGet(`filtroLista${P}TipoProva`)?.value || '';
 
-    // 🔥 Se só um dos campos está preenchido, usa o mesmo para os dois
     let dataInicioFinal = dataInicio;
     let dataFimFinal = dataFim;
 
@@ -2878,7 +3157,6 @@ async function carregarListaModulo(modulo, pagina = null) {
     if (dataFimFinal) url += `&dataFim=${dataFimFinal}`;
     if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
 
-    // 🔥 FORÇA FILTRO POR PERÍODO DA FALTA (overlap)
     if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
         url += `&filtrarPorPeriodoFalta=true`;
     }
@@ -3269,7 +3547,6 @@ async function abrirEditarModulo(modulo, id) {
         const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
         const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
         
-        // 🔥 REGRA DO CPF POR TIPO
         const cpfObrigatorio = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
         const cpfLabelHTML = cpfObrigatorio
             ? 'CPF <span class="text-danger">*</span>'
@@ -3525,11 +3802,6 @@ async function salvarEdicaoModulo() {
         return;
     }
     
-    // ============================================================
-    // 🔥 CPF DO RESPONSÁVEL — REGRA POR TIPO (EDIÇÃO)
-    // - Autorização: CPF OPCIONAL
-    // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
-    // ============================================================
     const cpfObrigatorio = (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada');
     const cpfPreenchido = responsavelCPF && responsavelCPF.trim() !== '';
     
@@ -4771,6 +5043,9 @@ async function excluirModulo(modulo, id) {
 // 🆕 SISTEMA DE SESSÃO DE ASSINATURA VIA QR CODE
 // ============================================================================
 
+/**
+ * Gera UUID v4
+ */
 function gerarUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
@@ -4779,11 +5054,19 @@ function gerarUUID() {
     });
 }
 
+/**
+ * Marca/desmarca necessidade de assinatura.
+ * Ao marcar: cria sessão + gera QR + abre modal + inicia polling
+ * Ao desmarcar: cancela a sessão
+ */
 async function toggleNecessitaAssinatura(modulo) {
     const check = safeGet(`${modulo}NecessitaAssinatura`);
     if (!check) return;
     
     if (check.checked) {
+        // ==========================================
+        // 1. Verifica se tem aluno selecionado
+        // ==========================================
         const snapshot = montarSnapshotAtendimento(modulo);
         
         if (!snapshot.alunoId) {
@@ -4792,12 +5075,18 @@ async function toggleNecessitaAssinatura(modulo) {
             return;
         }
         
+        // ==========================================
+        // 2. Gera ID único da sessão
+        // ==========================================
         const sessaoId = gerarUUID();
         estadoSessaoAssinatura[modulo].sessaoId = sessaoId;
         estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
         
+        // ==========================================
+        // 3. Cria a sessão no backend
+        // ==========================================
         try {
-            const response = await fetch('/api/sessoes-assinatura', {
+            const response = await fetch('/api/gestao-geral/sessoes-assinatura', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4813,8 +5102,11 @@ async function toggleNecessitaAssinatura(modulo) {
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
             
-            console.log('✅ Sessão criada:', sessaoId);
+            console.log('✅ Sessão de assinatura criada:', sessaoId);
             
+            // ==========================================
+            // 4. Gera QR Code apontando para ESTA MESMA PÁGINA
+            // ==========================================
             const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
             
             try {
@@ -4835,12 +5127,19 @@ async function toggleNecessitaAssinatura(modulo) {
                         `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
                 }
             } catch (e) {
-                console.warn('Erro ao gerar QR Code, usando fallback:', e);
+                console.warn('Fallback QR Code:', e);
                 estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
                     `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
             
+            // ==========================================
+            // 5. Abre o modal com QR
+            // ==========================================
             abrirModalAssinatura(modulo, urlAssinatura);
+            
+            // ==========================================
+            // 6. Inicia o polling
+            // ==========================================
             iniciarMonitoramentoSessao(modulo, sessaoId);
             
             notificar('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
@@ -4852,24 +5151,14 @@ async function toggleNecessitaAssinatura(modulo) {
             estadoSessaoAssinatura[modulo].sessaoId = null;
         }
     } else {
-        const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
-        if (sessaoId) {
-            try {
-                await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-            } catch (e) { console.warn(e); }
-        }
-        
-        estadoSessaoAssinatura[modulo].sessaoId = null;
-        estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
-        estadoSessaoAssinatura[modulo].qrCodeDataUrl = null;
-        pararMonitoramentoSessao(modulo);
-        fecharModalAssinatura(modulo);
+        // DESMARCOU → cancela a sessão
+        await cancelarSessaoAssinatura(modulo);
     }
 }
 
+/**
+ * Monta snapshot dos dados atuais para exibir na tela de assinatura.
+ */
 function montarSnapshotAtendimento(modulo) {
     if (modulo === 'atraso') {
         return {
@@ -4883,7 +5172,7 @@ function montarSnapshotAtendimento(modulo) {
             motivoLabel: getMotivoLabelAtraso(motivoSelecionado),
             descricao: safeGet('descricao')?.value || '',
             observacoes: safeGet('observacoes')?.value || '',
-            dataHora: safeGet('atrasoData')?.value
+            dataHora: safeGet('atrasoData')?.value || ''
         };
     }
     
@@ -4953,6 +5242,9 @@ function getMotivoLabelAtraso(motivo) {
     return labels[motivo] || motivo;
 }
 
+/**
+ * Abre o modal com QR Code (SEM sair da página).
+ */
 function abrirModalAssinatura(modulo, urlAssinatura) {
     const antigo = safeGet('modalAssinaturaQR');
     if (antigo) antigo.remove();
@@ -5118,14 +5410,23 @@ function iniciarMonitoramentoSessao(modulo, sessaoId) {
     
     const intervalId = setInterval(async () => {
         try {
-            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // ⚠️ Rota PÚBLICA — sem token (mesmo padrão da psicologia)
+            const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`);
             
             if (!response.ok) {
                 if (response.status === 404) {
-                    console.warn('Sessão expirou ou foi removida');
+                    console.warn('⚠️ Sessão expirou ou foi removida');
                     pararMonitoramentoSessao(modulo);
+                    
+                    // Limpa estado
+                    estadoSessaoAssinatura[modulo].sessaoId = null;
+                    const check = safeGet(`${modulo}NecessitaAssinatura`);
+                    if (check) check.checked = false;
+                    
+                    const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+                    if (bloco) bloco.style.display = 'none';
+                    
+                    notificar('⚠️ Sessão de assinatura expirou. Marque novamente.', 'warning');
                 }
                 return;
             }
@@ -5136,21 +5437,34 @@ function iniciarMonitoramentoSessao(modulo, sessaoId) {
             if (data.sessao.status === 'assinado') {
                 console.log('✅ Assinatura capturada!');
                 
+                // Guarda a assinatura no estado
                 estadoSessaoAssinatura[modulo].assinaturaCapturada = data.sessao.assinaturaBase64;
+                
+                // Atualiza o bloco visual
                 atualizarStatusAssinado(modulo, data.sessao);
+                
+                // Para o polling
                 pararMonitoramentoSessao(modulo);
                 
+                // Fecha o modal
                 if (estadoSessaoAssinatura[modulo].modalInstance) {
                     estadoSessaoAssinatura[modulo].modalInstance.hide();
                 }
                 const modalEl = safeGet('modalAssinaturaQR');
                 if (modalEl) setTimeout(() => modalEl.remove(), 300);
                 
-                notificar(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome}!`, 'success');
+                notificar(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome || 'Responsável'}!`, 'success');
                 
             } else if (data.sessao.status === 'cancelado') {
-                console.log('Sessão cancelada');
+                console.log('🚫 Sessão cancelada');
                 pararMonitoramentoSessao(modulo);
+                estadoSessaoAssinatura[modulo].sessaoId = null;
+                
+                const check = safeGet(`${modulo}NecessitaAssinatura`);
+                if (check) check.checked = false;
+                
+                const bloco = safeGet(`${modulo}BlocoAssinaturaInfo`);
+                if (bloco) bloco.style.display = 'none';
             }
         } catch (e) {
             console.warn('Erro no monitoramento:', e);
@@ -5210,12 +5524,16 @@ function atualizarStatusAssinado(modulo, sessao) {
 
 async function cancelarSessaoAssinatura(modulo) {
     const confirmar = await confirm('Cancelar a assinatura? O responsável não poderá mais assinar este atendimento.');
-    if (!confirmar) return;
+    if (!confirmar) {
+        const check = safeGet(`${modulo}NecessitaAssinatura`);
+        if (check) check.checked = true;
+        return;
+    }
     
     const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
     if (sessaoId) {
         try {
-            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -5245,7 +5563,7 @@ async function refazerAssinatura(modulo) {
     const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
     if (sessaoId) {
         try {
-            await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+            await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -5283,8 +5601,11 @@ function limparEstadoSessaoAssinatura(modulo) {
 // ============================================================================
 
 async function mostrarTelaAssinatura(sessaoId) {
-    document.querySelectorAll('.header-top, .card, .container > *').forEach(el => {
-        if (el && !el.id?.includes('content')) {
+    console.log('📱 [MODO ASSINATURA] Iniciando tela para sessão:', sessaoId);
+    
+    // Esconde todo o conteúdo principal
+    document.querySelectorAll('.container > *').forEach(el => {
+        if (el && !el.id?.includes('telaAssinatura')) {
             el.style.display = 'none';
         }
     });
@@ -5348,7 +5669,8 @@ async function mostrarTelaAssinatura(sessaoId) {
     `;
     
     try {
-        const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`);
+        // ⚠️ Rota PÚBLICA — sem token
+        const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`);
         const data = await response.json();
         
         if (!data.success) {
@@ -5450,57 +5772,6 @@ async function mostrarTelaAssinatura(sessaoId) {
                 <p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p>
             </div>
         `;
-    }
-}
-
-function handleResizeCanvasTela() {
-    const canvas = safeGet('canvasAssinatura');
-    const wrapper = safeGet('canvasWrapper');
-    
-    if (!canvas || !wrapper) return;
-    
-    if (!telaTemAssinatura) {
-        const rect = wrapper.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-        
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        canvas.style.width = rect.width + 'px';
-        canvas.style.height = rect.height + 'px';
-        
-        const ctx = canvas.getContext('2d');
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#1e3c72';
-        telaCtx = ctx;
-    } else {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(canvas, 0, 0);
-        
-        const rect = wrapper.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        canvas.style.width = rect.width + 'px';
-        canvas.style.height = rect.height + 'px';
-        
-        const ctx = canvas.getContext('2d');
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#1e3c72';
-        telaCtx = ctx;
-        
-        ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height, 0, 0, rect.width, rect.height);
     }
 }
 
@@ -5623,7 +5894,7 @@ async function salvarAssinaturaTela() {
     try {
         const base64 = telaCanvas.toDataURL('image/png');
         
-        const response = await fetch(`/api/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
+        const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
@@ -5872,27 +6143,10 @@ async function carregarNotificacoesSistema() {
 }
 
 async function carregarLembretesRemarcacao() {
-    try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
-        
-        const response = await fetch('/api/gestao-geral/remarcacoes/pendentes', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const contentType = response.headers.get('content-type') || '';
-        if (!response.ok || !contentType.includes('application/json')) {
-            __lembretesCache = [];
-            return;
-        }
-        const data = await response.json();
-        if (data.success && Array.isArray(data.remarcacoes)) {
-            __lembretesCache = data.remarcacoes;
-        } else {
-            __lembretesCache = [];
-        }
-    } catch (error) {
-        __lembretesCache = [];
-    }
+    // ⚠️ Gestão Geral NÃO tem sistema de remarcações (é exclusivo da Psicologia)
+    // Retorna vazio para não quebrar o sistema de notificações unificado
+    __lembretesCache = [];
+    return;
 }
 
 function calcularNivelAlertaNotif(r) {
@@ -6142,13 +6396,16 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
-});
+// Inicia o sistema de notificações APENAS se NÃO estiver em modo assinatura
+if (!window.__MODO_ASSINATURA__ && !new URLSearchParams(window.location.search).get('assinatura')) {
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
+    });
 
-window.addEventListener('beforeunload', () => {
-    if (notificacoesInterval) clearInterval(notificacoesInterval);
-});
+    window.addEventListener('beforeunload', () => {
+        if (notificacoesInterval) clearInterval(notificacoesInterval);
+    });
+}
 
 // ============================================
 // LOGOUT
