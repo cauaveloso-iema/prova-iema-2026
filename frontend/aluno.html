@@ -9,25 +9,46 @@
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
+    <!-- ============================================================ -->
+    <!-- 📱 ONESIGNAL - SDK + VINCULAÇÃO AUTOMÁTICA (CORRIGIDO)       -->
+    <!-- ============================================================ -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-        try {
-            await OneSignal.init({
-                appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
-                safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
-                allowLocalhostAsSecureOrigin: true
-            });
-            OneSignal.on('subscriptionChange', async function(isSubscribed) {
-                if (isSubscribed) {
-                    const playerId = await OneSignal.User.PushSubscription.id;
+    (function() {
+        'use strict';
+
+        console.log('📱 [OneSignal] Iniciando sistema de vinculação automática...');
+
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        
+        window.OneSignalDeferred.push(async function(OneSignal) {
+            try {
+                await OneSignal.init({
+                    appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
+                    safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
+                    allowLocalhostAsSecureOrigin: true,
+                    notifyButton: { enable: false }
+                });
+
+                console.log('✅ [OneSignal] Inicializado com sucesso');
+
+                // Função principal de vinculação
+                const vincularPlayerId = async (playerId) => {
+                    if (!playerId) return false;
+
                     const token = localStorage.getItem('auth_token');
-                    if (token) {
-                        fetch('/api/usuario/salvar-player-id', {
+                    if (!token) {
+                        console.warn('⚠️ [OneSignal] Token não encontrado.');
+                        return false;
+                    }
+
+                    try {
+                        console.log(`📤 [OneSignal] Enviando playerId: ${playerId.substring(0, 20)}...`);
+
+                        const response = await fetch('/api/usuario/salvar-player-id', {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${token}`,
@@ -35,12 +56,105 @@
                             },
                             body: JSON.stringify({ playerId })
                         });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            console.log('✅ [OneSignal] PlayerId salvo no backend!');
+                            localStorage.setItem('onesignal_player_id', playerId);
+                            localStorage.setItem('onesignal_vinculado_em', new Date().toISOString());
+
+                            const jaMostrou = sessionStorage.getItem('onesignal_msg_exibida');
+                            if (!jaMostrou && typeof mostrarMensagemAluno === 'function') {
+                                mostrarMensagemAluno('📱 Dispositivo vinculado para notificações!', 'info');
+                                sessionStorage.setItem('onesignal_msg_exibida', 'true');
+                            }
+                            return true;
+                        } else {
+                            console.error('❌ [OneSignal] Erro:', data.error);
+                            return false;
+                        }
+                    } catch (error) {
+                        console.error('❌ [OneSignal] Erro na requisição:', error);
+                        return false;
                     }
-                }
-            });
-        } catch(e) { console.warn('OneSignal:', e); }
-    });
+                };
+
+                // Escuta mudanças de inscrição
+                OneSignal.on('subscriptionChange', async function(isSubscribed) {
+                    console.log(`🔔 [OneSignal] subscriptionChange: ${isSubscribed ? 'INSCRITO' : 'NÃO'}`);
+                    if (isSubscribed) {
+                        try {
+                            const playerId = await OneSignal.User.PushSubscription.id;
+                            console.log('📱 [OneSignal] Novo playerId:', playerId);
+                            await vincularPlayerId(playerId);
+                        } catch (error) {
+                            console.error('❌ [OneSignal] Erro:', error);
+                        }
+                    }
+                });
+
+                // Verificação inicial (caso já esteja inscrito)
+                const verificarInscricaoAtual = async () => {
+                    try {
+                        const isSubscribed = await OneSignal.User.PushSubscription.optedIn;
+                        const currentPlayerId = await OneSignal.User.PushSubscription.id;
+
+                        console.log('🔍 [OneSignal] Verificação inicial:');
+                        console.log(`   └─ Inscrito: ${isSubscribed}`);
+                        console.log(`   └─ PlayerId: ${currentPlayerId || 'Nenhum'}`);
+
+                        if (isSubscribed && currentPlayerId) {
+                            const jaVinculado = localStorage.getItem('onesignal_player_id');
+                            if (jaVinculado === currentPlayerId) {
+                                console.log('ℹ️ [OneSignal] Já vinculado, pulando...');
+                            } else {
+                                console.log('🔄 [OneSignal] Vinculando playerId existente...');
+                                await vincularPlayerId(currentPlayerId);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('❌ [OneSignal] Erro na verificação:', error);
+                    }
+                };
+
+                setTimeout(verificarInscricaoAtual, 1500);
+
+                // Retry automático (máx 5 tentativas)
+                let tentativas = 0;
+                const retryVinculacao = setInterval(async () => {
+                    tentativas++;
+                    const playerId = await OneSignal.User.PushSubscription.id;
+                    const jaVinculado = localStorage.getItem('onesignal_player_id');
+
+                    if (jaVinculado === playerId && playerId) {
+                        clearInterval(retryVinculacao);
+                        return;
+                    }
+                    if (tentativas >= 5) {
+                        clearInterval(retryVinculacao);
+                        return;
+                    }
+                    if (playerId) {
+                        console.log(`🔄 [OneSignal] Tentativa ${tentativas}/5...`);
+                        const sucesso = await vincularPlayerId(playerId);
+                        if (sucesso) clearInterval(retryVinculacao);
+                    }
+                }, 30000);
+
+                window.addEventListener('beforeunload', () => {
+                    clearInterval(retryVinculacao);
+                });
+
+            } catch (error) {
+                console.error('❌ [OneSignal] Erro na inicialização:', error);
+            }
+        });
+    })();
     </script>
+    <!-- ============================================================ -->
+    <!-- FIM ONESIGNAL                                                -->
+    <!-- ============================================================ -->
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
