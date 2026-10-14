@@ -20882,7 +20882,6 @@ class AdminPanel {
     // FUNÇÕES DE ADAPTAÇÃO DE DOCUMENTOS COM GOOGLE DOCS API
     // ============================================================================
 
-    // ============ ABRIR MODAL DE ADAPTAÇÃO ============
     async abrirModalUploadAdaptarDocumento() {
         const modalBody = document.getElementById('modalBody');
         const modalTitle = document.getElementById('modalTitle');
@@ -20892,27 +20891,40 @@ class AdminPanel {
         
         modalBody.innerHTML = `
             <div style="padding: 20px;">
-                <div class="upload-area" 
-                    onclick="document.getElementById('fileInputAdaptar').click()"
-                    ondrop="admin.handleDropAdaptar(event)"
-                    ondragover="admin.handleDragOverAdaptar(event)"
-                    style="
-                        background: #f8fafc;
-                        border: 3px dashed #cbd5e0;
-                        border-radius: 16px;
-                        padding: 40px;
-                        text-align: center;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                    ">
+                <!-- 🔥 CORRIGIDO PARA KODULAR: <label> envolvendo o <input> -->
+                <label for="fileInputAdaptar" id="uploadLabelAdaptar" style="
+                    display: block;
+                    background: #f8fafc;
+                    border: 3px dashed #cbd5e0;
+                    border-radius: 16px;
+                    padding: 40px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    position: relative;
+                ">
                     <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #667eea; margin-bottom: 15px;"></i>
                     <h4 style="margin: 0 0 5px;">Arraste ou clique para enviar</h4>
                     <p style="margin: 0; color: #718096;">PDF, DOCX, DOC (até 10MB)</p>
                     <p style="margin-top: 10px; font-size: 12px; color: #f59e0b;">
                         <i class="fas fa-info-circle"></i> O documento mantém 100% da formatação original
                     </p>
-                </div>
-                <input type="file" id="fileInputAdaptar" style="display: none;" accept=".pdf,.docx,.doc" onchange="admin.handleFileSelectAdaptar(event)">
+                    
+                    <!-- 🔥 Input DENTRO do label, invisível mas clicável -->
+                    <input type="file" 
+                        id="fileInputAdaptar" 
+                        style="
+                            position: absolute;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100%;
+                            opacity: 0;
+                            cursor: pointer;
+                        " 
+                        accept=".pdf,.docx,.doc" 
+                        onchange="admin.handleFileSelectAdaptar(event)">
+                </label>
                 
                 <div id="previewArquivo" style="display: none; margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px;">
                     <div style="display: flex; align-items: center; gap: 15px;">
@@ -21011,7 +21023,7 @@ class AdminPanel {
             </div>
             
             <style>
-                .upload-area:hover {
+                #uploadLabelAdaptar:hover {
                     background: #f0f9ff !important;
                     border-color: #667eea !important;
                 }
@@ -21027,13 +21039,6 @@ class AdminPanel {
         const fonteCheckbox = document.getElementById('optFonteAmpliada');
         const slider = document.getElementById('fonteSlider');
         const fonteValue = document.getElementById('fonteValue');
-        
-        if (fonteCheckbox) {
-            fonteCheckbox.addEventListener('change', () => {
-                const sliderDiv = document.getElementById('sliderFonte');
-                if (sliderDiv) sliderDiv.style.display = fonteCheckbox.checked ? 'block' : 'none';
-            });
-        }
         
         if (slider) {
             slider.addEventListener('input', () => {
@@ -21103,14 +21108,25 @@ class AdminPanel {
         document.getElementById('nomeArquivo').textContent = file.name;
         document.getElementById('tamanhoArquivo').textContent = `${(file.size / 1024).toFixed(2)} KB`;
         document.getElementById('opcoesAdaptacao').style.display = 'block';
+
+         // 🔥 ADICIONAR: Esconder o label após seleção
+        const uploadLabel = document.getElementById('uploadLabelAdaptar');
+        if (uploadLabel) uploadLabel.style.display = 'none';
     }
 
     // ============ REMOVER ARQUIVO ============
     removerArquivoAdaptar() {
         this.arquivoSelecionado = null;
+        
         document.getElementById('previewArquivo').style.display = 'none';
         document.getElementById('opcoesAdaptacao').style.display = 'none';
-        document.getElementById('fileInputAdaptar').value = '';
+        
+        const fileInput = document.getElementById('fileInputAdaptar');
+        if (fileInput) fileInput.value = '';
+        
+        // 🔥 ADICIONAR: Mostrar o label novamente
+        const uploadLabel = document.getElementById('uploadLabelAdaptar');
+        if (uploadLabel) uploadLabel.style.display = 'block';
     }
 
     // ============ TOGGLE SLIDER FONTE ============
