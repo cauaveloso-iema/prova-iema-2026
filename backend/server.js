@@ -1015,6 +1015,10 @@ app.use('/api/acompanhamento-compartilhado', require('./routes/acompanhamento-co
 // ---------- Substituição de Professor ----------
 app.use('/api/substituicao-professor', require('./routes/substituicao-professor-routes'));
 
+// ---------- Atraso de Professor ----------
+const atrasoProfessorRoutes = require('./routes/atraso-professor-routes');
+app.use('/api/atraso-professor', atrasoProfessorRoutes);
+
 // ---------- LGPD ----------
 app.use('/api/lgpd', require('./routes/lgpd'));
 

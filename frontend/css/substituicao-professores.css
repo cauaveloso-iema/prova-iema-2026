@@ -683,3 +683,73 @@
         padding: 15px !important;
     }
 }
+
+/* Professor selecionado (Atrasos) */
+.professor-selecionado-box {
+    background: linear-gradient(135deg, #f0f4ff, #e8edff);
+    border: 2px solid #dbe4ff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.professor-selecionado-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.professor-avatar-lg {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.professor-selecionado-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.professor-selecionado-info strong {
+    display: block;
+    font-size: 1rem;
+    color: #1e3c72;
+    margin-bottom: 3px;
+}
+
+.professor-selecionado-info small {
+    display: block;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+/* Pills (sub-abas) */
+.nav-pills .nav-link {
+    color: #4b5563;
+    background: transparent;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 8px 16px;
+    transition: all 0.2s;
+}
+
+.nav-pills .nav-link:hover {
+    border-color: #1e3c72;
+    color: #1e3c72;
+}
+
+.nav-pills .nav-link.active {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    border-color: #1e3c72;
+    color: white;
+}

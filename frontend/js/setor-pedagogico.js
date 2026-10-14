@@ -463,6 +463,11 @@ class SetorPedagogico {
             this.showToast('❌ Você não tem permissão para acessar Substituição de Professores', 'error');
             return;
         }
+        // 🔥 NOVO: Atrasos usa a mesma permissão de Substituição
+        if (section === 'atrasos' && !this.temPermissaoSubstituicao) {
+            this.showToast('❌ Você não tem permissão para acessar Atrasos', 'error');
+            return;
+        }
         if (section === 'visitas' && !this.temPermissaoVisitas) {
             this.showToast('❌ Você não tem permissão para acessar Autorização de Visitas', 'error');
             return;
@@ -500,6 +505,7 @@ class SetorPedagogico {
             relatorios: 'Relatórios',
             'segunda-chamada': '2ª Chamada',
             'substituicao-professores': 'Substituição de Professores',
+            'atrasos': 'Atrasos de Professores', // 🔥 NOVO
             'visitas': 'Autorização de Visitas'
         };
         
@@ -510,6 +516,7 @@ class SetorPedagogico {
             relatorios: 'fa-chart-bar',
             'segunda-chamada': 'fa-redo',
             'substituicao-professores': 'fa-people-arrows',
+            'atrasos': 'fa-clock', // 🔥 NOVO
             'visitas': 'fa-map-marked-alt'
         };
         
@@ -533,6 +540,8 @@ class SetorPedagogico {
             this.loadSegundaChamada();
         } else if (section === 'substituicao-professores') {
             this.loadSubstituicaoProfessores();
+        } else if (section === 'atrasos') { // 🔥 NOVO
+            this.loadAtrasos();
         } else if (section === 'visitas') {
             this.loadVisitas();
         }
@@ -6018,6 +6027,13 @@ class SetorPedagogico {
                             <i class="fas fa-file-alt"></i> Relatórios
                         </button>
                     </li>
+                    <!-- 🔥 NOVA ABA: ATRASOS -->
+                    <li class="nav-item">
+                        <button class="nav-link" id="sp-atrasos-tab" data-bs-toggle="tab" data-bs-target="#sp-atrasos" type="button">
+                            <i class="fas fa-clock"></i> Atrasos
+                            <span class="badge bg-warning text-dark ms-1" id="badgeTotalAtrasos">0</span>
+                        </button>
+                    </li>
                 </ul>
 
                 <div class="tab-content">
@@ -6450,6 +6466,14 @@ class SetorPedagogico {
                             </div>
                         </div>
                     </div>
+
+                    <!-- 🔥 NOVA ABA: ATRASOS (conteúdo injetado dinamicamente) -->
+                    <div class="tab-pane fade" id="sp-atrasos">
+                        <div class="text-center py-5">
+                            <div class="loading"></div>
+                            <p class="mt-3 text-muted">Carregando módulo de atrasos...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -6529,6 +6553,15 @@ class SetorPedagogico {
             document.getElementById('sp-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
                 this.carregarDashboardSubstituicoes();
             });
+            
+            // 🔥 QUANDO A ABA ATRASOS FOR MOSTRADA, CARREGA O CONTEÚDO
+            document.getElementById('sp-atrasos-tab')?.addEventListener('shown.bs.tab', () => {
+                this.carregarConteudoAtrasos();
+            });
+            
+            // 🔥 Também carrega de imediato se já estiver ativa (não é o caso, mas por segurança)
+            // Não carrega por padrão pra não pesar — só carrega quando o usuário clicar na aba
+            
         }, 200);
     }
 
@@ -9388,6 +9421,1709 @@ class SetorPedagogico {
                                 </td>
                                 <td>${this.escapeHtml(s.turma)}</td>
                                 <td>${this.escapeHtml(s.motivoLabel)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>EducaPleno - Setor Pedagógico</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        win.onload = () => setTimeout(() => win.print(), 500);
+    }
+
+    async carregarConteudoAtrasos() {
+        const container = document.querySelector('#sp-atrasos');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="loading"></div>
+                <p class="mt-3 text-muted">Carregando módulo de atrasos...</p>
+            </div>
+        `;
+        
+        try {
+            // Carrega professores e turmas
+            const [professoresRes, turmasRes] = await Promise.all([
+                fetch('/api/atraso-professor/professores', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                }),
+                fetch('/api/atraso-professor/turmas', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                })
+            ]);
+            
+            const professoresData = await professoresRes.json();
+            const turmasData = await turmasRes.json();
+            
+            if (professoresData.success) {
+                this.atrasosState = this.atrasosState || {};
+                this.atrasosState.professores = professoresData.professores;
+            }
+            
+            if (turmasData.success) {
+                this.atrasosState = this.atrasosState || {};
+                this.atrasosState.turmas = turmasData.turmas;
+            }
+            
+            // Renderiza conteúdo
+            container.innerHTML = this.getHTMLAtrasos();
+            
+            // Inicializa eventos
+            setTimeout(() => {
+                this.inicializarEventosAtrasos();
+            }, 100);
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar módulo de atrasos:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Erro ao carregar módulo de atrasos: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    getHTMLAtrasos() {
+        return `
+            <!-- Sub-abas: Registrar | Lista | Dashboard | Relatórios -->
+            <ul class="nav nav-pills mb-3" role="tablist" style="gap: 8px;">
+                <li class="nav-item">
+                    <button class="nav-link active" id="atraso-registrar-tab" data-bs-toggle="pill" data-bs-target="#atraso-registrar" type="button">
+                        <i class="fas fa-plus-circle"></i> Registrar
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" id="atraso-lista-tab" data-bs-toggle="pill" data-bs-target="#atraso-lista" type="button">
+                        <i class="fas fa-list"></i> Lista
+                        <span class="badge bg-danger ms-1" id="badgeTotalAtrasos">0</span>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" id="atraso-dashboard-tab" data-bs-toggle="pill" data-bs-target="#atraso-dashboard" type="button">
+                        <i class="fas fa-chart-line"></i> Dashboard
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" id="atraso-relatorios-tab" data-bs-toggle="pill" data-bs-target="#atraso-relatorios" type="button">
+                        <i class="fas fa-file-alt"></i> Relatórios
+                    </button>
+                </li>
+            </ul>
+            
+            <div class="tab-content">
+                <!-- SUB-TAB: REGISTRAR -->
+                <div class="tab-pane fade show active" id="atraso-registrar">
+                    
+                    <!-- Etapa 1: Professor -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="etapa-header">
+                                <div class="etapa-numero">1</div>
+                                <div class="etapa-titulo">
+                                    <h5><i class="fas fa-user-clock me-2"></i> Professor Atrasado</h5>
+                                    <small class="text-muted">Selecione o professor que chegou atrasado</small>
+                                </div>
+                            </div>
+                            
+                            <div class="professor-selecionado-box mt-3" id="professorSelecionadoAtraso" style="display: none;">
+                                <div class="professor-selecionado-content">
+                                    <div class="professor-avatar-lg" id="avatarProfessorAtraso">?</div>
+                                    <div class="professor-selecionado-info">
+                                        <strong id="nomeProfessorAtraso">-</strong>
+                                        <small id="emailProfessorAtraso">-</small>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="setorPedagogico.limparProfessorAtraso()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="search-box mt-3">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="buscaProfessorAtraso" placeholder="Buscar professor por nome, email ou matrícula...">
+                            </div>
+                            <div class="professor-list mt-3" id="listaProfessoresAtraso">
+                                <div class="text-center py-3">
+                                    <div class="loading"></div>
+                                    <p>Carregando professores...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Etapa 2: Detalhes -->
+                    <div class="card mb-3" id="cardDetalhesAtraso" style="display: none;">
+                        <div class="card-body">
+                            <div class="etapa-header">
+                                <div class="etapa-numero">2</div>
+                                <div class="etapa-titulo">
+                                    <h5><i class="fas fa-clipboard-list me-2"></i> Detalhes do Atraso</h5>
+                                    <small class="text-muted">Informe os dados do atraso</small>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3 mt-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Data do Atraso <span class="text-danger">*</span></label>
+                                    <input type="date" id="inputDataAtraso" class="form-control">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Horário da Aula <span class="text-danger">*</span></label>
+                                    <select id="selectHorarioAtraso" class="form-select">
+                                        <option value="">Selecione...</option>
+                                        <option value="1">1º Horário</option>
+                                        <option value="2">2º Horário</option>
+                                        <option value="3">3º Horário</option>
+                                        <option value="4">4º Horário</option>
+                                        <option value="5">5º Horário</option>
+                                        <option value="6">6º Horário</option>
+                                        <option value="7">7º Horário</option>
+                                        <option value="8">8º Horário</option>
+                                        <option value="9">9º Horário</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Horário de Chegada</label>
+                                    <input type="time" id="inputHorarioChegadaAtraso" class="form-control">
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3 mt-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Minutos de Atraso</label>
+                                    <input type="number" id="inputMinutosAtraso" class="form-control" min="0" max="300" placeholder="Ex: 15">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Turma</label>
+                                    <select id="selectTurmaAtraso" class="form-select">
+                                        <option value="">Selecione a turma...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Motivo</label>
+                                    <select id="selectMotivoAtraso" class="form-select" onchange="setorPedagogico.toggleMotivoDetalhesAtraso()">
+                                        <option value="nao_justificado">Não Justificado</option>
+                                        <option value="problema_transporte">Problema de Transporte</option>
+                                        <option value="problema_pessoal">Problema Pessoal</option>
+                                        <option value="problema_saude">Problema de Saúde</option>
+                                        <option value="transito">Trânsito</option>
+                                        <option value="clima">Condições Climáticas</option>
+                                        <option value="outros">Outros</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3" id="grupoMotivoDetalhesAtraso" style="display: none;">
+                                <label class="form-label">Especifique o Motivo</label>
+                                <input type="text" id="inputMotivoDetalhesAtraso" class="form-control" placeholder="Descreva o motivo...">
+                            </div>
+                            
+                            <div class="mt-3">
+                                <label class="form-label">Observações</label>
+                                <textarea id="inputObservacoesAtraso" class="form-control" rows="3" placeholder="Informações adicionais (opcional)..."></textarea>
+                            </div>
+                            
+                            <div class="info-preenchimento mt-3">
+                                <i class="fas fa-clock"></i>
+                                <div>
+                                    <strong>Horário do Preenchimento:</strong>
+                                    <span id="horarioPreenchimentoAtraso"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex gap-2 mt-4 justify-content-end">
+                                <button class="btn btn-secondary" onclick="setorPedagogico.resetarFormularioAtraso()">
+                                    <i class="fas fa-times me-2"></i> Cancelar
+                                </button>
+                                <button class="btn btn-primary" onclick="setorPedagogico.registrarAtraso()" id="btnRegistrarAtraso">
+                                    <i class="fas fa-save me-2"></i> Registrar Atraso
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- SUB-TAB: LISTA -->
+                <div class="tab-pane fade" id="atraso-lista">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="fas fa-filter me-2"></i> Filtros</h6>
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Mês</label>
+                                    <input type="month" id="filtroMesAtraso" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Professor</label>
+                                    <input type="text" id="filtroBuscaAtraso" class="form-control" placeholder="Nome...">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Motivo</label>
+                                    <select id="filtroMotivoAtraso" class="form-select">
+                                        <option value="">Todos</option>
+                                        <option value="nao_justificado">Não Justificado</option>
+                                        <option value="problema_transporte">Transporte</option>
+                                        <option value="problema_pessoal">Pessoal</option>
+                                        <option value="problema_saude">Saúde</option>
+                                        <option value="transito">Trânsito</option>
+                                        <option value="clima">Clima</option>
+                                        <option value="outros">Outros</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Data Início</label>
+                                    <input type="date" id="filtroDataInicioAtraso" class="form-control">
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end gap-2">
+                                    <button class="btn btn-secondary flex-fill" onclick="setorPedagogico.limparFiltrosAtraso()">
+                                        <i class="fas fa-eraser"></i>
+                                    </button>
+                                    <button class="btn btn-primary flex-fill" onclick="setorPedagogico.carregarListaAtrasos()">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="card-title mb-0"><i class="fas fa-list me-2"></i> Atrasos Registrados</h6>
+                                <span class="badge bg-primary" id="contadorListaAtrasos">0 registros</span>
+                            </div>
+                            <div id="listaAtrasos"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- SUB-TAB: DASHBOARD -->
+                <div class="tab-pane fade" id="atraso-dashboard">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label">Mês de Referência</label>
+                                    <input type="month" id="dashboardMesAtraso" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-primary w-100" onclick="setorPedagogico.carregarDashboardAtrasos()">
+                                        <i class="fas fa-sync-alt me-2"></i> Atualizar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-3 mb-3">
+                            <div class="metric-card">
+                                <i class="fas fa-clock fa-2x text-primary mb-2"></i>
+                                <div class="metric-value" id="atrasoStatTotalMes">0</div>
+                                <div class="metric-label">Atrasos no Mês</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="metric-card">
+                                <i class="fas fa-calendar-day fa-2x text-success mb-2"></i>
+                                <div class="metric-value" id="atrasoStatMediaDiaria">0</div>
+                                <div class="metric-label">Média Diária</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="metric-card">
+                                <i class="fas fa-user-clock fa-2x text-warning mb-2"></i>
+                                <div class="metric-value" id="atrasoStatProfessores">0</div>
+                                <div class="metric-label">Professores</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="metric-card">
+                                <i class="fas fa-hourglass-half fa-2x text-danger mb-2"></i>
+                                <div class="metric-value" id="atrasoStatTotalMinutos">0</div>
+                                <div class="metric-label">Tempo Total</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-pie"></i> Por Motivo</h6>
+                                    <canvas id="atrasoChartMotivos"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-bar"></i> Por Horário</h6>
+                                    <canvas id="atrasoChartHorarios"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-line"></i> Por Dia</h6>
+                                    <canvas id="atrasoChartDias"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-trophy"></i> Professores com Mais Atrasos</h6>
+                                    <div id="atrasoRankingProfessores" class="ranking-list mt-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="fas fa-history"></i> Últimos Atrasos</h6>
+                            <div id="atrasoUltimosRegistros" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- SUB-TAB: RELATÓRIOS -->
+                <div class="tab-pane fade" id="atraso-relatorios">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title"><i class="fas fa-file-alt me-2"></i> Gerar Relatório</h6>
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Mês</label>
+                                    <input type="month" id="relatorioMesAtraso" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Data Início</label>
+                                    <input type="date" id="relatorioDataInicioAtraso" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Data Fim</label>
+                                    <input type="date" id="relatorioDataFimAtraso" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Professor</label>
+                                    <select id="relatorioProfessorAtraso" class="form-select">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Motivo</label>
+                                    <select id="relatorioMotivoAtraso" class="form-select">
+                                        <option value="">Todos</option>
+                                        <option value="nao_justificado">Não Justificado</option>
+                                        <option value="problema_transporte">Transporte</option>
+                                        <option value="problema_pessoal">Pessoal</option>
+                                        <option value="problema_saude">Saúde</option>
+                                        <option value="transito">Trânsito</option>
+                                        <option value="clima">Clima</option>
+                                        <option value="outros">Outros</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button class="btn btn-primary w-100" onclick="setorPedagogico.gerarRelatorioAtrasos()">
+                                        <i class="fas fa-search me-2"></i> Gerar
+                                    </button>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="btn-group w-100">
+                                        <button class="btn btn-success" onclick="setorPedagogico.exportarCSVAtrasos()" id="btnExportarCSVAtraso" disabled>
+                                            <i class="fas fa-file-csv me-1"></i> CSV
+                                        </button>
+                                        <button class="btn btn-danger" onclick="setorPedagogico.imprimirRelatorioAtrasos()" id="btnImprimirRelatorioAtraso" disabled>
+                                            <i class="fas fa-print me-1"></i> PDF
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="resultadoRelatorioAtrasos">
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Selecione os filtros e clique em Gerar</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    inicializarEventosAtrasos() {
+        const hoje = getDataLocalISO();
+        const mesAtual = new Date().toISOString().substring(0, 7);
+        
+        // Preencher datas
+        const inputData = document.getElementById('inputDataAtraso');
+        if (inputData) inputData.value = hoje;
+        
+        ['filtroMesAtraso', 'dashboardMesAtraso', 'relatorioMesAtraso'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = mesAtual;
+        });
+        
+        // Carregar dados iniciais
+        this.carregarProfessoresAtraso();
+        this.carregarTurmasAtraso();
+        this.carregarListaAtrasos();
+        
+        // Busca de professores
+        const busca = document.getElementById('buscaProfessorAtraso');
+        if (busca) {
+            busca.addEventListener('input', (e) => {
+                this.filtrarProfessoresAtraso(e.target.value);
+            });
+        }
+        
+        // Motivo "outros"
+        const selectMotivo = document.getElementById('selectMotivoAtraso');
+        if (selectMotivo) {
+            selectMotivo.addEventListener('change', () => this.toggleMotivoDetalhesAtraso());
+        }
+        
+        // Botão de atualizar dashboard na tab
+        document.getElementById('atraso-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
+            this.carregarDashboardAtrasos();
+        });
+        
+        // Preencher select de professores do relatório
+        this.preencherSelectProfessoresAtraso();
+    }
+
+    toggleMotivoDetalhesAtraso() {
+        const motivo = document.getElementById('selectMotivoAtraso')?.value;
+        const grupo = document.getElementById('grupoMotivoDetalhesAtraso');
+        
+        if (motivo === 'outros') {
+            grupo.style.display = 'block';
+        } else {
+            grupo.style.display = 'none';
+            const input = document.getElementById('inputMotivoDetalhesAtraso');
+            if (input) input.value = '';
+        }
+    }
+
+    async carregarProfessoresAtraso() {
+        const container = document.getElementById('listaProfessoresAtraso');
+        if (!container) return;
+        
+        try {
+            const response = await fetch('/api/atraso-professor/professores', {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.atrasosState = this.atrasosState || {};
+                this.atrasosState.professores = data.professores;
+                this.renderizarListaProfessoresAtraso(data.professores);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar professores:', error);
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Erro ao carregar</p></div>';
+        }
+    }
+
+    renderizarListaProfessoresAtraso(lista) {
+        const container = document.getElementById('listaProfessoresAtraso');
+        if (!container) return;
+        
+        if (lista.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-user-slash"></i>
+                    <p>Nenhum professor encontrado</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = lista.map(p => `
+            <div class="professor-item" data-id="${p.id}" onclick="setorPedagogico.selecionarProfessorAtraso('${p.id}')">
+                <div class="professor-avatar">${(p.nome || '?').charAt(0).toUpperCase()}</div>
+                <div class="professor-info">
+                    <div class="professor-nome">${this.escapeHtml(p.nome)}</div>
+                    <div class="professor-detalhes">
+                        <span><i class="fas fa-envelope"></i> ${this.escapeHtml(p.email || 'Sem email')}</span>
+                        <span><i class="fas fa-phone"></i> ${p.telefone || 'N/A'}</span>
+                        <span><i class="fas fa-sitemap"></i> ${this.escapeHtml(p.eixo || 'Sem eixo')}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    filtrarProfessoresAtraso(termo) {
+        if (!this.atrasosState || !this.atrasosState.professores) return;
+        
+        const termoLower = (termo || '').toLowerCase();
+        let filtrados = this.atrasosState.professores;
+        
+        if (termoLower) {
+            filtrados = filtrados.filter(p =>
+                (p.nome || '').toLowerCase().includes(termoLower) ||
+                (p.email || '').toLowerCase().includes(termoLower) ||
+                (p.matricula || '').toLowerCase().includes(termoLower)
+            );
+        }
+        
+        this.renderizarListaProfessoresAtraso(filtrados);
+    }
+
+    selecionarProfessorAtraso(id) {
+        if (!this.atrasosState || !this.atrasosState.professores) return;
+        
+        const professor = this.atrasosState.professores.find(p => p.id === id);
+        if (!professor) return;
+        
+        this.atrasosState.professorSelecionado = professor;
+        
+        // Atualizar UI
+        document.querySelectorAll('#listaProfessoresAtraso .professor-item').forEach(el => {
+            el.classList.toggle('selected', el.dataset.id === id);
+        });
+        
+        // Mostrar box do professor selecionado
+        const box = document.getElementById('professorSelecionadoAtraso');
+        if (box) {
+            box.style.display = 'block';
+            document.getElementById('avatarProfessorAtraso').textContent = (professor.nome || '?').charAt(0).toUpperCase();
+            document.getElementById('nomeProfessorAtraso').textContent = professor.nome;
+            document.getElementById('emailProfessorAtraso').textContent = professor.email || 'Sem email';
+        }
+        
+        // Esconder lista
+        const lista = document.getElementById('listaProfessoresAtraso');
+        if (lista) lista.style.display = 'none';
+        
+        const busca = document.getElementById('buscaProfessorAtraso');
+        if (busca) busca.style.display = 'none';
+        
+        // Mostrar card de detalhes
+        const card = document.getElementById('cardDetalhesAtraso');
+        if (card) {
+            card.style.display = 'block';
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        // Inicializar horário de preenchimento
+        this.atualizarHorarioPreenchimentoAtraso();
+        setInterval(() => this.atualizarHorarioPreenchimentoAtraso(), 1000);
+    }
+
+    limparProfessorAtraso() {
+        if (this.atrasosState) {
+            this.atrasosState.professorSelecionado = null;
+        }
+        
+        const box = document.getElementById('professorSelecionadoAtraso');
+        if (box) box.style.display = 'none';
+        
+        const lista = document.getElementById('listaProfessoresAtraso');
+        if (lista) lista.style.display = 'block';
+        
+        const busca = document.getElementById('buscaProfessorAtraso');
+        if (busca) {
+            busca.style.display = 'block';
+            busca.value = '';
+        }
+        
+        const card = document.getElementById('cardDetalhesAtraso');
+        if (card) card.style.display = 'none';
+        
+        document.querySelectorAll('#listaProfessoresAtraso .professor-item').forEach(el => {
+            el.classList.remove('selected');
+        });
+    }
+
+    atualizarHorarioPreenchimentoAtraso() {
+        const el = document.getElementById('horarioPreenchimentoAtraso');
+        if (el) {
+            el.textContent = new Date().toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+    }
+
+    async carregarTurmasAtraso() {
+        try {
+            const response = await fetch('/api/atraso-professor/turmas', {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.atrasosState = this.atrasosState || {};
+                this.atrasosState.turmas = data.turmas;
+                
+                const options = data.turmas.map(t => `<option value="${this.escapeHtml(t)}">${this.escapeHtml(t)}</option>`).join('');
+                
+                const selectTurma = document.getElementById('selectTurmaAtraso');
+                if (selectTurma) {
+                    selectTurma.innerHTML = '<option value="">Selecione a turma...</option>' + options;
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao carregar turmas:', error);
+        }
+    }
+
+    async preencherSelectProfessoresAtraso() {
+        if (!this.atrasosState || !this.atrasosState.professores) return;
+        
+        const select = document.getElementById('relatorioProfessorAtraso');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">Todos os professores</option>' +
+            this.atrasosState.professores.map(p => 
+                `<option value="${p.id}">${this.escapeHtml(p.nome)}</option>`
+            ).join('');
+    }
+
+    // ============================================================================
+    // REGISTRAR ATRASO
+    // ============================================================================
+    async registrarAtraso() {
+        if (!this.atrasosState || !this.atrasosState.professorSelecionado) {
+            this.showToast('⚠️ Selecione um professor', 'warning');
+            return;
+        }
+        
+        const data = document.getElementById('inputDataAtraso')?.value;
+        const horario = document.getElementById('selectHorarioAtraso')?.value;
+        
+        if (!data) {
+            this.showToast('⚠️ Informe a data', 'warning');
+            return;
+        }
+        
+        if (!horario) {
+            this.showToast('⚠️ Selecione o horário', 'warning');
+            return;
+        }
+        
+        const btn = document.getElementById('btnRegistrarAtraso');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Registrando...';
+        }
+        
+        try {
+            const payload = {
+                professorId: this.atrasosState.professorSelecionado.id,
+                data,
+                horario: parseInt(horario),
+                horarioChegada: document.getElementById('inputHorarioChegadaAtraso')?.value || '',
+                minutosAtraso: parseInt(document.getElementById('inputMinutosAtraso')?.value) || 0,
+                turma: document.getElementById('selectTurmaAtraso')?.value || '',
+                observacoes: document.getElementById('inputObservacoesAtraso')?.value || '',
+                motivo: document.getElementById('selectMotivoAtraso')?.value || 'nao_justificado',
+                motivoDetalhes: document.getElementById('inputMotivoDetalhesAtraso')?.value || ''
+            };
+            
+            const response = await fetch('/api/atraso-professor/registrar', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('✅ Atraso registrado!', 'success');
+                this.resetarFormularioAtraso();
+                await this.carregarListaAtrasos();
+                
+                // Trocar para tab lista
+                const listaTab = document.getElementById('atraso-lista-tab');
+                if (listaTab) new bootstrap.Tab(listaTab).show();
+            } else {
+                throw new Error(result.error || 'Erro ao registrar');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            this.showToast(error.message, 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save me-2"></i> Registrar Atraso';
+            }
+        }
+    }
+
+    resetarFormularioAtraso() {
+        if (this.atrasosState) {
+            this.atrasosState.professorSelecionado = null;
+        }
+        
+        const box = document.getElementById('professorSelecionadoAtraso');
+        if (box) box.style.display = 'none';
+        
+        const lista = document.getElementById('listaProfessoresAtraso');
+        if (lista) lista.style.display = 'block';
+        
+        const busca = document.getElementById('buscaProfessorAtraso');
+        if (busca) {
+            busca.style.display = 'block';
+            busca.value = '';
+        }
+        
+        const card = document.getElementById('cardDetalhesAtraso');
+        if (card) card.style.display = 'none';
+        
+        // Limpar campos
+        const hoje = getDataLocalISO();
+        const inputData = document.getElementById('inputDataAtraso');
+        if (inputData) inputData.value = hoje;
+        
+        const selectHorario = document.getElementById('selectHorarioAtraso');
+        if (selectHorario) selectHorario.value = '';
+        
+        const inputChegada = document.getElementById('inputHorarioChegadaAtraso');
+        if (inputChegada) inputChegada.value = '';
+        
+        const inputMinutos = document.getElementById('inputMinutosAtraso');
+        if (inputMinutos) inputMinutos.value = '';
+        
+        const selectTurma = document.getElementById('selectTurmaAtraso');
+        if (selectTurma) selectTurma.value = '';
+        
+        const selectMotivo = document.getElementById('selectMotivoAtraso');
+        if (selectMotivo) selectMotivo.value = 'nao_justificado';
+        
+        const inputDetalhes = document.getElementById('inputMotivoDetalhesAtraso');
+        if (inputDetalhes) inputDetalhes.value = '';
+        
+        const inputObs = document.getElementById('inputObservacoesAtraso');
+        if (inputObs) inputObs.value = '';
+        
+        const grupo = document.getElementById('grupoMotivoDetalhesAtraso');
+        if (grupo) grupo.style.display = 'none';
+        
+        // Resetar lista
+        if (this.atrasosState && this.atrasosState.professores) {
+            this.renderizarListaProfessoresAtraso(this.atrasosState.professores);
+        }
+    }
+
+    // ============================================================================
+    // LISTA DE ATRASOS
+    // ============================================================================
+    async carregarListaAtrasos() {
+        const container = document.getElementById('listaAtrasos');
+        if (!container) return;
+        
+        container.innerHTML = '<div class="text-center py-3"><div class="loading"></div><p>Carregando...</p></div>';
+        
+        try {
+            const params = new URLSearchParams();
+            const mes = document.getElementById('filtroMesAtraso')?.value;
+            const busca = document.getElementById('filtroBuscaAtraso')?.value;
+            const motivo = document.getElementById('filtroMotivoAtraso')?.value;
+            const dataInicio = document.getElementById('filtroDataInicioAtraso')?.value;
+            
+            if (mes) params.append('mes', mes);
+            if (busca) params.append('busca', busca);
+            if (motivo) params.append('motivo', motivo);
+            if (dataInicio) params.append('dataInicio', dataInicio);
+            
+            const response = await fetch(`/api/atraso-professor/listar?${params.toString()}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.atrasosState = this.atrasosState || {};
+                this.atrasosState.atrasos = data.atrasos;
+                
+                this.renderizarListaAtrasos(data.atrasos);
+                
+                const contador = document.getElementById('contadorListaAtrasos');
+                if (contador) contador.textContent = `${data.total} registro${data.total !== 1 ? 's' : ''}`;
+                
+                const badge = document.getElementById('badgeTotalAtrasos');
+                if (badge) badge.textContent = data.total;
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Erro ao carregar</p></div>';
+        }
+    }
+
+    renderizarListaAtrasos(lista) {
+        const container = document.getElementById('listaAtrasos');
+        if (!container) return;
+        
+        if (lista.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h4>Nenhum atraso encontrado</h4>
+                    <p>Registre o primeiro atraso ou ajuste os filtros.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const MOTIVOS_CORES = {
+            'nao_justificado': '#ef4444',
+            'problema_transporte': '#f59e0b',
+            'problema_pessoal': '#8b5cf6',
+            'problema_saude': '#dc2626',
+            'transito': '#3b82f6',
+            'clima': '#06b6d4',
+            'outros': '#64748b'
+        };
+        
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Horário</th>
+                            <th>Professor</th>
+                            <th>Turma</th>
+                            <th>Minutos</th>
+                            <th>Motivo</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${lista.map(a => `
+                            <tr>
+                                <td>
+                                    <strong>${a.dataFormatada}</strong>
+                                    <br><small style="color:#6b7280;">${a.diaSemana}</small>
+                                </td>
+                                <td>
+                                    <span class="badge-custom badge-primary">${a.horario}º Horário</span>
+                                    ${a.horarioChegada ? `<br><small>Chegou: ${a.horarioChegada}</small>` : ''}
+                                </td>
+                                <td>
+                                    <strong>${this.escapeHtml(a.professorNome)}</strong>
+                                    <br><small style="color:#6b7280;">${this.escapeHtml(a.professorEixo || '')}</small>
+                                </td>
+                                <td>${a.turma ? `<span class="badge-custom badge-gray">${this.escapeHtml(a.turma)}</span>` : '-'}</td>
+                                <td>
+                                    ${a.minutosAtraso > 0 
+                                        ? `<span class="badge-custom" style="background: #fee2e2; color: #dc2626;">${a.minutosAtraso} min</span>`
+                                        : '-'
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge-custom" style="background:${(MOTIVOS_CORES[a.motivo] || '#64748b')}20; color:${MOTIVOS_CORES[a.motivo] || '#64748b'};">
+                                        ${a.motivoLabel}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn-action btn-view" onclick="setorPedagogico.verDetalhesAtraso('${a.id}')" title="Ver">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn-action btn-edit" onclick="setorPedagogico.abrirEdicaoAtraso('${a.id}')" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn-action btn-delete" onclick="setorPedagogico.excluirAtraso('${a.id}')" title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    limparFiltrosAtraso() {
+        const mes = document.getElementById('filtroMesAtraso');
+        if (mes) mes.value = new Date().toISOString().substring(0, 7);
+        
+        const busca = document.getElementById('filtroBuscaAtraso');
+        if (busca) busca.value = '';
+        
+        const motivo = document.getElementById('filtroMotivoAtraso');
+        if (motivo) motivo.value = '';
+        
+        const dataInicio = document.getElementById('filtroDataInicioAtraso');
+        if (dataInicio) dataInicio.value = '';
+        
+        this.carregarListaAtrasos();
+    }
+
+    // ============================================================================
+    // DETALHES / EDITAR / EXCLUIR ATRASO
+    // ============================================================================
+    async verDetalhesAtraso(id) {
+        try {
+            const response = await fetch(`/api/atraso-professor/${id}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (!data.success) {
+                this.showToast('Atraso não encontrado', 'error');
+                return;
+            }
+            
+            const a = data.atraso;
+            
+            const MOTIVOS_LABELS = {
+                'nao_justificado': 'Não Justificado',
+                'problema_transporte': 'Problema de Transporte',
+                'problema_pessoal': 'Problema Pessoal',
+                'problema_saude': 'Problema de Saúde',
+                'transito': 'Trânsito',
+                'clima': 'Condições Climáticas',
+                'outros': 'Outros'
+            };
+            
+            const modalHtml = `
+                <div class="modal fade" id="modalDetalhesAtraso" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
+                                <h5 class="modal-title"><i class="fas fa-clock me-2"></i> Detalhes do Atraso</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div style="background: #f0f4ff; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                                    <div style="display: flex; align-items: center; gap: 15px;">
+                                        <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700;">
+                                            ${(a.professorNome || '?').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 18px;">${this.escapeHtml(a.professorNome)}</div>
+                                            <div style="font-size: 13px; color: #6b7280;">${this.escapeHtml(a.professorEmail || '')}</div>
+                                            ${a.professorEixo ? `<div style="font-size: 12px; color: #6b7280; margin-top: 3px;"><i class="fas fa-sitemap"></i> ${this.escapeHtml(a.professorEixo)}</div>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div><strong>Data:</strong> ${new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR')} (${a.diaSemana})</div>
+                                    <div><strong>Horário:</strong> ${a.horario}º Horário</div>
+                                    ${a.horarioChegada ? `<div><strong>Chegada:</strong> ${a.horarioChegada}</div>` : ''}
+                                    ${a.minutosAtraso ? `<div><strong>Minutos:</strong> ${a.minutosAtraso} min</div>` : ''}
+                                    ${a.turma ? `<div><strong>Turma:</strong> ${this.escapeHtml(a.turma)}</div>` : ''}
+                                    <div><strong>Motivo:</strong> ${MOTIVOS_LABELS[a.motivo] || a.motivo}</div>
+                                </div>
+                                
+                                ${a.observacoes ? `
+                                    <div style="margin-top: 15px;">
+                                        <strong>Observações:</strong>
+                                        <div style="background: #f9fafb; padding: 15px; border-radius: 10px; margin-top: 5px;">
+                                            ${this.escapeHtml(a.observacoes)}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                
+                                ${a.motivoDetalhes ? `
+                                    <div style="margin-top: 15px;">
+                                        <strong>Detalhes do Motivo:</strong>
+                                        <div style="background: #f9fafb; padding: 15px; border-radius: 10px; margin-top: 5px;">
+                                            ${this.escapeHtml(a.motivoDetalhes)}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                
+                                <div style="background: #f0fdf4; padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 13px;">
+                                    <i class="fas fa-user-check" style="color: #10b981;"></i>
+                                    Registrado por <strong>${this.escapeHtml(a.registradoPorNome)}</strong>
+                                    em ${new Date(a.registradoEm).toLocaleString('pt-BR')}
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const oldModal = document.getElementById('modalDetalhesAtraso');
+            if (oldModal) oldModal.remove();
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            new bootstrap.Modal(document.getElementById('modalDetalhesAtraso')).show();
+            
+        } catch (error) {
+            console.error('Erro:', error);
+            this.showToast('Erro ao carregar detalhes', 'error');
+        }
+    }
+
+    async abrirEdicaoAtraso(id) {
+        try {
+            const response = await fetch(`/api/atraso-professor/${id}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (!data.success) return;
+            
+            const a = data.atraso;
+            this.atrasosState = this.atrasosState || {};
+            this.atrasosState.editandoId = id;
+            
+            const MOTIVOS_LABELS = {
+                'nao_justificado': 'Não Justificado',
+                'problema_transporte': 'Problema de Transporte',
+                'problema_pessoal': 'Problema Pessoal',
+                'problema_saude': 'Problema de Saúde',
+                'transito': 'Trânsito',
+                'clima': 'Condições Climáticas',
+                'outros': 'Outros'
+            };
+            
+            const motivosOptions = Object.entries(MOTIVOS_LABELS).map(([key, label]) =>
+                `<option value="${key}" ${a.motivo === key ? 'selected' : ''}>${label}</option>`
+            ).join('');
+            
+            // Turmas
+            const turmasOptions = (this.atrasosState.turmas || []).map(t => 
+                `<option value="${this.escapeHtml(t)}" ${t === a.turma ? 'selected' : ''}>${this.escapeHtml(t)}</option>`
+            ).join('');
+            
+            let horariosOptions = '';
+            for (let i = 1; i <= 9; i++) {
+                horariosOptions += `<option value="${i}" ${a.horario === i ? 'selected' : ''}>${i}º Horário</option>`;
+            }
+            
+            const modalHtml = `
+                <div class="modal fade" id="modalEditarAtraso" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                                <h5 class="modal-title"><i class="fas fa-edit me-2"></i> Editar Atraso</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div style="background: #f0f4ff; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                                    <strong>${this.escapeHtml(a.professorNome)}</strong>
+                                    <br><small>${this.escapeHtml(a.professorEmail || '')}</small>
+                                </div>
+                                
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Data</label>
+                                        <input type="date" id="editDataAtraso" class="form-control" value="${a.data}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Horário</label>
+                                        <select id="editHorarioAtraso" class="form-select">${horariosOptions}</select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Horário Chegada</label>
+                                        <input type="time" id="editHorarioChegadaAtraso" class="form-control" value="${a.horarioChegada || ''}">
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-3 mt-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Minutos de Atraso</label>
+                                        <input type="number" id="editMinutosAtraso" class="form-control" min="0" max="300" value="${a.minutosAtraso || 0}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Turma</label>
+                                        <select id="editTurmaAtraso" class="form-select">
+                                            <option value="">Sem turma</option>
+                                            ${turmasOptions}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Motivo</label>
+                                        <select id="editMotivoAtraso" class="form-select">${motivosOptions}</select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <label class="form-label">Detalhes do Motivo</label>
+                                    <input type="text" id="editMotivoDetalhesAtraso" class="form-control" value="${this.escapeHtml(a.motivoDetalhes || '')}">
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <label class="form-label">Observações</label>
+                                    <textarea id="editObservacoesAtraso" class="form-control" rows="3">${this.escapeHtml(a.observacoes || '')}</textarea>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button class="btn btn-primary" onclick="setorPedagogico.salvarEdicaoAtraso()">
+                                    <i class="fas fa-save me-2"></i> Salvar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const oldModal = document.getElementById('modalEditarAtraso');
+            if (oldModal) oldModal.remove();
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            new bootstrap.Modal(document.getElementById('modalEditarAtraso')).show();
+            
+        } catch (error) {
+            console.error('Erro:', error);
+            this.showToast('Erro ao carregar atraso', 'error');
+        }
+    }
+
+    async salvarEdicaoAtraso() {
+        if (!this.atrasosState || !this.atrasosState.editandoId) return;
+        
+        const dados = {
+            data: document.getElementById('editDataAtraso')?.value,
+            horario: parseInt(document.getElementById('editHorarioAtraso')?.value),
+            horarioChegada: document.getElementById('editHorarioChegadaAtraso')?.value || '',
+            minutosAtraso: parseInt(document.getElementById('editMinutosAtraso')?.value) || 0,
+            turma: document.getElementById('editTurmaAtraso')?.value || '',
+            motivo: document.getElementById('editMotivoAtraso')?.value,
+            motivoDetalhes: document.getElementById('editMotivoDetalhesAtraso')?.value || '',
+            observacoes: document.getElementById('editObservacoesAtraso')?.value || ''
+        };
+        
+        if (!dados.data || !dados.horario) {
+            this.showToast('Preencha data e horário', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/atraso-professor/${this.atrasosState.editandoId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('✅ Atraso atualizado!', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('modalEditarAtraso'))?.hide();
+                await this.carregarListaAtrasos();
+                await this.carregarDashboardAtrasos();
+            } else {
+                throw new Error(result.error || 'Erro ao atualizar');
+            }
+        } catch (error) {
+            this.showToast(error.message, 'error');
+        }
+    }
+
+    async excluirAtraso(id) {
+        const confirmar = await this.confirmarAcao('⚠️ Tem certeza que deseja excluir este registro de atraso?\n\nEsta ação não pode ser desfeita.');
+        if (!confirmar) return;
+        
+        try {
+            const response = await fetch(`/api/atraso-professor/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showToast('✅ Atraso excluído!', 'success');
+                await this.carregarListaAtrasos();
+                await this.carregarDashboardAtrasos();
+            }
+        } catch (error) {
+            this.showToast('Erro ao excluir', 'error');
+        }
+    }
+
+    // ============================================================================
+    // DASHBOARD DE ATRASOS
+    // ============================================================================
+    async carregarDashboardAtrasos() {
+        try {
+            const mes = document.getElementById('dashboardMesAtraso')?.value || new Date().toISOString().substring(0, 7);
+            
+            const response = await fetch(`/api/atraso-professor/dashboard/resumo?mes=${mes}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (!data.success) return;
+            
+            // Stats
+            this.safeSetText('atrasoStatTotalMes', data.resumo.totalMes || 0);
+            this.safeSetText('atrasoStatMediaDiaria', data.resumo.mediaDiaria || 0);
+            this.safeSetText('atrasoStatProfessores', data.professoresMaisAtrasam?.length || 0);
+            this.safeSetText('atrasoStatTotalMinutos', data.resumo.totalFormatado || '0min');
+            
+            // Charts
+            this.renderizarGraficosAtrasos(data, mes);
+            
+            // Ranking
+            this.renderizarRankingAtrasos(data.professoresMaisAtrasam);
+            
+            // Últimos
+            this.renderizarUltimosAtrasos(data.ultimosAtrasos);
+            
+        } catch (error) {
+            console.error('Erro no dashboard de atrasos:', error);
+        }
+    }
+
+    renderizarGraficosAtrasos(data, mes) {
+        // Paleta de cores
+        const MOTIVOS_CORES = {
+            'nao_justificado': '#ef4444',
+            'problema_transporte': '#f59e0b',
+            'problema_pessoal': '#8b5cf6',
+            'problema_saude': '#dc2626',
+            'transito': '#3b82f6',
+            'clima': '#06b6d4',
+            'outros': '#64748b'
+        };
+        
+        const HORARIOS_CORES = [
+            '#6366f1', '#7c3aed', '#8b5cf6', '#a855f7', '#d946ef',
+            '#ec4899', '#f43f5e', '#f97316', '#f59e0b'
+        ];
+        
+        // Gráfico de Motivos
+        const ctxMotivos = document.getElementById('atrasoChartMotivos');
+        if (ctxMotivos) {
+            if (this.atrasosState.charts?.motivos) {
+                try { this.atrasosState.charts.motivos.destroy(); } catch(e){}
+            }
+            
+            this.atrasosState = this.atrasosState || {};
+            this.atrasosState.charts = this.atrasosState.charts || {};
+            
+            this.atrasosState.charts.motivos = new Chart(ctxMotivos.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: data.porMotivo.map(d => d.label),
+                    datasets: [{
+                        data: data.porMotivo.map(d => d.count),
+                        backgroundColor: data.porMotivo.map(d => MOTIVOS_CORES[d.motivo] || '#64748b'),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { padding: 12, usePointStyle: true, font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Gráfico de Horários
+        const ctxHorarios = document.getElementById('atrasoChartHorarios');
+        if (ctxHorarios) {
+            if (this.atrasosState.charts?.horarios) {
+                try { this.atrasosState.charts.horarios.destroy(); } catch(e){}
+            }
+            
+            const horarios = [];
+            for (let i = 1; i <= 9; i++) {
+                const enc = data.porHorario.find(d => d.horario === i);
+                horarios.push(enc ? enc.count : 0);
+            }
+            
+            this.atrasosState.charts.horarios = new Chart(ctxHorarios.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º'],
+                    datasets: [{
+                        label: 'Atrasos',
+                        data: horarios,
+                        backgroundColor: HORARIOS_CORES,
+                        borderRadius: 6,
+                        maxBarThickness: 40
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+                    }
+                }
+            });
+        }
+        
+        // Gráfico de Dias
+        const ctxDias = document.getElementById('atrasoChartDias');
+        if (ctxDias) {
+            if (this.atrasosState.charts?.dias) {
+                try { this.atrasosState.charts.dias.destroy(); } catch(e){}
+            }
+            
+            const [ano, mesNum] = mes.split('-').map(Number);
+            const ultimoDia = new Date(ano, mesNum, 0).getDate();
+            const labels = [];
+            const valores = [];
+            
+            for (let i = 1; i <= ultimoDia; i++) {
+                labels.push(i);
+                const diaStr = `${mes}-${String(i).padStart(2, '0')}`;
+                const enc = data.atrasosPorDia.find(d => d.data === diaStr);
+                valores.push(enc ? enc.count : 0);
+            }
+            
+            const gradiente = ctxDias.getContext('2d').createLinearGradient(0, 0, 0, 300);
+            gradiente.addColorStop(0, 'rgba(220, 38, 38, 0.4)');
+            gradiente.addColorStop(1, 'rgba(220, 38, 38, 0.02)');
+            
+            this.atrasosState.charts.dias = new Chart(ctxDias.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Atrasos',
+                        data: valores,
+                        borderColor: '#dc2626',
+                        backgroundColor: gradiente,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: valores.map(v => v > 0 ? 5 : 2),
+                        pointBackgroundColor: valores.map(v => v > 0 ? '#dc2626' : '#cbd5e1')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+                    }
+                }
+            });
+        }
+    }
+
+    renderizarRankingAtrasos(lista) {
+        const container = document.getElementById('atrasoRankingProfessores');
+        if (!container) return;
+        
+        if (!lista || lista.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="padding: 30px;">
+                    <i class="fas fa-trophy" style="font-size: 32px; opacity: 0.5;"></i>
+                    <p>Nenhum dado disponível</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = lista.map((p, i) => {
+            const posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+            const medalha = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+            
+            return `
+                <div class="ranking-item">
+                    <div class="ranking-position ${posClass}">
+                        ${medalha || (i + 1)}
+                    </div>
+                    <div class="ranking-info">
+                        <div class="ranking-nome">${this.escapeHtml(p.nome)}</div>
+                        <div class="ranking-detalhes">
+                            ${this.escapeHtml(p.eixo || 'Sem eixo')}
+                            ${p.totalMinutos ? ` • ${p.totalMinutos} min` : ''}
+                        </div>
+                    </div>
+                    <div class="ranking-count">${p.count}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    renderizarUltimosAtrasos(lista) {
+        const container = document.getElementById('atrasoUltimosRegistros');
+        if (!container) return;
+        
+        if (!lista || lista.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 30px; color: #9ca3af;">
+                    <i class="fas fa-history" style="font-size: 32px; opacity: 0.5;"></i>
+                    <p>Nenhum atraso recente</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Horário</th>
+                            <th>Professor</th>
+                            <th>Minutos</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${lista.map(a => `
+                            <tr>
+                                <td>${a.dataFormatada}</td>
+                                <td>${a.horario}º</td>
+                                <td>${this.escapeHtml(a.professorNome)}</td>
+                                <td>${a.minutosAtraso > 0 ? `${a.minutosAtraso} min` : '-'}</td>
+                                <td><span class="badge-custom badge-warning">${a.motivoLabel}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // ============================================================================
+    // RELATÓRIOS DE ATRASOS
+    // ============================================================================
+    async gerarRelatorioAtrasos() {
+        const container = document.getElementById('resultadoRelatorioAtrasos');
+        if (!container) return;
+        
+        container.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p>Gerando relatório...</p></div>';
+        
+        try {
+            const params = new URLSearchParams();
+            const mes = document.getElementById('relatorioMesAtraso')?.value;
+            const dataInicio = document.getElementById('relatorioDataInicioAtraso')?.value;
+            const dataFim = document.getElementById('relatorioDataFimAtraso')?.value;
+            const professorId = document.getElementById('relatorioProfessorAtraso')?.value;
+            const motivo = document.getElementById('relatorioMotivoAtraso')?.value;
+            
+            if (mes) params.append('mes', mes);
+            if (dataInicio) params.append('dataInicio', dataInicio);
+            if (dataFim) params.append('dataFim', dataFim);
+            if (professorId) params.append('professorId', professorId);
+            if (motivo) params.append('motivo', motivo);
+            
+            const response = await fetch(`/api/atraso-professor/relatorio/gerar?${params.toString()}`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await response.json();
+            
+            if (!data.success) throw new Error(data.error);
+            
+            this.atrasosState = this.atrasosState || {};
+            this.atrasosState.relatorioAtual = data;
+            
+            const btnCSV = document.getElementById('btnExportarCSVAtraso');
+            if (btnCSV) btnCSV.disabled = false;
+            const btnPDF = document.getElementById('btnImprimirRelatorioAtraso');
+            if (btnPDF) btnPDF.disabled = false;
+            
+            let html = `
+                <div class="card">
+                    <div class="card-body">
+                        <h6><i class="fas fa-chart-bar me-2"></i> Resultado do Relatório</h6>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-4 mb-3">
+                                <div class="metric-card">
+                                    <div class="metric-value">${data.total}</div>
+                                    <div class="metric-label">Total de Atrasos</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="metric-card">
+                                    <div class="metric-value">${data.totalFormatado}</div>
+                                    <div class="metric-label">Tempo Total</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="metric-card">
+                                    <div class="metric-value">${Object.keys(data.estatisticas.porProfessor).length}</div>
+                                    <div class="metric-label">Professores</div>
+                                </div>
+                            </div>
+                        </div>
+            `;
+            
+            if (Object.keys(data.estatisticas.porMotivo).length > 0) {
+                html += `<h6 style="margin-top:20px;">Por Motivo</h6><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">`;
+                Object.entries(data.estatisticas.porMotivo).forEach(([k, v]) => {
+                    html += `<span class="badge-custom badge-gray" style="padding:8px 14px;">${k}: <strong>${v}</strong></span>`;
+                });
+                html += `</div>`;
+            }
+            
+            if (data.atrasos.length > 0) {
+                html += `
+                    <h6 style="margin-top:20px;">Detalhamento</h6>
+                    <div class="table-responsive" style="margin-top:10px;">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Horário</th>
+                                    <th>Professor</th>
+                                    <th>Turma</th>
+                                    <th>Minutos</th>
+                                    <th>Motivo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.atrasos.map(a => `
+                                    <tr>
+                                        <td>${a.dataFormatada}</td>
+                                        <td>${a.horario}º</td>
+                                        <td>${this.escapeHtml(a.professorNome)}</td>
+                                        <td>${this.escapeHtml(a.turma || '-')}</td>
+                                        <td>${a.minutosAtraso > 0 ? `${a.minutosAtraso} min` : '-'}</td>
+                                        <td>${this.escapeHtml(a.motivoLabel)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            html += `</div></div>`;
+            container.innerHTML = html;
+            
+        } catch (error) {
+            console.error(error);
+            container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>Erro</h4><p>${error.message}</p></div>`;
+        }
+    }
+
+    exportarCSVAtrasos() {
+        const data = this.atrasosState?.relatorioAtual;
+        if (!data || data.atrasos.length === 0) {
+            this.showToast('Gere um relatório primeiro', 'warning');
+            return;
+        }
+        
+        let csv = 'Data,Dia da Semana,Horário,Professor,Matrícula,Eixo,Turma,Minutos,Motivo,Observações\n';
+        
+        data.atrasos.forEach(a => {
+            csv += [
+                `"${a.dataFormatada}"`,
+                `"${a.diaSemana || ''}"`,
+                `${a.horario}º`,
+                `"${(a.professorNome || '').replace(/"/g, '""')}"`,
+                `"${(a.professorMatricula || '').replace(/"/g, '""')}"`,
+                `"${(a.professorEixo || '').replace(/"/g, '""')}"`,
+                `"${(a.turma || '').replace(/"/g, '""')}"`,
+                a.minutosAtraso || 0,
+                `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
+                `"${(a.observacoes || '').replace(/"/g, '""')}"`
+            ].join(',') + '\n';
+        });
+        
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `atrasos_${getDataLocalISO()}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        
+        this.showToast('✅ CSV exportado!', 'success');
+    }
+
+    imprimirRelatorioAtrasos() {
+        const data = this.atrasosState?.relatorioAtual;
+        if (!data || data.atrasos.length === 0) {
+            this.showToast('Gere um relatório primeiro', 'warning');
+            return;
+        }
+        
+        const html = `
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <title>Relatório de Atrasos</title>
+                <style>
+                    @page { size: A4 landscape; margin: 10mm; }
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body { font-family: Arial, sans-serif; font-size: 10pt; }
+                    .header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #1e3c72; }
+                    .header h1 { font-size: 16pt; color: #1e3c72; }
+                    .header h2 { font-size: 12pt; font-weight: normal; margin-top: 5px; }
+                    .stats { display: flex; gap: 20px; margin-bottom: 20px; padding: 15px; background: #f0f4ff; border-radius: 8px; }
+                    .stat { text-align: center; flex: 1; }
+                    .stat-value { font-size: 24pt; font-weight: bold; color: #1e3c72; }
+                    .stat-label { font-size: 9pt; color: #666; }
+                    table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+                    th { background: #1e3c72; color: white; padding: 8px; text-align: left; }
+                    td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
+                    tr:nth-child(even) { background: #f9fafb; }
+                    .footer { margin-top: 20px; text-align: center; font-size: 8pt; color: #666; }
+                    .btn-print { display: block; margin: 20px auto; padding: 12px 30px; background: #1e3c72; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+                <div class="header">
+                    <h1>IEMA Pleno: São Luís - Centro</h1>
+                    <h2>Relatório de Atrasos de Professores</h2>
+                    <p style="font-size: 9pt; margin-top: 5px;">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+                </div>
+                <div class="stats">
+                    <div class="stat"><div class="stat-value">${data.total}</div><div class="stat-label">Total de Atrasos</div></div>
+                    <div class="stat"><div class="stat-value">${data.totalFormatado}</div><div class="stat-label">Tempo Total</div></div>
+                    <div class="stat"><div class="stat-value">${Object.keys(data.estatisticas.porProfessor).length}</div><div class="stat-label">Professores</div></div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Dia</th>
+                            <th>Horário</th>
+                            <th>Professor</th>
+                            <th>Turma</th>
+                            <th>Minutos</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.atrasos.map(a => `
+                            <tr>
+                                <td>${a.dataFormatada}</td>
+                                <td>${a.diaSemana || '-'}</td>
+                                <td>${a.horario}º</td>
+                                <td>${this.escapeHtml(a.professorNome)}</td>
+                                <td>${this.escapeHtml(a.turma || '-')}</td>
+                                <td>${a.minutosAtraso > 0 ? `${a.minutosAtraso} min` : '-'}</td>
+                                <td>${this.escapeHtml(a.motivoLabel)}</td>
                             </tr>
                         `).join('')}
                     </tbody>
