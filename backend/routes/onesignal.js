@@ -481,41 +481,76 @@ router.post('/admin/toggle', authenticateTokenLocal, async (req, res) => {
     }
 });
 
+
 // ============================================================================
-// ROTA: RECEBER LOGS DE DEBUG DO WEBVIEW
+// ROTA: RECEBER LOGS DE DEBUG DO WEBVIEW (SALVA NO MONGODB)
 // ============================================================================
 router.post('/logs-onesignal', authenticateTokenLocal, async (req, res) => {
     try {
         const { logs, userAgent } = req.body;
         const userId = req.userId;
 
-        const fs = require('fs');
-        const path = require('path');
-        const logDir = path.join(__dirname, '..', 'logs', 'onesignal');
-        
-        if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir, { recursive: true });
+        if (!logs || !Array.isArray(logs)) {
+            return res.status(400).json({ success: false, error: 'logs inválidos' });
         }
 
-        const arquivo = path.join(logDir, `user_${userId}_${Date.now()}.json`);
-        fs.writeFileSync(arquivo, JSON.stringify({
-            userId,
-            userAgent,
-            timestamp: new Date().toISOString(),
-            logs
-        }, null, 2));
+        const User = mongoose.model('User');
+        const OneSignalLog = mongoose.model('OneSignalLog');
 
-        console.log(`📥 Logs OneSignal recebidos de user ${userId}`);
-        console.log(`   Arquivo: ${arquivo}`);
-        console.log(`   Total de logs: ${logs.length}`);
+        const usuario = await User.findById(userId).select('nome email role');
         
-        // Mostra os últimos 5 logs no console do servidor
-        const ultimos = logs.slice(-5);
-        ultimos.forEach(l => {
-            console.log(`   [${l.tipo}] ${l.mensagem}`);
+        // Analisa os logs para detectar se vinculou
+        const logVinculacao = logs.find(l => 
+            l.tipo === 'sucesso' || l.tipo === 'erro_servidor' || l.tipo === 'erro_fetch'
+        );
+        
+        const playerIdLog = logs.find(l => l.tipo === 'playerid_obtido');
+        const playerId = playerIdLog ? playerIdLog.mensagem.replace('📱 PlayerId obtido: ', '') : null;
+
+        // Detecta plataforma
+        let plataforma = 'desconhecida';
+        if (userAgent) {
+            if (/Android/i.test(userAgent)) plataforma = 'Android';
+            else if (/iPhone|iPad/i.test(userAgent)) plataforma = 'iOS';
+            else if (/Windows/i.test(userAgent)) plataforma = 'Windows';
+            else if (/Mac/i.test(userAgent)) plataforma = 'Mac';
+        }
+
+        const novoLog = new OneSignalLog({
+            usuarioId: userId,
+            usuarioNome: usuario?.nome,
+            usuarioEmail: usuario?.email,
+            usuarioRole: usuario?.role,
+            userAgent: userAgent,
+            plataforma: plataforma,
+            logs: logs,
+            totalLogs: logs.length,
+            origem: 'timeout_25s',
+            playerIdDetectado: playerId,
+            vinculouComSucesso: logVinculacao?.tipo === 'sucesso'
         });
 
-        res.json({ success: true, message: 'Logs recebidos' });
+        await novoLog.save();
+
+        console.log('📥 ============================================');
+        console.log(`📥 LOGS ONESIGNAL RECEBIDOS`);
+        console.log(`   Usuário: ${usuario?.nome} (${usuario?.email})`);
+        console.log(`   Role: ${usuario?.role}`);
+        console.log(`   Plataforma: ${plataforma}`);
+        console.log(`   Total de logs: ${logs.length}`);
+        console.log(`   PlayerId: ${playerId || 'N/A'}`);
+        console.log(`   Vinculou: ${logVinculacao?.tipo === 'sucesso' ? '✅ SIM' : '❌ NÃO'}`);
+        console.log('   Últimos 8 logs:');
+        logs.slice(-8).forEach(l => {
+            console.log(`      [${l.tipo}] ${l.mensagem}`);
+        });
+        console.log('📥 ============================================');
+
+        res.json({ 
+            success: true, 
+            message: 'Logs recebidos e salvos',
+            logId: novoLog._id
+        });
     } catch (error) {
         console.error('❌ Erro ao salvar logs:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -523,13 +558,12 @@ router.post('/logs-onesignal', authenticateTokenLocal, async (req, res) => {
 });
 
 // ============================================================================
-// ROTA: RECEBER LOGS VIA SEND-BEACON (sem header de autenticação)
+// ROTA: RECEBER LOGS VIA SEND-BEACON
 // ============================================================================
 router.post('/logs-onesignal-beacon', async (req, res) => {
     try {
         const { logs, token } = req.body;
         
-        // Valida o token manualmente
         const jwt = require('jsonwebtoken');
         let userId = null;
         try {
@@ -539,28 +573,79 @@ router.post('/logs-onesignal-beacon', async (req, res) => {
             return res.status(401).json({ success: false, error: 'Token inválido' });
         }
 
-        const fs = require('fs');
-        const path = require('path');
-        const logDir = path.join(__dirname, '..', 'logs', 'onesignal');
+        const User = mongoose.model('User');
+        const OneSignalLog = mongoose.model('OneSignalLog');
+
+        const usuario = await User.findById(userId).select('nome email role');
         
-        if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir, { recursive: true });
-        }
+        const novoLog = new OneSignalLog({
+            usuarioId: userId,
+            usuarioNome: usuario?.nome,
+            usuarioEmail: usuario?.email,
+            usuarioRole: usuario?.role,
+            userAgent: req.headers['user-agent'],
+            logs: logs,
+            totalLogs: logs.length,
+            origem: 'beacon'
+        });
 
-        const arquivo = path.join(logDir, `user_${userId}_beacon_${Date.now()}.json`);
-        fs.writeFileSync(arquivo, JSON.stringify({
-            userId,
-            origem: 'beacon',
-            timestamp: new Date().toISOString(),
-            logs
-        }, null, 2));
-
-        console.log(`📥 [BEACON] Logs recebidos de user ${userId}`);
+        await novoLog.save();
+        console.log(`📥 [BEACON] Logs salvos para ${usuario?.email}`);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// ============================================================================
+// ROTA: LISTAR LOGS RECEBIDOS (para o admin visualizar)
+// ============================================================================
+router.get('/logs-onesignal/listar', authenticateTokenLocal, async (req, res) => {
+    try {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({ success: false, error: 'Acesso negado' });
+        }
+
+        const OneSignalLog = mongoose.model('OneSignalLog');
+        const { limite = 50, usuarioId } = req.query;
+
+        let query = {};
+        if (usuarioId) query.usuarioId = usuarioId;
+
+        const logs = await OneSignalLog.find(query)
+            .sort({ createdAt: -1 })
+            .limit(parseInt(limite))
+            .lean();
+
+        res.json({ success: true, logs, total: logs.length });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// ROTA: BUSCAR LOGS DE UM USUÁRIO ESPECÍFICO
+// ============================================================================
+router.get('/logs-onesignal/usuario/:usuarioId', authenticateTokenLocal, async (req, res) => {
+    try {
+        if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
+            return res.status(403).json({ success: false, error: 'Acesso negado' });
+        }
+
+        const OneSignalLog = mongoose.model('OneSignalLog');
+        const { usuarioId } = req.params;
+
+        const logs = await OneSignalLog.find({ usuarioId })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .lean();
+
+        res.json({ success: true, logs, total: logs.length });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 
 // ============================================================================
 // EXPORTAR ROUTER
