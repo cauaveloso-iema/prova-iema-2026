@@ -24,6 +24,75 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/biblioteca.css">
+    
+    <style>
+        /* ========== ESTILOS DO DASHBOARD DE VISITAS ========== */
+        .visitas-filtros {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .visitas-filtros .form-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+        
+        .visitas-filtros .form-control,
+        .visitas-filtros .form-select {
+            font-size: 0.85rem;
+        }
+        
+        .visitas-table th {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #475569;
+            white-space: nowrap;
+        }
+        
+        .visitas-table td {
+            font-size: 0.85rem;
+            vertical-align: middle;
+        }
+        
+        .visitas-table .badge {
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        
+        .pagination .page-link {
+            font-size: 0.85rem;
+            color: #0ea5e9;
+        }
+        
+        .pagination .page-item.active .page-link {
+            background: #0ea5e9;
+            border-color: #0ea5e9;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: 12px;
+        }
+        
+        .visitas-container {
+            position: relative;
+            min-height: 200px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -268,8 +337,11 @@
                         <div id="listaAtendimentosAtivos"></div>
                     </div>
                     
-                    <!-- ABA DASHBOARD -->
+                    <!-- ================================
+                         ABA DASHBOARD
+                    ================================= -->
                     <div class="tab-pane fade" id="tab-dashboard">
+                        <!-- Estatísticas -->
                         <div class="stats-grid">
                             <div class="stat-card">
                                 <i class="fas fa-calendar-day fa-2x"></i>
@@ -293,6 +365,7 @@
                             </div>
                         </div>
                         
+                        <!-- Gráficos -->
                         <div class="row mt-4">
                             <div class="col-md-6 mb-4">
                                 <div class="card">
@@ -319,6 +392,77 @@
                                 <div class="card">
                                     <div class="card-header"><i class="fas fa-users"></i> Alunos Mais Frequentes</div>
                                     <div class="card-body" id="alunosFrequentes"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- ================================
+                             LISTA DE VISITAS (PAGINADA)
+                        ================================= -->
+                        <div class="card mt-4">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div><i class="fas fa-history me-2"></i> Histórico de Visitas</div>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="limparFiltrosDashboard()">
+                                    <i class="fas fa-eraser"></i> Limpar Filtros
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <!-- Filtros -->
+                                <div class="visitas-filtros">
+                                    <div class="row g-2">
+                                        <div class="col-md-3">
+                                            <label class="form-label">Buscar Aluno</label>
+                                            <input type="text" id="dashboardFiltroAluno" class="form-control form-control-sm" placeholder="Nome do aluno...">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label">Turma</label>
+                                            <select id="dashboardFiltroTurma" class="form-select form-select-sm">
+                                                <option value="">Todas</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label">Motivo</label>
+                                            <select id="dashboardFiltroMotivo" class="form-select form-select-sm">
+                                                <option value="">Todos</option>
+                                                <option value="ler_livro">Ler um Livro</option>
+                                                <option value="pegar_livro_emprestado">Pegar Emprestado</option>
+                                                <option value="participar_atividade_leitura">Atividade de Leitura</option>
+                                                <option value="fazer_pesquisa">Fazer Pesquisa</option>
+                                                <option value="outros">Outros</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label">Status</label>
+                                            <select id="dashboardFiltroStatus" class="form-select form-select-sm">
+                                                <option value="">Todos</option>
+                                                <option value="em_visita">Em Visita</option>
+                                                <option value="finalizado">Finalizado</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">Período</label>
+                                            <div class="d-flex gap-1">
+                                                <input type="date" id="dashboardFiltroDataInicio" class="form-control form-control-sm" title="Data início">
+                                                <input type="date" id="dashboardFiltroDataFim" class="form-control form-control-sm" title="Data fim">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Loading -->
+                                <div id="loadingVisitasDashboard" class="loading-overlay" style="display: none;">
+                                    <div class="text-center">
+                                        <i class="fas fa-spinner fa-spin fa-2x" style="color: #0ea5e9;"></i>
+                                        <p class="mt-2 text-muted">Carregando visitas...</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Lista -->
+                                <div id="listaVisitasDashboard" class="visitas-container">
+                                    <div class="text-center py-5 text-muted">
+                                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                        <p class="mt-2">Carregando...</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -453,6 +597,81 @@
                 <div class="modal-footer">
                     <button class="btn btn-primary" onclick="baixarQRCode()"><i class="fas fa-download"></i> Baixar</button>
                     <button class="btn btn-secondary" onclick="imprimirQRCode()"><i class="fas fa-print"></i> Imprimir</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================
+         MODAL EDITAR ATENDIMENTO
+    ================================= -->
+    <div class="modal fade" id="modalEditarAtendimento" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                    <h5 class="modal-title"><i class="fas fa-edit"></i> Editar Atendimento</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editAtendimentoId">
+                    
+                    <div class="alert alert-info d-flex align-items-center gap-3">
+                        <i class="fas fa-user-graduate fa-2x"></i>
+                        <div>
+                            <strong id="editAlunoNome">-</strong><br>
+                            <small>Turma: <span id="editAlunoTurma">-</span></small>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="fas fa-calendar-alt"></i> Data/Hora de Entrada *</label>
+                            <input type="datetime-local" id="editDataEntrada" class="form-control" required>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="fas fa-clipboard-list"></i> Motivo da Visita *</label>
+                            <select id="editMotivoVisita" class="form-select">
+                                <option value="ler_livro">Ler um Livro</option>
+                                <option value="pegar_livro_emprestado">Pegar Emprestado</option>
+                                <option value="participar_atividade_leitura">Atividade de Leitura</option>
+                                <option value="fazer_pesquisa">Fazer Pesquisa</option>
+                                <option value="outros">Outros</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-12" id="editCampoOutros" style="display: none;">
+                            <label class="form-label">Especifique o motivo</label>
+                            <input type="text" id="editMotivoOutros" class="form-control">
+                        </div>
+                        
+                        <div class="col-md-12">
+                            <label class="form-label"><i class="fas fa-tasks"></i> Atividades</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                <label><input type="checkbox" class="edit-atividade" value="leitura_individual"> Leitura Individual</label>
+                                <label><input type="checkbox" class="edit-atividade" value="leitura_grupo"> Leitura em Grupo</label>
+                                <label><input type="checkbox" class="edit-atividade" value="pesquisa_internet"> Pesquisa Internet</label>
+                                <label><input type="checkbox" class="edit-atividade" value="pesquisa_livros"> Pesquisa Livros</label>
+                                <label><input type="checkbox" class="edit-atividade" value="estudo_dirigido"> Estudo Dirigido</label>
+                                <label><input type="checkbox" class="edit-atividade" value="emprestimo_livro"> Empréstimo</label>
+                                <label><input type="checkbox" class="edit-atividade" value="devolucao_livro"> Devolução</label>
+                                <label><input type="checkbox" class="edit-atividade" value="atividade_pedagogica"> Atividade Pedagógica</label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-12">
+                            <label class="form-label">Observações</label>
+                            <textarea id="editObservacoes" class="form-control" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="salvarEdicaoAtendimento()">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
                 </div>
             </div>
         </div>

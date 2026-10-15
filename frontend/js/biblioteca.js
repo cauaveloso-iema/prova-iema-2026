@@ -36,27 +36,17 @@ let alunosPorTurma = [];
 let motivoSelecionado = null;
 let modalQRCode = null;
 
-// ========== PROTEÇÃO CONTRA alert() ==========
-(function() {
-  const original = window.alert.bind(window);
-  window.alert = function(msg) {
-    const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
-                      (typeof window.AppInventor !== 'undefined');
-    if (!isWebView) {
-      console.log('[ALERT]', msg);
-      return;
-    }
-    const modal = document.createElement('div');
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999999;padding:20px;';
-    modal.innerHTML = `
-      <div style="background:white;border-radius:16px;padding:25px;max-width:380px;width:100%;text-align:center;">
-        <div style="font-size:48px;margin-bottom:15px;">ℹ️</div>
-        <p style="color:#374151;margin-bottom:20px;white-space:pre-line;">${String(msg)}</p>
-        <button onclick="this.closest('div').parentElement.remove()" style="width:100%;padding:12px;background:#0ea5e9;color:white;border:none;border-radius:10px;font-weight:600;cursor:pointer;">OK</button>
-      </div>`;
-    document.body.appendChild(modal);
-  };
-})();
+// ========== PAGINAÇÃO DASHBOARD ==========
+let dashboardPaginaAtual = 1;
+let dashboardTotalPaginas = 1;
+let dashboardFiltros = {
+    alunoNome: '',
+    turma: '',
+    motivo: '',
+    status: '',
+    dataInicio: '',
+    dataFim: ''
+};
 
 // ========== HELPERS ==========
 function safeGet(id) { return document.getElementById(id); }
@@ -69,6 +59,54 @@ function gerarAvatarSVG(nome) {
   const inicial = (nome || '?').charAt(0).toUpperCase();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0ea5e9"/><stop offset="100%" stop-color="#0284c7"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="50" font-family="Arial" font-size="45" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
   return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
+/**
+ * 🕐 FORMATA DURAÇÃO EM MINUTOS PARA FORMATO LEGÍVEL
+ * Ex: 45 → "45min"
+ *     60 → "1h"
+ *     90 → "1h 30min"
+ *     125 → "2h 5min"
+ */
+function formatarDuracao(minutos) {
+  if (!minutos || minutos < 0) return '0min';
+  
+  const mins = Math.round(minutos);
+  
+  if (mins < 60) {
+    return `${mins}min`;
+  }
+  
+  const horas = Math.floor(mins / 60);
+  const minsRestantes = mins % 60;
+  
+  if (minsRestantes === 0) {
+    return `${horas}h`;
+  }
+  
+  return `${horas}h ${minsRestantes}min`;
+}
+
+/**
+ * 🕐 FORMATA DURAÇÃO ABREVIADA (para badges)
+ */
+function formatarDuracaoCurta(minutos) {
+  if (!minutos || minutos < 0) return '0m';
+  
+  const mins = Math.round(minutos);
+  
+  if (mins < 60) {
+    return `${mins}m`;
+  }
+  
+  const horas = Math.floor(mins / 60);
+  const minsRestantes = mins % 60;
+  
+  if (minsRestantes === 0) {
+    return `${horas}h`;
+  }
+  
+  return `${horas}h${minsRestantes}m`;
 }
 
 function mostrarToast(msg, tipo = 'info') {
@@ -120,7 +158,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Tabs
   safeGet('ativos-tab')?.addEventListener('shown.bs.tab', carregarAtendimentosAtivos);
-  safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', carregarDashboard);
+  safeGet('dashboard-tab')?.addEventListener('shown.bs.tab', () => {
+    carregarDashboard();
+    carregarListaVisitasDashboard();
+  });
   safeGet('relatorios-tab')?.addEventListener('shown.bs.tab', carregarTurmasRelatorio);
   safeGet('registro-tab')?.addEventListener('shown.bs.tab', () => {
     if (modoAtual === 'automatico') iniciarScannerAutomatico();
@@ -131,6 +172,43 @@ document.addEventListener('DOMContentLoaded', async () => {
   safeGet('filtroTurmaManual')?.addEventListener('change', carregarAlunosPorTurma);
   safeGet('filtroBuscaManual')?.addEventListener('input', filtrarAlunosManual);
   
+  // Eventos dos filtros do dashboard
+  safeGet('dashboardFiltroAluno')?.addEventListener('input', debounce(() => {
+    dashboardFiltros.alunoNome = safeGet('dashboardFiltroAluno').value;
+    dashboardPaginaAtual = 1;
+    carregarListaVisitasDashboard();
+  }, 500));
+  
+  safeGet('dashboardFiltroTurma')?.addEventListener('change', () => {
+    dashboardFiltros.turma = safeGet('dashboardFiltroTurma').value;
+    dashboardPaginaAtual = 1;
+    carregarListaVisitasDashboard();
+  });
+  
+  safeGet('dashboardFiltroMotivo')?.addEventListener('change', () => {
+    dashboardFiltros.motivo = safeGet('dashboardFiltroMotivo').value;
+    dashboardPaginaAtual = 1;
+    carregarListaVisitasDashboard();
+  });
+  
+  safeGet('dashboardFiltroStatus')?.addEventListener('change', () => {
+    dashboardFiltros.status = safeGet('dashboardFiltroStatus').value;
+    dashboardPaginaAtual = 1;
+    carregarListaVisitasDashboard();
+  });
+  
+  safeGet('dashboardFiltroDataInicio')?.addEventListener('change', () => {
+    dashboardFiltros.dataInicio = safeGet('dashboardFiltroDataInicio').value;
+    dashboardPaginaAtual = 1;
+    carregarListaVisitasDashboard();
+  });
+  
+  safeGet('dashboardFiltroDataFim')?.addEventListener('change', () => {
+    dashboardFiltros.dataFim = safeGet('dashboardFiltroDataFim').value;
+    dashboardPaginaAtual = 1;
+    carregarListaVisitasDashboard();
+  });
+  
   setInterval(() => {
     if (safeGet('ativos-tab')?.classList.contains('active')) carregarAtendimentosAtivos();
   }, 30000);
@@ -139,6 +217,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     iniciarNotificacoes();
   }
 });
+
+// Debounce helper
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
 
 // ========== FOTO PERFIL ==========
 async function carregarFotoPerfil() {
@@ -237,6 +328,13 @@ async function carregarTurmasManual() {
       if (sel) {
         sel.innerHTML = '<option value="">Selecione a turma...</option>';
         d.turmas.forEach(t => sel.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`);
+      }
+      
+      // Preencher também o filtro do dashboard
+      const selDash = safeGet('dashboardFiltroTurma');
+      if (selDash) {
+        selDash.innerHTML = '<option value="">Todas as turmas</option>';
+        d.turmas.forEach(t => selDash.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`);
       }
     }
   } catch (e) { console.error(e); }
@@ -450,7 +548,8 @@ async function registrarSaida() {
     });
     const d = await r.json();
     if (d.success) {
-      mostrarToast(`✅ ${d.message} (${d.atendimento.duracaoMinutos} min)`, 'success');
+      const duracaoFormatada = formatarDuracao(d.atendimento.duracaoMinutos);
+      mostrarToast(`✅ ${d.message} (${duracaoFormatada})`, 'success');
       limparTela();
       if (modoAtual === 'automatico') reiniciarScanner();
       carregarAtendimentosAtivos();
@@ -494,7 +593,7 @@ async function carregarAtendimentosAtivos() {
               <div>
                 <strong>${escapeHTML(a.alunoNome)}</strong><br>
                 <small class="text-muted">${escapeHTML(a.alunoTurma || '-')}</small><br>
-                <small class="text-muted"><i class="fas fa-clock"></i> ${a.tempoAtendimento} min</small><br>
+                <small class="text-muted"><i class="fas fa-clock"></i> ${formatarDuracao(a.tempoAtendimento)}</small><br>
                 <span class="badge bg-info">${escapeHTML(a.motivoLabel)}</span>
               </div>
             </div>
@@ -526,7 +625,9 @@ async function finalizarAtendimentoAtivo(alunoId) {
 }
 
 async function excluirAtendimento(id, nome) {
-  if (!confirm(`Excluir atendimento de "${nome}"?`)) return;
+  const confirmacao = await confirmar(`🗑️ Excluir atendimento de "${nome}"?\n\nEsta ação não pode ser desfeita.`);
+  if (!confirmacao) return;
+  
   try {
     const r = await fetch(`/api/biblioteca/atendimento/${id}`, {
       method: 'DELETE',
@@ -534,14 +635,116 @@ async function excluirAtendimento(id, nome) {
     });
     const d = await r.json();
     if (d.success) {
-      mostrarToast('✅ Excluído', 'success');
+      mostrarToast('✅ Excluído com sucesso', 'success');
       carregarAtendimentosAtivos();
+      carregarListaVisitasDashboard();
+      carregarDashboard();
+    } else {
+      mostrarToast('❌ ' + d.error, 'error');
     }
-  } catch (e) {}
+  } catch (e) {
+    mostrarToast('❌ Erro ao excluir', 'error');
+  }
 }
 
 async function editarAtendimento(id) {
-  mostrarToast('Função de edição em desenvolvimento', 'info');
+  try {
+    const r = await fetch(`/api/biblioteca/atendimento/${id}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const d = await r.json();
+    
+    if (!d.success) {
+      mostrarToast('Erro ao carregar atendimento', 'error');
+      return;
+    }
+    
+    const a = d.atendimento;
+    
+    // Preencher modal de edição
+    safeGet('editAtendimentoId').value = a.id;
+    safeGet('editAlunoNome').textContent = a.alunoNome;
+    safeGet('editAlunoTurma').textContent = a.alunoTurma || '-';
+    
+    // Data/hora de entrada
+    const dataEntrada = new Date(a.entrada.dataHora);
+    const offset = dataEntrada.getTimezoneOffset() * 60000;
+    const dataLocal = new Date(dataEntrada.getTime() - offset);
+    safeGet('editDataEntrada').value = dataLocal.toISOString().slice(0, 16);
+    
+    // Motivo
+    safeGet('editMotivoVisita').value = a.motivoVisita || '';
+    safeGet('editMotivoOutros').value = a.motivoOutros || '';
+    safeGet('editCampoOutros').style.display = a.motivoVisita === 'outros' ? 'block' : 'none';
+    
+    // Observações
+    safeGet('editObservacoes').value = a.entrada.observacoes || '';
+    
+    // Atividades
+    document.querySelectorAll('#modalEditarAtendimento .edit-atividade').forEach(chk => {
+      chk.checked = a.atividades.includes(chk.value);
+    });
+    
+    // Abrir modal
+    const modal = new bootstrap.Modal(safeGet('modalEditarAtendimento'));
+    modal.show();
+    
+  } catch (e) {
+    console.error(e);
+    mostrarToast('Erro ao carregar atendimento', 'error');
+  }
+}
+
+async function salvarEdicaoAtendimento() {
+  const id = safeGet('editAtendimentoId').value;
+  const motivoVisita = safeGet('editMotivoVisita').value;
+  const motivoOutros = safeGet('editMotivoOutros').value;
+  const observacoes = safeGet('editObservacoes').value;
+  const dataEntrada = safeGet('editDataEntrada').value;
+  
+  if (!motivoVisita) {
+    mostrarToast('Selecione o motivo', 'error');
+    return;
+  }
+  
+  if (motivoVisita === 'outros' && !motivoOutros.trim()) {
+    mostrarToast('Especifique o motivo "Outros"', 'error');
+    return;
+  }
+  
+  const atividades = Array.from(document.querySelectorAll('#modalEditarAtendimento .edit-atividade:checked')).map(c => c.value);
+  
+  try {
+    const r = await fetch(`/api/biblioteca/atendimento/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        motivoVisita,
+        motivoOutros,
+        atividades,
+        observacoes,
+        dataEntrada: dataEntrada ? new Date(dataEntrada).toISOString() : undefined
+      })
+    });
+    
+    const d = await r.json();
+    
+    if (d.success) {
+      mostrarToast('✅ Atendimento atualizado!', 'success');
+      bootstrap.Modal.getInstance(safeGet('modalEditarAtendimento')).hide();
+      carregarAtendimentosAtivos();
+      carregarListaVisitasDashboard();
+      carregarDashboard();
+    } else {
+      mostrarToast('❌ ' + d.error, 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    mostrarToast('❌ Erro ao salvar', 'error');
+  }
 }
 
 // ========== DASHBOARD ==========
@@ -629,6 +832,373 @@ async function carregarDashboard() {
   } catch (e) { console.error(e); }
 }
 
+// ========== LISTA DE VISITAS PAGINADA (DASHBOARD) ==========
+async function carregarListaVisitasDashboard(pagina = null) {
+  const container = safeGet('listaVisitasDashboard');
+  if (!container) return;
+  
+  if (pagina !== null) {
+    dashboardPaginaAtual = pagina;
+  }
+  
+  const loading = safeGet('loadingVisitasDashboard');
+  if (loading) loading.style.display = 'block';
+  
+  try {
+    const params = new URLSearchParams({
+      limit: 10,
+      page: dashboardPaginaAtual
+    });
+    
+    if (dashboardFiltros.alunoNome) params.append('alunoNome', dashboardFiltros.alunoNome);
+    if (dashboardFiltros.turma) params.append('turma', dashboardFiltros.turma);
+    if (dashboardFiltros.motivo) params.append('motivo', dashboardFiltros.motivo);
+    if (dashboardFiltros.status) params.append('status', dashboardFiltros.status);
+    if (dashboardFiltros.dataInicio) params.append('dataInicio', dashboardFiltros.dataInicio);
+    if (dashboardFiltros.dataFim) params.append('dataFim', dashboardFiltros.dataFim);
+    
+    const r = await fetch(`/api/biblioteca/listar?${params.toString()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const d = await r.json();
+    
+    if (!d.success) {
+      container.innerHTML = '<div class="alert alert-danger">Erro ao carregar visitas</div>';
+      return;
+    }
+    
+    dashboardTotalPaginas = d.totalPages || 1;
+    
+    if (d.atendimentos.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-5 text-muted">
+          <i class="fas fa-inbox fa-3x mb-3" style="opacity:0.3;"></i>
+          <p>Nenhuma visita encontrada</p>
+        </div>`;
+      atualizarPaginacaoDashboard();
+      return;
+    }
+    
+    container.innerHTML = `
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width:50px;">#</th>
+              <th>Aluno</th>
+              <th style="width:100px;">Turma</th>
+              <th>Motivo</th>
+              <th style="width:150px;">Entrada</th>
+              <th style="width:150px;">Saída</th>
+              <th style="width:100px;">Duração</th>
+              <th style="width:90px;">Status</th>
+              <th style="width:140px;">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.atendimentos.map((a, idx) => {
+              const num = ((dashboardPaginaAtual - 1) * 10) + idx + 1;
+              const entradaFmt = new Date(a.dataHora).toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+              });
+              const saidaFmt = a.dataHoraSaida 
+                ? new Date(a.dataHoraSaida).toLocaleString('pt-BR', {
+                    day: '2-digit', month: '2-digit', year: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                  })
+                : '-';
+              
+              const duracaoFmt = a.duracaoMinutos ? formatarDuracaoCurta(a.duracaoMinutos) : '-';
+              
+              const statusBadge = a.status === 'em_visita' 
+                ? '<span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Em visita</span>'
+                : '<span class="badge bg-success"><i class="fas fa-check"></i> Finalizado</span>';
+              
+              return `
+                <tr>
+                  <td class="text-muted">${num}</td>
+                  <td>
+                    <div class="d-flex align-items-center gap-2">
+                      <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                           style="width:32px;height:32px;border-radius:50%;object-fit:cover;"
+                           onerror="this.onerror=null;this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                      <div>
+                        <strong>${escapeHTML(a.alunoNome)}</strong>
+                        ${a.alunoMatricula ? `<br><small class="text-muted">${escapeHTML(a.alunoMatricula)}</small>` : ''}
+                      </div>
+                    </div>
+                  </td>
+                  <td>${escapeHTML(a.alunoTurma || '-')}</td>
+                  <td>
+                    <span class="badge bg-info">${escapeHTML(a.motivoLabel)}</span>
+                    ${a.motivoOutros ? `<br><small class="text-muted">${escapeHTML(a.motivoOutros)}</small>` : ''}
+                  </td>
+                  <td><small>${entradaFmt}</small></td>
+                  <td><small>${saidaFmt}</small></td>
+                  <td><strong>${duracaoFmt}</strong></td>
+                  <td>${statusBadge}</td>
+                  <td>
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-outline-primary" onclick="verDetalhesAtendimento('${a.id}')" title="Ver detalhes">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                      <button class="btn btn-outline-warning" onclick="editarAtendimento('${a.id}')" title="Editar">
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button class="btn btn-outline-danger" onclick="excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome)}')" title="Excluir">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="d-flex justify-content-between align-items-center mt-3">
+        <div class="text-muted">
+          <small>Mostrando <strong>${((dashboardPaginaAtual - 1) * 10) + 1}</strong> a 
+          <strong>${Math.min(dashboardPaginaAtual * 10, d.total)}</strong> de 
+          <strong>${d.total}</strong> visitas</small>
+        </div>
+        <div id="paginacaoDashboard"></div>
+      </div>
+    `;
+    
+    atualizarPaginacaoDashboard();
+    
+  } catch (e) {
+    console.error(e);
+    container.innerHTML = '<div class="alert alert-danger">Erro de conexão</div>';
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+function atualizarPaginacaoDashboard() {
+  const container = safeGet('paginacaoDashboard');
+  if (!container) return;
+  
+  if (dashboardTotalPaginas <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+  
+  let html = '<nav><ul class="pagination pagination-sm mb-0">';
+  
+  // Botão anterior
+  html += `
+    <li class="page-item ${dashboardPaginaAtual === 1 ? 'disabled' : ''}">
+      <a class="page-link" href="#" onclick="event.preventDefault(); carregarListaVisitasDashboard(${dashboardPaginaAtual - 1})">
+        <i class="fas fa-chevron-left"></i>
+      </a>
+    </li>
+  `;
+  
+  // Páginas
+  const maxVisiveis = 5;
+  let inicio = Math.max(1, dashboardPaginaAtual - Math.floor(maxVisiveis / 2));
+  let fim = Math.min(dashboardTotalPaginas, inicio + maxVisiveis - 1);
+  
+  if (fim - inicio + 1 < maxVisiveis) {
+    inicio = Math.max(1, fim - maxVisiveis + 1);
+  }
+  
+  if (inicio > 1) {
+    html += `
+      <li class="page-item">
+        <a class="page-link" href="#" onclick="event.preventDefault(); carregarListaVisitasDashboard(1)">1</a>
+      </li>
+    `;
+    if (inicio > 2) {
+      html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+    }
+  }
+  
+  for (let i = inicio; i <= fim; i++) {
+    html += `
+      <li class="page-item ${i === dashboardPaginaAtual ? 'active' : ''}">
+        <a class="page-link" href="#" onclick="event.preventDefault(); carregarListaVisitasDashboard(${i})">${i}</a>
+      </li>
+    `;
+  }
+  
+  if (fim < dashboardTotalPaginas) {
+    if (fim < dashboardTotalPaginas - 1) {
+      html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+    }
+    html += `
+      <li class="page-item">
+        <a class="page-link" href="#" onclick="event.preventDefault(); carregarListaVisitasDashboard(${dashboardTotalPaginas})">${dashboardTotalPaginas}</a>
+      </li>
+    `;
+  }
+  
+  // Botão próximo
+  html += `
+    <li class="page-item ${dashboardPaginaAtual === dashboardTotalPaginas ? 'disabled' : ''}">
+      <a class="page-link" href="#" onclick="event.preventDefault(); carregarListaVisitasDashboard(${dashboardPaginaAtual + 1})">
+        <i class="fas fa-chevron-right"></i>
+      </a>
+    </li>
+  `;
+  
+  html += '</ul></nav>';
+  container.innerHTML = html;
+}
+
+function limparFiltrosDashboard() {
+  dashboardFiltros = {
+    alunoNome: '',
+    turma: '',
+    motivo: '',
+    status: '',
+    dataInicio: '',
+    dataFim: ''
+  };
+  
+  if (safeGet('dashboardFiltroAluno')) safeGet('dashboardFiltroAluno').value = '';
+  if (safeGet('dashboardFiltroTurma')) safeGet('dashboardFiltroTurma').value = '';
+  if (safeGet('dashboardFiltroMotivo')) safeGet('dashboardFiltroMotivo').value = '';
+  if (safeGet('dashboardFiltroStatus')) safeGet('dashboardFiltroStatus').value = '';
+  if (safeGet('dashboardFiltroDataInicio')) safeGet('dashboardFiltroDataInicio').value = '';
+  if (safeGet('dashboardFiltroDataFim')) safeGet('dashboardFiltroDataFim').value = '';
+  
+  dashboardPaginaAtual = 1;
+  carregarListaVisitasDashboard();
+}
+
+// ========== VER DETALHES DO ATENDIMENTO ==========
+async function verDetalhesAtendimento(id) {
+  try {
+    const r = await fetch(`/api/biblioteca/atendimento/${id}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const d = await r.json();
+    
+    if (!d.success) {
+      mostrarToast('Erro ao carregar detalhes', 'error');
+      return;
+    }
+    
+    const a = d.atendimento;
+    
+    const duracaoFmt = a.duracaoMinutos ? formatarDuracao(a.duracaoMinutos) : 'Em andamento';
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white;">
+            <h5 class="modal-title"><i class="fas fa-info-circle"></i> Detalhes do Atendimento</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-12">
+                <div class="d-flex align-items-center gap-3 p-3" style="background:#f0f9ff;border-radius:12px;">
+                  <img src="${a.alunoFoto || gerarAvatarSVG(a.alunoNome)}" 
+                       style="width:64px;height:64px;border-radius:50%;object-fit:cover;"
+                       onerror="this.onerror=null;this.src='${gerarAvatarSVG(a.alunoNome)}'">
+                  <div>
+                    <h5 class="mb-1">${escapeHTML(a.alunoNome)}</h5>
+                    <p class="mb-0 text-muted">
+                      <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || 'Sem matrícula')} • 
+                      <i class="fas fa-users"></i> ${escapeHTML(a.alunoTurma || 'Sem turma')} • 
+                      <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoCurso || 'Sem curso')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="card h-100">
+                  <div class="card-header bg-light"><strong><i class="fas fa-sign-in-alt text-success"></i> Entrada</strong></div>
+                  <div class="card-body">
+                    <p><strong>Data/Hora:</strong> ${new Date(a.entrada.dataHora).toLocaleString('pt-BR')}</p>
+                    <p><strong>Registrado por:</strong> ${escapeHTML(a.entrada.registradoPorNome || '-')}</p>
+                    ${a.entrada.observacoes ? `<p><strong>Observações:</strong> ${escapeHTML(a.entrada.observacoes)}</p>` : ''}
+                    ${a.entrada.editadoEm ? `<p class="text-muted small"><i class="fas fa-edit"></i> Editado em ${new Date(a.entrada.editadoEm).toLocaleString('pt-BR')} por ${escapeHTML(a.entrada.editadoPorNome || '-')}</p>` : ''}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="card h-100">
+                  <div class="card-header bg-light"><strong><i class="fas fa-sign-out-alt text-danger"></i> Saída</strong></div>
+                  <div class="card-body">
+                    ${a.saida ? `
+                      <p><strong>Data/Hora:</strong> ${new Date(a.saida.dataHora).toLocaleString('pt-BR')}</p>
+                      <p><strong>Registrado por:</strong> ${escapeHTML(a.saida.registradoPorNome || '-')}</p>
+                      ${a.saida.observacoes ? `<p><strong>Observações:</strong> ${escapeHTML(a.saida.observacoes)}</p>` : ''}
+                      ${a.saida.livrosConsultados?.length ? `<p><strong>Livros consultados:</strong> ${escapeHTML(a.saida.livrosConsultados.join(', '))}</p>` : ''}
+                      ${a.saida.livrosEmprestados?.length ? `<p><strong>Livros emprestados:</strong> ${escapeHTML(a.saida.livrosEmprestados.join(', '))}</p>` : ''}
+                      ${a.saida.computadoresUsados ? `<p><strong>Computadores usados:</strong> ${a.saida.computadoresUsados}</p>` : ''}
+                      ${a.saida.satisfacao ? `<p><strong>Satisfação:</strong> ${escapeHTML(a.saida.satisfacao)}</p>` : ''}
+                    ` : '<p class="text-muted"><i class="fas fa-hourglass-half"></i> Ainda em visita</p>'}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header bg-light"><strong><i class="fas fa-clipboard-list"></i> Motivo</strong></div>
+                  <div class="card-body">
+                    <span class="badge bg-info fs-6">${escapeHTML(a.motivoLabel)}</span>
+                    ${a.motivoOutros ? `<p class="mt-2 mb-0">${escapeHTML(a.motivoOutros)}</p>` : ''}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header bg-light"><strong><i class="fas fa-tasks"></i> Atividades</strong></div>
+                  <div class="card-body">
+                    ${a.atividadesLabels?.length 
+                      ? a.atividadesLabels.map(at => `<span class="badge bg-secondary me-1 mb-1">${escapeHTML(at)}</span>`).join('')
+                      : '<p class="text-muted mb-0">Nenhuma atividade registrada</p>'}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="col-md-12">
+                <div class="card" style="background: #fef3c7; border: 2px solid #f59e0b;">
+                  <div class="card-body text-center">
+                    <h4 class="mb-0"><i class="fas fa-clock text-warning"></i> Duração: <strong>${duracaoFmt}</strong></h4>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-warning" onclick="bootstrap.Modal.getInstance(this.closest('.modal')).hide(); editarAtendimento('${a.id}')">
+              <i class="fas fa-edit"></i> Editar
+            </button>
+            <button class="btn btn-danger" onclick="bootstrap.Modal.getInstance(this.closest('.modal')).hide(); excluirAtendimento('${a.id}', '${escapeHTML(a.alunoNome)}')">
+              <i class="fas fa-trash"></i> Excluir
+            </button>
+            <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    
+    modal.addEventListener('hidden.bs.modal', () => modal.remove());
+    
+  } catch (e) {
+    console.error(e);
+    mostrarToast('Erro ao carregar detalhes', 'error');
+  }
+}
+
 // ========== RELATÓRIOS ==========
 function toggleRelatorioFiltros() {
   const tipo = safeGet('tipoRelatorio').value;
@@ -711,7 +1281,7 @@ function exibirRelatorio(d, tipo) {
             <tr>
               <td>${new Date(a.dataEntrada).toLocaleString('pt-BR')}</td>
               <td>${escapeHTML(a.motivo)}</td>
-              <td>${a.duracao || 0} min</td>
+              <td>${formatarDuracao(a.duracao || 0)}</td>
             </tr>`).join('')}</tbody>
         </table>
       </div></div>`;
@@ -725,7 +1295,7 @@ function exportarCSV() {
   const atendimentos = relatorioData.atendimentos || relatorioData.ultimosAtendimentos || [];
   atendimentos.forEach(a => {
     const data = a.dataEntrada || a.entrada?.dataHora;
-    csv += `${data ? new Date(data).toLocaleString('pt-BR') : ''},"${a.alunoNome||''}","${a.alunoTurma||''}","${a.motivo||a.motivoLabel||''}","${a.duracao||a.duracaoMinutos||0}"\n`;
+    csv += `${data ? new Date(data).toLocaleString('pt-BR') : ''},"${a.alunoNome||''}","${a.alunoTurma||''}","${a.motivo||a.motivoLabel||''}","${formatarDuracao(a.duracao||a.duracaoMinutos||0)}"\n`;
   });
   
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -864,7 +1434,7 @@ function exportarPDF() {
                         <th>Aluno</th>
                         <th>Turma</th>
                         <th>Motivo</th>
-                        <th style="width:90px;text-align:center;">Duração</th>
+                        <th style="width:100px;text-align:center;">Duração</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -875,7 +1445,7 @@ function exportarPDF() {
                                 <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                                 <td>${escapeHTML(a.alunoTurma || '')}</td>
                                 <td>${escapeHTML(a.motivoLabel || '')}</td>
-                                <td style="text-align:center;">${a.duracao || 0} min</td>
+                                <td style="text-align:center;"><strong>${formatarDuracao(a.duracao || 0)}</strong></td>
                             </tr>
                         `).join('') 
                         : '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento registrado</td></tr>'}
@@ -916,7 +1486,7 @@ function exportarPDF() {
                         <th>Data</th>
                         <th>Aluno</th>
                         <th>Motivo</th>
-                        <th style="width:90px;text-align:center;">Duração</th>
+                        <th style="width:100px;text-align:center;">Duração</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -926,7 +1496,7 @@ function exportarPDF() {
                                 <td>${new Date(a.dataEntrada).toLocaleString('pt-BR')}</td>
                                 <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                                 <td>${escapeHTML(a.motivo || '')}</td>
-                                <td style="text-align:center;">${a.duracao || 0} min</td>
+                                <td style="text-align:center;"><strong>${formatarDuracao(a.duracao || 0)}</strong></td>
                             </tr>
                         `).join('') 
                         : '<tr><td colspan="4" style="text-align:center;">Nenhum atendimento</td></tr>'}
@@ -966,7 +1536,7 @@ function exportarPDF() {
                         <th>Data Saída</th>
                         <th>Motivo</th>
                         <th>Atividades</th>
-                        <th style="width:80px;text-align:center;">Duração</th>
+                        <th style="width:100px;text-align:center;">Duração</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -977,7 +1547,7 @@ function exportarPDF() {
                                 <td>${a.dataSaida ? new Date(a.dataSaida).toLocaleString('pt-BR') : '-'}</td>
                                 <td>${escapeHTML(a.motivo || '')}</td>
                                 <td>${escapeHTML((a.atividades || []).join(', '))}</td>
-                                <td style="text-align:center;">${a.duracao || 0} min</td>
+                                <td style="text-align:center;"><strong>${formatarDuracao(a.duracao || 0)}</strong></td>
                             </tr>
                         `).join('') 
                         : '<tr><td colspan="5" style="text-align:center;">Nenhum atendimento</td></tr>'}
@@ -1028,7 +1598,6 @@ function exportarPDF() {
             td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #f0f9ff; }
             
-            /* 🖋️ Assinaturas com carimbo — CORRIGIDO */
             .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 30px; }
             .assinatura { flex: 1; text-align: center; }
 
@@ -1134,9 +1703,10 @@ async function imprimirAtendimentosAtivos() {
     const carimbo = '/icons/assinatura_gpeda.ico';
     const total = d.atendimentos.length;
     
-    const tempoMedio = Math.round(
+    const tempoMedioMin = Math.round(
       d.atendimentos.reduce((acc, a) => acc + (a.tempoAtendimento || 0), 0) / total
     );
+    const tempoMedio = formatarDuracao(tempoMedioMin);
     
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html>
@@ -1188,7 +1758,6 @@ async function imprimirAtendimentosAtivos() {
             .badge-medio { background: #fef3c7; color: #92400e; }
             .badge-alto { background: #fee2e2; color: #991b1b; }
             
-            /* 🖋️ Assinaturas com carimbo — CORRIGIDO */
             .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 30px; }
             .assinatura { flex: 1; text-align: center; }
 
@@ -1257,7 +1826,7 @@ async function imprimirAtendimentosAtivos() {
             </div>
             <div class="stat">
                 <div class="stat-value">${tempoMedio}</div>
-                <div class="stat-label">Tempo Médio (min)</div>
+                <div class="stat-label">Tempo Médio</div>
             </div>
             <div class="stat">
                 <div class="stat-value">${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -1274,7 +1843,7 @@ async function imprimirAtendimentosAtivos() {
                     <th style="width:70px;">Turma</th>
                     <th>Motivo</th>
                     <th style="width:80px;text-align:center;">Entrada</th>
-                    <th style="width:70px;text-align:center;">Tempo</th>
+                    <th style="width:90px;text-align:center;">Tempo</th>
                 </tr>
             </thead>
             <tbody>
@@ -1296,7 +1865,7 @@ async function imprimirAtendimentosAtivos() {
                             <td>${escapeHTML(a.motivoLabel || '-')}</td>
                             <td style="text-align:center;">${horarioEntrada}</td>
                             <td style="text-align:center;">
-                                <span class="badge-tempo ${badgeClass}">${tempo} min</span>
+                                <span class="badge-tempo ${badgeClass}">${formatarDuracao(tempo)}</span>
                             </td>
                         </tr>`;
                 }).join('')}
@@ -2026,7 +2595,8 @@ window.addEventListener('beforeunload', function() {
 
 // ========== LOGOUT ==========
 async function logout() {
-  if (confirm('Deseja sair do sistema?')) {
+  const confirmacao = await confirmar('Deseja sair do sistema?');
+  if (confirmacao) {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_data');
     window.location.href = '/login.html';
@@ -2054,6 +2624,14 @@ window.abrirNotificacoes = abrirNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;
 window.logout = logout;
 
+// Dashboard lista
+window.carregarListaVisitasDashboard = carregarListaVisitasDashboard;
+window.limparFiltrosDashboard = limparFiltrosDashboard;
+window.verDetalhesAtendimento = verDetalhesAtendimento;
+window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
+window.formatarDuracao = formatarDuracao;
+window.formatarDuracaoCurta = formatarDuracaoCurta;
+
 // 🔧 CONFIGURAÇÕES
 window.carregarConfiguracaoBiblioteca = carregarConfiguracaoBiblioteca;
 window.atualizarConfiguracaoBiblioteca = atualizarConfiguracaoBiblioteca;
@@ -2067,3 +2645,16 @@ window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 window.confirmar = confirmar;
 window.marcarTodasLidas = marcarTodasLidas;
 window.carregarNotificacoes = carregarNotificacoes;
+
+// Editar motivo - mostrar/ocultar campo outros
+document.addEventListener('DOMContentLoaded', function() {
+  const editMotivo = document.getElementById('editMotivoVisita');
+  if (editMotivo) {
+    editMotivo.addEventListener('change', function() {
+      const campoOutros = document.getElementById('editCampoOutros');
+      if (campoOutros) {
+        campoOutros.style.display = this.value === 'outros' ? 'block' : 'none';
+      }
+    });
+  }
+});

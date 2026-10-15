@@ -62,6 +62,24 @@ function montarFiltroData(dataInicio, dataFim) {
 }
 
 // ============================================
+// HELPER: FORMATA DURAÇÃO EM MINUTOS
+// ============================================
+function formatarDuracao(minutos) {
+  if (!minutos || minutos < 0) return '0min';
+  
+  const mins = Math.round(minutos);
+  
+  if (mins < 60) return `${mins}min`;
+  
+  const horas = Math.floor(mins / 60);
+  const minsRestantes = mins % 60;
+  
+  if (minsRestantes === 0) return `${horas}h`;
+  
+  return `${horas}h ${minsRestantes}min`;
+}
+
+// ============================================
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
@@ -368,6 +386,7 @@ router.post('/saida', authenticateToken, verificarBiblioteca, async (req, res) =
         id: atendimento._id,
         alunoNome: atendimento.alunoNome,
         duracaoMinutos: atendimento.duracaoMinutos,
+        duracaoFormatada: formatarDuracao(atendimento.duracaoMinutos),
         dataHoraSaida: atendimento.saida.dataHora
       }
     });
@@ -403,7 +422,8 @@ router.get('/atendimentos-ativos', authenticateToken, verificarBiblioteca, async
           atividades: a.atividades.map(x => AtendimentoBiblioteca.getAtividadeLabel(x)),
           queixa: a.entrada.observacoes,
           dataHoraEntrada: a.entrada.dataHora,
-          tempoAtendimento: minutos
+          tempoAtendimento: minutos,
+          tempoFormatado: formatarDuracao(minutos)
         };
       })
     });
@@ -413,14 +433,14 @@ router.get('/atendimentos-ativos', authenticateToken, verificarBiblioteca, async
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS
+// LISTAR ATENDIMENTOS (COM PAGINAÇÃO E FILTROS)
 // ============================================
 router.get('/listar', authenticateToken, verificarBiblioteca, async (req, res) => {
   try {
     const {
       alunoNome, turma, motivo, status,
       dataInicio, dataFim,
-      limit = 50, page = 1
+      limit = 10, page = 1
     } = req.query;
 
     const query = {};
@@ -434,19 +454,24 @@ router.get('/listar', authenticateToken, verificarBiblioteca, async (req, res) =
       query['entrada.dataHora'] = montarFiltroData(dataInicio, dataFim);
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = Math.min(parseInt(limit) || 10, 100); // máximo 100
+    const pageNum = Math.max(parseInt(page) || 1, 1);
+    const skip = (pageNum - 1) * limitNum;
+
     const total = await AtendimentoBiblioteca.countDocuments(query);
+    const totalPages = Math.ceil(total / limitNum);
 
     const atendimentos = await AtendimentoBiblioteca.find(query)
       .sort({ 'entrada.dataHora': -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(limitNum);
 
     res.json({
       success: true,
       total,
-      page: parseInt(page),
-      totalPages: Math.ceil(total / parseInt(limit)),
+      page: pageNum,
+      totalPages,
+      limit: limitNum,
       atendimentos: atendimentos.map(a => ({
         id: a._id,
         alunoNome: a.alunoNome,
@@ -462,7 +487,9 @@ router.get('/listar', authenticateToken, verificarBiblioteca, async (req, res) =
         dataHora: a.entrada.dataHora,
         dataHoraFormatada: new Date(a.entrada.dataHora).toLocaleString('pt-BR'),
         dataHoraSaida: a.saida?.dataHora || null,
+        dataHoraSaidaFormatada: a.saida?.dataHora ? new Date(a.saida.dataHora).toLocaleString('pt-BR') : null,
         duracaoMinutos: a.duracaoMinutos,
+        duracaoFormatada: a.duracaoMinutos ? formatarDuracao(a.duracaoMinutos) : null,
         status: a.status,
         registradoPor: a.entrada.registradoPorNome
       }))
@@ -515,6 +542,7 @@ router.get('/atendimento/:id', authenticateToken, verificarBiblioteca, async (re
           satisfacao: a.saida.satisfacao
         } : null,
         duracaoMinutos: a.duracaoMinutos,
+        duracaoFormatada: a.duracaoMinutos ? formatarDuracao(a.duracaoMinutos) : null,
         createdAt: a.createdAt
       }
     });
@@ -723,7 +751,8 @@ router.get('/relatorio/geral', authenticateToken, verificarBiblioteca, async (re
         motivoLabel: AtendimentoBiblioteca.getMotivoLabel(a.motivoVisita),
         dataEntrada: a.entrada.dataHora,
         status: a.status,
-        duracao: a.duracaoMinutos
+        duracao: a.duracaoMinutos,
+        duracaoFormatada: a.duracaoMinutos ? formatarDuracao(a.duracaoMinutos) : null
       }))
     });
   } catch (error) {
@@ -773,7 +802,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarBiblioteca, as
         alunoNome: a.alunoNome,
         dataEntrada: a.entrada.dataHora,
         motivo: AtendimentoBiblioteca.getMotivoLabel(a.motivoVisita),
-        duracao: a.duracaoMinutos
+        duracao: a.duracaoMinutos,
+        duracaoFormatada: a.duracaoMinutos ? formatarDuracao(a.duracaoMinutos) : null
       }))
     });
   } catch (error) {
@@ -827,6 +857,7 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarBiblioteca, 
         motivo: AtendimentoBiblioteca.getMotivoLabel(a.motivoVisita),
         atividades: a.atividades.map(x => AtendimentoBiblioteca.getAtividadeLabel(x)),
         duracao: a.duracaoMinutos,
+        duracaoFormatada: a.duracaoMinutos ? formatarDuracao(a.duracaoMinutos) : null,
         observacoes: a.entrada.observacoes
       }))
     });
