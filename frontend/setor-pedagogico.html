@@ -59,6 +59,11 @@
                 <i class="fas fa-people-arrows"></i> Substituição de Professores
             </a>
 
+            <!-- 🔥 Gestão de Professores -->
+            <a href="#" class="nav-link" data-section="gestao-professores" id="navGestaoProfessores" style="display: none;">
+                <i class="fas fa-chalkboard-teacher"></i> Gestão de Professores
+            </a>
+
             <a class="nav-link" data-section="visitas" href="#" id="navVisitas" style="display: none;">
                 <i class="fas fa-map-marked-alt"></i>
                 <span>Autorização de Visitas</span>
@@ -73,7 +78,6 @@
                 <i class="fas fa-user-edit"></i> Editar Perfil
             </a>
 
-            <!-- Botão de Download do App - Estilo destacado -->
             <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" 
             target="_blank" 
             class="nav-link btn-download-app"
@@ -110,7 +114,6 @@
     
     <div class="main-content">
         <div class="page-header">
-            <!-- 🔥 LOGO + TÍTULO À ESQUERDA -->
             <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
                 <div class="page-header-logo">
                     <i class="fas fa-graduation-cap"></i>
@@ -121,15 +124,12 @@
                 </div>
             </div>
             
-            <!-- AÇÕES À DIREITA -->
             <div class="d-flex align-items-center gap-3 page-header-actions">
-                <!-- BOTÃO ADAPTAR DOCUMENTO (só desktop) -->
                 <button class="btn-adaptar-header" onclick="setorPedagogico.abrirModalUploadAdaptarDocumento()">
                     <i class="fas fa-universal-access"></i>
                     <span>Adaptar Documento</span>
                 </button>
 
-                <!-- USER INFO -->
                 <div class="user-info">
                     <div class="user-avatar" id="userAvatar">
                         <i class="fas fa-user-circle"></i>
@@ -140,7 +140,6 @@
                     </div>
                 </div>
                 
-                <!-- NOTIFICAÇÕES -->
                 <div class="notificacao-icone" onclick="setorPedagogico.abrirPainelNotificacoes()">
                     <i class="fas fa-bell"></i>
                     <span id="notificacaoBadge" class="badge">0</span>
@@ -198,9 +197,6 @@
         </div>
     </div>
 
-    <!-- ================================================
-         MODAL GENÉRICO (usado por todos os módulos)
-         ================================================ -->
     <div class="modal fade" id="modal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
@@ -210,9 +206,7 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
-                <div class="modal-body" id="modalBody" style="padding: 25px;">
-                    <!-- Conteúdo dinâmico -->
-                </div>
+                <div class="modal-body" id="modalBody" style="padding: 25px;"></div>
                 <div class="modal-footer" style="padding: 15px 25px; background: #f8fafc; border-top: 1px solid #e5e7eb;">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 10px; padding: 10px 20px;">
                         <i class="fas fa-times"></i> Fechar
@@ -225,9 +219,6 @@
         </div>
     </div>
 
-    <!-- ================================================
-         MODAL DE CONFIRMAÇÃO
-         ================================================ -->
     <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="border-radius: 16px; border: none;">
@@ -256,6 +247,8 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
     <script src="js/setor-pedagogico.js"></script>
+    <!-- 🔥 Módulo de Gestão de Professores (v2 — aulas por período) -->
+    <script src="js/gestao-professores-module.js"></script>
     <script src="js/visitas-admin.js"></script>
     
     <script src="js/vlibras-oficial.js"></script>
@@ -265,9 +258,6 @@
     <script src="js/chatbot-frontend.js"></script>
     <script src="/js/core-security.js"></script>
 
-    <!-- ============================================ -->
-    <!-- 📱 BOTTOM NAVIGATION - SETOR PEDAGÓGICO      -->
-    <!-- ============================================ -->
     <nav class="bottom-nav-sp" id="bottomNavSp">
         <button class="nav-item-sp active" data-section="dashboard" onclick="setorPedagogico.navigateTo('dashboard'); setorPedagogico.updateBottomNav('dashboard');">
             <div class="icon-wrapper"><i class="fas fa-chart-line"></i></div>
@@ -295,7 +285,6 @@
         </button>
     </nav>
 
-    <!-- Overlay do menu -->
     <div class="sidebar-overlay-sp" id="sidebarOverlaySp" onclick="setorPedagogico.fecharMenuLateral()"></div>
 
     <script>

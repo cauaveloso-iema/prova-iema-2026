@@ -74,6 +74,7 @@ class SetorPedagogico {
         this.temPermissao2Chamada = false;
         this.temPermissaoSubstituicao = false;
         this.temPermissaoVisitas = false;
+        this.temPermissaoGestaoProfessores = false;
         
         this.estadoSegundaChamada = {
             currentAluno: null,
@@ -188,6 +189,73 @@ class SetorPedagogico {
         this.setupNavigation();
         
         setInterval(() => this.carregarNotificacoes(), 30000);
+        
+        // ============================================
+        // 🔥 NOVO: VERIFICAR SE VEIO COM PARÂMETRO DE MÓDULO
+        // URL: /setor-pedagogico.html?modulo=gestao-professores
+        // Usado para abrir direto em um módulo específico (via iframe do admin)
+        // ============================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const moduloForcado = urlParams.get('modulo');
+        
+        if (moduloForcado) {
+            console.log('🎯 Módulo forçado via URL:', moduloForcado);
+            
+            // Aguardar as permissões serem verificadas (já foram verificadas acima)
+            setTimeout(async () => {
+                // Lista de módulos suportados
+                const modulosValidos = {
+                    'gestao-professores': {
+                        metodo: () => this.loadGestaoProfessores(),
+                        permissao: () => this.temPermissaoGestaoProfessores,
+                        nome: 'Gestão de Professores'
+                    },
+                    'substituicao-professores': {
+                        metodo: () => this.loadSubstituicaoProfessores(),
+                        permissao: () => this.temPermissaoSubstituicao,
+                        nome: 'Substituição de Professores'
+                    },
+                    'segunda-chamada': {
+                        metodo: () => this.loadSegundaChamada(),
+                        permissao: () => this.temPermissao2Chamada,
+                        nome: '2ª Chamada'
+                    },
+                    'visitas': {
+                        metodo: () => this.loadVisitas(),
+                        permissao: () => this.temPermissaoVisitas,
+                        nome: 'Autorização de Visitas'
+                    }
+                };
+                
+                if (modulosValidos[moduloForcado]) {
+                    const modulo = modulosValidos[moduloForcado];
+                    
+                    // Se o usuário é admin/super_admin, forçar a permissão
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    const isAdmin = ['admin', 'super_admin'].includes(userData.role);
+                    
+                    if (modulo.permissao() || isAdmin) {
+                        // Se for admin, garantir que a permissão está ativa
+                        if (isAdmin) {
+                            if (moduloForcado === 'gestao-professores') this.temPermissaoGestaoProfessores = true;
+                            if (moduloForcado === 'substituicao-professores') this.temPermissaoSubstituicao = true;
+                            if (moduloForcado === 'segunda-chamada') this.temPermissao2Chamada = true;
+                            if (moduloForcado === 'visitas') this.temPermissaoVisitas = true;
+                        }
+                        
+                        console.log(`✅ Abrindo módulo: ${modulo.nome}`);
+                        await modulo.metodo();
+                        
+                        // Atualizar título e navegação
+                        this.navigateTo(moduloForcado);
+                    } else {
+                        console.warn(`⚠️ Sem permissão para ${modulo.nome}`);
+                    }
+                } else {
+                    console.warn('⚠️ Módulo inválido:', moduloForcado);
+                }
+            }, 500);
+        }
     }
     
     async loadUser() {
@@ -291,12 +359,38 @@ class SetorPedagogico {
                 console.error('❌ Erro ao verificar permissão Visitas:', error);
                 this.temPermissaoVisitas = false;
             }
+
+            // ============================================
+            // 4. 🔥 NOVO: VERIFICAR PERMISSÃO - GESTÃO DE PROFESSORES
+            // ============================================
+            try {
+                const responseGP = await fetch('/api/admin/permissoes-modulos/verificar/gestao_professores_setor_pedagogico', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                
+                const dataGP = await responseGP.json();
+                
+                if (dataGP.success && dataGP.temPermissao) {
+                    const navItem = document.getElementById('navGestaoProfessores');
+                    if (navItem) navItem.style.display = 'flex';
+                    const menuMobile = document.getElementById('menuItemGestaoProfessores');
+                    if (menuMobile) menuMobile.style.display = 'flex';
+                    this.temPermissaoGestaoProfessores = true;
+                    console.log('✅ Permissão Gestão de Professores concedida');
+                } else {
+                    this.temPermissaoGestaoProfessores = false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar permissão Gestão de Professores:', error);
+                this.temPermissaoGestaoProfessores = false;
+            }
             
         } catch (error) {
             console.error('❌ Erro geral ao verificar permissões:', error);
             this.temPermissao2Chamada = false;
             this.temPermissaoSubstituicao = false;
             this.temPermissaoVisitas = false;
+            this.temPermissaoGestaoProfessores = false;
         }
     }
     
@@ -463,13 +557,17 @@ class SetorPedagogico {
             this.showToast('❌ Você não tem permissão para acessar Substituição de Professores', 'error');
             return;
         }
-        // 🔥 NOVO: Atrasos usa a mesma permissão de Substituição
         if (section === 'atrasos' && !this.temPermissaoSubstituicao) {
             this.showToast('❌ Você não tem permissão para acessar Atrasos', 'error');
             return;
         }
         if (section === 'visitas' && !this.temPermissaoVisitas) {
             this.showToast('❌ Você não tem permissão para acessar Autorização de Visitas', 'error');
+            return;
+        }
+        // 🔥 NOVO: Gestão de Professores
+        if (section === 'gestao-professores' && !this.temPermissaoGestaoProfessores) {
+            this.showToast('❌ Você não tem permissão para acessar Gestão de Professores', 'error');
             return;
         }
         
@@ -505,8 +603,9 @@ class SetorPedagogico {
             relatorios: 'Relatórios',
             'segunda-chamada': '2ª Chamada',
             'substituicao-professores': 'Substituição de Professores',
-            'atrasos': 'Atrasos de Professores', // 🔥 NOVO
-            'visitas': 'Autorização de Visitas'
+            'atrasos': 'Atrasos de Professores',
+            'visitas': 'Autorização de Visitas',
+            'gestao-professores': 'Gestão de Professores'  // 🔥 NOVO
         };
         
         const icons = {
@@ -516,8 +615,9 @@ class SetorPedagogico {
             relatorios: 'fa-chart-bar',
             'segunda-chamada': 'fa-redo',
             'substituicao-professores': 'fa-people-arrows',
-            'atrasos': 'fa-clock', // 🔥 NOVO
-            'visitas': 'fa-map-marked-alt'
+            'atrasos': 'fa-clock',
+            'visitas': 'fa-map-marked-alt',
+            'gestao-professores': 'fa-chalkboard-teacher'  // 🔥 NOVO
         };
         
         const pageTitle = document.getElementById('pageTitle');
@@ -540,10 +640,13 @@ class SetorPedagogico {
             this.loadSegundaChamada();
         } else if (section === 'substituicao-professores') {
             this.loadSubstituicaoProfessores();
-        } else if (section === 'atrasos') { // 🔥 NOVO
+        } else if (section === 'atrasos') {
             this.loadAtrasos();
         } else if (section === 'visitas') {
             this.loadVisitas();
+        } else if (section === 'gestao-professores') {
+            // 🔥 NOVO: Carregar módulo de Gestão de Professores
+            this.loadGestaoProfessores();
         }
     }
     
@@ -11139,6 +11242,361 @@ class SetorPedagogico {
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
+    }
+
+        // ============================================
+    // 🔥 CARREGAR MÓDULO DE GESTÃO DE PROFESSORES
+    // ============================================
+    async loadGestaoProfessores() {
+        const content = document.getElementById('content');
+        if (!content) return;
+        
+        if (!this.temPermissaoGestaoProfessores) {
+            content.innerHTML = `
+                <div class="alert alert-warning m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Restrito</strong>
+                    <p>Você não tem permissão para acessar este módulo.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        console.log('📋 Carregando módulo de Gestão de Professores...');
+        
+        content.innerHTML = `
+            <div class="gestao-professores-container">
+                <!-- TABS -->
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="gpRegistrarTab" data-bs-toggle="tab" data-bs-target="#gpRegistrar" type="button">
+                            <i class="fas fa-plus-circle"></i> Registrar
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="gpListaTab" data-bs-toggle="tab" data-bs-target="#gpLista" type="button">
+                            <i class="fas fa-list"></i> Registros
+                            <span class="badge bg-primary ms-1" id="gpBadgeTotal">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="gpDashboardTab" data-bs-toggle="tab" data-bs-target="#gpDashboard" type="button">
+                            <i class="fas fa-chart-line"></i> Dashboard
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="gpRelatorioTab" data-bs-toggle="tab" data-bs-target="#gpRelatorio" type="button">
+                            <i class="fas fa-file-alt"></i> Relatórios
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <!-- ==================== TAB REGISTRAR ==================== -->
+                    <div class="tab-pane fade show active" id="gpRegistrar">
+                        
+                        <!-- ETAPA 1: SELECIONAR PROFESSOR -->
+                        <div class="card mb-3" style="border: 2px solid #e0e7ff;">
+                            <div class="card-body">
+                                <div class="etapa-header">
+                                    <div class="etapa-numero">1</div>
+                                    <div class="etapa-titulo">
+                                        <h5><i class="fas fa-user-tie me-2"></i> Selecionar Professor</h5>
+                                        <small class="text-muted">Busque pelo professor cadastrado no sistema</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="search-box mt-3" style="position: relative;">
+                                    <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
+                                    <input type="text" id="gpBuscaProfessor" placeholder="Buscar por nome, email, matrícula ou CPF..." 
+                                           style="width: 100%; padding: 14px 16px 14px 44px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px;">
+                                </div>
+                                
+                                <div id="gpListaProfessores" class="mt-3" style="max-height: 400px; overflow-y: auto;">
+                                    <div style="text-align: center; padding: 30px;">
+                                        <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #6366f1;"></i>
+                                        <p style="margin-top: 10px; color: #64748b;">Carregando professores...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- DADOS DO PROFESSOR SELECIONADO -->
+                        <div id="gpDadosProfessor" style="display: none;"></div>
+                        
+                        <!-- ETAPA 2: TURMAS VINCULADAS -->
+                        <div class="card mb-3" id="gpCardTurmas" style="display: none; border: 2px solid #e0e7ff;">
+                            <div class="card-body">
+                                <div class="etapa-header">
+                                    <div class="etapa-numero">2</div>
+                                    <div class="etapa-titulo">
+                                        <h5><i class="fas fa-users me-2"></i> Turmas Vinculadas</h5>
+                                        <small class="text-muted">Vincule as turmas que o professor leciona</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-3 mt-3">
+                                    <div class="col-md-5">
+                                        <label class="form-label" style="font-weight: 600; font-size: 13px;">Turma</label>
+                                        <select id="gpSelectTurma" class="form-select">
+                                            <option value="">Selecione a turma...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button id="gpBtnAddTurma" class="btn btn-primary w-100" style="height: 42px;">
+                                            <i class="fas fa-plus"></i> Adicionar
+                                        </button>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label" style="font-weight: 600; font-size: 13px;">Data da Coleta <span class="text-danger">*</span></label>
+                                        <input type="date" id="gpDataColeta" class="form-control" style="height: 42px;">
+                                    </div>
+                                </div>
+                                
+                                <div id="gpTurmasVinculadas" class="mt-3"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- ETAPA 3: COMPONENTES CURRICULARES -->
+                        <div class="card mb-3" id="gpCardComponentes" style="display: none; border: 2px solid #e0e7ff;">
+                            <div class="card-body">
+                                <div class="etapa-header">
+                                    <div class="etapa-numero">3</div>
+                                    <div class="etapa-titulo">
+                                        <h5><i class="fas fa-book-open me-2"></i> Componentes Curriculares</h5>
+                                        <small class="text-muted">Adicione os componentes que o professor leciona</small>
+                                    </div>
+                                </div>
+                                
+                                <div id="gpListaComponentes" class="mt-3"></div>
+                                
+                                <div class="mt-3">
+                                    <button id="gpBtnAddComponente" class="btn btn-outline-primary">
+                                        <i class="fas fa-plus"></i> Adicionar Componente
+                                    </button>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px;">Observações Gerais</label>
+                                    <textarea id="gpObservacoesGerais" class="form-control" rows="3" 
+                                              placeholder="Observações gerais sobre a gestão deste professor..."></textarea>
+                                </div>
+                                
+                                <div class="d-flex gap-2 mt-4 justify-content-end">
+                                    <button id="gpBtnLimpar" class="btn btn-secondary">
+                                        <i class="fas fa-times me-2"></i> Cancelar
+                                    </button>
+                                    <button id="gpBtnRegistrar" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i> Registrar Gestão
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ==================== TAB LISTA ==================== -->
+                    <div class="tab-pane fade" id="gpLista">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-filter me-2"></i> Filtros</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Buscar</label>
+                                        <input type="text" id="gpFiltroBusca" class="form-control" placeholder="Professor ou componente...">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Eixo</label>
+                                        <select id="gpFiltroEixo" class="form-select"><option value="">Todos</option></select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Turma</label>
+                                        <select id="gpFiltroTurma" class="form-select"><option value="">Todas</option></select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Data Início</label>
+                                        <input type="date" id="gpFiltroDataInicio" class="form-control">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Data Fim</label>
+                                        <input type="date" id="gpFiltroDataFim" class="form-control">
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-end">
+                                        <button class="btn btn-secondary w-100" onclick="GestaoProfessoresModule.carregarLista()">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="card-title mb-0"><i class="fas fa-list me-2"></i> Registros de Gestão</h6>
+                                    <span class="badge bg-primary" id="gpContadorRegistros">0 registros</span>
+                                </div>
+                                <div id="gpListaRegistros"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ==================== TAB DASHBOARD ==================== -->
+                    <div class="tab-pane fade" id="gpDashboard">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Mês de Referência</label>
+                                        <input type="month" id="gpDashboardMes" class="form-control">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button id="gpBtnAtualizarDashboard" class="btn btn-primary w-100">
+                                            <i class="fas fa-sync-alt me-2"></i> Atualizar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
+                                    <i class="fas fa-clipboard-list fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatTotalGeral">0</div>
+                                    <div class="metric-label">Total Geral</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                                    <i class="fas fa-calendar-alt fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatTotalMes">0</div>
+                                    <div class="metric-label">No Mês</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                                    <i class="fas fa-user-tie fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatProfessores">0</div>
+                                    <div class="metric-label">Professores</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #ec4899, #db2777); color: white;">
+                                    <i class="fas fa-chalkboard fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatAulas">0</div>
+                                    <div class="metric-label">Aulas Registradas</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-pie"></i> Distribuição por Eixo</h6>
+                                    <canvas id="gpChartEixo"></canvas>
+                                </div></div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-bar"></i> Distribuição por Turma</h6>
+                                    <canvas id="gpChartTurma"></canvas>
+                                </div></div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-trophy"></i> Professores com Mais Componentes</h6>
+                                    <div id="gpRankingProfessores" class="mt-3"></div>
+                                </div></div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-history"></i> Últimos Registros</h6>
+                                    <div id="gpUltimosRegistros" class="mt-3"></div>
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ==================== TAB RELATÓRIO ==================== -->
+                    <div class="tab-pane fade" id="gpRelatorio">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-file-alt me-2"></i> Gerar Relatório</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Tipo de Relatório</label>
+                                        <select id="gpTipoRelatorio" class="form-select">
+                                            <option value="geral">Geral</option>
+                                            <option value="eixo">Por Eixo</option>
+                                            <option value="turma">Por Turma</option>
+                                            <option value="professor">Por Professor</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3" id="gpRelatorioEixoDiv" style="display: none;">
+                                        <label class="form-label">Eixo</label>
+                                        <select id="gpRelatorioEixo" class="form-select">
+                                            <option value="">Selecione...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3" id="gpRelatorioTurmaDiv" style="display: none;">
+                                        <label class="form-label">Turma</label>
+                                        <select id="gpRelatorioTurma" class="form-select">
+                                            <option value="">Selecione...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3" id="gpRelatorioProfessorDiv" style="display: none;">
+                                        <label class="form-label">Professor</label>
+                                        <select id="gpRelatorioProfessor" class="form-select">
+                                            <option value="">Selecione...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Data Início</label>
+                                        <input type="date" id="gpRelatorioDataInicio" class="form-control">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Data Fim</label>
+                                        <input type="date" id="gpRelatorioDataFim" class="form-control">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">&nbsp;</label>
+                                        <button class="btn btn-primary w-100" id="gpBtnGerarRelatorio">
+                                            <i class="fas fa-search me-2"></i> Gerar
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">&nbsp;</label>
+                                        <div class="btn-group w-100">
+                                            <button class="btn btn-success" id="gpBtnExportarCSV" disabled>
+                                                <i class="fas fa-file-csv me-1"></i> CSV
+                                            </button>
+                                            <button class="btn btn-danger" id="gpBtnImprimirRelatorio" disabled>
+                                                <i class="fas fa-print me-1"></i> PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="gpResultadoRelatorio">
+                            <div class="text-center py-5">
+                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Selecione os filtros e clique em Gerar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Inicializa o módulo após renderizar HTML
+        setTimeout(async () => {
+            if (window.GestaoProfessoresModule) {
+                await window.GestaoProfessoresModule.init();
+            }
+        }, 150);
     }
 
     // ============================================

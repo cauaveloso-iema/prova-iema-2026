@@ -1862,3 +1862,72 @@ body {
     border-color: #e5e7eb;
     color: #cbd5e1;
 }
+
+/* ============================================
+   🔥 TABS DO MÓDULO DE GESTÃO DE PROFESSORES
+   ============================================ */
+
+.gestao-professores-container .nav-tabs {
+    border-bottom: 2px solid #e5e7eb;
+    background: #f8fafc;
+    border-radius: 12px 12px 0 0;
+    padding: 8px 12px 0;
+    gap: 4px;
+}
+
+.gestao-professores-container .nav-tabs .nav-item {
+    margin-bottom: -2px;
+}
+
+.gestao-professores-container .nav-tabs .nav-link {
+    color: #64748b;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 12px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: 8px 8px 0 0;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 1;
+}
+
+.gestao-professores-container .nav-tabs .nav-link:hover {
+    color: #6366f1;
+    background: #eef2ff;
+    border-bottom-color: #c7d2fe;
+}
+
+.gestao-professores-container .nav-tabs .nav-link.active {
+    color: #6366f1;
+    background: white;
+    border-bottom: 3px solid #6366f1;
+    font-weight: 700;
+    box-shadow: 0 -2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.gestao-professores-container .nav-tabs .nav-link i {
+    font-size: 15px;
+}
+
+/* Badge nas tabs */
+.gestao-professores-container .nav-tabs .nav-link .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .gestao-professores-container .nav-tabs .nav-link {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+    
+    .gestao-professores-container .nav-tabs .nav-link span:not(.badge) {
+        display: none; /* Esconde texto, mostra só ícone */
+    }
+}
