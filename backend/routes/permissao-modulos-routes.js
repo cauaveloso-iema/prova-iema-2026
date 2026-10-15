@@ -82,10 +82,14 @@ const MODULOS_DISPONIVEIS = {
         nomeAmigavel: 'Substituição de Professores',
         descricao: 'Permite registrar substituições de professores quando há ausências'
     },
-    // 🔥 NOVO MÓDULO
     'autorizacao_visitas': {
         nomeAmigavel: 'Autorização de Visitas',
         descricao: 'Permite criar e gerenciar termos de visita técnica e autorizações de responsáveis'
+    },
+    // 🔥 NOVO MÓDULO: GESTÃO DE PROFESSORES
+    'gestao_professores_setor_pedagogico': {
+        nomeAmigavel: 'Gestão de Professores',
+        descricao: 'Permite registrar e gerenciar a gestão de professores, componentes curriculares, turmas e aulas por período'
     }
 };
 
