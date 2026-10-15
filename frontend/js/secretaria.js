@@ -1078,11 +1078,17 @@ function gerarHTMLImpressao(a, qrCodeUrl) {
     const tipoProva = getTipoProvaFormatado(a);
     const dataFormatada = a.dataFormatada || (a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '-');
 
+    // 🔥 Nome do arquivo: usa o período da falta (se existir), senão a data do registro
+    const referenciaArquivo = periodoFalta || dataFormatada;
+    const dataArquivo = referenciaArquivo
+        .replace(/\//g, '-')          // 10/03/2025 -> 10-03-2025
+        .replace(/\s+a\s+/g, '_a_');  // "10-03-2025 a 12-03-2025" -> "10-03-2025_a_12-03-2025"
+
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
         <meta charset="UTF-8">
-        <title>Justificativa - ${escapeHTML(a.alunoNome)}</title>
+        <title>Justificativa - ${escapeHTML(a.alunoNome)} - ${dataArquivo}</title>
         <style>
             @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
