@@ -62,6 +62,20 @@ const estadoSessaoAssinatura = {
     }
 };
 
+// ============================================
+// 🆕 ESTADO DA SESSÃO DE ASSINATURA DO ALUNO (Apenas Atrasos)
+// ============================================
+const estadoSessaoAssinaturaAluno = {
+    atraso: {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    }
+};
+
+
 // Modo assinatura (quando abre via ?assinatura=UUID)
 let sessaoAssinaturaModo = null;
 let sessaoAssinaturaAtual = null;
@@ -353,6 +367,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             iniciarScannerAutomatico();
         }
     }, 1000);
+
+    // ============ RODÍZIOS ============
+    // 🆕 Carrega rodízios quando a aba é ativada
+    safeGet('aba-rodizios')?.addEventListener('shown.bs.tab', () => {
+        console.log('🔄 Aba rodízios ativada — carregando...');
+        if (typeof carregarRodizios === 'function') {
+            carregarRodizios();
+        } else {
+            console.error('❌ carregarRodizios não existe! O gestao-geral-rodizio.js não foi carregado.');
+        }
+    });
+
+    // 🆕 Carrega rodízios no LOAD inicial (porque a aba já vem ativa por padrão)
+    setTimeout(() => {
+        if (document.getElementById('aba-rodizios')?.classList.contains('active')) {
+            console.log('🔄 Aba rodízios é a inicial — carregando no load...');
+            if (typeof carregarRodizios === 'function') {
+                carregarRodizios();
+            }
+        }
+    }, 1500); // 1.5s de delay pra garantir que gestao-geral-rodizio.js já carregou
     
     // ============ ATRASOS ============
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
@@ -442,6 +477,8 @@ window.addEventListener('beforeunload', () => {
     ['atraso', 'autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
         pararMonitoramentoSessao(modulo);
     });
+    // 🆕 Para o monitoramento do aluno
+    pararMonitoramentoSessaoAluno('atraso');
     window.removeEventListener('resize', handleResizeCanvasTela);
 });
 
@@ -878,11 +915,19 @@ function mostrarFormRegistro() {
     safeGet('motivoOutrosTexto').value = '';
     safeGet('campoOutros').style.display = 'none';
     
+    // Limpa assinatura do RESPONSÁVEL
     limparEstadoSessaoAssinatura('atraso');
     const checkAssinatura = safeGet('atrasoNecessitaAssinatura');
     if (checkAssinatura) checkAssinatura.checked = false;
     const blocoInfo = safeGet('atrasoBlocoAssinaturaInfo');
     if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
+    
+    // 🆕 Limpa assinatura do ALUNO
+    limparEstadoSessaoAssinaturaAluno('atraso');
+    const checkAssinaturaAluno = safeGet('atrasoNecessitaAssinaturaAluno');
+    if (checkAssinaturaAluno) checkAssinaturaAluno.checked = false;
+    const blocoInfoAluno = safeGet('atrasoBlocoAssinaturaAlunoInfo');
+    if (blocoInfoAluno) { blocoInfoAluno.style.display = 'none'; blocoInfoAluno.innerHTML = ''; }
     
     const hoje = getDataLocalISO();
     const dataEl = safeGet('atrasoData');
@@ -926,9 +971,7 @@ async function registrarAtraso() {
     const dataSelecionada = new Date(dataAtraso + 'T00:00:00');
     if (dataSelecionada > hoje) {
         const confirmar = await confirm('⚠️ A data selecionada é no futuro. Deseja continuar mesmo assim?');
-        if (!confirmar) {
-            return;
-        }
+        if (!confirmar) return;
     }
     
     const descricao = (safeGet('descricao')?.value || '').trim();
@@ -948,13 +991,25 @@ async function registrarAtraso() {
         }
     }
     
+    // 🔹 Assinatura do RESPONSÁVEL
     const precisaAssinatura = safeGet('atrasoNecessitaAssinatura')?.checked || false;
     const assinaturaBase64 = estadoSessaoAssinatura.atraso?.assinaturaCapturada || '';
     const sessaoAssinaturaId = estadoSessaoAssinatura.atraso?.sessaoId || null;
     
     if (precisaAssinatura && !assinaturaBase64) {
-        notificar('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'warning', 5000);
+        notificar('⚠️ Aguardando assinatura do responsável!', 'warning', 5000);
         reabrirModalAssinatura('atraso');
+        return;
+    }
+    
+    // 🆕 Assinatura do ALUNO
+    const precisaAssinaturaAluno = safeGet('atrasoNecessitaAssinaturaAluno')?.checked || false;
+    const assinaturaAlunoBase64 = estadoSessaoAssinaturaAluno.atraso?.assinaturaCapturada || '';
+    const sessaoAssinaturaAlunoId = estadoSessaoAssinaturaAluno.atraso?.sessaoId || null;
+    
+    if (precisaAssinaturaAluno && !assinaturaAlunoBase64) {
+        notificar('⚠️ Aguardando assinatura do aluno!', 'warning', 5000);
+        reabrirModalAssinaturaAluno('atraso');
         return;
     }
     
@@ -985,13 +1040,19 @@ async function registrarAtraso() {
                     horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
                     horarioChegada: safeGet('horarioChegada')?.value || ''
                 },
+                // Responsável
                 precisaAssinatura: precisaAssinatura,
                 assinaturaBase64: assinaturaBase64,
-                sessaoAssinaturaId: sessaoAssinaturaId
+                sessaoAssinaturaId: sessaoAssinaturaId,
+                // 🆕 Aluno
+                precisaAssinaturaAluno: precisaAssinaturaAluno,
+                assinaturaAlunoBase64: assinaturaAlunoBase64,
+                sessaoAssinaturaAlunoId: sessaoAssinaturaAlunoId
             })
         });
         const data = await response.json();
         if (data.success) {
+            // Limpa sessão do responsável
             const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
             if (sessaoId) {
                 fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
@@ -1002,6 +1063,18 @@ async function registrarAtraso() {
             pararMonitoramentoSessao('atraso');
             fecharModalAssinatura('atraso');
             limparEstadoSessaoAssinatura('atraso');
+            
+            // 🆕 Limpa sessão do aluno
+            const sessaoAlunoId = estadoSessaoAssinaturaAluno.atraso?.sessaoId;
+            if (sessaoAlunoId) {
+                fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoAlunoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).catch(e => console.warn(e));
+            }
+            pararMonitoramentoSessaoAluno('atraso');
+            fecharModalAssinaturaAluno('atraso');
+            limparEstadoSessaoAssinaturaAluno('atraso');
             
             notificar(`✅ ${data.message}`, 'success');
             limparTela();
@@ -1024,6 +1097,7 @@ function limparTela() {
     currentAluno = null;
     motivoSelecionado = null;
     
+    // Limpa sessão do RESPONSÁVEL
     const sessaoId = estadoSessaoAssinatura.atraso?.sessaoId;
     if (sessaoId) {
         fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
@@ -1039,6 +1113,23 @@ function limparTela() {
     if (checkAssinatura) checkAssinatura.checked = false;
     const blocoInfo = safeGet('atrasoBlocoAssinaturaInfo');
     if (blocoInfo) { blocoInfo.style.display = 'none'; blocoInfo.innerHTML = ''; }
+    
+    // 🆕 Limpa sessão do ALUNO
+    const sessaoAlunoId = estadoSessaoAssinaturaAluno.atraso?.sessaoId;
+    if (sessaoAlunoId) {
+        fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoAlunoId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(e => console.warn(e));
+    }
+    pararMonitoramentoSessaoAluno('atraso');
+    fecharModalAssinaturaAluno('atraso');
+    limparEstadoSessaoAssinaturaAluno('atraso');
+    
+    const checkAssinaturaAluno = safeGet('atrasoNecessitaAssinaturaAluno');
+    if (checkAssinaturaAluno) checkAssinaturaAluno.checked = false;
+    const blocoInfoAluno = safeGet('atrasoBlocoAssinaturaAlunoInfo');
+    if (blocoInfoAluno) { blocoInfoAluno.style.display = 'none'; blocoInfoAluno.innerHTML = ''; }
 }
 
 function reiniciarScannerAutomatico() {
@@ -1632,9 +1723,106 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             </div>`;
     }
     
-    const assinaturaHTML = a.assinaturaBase64 
-        ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura" style="max-height:13mm;max-width:100%;object-fit:contain;position:relative;z-index:2;margin-bottom:1mm;">`
+    // ============================================
+    // 🔍 DEFINE QUAIS ASSINATURAS MOSTRAR
+    // ============================================
+    const temResp = !!(a.assinaturaBase64 && a.assinaturaBase64.length > 100);
+    const temAluno = !!(a.assinaturaAlunoBase64 && a.assinaturaAlunoBase64.length > 100);
+    const precisaResp = !!a.precisaAssinatura;
+    const precisaAluno = !!a.precisaAssinaturaAluno;
+    
+    // 🎯 Regra: só mostra a assinatura de quem FOI MARCADO
+    // Se marcou só aluno → só aluno + gestão
+    // Se marcou só responsável → só responsável + gestão
+    // Se marcou os dois → os dois + gestão
+    // Se não marcou nenhum → responsável (padrão) + gestão
+    
+    const mostrarResp = precisaResp || (!precisaResp && !precisaAluno);
+    const mostrarAluno = precisaAluno;
+    
+    console.log('🖨️ Impressão - mostrarResp:', mostrarResp, '| mostrarAluno:', mostrarAluno, 
+                '| temResp:', temResp, '| temAluno:', temAluno);
+    
+    // HTML da assinatura do RESPONSÁVEL
+    const assinaturaRespHTML = temResp
+        ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura Responsável">`
         : `<span style="color:#999;font-size:8pt;padding-bottom:2px;">_________________________________</span>`;
+    
+    // HTML da assinatura do ALUNO
+    const assinaturaAlunoHTML = temAluno
+        ? `<img class="assinatura-img" src="${a.assinaturaAlunoBase64}" alt="Assinatura Aluno">`
+        : `<span style="color:#999;font-size:8pt;padding-bottom:2px;">_________________________________</span>`;
+    
+    // Nome do aluno assinante
+    const nomeAlunoAssinante = a.assinadaPorNomeAluno 
+        ? `<div style="font-size:7pt;color:#047857;margin-top:1mm;">${escapeHTML(a.assinadaPorNomeAluno)}</div>` 
+        : '';
+    
+    // ============================================
+    // 🎨 MONTA O BLOCO DE ASSINATURAS
+    // ============================================
+    let assinaturasHTML = '';
+    
+    if (mostrarResp && mostrarAluno) {
+        // Ambos → 3 colunas
+        assinaturasHTML = `
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-container">
+                        ${assinaturaRespHTML}
+                    </div>
+                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                </div>
+                <div class="assinatura">
+                    <div class="assinatura-container">
+                        ${assinaturaAlunoHTML}
+                        ${nomeAlunoAssinante}
+                    </div>
+                    <div class="assinatura-linha">Assinatura do Aluno</div>
+                </div>
+                <div class="assinatura">
+                    <div class="assinatura-container">
+                        <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                    </div>
+                    <div class="assinatura-linha">Coordenação / Gestão Geral</div>
+                </div>
+            </div>`;
+    } else if (mostrarAluno && !mostrarResp) {
+        // Só aluno → 2 colunas
+        assinaturasHTML = `
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-container">
+                        ${assinaturaAlunoHTML}
+                        ${nomeAlunoAssinante}
+                    </div>
+                    <div class="assinatura-linha">Assinatura do Aluno</div>
+                </div>
+                <div class="assinatura">
+                    <div class="assinatura-container">
+                        <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                    </div>
+                    <div class="assinatura-linha">Coordenação / Gestão Geral</div>
+                </div>
+            </div>`;
+    } else {
+        // Só responsável (ou padrão) → 2 colunas
+        assinaturasHTML = `
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-container">
+                        ${assinaturaRespHTML}
+                    </div>
+                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                </div>
+                <div class="assinatura">
+                    <div class="assinatura-container">
+                        <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
+                    </div>
+                    <div class="assinatura-linha">Coordenação / Gestão Geral</div>
+                </div>
+            </div>`;
+    }
     
     return `<!DOCTYPE html>
     <html lang="pt-BR">
@@ -1672,11 +1860,13 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             
             .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 80px; overflow: hidden; word-wrap: break-word; }
             
+            /* Assinaturas - layout dinâmico */
             .assinaturas { display: flex; justify-content: space-around; margin-top: 15px; gap: 15px; }
-            .assinatura { flex: 1; text-align: center; font-size: 8pt; position: relative; }
+            .assinatura { flex: 1; text-align: center; font-size: 7.5pt; position: relative; }
             .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
+            .assinatura-img { max-height: 13mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
             .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; }
-            .assinatura-linha { padding-top: 2px; font-size: 8pt; margin-top: 2px; }
+            .assinatura-linha { padding-top: 2px; font-size: 7.5pt; margin-top: 2px; font-weight: bold; }
             
             .qr-code { text-align: center; margin-top: 6px; }
             .qr-code img { width: 25mm; height: 25mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
@@ -1735,20 +1925,7 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
             <div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.observacoes).replace(/\n/g, '<br>')}</div>
         ` : ''}
         
-        <div class="assinaturas">
-            <div class="assinatura">
-                <div class="assinatura-container">
-                    ${assinaturaHTML}
-                </div>
-                <div class="assinatura-linha">Assinatura do Responsável</div>
-            </div>
-            <div class="assinatura">
-                <div class="assinatura-container">
-                    <img class="carimbo-overlay" src="${carimbo}" alt="Carimbo" onerror="this.style.display='none'">
-                </div>
-                <div class="assinatura-linha">Coordenação / Gestão Geral</div>
-            </div>
-        </div>
+        ${assinaturasHTML}
         
         ${qrCodeUrl ? `
             <div class="qr-code">
@@ -5597,6 +5774,420 @@ function limparEstadoSessaoAssinatura(modulo) {
 }
 
 // ============================================================================
+// 🆕 SISTEMA DE ASSINATURA DO ALUNO (Apenas Atrasos)
+// ============================================================================
+
+async function toggleNecessitaAssinaturaAluno(modulo) {
+    if (modulo !== 'atraso') {
+        console.warn('⚠️ Assinatura do aluno só está disponível para Atrasos');
+        return;
+    }
+    
+    const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+    if (!check) return;
+    
+    if (check.checked) {
+        const snapshot = montarSnapshotAtendimento(modulo);
+        
+        if (!snapshot.alunoId) {
+            notificar('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
+            check.checked = false;
+            return;
+        }
+        
+        const sessaoId = gerarUUID();
+        estadoSessaoAssinaturaAluno[modulo].sessaoId = sessaoId;
+        estadoSessaoAssinaturaAluno[modulo].assinaturaCapturada = null;
+        
+        try {
+            const response = await fetch('/api/gestao-geral/sessoes-assinatura', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    sessaoId,
+                    tipo: 'atraso_aluno',
+                    dadosAtendimento: {
+                        ...snapshot,
+                        tipoAssinante: 'aluno'
+                    }
+                })
+            });
+            
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
+            
+            console.log('✅ Sessão de assinatura do aluno criada:', sessaoId);
+            
+            const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
+            
+            try {
+                const qrResponse = await fetch('/api/qrcode/gerar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ url: urlAssinatura })
+                });
+                const qrData = await qrResponse.json();
+                
+                if (qrData.success && qrData.qrCode) {
+                    estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = qrData.qrCode;
+                } else {
+                    estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = 
+                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                }
+            } catch (e) {
+                console.warn('Fallback QR Code aluno:', e);
+                estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = 
+                    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+            }
+            
+            abrirModalAssinaturaAluno(modulo, urlAssinatura);
+            iniciarMonitoramentoSessaoAluno(modulo, sessaoId);
+            
+            notificar('📱 QR Code do aluno gerado! Peça para ele escanear.', 'info');
+            
+        } catch (e) {
+            console.error('Erro ao criar sessão do aluno:', e);
+            notificar('❌ Erro ao criar sessão de assinatura do aluno', 'error');
+            check.checked = false;
+            estadoSessaoAssinaturaAluno[modulo].sessaoId = null;
+        }
+    } else {
+        await cancelarSessaoAssinaturaAluno(modulo);
+    }
+}
+
+function abrirModalAssinaturaAluno(modulo, urlAssinatura) {
+    const antigo = safeGet('modalAssinaturaAlunoQR');
+    if (antigo) antigo.remove();
+    
+    const qrUrl = estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl || 
+        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+    
+    const modalHtml = `
+        <div class="modal fade" id="modalAssinaturaAlunoQR" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 20px; border: none; overflow: hidden;">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #059669, #10b981); color: white; border: none; padding: 20px 25px;">
+                        <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-user-graduate"></i> 
+                            Aguardando Assinatura do Aluno
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="gestaoGeral.fecharModalAssinaturaAluno('${modulo}')"></button>
+                    </div>
+                    
+                    <div class="modal-body" style="padding: 30px; text-align: center;">
+                        <div id="modalAssinaturaAlunoStatus" style="margin-bottom: 20px;">
+                            <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                <div>
+                                    <strong style="color: #92400e;">Aguardando assinatura do aluno...</strong>
+                                    <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                        Peça para o aluno escanear o QR Code abaixo
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                            <img src="${qrUrl}" 
+                                alt="QR Code para assinatura do aluno" 
+                                style="width: 260px; height: 260px; display: block;"
+                                id="qrCodeAlunoImage">
+                            <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                <i class="fas fa-mobile-alt"></i> 
+                                Aponte a câmera do celular
+                            </p>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
+                            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                                <i class="fas fa-info-circle"></i>
+                                <span><strong>O aluno assina direto no celular dele</strong>. Assim que confirmar, você verá aqui automaticamente.</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <i class="fas fa-clock"></i>
+                                <span>Sessão válida por <strong>30 minutos</strong>.</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 16px;">
+                            <button onclick="gestaoGeral.copiarLinkAssinatura('${urlAssinatura}')"
+                                    class="btn-copiar-link">
+                                <i class="fas fa-link"></i> Copiar link de assinatura
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
+                        <button type="button" class="btn btn-outline-secondary" onclick="gestaoGeral.fecharModalAssinaturaAluno('${modulo}')" style="border-radius: 10px;">
+                            <i class="fas fa-eye-slash"></i> Ocultar
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="gestaoGeral.cancelarSessaoAssinaturaAluno('${modulo}')" style="border-radius: 10px;">
+                            <i class="fas fa-times"></i> Cancelar Assinatura
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    estadoSessaoAssinaturaAluno[modulo].modalInstance = new bootstrap.Modal(safeGet('modalAssinaturaAlunoQR'));
+    estadoSessaoAssinaturaAluno[modulo].modalInstance.show();
+    
+    setTimeout(() => {
+        const img = safeGet('qrCodeAlunoImage');
+        if (img && window.innerWidth < 500) {
+            img.style.width = '200px';
+            img.style.height = '200px';
+        }
+    }, 200);
+}
+
+function fecharModalAssinaturaAluno(modulo) {
+    if (estadoSessaoAssinaturaAluno[modulo].modalInstance) {
+        estadoSessaoAssinaturaAluno[modulo].modalInstance.hide();
+    }
+    const modalEl = safeGet('modalAssinaturaAlunoQR');
+    if (modalEl) setTimeout(() => modalEl.remove(), 300);
+    
+    mostrarBlocoCompactoAssinaturaAluno(modulo);
+}
+
+function mostrarBlocoCompactoAssinaturaAluno(modulo) {
+    let bloco = safeGet(`${modulo}BlocoAssinaturaAlunoInfo`);
+    
+    if (!bloco) {
+        bloco = document.createElement('div');
+        bloco.id = `${modulo}BlocoAssinaturaAlunoInfo`;
+        const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+        if (check && check.parentElement) {
+            check.parentElement.parentElement.appendChild(bloco);
+        }
+    }
+    
+    bloco.style.display = 'block';
+    bloco.innerHTML = `
+        <div class="alert alert-warning" style="font-size: 13px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <i class="fas fa-clock"></i>
+                <div style="flex: 1;">
+                    <strong>Aguardando assinatura do aluno...</strong>
+                    <p style="margin: 3px 0 0; font-size: 12px;">O aluno precisa escanear o QR Code</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-warning" 
+                        onclick="gestaoGeral.reabrirModalAssinaturaAluno('${modulo}')"
+                        style="border-radius: 8px;">
+                    <i class="fas fa-qrcode"></i> Mostrar QR
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function reabrirModalAssinaturaAluno(modulo) {
+    const sessaoId = estadoSessaoAssinaturaAluno[modulo].sessaoId;
+    if (!sessaoId) {
+        notificar('⚠️ Nenhuma sessão ativa', 'warning');
+        return;
+    }
+    const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
+    abrirModalAssinaturaAluno(modulo, urlAssinatura);
+}
+
+function iniciarMonitoramentoSessaoAluno(modulo, sessaoId) {
+    pararMonitoramentoSessaoAluno(modulo);
+    
+    console.log('👀 Monitorando sessão do aluno:', sessaoId);
+    
+    const intervalId = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`);
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    console.warn('⚠️ Sessão do aluno expirou');
+                    pararMonitoramentoSessaoAluno(modulo);
+                    
+                    estadoSessaoAssinaturaAluno[modulo].sessaoId = null;
+                    const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+                    if (check) check.checked = false;
+                    
+                    const bloco = safeGet(`${modulo}BlocoAssinaturaAlunoInfo`);
+                    if (bloco) bloco.style.display = 'none';
+                    
+                    notificar('⚠️ Sessão de assinatura do aluno expirou. Marque novamente.', 'warning');
+                }
+                return;
+            }
+            
+            const data = await response.json();
+            if (!data.success) return;
+            
+            if (data.sessao.status === 'assinado') {
+                console.log('✅ Assinatura do aluno capturada!');
+                
+                estadoSessaoAssinaturaAluno[modulo].assinaturaCapturada = data.sessao.assinaturaBase64;
+                
+                atualizarStatusAssinadoAluno(modulo, data.sessao);
+                pararMonitoramentoSessaoAluno(modulo);
+                
+                if (estadoSessaoAssinaturaAluno[modulo].modalInstance) {
+                    estadoSessaoAssinaturaAluno[modulo].modalInstance.hide();
+                }
+                const modalEl = safeGet('modalAssinaturaAlunoQR');
+                if (modalEl) setTimeout(() => modalEl.remove(), 300);
+                
+                notificar(`✅ Assinatura do aluno capturada!`, 'success');
+                
+            } else if (data.sessao.status === 'cancelado') {
+                console.log('🚫 Sessão do aluno cancelada');
+                pararMonitoramentoSessaoAluno(modulo);
+                estadoSessaoAssinaturaAluno[modulo].sessaoId = null;
+                
+                const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+                if (check) check.checked = false;
+                
+                const bloco = safeGet(`${modulo}BlocoAssinaturaAlunoInfo`);
+                if (bloco) bloco.style.display = 'none';
+            }
+        } catch (e) {
+            console.warn('Erro no monitoramento do aluno:', e);
+        }
+    }, 3000);
+    
+    estadoSessaoAssinaturaAluno[modulo].monitoramentoInterval = intervalId;
+}
+
+function pararMonitoramentoSessaoAluno(modulo) {
+    const id = estadoSessaoAssinaturaAluno[modulo]?.monitoramentoInterval;
+    if (id) {
+        clearInterval(id);
+        estadoSessaoAssinaturaAluno[modulo].monitoramentoInterval = null;
+    }
+}
+
+function atualizarStatusAssinadoAluno(modulo, sessao) {
+    let bloco = safeGet(`${modulo}BlocoAssinaturaAlunoInfo`);
+    
+    if (!bloco) {
+        bloco = document.createElement('div');
+        bloco.id = `${modulo}BlocoAssinaturaAlunoInfo`;
+        const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+        if (check && check.parentElement) {
+            check.parentElement.parentElement.appendChild(bloco);
+        }
+    }
+    
+    bloco.style.display = 'block';
+    bloco.innerHTML = `
+        <div style="margin-top: 10px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <i class="fas fa-check-circle" style="color: #10b981; font-size: 22px;"></i>
+                <div style="flex: 1;">
+                    <strong style="color: #065f46;">✓ Assinatura do aluno capturada!</strong>
+                    <p style="margin: 3px 0 0; font-size: 12px; color: #047857;">
+                        ${sessao.assinadaEm ? `Assinado em ${new Date(sessao.assinadaEm).toLocaleString('pt-BR')}` : ''}
+                    </p>
+                </div>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 8px; text-align: center;">
+                <img src="${sessao.assinaturaBase64}" 
+                    style="max-width: 100%; max-height: 100px;" 
+                    alt="Assinatura do Aluno">
+            </div>
+            <button type="button" 
+                    onclick="gestaoGeral.refazerAssinaturaAluno('${modulo}')"
+                    class="btn btn-sm btn-outline-danger w-100 mt-2"
+                    style="border-radius: 8px;">
+                <i class="fas fa-redo"></i> Refazer Assinatura do Aluno
+            </button>
+        </div>
+    `;
+}
+
+async function cancelarSessaoAssinaturaAluno(modulo) {
+    const confirmar = await confirm('Cancelar a assinatura do aluno? Ele não poderá mais assinar este atendimento.');
+    if (!confirmar) {
+        const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+        if (check) check.checked = true;
+        return;
+    }
+    
+    const sessaoId = estadoSessaoAssinaturaAluno[modulo].sessaoId;
+    if (sessaoId) {
+        try {
+            await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    pararMonitoramentoSessaoAluno(modulo);
+    fecharModalAssinaturaAluno(modulo);
+    
+    estadoSessaoAssinaturaAluno[modulo].sessaoId = null;
+    estadoSessaoAssinaturaAluno[modulo].assinaturaCapturada = null;
+    estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = null;
+    
+    const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+    if (check) check.checked = false;
+    
+    const bloco = safeGet(`${modulo}BlocoAssinaturaAlunoInfo`);
+    if (bloco) bloco.style.display = 'none';
+    
+    notificar('Sessão do aluno cancelada', 'info');
+}
+
+async function refazerAssinaturaAluno(modulo) {
+    const confirmar = await confirm('Refazer a assinatura do aluno? A atual será descartada.');
+    if (!confirmar) return;
+    
+    const sessaoId = estadoSessaoAssinaturaAluno[modulo].sessaoId;
+    if (sessaoId) {
+        try {
+            await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    pararMonitoramentoSessaoAluno(modulo);
+    estadoSessaoAssinaturaAluno[modulo].sessaoId = null;
+    estadoSessaoAssinaturaAluno[modulo].assinaturaCapturada = null;
+    estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = null;
+    
+    const bloco = safeGet(`${modulo}BlocoAssinaturaAlunoInfo`);
+    if (bloco) bloco.style.display = 'none';
+    
+    const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
+    if (check) {
+        check.checked = false;
+        check.checked = true;
+        await toggleNecessitaAssinaturaAluno(modulo);
+    }
+}
+
+function limparEstadoSessaoAssinaturaAluno(modulo) {
+    estadoSessaoAssinaturaAluno[modulo] = {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    };
+}
+
+
+// ============================================================================
 // 📱 MODO ASSINATURA (via URL ?assinatura=UUID)
 // ============================================================================
 
@@ -6487,6 +7078,7 @@ window.validarCPFCliente = validarCPFCliente;
 
 // 🆕 SISTEMA DE SESSÃO DE ASSINATURA
 window.gestaoGeral = {
+    // Responsável
     toggleNecessitaAssinatura,
     abrirModalAssinatura,
     fecharModalAssinatura,
@@ -6494,6 +7086,14 @@ window.gestaoGeral = {
     copiarLinkAssinatura,
     cancelarSessaoAssinatura,
     refazerAssinatura,
+    // 🆕 Aluno
+    toggleNecessitaAssinaturaAluno,
+    abrirModalAssinaturaAluno,
+    fecharModalAssinaturaAluno,
+    reabrirModalAssinaturaAluno,
+    cancelarSessaoAssinaturaAluno,
+    refazerAssinaturaAluno,
+    // Comum
     mostrarTelaAssinatura,
     limparAssinaturaTela,
     salvarAssinaturaTela

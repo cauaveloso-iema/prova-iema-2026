@@ -14,7 +14,8 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
             'autorizacao', 
             'justificativa', 
             'segunda_chamada', 
-            'atraso', 
+            'atraso',
+            'atraso_aluno',   // 🆕 Assinatura do aluno em atrasos
             'psicologia',
             'assistente_social',
             'supervisao',
@@ -52,6 +53,9 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
         tipoProvaPerdidaFormatado: String,
         responsavelNome: String,
         responsavelCPF: String,
+        
+        // 🆕 Identifica quem vai assinar: 'responsavel' ou 'aluno'
+        tipoAssinante: String,
         
         tipoTarefa: String,
         tipoTarefaLabel: String,

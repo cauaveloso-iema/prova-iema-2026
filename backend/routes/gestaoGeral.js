@@ -50,7 +50,7 @@ router.get('/health', (req, res) => {
     success: true,
     status: 'online',
     service: 'Gestão Geral',
-    versao: '2.0-assinatura-qr',
+    versao: '2.2-assinatura-dupla',
     timestamp: new Date().toISOString()
   });
 });
@@ -61,7 +61,6 @@ router.get('/health', (req, res) => {
 
 /**
  * Cria uma nova sessão de assinatura
- * Requer autenticação (é o profissional logado que cria)
  * POST /api/gestao-geral/sessoes-assinatura
  */
 router.post('/sessoes-assinatura', authenticateToken, verificarGestaoGeral, async (req, res) => {
@@ -75,7 +74,6 @@ router.post('/sessoes-assinatura', authenticateToken, verificarGestaoGeral, asyn
       });
     }
 
-    // Valida que userId é um ObjectId válido
     if (!req.userId || !mongoose.Types.ObjectId.isValid(req.userId)) {
       console.error('❌ [SESSÃO] userId inválido:', req.userId);
       return res.status(400).json({
@@ -84,7 +82,6 @@ router.post('/sessoes-assinatura', authenticateToken, verificarGestaoGeral, asyn
       });
     }
 
-    // Verifica duplicata
     const existente = await SessaoAssinatura.findOne({ sessaoId });
     if (existente) {
       return res.status(409).json({
@@ -93,7 +90,6 @@ router.post('/sessoes-assinatura', authenticateToken, verificarGestaoGeral, asyn
       });
     }
 
-    // 🎯 Converte datas para Date se vierem como string
     const dadosNormalizados = { ...dadosAtendimento };
     if (dadosNormalizados.dataHora && typeof dadosNormalizados.dataHora === 'string') {
       const d = new Date(dadosNormalizados.dataHora);
@@ -119,12 +115,12 @@ router.post('/sessoes-assinatura', authenticateToken, verificarGestaoGeral, asyn
     const sessao = new SessaoAssinatura({
       sessaoId,
       tipo,
-      status: 'aguardando',              // ✅ enum correto: 'aguardando' (não 'pendente')
+      status: 'aguardando',
       dadosAtendimento: dadosNormalizados,
-      criadoPor: req.userId,             // ✅ campo obrigatório
+      criadoPor: req.userId,
       criadoPorNome: req.userNome || 'Gestão Geral',
       criadoEm: new Date(),
-      expiraEm: new Date(Date.now() + 30 * 60 * 1000) // 30 minutos
+      expiraEm: new Date(Date.now() + 30 * 60 * 1000)
     });
 
     await sessao.save();
@@ -159,7 +155,7 @@ router.post('/sessoes-assinatura', authenticateToken, verificarGestaoGeral, asyn
 
 /**
  * Busca uma sessão de assinatura pelo ID
- * PÚBLICO - o responsável acessa sem estar logado
+ * PÚBLICO
  * GET /api/gestao-geral/sessoes-assinatura/:sessaoId
  */
 router.get('/sessoes-assinatura/:sessaoId', async (req, res) => {
@@ -204,8 +200,8 @@ router.get('/sessoes-assinatura/:sessaoId', async (req, res) => {
 });
 
 /**
- * Registra a assinatura do responsável
- * PÚBLICO - o responsável envia a assinatura sem estar logado
+ * Registra a assinatura (responsável OU aluno)
+ * PÚBLICO
  * PUT /api/gestao-geral/sessoes-assinatura/:sessaoId/assinar
  */
 router.put('/sessoes-assinatura/:sessaoId/assinar', async (req, res) => {
@@ -253,13 +249,27 @@ router.put('/sessoes-assinatura/:sessaoId/assinar', async (req, res) => {
     }
 
     sessao.assinaturaBase64 = assinaturaBase64;
-    sessao.assinadaPorNome = assinanteNome || 'Responsável';
+    
+    const ehAluno = sessao.dadosAtendimento?.tipoAssinante === 'aluno';
+    
+    let nomeFinal = assinanteNome;
+    if (!nomeFinal || nomeFinal === 'Responsável') {
+      if (ehAluno && sessao.dadosAtendimento?.alunoNome) {
+        nomeFinal = sessao.dadosAtendimento.alunoNome;
+      } else if (!ehAluno && sessao.dadosAtendimento?.responsavelNome) {
+        nomeFinal = sessao.dadosAtendimento.responsavelNome;
+      } else {
+        nomeFinal = ehAluno ? 'Aluno' : 'Responsável';
+      }
+    }
+    
+    sessao.assinadaPorNome = nomeFinal;
     sessao.assinadaEm = new Date();
-    sessao.status = 'assinado';       // ✅ enum correto
+    sessao.status = 'assinado';
 
     await sessao.save();
 
-    console.log(`✅ [GESTÃO] Assinatura capturada: ${sessaoId} por ${sessao.assinadaPorNome}`);
+    console.log(`✅ [GESTÃO] Assinatura capturada: ${sessaoId} por ${sessao.assinadaPorNome} (${ehAluno ? 'ALUNO' : 'RESPONSÁVEL'})`);
 
     res.json({
       success: true,
@@ -279,7 +289,6 @@ router.put('/sessoes-assinatura/:sessaoId/assinar', async (req, res) => {
 
 /**
  * Cancela uma sessão de assinatura
- * Requer autenticação (é o profissional que cancela)
  * DELETE /api/gestao-geral/sessoes-assinatura/:sessaoId
  */
 router.delete('/sessoes-assinatura/:sessaoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
@@ -295,7 +304,7 @@ router.delete('/sessoes-assinatura/:sessaoId', authenticateToken, verificarGesta
       });
     }
 
-    sessao.status = 'cancelado';      // ✅ enum correto
+    sessao.status = 'cancelado';
     await sessao.save();
 
     console.log(`🗑️ [GESTÃO] Sessão cancelada: ${sessaoId}`);
@@ -525,6 +534,7 @@ router.get('/atraso/buscar-aluno', authenticateToken, verificarGestaoGeral, asyn
 
 // ============================================
 // 📝 REGISTRAR ATRASO (com assinatura via QR Code)
+// Suporta assinatura do RESPONSÁVEL e do ALUNO
 // ============================================
 router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -532,7 +542,10 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       alunoId, motivo, descricao, observacoes, detalhes, dataHora,
       precisaAssinatura = false,
       assinaturaBase64 = '',
-      sessaoAssinaturaId = null
+      sessaoAssinaturaId = null,
+      precisaAssinaturaAluno = false,
+      assinaturaAlunoBase64 = '',
+      sessaoAssinaturaAlunoId = null
     } = req.body;
     
     if (!descricao || descricao.trim() === '') {
@@ -568,12 +581,13 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       });
     }
     
-    // 🆕 ASSINATURA VIA QR CODE
+    // ============================================
+    // ASSINATURA DO RESPONSÁVEL
+    // ============================================
     let assinaturaValida = '';
     let assinadaPorNome = null;
     let assinadaEm = null;
     
-    // Se veio assinatura direta (formato base64)
     if (assinaturaBase64 && typeof assinaturaBase64 === 'string') {
       if (assinaturaBase64.startsWith('data:image/png;base64,')) {
         if (assinaturaBase64.length > 500 * 1024) {
@@ -585,7 +599,6 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       }
     }
     
-    // Se veio via sessão de assinatura, busca a assinatura da sessão
     if (sessaoAssinaturaId && !assinaturaValida) {
       try {
         const sessao = await SessaoAssinatura.findOne({ 
@@ -598,22 +611,67 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
           assinadaPorNome = sessao.assinadaPorNome;
           assinadaEm = sessao.assinadaEm;
           
-          // Marca sessão como aplicada (não temos esse status no enum, então cancelamos)
-          // Aplica a assinatura e depois cancela a sessão para não ser reutilizada
           sessao.status = 'cancelado';
           await sessao.save();
           
-          console.log(`✅ [GESTÃO] Assinatura da sessão ${sessaoAssinaturaId} aplicada ao atraso`);
+          console.log(`✅ [GESTÃO] Assinatura do RESPONSÁVEL da sessão ${sessaoAssinaturaId} aplicada`);
         }
       } catch (e) {
-        console.warn('Erro ao buscar assinatura da sessão:', e.message);
+        console.warn('Erro ao buscar assinatura da sessão (responsável):', e.message);
       }
     }
     
-    const statusAssinatura = precisaAssinatura && !assinaturaValida
-      ? 'pendente'
-      : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
+    const statusAssinatura = assinaturaValida.length > 100
+      ? 'assinada'
+      : (precisaAssinatura ? 'pendente' : 'nao_necessaria');
     
+    // ============================================
+    // 🆕 ASSINATURA DO ALUNO
+    // ============================================
+    let assinaturaAlunoValida = '';
+    let assinadaPorNomeAluno = null;
+    let assinadaEmAluno = null;
+    
+    if (assinaturaAlunoBase64 && typeof assinaturaAlunoBase64 === 'string') {
+      if (assinaturaAlunoBase64.startsWith('data:image/png;base64,')) {
+        if (assinaturaAlunoBase64.length > 500 * 1024) {
+          return res.status(400).json({ success: false, error: 'Assinatura do aluno muito grande (máx 500KB)' });
+        }
+        assinaturaAlunoValida = assinaturaAlunoBase64;
+        assinadaPorNomeAluno = aluno.nome;
+        assinadaEmAluno = new Date();
+      }
+    }
+    
+    if (sessaoAssinaturaAlunoId && !assinaturaAlunoValida) {
+      try {
+        const sessaoAluno = await SessaoAssinatura.findOne({ 
+          sessaoId: sessaoAssinaturaAlunoId,
+          status: 'assinado'
+        });
+        
+        if (sessaoAluno && sessaoAluno.assinaturaBase64) {
+          assinaturaAlunoValida = sessaoAluno.assinaturaBase64;
+          assinadaPorNomeAluno = sessaoAluno.assinadaPorNome || aluno.nome;
+          assinadaEmAluno = sessaoAluno.assinadaEm;
+          
+          sessaoAluno.status = 'cancelado';
+          await sessaoAluno.save();
+          
+          console.log(`✅ [GESTÃO] Assinatura do ALUNO da sessão ${sessaoAssinaturaAlunoId} aplicada`);
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar assinatura da sessão (aluno):', e.message);
+      }
+    }
+    
+    const statusAssinaturaAluno = assinaturaAlunoValida.length > 100
+      ? 'assinada'
+      : (precisaAssinaturaAluno ? 'pendente' : 'nao_necessaria');
+    
+    // ============================================
+    // CRIA O REGISTRO DE ATRASO
+    // ============================================
     const atraso = new Atraso({
       alunoId: aluno._id,
       alunoNome: aluno.nome,
@@ -628,22 +686,35 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
       detalhes: detalhes || {},
       registradoPor: req.userId,
       registradoPorNome: gestor?.nome || req.userNome || 'Gestão Geral',
+      
+      // Responsável
+      precisaAssinatura: !!precisaAssinatura,
       assinaturaBase64: assinaturaValida,
       temAssinatura: assinaturaValida.length > 100,
       statusAssinatura: statusAssinatura,
       assinadaEm: assinadaEm,
-      assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
       assinadaPorNome: assinadaPorNome,
-      sessaoAssinaturaId: sessaoAssinaturaId
+      
+      // 🆕 Aluno
+      precisaAssinaturaAluno: !!precisaAssinaturaAluno,
+      assinaturaAlunoBase64: assinaturaAlunoValida,
+      temAssinaturaAluno: assinaturaAlunoValida.length > 100,
+      statusAssinaturaAluno: statusAssinaturaAluno,
+      assinadaEmAluno: assinadaEmAluno,
+      assinadaPorNomeAluno: assinadaPorNomeAluno
     });
     
     await atraso.save();
     
     const dataFormatada = dataFinal.toLocaleString('pt-BR');
     
+    let msgExtras = '';
+    if (statusAssinatura === 'pendente') msgExtras += ' — aguardando assinatura do responsável';
+    if (statusAssinaturaAluno === 'pendente') msgExtras += ' — aguardando assinatura do aluno';
+    
     res.json({
       success: true,
-      message: `Atraso de ${dataFormatada} registrado para ${aluno.nome}${statusAssinatura === 'pendente' ? ' — aguardando assinatura' : ''}`,
+      message: `Atraso de ${dataFormatada} registrado para ${aluno.nome}${msgExtras}`,
       atraso: {
         id: atraso._id,
         motivo: atraso.motivo,
@@ -651,7 +722,9 @@ router.post('/atraso/registrar', authenticateToken, verificarGestaoGeral, async 
         dataHora: atraso.dataHora,
         dataHoraFormatada: dataFormatada,
         temAssinatura: atraso.temAssinatura,
-        statusAssinatura: atraso.statusAssinatura
+        statusAssinatura: atraso.statusAssinatura,
+        temAssinaturaAluno: atraso.temAssinaturaAluno,
+        statusAssinaturaAluno: atraso.statusAssinaturaAluno
       }
     });
   } catch (error) {
@@ -788,7 +861,7 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
     
     const [atrasos, total] = await Promise.all([
       Atraso.find(query)
-        .select('-assinaturaBase64')
+        .select('-assinaturaBase64 -assinaturaAlunoBase64')
         .sort({ dataHora: -1 })
         .skip(skip)
         .limit(limitNum),
@@ -817,6 +890,8 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
         registradoPor: a.registradoPorNome,
         temAssinatura: a.temAssinatura,
         statusAssinatura: a.statusAssinatura,
+        temAssinaturaAluno: a.temAssinaturaAluno,
+        statusAssinaturaAluno: a.statusAssinaturaAluno,
         createdAt: a.createdAt
       }))
     });
@@ -826,7 +901,10 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
   }
 });
 
-// Buscar por ID
+// ============================================
+// 🔍 BUSCAR ATRASO POR ID
+// ✅ Retorna TUDO que a impressão precisa, incluindo precisaAssinatura/precisaAssinaturaAluno
+// ============================================
 router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
     if (req.params.id === 'listar' || req.params.id === 'dashboard' || req.params.id === 'registrar') {
@@ -856,12 +934,23 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         observacoes: atraso.observacoes,
         detalhes: atraso.detalhes,
         registradoPor: atraso.registradoPorNome,
+        
+        // ✅ RESPONSÁVEL
+        precisaAssinatura: atraso.precisaAssinatura || false,
         assinaturaBase64: atraso.assinaturaBase64 || '',
-        temAssinatura: atraso.temAssinatura,
+        temAssinatura: atraso.temAssinatura || false,
         statusAssinatura: atraso.statusAssinatura,
         assinadaEm: atraso.assinadaEm,
         assinadaPorNome: atraso.assinadaPorNome,
-        sessaoAssinaturaId: atraso.sessaoAssinaturaId || null,
+        
+        // ✅ ALUNO
+        precisaAssinaturaAluno: atraso.precisaAssinaturaAluno || false,
+        assinaturaAlunoBase64: atraso.assinaturaAlunoBase64 || '',
+        temAssinaturaAluno: atraso.temAssinaturaAluno || false,
+        statusAssinaturaAluno: atraso.statusAssinaturaAluno,
+        assinadaEmAluno: atraso.assinadaEmAluno,
+        assinadaPorNomeAluno: atraso.assinadaPorNomeAluno,
+        
         createdAt: atraso.createdAt,
         updatedAt: atraso.updatedAt
       }
@@ -960,7 +1049,7 @@ router.get('/atraso/relatorio/aluno/:alunoId', authenticateToken, verificarGesta
       if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
     }
     
-    const atrasos = await Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 });
+    const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
     const aluno = await User.findById(req.params.alunoId).select('nome matricula turma curso');
     
     const porMotivo = {};
@@ -1004,7 +1093,7 @@ router.get('/atraso/relatorio/turma/:turma', authenticateToken, verificarGestaoG
       if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
     }
     
-    const atrasos = await Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 });
+    const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
     
     const porAluno = {};
     atrasos.forEach(a => {
@@ -1054,7 +1143,7 @@ router.get('/atraso/relatorio/geral', authenticateToken, verificarGestaoGeral, a
       if (dataFim) query.dataHora.$lte = new Date(dataFim + 'T23:59:59');
     }
     
-    const atrasos = await Atraso.find(query).select('-assinaturaBase64').sort({ dataHora: -1 });
+    const atrasos = await Atraso.find(query).select('-assinaturaBase64 -assinaturaAlunoBase64').sort({ dataHora: -1 });
     
     const porTurma = {};
     const porMotivo = {};
