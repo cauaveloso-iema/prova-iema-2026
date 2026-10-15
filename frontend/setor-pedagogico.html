@@ -14,6 +14,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Setor Pedagógico - EducaPleno</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -22,46 +23,24 @@
     <link rel="stylesheet" href="css/setor-pedagogico.css">
     <link rel="stylesheet" href="css/substituicao-professores.css">
     <link rel="stylesheet" href="css/visitas-admin.css">
+    <link rel="stylesheet" href="css/aee.css">
+
     <script src="js/dialog-helper.js"></script>
 </head>
 <body>
     <button class="mobile-menu-btn" id="mobileMenuBtn">
         <i class="fas fa-bars"></i>
     </button>
-    
+
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h3><i class="fas fa-graduation-cap"></i> Setor Pedagógico</h3>
-            <p>AEE | Psicopedagogia</p>
-            <div class="mt-3">
-                <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
-                    <i class="fas fa-heart text-danger"></i> Inclusão
-                </span>
-            </div>
+            <p class="sidebar-subtitle">Bem-vindo(a) ao EducaPleno</p>
         </div>
-        <nav class="nav flex-column">
-            <a href="#" class="nav-link active" data-section="dashboard">
-                <i class="fas fa-chart-line"></i> Dashboard
-            </a>
-            <a href="#" class="nav-link" data-section="alunos">
-                <i class="fas fa-users"></i> Alunos AEE
-            </a>
-            <a href="#" class="nav-link" data-section="provas">
-                <i class="fas fa-file-alt"></i> Provas
-            </a>
-            <a href="#" class="nav-link" data-section="relatorios">
-                <i class="fas fa-chart-bar"></i> Relatórios
-            </a>
-            <a href="#" class="nav-link" data-section="segunda-chamada" id="navSegundaChamada" style="display: none;">
-                <i class="fas fa-redo"></i> 2ª Chamada
-            </a>
-            <a href="#" class="nav-link" data-section="substituicao-professores" id="navSubstituicaoProfessores" style="display: none;">
-                <i class="fas fa-people-arrows"></i> Substituição de Professores
-            </a>
 
-            <!-- 🔥 Gestão de Professores -->
-            <a href="#" class="nav-link" data-section="gestao-professores" id="navGestaoProfessores" style="display: none;">
-                <i class="fas fa-chalkboard-teacher"></i> Gestão de Professores
+        <nav class="nav flex-column">
+            <a href="#" class="nav-link" data-section="aee" id="navAEE" style="display: none;">
+                <i class="fas fa-universal-access"></i> AEE
             </a>
 
             <a class="nav-link" data-section="visitas" href="#" id="navVisitas" style="display: none;">
@@ -69,49 +48,50 @@
                 <span>Autorização de Visitas</span>
             </a>
 
-            <a href="#" class="nav-link" onclick="event.preventDefault(); setorPedagogico.fecharMenuLateral(); setTimeout(() => setorPedagogico.abrirModalUploadAdaptarDocumento(), 300);" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; margin: 12px 16px;">
+            <a href="#" class="nav-link" data-section="gestao-professores" id="navGestaoProfessores" style="display: none;">
+                <i class="fas fa-chalkboard-teacher"></i> Gestão de Professores
+            </a>
+
+            <a href="#" class="nav-link" data-section="substituicao-professores" id="navSubstituicaoProfessores" style="display: none;">
+                <i class="fas fa-people-arrows"></i> Substituição de Professores
+            </a>
+
+            <a href="#" class="nav-link" data-section="segunda-chamada" id="navSegundaChamada" style="display: none;">
+                <i class="fas fa-redo"></i> 2ª Chamada
+            </a>
+
+            <a href="#" class="nav-link"
+               onclick="event.preventDefault(); setorPedagogico.fecharMenuLateral(); setTimeout(() => setorPedagogico.abrirModalUploadAdaptarDocumento(), 300);"
+               style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; margin: 12px 16px;">
                 <i class="fas fa-universal-access"></i> Adaptar Documento
             </a>
+
             <hr style="margin: 16px 24px; border-color: rgba(255,255,255,0.15);">
-            
+
             <a href="editar-perfil.html" class="btn-editar-perfil">
                 <i class="fas fa-user-edit"></i> Editar Perfil
             </a>
 
-            <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" 
-            target="_blank" 
-            class="nav-link btn-download-app"
-            style="
-                background: linear-gradient(135deg, #10b981, #059669);
-                color: white;
-                margin: 10px 16px;
-                border-radius: 12px;
-                padding: 12px 20px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                font-weight: 600;
-                font-size: 0.9rem;
-                text-decoration: none;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-            "
-            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(16,185,129,0.4)'"
-            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'">
+            <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+               target="_blank"
+               class="nav-link btn-download-app"
+               style="background: linear-gradient(135deg, #10b981, #059669); color: white; margin: 10px 16px; border-radius: 12px; padding: 12px 20px; display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 0.9rem; text-decoration: none; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);"
+               onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(16,185,129,0.4)'"
+               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'">
                 <i class="fas fa-download" style="font-size: 1.1rem;"></i>
                 <span>Baixar Aplicativo</span>
             </a>
-            
+
             <a href="#" class="nav-link" id="logoutBtn">
                 <i class="fas fa-sign-out-alt"></i> Sair
             </a>
         </nav>
-        
+
         <div class="position-absolute bottom-0 start-0 end-0 p-3 text-center" style="font-size: 0.7rem; opacity: 0.6;">
             <i class="fas fa-shield-alt"></i> EducaPleno
         </div>
     </div>
-    
+
     <div class="main-content">
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
@@ -119,11 +99,11 @@
                     <i class="fas fa-graduation-cap"></i>
                 </div>
                 <div style="min-width: 0; flex: 1;">
-                    <h2 id="pageTitle" class="mb-0">Dashboard</h2>
-                    <p class="text-muted mb-0 mt-1">Acompanhamento de alunos com necessidades especiais</p>
+                    <h2 id="pageTitle" class="mb-0">Setor Pedagógico</h2>
+                    <p class="text-muted mb-0 mt-1">Bem-vindo ao EducaPleno</p>
                 </div>
             </div>
-            
+
             <div class="d-flex align-items-center gap-3 page-header-actions">
                 <button class="btn-adaptar-header" onclick="setorPedagogico.abrirModalUploadAdaptarDocumento()">
                     <i class="fas fa-universal-access"></i>
@@ -139,22 +119,22 @@
                         <small class="text-muted" style="font-size: 0.7rem;">Setor Pedagógico</small>
                     </div>
                 </div>
-                
+
                 <div class="notificacao-icone" onclick="setorPedagogico.abrirPainelNotificacoes()">
                     <i class="fas fa-bell"></i>
                     <span id="notificacaoBadge" class="badge">0</span>
                 </div>
             </div>
         </div>
-        
+
         <div id="content">
             <div class="text-center py-5">
                 <div class="loading"></div>
-                <p class="mt-3 text-muted">Carregando dados...</p>
+                <p class="mt-3 text-muted">Carregando...</p>
             </div>
         </div>
     </div>
-    
+
     <div class="notificacoes-panel" id="notificacoesPanel">
         <div class="notificacoes-header">
             <h3><i class="fas fa-bell"></i> Notificações</h3>
@@ -174,7 +154,8 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- MODAIS -->
     <div class="modal fade" id="provaModal" tabindex="-1">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
@@ -242,15 +223,15 @@
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    
+
     <script src="js/setor-pedagogico.js"></script>
-    <!-- 🔥 Módulo de Gestão de Professores (v2 — aulas por período) -->
     <script src="js/gestao-professores-module.js"></script>
+    <script src="js/aee-module.js"></script>
     <script src="js/visitas-admin.js"></script>
-    
+
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
@@ -259,24 +240,14 @@
     <script src="/js/core-security.js"></script>
 
     <nav class="bottom-nav-sp" id="bottomNavSp">
-        <button class="nav-item-sp active" data-section="dashboard" onclick="setorPedagogico.navigateTo('dashboard'); setorPedagogico.updateBottomNav('dashboard');">
-            <div class="icon-wrapper"><i class="fas fa-chart-line"></i></div>
+        <button class="nav-item-sp active" data-section="boas-vindas" onclick="setorPedagogico.navigateTo('boas-vindas'); setorPedagogico.updateBottomNav('boas-vindas');">
+            <div class="icon-wrapper"><i class="fas fa-home"></i></div>
             <span class="nav-label">Início</span>
-        </button>
-
-        <button class="nav-item-sp" data-section="alunos" onclick="setorPedagogico.navigateTo('alunos'); setorPedagogico.updateBottomNav('alunos');">
-            <div class="icon-wrapper"><i class="fas fa-users"></i></div>
-            <span class="nav-label">Alunos</span>
         </button>
 
         <button class="nav-item-sp" data-section="provas" onclick="setorPedagogico.navigateTo('provas'); setorPedagogico.updateBottomNav('provas');">
             <div class="icon-wrapper"><i class="fas fa-file-alt"></i></div>
             <span class="nav-label">Provas</span>
-        </button>
-
-        <button class="nav-item-sp" data-section="relatorios" onclick="setorPedagogico.navigateTo('relatorios'); setorPedagogico.updateBottomNav('relatorios');">
-            <div class="icon-wrapper"><i class="fas fa-chart-bar"></i></div>
-            <span class="nav-label">Relatórios</span>
         </button>
 
         <button class="nav-item-sp" data-section="menu" onclick="setorPedagogico.abrirMenuLateral()">
@@ -359,6 +330,7 @@
     <script>
     (function() {
         if (window.innerWidth > 768) return;
+
         function calcularEscalaMobile() {
             const width = window.innerWidth;
             if (width <= 320) return 0.55;
@@ -369,11 +341,13 @@
             if (width <= 700) return 0.95;
             return 1;
         }
+
         function aplicarEscalaMobile() {
             if (window.innerWidth > 768) return;
             const escala = calcularEscalaMobile();
             document.documentElement.style.setProperty('--scale-ratio', escala);
         }
+
         aplicarEscalaMobile();
         let timeout;
         window.addEventListener('resize', function() {
@@ -387,44 +361,6 @@
     </script>
 
     <script>
-    (function() {
-        const fabBtn = document.getElementById('fabMenuBtn');
-        const bottomSheet = document.getElementById('bottomSheet');
-        const sheetOverlay = document.getElementById('sheetOverlay');
-        const closeSheetBtn = document.getElementById('closeSheetBtn');
-
-        function openBottomSheet() {
-            bottomSheet.classList.add('open');
-            sheetOverlay.classList.add('active');
-        }
-        function closeBottomSheet() {
-            bottomSheet.classList.remove('open');
-            sheetOverlay.classList.remove('active');
-        }
-
-        if (fabBtn) fabBtn.addEventListener('click', openBottomSheet);
-        if (closeSheetBtn) closeSheetBtn.addEventListener('click', closeBottomSheet);
-        if (sheetOverlay) sheetOverlay.addEventListener('click', closeBottomSheet);
-
-        document.querySelectorAll('.menu-item[data-section]').forEach(item => {
-            item.addEventListener('click', function() {
-                const section = this.getAttribute('data-section');
-                if (section && typeof setorPedagogico !== 'undefined') {
-                    setorPedagogico.navigateTo(section);
-                    closeBottomSheet();
-                }
-            });
-        });
-
-        const logoutMobileBtn = document.getElementById('logoutMobileBtn');
-        if (logoutMobileBtn) {
-            logoutMobileBtn.addEventListener('click', function() {
-                localStorage.clear();
-                window.location.href = 'login.html';
-            });
-        }
-    })();
-
     (function() {
         function ajustarMenuMobile() {
             const isMobile = window.innerWidth < 768;

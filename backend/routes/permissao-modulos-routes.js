@@ -17,31 +17,31 @@ function getPermissaoModulo() {
 const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    
+
     if (!token) {
         return res.status(401).json({ success: false, error: 'Token não fornecido' });
     }
-    
+
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
         if (err) {
             console.error('❌ Token inválido:', err.message);
             return res.status(403).json({ success: false, error: 'Token inválido' });
         }
-        
+
         try {
             // 🔥 CORREÇÃO: Buscar email do banco de dados
             const User = require('../models/User');
             const user = await User.findById(decoded.id).select('email nome role');
-            
+
             if (!user) {
                 return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
             }
-            
+
             req.userId = user._id;
             req.userRole = user.role;
             req.userNome = user.nome;
             req.userEmail = user.email;  // ✅ Email vem do BANCO
-            
+
             next();
         } catch (dbError) {
             console.error('❌ Erro ao buscar usuário:', dbError);
@@ -86,10 +86,15 @@ const MODULOS_DISPONIVEIS = {
         nomeAmigavel: 'Autorização de Visitas',
         descricao: 'Permite criar e gerenciar termos de visita técnica e autorizações de responsáveis'
     },
-    // 🔥 NOVO MÓDULO: GESTÃO DE PROFESSORES
+    // 🔥 GESTÃO DE PROFESSORES
     'gestao_professores_setor_pedagogico': {
         nomeAmigavel: 'Gestão de Professores',
         descricao: 'Permite registrar e gerenciar a gestão de professores, componentes curriculares, turmas e aulas por período'
+    },
+    // 🆕 AEE - ATENDIMENTO EDUCACIONAL ESPECIALIZADO
+    'aee_setor_pedagogico': {
+        nomeAmigavel: 'AEE - Atendimento Educacional Especializado',
+        descricao: 'Permite acessar o módulo AEE: alunos com necessidades específicas, relatórios de acessibilidade e provas adaptadas'
     }
 };
 
@@ -107,14 +112,14 @@ router.get('/modulos', authenticateToken, apenasAdmins, async (req, res) => {
     try {
         const PermissaoModulo = getPermissaoModulo();
         const modulos = [];
-        
+
         for (const [modulo, config] of Object.entries(MODULOS_DISPONIVEIS)) {
             const permissao = await PermissaoModulo.buscarOuCriar(
                 modulo,
                 config.nomeAmigavel,
                 config.descricao
             );
-            
+
             modulos.push({
                 modulo: permissao.modulo,
                 nomeAmigavel: permissao.nomeAmigavel,
@@ -126,9 +131,9 @@ router.get('/modulos', authenticateToken, apenasAdmins, async (req, res) => {
                 updatedAt: permissao.updatedAt
             });
         }
-        
+
         res.json({ success: true, modulos });
-        
+
     } catch (error) {
         console.error('❌ Erro ao listar módulos:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -142,23 +147,23 @@ router.get('/modulos/:modulo', authenticateToken, apenasAdmins, async (req, res)
     try {
         const PermissaoModulo = getPermissaoModulo();
         const { modulo } = req.params;
-        
+
         if (!MODULOS_DISPONIVEIS[modulo]) {
             return res.status(404).json({
                 success: false,
                 error: 'Módulo não reconhecido'
             });
         }
-        
+
         const config = MODULOS_DISPONIVEIS[modulo];
         const permissao = await PermissaoModulo.buscarOuCriar(
             modulo,
             config.nomeAmigavel,
             config.descricao
         );
-        
+
         res.json({ success: true, permissao });
-        
+
     } catch (error) {
         console.error('❌ Erro:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -173,43 +178,43 @@ router.post('/modulos/:modulo/emails', authenticateToken, apenasAdmins, async (r
         const PermissaoModulo = getPermissaoModulo();
         const { modulo } = req.params;
         const { email } = req.body;
-        
+
         if (!MODULOS_DISPONIVEIS[modulo]) {
             return res.status(404).json({
                 success: false,
                 error: 'Módulo não reconhecido'
             });
         }
-        
+
         if (!email || !email.includes('@')) {
             return res.status(400).json({
                 success: false,
                 error: 'Email inválido'
             });
         }
-        
+
         const config = MODULOS_DISPONIVEIS[modulo];
-        
+
         await PermissaoModulo.buscarOuCriar(
             modulo,
             config.nomeAmigavel,
             config.descricao
         );
-        
+
         const permissao = await PermissaoModulo.adicionarEmail(
             modulo,
             email,
             { userId: req.userId, nome: req.userNome }
         );
-        
+
         console.log(`✅ Email ${email} adicionado ao módulo ${modulo} por ${req.userNome}`);
-        
+
         res.json({
             success: true,
             message: `Email ${email} adicionado com sucesso`,
             permissao
         });
-        
+
     } catch (error) {
         console.error('❌ Erro ao adicionar email:', error);
         res.status(400).json({ success: false, error: error.message });
@@ -223,28 +228,28 @@ router.delete('/modulos/:modulo/emails/:email', authenticateToken, apenasAdmins,
     try {
         const PermissaoModulo = getPermissaoModulo();
         const { modulo, email } = req.params;
-        
+
         if (!MODULOS_DISPONIVEIS[modulo]) {
             return res.status(404).json({
                 success: false,
                 error: 'Módulo não reconhecido'
             });
         }
-        
+
         const permissao = await PermissaoModulo.removerEmail(
             modulo,
             decodeURIComponent(email),
             { userId: req.userId, nome: req.userNome }
         );
-        
+
         console.log(`🗑️ Email ${email} removido do módulo ${modulo} por ${req.userNome}`);
-        
+
         res.json({
             success: true,
             message: `Email removido com sucesso`,
             permissao
         });
-        
+
     } catch (error) {
         console.error('❌ Erro ao remover email:', error);
         res.status(400).json({ success: false, error: error.message });
@@ -252,21 +257,21 @@ router.delete('/modulos/:modulo/emails/:email', authenticateToken, apenasAdmins,
 });
 
 // ============================================
-// ✅ VERIFICAR PERMISSÃO (VERSÃO CORRIGIDA)
+// ✅ VERIFICAR PERMISSÃO
 // ============================================
 router.get('/verificar/:modulo', authenticateToken, async (req, res) => {
     try {
         const PermissaoModulo = getPermissaoModulo();
         const { modulo } = req.params;
-        
+
         // 🔥 CORREÇÃO PRINCIPAL:
         // Prioridade: query param > email do token
         const emailParaVerificar = (
-            req.query.email || 
-            req.userEmail || 
+            req.query.email ||
+            req.userEmail ||
             ''
         ).trim().toLowerCase();
-        
+
         // Admin e super_admin SEMPRE têm permissão
         if (req.userRole === 'admin' || req.userRole === 'super_admin') {
             console.log('✅ Admin/Super Admin - permissão concedida automaticamente');
@@ -278,10 +283,10 @@ router.get('/verificar/:modulo', authenticateToken, async (req, res) => {
                 motivo: 'Usuário é admin/super_admin'
             });
         }
-        
+
         // Buscar permissão no banco
         const permissao = await PermissaoModulo.findOne({ modulo });
-        
+
         if (!permissao) {
             console.log('⚠️ Módulo não encontrado no banco');
             return res.json({
@@ -292,7 +297,7 @@ router.get('/verificar/:modulo', authenticateToken, async (req, res) => {
                 motivo: 'Módulo não configurado'
             });
         }
-        
+
         if (!permissao.ativo) {
             console.log('⚠️ Módulo desativado');
             return res.json({
@@ -303,14 +308,14 @@ router.get('/verificar/:modulo', authenticateToken, async (req, res) => {
                 motivo: 'Módulo desativado'
             });
         }
-        
+
         // 🔥 Comparação robusta: case-insensitive + trim
-        const emailsNormalizados = permissao.emailsAutorizados.map(e => 
+        const emailsNormalizados = permissao.emailsAutorizados.map(e =>
             (e || '').trim().toLowerCase()
         );
-        
+
         const temPermissao = emailsNormalizados.includes(emailParaVerificar);
-        
+
         res.json({
             success: true,
             temPermissao,
@@ -318,12 +323,12 @@ router.get('/verificar/:modulo', authenticateToken, async (req, res) => {
             email: emailParaVerificar,
             motivo: temPermissao ? 'Email autorizado' : 'Email não autorizado'
         });
-        
+
     } catch (error) {
         console.error('❌ Erro ao verificar permissão:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
@@ -335,19 +340,19 @@ router.get('/modulos/:modulo/emails', authenticateToken, apenasAdmins, async (re
     try {
         const PermissaoModulo = getPermissaoModulo();
         const { modulo } = req.params;
-        
+
         const permissao = await PermissaoModulo.findOne({ modulo });
-        
+
         if (!permissao) {
             return res.json({ success: true, emails: [] });
         }
-        
+
         res.json({
             success: true,
             emails: permissao.emailsAutorizados,
             total: permissao.emailsAutorizados.length
         });
-        
+
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

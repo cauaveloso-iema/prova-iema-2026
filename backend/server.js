@@ -1018,6 +1018,10 @@ app.use('/api/substituicao-professor', require('./routes/substituicao-professor-
 // ---------- Gestao de Professor ----------
 app.use('/api/gestao-professores', require('./routes/gestao-professores-routes'));
 
+// ---------- AEE ----------
+const aeeRoutes = require('./routes/aee-routes');
+app.use('/api/aee', aeeRoutes);
+
 // ---------- Atraso de Professor ----------
 const atrasoProfessorRoutes = require('./routes/atraso-professor-routes');
 app.use('/api/atraso-professor', atrasoProfessorRoutes);

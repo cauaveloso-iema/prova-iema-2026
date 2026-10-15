@@ -1931,3 +1931,418 @@ body {
         display: none; /* Esconde texto, mostra só ícone */
     }
 }
+
+/* ============================================================================
+   WELCOME / BOAS-VINDAS - SETOR PEDAGÓGICO
+   ============================================================================ */
+
+.welcome-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 4px 40px;
+    animation: fadeInUp 0.5s ease;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- HERO ---------- */
+.welcome-hero {
+    position: relative;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 24px;
+    padding: 36px 36px;
+    margin-bottom: 32px;
+    overflow: hidden;
+    color: white;
+    box-shadow: 0 12px 40px rgba(102, 126, 234, 0.25);
+}
+
+.welcome-hero-bg {
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.welcome-hero-bg::after {
+    content: '';
+    position: absolute;
+    bottom: -180px;
+    left: -120px;
+    width: 320px;
+    height: 320px;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+}
+
+.welcome-hero-content {
+    position: relative;
+    z-index: 1;
+}
+
+/* Layout em 2 colunas: esquerda (texto) e direita (relógio) */
+.welcome-hero-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+}
+
+.welcome-hero-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.welcome-hero-right {
+    flex-shrink: 0;
+}
+
+.welcome-saudacao-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    font-size: 24px;
+    margin-bottom: 16px;
+    backdrop-filter: blur(10px);
+}
+
+.welcome-title {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0 0 14px;
+    letter-spacing: -0.5px;
+    color: white;
+    line-height: 1.2;
+}
+
+.welcome-title span {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.welcome-subtitle {
+    font-size: 1.02rem;
+    line-height: 1.65;
+    margin: 0 0 18px;
+    opacity: 0.96;
+    /* ✅ SEM max-width - ocupa todo o espaço disponível */
+}
+
+.welcome-subtitle strong { font-weight: 700; }
+
+.welcome-data {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(10px);
+    padding: 9px 18px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-transform: capitalize;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* ---------- CARD DE RELÓGIO (lado direito) ---------- */
+.welcome-relogio-card {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 20px;
+    padding: 20px 26px;
+    min-width: 210px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transition: transform 0.3s ease;
+}
+
+.welcome-relogio-card:hover {
+    transform: translateY(-3px);
+}
+
+.welcome-relogio-topo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+    opacity: 0.85;
+    margin-bottom: 10px;
+}
+
+.welcome-relogio-topo i { font-size: 0.9rem; }
+
+.welcome-relogio-hora {
+    font-size: 2.6rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1;
+    color: white;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 2px;
+}
+
+.welcome-relogio-segundos {
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0.8;
+    font-variant-numeric: tabular-nums;
+}
+
+.welcome-relogio-periodo {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 4px 14px;
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+/* ---------- SEÇÃO DE MÓDULOS ---------- */
+.welcome-modulos-section { margin-top: 8px; }
+
+.welcome-modulos-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.welcome-modulos-header h2 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.welcome-modulos-header h2 i { color: #667eea; }
+
+.welcome-modulos-count {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+}
+
+.welcome-modulos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 18px;
+}
+
+/* ---------- CARD DE MÓDULO ---------- */
+.welcome-modulo-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.welcome-modulo-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #667eea, #764ba2);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.welcome-modulo-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 32px rgba(102, 126, 234, 0.15);
+    border-color: #c7d2fe;
+}
+
+.welcome-modulo-card:hover::before { opacity: 1; }
+
+.welcome-modulo-card:hover .welcome-modulo-arrow {
+    transform: translateX(4px);
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.welcome-modulo-icon {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 22px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.welcome-modulo-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.welcome-modulo-body h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 4px;
+    line-height: 1.3;
+}
+
+.welcome-modulo-subtitulo {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.welcome-modulo-descricao {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.welcome-modulo-arrow {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+/* ---------- ESTADO VAZIO ---------- */
+.welcome-empty {
+    text-align: center;
+    padding: 60px 24px;
+    background: white;
+    border: 2px dashed #e5e7eb;
+    border-radius: 20px;
+    margin-top: 8px;
+}
+
+.welcome-empty i {
+    font-size: 56px;
+    color: #cbd5e1;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.welcome-empty h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #475569;
+    margin: 0 0 8px;
+}
+
+.welcome-empty p {
+    color: #94a3b8;
+    font-size: 0.95rem;
+    margin: 0;
+    max-width: 400px;
+    margin-inline: auto;
+}
+
+/* ---------- FOOTER ---------- */
+.welcome-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-top: 40px;
+    padding: 20px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.welcome-footer-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.welcome-footer-item i { font-size: 1rem; color: #667eea; }
+
+/* ---------- RESPONSIVO ---------- */
+@media (max-width: 900px) {
+    .welcome-hero-main {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 20px;
+    }
+    .welcome-hero-right {
+        width: 100%;
+    }
+    .welcome-relogio-card {
+        min-width: 0;
+        width: 100%;
+        padding: 16px 20px;
+    }
+    .welcome-relogio-hora { font-size: 2.2rem; }
+}
+
+@media (max-width: 768px) {
+    .welcome-hero { padding: 26px 20px; border-radius: 20px; margin-bottom: 24px; }
+    .welcome-title { font-size: 1.5rem; }
+    .welcome-subtitle { font-size: 0.95rem; }
+    .welcome-saudacao-icon { width: 48px; height: 48px; font-size: 20px; }
+    .welcome-modulos-grid { grid-template-columns: 1fr; gap: 14px; }
+    .welcome-modulo-card { padding: 16px; border-radius: 16px; }
+    .welcome-modulo-icon { width: 48px; height: 48px; font-size: 18px; border-radius: 14px; }
+    .welcome-modulo-body h3 { font-size: 0.98rem; }
+    .welcome-modulos-header h2 { font-size: 1.15rem; }
+    .welcome-footer { gap: 16px; margin-top: 28px; }
+    .welcome-footer-item { font-size: 0.78rem; }
+}
+
+@media (max-width: 480px) {
+    .welcome-hero { padding: 22px 18px; }
+    .welcome-title { font-size: 1.3rem; }
+    .welcome-data { font-size: 0.78rem; padding: 6px 12px; }
+    .welcome-relogio-hora { font-size: 1.9rem; }
+}

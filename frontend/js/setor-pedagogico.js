@@ -1,6 +1,19 @@
 // js/setor-pedagogico.js
 // ============================================================================
-// CLASSE PRINCIPAL - SETOR PEDAGÓGICO
+// CLASSE PRINCIPAL - SETOR PEDAGÓGICO (REFATORADO)
+// ============================================================================
+// Responsabilidades:
+//   - Boas-vindas (home)
+//   - Provas (visualizar/imprimir normal)
+//   - 2ª Chamada
+//   - Substituição de Professores
+//   - Gestão de Professores
+//   - Autorização de Visitas
+//   - Adaptar Documento (global)
+//   - Notificações
+//
+// ⚠️ Módulo AEE (Alunos, Relatórios de Acessibilidade, Provas Adaptadas)
+//    está em: js/aee-module.js
 // ============================================================================
 
 // ============================================
@@ -8,30 +21,29 @@
 // ============================================
 (function protegerContraAlertNativo() {
     let __alertaEmProgresso = false;
-    
+
     window.alert = function(mensagem) {
         if (__alertaEmProgresso) {
             console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
             return;
         }
         __alertaEmProgresso = true;
-        
+
         try {
             const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
                               (typeof window.AppInventor !== 'undefined');
-            
-            // Se existe a instância global, usa o toast dela
-            if (typeof window.setorPedagogico !== 'undefined' && 
+
+            if (typeof window.setorPedagogico !== 'undefined' &&
                 typeof window.setorPedagogico.showToast === 'function') {
                 window.setorPedagogico.showToast(String(mensagem), 'info');
                 return;
             }
-            
+
             if (!isWebView) {
                 console.log('%c[ALERT] ' + mensagem, 'background:#f59e0b;color:white;padding:4px 8px;border-radius:4px;');
                 return;
             }
-            
+
             const modal = document.createElement('div');
             modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
                 background:rgba(0,0,0,0.6);display:flex;align-items:center;
@@ -53,15 +65,15 @@
             __alertaEmProgresso = false;
         }
     };
-    
+
     console.log('🛡️ [Proteção] window.alert sobrescrito (setor pedagógico)');
 })();
 
 // ✅ Helper: retorna data LOCAL no formato YYYY-MM-DD (evita bug de UTC)
 function getDataLocalISO(dateObj) {
     const d = dateObj || new Date();
-    return d.getFullYear() + '-' + 
-        String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+    return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
         String(d.getDate()).padStart(2, '0');
 }
 
@@ -75,7 +87,8 @@ class SetorPedagogico {
         this.temPermissaoSubstituicao = false;
         this.temPermissaoVisitas = false;
         this.temPermissaoGestaoProfessores = false;
-        
+        this.temPermissaoAEE = false;
+
         this.estadoSegundaChamada = {
             currentAluno: null,
             motivoSelecionado: null,
@@ -83,33 +96,31 @@ class SetorPedagogico {
             alunosPorTurma: [],
             scanner: null,
             scannerAtivo: false,
-            // 🆕 Sessão de assinatura
             sessaoAssinaturaId: null,
             assinaturaCapturada: null,
             monitoramentoInterval: null,
             qrCodeDataUrl: null
         };
-        
+
         this.assinaturaSegundaChamada = {
             canvas: null, ctx: null, desenhando: false,
             temAssinatura: false, lastX: 0, lastY: 0
         };
-        
+
         this.relatorio2Chamada = null;
 
-        // 🆕 Estado da paginação da lista de 2ªs chamadas
         this.paginacao2Chamada = {
             paginaAtual: 1,
             porPagina: 10,
             totalRegistros: 0,
             totalPaginas: 0
         };
-        
+
         this.autocomplete2Chamada = {
             alunos: [], filtrados: [], indice: -1,
             carregado: false, carregando: false
         };
-        
+
         this.charts2Chamada = { motivos: null, atrasos: null, turmas: null };
 
         this.substituicaoState = {
@@ -134,28 +145,34 @@ class SetorPedagogico {
                 substitutoAusenteObservacoes: ''
             }
         };
-        
+
+        this.atrasosState = {
+            professores: [],
+            turmas: [],
+            atrasos: [],
+            relatorioAtual: null,
+            editandoId: null,
+            professorSelecionado: null,
+            charts: { motivos: null, horarios: null, dias: null }
+        };
+
         this.init();
     }
-    
+
     async init() {
         console.log('🚀 Inicializando Setor Pedagógico...');
-        
+
         // ============================================
-        // 🆕 VERIFICA PRIMEIRO SE ESTÁ EM MODO ASSINATURA
-        // URL: /setor-pedagogico.html?assinatura=UUID
-        // O responsável NÃO está logado — só vai assinar
+        // 🆕 MODO ASSINATURA (URL com ?assinatura=UUID)
         // ============================================
         const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
         if (modoAssinatura) {
             console.log('📱 Modo assinatura detectado:', modoAssinatura);
-            
-            // Carrega só o usuário (pra ter o nome do assinante) - OPCIONAL
+
             try {
                 const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
                 if (userData.nome) this.currentUser = userData;
-                
-                // Tenta buscar via API, mas se falhar (sem token), não impede
+
                 if (this.token) {
                     const data = await this.apiRequest('/api/auth/me');
                     if (data.success) {
@@ -166,44 +183,39 @@ class SetorPedagogico {
             } catch (e) {
                 console.warn('Erro ao carregar usuário no modo assinatura:', e);
             }
-            
-            // Mostra SOMENTE a tela de assinatura
+
             await this.mostrarTelaAssinatura(modoAssinatura);
-            return; // ⚠️ NÃO continua com o init normal
+            return;
         }
-        
+
         // ============================================
-        // INIT NORMAL (com login)
+        // INIT NORMAL
         // ============================================
         if (!this.token) {
             window.location.href = '/login.html';
             return;
         }
-        
+
         await this.loadUser();
         await this.carregarFotoPerfil();
         await this.carregarNotificacoes();
         await this.verificarPermissoesEspeciais();
-        
-        this.loadDashboard();
+
+        this.loadBoasVindas();
         this.setupNavigation();
-        
+
         setInterval(() => this.carregarNotificacoes(), 30000);
-        
+
         // ============================================
-        // 🔥 NOVO: VERIFICAR SE VEIO COM PARÂMETRO DE MÓDULO
-        // URL: /setor-pedagogico.html?modulo=gestao-professores
-        // Usado para abrir direto em um módulo específico (via iframe do admin)
+        // 🔥 MÓDULO FORÇADO VIA URL
         // ============================================
         const urlParams = new URLSearchParams(window.location.search);
         const moduloForcado = urlParams.get('modulo');
-        
+
         if (moduloForcado) {
             console.log('🎯 Módulo forçado via URL:', moduloForcado);
-            
-            // Aguardar as permissões serem verificadas (já foram verificadas acima)
+
             setTimeout(async () => {
-                // Lista de módulos suportados
                 const modulosValidos = {
                     'gestao-professores': {
                         metodo: () => this.loadGestaoProfessores(),
@@ -224,29 +236,30 @@ class SetorPedagogico {
                         metodo: () => this.loadVisitas(),
                         permissao: () => this.temPermissaoVisitas,
                         nome: 'Autorização de Visitas'
+                    },
+                    'aee': {
+                        metodo: () => this.loadAEE(),
+                        permissao: () => this.temPermissaoAEE,
+                        nome: 'AEE'
                     }
                 };
-                
+
                 if (modulosValidos[moduloForcado]) {
                     const modulo = modulosValidos[moduloForcado];
-                    
-                    // Se o usuário é admin/super_admin, forçar a permissão
                     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
                     const isAdmin = ['admin', 'super_admin'].includes(userData.role);
-                    
+
                     if (modulo.permissao() || isAdmin) {
-                        // Se for admin, garantir que a permissão está ativa
                         if (isAdmin) {
                             if (moduloForcado === 'gestao-professores') this.temPermissaoGestaoProfessores = true;
                             if (moduloForcado === 'substituicao-professores') this.temPermissaoSubstituicao = true;
                             if (moduloForcado === 'segunda-chamada') this.temPermissao2Chamada = true;
                             if (moduloForcado === 'visitas') this.temPermissaoVisitas = true;
+                            if (moduloForcado === 'aee') this.temPermissaoAEE = true;
                         }
-                        
+
                         console.log(`✅ Abrindo módulo: ${modulo.nome}`);
                         await modulo.metodo();
-                        
-                        // Atualizar título e navegação
                         this.navigateTo(moduloForcado);
                     } else {
                         console.warn(`⚠️ Sem permissão para ${modulo.nome}`);
@@ -257,7 +270,7 @@ class SetorPedagogico {
             }, 500);
         }
     }
-    
+
     async loadUser() {
         try {
             const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
@@ -265,14 +278,16 @@ class SetorPedagogico {
                 this.currentUser = userData;
                 document.getElementById('userName').textContent = userData.nome;
             }
-            
+
             const data = await this.apiRequest('/api/auth/me');
             if (data.success) {
                 this.currentUser = data.user;
                 document.getElementById('userName').textContent = this.currentUser.nome;
                 localStorage.setItem('user_data', JSON.stringify(this.currentUser));
-                
-                if (this.currentUser.role !== 'setor_pedagogico' && this.currentUser.role !== 'admin' && this.currentUser.role !== 'super_admin') {
+
+                if (this.currentUser.role !== 'setor_pedagogico' &&
+                    this.currentUser.role !== 'admin' &&
+                    this.currentUser.role !== 'super_admin') {
                     window.location.href = '/login.html';
                 }
             }
@@ -280,21 +295,18 @@ class SetorPedagogico {
             console.error('Erro ao carregar usuário:', error);
         }
     }
-    
+
     async verificarPermissoesEspeciais() {
         try {
             if (!this.token) return;
-            
-            // ============================================
-            // 1. VERIFICAR PERMISSÃO - 2ª CHAMADA
-            // ============================================
+
+            // 1. 2ª CHAMADA
             try {
                 const response = await fetch('/api/admin/permissoes-modulos/verificar/segunda_chamada_setor_pedagogico', {
                     headers: { 'Authorization': `Bearer ${this.token}` }
                 });
-                
                 const data = await response.json();
-                
+
                 if (data.success && data.temPermissao) {
                     const navItem = document.getElementById('navSegundaChamada');
                     if (navItem) navItem.style.display = 'flex';
@@ -310,16 +322,13 @@ class SetorPedagogico {
                 this.temPermissao2Chamada = false;
             }
 
-            // ============================================
-            // 2. VERIFICAR PERMISSÃO - SUBSTITUIÇÃO PROFESSORES
-            // ============================================
+            // 2. SUBSTITUIÇÃO
             try {
                 const responseSub = await fetch('/api/admin/permissoes-modulos/verificar/substituicao_professores_setor_pedagogico', {
                     headers: { 'Authorization': `Bearer ${this.token}` }
                 });
-                
                 const dataSub = await responseSub.json();
-                
+
                 if (dataSub.success && dataSub.temPermissao) {
                     const navItem = document.getElementById('navSubstituicaoProfessores');
                     if (navItem) navItem.style.display = 'flex';
@@ -335,16 +344,13 @@ class SetorPedagogico {
                 this.temPermissaoSubstituicao = false;
             }
 
-            // ============================================
-            // 3. VERIFICAR PERMISSÃO - AUTORIZAÇÃO DE VISITAS
-            // ============================================
+            // 3. VISITAS
             try {
                 const responseVisitas = await fetch('/api/admin/permissoes-modulos/verificar/autorizacao_visitas', {
                     headers: { 'Authorization': `Bearer ${this.token}` }
                 });
-                
                 const dataVisitas = await responseVisitas.json();
-                
+
                 if (dataVisitas.success && dataVisitas.temPermissao) {
                     const navItem = document.getElementById('navVisitas');
                     if (navItem) navItem.style.display = 'flex';
@@ -360,16 +366,13 @@ class SetorPedagogico {
                 this.temPermissaoVisitas = false;
             }
 
-            // ============================================
-            // 4. 🔥 NOVO: VERIFICAR PERMISSÃO - GESTÃO DE PROFESSORES
-            // ============================================
+            // 4. GESTÃO DE PROFESSORES
             try {
                 const responseGP = await fetch('/api/admin/permissoes-modulos/verificar/gestao_professores_setor_pedagogico', {
                     headers: { 'Authorization': `Bearer ${this.token}` }
                 });
-                
                 const dataGP = await responseGP.json();
-                
+
                 if (dataGP.success && dataGP.temPermissao) {
                     const navItem = document.getElementById('navGestaoProfessores');
                     if (navItem) navItem.style.display = 'flex';
@@ -384,17 +387,39 @@ class SetorPedagogico {
                 console.error('❌ Erro ao verificar permissão Gestão de Professores:', error);
                 this.temPermissaoGestaoProfessores = false;
             }
-            
+
+            // 5. 🆕 AEE
+            try {
+                const responseAEE = await fetch('/api/admin/permissoes-modulos/verificar/aee_setor_pedagogico', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                const dataAEE = await responseAEE.json();
+
+                if (dataAEE.success && dataAEE.temPermissao) {
+                    const navItem = document.getElementById('navAEE');
+                    if (navItem) navItem.style.display = 'flex';
+                    const menuMobile = document.getElementById('menuItemAEE');
+                    if (menuMobile) menuMobile.style.display = 'flex';
+                    this.temPermissaoAEE = true;
+                    console.log('✅ Permissão AEE concedida');
+                } else {
+                    this.temPermissaoAEE = false;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar permissão AEE:', error);
+                this.temPermissaoAEE = false;
+            }
+
         } catch (error) {
             console.error('❌ Erro geral ao verificar permissões:', error);
             this.temPermissao2Chamada = false;
             this.temPermissaoSubstituicao = false;
             this.temPermissaoVisitas = false;
             this.temPermissaoGestaoProfessores = false;
+            this.temPermissaoAEE = false;
         }
     }
-    
-    
+
     async carregarFotoPerfil() {
         try {
             const data = await this.apiRequest('/api/perfil/me');
@@ -408,7 +433,7 @@ class SetorPedagogico {
             console.error('❌ Erro ao carregar foto:', error);
         }
     }
-    
+
     async apiRequest(url, options = {}) {
         const response = await fetch(url, {
             ...options,
@@ -418,19 +443,19 @@ class SetorPedagogico {
                 ...options.headers
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok && (response.status === 401 || response.status === 403)) {
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user_data');
             window.location.href = '/login.html';
             throw new Error('Sessão expirada');
         }
-        
+
         return data;
     }
-    
+
     showToast(mensagem, tipo = 'info') {
         const toast = document.createElement('div');
         toast.className = `toast-notification ${tipo}`;
@@ -443,7 +468,6 @@ class SetorPedagogico {
     }
 
     mostrarNotificacao(mensagem, tipo = 'info') {
-        // Usa o toast da própria classe
         if (typeof this.showToast === 'function') {
             this.showToast(mensagem, tipo);
         } else {
@@ -455,7 +479,7 @@ class SetorPedagogico {
         return new Promise((resolve) => {
             const old = document.getElementById('confirmSetorModal');
             if (old) old.remove();
-            
+
             const modalHtml = `
                 <div class="modal fade" id="confirmSetorModal" tabindex="-1" data-bs-backdrop="static">
                     <div class="modal-dialog modal-dialog-centered">
@@ -476,42 +500,41 @@ class SetorPedagogico {
                     </div>
                 </div>`;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
-            
+
             const modalEl = document.getElementById('confirmSetorModal');
             const modal = new bootstrap.Modal(modalEl);
             modal.show();
-            
+
             const finalizar = (resultado) => {
                 modal.hide();
                 setTimeout(() => modalEl.remove(), 300);
                 resolve(resultado);
             };
-            
+
             document.getElementById('btnConfirmarSetor').addEventListener('click', () => finalizar(true));
             document.getElementById('btnCancelarSetor').addEventListener('click', () => finalizar(false));
         });
     }
-    
+
     escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     safeSetText(id, value) {
         const el = document.getElementById(id);
         if (el) el.textContent = value;
     }
-    
+
     gerarAvatarSVG(nome) {
         const inicial = (nome || '?').charAt(0).toUpperCase();
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><circle cx="40" cy="40" r="40" fill="#f59e0b"/><text x="40" y="40" font-family="Arial" font-size="36" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
         return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
     }
-    
+
     setupNavigation() {
-        // Todos os nav-links com data-section
         document.querySelectorAll('.nav-link[data-section]').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -522,16 +545,14 @@ class SetorPedagogico {
                 }
             });
         });
-        
-        // Menu mobile (hamburguer)
+
         const mobileMenuBtn = document.getElementById('mobileMenuBtn');
         if (mobileMenuBtn) {
             mobileMenuBtn.addEventListener('click', () => {
                 document.getElementById('sidebar').classList.toggle('mobile-open');
             });
         }
-        
-        // Logout
+
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', (e) => {
@@ -541,14 +562,12 @@ class SetorPedagogico {
                 window.location.href = '/login.html';
             });
         }
-        
+
         console.log('✅ Navegação configurada');
     }
-    
+
     navigateTo(section) {
-        // ============================================
-        // VERIFICAÇÕES DE PERMISSÃO
-        // ============================================
+        // Verificações de permissão
         if (section === 'segunda-chamada' && !this.temPermissao2Chamada) {
             this.showToast('❌ Você não tem permissão para acessar 2ª Chamada', 'error');
             return;
@@ -565,77 +584,54 @@ class SetorPedagogico {
             this.showToast('❌ Você não tem permissão para acessar Autorização de Visitas', 'error');
             return;
         }
-        // 🔥 NOVO: Gestão de Professores
         if (section === 'gestao-professores' && !this.temPermissaoGestaoProfessores) {
             this.showToast('❌ Você não tem permissão para acessar Gestão de Professores', 'error');
             return;
         }
-        
-        // ============================================
-        // ATUALIZAR NAV ATIVO (SIDEBAR)
-        // ============================================
+        if (section === 'aee' && !this.temPermissaoAEE) {
+            this.showToast('❌ Você não tem permissão para acessar AEE', 'error');
+            return;
+        }
+
+        // Atualizar nav ativo
         document.querySelectorAll('.nav-link[data-section]').forEach(link => link.classList.remove('active'));
         document.querySelector(`.nav-link[data-section="${section}"]`)?.classList.add('active');
-        
-        // ============================================
-        // ATUALIZAR BOTTOM NAV (MOBILE)
-        // ============================================
-        const bottomNavSections = ['dashboard', 'alunos', 'provas', 'relatorios'];
+
+        // Bottom nav (mobile)
+        const bottomNavSections = ['boas-vindas', 'provas'];
         if (bottomNavSections.includes(section)) {
             this.updateBottomNav(section);
         } else {
             document.querySelectorAll('#bottomNavSp .nav-item-sp').forEach(item => item.classList.remove('active'));
             document.querySelector('#bottomNavSp .nav-item-sp[data-section="menu"]')?.classList.add('active');
         }
-        
-        // Fechar menu mobile
+
         if (window.innerWidth <= 768) {
             setTimeout(() => this.fecharMenuLateral(), 100);
         }
-        
-        // ============================================
-        // TÍTULOS E ÍCONES DAS PÁGINAS
-        // ============================================
+
+        // Títulos
         const titles = {
-            dashboard: 'Dashboard',
-            alunos: 'Alunos com Necessidades Especiais (AEE)',
-            provas: 'Provas Publicadas',
-            relatorios: 'Relatórios',
+            'boas-vindas': 'Setor Pedagógico',
+            'provas': 'Provas',
             'segunda-chamada': '2ª Chamada',
             'substituicao-professores': 'Substituição de Professores',
             'atrasos': 'Atrasos de Professores',
             'visitas': 'Autorização de Visitas',
-            'gestao-professores': 'Gestão de Professores'  // 🔥 NOVO
+            'gestao-professores': 'Gestão de Professores',
+            'aee': 'AEE - Atendimento Educacional Especializado'
         };
-        
-        const icons = {
-            dashboard: 'fa-chart-line',
-            alunos: 'fa-users',
-            provas: 'fa-file-alt',
-            relatorios: 'fa-chart-bar',
-            'segunda-chamada': 'fa-redo',
-            'substituicao-professores': 'fa-people-arrows',
-            'atrasos': 'fa-clock',
-            'visitas': 'fa-map-marked-alt',
-            'gestao-professores': 'fa-chalkboard-teacher'  // 🔥 NOVO
-        };
-        
+
         const pageTitle = document.getElementById('pageTitle');
         if (pageTitle) {
-            pageTitle.textContent = titles[section] || 'Dashboard';
+            pageTitle.textContent = titles[section] || 'Setor Pedagógico';
         }
-        
-        // ============================================
-        // CARREGAR CONTEÚDO DA SEÇÃO
-        // ============================================
-        if (section === 'dashboard') {
-            this.loadDashboard();
-        } else if (section === 'alunos') {
-            this.loadAlunos();
+
+        // Carregar conteúdo
+        if (section === 'boas-vindas') {
+            this.loadBoasVindas();
         } else if (section === 'provas') {
             this.loadProvas();
-        } else if (section === 'relatorios') {
-            this.loadRelatorios();
         } else if (section === 'segunda-chamada') {
             this.loadSegundaChamada();
         } else if (section === 'substituicao-professores') {
@@ -645,296 +641,237 @@ class SetorPedagogico {
         } else if (section === 'visitas') {
             this.loadVisitas();
         } else if (section === 'gestao-professores') {
-            // 🔥 NOVO: Carregar módulo de Gestão de Professores
             this.loadGestaoProfessores();
+        } else if (section === 'aee') {
+            this.loadAEE();
         }
     }
-    
-    // ============ DASHBOARD ============
-    async loadDashboard() {
+
+    // ============================================================================
+    // 🏠 BOAS-VINDAS (HOME)
+    // ============================================================================
+    loadBoasVindas() {
         const content = document.getElementById('content');
-        content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando dashboard...</p></div>';
-        
-        try {
-            const data = await this.apiRequest('/api/setor-pedagogico/dashboard');
-            if (data.success) {
-                const d = data.dashboard;
-                content.innerHTML = `
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-6 col-xl-3">
-                            <div class="card stat-card"><div class="card-body p-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div><small class="opacity-75">Total de Alunos</small><div class="stat-value mt-2">${d.totalAlunos}</div></div>
-                                    <i class="fas fa-users"></i>
-                                </div>
-                            </div></div>
-                        </div>
-                        <div class="col-md-6 col-xl-3">
-                            <div class="card stat-card stat-card-warning"><div class="card-body p-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div><small class="opacity-75">Alunos AEE</small><div class="stat-value mt-2">${d.totalAlunosComAcessibilidade}</div></div>
-                                    <i class="fas fa-hand-holding-heart"></i>
-                                </div>
-                            </div></div>
-                        </div>
-                        <div class="col-md-6 col-xl-3">
-                            <div class="card stat-card stat-card-success"><div class="card-body p-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div><small class="opacity-75">Taxa Acessibilidade</small><div class="stat-value mt-2">${d.taxaAcessibilidade}%</div></div>
-                                    <i class="fas fa-chart-line"></i>
-                                </div>
-                            </div></div>
-                        </div>
-                        <div class="col-md-6 col-xl-3">
-                            <div class="card stat-card stat-card-info"><div class="card-body p-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div><small class="opacity-75">Total de Provas</small><div class="stat-value mt-2">${d.totalProvas}</div></div>
-                                    <i class="fas fa-file-alt"></i>
-                                </div>
-                            </div></div>
-                        </div>
-                    </div>
-                    
-                    <div class="row g-4">
-                        <div class="col-lg-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-white border-0 pt-4 px-4">
-                                    <h5 class="mb-0 fw-bold"><i class="fas fa-chart-pie me-2 text-primary"></i> Distribuição por Condição</h5>
-                                </div>
-                                <div class="card-body px-4 pb-4">
-                                    <div id="condicoesChart" class="mb-4"></div>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm">
-                                            <thead class="table-light"><tr><th>Condição</th><th>Quantidade</th><th>%</th></tr></thead>
-                                            <tbody>
-                                                ${d.distribuicaoCondicoes.map(c => `
-                                                    <tr><td>${c.label}</td><td><strong>${c.count}</strong></td><td>${((c.count / d.totalAlunosComAcessibilidade) * 100).toFixed(1)}%</td></tr>
-                                                `).join('')}
-                                                ${d.distribuicaoCondicoes.length === 0 ? '<tr><td colspan="3" class="text-center text-muted">Nenhum dado disponível</td></tr>' : ''}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-white border-0 pt-4 px-4">
-                                    <h5 class="mb-0 fw-bold"><i class="fas fa-bolt me-2 text-warning"></i> Ações Rápidas</h5>
-                                </div>
-                                <div class="card-body px-4 pb-4">
-                                    <div class="d-grid gap-3">
-                                        <button class="btn btn-outline-primary py-3" onclick="setorPedagogico.navigateTo('alunos')">
-                                            <i class="fas fa-users me-2"></i> Listar Alunos AEE <i class="fas fa-arrow-right ms-2"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success py-3" onclick="setorPedagogico.navigateTo('provas')">
-                                            <i class="fas fa-file-alt me-2"></i> Visualizar Provas <i class="fas fa-arrow-right ms-2"></i>
-                                        </button>
-                                        <button class="btn btn-outline-warning py-3" onclick="setorPedagogico.navigateTo('relatorios')">
-                                            <i class="fas fa-chart-bar me-2"></i> Gerar Relatório <i class="fas fa-arrow-right ms-2"></i>
-                                        </button>
-                                        ${this.temPermissao2Chamada ? `
-                                        <button class="btn btn-outline-info py-3" onclick="setorPedagogico.navigateTo('segunda-chamada')">
-                                            <i class="fas fa-redo me-2"></i> Registrar 2ª Chamada <i class="fas fa-arrow-right ms-2"></i>
-                                        </button>
-                                        ` : ''}
-                                        ${this.temPermissaoSubstituicao ? `
-                                        <button class="btn btn-outline-danger py-3" onclick="setorPedagogico.navigateTo('substituicao-professores')">
-                                            <i class="fas fa-people-arrows me-2"></i> Substituição de Professores <i class="fas fa-arrow-right ms-2"></i>
-                                        </button>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                if (d.distribuicaoCondicoes.length > 0) this.drawSimpleChart(d.distribuicaoCondicoes);
-            }
-        } catch (error) {
-            console.error('Erro ao carregar dashboard:', error);
-            content.innerHTML = '<div class="alert alert-danger">Erro ao carregar dashboard</div>';
+        if (!content) return;
+
+        // Mata o intervalo antigo do relógio (se existir) para evitar múltiplos
+        if (this._intervaloRelogioBoasVindas) {
+            clearInterval(this._intervaloRelogioBoasVindas);
+            this._intervaloRelogioBoasVindas = null;
         }
-    }
-    
-    drawSimpleChart(data) {
-        const container = document.getElementById('condicoesChart');
-        if (!container) return;
-        const total = data.reduce((sum, d) => sum + d.count, 0);
-        container.innerHTML = data.map(d => `
-            <div class="mb-3">
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="fw-medium">${d.label}</span>
-                    <span class="text-muted">${((d.count / total) * 100).toFixed(0)}%</span>
+
+        const agora = new Date();
+        const hora = agora.getHours();
+        let saudacao = 'Bom dia';
+        let iconeSaudacao = 'fa-sun';
+        let corSaudacao = '#f59e0b';
+
+        if (hora >= 12 && hora < 18) {
+            saudacao = 'Boa tarde';
+            iconeSaudacao = 'fa-cloud-sun';
+            corSaudacao = '#f97316';
+        } else if (hora >= 18 || hora < 5) {
+            saudacao = 'Boa noite';
+            iconeSaudacao = 'fa-moon';
+            corSaudacao = '#6366f1';
+        }
+
+        const nome = (this.currentUser?.nome || 'Servidor(a)').split(' ')[0];
+
+        const dataFormatada = agora.toLocaleDateString('pt-BR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+
+        // 🔥 MENSAGEM COMPLETA E DESCRITIVA
+        const mensagemCompleta = 'Aqui você acompanha o AEE, autorizações de visitas, gestão e substituição de professores, 2ª chamada e muito mais. Escolha um dos módulos abaixo para começar.';
+
+        const modulos = [];
+
+        if (this.temPermissaoAEE) {
+            modulos.push({
+                section: 'aee',
+                titulo: 'AEE',
+                subtitulo: 'Atendimento Educacional Especializado',
+                descricao: 'Acompanhamento de alunos com necessidades educacionais específicas',
+                icone: 'fa-universal-access',
+                cor: 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+            });
+        }
+
+        if (this.temPermissaoVisitas) {
+            modulos.push({
+                section: 'visitas',
+                titulo: 'Autorização de Visitas',
+                subtitulo: 'Controle de visitas e saídas',
+                descricao: 'Gerencie autorizações e registros de visitas',
+                icone: 'fa-map-marked-alt',
+                cor: 'linear-gradient(135deg, #10b981, #059669)'
+            });
+        }
+
+        if (this.temPermissaoGestaoProfessores) {
+            modulos.push({
+                section: 'gestao-professores',
+                titulo: 'Gestão de Professores',
+                subtitulo: 'Cadastro e manutenção',
+                descricao: 'Cadastre, edite e gerencie o corpo docente',
+                icone: 'fa-chalkboard-teacher',
+                cor: 'linear-gradient(135deg, #f59e0b, #d97706)'
+            });
+        }
+
+        if (this.temPermissaoSubstituicao) {
+            modulos.push({
+                section: 'substituicao-professores',
+                titulo: 'Substituição de Professores',
+                subtitulo: 'Registro de substituições e atrasos',
+                descricao: 'Controle de ausências e substituições do corpo docente',
+                icone: 'fa-people-arrows',
+                cor: 'linear-gradient(135deg, #ec4899, #db2777)'
+            });
+        }
+
+        if (this.temPermissao2Chamada) {
+            modulos.push({
+                section: 'segunda-chamada',
+                titulo: '2ª Chamada',
+                subtitulo: 'Registro de provas em segunda chamada',
+                descricao: 'Registre e gerencie as segundas chamadas dos alunos',
+                icone: 'fa-redo',
+                cor: 'linear-gradient(135deg, #06b6d4, #0891b2)'
+            });
+        }
+
+        content.innerHTML = `
+            <div class="welcome-container">
+                <div class="welcome-hero">
+                    <div class="welcome-hero-bg"></div>
+                    <div class="welcome-hero-content">
+
+                        <div class="welcome-hero-main">
+                            <div class="welcome-hero-left">
+                                <div class="welcome-saudacao-icon" style="background: ${corSaudacao}20; color: ${corSaudacao};">
+                                    <i class="fas ${iconeSaudacao}"></i>
+                                </div>
+                                <h1 class="welcome-title">
+                                    ${saudacao}, <span>${this.escapeHtml(nome)}</span>! 👋
+                                </h1>
+                                <p class="welcome-subtitle">
+                                    Bem-vindo(a) ao <strong>Setor Pedagógico</strong> do <strong>EducaPleno</strong>. ${this.escapeHtml(mensagemCompleta)}
+                                </p>
+                                <div class="welcome-data">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    ${this.escapeHtml(dataFormatada)}
+                                </div>
+                            </div>
+
+                            <div class="welcome-hero-right">
+                                <div class="welcome-relogio-card">
+                                    <div class="welcome-relogio-topo">
+                                        <i class="fas fa-clock"></i>
+                                        <span>Horário atual</span>
+                                    </div>
+                                    <div class="welcome-relogio-hora" id="welcomeRelogioHora">--:--</div>
+                                    <div class="welcome-relogio-segundos" id="welcomeRelogioSegundos">--s</div>
+                                    <div class="welcome-relogio-periodo" id="welcomeRelogioPeriodo">—</div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
-                <div class="progress"><div class="progress-bar" style="width: ${(d.count / total) * 100}%"></div></div>
-            </div>
-        `).join('');
-    }
-    
-    // ============ ALUNOS AEE ============
-    async loadAlunos() {
-        const content = document.getElementById('content');
-        content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando alunos...</p></div>';
-        
-        try {
-            const data = await this.apiRequest('/api/setor-pedagogico/alunos-acessibilidade');
-            if (data.success) {
-                content.innerHTML = `
-                    <div class="filtros-card">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-3">
-                                <label class="fw-semibold mb-2">Condição</label>
-                                <select class="form-select" id="filtroCondicao">
-                                    <option value="todos">Todas</option>
-                                    ${data.filtros.condicoes.map(c => `<option value="${c.valor}">${c.label}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="fw-semibold mb-2">Turma</label>
-                                <select class="form-select" id="filtroTurma">
-                                    <option value="">Todas</option>
-                                    ${data.filtros.turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="fw-semibold mb-2">Curso</label>
-                                <select class="form-select" id="filtroCurso">
-                                    <option value="">Todos</option>
-                                    ${data.filtros.cursos.map(c => `<option value="${c}">${c}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-primary flex-grow-1" onclick="setorPedagogico.aplicarFiltrosAlunos()">
-                                        <i class="fas fa-search me-2"></i> Filtrar
-                                    </button>
-                                    <button class="btn btn-outline-secondary" onclick="setorPedagogico.limparFiltrosAlunos()">
-                                        <i class="fas fa-eraser"></i>
-                                    </button>
-                                </div>
-                            </div>
+
+                ${modulos.length > 0 ? `
+                    <div class="welcome-modulos-section">
+                        <div class="welcome-modulos-header">
+                            <h2><i class="fas fa-th-large"></i> Módulos Disponíveis</h2>
+                            <span class="welcome-modulos-count">${modulos.length} ${modulos.length === 1 ? 'módulo' : 'módulos'}</span>
                         </div>
-                    </div>
-                    
-                    <div class="table-container">
-                        <div class="table-header d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0 fw-bold"><i class="fas fa-users me-2 text-primary"></i> Alunos com Necessidades Especiais</h5>
-                            <span class="badge bg-primary px-3 py-2">${data.total} alunos</span>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr><th>Nome</th><th>Matrícula</th><th>Turma</th><th>Curso</th><th>Condição</th><th>Status</th><th>Ações</th></tr>
-                                </thead>
-                                <tbody>
-                                    ${data.alunos.map(aluno => `
-                                        <tr>
-                                            <td><strong>${aluno.nome}</strong></td>
-                                            <td>${aluno.matricula}</td>
-                                            <td>${aluno.turma || '-'}</td>
-                                            <td>${aluno.curso || '-'}</td>
-                                            <td>
-                                                <span class="badge-acessibilidade">
-                                                    <i class="fas fa-heart me-1"></i> ${aluno.condicao.label}
-                                                    ${aluno.condicao.descricao ? `<br><small>${aluno.condicao.descricao}</small>` : ''}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="badge-status ${aluno.status === 'aprovada' ? 'aprovada' : 'pendente'}">
-                                                    ${aluno.status === 'aprovada' ? '✓ Aprovada' : '⏳ Pendente'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <button class="btn btn-sm btn-outline-primary" onclick="setorPedagogico.verDetalhesAluno('${aluno.id}')">
-                                                    <i class="fas fa-eye me-1"></i> Ver
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                    ${data.alunos.length === 0 ? '<tr><td colspan="7" class="text-center text-muted py-5">Nenhum aluno encontrado</td></tr>' : ''}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-                window.alunosData = data;
-            }
-        } catch (error) {
-            console.error('Erro ao carregar alunos:', error);
-            content.innerHTML = '<div class="alert alert-danger">Erro ao carregar alunos</div>';
-        }
-    }
-    
-    async verDetalhesAluno(alunoId) {
-        try {
-            const data = await this.apiRequest(`/api/setor-pedagogico/aluno/${alunoId}`);
-            if (data.success) {
-                const a = data.aluno;
-                const modalHtml = `
-                    <div class="row g-4">
-                        <div class="col-md-6">
-                            <div class="bg-light rounded-3 p-4 h-100">
-                                <h6 class="fw-bold mb-3"><i class="fas fa-user-graduate me-2 text-primary"></i> Dados Pessoais</h6>
-                                <hr class="my-2">
-                                <p class="mb-2"><strong>Nome:</strong> ${a.nome}</p>
-                                <p class="mb-2"><strong>Email:</strong> ${a.email}</p>
-                                <p class="mb-2"><strong>Matrícula:</strong> ${a.matricula || 'Não informada'}</p>
-                                <p class="mb-2"><strong>Turma:</strong> ${a.turma || '-'}</p>
-                                <p class="mb-0"><strong>Curso:</strong> ${a.curso || '-'}</p>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="bg-light rounded-3 p-4 h-100">
-                                <h6 class="fw-bold mb-3"><i class="fas fa-hand-holding-heart me-2 text-warning"></i> Acessibilidade</h6>
-                                <hr class="my-2">
-                                <p class="mb-2"><strong>Condição:</strong> ${a.acessibilidade.condicao.label}</p>
-                                ${a.acessibilidade.condicao.detalhes ? `<p class="mb-2"><strong>Detalhes:</strong> ${a.acessibilidade.condicao.detalhes}</p>` : ''}
-                                <p class="mb-2"><strong>Data Solicitação:</strong> ${new Date(a.acessibilidade.dataSolicitacao).toLocaleDateString('pt-BR')}</p>
-                                <p class="mb-0"><strong>Status:</strong> <span class="badge ${a.acessibilidade.status === 'aprovada' ? 'bg-success' : 'bg-warning'}">${a.acessibilidade.status === 'aprovada' ? 'Aprovada' : 'Pendente'}</span></p>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="bg-light rounded-3 p-4">
-                                <h6 class="fw-bold mb-3"><i class="fas fa-file-alt me-2 text-success"></i> Últimas Provas Realizadas</h6>
-                                <hr class="my-2">
-                                ${a.provasRealizadas.length > 0 ? `
-                                    <div class="list-group">
-                                        ${a.provasRealizadas.map(p => `
-                                            <div class="list-group-item d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <strong>${p.provaTitulo}</strong><br>
-                                                    <small class="text-muted">${p.adaptada ? 'Adaptada' : 'Normal'}</small>
-                                                </div>
-                                                <span class="badge ${p.notaLiberada ? 'bg-success' : 'bg-secondary'}">
-                                                    ${p.notaLiberada ? `Nota: ${p.nota}` : 'Aguardando'}
-                                                </span>
-                                            </div>
-                                        `).join('')}
+                        <div class="welcome-modulos-grid">
+                            ${modulos.map(m => `
+                                <div class="welcome-modulo-card" onclick="setorPedagogico.navigateTo('${m.section}')">
+                                    <div class="welcome-modulo-icon" style="background: ${m.cor};">
+                                        <i class="fas ${m.icone}"></i>
                                     </div>
-                                ` : '<p class="text-muted text-center py-3">Nenhuma prova realizada ainda</p>'}
-                            </div>
+                                    <div class="welcome-modulo-body">
+                                        <h3>${m.titulo}</h3>
+                                        <p class="welcome-modulo-subtitulo">${m.subtitulo}</p>
+                                        <p class="welcome-modulo-descricao">${m.descricao}</p>
+                                    </div>
+                                    <div class="welcome-modulo-arrow">
+                                        <i class="fas fa-arrow-right"></i>
+                                    </div>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
-                `;
-                const modal = new bootstrap.Modal(document.getElementById('provaModal'));
-                document.getElementById('provaModalBody').innerHTML = modalHtml;
-                document.getElementById('provaModal').querySelector('.modal-title').innerHTML = `<i class="fas fa-user-circle me-2"></i> Detalhes: ${a.nome}`;
-                document.getElementById('printProvaBtn').style.display = 'none';
-                modal.show();
-            }
-        } catch (error) {
-            console.error('Erro ao carregar detalhes:', error);
-            this.mostrarNotificacao('Erro ao carregar detalhes do aluno', 'error');
-        }
+                ` : `
+                    <div class="welcome-empty">
+                        <i class="fas fa-lock"></i>
+                        <h2>Nenhum módulo liberado ainda</h2>
+                        <p>Solicite ao administrador a liberação dos módulos que você precisa acessar.</p>
+                    </div>
+                `}
+
+                <div class="welcome-footer">
+                    <div class="welcome-footer-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Acesso seguro</span>
+                    </div>
+                    <div class="welcome-footer-item">
+                        <i class="fas fa-heart" style="color: #ec4899;"></i>
+                        <span>EducaPleno</span>
+                    </div>
+                    <div class="welcome-footer-item">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>Setor Pedagógico</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 🔥 Inicia o relógio em tempo real
+        this._iniciarRelogioBoasVindas();
     }
-    
-    // ============ PROVAS ============
+
+    // 🔥 Relógio em tempo real do hero
+    _iniciarRelogioBoasVindas() {
+        const horaEl = document.getElementById('welcomeRelogioHora');
+        const segEl = document.getElementById('welcomeRelogioSegundos');
+        const perEl = document.getElementById('welcomeRelogioPeriodo');
+        if (!horaEl || !segEl || !perEl) return;
+
+        const atualizar = () => {
+            const agora = new Date();
+            const hh = String(agora.getHours()).padStart(2, '0');
+            const mm = String(agora.getMinutes()).padStart(2, '0');
+            const ss = String(agora.getSeconds()).padStart(2, '0');
+
+            horaEl.textContent = `${hh}:${mm}`;
+            segEl.textContent = `${ss}s`;
+
+            const h = agora.getHours();
+            let periodo = 'Madrugada';
+            if (h >= 5 && h < 12) periodo = 'Manhã';
+            else if (h >= 12 && h < 18) periodo = 'Tarde';
+            else if (h >= 18 && h < 24) periodo = 'Noite';
+            perEl.textContent = periodo;
+        };
+
+        atualizar();
+        this._intervaloRelogioBoasVindas = setInterval(atualizar, 1000);
+    }
+
+    // ============================================================================
+    // 📝 PROVAS (visualizar / imprimir normal — SEM adaptação)
+    // ============================================================================
     async loadProvas() {
         const content = document.getElementById('content');
         content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando provas...</p></div>';
-        
+
         try {
             const data = await this.apiRequest('/api/setor-pedagogico/provas');
             if (data.success) {
@@ -976,7 +913,7 @@ class SetorPedagogico {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="table-container">
                         <div class="table-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0 fw-bold"><i class="fas fa-file-alt me-2 text-primary"></i> Provas Publicadas</h5>
@@ -1010,7 +947,7 @@ class SetorPedagogico {
                                                     <button class="btn btn-sm btn-outline-info" onclick="setorPedagogico.visualizarProva('${prova.id}')">
                                                         <i class="fas fa-eye"></i>
                                                     </button>
-                                                    <button class="btn btn-sm btn-print" onclick="setorPedagogico.imprimirProva('${prova.id}', '${prova.titulo}')">
+                                                    <button class="btn btn-sm btn-print" onclick="setorPedagogico.imprimirProvaNormal('${prova.id}', '${prova.titulo}')">
                                                         <i class="fas fa-print"></i>
                                                     </button>
                                                 </div>
@@ -1030,7 +967,7 @@ class SetorPedagogico {
             content.innerHTML = '<div class="alert alert-danger">Erro ao carregar provas</div>';
         }
     }
-    
+
     async visualizarProva(provaId) {
         try {
             const data = await this.apiRequest(`/api/setor-pedagogico/provas/${provaId}/visualizar`);
@@ -1048,7 +985,7 @@ class SetorPedagogico {
                         </div>
                     `;
                 });
-                
+
                 const modalHtml = `
                     <div class="prova-preview">
                         <div class="text-center mb-5">
@@ -1065,12 +1002,12 @@ class SetorPedagogico {
                         <div class="text-center mt-5"><hr><p class="text-muted small">Documento gerado pelo EducaPleno - Setor Pedagógico</p></div>
                     </div>
                 `;
-                
+
                 const modal = new bootstrap.Modal(document.getElementById('provaModal'));
                 document.getElementById('provaModalBody').innerHTML = modalHtml;
                 document.getElementById('provaModal').querySelector('.modal-title').innerHTML = `<i class="fas fa-file-alt me-2"></i> ${p.titulo}`;
                 document.getElementById('printProvaBtn').style.display = 'block';
-                document.getElementById('printProvaBtn').onclick = () => this.imprimirProva(provaId, p.titulo);
+                document.getElementById('printProvaBtn').onclick = () => this.imprimirProvaNormal(provaId, p.titulo);
                 modal.show();
             }
         } catch (error) {
@@ -1078,637 +1015,549 @@ class SetorPedagogico {
             this.showToast('Erro ao carregar prova para visualização', 'error');
         }
     }
-        // ============ IMPRESSÃO COM ADAPTAÇÃO ============
-    async imprimirProva(provaId, titulo) {
+
+    async imprimirProvaNormal(provaId, titulo) {
         try {
-            const token = localStorage.getItem('auth_token');
-            const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            const IS_RENDER = window.location.hostname.includes('render.com') || window.location.hostname.includes('sistema-avaliativo');
-            let API_BASE_URL;
-            if (IS_LOCALHOST) API_BASE_URL = 'http://localhost:3000/api';
-            else if (IS_RENDER) API_BASE_URL = window.location.origin + '/api';
-            else API_BASE_URL = '/api';
-            
-            this.showToast('📄 Preparando prova para impressão...', 'info');
-            
-            const response = await fetch(`${API_BASE_URL}/provas/${provaId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Erro ao carregar dados da prova');
-            const data = await response.json();
+            const data = await this.apiRequest(`/api/setor-pedagogico/provas/${provaId}/visualizar`);
             if (!data.success) throw new Error(data.error || 'Erro ao carregar prova');
-            
-            const prova = data.prova;
-            const questoes = data.questoes || [];
-            
-            let turmaId = null;
-            if (prova.turmaId) turmaId = prova.turmaId;
-            else if (prova.turma && prova.turma.id) turmaId = prova.turma.id;
-            else if (prova.turma && prova.turma._id) turmaId = prova.turma._id;
-            else if (prova.turma && typeof prova.turma === 'string') turmaId = prova.turma;
-            
-            window.alunosDaTurma = [];
-            
-            if (turmaId) {
-                try {
-                    let alunosRaw = [];
-                    try {
-                        const alunosRes = await fetch(`${API_BASE_URL}/turmas/${turmaId}/alunos`, { headers: { 'Authorization': `Bearer ${token}` } });
-                        const alunosData = await alunosRes.json();
-                        if (alunosData.success && alunosData.alunos) alunosRaw = alunosData.alunos;
-                        else if (alunosData.alunos) alunosRaw = alunosData.alunos;
-                    } catch (e) { console.log('⚠️ Rota /alunos falhou:', e.message); }
-                    
-                    if (alunosRaw.length === 0) {
-                        try {
-                            const turmaRes = await fetch(`${API_BASE_URL}/turmas/${turmaId}`, { headers: { 'Authorization': `Bearer ${token}` } });
-                            const turmaData = await turmaRes.json();
-                            if (turmaData.success && turmaData.turma && turmaData.turma.alunos) alunosRaw = turmaData.turma.alunos;
-                            else if (turmaData.turma && turmaData.turma.alunos) alunosRaw = turmaData.turma.alunos;
-                            else if (turmaData.alunos) alunosRaw = turmaData.alunos;
-                        } catch (e) { console.log('⚠️ Rota principal falhou:', e.message); }
-                    }
-                    
-                    if (alunosRaw.length === 0 && prova.turma && prova.turma.alunos) alunosRaw = prova.turma.alunos;
-                    
-                    if (alunosRaw.length > 0) {
-                        const alunosUnicos = new Map();
-                        for (const aluno of alunosRaw) {
-                            const alunoId = aluno._id || aluno.id || aluno.alunoId;
-                            const alunoNome = aluno.nome || aluno.alunoNome || aluno.name || 'Aluno';
-                            if (alunoId && !alunosUnicos.has(alunoId.toString())) {
-                                alunosUnicos.set(alunoId.toString(), {
-                                    id: alunoId, _id: alunoId, nome: alunoNome,
-                                    email: aluno.email || aluno.alunoEmail || '',
-                                    matricula: aluno.matricula || ''
-                                });
-                            }
-                        }
-                        window.alunosDaTurma = Array.from(alunosUnicos.values());
-                    }
-                } catch (error) {
-                    console.error('❌ Erro ao carregar turma:', error);
-                    window.alunosDaTurma = [];
-                }
-            }
-            
-            let qrCodeDataUrl = '';
-            try {
-                const correcaoUrl = `${window.location.origin}/corrigir-prova.html?prova=${provaId}`;
-                const qrResponse = await fetch(`${API_BASE_URL}/qrcode/gerar`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: correcaoUrl })
-                });
-                const qrData = await qrResponse.json();
-                if (qrData.success && qrData.qrCode) qrCodeDataUrl = qrData.qrCode;
-            } catch (qrError) { console.error('❌ Erro ao buscar QR Code:', qrError); }
-            
-            window.provaParaImpressao = { prova, questoes, qrCodeDataUrl, API_BASE_URL, token };
-            this.mostrarModalPerguntaAdaptacao();
-        } catch (error) {
-            console.error('❌ Erro ao preparar impressão:', error);
-            this.showToast(`❌ Erro: ${error.message}`, 'error');
-        }
-    }
 
-    mostrarModalPerguntaAdaptacao() {
-        if (!window.provaParaImpressao || !window.provaParaImpressao.prova) {
-            this.showToast('❌ Dados da prova não encontrados.', 'error');
-            return;
-        }
-        
-        this.closeAllModals();
-        
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.id = 'modalPerguntaAdaptacao';
-        modal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10001;align-items:center;justify-content:center;';
-        
-        const alunos = window.alunosDaTurma || [];
-        const temAlunos = alunos.length > 0;
-        
-        let selectOptions = '<option value="">Selecione um aluno...</option>';
-        if (temAlunos) {
-            selectOptions += alunos.map(aluno => `
-                <option value="${aluno.id || aluno._id}">
-                    ${aluno.nome || aluno.alunoNome || 'Aluno'} ${aluno.matricula ? `(${aluno.matricula})` : ''}
-                </option>
-            `).join('');
-        } else {
-            selectOptions = '<option value="" disabled>Nenhum aluno encontrado nesta turma</option>';
-        }
-        
-        modal.innerHTML = `
-            <div class="modal-content" style="max-width: 500px; width: 90%; background: white; border-radius: 24px; padding: 0; margin: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;">
-                <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;">
-                    <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-print"></i> Imprimir Prova</h3>
-                    <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1;">&times;</button>
-                </div>
-                <div style="padding: 25px;">
-                    <p style="color: #4b5563; margin-bottom: 20px; text-align: center; font-size: 1rem;">Deseja adaptar esta prova para acessibilidade?</p>
-                    
-                    <div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 16px;">
-                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;">
-                            <input type="radio" name="tipoImpressao" value="individual" ${temAlunos ? 'checked' : 'disabled'} onchange="setorPedagogico.toggleOpcaoAlunos()">
-                            <span><strong>👤 Imprimir para um aluno específico</strong></span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                            <input type="radio" name="tipoImpressao" value="todos" ${temAlunos ? '' : 'checked disabled'} onchange="setorPedagogico.toggleOpcaoAlunos()">
-                            <span><strong>👥 Imprimir para todos os alunos da turma</strong></span>
-                        </label>
-                        <div id="selectAlunosContainer" style="margin-top: 15px; ${temAlunos ? 'display: block;' : 'display: none;'}">
-                            <label style="display: block; margin-bottom: 8px; font-weight: 500;"><i class="fas fa-user-graduate"></i> Selecione o aluno:</label>
-                            <select id="selectAlunoImpressao" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">${selectOptions}</select>
+            const p = data.prova;
+
+            let questoesHtml = '';
+            p.questoes.forEach((q, idx) => {
+                questoesHtml += `
+                    <div style="margin-bottom: 22px; page-break-inside: avoid;">
+                        <div style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-bottom: 8px;">
+                            Questão ${idx + 1}
                         </div>
-                        <div style="margin-top: 12px; padding: 10px; background: #e0f2fe; border-radius: 8px; font-size: 0.85rem;">
-                            <i class="fas fa-info-circle"></i> <span id="infoImpressao">${temAlunos ? `Selecione um aluno ou imprima para todos (${alunos.length} alunos).` : 'Nenhum aluno encontrado nesta turma.'}</span>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 15px;">
-                        <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.gerarImpressaoNormal()" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;"><i class="fas fa-times"></i> Não, imprimir normal</button>
-                        <button onclick="setorPedagogico.fecharModalAdaptacao('modalPerguntaAdaptacao'); setorPedagogico.mostrarModalOpcoesAdaptacao()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;"><i class="fas fa-universal-access"></i> Sim, adaptar</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-
-    toggleOpcaoAlunos() {
-        const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
-        const selectContainer = document.getElementById('selectAlunosContainer');
-        const infoSpan = document.getElementById('infoImpressao');
-        const alunos = window.alunosDaTurma || [];
-        
-        if (tipoImpressao === 'individual') {
-            if (selectContainer) selectContainer.style.display = 'block';
-            if (infoSpan) infoSpan.innerHTML = `Será gerada uma prova com QR Code específico para o aluno selecionado. (${alunos.length} alunos disponíveis)`;
-        } else {
-            if (selectContainer) selectContainer.style.display = 'none';
-            if (infoSpan) infoSpan.innerHTML = `Será gerado um documento único com todos os ${alunos.length} alunos da turma.`;
-        }
-    }
-
-    mostrarModalOpcoesAdaptacao() {
-        if (!window.provaParaImpressao || !window.provaParaImpressao.prova) {
-            this.showToast('❌ Dados da prova não encontrados.', 'error');
-            return;
-        }
-        
-        const modalPergunta = document.getElementById('modalPerguntaAdaptacao');
-        if (modalPergunta) modalPergunta.style.display = 'none';
-        
-        let modalOpcoes = document.getElementById('modalOpcoesAdaptacao');
-        if (modalOpcoes) modalOpcoes.remove();
-        
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.id = 'modalOpcoesAdaptacao';
-        modal.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10002;align-items:center;justify-content:center;';
-        
-        const { prova } = window.provaParaImpressao;
-        const isAdaptada = prova?.tipoProva === 'adaptada' || prova?.adaptada === true;
-        
-        modal.innerHTML = `
-            <div class="modal-content" style="max-width: 550px; width: 90%; background: white; border-radius: 24px; padding: 0; margin: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
-                <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 20px 25px; border-radius: 24px 24px 0 0; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;">
-                    <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-universal-access"></i> Opções de Adaptação</h3>
-                    <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao')" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer;">&times;</button>
-                </div>
-                <div style="padding: 25px; overflow-y: auto; flex: 1;">
-                    <p style="color: #4b5563; margin-bottom: 20px;">Selecione as adaptações desejadas para a impressão:</p>
-                    ${isAdaptada ? `<div style="background: #dbeafe; padding: 10px; margin-bottom: 15px; border-radius: 8px;"><i class="fas fa-info-circle"></i> Prova originalmente adaptada - 3 alternativas</div>` : ''}
-                    
-                    <div style="display: flex; flex-direction: column; gap: 15px;">
-                        <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 10px;">
-                                <input type="checkbox" id="optFonteDinamica" style="width: 20px; height: 20px;">
-                                <div>
-                                    <strong style="font-size: 1rem;">🔍 Fonte Dinâmica</strong>
-                                    <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Amplie o tamanho da fonte conforme sua necessidade</p>
+                        <div style="margin-bottom: 10px; line-height: 1.5;">${q.pergunta}</div>
+                        <div style="margin-left: 15px;">
+                            ${(q.opcoes || []).map((op, i) => `
+                                <div style="display: flex; margin: 6px 0;">
+                                    <span style="font-weight: 600; min-width: 24px;">${String.fromCharCode(65 + i)})</span>
+                                    <span>${op}</span>
                                 </div>
-                            </label>
-                            <div id="sliderContainer" style="display: none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="font-size: 12px;">Normal (12pt)</span>
-                                    <span style="font-size: 12px; font-weight: bold;" id="tamanhoFonteAtual">12pt</span>
-                                    <span style="font-size: 12px;">Máximo (48pt)</span>
-                                </div>
-                                <input type="range" id="fonteSlider" min="12" max="48" step="1" value="12" style="width: 100%; margin: 10px 0;">
-                                <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
-                                    <button type="button" onclick="setorPedagogico.ajustarFonteRapido(12)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Normal</button>
-                                    <button type="button" onclick="setorPedagogico.ajustarFonteRapido(18)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Médio</button>
-                                    <button type="button" onclick="setorPedagogico.ajustarFonteRapido(24)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Grande</button>
-                                    <button type="button" onclick="setorPedagogico.ajustarFonteRapido(36)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Muito Grande</button>
-                                    <button type="button" onclick="setorPedagogico.ajustarFonteRapido(48)" style="flex: 1; padding: 6px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Máximo</button>
-                                </div>
-                                <div style="margin-top: 10px; padding: 8px; background: #f1f5f9; border-radius: 8px; text-align: center; font-size: 12px; color: #475569;">
-                                    <i class="fas fa-mouse-pointer"></i> <strong>Pré-visualização:</strong>
-                                    <span id="previewFonte" style="font-size: 12px; display: inline-block; margin-left: 8px;">Texto exemplo</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                <input type="checkbox" id="optNegrito" style="width: 20px; height: 20px;">
-                                <div><strong style="font-size: 1rem;">🔤 Texto em Negrito</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Aplicar negrito em todo o texto da prova</p></div>
-                            </label>
-                        </div>
-                        
-                        <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                <input type="checkbox" id="optAltoContraste" style="width: 20px; height: 20px;">
-                                <div><strong style="font-size: 1rem;">🎨 Alto Contraste</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Fundo escuro com texto claro para melhor visualização</p></div>
-                            </label>
-                        </div>
-                        
-                        <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                <input type="checkbox" id="optLayoutSimplificado" style="width: 20px; height: 20px;">
-                                <div><strong style="font-size: 1rem;">📄 Layout Simplificado</strong><p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Remover elementos decorativos, manter apenas o essencial</p></div>
-                            </label>
-                        </div>
-                        
-                        <div style="background: #f8fafc; padding: 15px; border-radius: 16px; border: 2px solid #e5e7eb;">
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                <input type="checkbox" id="optCaixaAlta" style="width: 20px; height: 20px;">
-                                <div>
-                                    <strong style="font-size: 1rem;">🔠 CAIXA ALTA (Maiúsculas)</strong>
-                                    <p style="margin: 5px 0 0; font-size: 0.85rem; color: #6b7280;">Converte todo o texto para letras maiúsculas</p>
-                                </div>
-                            </label>
-                            <div id="caixaAltaPreview" style="margin-top: 10px; padding: 8px; background: #fff; border-radius: 8px; font-size: 12px; color: #64748b; border: 1px solid #e5e7eb;">
-                                <i class="fas fa-eye"></i> Pré-visualização: <span id="previewCaixaAlta">Exemplo de texto em maiúsculas</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
-                        <p style="margin: 0; font-size: 0.85rem;"><i class="fas fa-lightbulb"></i> <strong>Dica:</strong> Você pode combinar várias opções conforme a necessidade do aluno.</p>
-                    </div>
-                    
-                    <div style="display: flex; gap: 12px; margin-top: 25px; margin-bottom: 10px;">
-                        <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao'); setorPedagogico.gerarImpressaoComOpcoes()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;"><i class="fas fa-print"></i> Imprimir com Adaptações</button>
-                        <button onclick="setorPedagogico.fecharModalAdaptacao('modalOpcoesAdaptacao')" style="flex: 1; padding: 14px; background: #6b7280; color: white; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">Cancelar</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        
-        setTimeout(() => {
-            const fonteDinamicaCheckbox = document.getElementById('optFonteDinamica');
-            const sliderContainer = document.getElementById('sliderContainer');
-            const fonteSlider = document.getElementById('fonteSlider');
-            const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
-            const previewFonte = document.getElementById('previewFonte');
-            const caixaAltaCheckbox = document.getElementById('optCaixaAlta');
-            const previewCaixaAlta = document.getElementById('previewCaixaAlta');
-
-            if (caixaAltaCheckbox && previewCaixaAlta) {
-                caixaAltaCheckbox.addEventListener('change', function() {
-                    if (this.checked) {
-                        previewCaixaAlta.style.textTransform = 'uppercase';
-                        previewCaixaAlta.style.fontWeight = 'bold';
-                        previewCaixaAlta.style.color = '#10b981';
-                        previewCaixaAlta.innerHTML = 'EXEMPLO DE TEXTO EM MAIÚSCULAS';
-                    } else {
-                        previewCaixaAlta.style.textTransform = 'none';
-                        previewCaixaAlta.style.fontWeight = 'normal';
-                        previewCaixaAlta.style.color = '#64748b';
-                        previewCaixaAlta.innerHTML = 'Exemplo de texto em maiúsculas';
-                    }
-                });
-            }
-            
-            if (fonteDinamicaCheckbox) {
-                fonteDinamicaCheckbox.addEventListener('change', function() {
-                    if (sliderContainer) sliderContainer.style.display = this.checked ? 'block' : 'none';
-                });
-            }
-            if (fonteSlider) {
-                fonteSlider.addEventListener('input', function() {
-                    const tamanho = this.value;
-                    if (tamanhoAtual) tamanhoAtual.textContent = tamanho + 'pt';
-                    if (previewFonte) {
-                        previewFonte.style.fontSize = tamanho + 'pt';
-                        previewFonte.style.fontWeight = 'bold';
-                    }
-                });
-                fonteSlider.dispatchEvent(new Event('input'));
-            }
-        }, 100);
-    }
-
-    ajustarFonteRapido(tamanho) {
-        const slider = document.getElementById('fonteSlider');
-        const tamanhoAtual = document.getElementById('tamanhoFonteAtual');
-        const previewFonte = document.getElementById('previewFonte');
-        
-        if (slider) {
-            slider.value = tamanho;
-            if (tamanhoAtual) tamanhoAtual.textContent = tamanho + 'pt';
-            if (previewFonte) previewFonte.style.fontSize = tamanho + 'pt';
-            const checkbox = document.getElementById('optFonteDinamica');
-            if (checkbox && !checkbox.checked) {
-                checkbox.checked = true;
-                const sliderContainer = document.getElementById('sliderContainer');
-                if (sliderContainer) sliderContainer.style.display = 'block';
-            }
-        }
-    }
-
-    fecharModalAdaptacao(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) modal.style.display = 'none';
-    }
-
-    async gerarImpressaoNormal() {
-        const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
-        if (!prova) { this.showToast('❌ Erro: dados da prova não encontrados', 'error'); return; }
-        
-        const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
-        const selectAluno = document.getElementById('selectAlunoImpressao');
-        const alunoId = selectAluno?.value;
-        const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim();
-        
-        this.fecharModalAdaptacao('modalPerguntaAdaptacao');
-        
-        if (tipoImpressao === 'todos') {
-            const alunos = window.alunosDaTurma || [];
-            if (alunos.length === 0) { this.showToast('⚠️ Nenhum aluno encontrado', 'info'); return; }
-            await this.gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, {}, alunos);
-            return;
-        }
-        
-        if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
-        
-        let qrCodeAlunoUrl = null;
-        try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
-            if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
-            else this.showToast('⚠️ QR Code do aluno não encontrado.', 'warning');
-        } catch (error) {
-            console.error('❌ Erro ao buscar QR Code do aluno:', error);
-            this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
-        }
-        
-        await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, {}, qrCodeAlunoUrl, alunoNome);
-    }
-
-    async gerarImpressaoComOpcoes() {
-        const { prova, questoes, qrCodeDataUrl } = window.provaParaImpressao || {};
-        if (!prova) { this.showToast('❌ Erro: dados da prova não encontrados', 'error'); return; }
-        
-        const fonteDinamicaHabilitada = document.getElementById('optFonteDinamica')?.checked || false;
-        const tamanhoFonte = fonteDinamicaHabilitada ? (document.getElementById('fonteSlider')?.value || 12) : 12;
-        
-        const opcoes = {
-            fonteAmpliada: fonteDinamicaHabilitada ? tamanhoFonte : false,
-            fontePersonalizada: fonteDinamicaHabilitada ? tamanhoFonte : false,
-            negrito: document.getElementById('optNegrito')?.checked || false,
-            altoContraste: document.getElementById('optAltoContraste')?.checked || false,
-            layoutSimplificado: document.getElementById('optLayoutSimplificado')?.checked || false,
-            tamanhoFonte: parseInt(tamanhoFonte),
-            caixaAlta: document.getElementById('optCaixaAlta')?.checked || false
-        };
-        
-        const nenhumaOpcao = !opcoes.fontePersonalizada && !opcoes.negrito && !opcoes.altoContraste && !opcoes.layoutSimplificado && !opcoes.caixaAlta;
-        if (nenhumaOpcao) {
-            const confirmar = await this.confirmarAcao('Nenhuma opção selecionada. Imprimir normalmente?');
-            if (confirmar) {
-                this.fecharModalAdaptacao('modalOpcoesAdaptacao');
-                await this.gerarImpressaoNormal();
-            }
-            return;
-        }
-        
-        const tipoImpressao = document.querySelector('input[name="tipoImpressao"]:checked')?.value;
-        const selectAluno = document.getElementById('selectAlunoImpressao');
-        const alunoId = selectAluno?.value;
-        const alunoNome = selectAluno?.options[selectAluno.selectedIndex]?.text.split('(')[0].trim();
-        
-        this.fecharModalAdaptacao('modalOpcoesAdaptacao');
-        this.fecharModalAdaptacao('modalPerguntaAdaptacao');
-        
-        if (tipoImpressao === 'todos') {
-            const alunos = window.alunosDaTurma || [];
-            if (alunos.length === 0) { this.showToast('⚠️ Nenhum aluno encontrado', 'info'); return; }
-            await this.gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoes, alunos);
-            return;
-        }
-        
-        if (!alunoId) { this.showToast('⚠️ Selecione um aluno', 'info'); this.mostrarModalPerguntaAdaptacao(); return; }
-        
-        let qrCodeAlunoUrl = null;
-        try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
-            if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
-            else this.showToast('⚠️ QR Code do aluno não encontrado.', 'warning');
-        } catch (error) {
-            console.error('❌ Erro ao buscar QR Code do aluno:', error);
-            this.showToast('❌ Erro ao buscar QR Code do aluno', 'error');
-        }
-        
-        await this.gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoes, qrCodeAlunoUrl, alunoNome);
-    }
-
-    async gerarImpressaoTodosAlunos(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, alunos) {
-        this.showToast(`🖨️ Gerando prova para ${alunos.length} aluno(s)...`, 'info');
-        try {
-            const token = localStorage.getItem('auth_token');
-            const alunosComQRCode = await Promise.all(alunos.map(async (aluno) => {
-                const alunoId = aluno._id || aluno.id;
-                const alunoNome = aluno.nome || aluno.alunoNome || 'Aluno';
-                let qrCodeAlunoUrl = '';
-                try {
-                    const response = await fetch(`/api/aluno/qrcode/${alunoId}`, {
-                        method: 'GET',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-                    });
-                    const data = await response.json();
-                    if (data.success && data.qrCode) qrCodeAlunoUrl = data.qrCode;
-                } catch (error) {
-                    console.error(`❌ Erro ao buscar QR Code para ${alunoNome}:`, error);
-                }
-                return { ...aluno, qrCodeDataUrl: qrCodeAlunoUrl, id: alunoId, nome: alunoNome };
-            }));
-            
-            let htmlCompleto = '';
-            for (let i = 0; i < alunosComQRCode.length; i++) {
-                const aluno = alunosComQRCode[i];
-                window.alunoSelecionadoNome = aluno.nome;
-                const htmlAluno = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, aluno.qrCodeDataUrl, aluno.nome);
-                htmlCompleto += htmlAluno;
-                if (i < alunosComQRCode.length - 1) htmlCompleto += `<div style="page-break-before: always;"></div>`;
-            }
-            
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(htmlCompleto);
-            printWindow.document.close();
-            printWindow.onload = () => { printWindow.print(); printWindow.onafterprint = () => printWindow.close(); };
-            this.showToast(`✅ Impressão preparada para ${alunosComQRCode.length} aluno(s)!`, 'success');
-        } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast(`❌ Erro: ${error.message}`, 'error');
-        }
-    }
-
-    gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}, qrCodeAlunoUrl = null, alunoNome = null) {
-        const provaTitulo = prova.titulo || 'Prova sem título';
-        const logoIema = '/uploads/logo-iema.png';
-        const dataAtual = new Date();
-        const dataFormatada = dataAtual.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const totalQuestoes = questoes.length;
-        const turmaNome = prova.turma?.nome || 'Turma não especificada';
-        const disciplina = prova.turma?.disciplina || 'Disciplina não especificada';
-        const professorNome = prova.professor?.nome || 'Professor';
-        const periodo = prova.periodo ? `${prova.periodo}º Período` : '1º Período';
-        const isAdaptada = prova.tipoProva === 'adaptada' || prova.adaptada === true;
-        const letrasUsadas = isAdaptada ? ['A', 'B', 'C'] : ['A', 'B', 'C', 'D', 'E'];
-        
-        let adaptacoesTexto = '';
-        const temAdaptacoes = opcoesAdaptacao.fonteAmpliada || opcoesAdaptacao.negrito || opcoesAdaptacao.altoContraste || opcoesAdaptacao.layoutSimplificado || opcoesAdaptacao.fontePersonalizada || opcoesAdaptacao.caixaAlta;
-        if (temAdaptacoes) {
-            const adaptacoesSelecionadas = [];
-            if (opcoesAdaptacao.fontePersonalizada && opcoesAdaptacao.tamanhoFonte) adaptacoesSelecionadas.push(`Fonte Dinâmica (${opcoesAdaptacao.tamanhoFonte}pt)`);
-            else if (opcoesAdaptacao.fonteAmpliada) adaptacoesSelecionadas.push('Fonte Ampliada');
-            if (opcoesAdaptacao.negrito) adaptacoesSelecionadas.push('Texto em Negrito');
-            if (opcoesAdaptacao.altoContraste) adaptacoesSelecionadas.push('Alto Contraste');
-            if (opcoesAdaptacao.layoutSimplificado) adaptacoesSelecionadas.push('Layout Simplificado');
-            if (opcoesAdaptacao.caixaAlta) adaptacoesSelecionadas.push('Caixa Alta');
-            adaptacoesTexto = `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 8px 12px; margin: 10px 0; border-radius: 8px;"><p style="margin: 0; font-size: 0.85rem; color: #92400e;"><i class="fas fa-universal-access"></i> <strong>Prova Adaptada</strong> - Esta impressão inclui: ${adaptacoesSelecionadas.join(', ')}.</p></div>`;
-        }
-        
-        let questoesHTML = '';
-        questoes.forEach((questao, index) => {
-            const opcoes = questao.opcoes || [];
-            const opcoesFormatadas = opcoes.map((opcao, optIndex) => {
-                const letra = letrasUsadas[optIndex];
-                let opcaoLimpa = opcao || 'Opção não disponível';
-                if (opcaoLimpa.startsWith(`${letra})`) || opcaoLimpa.startsWith(`${letra}.`)) opcaoLimpa = opcaoLimpa.substring(2).trim();
-                return { letra, texto: opcaoLimpa };
-            });
-            questoesHTML += `
-                <div class="questao-print">
-                    <div class="questao-numero">Questão ${index + 1} ${isAdaptada ? '(Prova Adaptada - 3 alternativas)' : ''}</div>
-                    <div class="questao-texto"><strong>${questao.pergunta || 'Pergunta não disponível'}</strong></div>
-                    <div class="opcoes-print">${opcoesFormatadas.map(op => `<div class="opcao-linha"><span class="opcao-letra">${op.letra})</span><span class="opcao-texto">${op.texto}</span></div>`).join('')}</div>
-                    <div class="rascunho-area"><small>Espaço para rascunho</small><div class="rascunho-linhas"></div></div>
-                </div>
-            `;
-        });
-        
-        const gerarCartaoResposta = () => {
-            const qrCodeArea = qrCodeDataUrl ? `
-                <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
-                        <img src="${qrCodeDataUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code">
-                        <div style="font-size: 9px; color: #666; text-align: center;">
-                            <strong>📱 Correção Automática</strong><br>
-                            Escaneie este QR Code
-                        </div>
-                    </div>
-                </div>
-            ` : '';
-            
-            let qrCodeAlunoArea = '';
-            if (qrCodeAlunoUrl) {
-                qrCodeAlunoArea = `
-                    <div style="text-align: center; margin-top: 10px; padding: 8px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; display: inline-block; width: auto;">
-                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
-                            <img src="${qrCodeAlunoUrl}" style="width: 85px; height: auto; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="QR Code do Aluno">
-                            <div style="font-size: 9px; color: #666; text-align: center;">
-                                <strong>👤 Identificação do Aluno</strong><br>
-                                ${alunoNome || 'Aluno'}
-                            </div>
+                            `).join('')}
                         </div>
                     </div>
                 `;
-            }
-            
-            return `
-                <div style="text-align: center;">
-                    <div class="cartao-header" style="margin-bottom: 8px;">
-                        <h4 style="margin: 0 0 5px 0; font-size: 11pt; font-weight: bold; text-align: center;">📝 CARTÃO-RESPOSTA</h4>
-                        <div class="instrucoes-cartao" style="font-size: 8pt; color: #333; text-align: center; padding: 8px; background: #fef3c7; border-radius: 6px;">
-                            <p style="margin: 0;"><strong>INSTRUÇÕES PARA PREENCHIMENTO DO CARTÃO-RESPOSTA</strong></p>
-                            <p style="margin: 5px 0 0 0;">Ao marcar a alternativa correta no cartão-resposta (Gabarito), use caneta esferográfica de tinta azul ou preta. Será anulada a questão que contiver rasura ou, ainda, a que apresentar mais de uma alternativa assinalada no cartão-resposta (Gabarito).</p>
+            });
+
+            const html = `<!DOCTYPE html>
+                <html lang="pt-BR">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>${this.escapeHtml(p.titulo)}</title>
+                    <style>
+                        @page { size: A4; margin: 15mm; }
+                        * { box-sizing: border-box; margin: 0; padding: 0; }
+                        body { font-family: 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #000; }
+                        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                        .header h1 { font-size: 14pt; text-transform: uppercase; }
+                        .header h2 { font-size: 11pt; font-weight: normal; margin-top: 4px; }
+                        .info-box { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 8px; background: #f5f5f5; border: 1px solid #ccc; margin-bottom: 20px; font-size: 10pt; }
+                        .aluno-box { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+                        .aluno-linha { display: flex; align-items: baseline; gap: 8px; }
+                        .aluno-linha strong { min-width: 90px; }
+                        .aluno-linha .linha { flex: 1; border-bottom: 1px dotted #000; height: 18px; }
+                        .btn-print { display: block; margin: 15px auto; padding: 10px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+                        @media print { .btn-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+
+                    <div class="header">
+                        <h1>IEMA Pleno: São Luís - Centro</h1>
+                        <h2>${this.escapeHtml(p.titulo)}</h2>
+                    </div>
+
+                    <div class="info-box">
+                        <span><strong>Código:</strong> ${this.escapeHtml(p.codigo || '-')}</span>
+                        <span><strong>Turma:</strong> ${this.escapeHtml(p.turma?.nome || '-')}</span>
+                        <span><strong>Disciplina:</strong> ${this.escapeHtml(p.turma?.disciplina || '-')}</span>
+                        <span><strong>Professor:</strong> ${this.escapeHtml(p.professor || '-')}</span>
+                        <span><strong>Duração:</strong> ${p.duracaoMinutos || '-'} min</span>
+                    </div>
+
+                    <div class="aluno-box">
+                        <div class="aluno-linha">
+                            <strong>ESTUDANTE:</strong>
+                            <span class="linha"></span>
+                        </div>
+                        <div class="aluno-linha">
+                            <strong>TURMA:</strong>
+                            <span class="linha"></span>
+                            <strong style="margin-left: 20px;">DATA:</strong>
+                            <span class="linha"></span>
                         </div>
                     </div>
-                    <div class="cartao-resposta" style="position: relative; margin: 8px auto; border: 2px solid #000; padding: 15px 12px 12px 12px; background: #fff; display: inline-block; width: 85%; box-sizing: border-box; max-width: 650px;">
-                        <div style="position: absolute; top: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        <div style="position: absolute; top: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        <div style="position: absolute; bottom: 5px; left: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        <div style="position: absolute; bottom: 5px; right: 5px; width: 25px; height: 25px; background: #000 !important; border: 1px solid #000 !important; z-index: 5; print-color-adjust: exact;"></div>
-                        <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
-                            <thead><tr style="background: #e8e8e8;"><th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">Q</th>${letrasUsadas.map(letra => `<th style="border: 1px solid #000; padding: 6px 3px; text-align: center; font-weight: bold; font-size: 8pt; width: 35px;">${letra}</th>`).join('')} </tr></thead>
-                            <tbody>${Array.from({ length: totalQuestoes }, (_, i) => ` <tr><td style="border: 1px solid #000; padding: 5px 3px; text-align: center; font-weight: bold; font-size: 8pt;">${i + 1}</td>${letrasUsadas.map(() => `<td style="border: 1px solid #000; padding: 5px 3px; text-align: center;"><div style="width: 12px; height: 12px; border: 1.5px solid #000; border-radius: 50%; margin: 0 auto;"></div></td>`).join('')}</tr>`).join('')}</tbody>
-                        </table>
-                    </div>
-                    <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin-top: 15px; flex-wrap: wrap;">${qrCodeArea}${qrCodeAlunoArea}</div>
-                </div>
-            `;
-        };
-        
-        let cssAdaptacoes = '';
-        if (opcoesAdaptacao.caixaAlta) {
-            cssAdaptacoes += `body, .questao-texto, .opcao-linha, .instrucoes-cartao, .questao-numero, .cartao-header h4, .print-header h1, .print-prova-info h3, .label, .campo-label, .instrucoes-box h4, .info-label, .info-linha, .instrucoes-box li, .print-footer, .student-item, .campo-item, .cartao-resposta td, .cartao-resposta th, .rascunho-area small, .instrucoes-box ul, .instrucoes-box p, .student-item .label, .campo-item .campo-label, .info-linha .info-item, .print-prova-info .info-linha span, .questao-print, .opcoes-print, .opcao-linha .opcao-letra, .opcao-linha .opcao-texto, .print-header .student-row { text-transform: uppercase !important; }`;
-        }
-        if (opcoesAdaptacao.fontePersonalizada && opcoesAdaptacao.tamanhoFonte) {
-            const t = opcoesAdaptacao.tamanhoFonte;
-            cssAdaptacoes += `body{font-size:${t}pt!important}.questao-texto{font-size:${t}pt!important}.opcao-linha{font-size:${t-2}pt!important}.instrucoes-cartao{font-size:${t-5}pt!important}.rascunho-area small{font-size:${t-5}pt!important}.questao-numero{font-size:${t-2}pt!important}.print-header h1{font-size:${t+4}pt!important}.print-prova-info h3{font-size:${t+2}pt!important}.campos-box .campo-label,.student-item .label{font-size:${t-2}pt!important}.instrucoes-box li,.instrucoes-box h4,.info-linha,.info-item{font-size:${t-4}pt!important}.cartao-resposta th,.cartao-resposta td{font-size:${t-4}pt!important}.instrucoes-cartao p{font-size:${t-4}pt!important}.print-footer{font-size:${t-4.5}pt!important}`;
-        } else if (opcoesAdaptacao.fonteAmpliada) {
-            cssAdaptacoes += `body{font-size:16pt!important}.questao-texto{font-size:16pt!important}.opcao-linha{font-size:14pt!important}.instrucoes-cartao{font-size:11pt!important}.rascunho-area small{font-size:10pt!important}.questao-numero{font-size:14pt!important}.print-header h1{font-size:18pt!important}.print-prova-info h3{font-size:16pt!important}.campos-box .campo-label,.student-item .label{font-size:12pt!important}.instrucoes-box li,.instrucoes-box h4,.info-linha,.info-item{font-size:11pt!important}`;
-        }
-        if (opcoesAdaptacao.negrito) cssAdaptacoes += `body,.questao-texto,.opcao-linha,.instrucoes-cartao,.questao-numero,.cartao-header h4,.print-header h1,.print-prova-info h3,.label,.campo-label,.instrucoes-box h4,.info-label,.info-linha,.instrucoes-box li,.print-footer{font-weight:bold!important}`;
-        if (opcoesAdaptacao.altoContraste) cssAdaptacoes += `body{background:#000!important;color:#fff!important}.print-header,.campos-box,.instrucoes-box,.print-prova-info,.cartao-resposta,.questao-print,.rascunho-area,.info-linha{background:#000!important;color:#fff!important;border-color:#fff!important}.underline,.campo-underline{border-bottom-color:#fff!important}.rascunho-linhas{background:repeating-linear-gradient(transparent,transparent 16px,#fff 16px,#fff 18px)!important}`;
-        if (opcoesAdaptacao.layoutSimplificado) cssAdaptacoes += `.print-logo,.logo-iema{display:none!important}.campos-box{border:1px solid #000!important}.instrucoes-box{border:1px solid #000!important;background:#fefefe!important}.print-header{border-bottom:1px solid #000!important}`;
-        
-        return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Prova - ${provaTitulo}</title><style>@media print{body{margin:0;padding:0}.questao-print{page-break-inside:avoid}.cartao-resposta{page-break-inside:avoid}.questoes-container{page-break-before:always;margin-top:0}}body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.3;margin:0;padding:0.4in;background:white;color:black;position:relative}.print-header{text-align:center;margin-bottom:6px;padding-bottom:6px;border-bottom:2px solid #000}.print-logo{max-width:999px;width:100%;height:auto;display:block;margin:0 auto 3px auto}.print-header h1{font-size:14pt;font-weight:bold;margin:0 0 5px 0}.student-row{display:flex;justify-content:space-between;margin:4px 0;gap:15px}.student-item{flex:1;display:flex;align-items:baseline;gap:6px}.label{font-weight:bold;min-width:65px;font-size:10pt}.underline{border-bottom:1px dotted #000;flex:1;height:16px}.campos-box{margin:6px 0;border:2px solid #000;padding:5px 12px;display:flex;justify-content:space-between;gap:20px}.campo-item{flex:1;display:flex;align-items:baseline;gap:6px}.campo-label{font-weight:bold;min-width:35px;font-size:10pt}.campo-underline{border-bottom:1px dotted #000;flex:1;height:16px}.instrucoes-box{margin:6px 0;border:1px solid #ccc;padding:8px 12px;background:#fefefe;border-radius:4px}.instrucoes-box h4{margin:0 0 5px 0;font-size:10pt;font-weight:bold;color:#4f46e5;text-align:center}.instrucoes-box ul{margin:0;padding-left:20px}.instrucoes-box li{margin-bottom:3px;font-size:8.5pt;line-height:1.3}.print-prova-info{margin:8px 0;padding:5px 8px;border:1px solid #ddd;background:#fafafa}.print-prova-info h3{margin:0 0 3px 0;font-size:11pt;text-align:center;font-weight:bold}.info-linha{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:8pt;border-top:1px solid #eee;padding-top:4px;margin-top:4px}.info-item{display:inline-flex;gap:4px}.questoes-container{page-break-before:always;margin-top:0}.questao-print{margin-bottom:20px}.questao-numero{font-weight:bold;margin-bottom:6px;border-bottom:1px solid #ccc;padding-bottom:3px;font-size:10pt}.questao-texto{margin-bottom:10px;margin-left:8px;line-height:1.4;font-size:11pt}.opcao-linha{margin:6px 0 6px 18px;display:flex;font-size:10pt}.opcao-letra{min-width:22px;font-weight:500}.rascunho-area{margin-top:8px;border-top:1px dashed #ccc;padding-top:5px}.rascunho-area small{font-size:7pt}.rascunho-linhas{min-height:35px;background:repeating-linear-gradient(transparent,transparent 16px,#eee 16px,#eee 18px)}.print-footer{margin-top:25px;text-align:center;font-size:7.5pt;color:#666;border-top:1px solid #ccc;padding-top:8px}${cssAdaptacoes}</style></head><body><div class="print-header"><img src="${logoIema}" class="print-logo" alt="IEMA" onerror="this.style.display='none'"><h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1><div class="student-row"><div class="student-item"><span class="label">ESTUDANTE:</span><span class="underline"></span></div></div><div class="student-row"><div class="student-item"><span class="label">CURSO:</span><span class="underline"></span></div><div class="student-item"><span class="label">TURMA:</span><span class="underline"></span></div></div></div><div class="campos-box"><div class="campo-item"><span class="campo-label">Nota:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Ass.:</span><span class="campo-underline"></span></div><div class="campo-item"><span class="campo-label">Data:</span><span class="campo-underline"></span></div></div><div class="instrucoes-box"><h4>📋 INSTRUÇÕES GERAIS</h4><ul><li>Escreva seu nome de registro legível e não esqueça de assinar a lista de frequência.</li><li>Todas as anotações e cálculos devem ser feitos no caderno de prova.</li><li>Os celulares <strong>deverão ser desligados</strong> durante todo o período de realização da prova.</li><li>Cada questão contém apenas uma alternativa correta.</li><li>Leia e siga as instruções de preenchimento do cartão-resposta (GABARITO) abaixo.</li></ul></div>${adaptacoesTexto}<div class="print-prova-info"><h3>${provaTitulo}</h3><div class="info-linha"><span class="info-item">Período: ${periodo}</span><span class="info-item">Turma: ${turmaNome}</span><span class="info-item">Disciplina: ${disciplina}</span><span class="info-item">Professor: ${professorNome}</span><span class="info-item">Questões: ${totalQuestoes}</span></div></div>${gerarCartaoResposta()}<div class="questoes-container">${questoesHTML}</div><div class="print-footer"><p>EducaPleno - ${dataFormatada}</p><p>📱 Escaneie o QR Code para correção automática</p><p style="font-size: 6pt;">Aluno: ${alunoNome || '_________________'} | Turma: ${turmaNome} | Código: ${prova.codigo || 'N/A'}</p></div><div style="page-break-after: always;"></div></body></html>`;
-    }
 
-    async gerarHTMLImpressao(prova, questoes, qrCodeDataUrl, opcoesAdaptacao = {}, qrCodeAlunoUrl = null, alunoNome = null) {
-        try {
-            const printHTML = this.gerarHTMLProvaCompleta(prova, questoes, qrCodeDataUrl, opcoesAdaptacao, qrCodeAlunoUrl, alunoNome);
+                    ${questoesHtml}
+
+                    <div style="margin-top: 40px; text-align: center; font-size: 9pt; color: #666; border-top: 1px solid #ccc; padding-top: 8px;">
+                        Documento gerado pelo EducaPleno — Setor Pedagógico
+                    </div>
+                </body>
+                </html>`;
+
             const printWindow = window.open('', '_blank');
-            printWindow.document.write(printHTML);
+            printWindow.document.write(html);
             printWindow.document.close();
-            printWindow.onload = () => { printWindow.print(); printWindow.onafterprint = () => printWindow.close(); };
+            printWindow.onload = () => {
+                printWindow.print();
+                printWindow.onafterprint = () => printWindow.close();
+            };
+
             this.showToast('✅ Impressão preparada!', 'success');
         } catch (error) {
-            console.error('❌ Erro:', error);
-            this.showToast(`❌ Erro: ${error.message}`, 'error');
+            console.error('❌ Erro na impressão:', error);
+            this.showToast('Erro ao preparar impressão: ' + error.message, 'error');
         }
     }
 
-    closeAllModals() {
-        ['modal', 'confirmModal', 'modalPerguntaAdaptacao', 'modalOpcoesAdaptacao'].forEach(id => {
-            const modal = document.getElementById(id);
-            if (modal) modal.style.display = 'none';
-        });
+    aplicarFiltrosProvas() { this.loadProvas(); }
+    limparFiltrosProvas() {
+        if (document.getElementById('filtroTipoProva')) document.getElementById('filtroTipoProva').value = '';
+        if (document.getElementById('filtroTurmaProva')) document.getElementById('filtroTurmaProva').value = '';
+        if (document.getElementById('filtroStatusProva')) document.getElementById('filtroStatusProva').value = '';
+        this.loadProvas();
+    }
+    carregarProvas() { this.loadProvas(); }
+
+        // ============================================================================
+    // 🔥 CARREGAR MÓDULO AEE (delega para AeeModule)
+    // ============================================================================
+    async loadAEE() {
+        const content = document.getElementById('content');
+        if (!content) return;
+
+        if (!this.temPermissaoAEE) {
+            content.innerHTML = `
+                <div class="alert alert-warning m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Restrito</strong>
+                    <p>Você não tem permissão para acessar o módulo AEE.</p>
+                </div>
+            `;
+            return;
+        }
+
+        console.log('📋 Carregando módulo AEE...');
+
+        if (typeof window.AeeModule !== 'undefined') {
+            await window.AeeModule.init();
+        } else {
+            console.warn('⚠️ AeeModule não encontrado');
+            content.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Erro:</strong> Módulo AEE não carregado.
+                    <br><small>Recarregue a página (F5) e tente novamente.</small>
+                </div>
+            `;
+        }
+    }
+
+    // ============================================================================
+    // 🔥 CARREGAR MÓDULO DE GESTÃO DE PROFESSORES (delega para GestaoProfessoresModule)
+    // ============================================================================
+    async loadGestaoProfessores() {
+        const content = document.getElementById('content');
+        if (!content) return;
+
+        if (!this.temPermissaoGestaoProfessores) {
+            content.innerHTML = `
+                <div class="alert alert-warning m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Restrito</strong>
+                    <p>Você não tem permissão para acessar este módulo.</p>
+                </div>
+            `;
+            return;
+        }
+
+        console.log('📋 Carregando módulo de Gestão de Professores...');
+
+        content.innerHTML = `
+            <div class="gestao-professores-container">
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" id="gpRegistrarTab" data-bs-toggle="tab" data-bs-target="#gpRegistrar" type="button">
+                            <i class="fas fa-plus-circle"></i> Registrar
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="gpListaTab" data-bs-toggle="tab" data-bs-target="#gpLista" type="button">
+                            <i class="fas fa-list"></i> Registros
+                            <span class="badge bg-primary ms-1" id="gpBadgeTotal">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="gpDashboardTab" data-bs-toggle="tab" data-bs-target="#gpDashboard" type="button">
+                            <i class="fas fa-chart-line"></i> Dashboard
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" id="gpRelatorioTab" data-bs-toggle="tab" data-bs-target="#gpRelatorio" type="button">
+                            <i class="fas fa-file-alt"></i> Relatórios
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="gpRegistrar">
+                        <div class="card mb-3" style="border: 2px solid #e0e7ff;">
+                            <div class="card-body">
+                                <div class="etapa-header">
+                                    <div class="etapa-numero">1</div>
+                                    <div class="etapa-titulo">
+                                        <h5><i class="fas fa-user-tie me-2"></i> Selecionar Professor</h5>
+                                        <small class="text-muted">Busque pelo professor cadastrado no sistema</small>
+                                    </div>
+                                </div>
+                                <div class="search-box mt-3" style="position: relative;">
+                                    <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
+                                    <input type="text" id="gpBuscaProfessor" placeholder="Buscar por nome, email, matrícula ou CPF..."
+                                           style="width: 100%; padding: 14px 16px 14px 44px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px;">
+                                </div>
+                                <div id="gpListaProfessores" class="mt-3" style="max-height: 400px; overflow-y: auto;">
+                                    <div style="text-align: center; padding: 30px;">
+                                        <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #6366f1;"></i>
+                                        <p style="margin-top: 10px; color: #64748b;">Carregando professores...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="gpDadosProfessor" style="display: none;"></div>
+
+                        <div class="card mb-3" id="gpCardTurmas" style="display: none; border: 2px solid #e0e7ff;">
+                            <div class="card-body">
+                                <div class="etapa-header">
+                                    <div class="etapa-numero">2</div>
+                                    <div class="etapa-titulo">
+                                        <h5><i class="fas fa-users me-2"></i> Turmas Vinculadas</h5>
+                                        <small class="text-muted">Vincule as turmas que o professor leciona</small>
+                                    </div>
+                                </div>
+                                <div class="row g-3 mt-3">
+                                    <div class="col-md-5">
+                                        <label class="form-label" style="font-weight: 600; font-size: 13px;">Turma</label>
+                                        <select id="gpSelectTurma" class="form-select">
+                                            <option value="">Selecione a turma...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button id="gpBtnAddTurma" class="btn btn-primary w-100" style="height: 42px;">
+                                            <i class="fas fa-plus"></i> Adicionar
+                                        </button>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label" style="font-weight: 600; font-size: 13px;">Data da Coleta <span class="text-danger">*</span></label>
+                                        <input type="date" id="gpDataColeta" class="form-control" style="height: 42px;">
+                                    </div>
+                                </div>
+                                <div id="gpTurmasVinculadas" class="mt-3"></div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3" id="gpCardComponentes" style="display: none; border: 2px solid #e0e7ff;">
+                            <div class="card-body">
+                                <div class="etapa-header">
+                                    <div class="etapa-numero">3</div>
+                                    <div class="etapa-titulo">
+                                        <h5><i class="fas fa-book-open me-2"></i> Componentes Curriculares</h5>
+                                        <small class="text-muted">Adicione os componentes que o professor leciona</small>
+                                    </div>
+                                </div>
+                                <div id="gpListaComponentes" class="mt-3"></div>
+                                <div class="mt-3">
+                                    <button id="gpBtnAddComponente" class="btn btn-outline-primary">
+                                        <i class="fas fa-plus"></i> Adicionar Componente
+                                    </button>
+                                </div>
+                                <div class="mt-3">
+                                    <label class="form-label" style="font-weight: 600; font-size: 13px;">Observações Gerais</label>
+                                    <textarea id="gpObservacoesGerais" class="form-control" rows="3"
+                                              placeholder="Observações gerais sobre a gestão deste professor..."></textarea>
+                                </div>
+                                <div class="d-flex gap-2 mt-4 justify-content-end">
+                                    <button id="gpBtnLimpar" class="btn btn-secondary">
+                                        <i class="fas fa-times me-2"></i> Cancelar
+                                    </button>
+                                    <button id="gpBtnRegistrar" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i> Registrar Gestão
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="gpLista">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-filter me-2"></i> Filtros</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Buscar</label>
+                                        <input type="text" id="gpFiltroBusca" class="form-control" placeholder="Professor ou componente...">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Eixo</label>
+                                        <select id="gpFiltroEixo" class="form-select"><option value="">Todos</option></select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Turma</label>
+                                        <select id="gpFiltroTurma" class="form-select"><option value="">Todas</option></select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Data Início</label>
+                                        <input type="date" id="gpFiltroDataInicio" class="form-control">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Data Fim</label>
+                                        <input type="date" id="gpFiltroDataFim" class="form-control">
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-end">
+                                        <button class="btn btn-secondary w-100" onclick="GestaoProfessoresModule.carregarLista()">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="card-title mb-0"><i class="fas fa-list me-2"></i> Registros de Gestão</h6>
+                                    <span class="badge bg-primary" id="gpContadorRegistros">0 registros</span>
+                                </div>
+                                <div id="gpListaRegistros"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="gpDashboard">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Mês de Referência</label>
+                                        <input type="month" id="gpDashboardMes" class="form-control">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button id="gpBtnAtualizarDashboard" class="btn btn-primary w-100">
+                                            <i class="fas fa-sync-alt me-2"></i> Atualizar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
+                                    <i class="fas fa-clipboard-list fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatTotalGeral">0</div>
+                                    <div class="metric-label">Total Geral</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                                    <i class="fas fa-calendar-alt fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatTotalMes">0</div>
+                                    <div class="metric-label">No Mês</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                                    <i class="fas fa-user-tie fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatProfessores">0</div>
+                                    <div class="metric-label">Professores</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="metric-card" style="background: linear-gradient(135deg, #ec4899, #db2777); color: white;">
+                                    <i class="fas fa-chalkboard fa-2x mb-2"></i>
+                                    <div class="metric-value" id="gpStatAulas">0</div>
+                                    <div class="metric-label">Aulas Registradas</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-pie"></i> Distribuição por Eixo</h6>
+                                    <canvas id="gpChartEixo"></canvas>
+                                </div></div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-bar"></i> Distribuição por Turma</h6>
+                                    <canvas id="gpChartTurma"></canvas>
+                                </div></div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-trophy"></i> Professores com Mais Componentes</h6>
+                                    <div id="gpRankingProfessores" class="mt-3"></div>
+                                </div></div>
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <div class="card h-100"><div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-history"></i> Últimos Registros</h6>
+                                    <div id="gpUltimosRegistros" class="mt-3"></div>
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="gpRelatorio">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-file-alt me-2"></i> Gerar Relatório</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Tipo de Relatório</label>
+                                        <select id="gpTipoRelatorio" class="form-select">
+                                            <option value="geral">Geral</option>
+                                            <option value="eixo">Por Eixo</option>
+                                            <option value="turma">Por Turma</option>
+                                            <option value="professor">Por Professor</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3" id="gpRelatorioEixoDiv" style="display: none;">
+                                        <label class="form-label">Eixo</label>
+                                        <select id="gpRelatorioEixo" class="form-select">
+                                            <option value="">Selecione...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3" id="gpRelatorioTurmaDiv" style="display: none;">
+                                        <label class="form-label">Turma</label>
+                                        <select id="gpRelatorioTurma" class="form-select">
+                                            <option value="">Selecione...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3" id="gpRelatorioProfessorDiv" style="display: none;">
+                                        <label class="form-label">Professor</label>
+                                        <select id="gpRelatorioProfessor" class="form-select">
+                                            <option value="">Selecione...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Data Início</label>
+                                        <input type="date" id="gpRelatorioDataInicio" class="form-control">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Data Fim</label>
+                                        <input type="date" id="gpRelatorioDataFim" class="form-control">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">&nbsp;</label>
+                                        <button class="btn btn-primary w-100" id="gpBtnGerarRelatorio">
+                                            <i class="fas fa-search me-2"></i> Gerar
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">&nbsp;</label>
+                                        <div class="btn-group w-100">
+                                            <button class="btn btn-success" id="gpBtnExportarCSV" disabled>
+                                                <i class="fas fa-file-csv me-1"></i> CSV
+                                            </button>
+                                            <button class="btn btn-danger" id="gpBtnImprimirRelatorio" disabled>
+                                                <i class="fas fa-print me-1"></i> PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="gpResultadoRelatorio">
+                            <div class="text-center py-5">
+                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Selecione os filtros e clique em Gerar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        setTimeout(async () => {
+            if (window.GestaoProfessoresModule) {
+                await window.GestaoProfessoresModule.init();
+            }
+        }, 150);
+    }
+
+    // ============================================================================
+    // 🔥 CARREGAR MÓDULO DE AUTORIZAÇÃO DE VISITAS
+    // ============================================================================
+    loadVisitas() {
+        const content = document.getElementById('content');
+        if (!content) return;
+
+        if (!this.temPermissaoVisitas) {
+            content.innerHTML = `
+                <div class="alert alert-warning m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Restrito</strong>
+                    <p>Você não tem permissão para acessar este módulo.</p>
+                </div>
+            `;
+            return;
+        }
+
+        console.log('📋 Carregando módulo de Autorização de Visitas...');
+
+        content.innerHTML = `
+            <div id="aba-visitas-content">
+                <div style="text-align: center; padding: 60px;">
+                    <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #667eea; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
+                    <p style="color: #6b7280;">Carregando módulo de visitas...</p>
+                </div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            </div>
+        `;
+
+        setTimeout(async () => {
+            try {
+                if (typeof window.visitasAdmin !== 'undefined' && window.visitasAdmin) {
+                    await window.visitasAdmin.init();
+                    console.log('✅ Módulo de visitas inicializado');
+                } else {
+                    console.warn('⚠️ visitasAdmin não encontrado');
+                    content.innerHTML = `
+                        <div class="alert alert-danger m-4">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Erro:</strong> Módulo de visitas não carregado.
+                            <br><small>Recarregue a página (F5) e tente novamente.</small>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao inicializar módulo de visitas:', error);
+                content.innerHTML = `
+                    <div class="alert alert-danger m-4">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Erro ao carregar módulo:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }, 150);
     }
 
     // ============================================================================
     // 🔥 2ª CHAMADA
     // ============================================================================
-    
     async loadSegundaChamada() {
         const content = document.getElementById('content');
-        
+
         if (!this.temPermissao2Chamada) {
             content.innerHTML = `
                 <div class="alert alert-warning m-4">
@@ -1719,7 +1568,7 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         content.innerHTML = `
             <div class="segunda-chamada-container">
                 <div class="card mb-3">
@@ -1830,7 +1679,6 @@ class SetorPedagogico {
                                 </div>
                             </div>
 
-                            <!-- TIPO DE PROVA PERDIDA -->
                             <div class="mb-3" id="campoSegundaChamadaTipoProva">
                                 <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
                                 <div class="tipos-tarefa-grid">
@@ -1916,11 +1764,10 @@ class SetorPedagogico {
                                         </div>
                                     </div>
 
-                                    <!-- 🆕 ASSINATURA POR QR CODE -->
                                     <div class="assinatura-wrapper">
                                         <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
-                                            <input class="form-check-input" type="checkbox" 
-                                                id="segundaChamadaNecessitaAssinatura" 
+                                            <input class="form-check-input" type="checkbox"
+                                                id="segundaChamadaNecessitaAssinatura"
                                                 onchange="setorPedagogico.toggleNecessitaAssinatura('segundaChamada')"
                                                 style="width: 20px; height: 20px; margin-top: 2px;">
                                             <label class="form-check-label" for="segundaChamadaNecessitaAssinatura" style="margin-left: 8px; cursor: pointer;">
@@ -1930,8 +1777,7 @@ class SetorPedagogico {
                                                 </p>
                                             </label>
                                         </div>
-                                        
-                                        <!-- Bloco de status (preenchido dinamicamente) -->
+
                                         <div id="segundaChamadaBlocoAssinaturaInfo" style="display: none;"></div>
                                     </div>
                                 </div>
@@ -2033,7 +1879,7 @@ class SetorPedagogico {
                                 <div class="card h-100">
                                     <div class="card-body">
                                         <h6 class="card-title">
-                                            <i class="fas fa-exclamation-triangle text-warning"></i> 
+                                            <i class="fas fa-exclamation-triangle text-warning"></i>
                                             Alunos Reincidentes (3+ registros)
                                         </h6>
                                         <div id="SegundaChamadaAlunosReincidentes" class="mt-3">
@@ -2068,7 +1914,7 @@ class SetorPedagogico {
                                 <div class="col-md-4" id="SegundaChamadaFiltroAlunoDiv" style="display: none;">
                                     <label class="form-label">Aluno</label>
                                     <div class="autocomplete-aluno-wrapper">
-                                        <input type="text" id="SegundaChamadaBuscaAlunoRelatorio" class="form-control" 
+                                        <input type="text" id="SegundaChamadaBuscaAlunoRelatorio" class="form-control"
                                             placeholder="Digite o nome do aluno..." autocomplete="off">
                                         <input type="hidden" id="SegundaChamadaFiltroAluno" value="">
                                         <div id="SegundaChamadaAutocompleteAlunoList" class="autocomplete-aluno-list" style="display: none;"></div>
@@ -2185,12 +2031,11 @@ class SetorPedagogico {
                 </div>
             </div>
         `;
-        
+
         setTimeout(async () => {
             const dataEl = document.getElementById('segundaChamadaData');
             if (dataEl) dataEl.value = getDataLocalISO();
-            
-            // Reset do estado
+
             this.estadoSegundaChamada = {
                 currentAluno: null,
                 motivoSelecionado: null,
@@ -2203,25 +2048,25 @@ class SetorPedagogico {
                 monitoramentoInterval: null,
                 qrCodeDataUrl: null
             };
-            
+
             this.configurarEventosSegundaChamada();
             await this.carregarTurmasSegundaChamada();
-            
+
             setTimeout(() => {
                 if (this.estadoSegundaChamada.modoAtual === 'automatico') {
                     this.iniciarScannerSegundaChamada();
                 }
             }, 500);
-            
+
             await this.carregarListaSegundaChamada();
-            
+
             const dashTab = document.getElementById('segundaChamada-dashboard-tab');
             if (dashTab) {
                 dashTab.addEventListener('shown.bs.tab', () => {
                     this.carregarDashboardSegundaChamada();
                 });
             }
-            
+
             const relTab = document.getElementById('segundaChamada-relatorios-tab');
             if (relTab) {
                 relTab.addEventListener('shown.bs.tab', () => {
@@ -2231,13 +2076,13 @@ class SetorPedagogico {
             }
         }, 100);
     }
-    
+
     configurarEventosSegundaChamada() {
         document.getElementById('modoAutomaticoSegundaChamadaBtn').onclick = () => this.setModoSegundaChamada('automatico');
         document.getElementById('modoManualSegundaChamadaBtn').onclick = () => this.setModoSegundaChamada('manual');
         document.getElementById('filtroTurmaManualSegundaChamada').onchange = () => this.carregarAlunosTurmaSegundaChamada();
         document.getElementById('filtroBuscaManualSegundaChamada').oninput = () => this.filtrarAlunosManualSegundaChamada();
-        
+
         const filtroAluno = document.getElementById('filtroListaSegundaChamadaAluno');
         if (filtroAluno) {
             let timeout;
@@ -2246,14 +2091,14 @@ class SetorPedagogico {
                 timeout = setTimeout(() => this.carregarListaSegundaChamada(), 500);
             };
         }
-        
-        ['filtroListaSegundaChamadaTurma', 'filtroListaSegundaChamadaMotivo', 
+
+        ['filtroListaSegundaChamadaTurma', 'filtroListaSegundaChamadaMotivo',
          'filtroListaSegundaChamadaTipoProva',
          'filtroListaSegundaChamadaDataInicio', 'filtroListaSegundaChamadaDataFim'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.onchange = () => this.carregarListaSegundaChamada();
         });
-        
+
         const selectMotivo = document.getElementById('filtroListaSegundaChamadaMotivo');
         if (selectMotivo && selectMotivo.options.length <= 1) {
             const motivos = [
@@ -2267,7 +2112,7 @@ class SetorPedagogico {
             });
         }
     }
-    
+
     configurarEventosRelatorioSegundaChamada() {
         const selectTipo = document.getElementById('SegundaChamadaTipoRelatorio');
         if (selectTipo && !selectTipo.dataset.listenerAttached) {
@@ -2276,17 +2121,17 @@ class SetorPedagogico {
         }
         this.inicializarAutocompleteSegundaChamada();
     }
-    
+
     async setModoSegundaChamada(modo) {
         const est = this.estadoSegundaChamada;
         est.modoAtual = modo;
-        
+
         const infoEl = document.getElementById('alunoInfoSegundaChamada');
         const formEl = document.getElementById('formSegundaChamada');
         if (infoEl) infoEl.style.display = 'none';
         if (formEl) formEl.style.display = 'none';
         est.currentAluno = null;
-        
+
         if (modo === 'automatico') {
             document.getElementById('modoAutomaticoSegundaChamadaBtn')?.classList.add('active');
             document.getElementById('modoManualSegundaChamadaBtn')?.classList.remove('active');
@@ -2303,15 +2148,15 @@ class SetorPedagogico {
             if (turma) await this.carregarAlunosTurmaSegundaChamada();
         }
     }
-    
+
     async iniciarScannerSegundaChamada() {
         const est = this.estadoSegundaChamada;
         const container = document.getElementById('qr-reader-segunda-chamada');
         if (!container) return;
         if (est.scannerAtivo) return;
-        
+
         container.innerHTML = '<div id="qr-reader-segunda-chamada-new" style="width: 100%;"></div>';
-        
+
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             container.innerHTML = `
                 <div class="alert alert-warning m-3" style="border-radius: 12px;">
@@ -2324,7 +2169,7 @@ class SetorPedagogico {
                 </div>`;
             return;
         }
-        
+
         try {
             est.scanner = new Html5Qrcode("qr-reader-segunda-chamada-new");
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
@@ -2336,7 +2181,7 @@ class SetorPedagogico {
             let msg = 'Não foi possível acessar a câmera.';
             if (err.message?.includes('NotFoundError')) msg = 'Nenhuma câmera encontrada.';
             else if (err.message?.includes('NotAllowedError')) msg = 'Permissão negada.';
-            
+
             container.innerHTML = `
                 <div class="alert alert-warning m-3" style="border-radius: 12px;">
                     <i class="fas fa-video-slash" style="font-size: 32px; display: block; margin-bottom: 10px;"></i>
@@ -2350,7 +2195,7 @@ class SetorPedagogico {
             est.scanner = null;
         }
     }
-    
+
     async pararScannerSegundaChamada() {
         const est = this.estadoSegundaChamada;
         if (est.scanner && est.scannerAtivo) {
@@ -2359,14 +2204,14 @@ class SetorPedagogico {
         est.scannerAtivo = false;
         est.scanner = null;
     }
-    
+
     async onScanSuccessSegundaChamada(text) {
         const id = this.extrairAlunoId(text);
         if (!id) { this.mostrarNotificacao('QR Code inválido', 'error'); return; }
         await this.pararScannerSegundaChamada();
         await this.buscarAlunoSegundaChamada(id);
     }
-    
+
     extrairAlunoId(decodedText) {
         if (!decodedText || typeof decodedText !== 'string') return null;
         if (decodedText.match(/^[a-f0-9]{24}$/i)) return decodedText;
@@ -2376,7 +2221,7 @@ class SetorPedagogico {
         if (matchId) return matchId[1];
         return null;
     }
-    
+
     async carregarTurmasSegundaChamada() {
         try {
             const r = await fetch('/api/gestao-geral/autorizacao/turmas', {
@@ -2394,18 +2239,18 @@ class SetorPedagogico {
             }
         } catch (e) { console.error(e); }
     }
-    
+
     async carregarAlunosTurmaSegundaChamada() {
         const est = this.estadoSegundaChamada;
         const turma = document.getElementById('filtroTurmaManualSegundaChamada')?.value;
         const lista = document.getElementById('listaAlunosManualSegundaChamada');
-        
+
         if (!turma) {
             if (lista) lista.innerHTML = '<div class="text-center py-3">Selecione uma turma</div>';
             return;
         }
         if (lista) lista.innerHTML = '<div class="text-center py-3"><div class="loading-spinner"></div><p>Carregando...</p></div>';
-        
+
         try {
             const r = await fetch(`/api/gestao-geral/autorizacao/alunos-por-turma?turma=${encodeURIComponent(turma)}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
@@ -2417,14 +2262,14 @@ class SetorPedagogico {
             }
         } catch (e) { console.error(e); }
     }
-    
+
     filtrarAlunosManualSegundaChamada() {
         const est = this.estadoSegundaChamada;
         const busca = (document.getElementById('filtroBuscaManualSegundaChamada')?.value || '').toLowerCase();
         let filtrados = est.alunosPorTurma;
         if (busca) filtrados = filtrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
         filtrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-        
+
         const c = document.getElementById('listaAlunosManualSegundaChamada');
         if (!c) return;
         if (filtrados.length === 0) {
@@ -2432,7 +2277,7 @@ class SetorPedagogico {
             return;
         }
         c.innerHTML = '<div class="list-group">' + filtrados.map(a => `
-            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
+            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                  data-aluno-id="${a.id}" data-aluno-nome="${this.escapeHtml(a.nome)}" style="cursor:pointer;">
                 <div>
                     <strong>${this.escapeHtml(a.nome)}</strong><br>
@@ -2441,14 +2286,14 @@ class SetorPedagogico {
                 <i class="fas fa-hand-pointer fa-2x text-primary"></i>
             </div>
         `).join('') + '</div>';
-        
+
         c.querySelectorAll('.list-group-item').forEach(item => {
             item.addEventListener('click', () => {
                 this.selecionarAlunoSegundaChamada(item.dataset.alunoId, item.dataset.alunoNome, item);
             });
         });
     }
-    
+
     async selecionarAlunoSegundaChamada(alunoId, alunoNome, itemEl) {
         if (itemEl) {
             itemEl.style.background = '#dbeafe';
@@ -2460,7 +2305,7 @@ class SetorPedagogico {
         }
         try { await this.buscarAlunoSegundaChamada(alunoId); } catch (e) { console.error(e); }
     }
-    
+
     async buscarAlunoSegundaChamada(alunoId) {
         const est = this.estadoSegundaChamada;
         try {
@@ -2469,7 +2314,7 @@ class SetorPedagogico {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const d = await r.json();
-            
+
             if (d.success && d.aluno) {
                 est.currentAluno = d.aluno;
                 this.exibirAlunoSegundaChamada(d);
@@ -2484,22 +2329,22 @@ class SetorPedagogico {
             this.mostrarNotificacao('Erro ao buscar aluno', 'error');
         }
     }
-    
+
     exibirAlunoSegundaChamada(data) {
         const aluno = data.aluno;
-        
+
         const foto = document.getElementById('alunoFotoSegundaChamada');
         if (foto) {
             foto.onerror = null;
             foto.src = aluno.fotoPerfil || this.gerarAvatarSVG(aluno.nome);
             foto.onerror = function() { this.onerror = null; this.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDgwIDgwIj48Y2lyY2xlIGN4PSI0MCIgY3k9IjQwIiByPSI0MCIgZmlsbD0iIzFlM2M3MiIvPjx0ZXh0IHg9IjQwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjM2IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJjZW50cmFsIj7wn5GlPC90ZXh0Pjwvc3ZnPg=='; };
         }
-        
+
         this.safeSetText('alunoNomeSegundaChamada', aluno.nome || '-');
         this.safeSetText('alunoMatriculaSegundaChamada', aluno.matricula || 'Não informada');
         this.safeSetText('alunoTurmaSegundaChamada', aluno.turma || 'Não informada');
         this.safeSetText('alunoCursoSegundaChamada', aluno.curso || 'Não informado');
-        
+
         const hist = document.getElementById('historicoSegundaChamadaAluno');
         if (hist) {
             if (data.ultimasAutorizacoes?.length > 0) {
@@ -2512,24 +2357,22 @@ class SetorPedagogico {
                         </div>`).join('')}`;
             } else { hist.innerHTML = ''; }
         }
-        
+
         const infoEl = document.getElementById('alunoInfoSegundaChamada');
         if (infoEl) {
             infoEl.style.display = 'block';
             infoEl.scrollIntoView({ behavior: 'smooth' });
         }
     }
-    
+
     mostrarFormSegundaChamada() {
         const formEl = document.getElementById('formSegundaChamada');
         if (formEl) formEl.style.display = 'block';
-        
-        // Limpa motivo selecionado
+
         document.getElementById('segundaChamadaMotivoSelecionado').value = '';
         this.estadoSegundaChamada.motivoSelecionado = null;
         document.querySelectorAll('#formSegundaChamada .tipo-card').forEach(c => c.classList.remove('selected'));
-        
-        // Limpa todos os campos
+
         [
             'segundaChamadaData',
             'segundaChamadaHorario',
@@ -2546,34 +2389,27 @@ class SetorPedagogico {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
-        
-        // Esconde campos condicionais
+
         const campoOutros = document.getElementById('campoSegundaChamadaOutros');
         if (campoOutros) campoOutros.style.display = 'none';
-        
-        // Limpa tipo de prova perdida
+
         document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
-        
+
         const campoProvaOutros = document.getElementById('campoSegundaChamadaTipoProvaOutros');
         if (campoProvaOutros) campoProvaOutros.style.display = 'none';
-        
-        // Define data padrão
+
         const dataEl = document.getElementById('segundaChamadaData');
         if (dataEl) dataEl.value = getDataLocalISO();
-        
-        // ============================================
-        // 🆕 RESETA ESTADO DE ASSINATURA
-        // ============================================
+
         const checkAssinatura = document.getElementById('segundaChamadaNecessitaAssinatura');
         if (checkAssinatura) checkAssinatura.checked = false;
-        
+
         const blocoAssinatura = document.getElementById('segundaChamadaBlocoAssinaturaInfo');
         if (blocoAssinatura) {
             blocoAssinatura.style.display = 'none';
             blocoAssinatura.innerHTML = '';
         }
-        
-        // Cancela sessão anterior se existir
+
         const sessaoAnterior = this.estadoSegundaChamada?.sessaoAssinaturaId;
         if (sessaoAnterior) {
             fetch(`/api/sessoes-assinatura/${sessaoAnterior}`, {
@@ -2581,53 +2417,47 @@ class SetorPedagogico {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             }).catch(e => console.warn(e));
         }
-        
-        // Para monitoramento anterior
+
         this.pararMonitoramentoSessao('segundaChamada');
-        
-        // Fecha modal se estiver aberto
         this.fecharModalAssinatura();
-        
-        // Reset do estado
+
         if (this.estadoSegundaChamada) {
             this.estadoSegundaChamada.sessaoAssinaturaId = null;
             this.estadoSegundaChamada.assinaturaCapturada = null;
             this.estadoSegundaChamada.qrCodeDataUrl = null;
             this.estadoSegundaChamada.monitoramentoInterval = null;
         }
-        
-        // Scroll para o form
+
         setTimeout(() => {
             formEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
     }
-    
+
     selecionarMotivoSegundaChamada(motivo) {
         this.estadoSegundaChamada.motivoSelecionado = motivo;
         const el = document.getElementById('segundaChamadaMotivoSelecionado');
         if (el) el.value = motivo;
-        
+
         document.querySelectorAll('#formSegundaChamada .tipo-card[data-tipo]').forEach(c => c.classList.remove('selected'));
         const card = document.querySelector(`#formSegundaChamada .tipo-card[data-tipo="${motivo}"]`);
         if (card) card.classList.add('selected');
-        
+
         const campoOutros = document.getElementById('campoSegundaChamadaOutros');
         if (campoOutros) campoOutros.style.display = motivo === 'outros' ? 'block' : 'none';
     }
 
-    // 🆕 TIPO DE PROVA PERDIDA (2ª Chamada)
     selecionarTipoProvaPerdida(tipo) {
         const input = document.getElementById('segundaChamadaTipoProvaPerdida');
         if (input) input.value = tipo;
-        
+
         document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
         const card = document.querySelector(`#campoSegundaChamadaTipoProva .tipo-card[data-prova="${tipo}"]`);
         if (card) card.classList.add('selected');
-        
+
         const campoOutros = document.getElementById('campoSegundaChamadaTipoProvaOutros');
         if (campoOutros) campoOutros.style.display = tipo === 'Outros' ? 'block' : 'none';
     }
-    
+
     inicializarAssinaturaSegundaChamada() {
         const canvas = document.getElementById('segundaChamadaAssinaturaCanvas');
         if (!canvas) return;
@@ -2752,7 +2582,7 @@ class SetorPedagogico {
             return '';
         }
     }
-    
+
     formatarCPF(input) {
         let v = input.value.replace(/\D/g, '').slice(0, 11);
         if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
@@ -2760,7 +2590,7 @@ class SetorPedagogico {
         else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
         input.value = v;
     }
-    
+
     formatarTelefone(input) {
         let v = input.value.replace(/\D/g, '').slice(0, 11);
         if (v.length > 10) v = v.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
@@ -2769,23 +2599,21 @@ class SetorPedagogico {
         input.value = v;
     }
 
-    // 🆕 VALIDAÇÃO DE CPF (dígitos verificadores)
     validarCPFCliente(cpf) {
         if (!cpf || typeof cpf !== 'string') {
             return { valido: false, erro: 'CPF não informado' };
         }
-        
+
         const cpfLimpo = cpf.replace(/\D/g, '');
-        
+
         if (cpfLimpo.length !== 11) {
             return { valido: false, erro: 'CPF deve conter 11 dígitos' };
         }
-        
+
         if (/^(\d)\1{10}$/.test(cpfLimpo)) {
             return { valido: false, erro: 'CPF inválido (dígitos repetidos)' };
         }
-        
-        // 1º dígito verificador
+
         let soma = 0;
         for (let i = 0; i < 9; i++) {
             soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
@@ -2795,8 +2623,7 @@ class SetorPedagogico {
         if (resto !== parseInt(cpfLimpo.charAt(9))) {
             return { valido: false, erro: 'CPF inválido (1º dígito verificador)' };
         }
-        
-        // 2º dígito verificador
+
         soma = 0;
         for (let i = 0; i < 10; i++) {
             soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
@@ -2806,30 +2633,27 @@ class SetorPedagogico {
         if (resto !== parseInt(cpfLimpo.charAt(10))) {
             return { valido: false, erro: 'CPF inválido (2º dígito verificador)' };
         }
-        
+
         return { valido: true, cpfLimpo };
     }
-    
+
     async registrarSegundaChamada() {
         const est = this.estadoSegundaChamada;
-        
-        // ==========================================
-        // VALIDAÇÕES BÁSICAS
-        // ==========================================
-        if (!est.motivoSelecionado) { 
-            this.showToast('Selecione o motivo', 'error'); 
-            return; 
+
+        if (!est.motivoSelecionado) {
+            this.showToast('Selecione o motivo', 'error');
+            return;
         }
-        
+
         const data = document.getElementById('segundaChamadaData')?.value;
-        if (!data) { 
-            this.showToast('Preencha a data do registro', 'error'); 
-            return; 
+        if (!data) {
+            this.showToast('Preencha a data do registro', 'error');
+            return;
         }
-        
+
         const periodoFaltaInicio = document.getElementById('segundaChamadaPeriodoFaltaInicio')?.value || '';
         const periodoFaltaFim = document.getElementById('segundaChamadaPeriodoFaltaFim')?.value || '';
-        
+
         if (!periodoFaltaInicio) {
             this.showToast('Informe a data da falta (início)', 'error');
             return;
@@ -2838,13 +2662,10 @@ class SetorPedagogico {
             this.showToast('Data final não pode ser anterior à data inicial', 'error');
             return;
         }
-        
-        // ==========================================
-        // TIPO DE PROVA PERDIDA
-        // ==========================================
+
         const tipoProvaPerdida = document.getElementById('segundaChamadaTipoProvaPerdida')?.value || '';
         const tipoProvaPerdidaOutros = document.getElementById('segundaChamadaTipoProvaOutros')?.value || '';
-        
+
         if (!tipoProvaPerdida) {
             this.showToast('⚠️ Informe o tipo de prova perdida', 'error');
             return;
@@ -2853,60 +2674,47 @@ class SetorPedagogico {
             this.showToast('⚠️ Especifique o tipo de prova perdida', 'error');
             return;
         }
-        
-        // ==========================================
-        // MOTIVO "OUTROS"
-        // ==========================================
+
         if (est.motivoSelecionado === 'outros') {
             const motivoOutros = document.getElementById('segundaChamadaMotivoOutros')?.value.trim();
-            if (!motivoOutros) { 
-                this.showToast('Especifique o motivo', 'error'); 
-                return; 
+            if (!motivoOutros) {
+                this.showToast('Especifique o motivo', 'error');
+                return;
             }
         }
-        
-        // ==========================================
-        // ALUNO
-        // ==========================================
-        if (!est.currentAluno) { 
-            this.showToast('Nenhum aluno selecionado', 'error'); 
-            return; 
+
+        if (!est.currentAluno) {
+            this.showToast('Nenhum aluno selecionado', 'error');
+            return;
         }
-        
-        // ==========================================
-        // CPF DO RESPONSÁVEL (OBRIGATÓRIO)
-        // ==========================================
+
         const responsavelCPF = document.getElementById('segundaChamadaResponsavelCPF')?.value || '';
-        
+
         if (!responsavelCPF || responsavelCPF.trim() === '') {
             this.showToast('⚠️ CPF do responsável é obrigatório!\n\nPreencha o CPF antes de registrar.', 'error');
             document.getElementById('segundaChamadaResponsavelCPF')?.focus();
             return;
         }
-        
+
         const validacaoCPF = this.validarCPFCliente(responsavelCPF);
         if (!validacaoCPF.valido) {
             this.showToast(`⚠️ CPF inválido!\n\n${validacaoCPF.erro}`, 'error');
             document.getElementById('segundaChamadaResponsavelCPF')?.focus();
             return;
         }
-        
-        // ==========================================
-        // 🆕 VALIDAÇÃO DA ASSINATURA
-        // ==========================================
+
         const precisaAssinatura = document.getElementById('segundaChamadaNecessitaAssinatura')?.checked || false;
         const assinaturaBase64 = est.assinaturaCapturada || '';
-        
+
         if (precisaAssinatura && !assinaturaBase64) {
             this.showToast('⚠️ Aguardando assinatura! O responsável ainda não assinou o QR Code.', 'warning');
-            // Reabre o modal com o QR
             this.reabrirModalAssinatura('segundaChamada');
             return;
         }
-        
+
         const btn = document.querySelector('#formSegundaChamada .btn-primary-custom');
         if (btn) btn.disabled = true;
-        
+
         try {
             const body = {
                 tipo: 'segunda_chamada',
@@ -2924,23 +2732,19 @@ class SetorPedagogico {
                 motivo: est.motivoSelecionado,
                 motivoOutros: document.getElementById('segundaChamadaMotivoOutros')?.value || '',
                 observacoes: document.getElementById('segundaChamadaObservacoes')?.value || '',
-                // 🆕 Assinatura capturada via QR
                 assinaturaBase64: assinaturaBase64
             };
-            
+
             const r = await fetch('/api/gestao-geral/autorizacao/registrar', {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Authorization': `Bearer ${this.token}` 
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
                 },
                 body: JSON.stringify(body)
             });
             const d = await r.json();
-            
-            // ==========================================
-            // TRATAMENTO DE DUPLICIDADE (409)
-            // ==========================================
+
             if (r.status === 409 || (d.error && d.error.includes('Já existe'))) {
                 let msg = '⚠️ Registro duplicado detectado!\n\n';
                 msg += d.error || 'Já existe um registro com os mesmos dados.';
@@ -2953,17 +2757,14 @@ class SetorPedagogico {
                 if (btn) btn.disabled = false;
                 return;
             }
-            
+
             if (!d.success) {
                 this.showToast('❌ ' + (d.error || 'Erro'), 'error');
                 return;
             }
-            
+
             console.log('✅ 2ª Chamada registrada:', d.autorizacao.id);
-            
-            // ==========================================
-            // 🆕 LIMPA A SESSÃO DE ASSINATURA
-            // ==========================================
+
             const sessaoId = est.sessaoAssinaturaId;
             if (sessaoId) {
                 try {
@@ -2972,24 +2773,21 @@ class SetorPedagogico {
                         headers: { 'Authorization': `Bearer ${this.token}` }
                     });
                     console.log('✅ Sessão de assinatura removida');
-                } catch (e) { 
-                    console.warn('Erro ao remover sessão:', e); 
+                } catch (e) {
+                    console.warn('Erro ao remover sessão:', e);
                 }
             }
-            
+
             this.pararMonitoramentoSessao('segundaChamada');
             this.fecharModalAssinatura();
-            
-            // ==========================================
-            // JUSTIFICATIVA AUTOMÁTICA
-            // ==========================================
+
             const motivosMap = {
                 'problemas_pessoais': 'problemas_pessoais',
                 'problemas_saude': 'problemas_saude',
                 'viagem': 'viagem',
                 'outros': 'outros'
             };
-            
+
             let justificativaCriada = false;
             try {
                 const justBody = {
@@ -3008,12 +2806,12 @@ class SetorPedagogico {
                     origemId: d.autorizacao.id,
                     assinaturaBase64: assinaturaBase64
                 };
-                
+
                 const justR = await fetch('/api/gestao-geral/autorizacao/registrar', {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        'Authorization': `Bearer ${this.token}` 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.token}`
                     },
                     body: JSON.stringify(justBody)
                 });
@@ -3025,40 +2823,35 @@ class SetorPedagogico {
             } catch (e) {
                 console.warn('⚠️ Erro ao criar justificativa:', e);
             }
-            
-            // ==========================================
-            // SUCESSO!
-            // ==========================================
+
             let msg = `✅ ${d.message}`;
             if (justificativaCriada) msg += ' — Justificativa criada automaticamente!';
             this.showToast(msg, 'success');
-            
+
             const imprimir = await this.confirmarAcao('Deseja IMPRIMIR agora?');
             if (imprimir) {
                 this.imprimirSegundaChamada(d.autorizacao.id);
             }
-            
-            // Limpa tudo
+
             this.limparTelaSegundaChamada();
             await this.carregarListaSegundaChamada();
-            
+
             if (est.modoAtual === 'automatico') this.reiniciarScannerSegundaChamada();
-            
+
         } catch (e) {
             console.error(e);
             this.showToast('Erro ao registrar', 'error');
-        } finally { 
-            if (btn) btn.disabled = false; 
+        } finally {
+            if (btn) btn.disabled = false;
         }
     }
-    
+
     limparTelaSegundaChamada() {
         const infoEl = document.getElementById('alunoInfoSegundaChamada');
         const formEl = document.getElementById('formSegundaChamada');
         if (infoEl) infoEl.style.display = 'none';
         if (formEl) formEl.style.display = 'none';
-        
-        // 🆕 Limpa sessão de assinatura
+
         const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
         if (sessaoId) {
             fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -3066,10 +2859,10 @@ class SetorPedagogico {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             }).catch(e => console.warn(e));
         }
-        
+
         this.pararMonitoramentoSessao('segundaChamada');
         this.fecharModalAssinatura();
-        
+
         this.estadoSegundaChamada.currentAluno = null;
         this.estadoSegundaChamada.motivoSelecionado = null;
         this.estadoSegundaChamada.sessaoAssinaturaId = null;
@@ -3077,7 +2870,7 @@ class SetorPedagogico {
         this.estadoSegundaChamada.qrCodeDataUrl = null;
         this.limparAssinatura('segundaChamada');
     }
-    
+
     reiniciarScannerSegundaChamada() {
         setTimeout(() => {
             if (!this.estadoSegundaChamada.scannerAtivo && this.estadoSegundaChamada.modoAtual === 'automatico') {
@@ -3087,13 +2880,12 @@ class SetorPedagogico {
     }
 
     // ============================================
-    // LISTA DE 2ªS CHAMADAS - COM PAGINAÇÃO + FILTRO POR PERÍODO DA FALTA
+    // LISTA DE 2ªS CHAMADAS
     // ============================================
     async carregarListaSegundaChamada(pagina = null) {
         const container = document.getElementById('listaSegundaChamada');
         if (!container) return;
 
-        // Se não passou página, usa a atual
         if (pagina === null) pagina = this.paginacao2Chamada.paginaAtual;
         this.paginacao2Chamada.paginaAtual = pagina;
 
@@ -3104,18 +2896,12 @@ class SetorPedagogico {
         const dataInicio = document.getElementById('filtroListaSegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('filtroListaSegundaChamadaDataFim')?.value || '';
 
-        // 🔥 Se só um dos campos está preenchido, usa o mesmo para os dois
         let dataInicioFinal = dataInicio;
         let dataFimFinal = dataFim;
 
-        if (dataInicio && !dataFim) {
-            dataFimFinal = dataInicio;
-        }
-        if (dataFim && !dataInicio) {
-            dataInicioFinal = dataFim;
-        }
+        if (dataInicio && !dataFim) dataFimFinal = dataInicio;
+        if (dataFim && !dataInicio) dataInicioFinal = dataFim;
 
-        // 🔥 Paginação
         const limit = this.paginacao2Chamada.porPagina;
         let url = `/api/gestao-geral/autorizacao/listar?tipo=segunda_chamada&limit=${limit}&page=${pagina}`;
         if (alunoNome) url += `&alunoNome=${encodeURIComponent(alunoNome)}`;
@@ -3124,14 +2910,11 @@ class SetorPedagogico {
         if (tipoProvaPerdida) url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
         if (dataInicioFinal) url += `&dataInicio=${dataInicioFinal}`;
         if (dataFimFinal) url += `&dataFim=${dataFimFinal}`;
-
-        // 🔥 FORÇA FILTRO POR PERÍODO DA FALTA (overlap)
         url += `&filtrarPorPeriodoFalta=true`;
 
         container.innerHTML = `<div class="text-center py-3"><div class="loading-spinner"></div><p>Carregando registros...</p></div>`;
 
         try {
-            // Popula filtros (só na 1ª vez)
             const selectTurma = document.getElementById('filtroListaSegundaChamadaTurma');
             if (selectTurma && selectTurma.options.length <= 1) {
                 try {
@@ -3159,17 +2942,14 @@ class SetorPedagogico {
                     Nenhum registro de 2ª chamada encontrado.
                 </p>`;
 
-                // Zera paginação
                 this.paginacao2Chamada.totalRegistros = 0;
                 this.paginacao2Chamada.totalPaginas = 0;
                 return;
             }
 
-            // 🔥 Atualiza estado da paginação
             this.paginacao2Chamada.totalRegistros = d.total || 0;
             this.paginacao2Chamada.totalPaginas = d.totalPages || 1;
 
-            // Renderiza a tabela
             container.innerHTML = `
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -3206,8 +2986,8 @@ class SetorPedagogico {
                                             </div>` : '-'}
                                     </td>
                                     <td>
-                                        ${a.temAssinatura 
-                                            ? '<span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>' 
+                                        ${a.temAssinatura
+                                            ? '<span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>'
                                             : '<span class="badge bg-secondary">Sem</span>'}
                                     </td>
                                     <td>
@@ -3239,7 +3019,6 @@ class SetorPedagogico {
         }
     }
 
-    // 🆕 Renderiza a barra de paginação
     renderizarPaginacao2Chamada() {
         const { paginaAtual, totalPaginas, totalRegistros } = this.paginacao2Chamada;
 
@@ -3247,7 +3026,6 @@ class SetorPedagogico {
             return `<p class="text-muted text-end mt-2"><small>${totalRegistros} registro(s) encontrado(s)</small></p>`;
         }
 
-        // Calcula o range de páginas para mostrar (máx 5 botões + reticências)
         const maxBotoes = 5;
         let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
         let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
@@ -3258,7 +3036,6 @@ class SetorPedagogico {
 
         let botoes = '';
 
-        // Botão "Primeira"
         if (paginaAtual > 1) {
             botoes += `
                 <li class="page-item">
@@ -3270,7 +3047,6 @@ class SetorPedagogico {
             botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-left"></i></span></li>`;
         }
 
-        // Botão "Anterior"
         if (paginaAtual > 1) {
             botoes += `
                 <li class="page-item">
@@ -3282,12 +3058,10 @@ class SetorPedagogico {
             botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-left"></i></span></li>`;
         }
 
-        // Reticências à esquerda
         if (inicio > 1) {
             botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
         }
 
-        // Botões das páginas
         for (let i = inicio; i <= fim; i++) {
             if (i === paginaAtual) {
                 botoes += `<li class="page-item active"><span class="page-link">${i}</span></li>`;
@@ -3299,12 +3073,10 @@ class SetorPedagogico {
             }
         }
 
-        // Reticências à direita
         if (fim < totalPaginas) {
             botoes += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
         }
 
-        // Botão "Próxima"
         if (paginaAtual < totalPaginas) {
             botoes += `
                 <li class="page-item">
@@ -3316,7 +3088,6 @@ class SetorPedagogico {
             botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-right"></i></span></li>`;
         }
 
-        // Botão "Última"
         if (paginaAtual < totalPaginas) {
             botoes += `
                 <li class="page-item">
@@ -3328,7 +3099,6 @@ class SetorPedagogico {
             botoes += `<li class="page-item disabled"><span class="page-link"><i class="fas fa-angle-double-right"></i></span></li>`;
         }
 
-        // Info de range
         const de = (paginaAtual - 1) * this.paginacao2Chamada.porPagina + 1;
         const ate = Math.min(paginaAtual * this.paginacao2Chamada.porPagina, totalRegistros);
 
@@ -3347,12 +3117,8 @@ class SetorPedagogico {
     }
 
     // ============================================================================
-    // 🆕 SISTEMA DE SESSÃO DE ASSINATURA COM QR CODE (SEM REDIRECIONAMENTO)
+    // SISTEMA DE SESSÃO DE ASSINATURA COM QR CODE
     // ============================================================================
-
-    /**
-     * Gera UUID v4 simples para identificar a sessão.
-     */
     gerarUUID() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = Math.random() * 16 | 0;
@@ -3361,40 +3127,25 @@ class SetorPedagogico {
         });
     }
 
-    /**
-     * Marca/desmarca necessidade de assinatura.
-     * Quando marca → cria sessão + gera QR Code + abre modal
-     * Quando desmarca → cancela sessão + fecha modal
-     */
     async toggleNecessitaAssinatura(modulo) {
         const P = this.getPrefixo(modulo);
         const check = document.getElementById(`${P}NecessitaAssinatura`);
-        
+
         if (!check) return;
-        
+
         if (check.checked) {
-            // ==========================================
-            // 1. Monta snapshot dos dados atuais
-            // ==========================================
             const snapshot = this.montarSnapshotAtendimento(modulo);
-            
-            // Valida se o aluno foi selecionado
+
             if (!snapshot.alunoId) {
                 this.showToast('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
                 check.checked = false;
                 return;
             }
-            
-            // ==========================================
-            // 2. Gera ID único para a sessão
-            // ==========================================
+
             const sessaoId = this.gerarUUID();
             this.estadoSegundaChamada.sessaoAssinaturaId = sessaoId;
             this.estadoSegundaChamada.assinaturaCapturada = null;
-            
-            // ==========================================
-            // 3. Cria a sessão no backend
-            // ==========================================
+
             try {
                 const response = await fetch('/api/sessoes-assinatura', {
                     method: 'POST',
@@ -3408,17 +3159,14 @@ class SetorPedagogico {
                         dadosAtendimento: snapshot
                     })
                 });
-                
+
                 const data = await response.json();
                 if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
-                
+
                 console.log('✅ Sessão criada:', sessaoId);
-                
-                // ==========================================
-                // 4. Gera QR Code apontando para ESTA MESMA PÁGINA
-                // ==========================================
+
                 const urlAssinatura = `${window.location.origin}/setor-pedagogico.html?assinatura=${sessaoId}`;
-                
+
                 try {
                     const qrResponse = await fetch('/api/qrcode/gerar', {
                         method: 'POST',
@@ -3429,32 +3177,24 @@ class SetorPedagogico {
                         body: JSON.stringify({ url: urlAssinatura })
                     });
                     const qrData = await qrResponse.json();
-                    
+
                     if (qrData.success && qrData.qrCode) {
                         this.estadoSegundaChamada.qrCodeDataUrl = qrData.qrCode;
                     } else {
-                        // Fallback: gera via API pública
-                        this.estadoSegundaChamada.qrCodeDataUrl = 
+                        this.estadoSegundaChamada.qrCodeDataUrl =
                             `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
                     }
                 } catch (e) {
                     console.warn('Erro ao gerar QR Code, usando fallback:', e);
-                    this.estadoSegundaChamada.qrCodeDataUrl = 
+                    this.estadoSegundaChamada.qrCodeDataUrl =
                         `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
                 }
-                
-                // ==========================================
-                // 5. Abre o MODAL (dentro da própria página)
-                // ==========================================
+
                 this.abrirModalAssinatura(modulo, urlAssinatura);
-                
-                // ==========================================
-                // 6. Inicia monitoramento (polling)
-                // ==========================================
                 this.iniciarMonitoramentoSessao(modulo, sessaoId);
-                
+
                 this.showToast('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
-                
+
             } catch (e) {
                 console.error('Erro ao criar sessão:', e);
                 this.showToast('❌ Erro ao criar sessão de assinatura', 'error');
@@ -3462,9 +3202,6 @@ class SetorPedagogico {
                 this.estadoSegundaChamada.sessaoAssinaturaId = null;
             }
         } else {
-            // ==========================================
-            // DESMARCOU → cancela a sessão
-            // ==========================================
             const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
             if (sessaoId) {
                 try {
@@ -3474,7 +3211,7 @@ class SetorPedagogico {
                     });
                 } catch (e) { console.warn(e); }
             }
-            
+
             this.estadoSegundaChamada.sessaoAssinaturaId = null;
             this.estadoSegundaChamada.assinaturaCapturada = null;
             this.estadoSegundaChamada.qrCodeDataUrl = null;
@@ -3483,23 +3220,20 @@ class SetorPedagogico {
         }
     }
 
-    /**
-     * Monta snapshot dos dados do atendimento para enviar.
-     */
     montarSnapshotAtendimento(modulo) {
         const est = this.estadoSegundaChamada;
         const aluno = est.currentAluno || {};
-        
+
         const motivosLabel = {
             'problemas_pessoais': 'Problemas Pessoais',
             'problemas_saude': 'Problemas de Saúde',
             'viagem': 'Viagem',
             'outros': 'Outros'
         };
-        
+
         const periodoIni = document.getElementById('segundaChamadaPeriodoFaltaInicio')?.value || '';
         const periodoFim = document.getElementById('segundaChamadaPeriodoFaltaFim')?.value || '';
-        
+
         let periodoFormatado = '';
         if (periodoIni) {
             const ini = new Date(periodoIni + 'T12:00:00');
@@ -3507,10 +3241,10 @@ class SetorPedagogico {
             const fmt = d => d.toLocaleDateString('pt-BR');
             periodoFormatado = ini.getTime() === fim.getTime() ? fmt(ini) : `${fmt(ini)} a ${fmt(fim)}`;
         }
-        
+
         const tipoProva = document.getElementById('segundaChamadaTipoProvaPerdida')?.value || '';
         const tipoProvaOutros = document.getElementById('segundaChamadaTipoProvaOutros')?.value || '';
-        
+
         return {
             alunoId: aluno.id,
             alunoNome: aluno.nome,
@@ -3524,8 +3258,8 @@ class SetorPedagogico {
             periodoFaltaFim: periodoFim || periodoIni || null,
             periodoFaltaFormatado: periodoFormatado,
             tipoProvaPerdida: tipoProva,
-            tipoProvaPerdidaFormatado: tipoProva === 'Outros' && tipoProvaOutros 
-                ? `Outros (${tipoProvaOutros})` 
+            tipoProvaPerdidaFormatado: tipoProva === 'Outros' && tipoProvaOutros
+                ? `Outros (${tipoProvaOutros})`
                 : tipoProva,
             responsavelNome: document.getElementById('segundaChamadaResponsavelNome')?.value || '',
             responsavelCPF: document.getElementById('segundaChamadaResponsavelCPF')?.value || '',
@@ -3534,31 +3268,26 @@ class SetorPedagogico {
         };
     }
 
-    /**
-     * Abre o modal com QR Code (SEM sair da página).
-     */
     abrirModalAssinatura(modulo, urlAssinatura) {
-        // Remove modal antigo se existir
         const antigo = document.getElementById('modalAssinaturaQR');
         if (antigo) antigo.remove();
-        
-        const qrUrl = this.estadoSegundaChamada.qrCodeDataUrl || 
+
+        const qrUrl = this.estadoSegundaChamada.qrCodeDataUrl ||
             `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
-        
+
         const modalHtml = `
             <div class="modal fade" id="modalAssinaturaQR" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content" style="border-radius: 20px; border: none; overflow: hidden;">
                         <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
                             <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
-                                <i class="fas fa-signature"></i> 
+                                <i class="fas fa-signature"></i>
                                 Aguardando Assinatura
                             </h5>
                             <button type="button" class="btn-close btn-close-white" onclick="setorPedagogico.fecharModalAssinatura()"></button>
                         </div>
-                        
+
                         <div class="modal-body" style="padding: 30px; text-align: center;">
-                            <!-- Status -->
                             <div id="modalAssinaturaStatus" style="margin-bottom: 20px;">
                                 <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
                                     <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
@@ -3570,20 +3299,18 @@ class SetorPedagogico {
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- QR Code -->
+
                             <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
-                                <img src="${qrUrl}" 
-                                    alt="QR Code para assinatura" 
+                                <img src="${qrUrl}"
+                                    alt="QR Code para assinatura"
                                     style="width: 260px; height: 260px; display: block;"
                                     id="qrCodeImage">
                                 <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
-                                    <i class="fas fa-mobile-alt"></i> 
+                                    <i class="fas fa-mobile-alt"></i>
                                     Aponte a câmera do celular
                                 </p>
                             </div>
-                            
-                            <!-- Info extra -->
+
                             <div style="margin-top: 20px; padding: 14px; background: #f0f9ff; border-radius: 12px; font-size: 13px; color: #0369a1; text-align: left;">
                                 <div style="display: flex; gap: 8px; margin-bottom: 6px;">
                                     <i class="fas fa-info-circle"></i>
@@ -3594,8 +3321,7 @@ class SetorPedagogico {
                                     <span>Sessão válida por <strong>30 minutos</strong>.</span>
                                 </div>
                             </div>
-                            
-                            <!-- Botão link direto (útil se quiser abrir no PC) -->
+
                             <div style="margin-top: 16px;">
                                 <button onclick="setorPedagogico.copiarLinkAssinatura('${urlAssinatura}')"
                                         class="btn btn-sm btn-outline-secondary"
@@ -3604,7 +3330,7 @@ class SetorPedagogico {
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
                             <button type="button" class="btn btn-outline-secondary" onclick="setorPedagogico.fecharModalAssinatura()" style="border-radius: 10px;">
                                 <i class="fas fa-eye-slash"></i> Ocultar
@@ -3616,17 +3342,16 @@ class SetorPedagogico {
                     </div>
                 </div>
             </div>
-            
+
             <style>
                 @keyframes spin { to { transform: rotate(360deg); } }
             </style>
         `;
-        
+
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         this.modalAssinaturaInstance = new bootstrap.Modal(document.getElementById('modalAssinaturaQR'));
         this.modalAssinaturaInstance.show();
-        
-        // Redimensiona QR para caber bem em mobile
+
         setTimeout(() => {
             const img = document.getElementById('qrCodeImage');
             if (img && window.innerWidth < 500) {
@@ -3636,37 +3361,29 @@ class SetorPedagogico {
         }, 200);
     }
 
-    /**
-     * Fecha o modal (mas a sessão continua ativa).
-     */
     fecharModalAssinatura() {
         if (this.modalAssinaturaInstance) {
             this.modalAssinaturaInstance.hide();
         }
         const modalEl = document.getElementById('modalAssinaturaQR');
         if (modalEl) setTimeout(() => modalEl.remove(), 300);
-        
-        // Mostra o bloco compacto no formulário
+
         this.mostrarBlocoCompactoAssinatura();
     }
 
-    /**
-     * Mostra um bloco compacto no formulário indicando o status.
-     */
     mostrarBlocoCompactoAssinatura() {
         const P = 'segundaChamada';
         let bloco = document.getElementById(`${P}BlocoAssinaturaInfo`);
-        
+
         if (!bloco) {
             bloco = document.createElement('div');
             bloco.id = `${P}BlocoAssinaturaInfo`;
-            // Insere após o checkbox
             const check = document.getElementById(`${P}NecessitaAssinatura`);
             if (check) {
                 check.parentElement.insertAdjacentElement('afterend', bloco);
             }
         }
-        
+
         bloco.style.display = 'block';
         bloco.innerHTML = `
             <div class="alert alert-warning" style="font-size: 13px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-top: 10px;">
@@ -3676,7 +3393,7 @@ class SetorPedagogico {
                         <strong>Aguardando assinatura...</strong>
                         <p style="margin: 3px 0 0; font-size: 12px;">O responsável precisa escanear o QR Code</p>
                     </div>
-                    <button type="button" class="btn btn-sm btn-warning" 
+                    <button type="button" class="btn btn-sm btn-warning"
                             onclick="setorPedagogico.reabrirModalAssinatura('segundaChamada')"
                             style="border-radius: 8px;">
                         <i class="fas fa-qrcode"></i> Mostrar QR
@@ -3686,9 +3403,6 @@ class SetorPedagogico {
         `;
     }
 
-    /**
-     * Reabre o modal com o mesmo QR Code.
-     */
     reabrirModalAssinatura(modulo) {
         const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
         if (!sessaoId) {
@@ -3699,15 +3413,11 @@ class SetorPedagogico {
         this.abrirModalAssinatura(modulo, urlAssinatura);
     }
 
-    /**
-     * Copia o link para o clipboard.
-     */
     async copiarLinkAssinatura(url) {
         try {
             await navigator.clipboard.writeText(url);
             this.showToast('✅ Link copiado!', 'success');
         } catch (e) {
-            // Fallback
             const textarea = document.createElement('textarea');
             textarea.value = url;
             document.body.appendChild(textarea);
@@ -3718,20 +3428,17 @@ class SetorPedagogico {
         }
     }
 
-    /**
-     * Inicia polling para verificar se a assinatura foi capturada.
-     */
     iniciarMonitoramentoSessao(modulo, sessaoId) {
         this.pararMonitoramentoSessao(modulo);
-        
+
         console.log('👀 Monitorando sessão:', sessaoId);
-        
+
         const intervalId = setInterval(async () => {
             try {
                 const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
                     headers: { 'Authorization': `Bearer ${this.token}` }
                 });
-                
+
                 if (!response.ok) {
                     if (response.status === 404) {
                         console.warn('Sessão expirou ou foi removida');
@@ -3739,29 +3446,25 @@ class SetorPedagogico {
                     }
                     return;
                 }
-                
+
                 const data = await response.json();
                 if (!data.success) return;
-                
+
                 if (data.sessao.status === 'assinado') {
                     console.log('✅ Assinatura capturada!');
-                    
+
                     this.estadoSegundaChamada.assinaturaCapturada = data.sessao.assinaturaBase64;
                     this.atualizarStatusAssinado(modulo, data.sessao);
                     this.pararMonitoramentoSessao(modulo);
-                    
-                    // Fecha o modal se estiver aberto
+
                     if (this.modalAssinaturaInstance) {
                         this.modalAssinaturaInstance.hide();
                     }
                     const modalEl = document.getElementById('modalAssinaturaQR');
                     if (modalEl) setTimeout(() => modalEl.remove(), 300);
-                    
+
                     this.showToast(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome}!`, 'success');
-                    
-                    // Fecha automaticamente após 2s (opcional)
-                    // Aqui deixa aberto pra você ver o preview
-                    
+
                 } else if (data.sessao.status === 'cancelado') {
                     console.log('Sessão cancelada');
                     this.pararMonitoramentoSessao(modulo);
@@ -3769,14 +3472,11 @@ class SetorPedagogico {
             } catch (e) {
                 console.warn('Erro no monitoramento:', e);
             }
-        }, 3000); // a cada 3 segundos
-        
+        }, 3000);
+
         this.estadoSegundaChamada.monitoramentoInterval = intervalId;
     }
 
-    /**
-     * Para o monitoramento.
-     */
     pararMonitoramentoSessao(modulo) {
         const id = this.estadoSegundaChamada.monitoramentoInterval;
         if (id) {
@@ -3785,13 +3485,10 @@ class SetorPedagogico {
         }
     }
 
-    /**
-     * Atualiza o bloco visual mostrando a assinatura capturada.
-     */
     atualizarStatusAssinado(modulo, sessao) {
         const P = 'segundaChamada';
         let bloco = document.getElementById(`${P}BlocoAssinaturaInfo`);
-        
+
         if (!bloco) {
             bloco = document.createElement('div');
             bloco.id = `${P}BlocoAssinaturaInfo`;
@@ -3800,7 +3497,7 @@ class SetorPedagogico {
                 check.parentElement.insertAdjacentElement('afterend', bloco);
             }
         }
-        
+
         bloco.style.display = 'block';
         bloco.innerHTML = `
             <div style="margin-top: 10px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 14px;">
@@ -3815,11 +3512,11 @@ class SetorPedagogico {
                     </div>
                 </div>
                 <div style="background: white; border-radius: 8px; padding: 8px; text-align: center;">
-                    <img src="${sessao.assinaturaBase64}" 
-                        style="max-width: 100%; max-height: 100px;" 
+                    <img src="${sessao.assinaturaBase64}"
+                        style="max-width: 100%; max-height: 100px;"
                         alt="Assinatura">
                 </div>
-                <button type="button" 
+                <button type="button"
                         onclick="setorPedagogico.refazerAssinatura('segundaChamada')"
                         class="btn btn-sm btn-outline-danger w-100 mt-2"
                         style="border-radius: 8px;">
@@ -3829,13 +3526,10 @@ class SetorPedagogico {
         `;
     }
 
-    /**
-     * Cancela a sessão e limpa tudo.
-     */
     async cancelarSessaoAssinatura() {
         const confirmar = await this.confirmarAcao('Cancelar a assinatura? O responsável não poderá mais assinar este atendimento.');
         if (!confirmar) return;
-        
+
         const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
         if (sessaoId) {
             try {
@@ -3845,30 +3539,27 @@ class SetorPedagogico {
                 });
             } catch (e) { console.warn(e); }
         }
-        
+
         this.pararMonitoramentoSessao('segundaChamada');
         this.fecharModalAssinatura();
-        
+
         this.estadoSegundaChamada.sessaoAssinaturaId = null;
         this.estadoSegundaChamada.assinaturaCapturada = null;
         this.estadoSegundaChamada.qrCodeDataUrl = null;
-        
+
         const check = document.getElementById('segundaChamadaNecessitaAssinatura');
         if (check) check.checked = false;
-        
+
         const bloco = document.getElementById('segundaChamadaBlocoAssinaturaInfo');
         if (bloco) bloco.style.display = 'none';
-        
+
         this.showToast('Sessão cancelada', 'info');
     }
 
-    /**
-     * Refaz a assinatura (cancela atual e cria nova).
-     */
     async refazerAssinatura(modulo) {
         const confirmar = await this.confirmarAcao('Refazer a assinatura? A atual será descartada.');
         if (!confirmar) return;
-        
+
         const sessaoId = this.estadoSegundaChamada.sessaoAssinaturaId;
         if (sessaoId) {
             try {
@@ -3878,71 +3569,58 @@ class SetorPedagogico {
                 });
             } catch (e) { console.warn(e); }
         }
-        
+
         this.pararMonitoramentoSessao(modulo);
         this.estadoSegundaChamada.sessaoAssinaturaId = null;
         this.estadoSegundaChamada.assinaturaCapturada = null;
         this.estadoSegundaChamada.qrCodeDataUrl = null;
-        
+
         const bloco = document.getElementById('segundaChamadaBlocoAssinaturaInfo');
         if (bloco) bloco.style.display = 'none';
-        
+
         const check = document.getElementById('segundaChamadaNecessitaAssinatura');
         if (check) {
             check.checked = false;
-            // Marca de novo (cria nova sessão)
             check.checked = true;
             await this.toggleNecessitaAssinatura(modulo);
         }
     }
 
-    /**
-     * Detecta se a página abriu com ?assinatura=XXXX (modo assinatura).
-     * Se sim, mostra APENAS a tela de assinatura (esconde o resto).
-     */
     verificarModoAssinatura() {
         const params = new URLSearchParams(window.location.search);
         const sessaoId = params.get('assinatura');
-        
+
         if (!sessaoId) return false;
-        
+
         console.log('📱 Modo assinatura detectado:', sessaoId);
         this.mostrarTelaAssinatura(sessaoId);
         return true;
     }
 
-    /**
-     * Mostra a tela de assinatura (substitui o conteúdo principal).
-     */
     async mostrarTelaAssinatura(sessaoId) {
-        // Esconde sidebar, header, bottom nav
         document.querySelectorAll('.sidebar, .mobile-menu-btn, .page-header, #bottomNavSp, .sidebar-overlay-sp').forEach(el => {
             if (el) el.style.display = 'none';
         });
-        
-        // Substitui o conteúdo
+
         const content = document.getElementById('content');
         if (!content) return;
-        
+
         content.innerHTML = `
             <div style="min-height: 100vh; background: #f0f4f8; padding: 20px; display: flex; flex-direction: column; align-items: center;">
                 <div style="max-width: 600px; width: 100%;">
-                    <!-- Header -->
                     <div style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 18px 24px; border-radius: 16px 16px 0 0; text-align: center;">
                         <h1 style="font-size: 20px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
                             <i class="fas fa-signature"></i> Assinatura Digital
                         </h1>
                     </div>
-                    
-                    <!-- Info do atendimento -->
+
                     <div id="telaAssinaturaInfo" style="background: white; padding: 20px; border-left: 4px solid #1e3c72;">
                         <div style="text-align: center; padding: 40px;">
                             <div style="width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #1e3c72; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px;"></div>
                             <p style="color: #64748b; margin: 0;">Carregando atendimento...</p>
                         </div>
                     </div>
-                    
-                    <!-- Área de assinatura -->
+
                     <div id="telaAssinaturaArea" style="background: white; padding: 20px; display: none; border-radius: 0 0 16px 16px;">
                         <div id="canvasWrapper" style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 16px; overflow: hidden; height: 300px; margin-bottom: 16px;">
                             <canvas id="canvasAssinatura" style="width: 100%; height: 100%; display: block; touch-action: none;"></canvas>
@@ -3951,9 +3629,9 @@ class SetorPedagogico {
                                 <span style="font-size: 15px;">Assine aqui com o dedo</span>
                             </div>
                         </div>
-                        
+
                         <div style="display: flex; gap: 12px;">
-                            <button onclick="setorPedagogico.limparAssinaturaTela()" 
+                            <button onclick="setorPedagogico.limparAssinaturaTela()"
                                     style="flex: 1; padding: 16px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 15px;">
                                 <i class="fas fa-eraser"></i> Limpar
                             </button>
@@ -3965,26 +3643,25 @@ class SetorPedagogico {
                     </div>
                 </div>
             </div>
-            
+
             <style>
                 @keyframes spin { to { transform: rotate(360deg); } }
             </style>
         `;
-        
-        // Busca dados da sessão
+
         try {
             const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) {
                 document.getElementById('telaAssinaturaInfo').innerHTML = `
                     <div style="text-align: center; padding: 40px 20px;">
                         <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ef4444; margin-bottom: 15px; display: block;"></i>
                         <h3 style="color: #ef4444; margin: 0 0 10px;">Sessão inválida ou expirada</h3>
                         <p style="color: #64748b; margin: 0;">Esta sessão de assinatura não existe mais ou expirou (30 min).</p>
-                        <button onclick="window.location.href='/setor-pedagogico.html'" 
+                        <button onclick="window.location.href='/setor-pedagogico.html'"
                                 style="margin-top: 20px; padding: 12px 24px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
                             <i class="fas fa-arrow-left"></i> Voltar
                         </button>
@@ -3992,14 +3669,14 @@ class SetorPedagogico {
                 `;
                 return;
             }
-            
+
             if (data.sessao.status === 'assinado') {
                 document.getElementById('telaAssinaturaInfo').innerHTML = `
                     <div style="text-align: center; padding: 40px 20px;">
                         <i class="fas fa-check-circle" style="font-size: 48px; color: #10b981; margin-bottom: 15px; display: block;"></i>
                         <h3 style="color: #10b981; margin: 0 0 10px;">Esta sessão já foi assinada</h3>
                         <p style="color: #64748b; margin: 0;">Assinada por ${this.escapeHtml(data.sessao.assinadaPorNome || '')}</p>
-                        <button onclick="window.location.href='/setor-pedagogico.html'" 
+                        <button onclick="window.location.href='/setor-pedagogico.html'"
                                 style="margin-top: 20px; padding: 12px 24px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
                             <i class="fas fa-arrow-left"></i> Voltar
                         </button>
@@ -4007,21 +3684,20 @@ class SetorPedagogico {
                 `;
                 return;
             }
-            
-            // Exibe os dados do atendimento
+
             const d = data.sessao.dadosAtendimento || {};
             const tipoLabel = {
                 'autorizacao': 'Autorização',
                 'justificativa': 'Justificativa',
                 'segunda_chamada': '2ª Chamada'
             }[data.sessao.tipo] || data.sessao.tipo;
-            
+
             document.getElementById('telaAssinaturaInfo').innerHTML = `
                 <div style="border-left: 4px solid #1e3c72; padding-left: 14px;">
                     <h2 style="margin: 0 0 4px; font-size: 18px; color: #1e3c72;">${tipoLabel}</h2>
                     <p style="margin: 0; color: #64748b; font-size: 13px;">Confirme os dados e assine abaixo</p>
                 </div>
-                
+
                 <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div>
                         <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Aluno</span>
@@ -4049,17 +3725,14 @@ class SetorPedagogico {
                     ` : ''}
                 </div>
             `;
-            
-            // Mostra área de assinatura
+
             document.getElementById('telaAssinaturaArea').style.display = 'block';
-            
-            // Salva sessão ativa
+
             this.sessaoAssinaturaModo = sessaoId;
             this.sessaoAssinaturaAtual = data.sessao;
-            
-            // Inicializa canvas
+
             this.inicializarCanvasTela();
-            
+
         } catch (e) {
             console.error('Erro ao carregar sessão:', e);
             document.getElementById('telaAssinaturaInfo').innerHTML = `
@@ -4072,22 +3745,18 @@ class SetorPedagogico {
         }
     }
 
-    /**
-     * Inicializa o canvas na tela de assinatura.
-     */
     inicializarCanvasTela() {
         const canvas = document.getElementById('canvasAssinatura');
         const wrapper = document.getElementById('canvasWrapper');
         const placeholder = document.getElementById('placeholder');
         if (!canvas || !wrapper) return;
-        
-        // Salva refs
+
         this.telaCanvas = canvas;
         this.telaWrapper = wrapper;
         this.telaPlaceholder = placeholder;
         this.telaTemAssinatura = false;
         this.telaDesenhando = false;
-        
+
         const ajustar = () => {
             const rect = wrapper.getBoundingClientRect();
             if (rect.width === 0) { setTimeout(ajustar, 200); return; }
@@ -4106,7 +3775,7 @@ class SetorPedagogico {
             this.telaCtx = ctx;
         };
         ajustar();
-        
+
         const getPos = (e) => {
             const rect = canvas.getBoundingClientRect();
             let cx, cy;
@@ -4115,7 +3784,7 @@ class SetorPedagogico {
             else { cx = e.clientX; cy = e.clientY; }
             return { x: cx - rect.left, y: cy - rect.top };
         };
-        
+
         const iniciar = (e) => {
             e.preventDefault();
             this.telaDesenhando = true;
@@ -4126,7 +3795,7 @@ class SetorPedagogico {
             wrapper.style.borderColor = '#1e3c72';
             wrapper.style.borderStyle = 'solid';
             placeholder.style.opacity = '0';
-            
+
             const btn = document.getElementById('btnSalvarAssinatura');
             if (btn) {
                 btn.disabled = false;
@@ -4134,7 +3803,7 @@ class SetorPedagogico {
                 btn.style.cursor = 'pointer';
             }
         };
-        
+
         const desenhar = (e) => {
             if (!this.telaDesenhando) return;
             e.preventDefault();
@@ -4146,12 +3815,12 @@ class SetorPedagogico {
             this.telaLastX = p.x;
             this.telaLastY = p.y;
         };
-        
+
         const parar = (e) => {
             if (e?.preventDefault) e.preventDefault();
             this.telaDesenhando = false;
         };
-        
+
         canvas.addEventListener('touchstart', iniciar, { passive: false });
         canvas.addEventListener('touchmove', desenhar, { passive: false });
         canvas.addEventListener('touchend', parar, { passive: false });
@@ -4162,9 +3831,6 @@ class SetorPedagogico {
         canvas.addEventListener('mouseleave', () => { if (this.telaDesenhando) parar(); });
     }
 
-    /**
-     * Limpa a assinatura da tela.
-     */
     limparAssinaturaTela() {
         if (!this.telaCtx || !this.telaCanvas) return;
         const rect = this.telaCanvas.getBoundingClientRect();
@@ -4183,21 +3849,18 @@ class SetorPedagogico {
         }
     }
 
-    /**
-     * Salva a assinatura na sessão.
-     */
     async salvarAssinaturaTela() {
         if (!this.telaTemAssinatura || !this.sessaoAssinaturaModo) return;
-        
+
         const btn = document.getElementById('btnSalvarAssinatura');
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
         }
-        
+
         try {
             const base64 = this.telaCanvas.toDataURL('image/png');
-            
+
             const response = await fetch(`/api/sessoes-assinatura/${this.sessaoAssinaturaModo}/assinar`, {
                 method: 'PUT',
                 headers: {
@@ -4206,11 +3869,10 @@ class SetorPedagogico {
                 },
                 body: JSON.stringify({ assinaturaBase64: base64 })
             });
-            
+
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao salvar');
-            
-            // Sucesso!
+
             document.getElementById('telaAssinaturaInfo').innerHTML = `
                 <div style="text-align: center; padding: 60px 20px;">
                     <i class="fas fa-check-circle" style="font-size: 64px; color: #10b981; margin-bottom: 20px; display: block;"></i>
@@ -4219,25 +3881,25 @@ class SetorPedagogico {
                         A assinatura foi registrada com sucesso.<br>
                         Você já pode fechar esta janela.
                     </p>
-                    <button onclick="window.close()" 
+                    <button onclick="window.close()"
                             style="margin-top: 25px; padding: 14px 28px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 15px;">
                         <i class="fas fa-times"></i> Fechar
                     </button>
                 </div>
             `;
             document.getElementById('telaAssinaturaArea').style.display = 'none';
-            
+
         } catch (e) {
             console.error('Erro ao salvar assinatura:', e);
             this.showToast('❌ ' + e.message, 'error');
-            
+
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
             }
         }
     }
-    
+
     async carregarDashboardSegundaChamada() {
         console.log('📊 Carregando dashboard 2ª Chamada...');
         try {
@@ -4250,12 +3912,12 @@ class SetorPedagogico {
                 console.error('Erro no dashboard:', data.error);
                 return;
             }
-            
+
             this.safeSetText('SegundaChamadaTotalHoje', data.metricas?.hoje ?? 0);
             this.safeSetText('SegundaChamadaTotalSemana', data.metricas?.semana ?? 0);
             this.safeSetText('SegundaChamadaTotalMes', data.metricas?.mes ?? 0);
             this.safeSetText('SegundaChamadaTotalGeral', data.metricas?.total ?? 0);
-            
+
             const ctxMotivos = document.getElementById('SegundaChamadaChartMotivos');
             if (ctxMotivos && data.porMotivo) {
                 if (this.charts2Chamada.motivos) {
@@ -4273,7 +3935,7 @@ class SetorPedagogico {
                     options: { responsive: true, maintainAspectRatio: true }
                 });
             }
-            
+
             const ctxAtrasos = document.getElementById('SegundaChamadaChartAtrasos');
             if (ctxAtrasos && data.tendencias?.ultimos7Dias) {
                 if (this.charts2Chamada.atrasos) {
@@ -4295,7 +3957,7 @@ class SetorPedagogico {
                     options: { responsive: true, maintainAspectRatio: true }
                 });
             }
-            
+
             const ctxTurmas = document.getElementById('SegundaChamadaChartTurmas');
             if (ctxTurmas && data.tendencias?.porTurma) {
                 if (this.charts2Chamada.turmas) {
@@ -4319,7 +3981,7 @@ class SetorPedagogico {
                     }
                 });
             }
-            
+
             const reinc = document.getElementById('SegundaChamadaAlunosReincidentes');
             if (reinc) {
                 const lista = data.tendencias?.alunosReincidentes || [];
@@ -4343,30 +4005,29 @@ class SetorPedagogico {
                     </p>`;
                 }
             }
-            
+
             console.log('✅ Dashboard 2ª Chamada carregado');
         } catch (error) {
             console.error('Erro no dashboard 2ª Chamada:', error);
         }
     }
-    
+
     toggleRelatorioFiltrosSegundaChamada() {
         const tipo = document.getElementById('SegundaChamadaTipoRelatorio')?.value;
         if (!tipo) return;
-        
+
         const divTurma = document.getElementById('SegundaChamadaFiltroTurmaDiv');
         const divAluno = document.getElementById('SegundaChamadaFiltroAlunoDiv');
-        
+
         if (divTurma) divTurma.style.display = tipo === 'turma' ? 'block' : 'none';
         if (divAluno) divAluno.style.display = tipo === 'aluno' ? 'block' : 'none';
-        
-        // ✅ RESETAR BOTÕES ao trocar tipo
+
         const btnCSV = document.getElementById('btnExportarCSVSegundaChamada');
         const btnPDF = document.getElementById('btnExportarPDFSegundaChamada');
         if (btnCSV) btnCSV.disabled = true;
         if (btnPDF) btnPDF.disabled = true;
         this.relatorio2Chamada = null;
-        
+
         if (tipo === 'turma') this.carregarTurmasFiltroSegundaChamada();
         if (tipo === 'aluno') {
             this.inicializarAutocompleteSegundaChamada();
@@ -4376,11 +4037,11 @@ class SetorPedagogico {
             }
         }
     }
-    
+
     async carregarTurmasFiltroSegundaChamada() {
         const select = document.getElementById('SegundaChamadaFiltroTurma');
         if (!select || select.options.length > 1) return;
-        
+
         try {
             const r = await fetch('/api/gestao-geral/autorizacao/turmas', {
                 headers: { 'Authorization': `Bearer ${this.token}` }
@@ -4394,12 +4055,12 @@ class SetorPedagogico {
             }
         } catch (e) { console.warn(e); }
     }
-    
+
     inicializarAutocompleteSegundaChamada() {
         const input = document.getElementById('SegundaChamadaBuscaAlunoRelatorio');
         const listEl = document.getElementById('SegundaChamadaAutocompleteAlunoList');
         const hiddenInput = document.getElementById('SegundaChamadaFiltroAluno');
-        
+
         if (!input || !listEl || !hiddenInput) return;
         if (input.dataset.autocompleteInit === 'true') {
             if (!this.autocomplete2Chamada.carregado) {
@@ -4408,7 +4069,7 @@ class SetorPedagogico {
             return;
         }
         input.dataset.autocompleteInit = 'true';
-        
+
         input.addEventListener('input', (e) => {
             const termo = e.target.value.trim();
             hiddenInput.value = '';
@@ -4417,13 +4078,13 @@ class SetorPedagogico {
             if (termo.length < 1) { listEl.style.display = 'none'; return; }
             this.filtrarAlunosAutocompleteSegundaChamada(termo);
         });
-        
+
         input.addEventListener('focus', () => {
             const termo = input.value.trim();
             if (termo.length >= 1) this.filtrarAlunosAutocompleteSegundaChamada(termo);
             else if (!this.autocomplete2Chamada.carregado) this.carregarAlunosParaRelatorioSegundaChamada();
         });
-        
+
         input.addEventListener('keydown', (e) => {
             const state = this.autocomplete2Chamada;
             if (listEl.style.display === 'none') return;
@@ -4444,29 +4105,29 @@ class SetorPedagogico {
                 listEl.style.display = 'none';
             }
         });
-        
+
         document.addEventListener('click', (e) => {
             if (!input.contains(e.target) && !listEl.contains(e.target)) {
                 listEl.style.display = 'none';
             }
         });
-        
+
         if (!this.autocomplete2Chamada.carregado) {
             this.carregarAlunosParaRelatorioSegundaChamada();
         }
     }
-    
+
     async carregarAlunosParaRelatorioSegundaChamada() {
         const state = this.autocomplete2Chamada;
         if (state.carregado && state.alunos.length > 0) return;
         if (state.carregando) return;
         state.carregando = true;
-        
+
         const inputBusca = document.getElementById('SegundaChamadaBuscaAlunoRelatorio');
         if (inputBusca && !inputBusca.dataset.carregado) {
             inputBusca.placeholder = 'Carregando alunos...';
         }
-        
+
         try {
             const turmasRes = await fetch('/api/gestao-geral/autorizacao/turmas', {
                 headers: { 'Authorization': `Bearer ${this.token}` }
@@ -4476,7 +4137,7 @@ class SetorPedagogico {
                 state.carregando = false;
                 return;
             }
-            
+
             const todosAlunos = [];
             for (const turma of turmasData.turmas) {
                 try {
@@ -4495,11 +4156,11 @@ class SetorPedagogico {
                     }
                 } catch (e) { console.warn('Erro turma:', turma, e); }
             }
-            
+
             todosAlunos.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
             state.alunos = todosAlunos;
             state.carregado = true;
-            
+
             if (inputBusca) {
                 inputBusca.placeholder = 'Digite o nome do aluno...';
                 inputBusca.dataset.carregado = 'true';
@@ -4510,12 +4171,12 @@ class SetorPedagogico {
             state.carregando = false;
         }
     }
-    
+
     filtrarAlunosAutocompleteSegundaChamada(termo) {
         const listEl = document.getElementById('SegundaChamadaAutocompleteAlunoList');
         const state = this.autocomplete2Chamada;
         if (!listEl) return;
-        
+
         if (!state.carregado) {
             listEl.innerHTML = `<div class="autocomplete-aluno-loading">Carregando...</div>`;
             listEl.style.display = 'block';
@@ -4524,21 +4185,21 @@ class SetorPedagogico {
             });
             return;
         }
-        
+
         const termoLower = termo.toLowerCase();
         state.filtrados = state.alunos.filter(a =>
             (a.nome || '').toLowerCase().includes(termoLower) ||
             (a.matricula || '').toLowerCase().includes(termoLower)
         ).slice(0, 10);
-        
+
         state.indice = -1;
-        
+
         if (state.filtrados.length === 0) {
             listEl.innerHTML = `<div class="autocomplete-aluno-empty">Nenhum aluno encontrado</div>`;
             listEl.style.display = 'block';
             return;
         }
-        
+
         listEl.innerHTML = state.filtrados.map((aluno, index) => {
             const nomeDestacado = this.destacarTermo(aluno.nome, termo);
             const matricula = aluno.matricula ? `<span class="aluno-matricula">${this.escapeHtml(aluno.matricula)}</span>` : '';
@@ -4551,7 +4212,7 @@ class SetorPedagogico {
                     </div>
                 </div>`;
         }).join('');
-        
+
         listEl.querySelectorAll('.autocomplete-aluno-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -4566,22 +4227,22 @@ class SetorPedagogico {
                 this.destacarItemAutocompleteSegundaChamada();
             });
         });
-        
+
         listEl.style.display = 'block';
     }
-    
+
     destacarTermo(texto, termo) {
         if (!texto) return '';
         if (!termo) return this.escapeHtml(texto);
         const regex = new RegExp(`(${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
         return this.escapeHtml(texto).replace(regex, '<mark>$1</mark>');
     }
-    
+
     destacarItemAutocompleteSegundaChamada() {
         const listEl = document.getElementById('SegundaChamadaAutocompleteAlunoList');
         const state = this.autocomplete2Chamada;
         if (!listEl) return;
-        
+
         listEl.querySelectorAll('.autocomplete-aluno-item').forEach((item, i) => {
             if (i === state.indice) {
                 item.classList.add('selected');
@@ -4591,14 +4252,14 @@ class SetorPedagogico {
             }
         });
     }
-    
+
     selecionarAlunoAutocompleteSegundaChamada(aluno) {
         if (!aluno) return;
         const input = document.getElementById('SegundaChamadaBuscaAlunoRelatorio');
         const hiddenInput = document.getElementById('SegundaChamadaFiltroAluno');
         const listEl = document.getElementById('SegundaChamadaAutocompleteAlunoList');
         const infoEl = document.getElementById('SegundaChamadaAlunoSelecionadoInfo');
-        
+
         if (input) input.value = aluno.nome;
         if (hiddenInput) hiddenInput.value = aluno.id;
         if (listEl) listEl.style.display = 'none';
@@ -4608,24 +4269,23 @@ class SetorPedagogico {
             infoEl.style.color = '#1e3c72';
         }
     }
-    
+
     async carregarRelatorioSegundaChamada() {
         const tipo = document.getElementById('SegundaChamadaTipoRelatorio')?.value || 'geral';
         const dataInicio = document.getElementById('SegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('SegundaChamadaDataFim')?.value || '';
         const tipoProvaPerdida = document.getElementById('SegundaChamadaFiltroTipoProva')?.value || '';
-        
-        // 🆕 Pega o modo de filtro por data
+
         const filtroPor = document.getElementById('SegundaChamadaFiltroPorData')?.value || 'falta';
         const filtrarPorPeriodoFalta = filtroPor === 'falta' ? 'true' : 'false';
-        
+
         let url = '';
         if (tipo === 'geral') {
             url = `/api/gestao-geral/autorizacao/relatorio/geral?tipo=segunda_chamada&`;
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
             if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
-            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;   // 🆕
+            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;
         } else if (tipo === 'turma') {
             const turma = document.getElementById('SegundaChamadaFiltroTurma')?.value;
             if (!turma) { this.mostrarNotificacao('Selecione uma turma', 'error'); return; }
@@ -4633,7 +4293,7 @@ class SetorPedagogico {
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
             if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
-            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;   // 🆕
+            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;
         } else if (tipo === 'aluno') {
             const alunoId = document.getElementById('SegundaChamadaFiltroAluno')?.value;
             if (!alunoId) { this.mostrarNotificacao('Selecione um aluno', 'error'); return; }
@@ -4641,11 +4301,11 @@ class SetorPedagogico {
             if (dataInicio) url += `dataInicio=${dataInicio}&`;
             if (dataFim) url += `dataFim=${dataFim}&`;
             if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
-            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;   // 🆕
+            url += `filtrarPorPeriodoFalta=${filtrarPorPeriodoFalta}&`;
         }
-        
-        console.log('🔍 URL do relatório:', url);   // 🆕 log pra debug
-        
+
+        console.log('🔍 URL do relatório:', url);
+
         try {
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
@@ -4654,12 +4314,12 @@ class SetorPedagogico {
             if (data.success) {
                 this.relatorio2Chamada = data;
                 this.exibirRelatorioSegundaChamada(data, tipo);
-                
+
                 const btnCSV = document.getElementById('btnExportarCSVSegundaChamada');
                 const btnPDF = document.getElementById('btnExportarPDFSegundaChamada');
                 if (btnCSV) btnCSV.disabled = false;
                 if (btnPDF) btnPDF.disabled = false;
-                
+
                 const total = data.totalRegistros || data.estatisticas?.totalRegistros || 0;
                 if (total === 0) {
                     this.mostrarNotificacao('⚠️ Nenhum registro encontrado. Verifique as datas e filtros.', 'warning');
@@ -4673,33 +4333,27 @@ class SetorPedagogico {
         }
     }
 
-    // ============================================
-    // 📄 EXPORTAR PDF - 2ª CHAMADA (padrão unificado)
-    // ============================================
     exportarPDF2Chamada() {
         const data = this.relatorio2Chamada;
         if (!data) {
             this.mostrarNotificacao('⚠️ Gere um relatório primeiro. Clique em BUSCAR.', 'error');
             return;
         }
-        
+
         const html = this.gerarHTMLRelatorio2Chamada(data);
-        
+
         const win = window.open('', '_blank');
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
     }
-    
-    // ============================================
-    // 🎨 GERAR HTML DO RELATÓRIO - 2ª CHAMADA (COMPACTO / FORMAL)
-    // ============================================
+
     gerarHTMLRelatorio2Chamada(data) {
         const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
         const logoIema = '/uploads/logo-iema.png';
         const carimbo = '/icons/assinatura_gestao.ico';
         const dataGeracao = new Date().toLocaleString('pt-BR');
-        
+
         let assinaturaDigital = null;
         if (tipo === 'aluno' && Array.isArray(data.registros)) {
             const comAssinatura = data.registros.find(a => a.assinaturaBase64);
@@ -4710,19 +4364,7 @@ class SetorPedagogico {
             const comAssinatura = lista.find(a => a.assinaturaBase64);
             if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
         }
-        
-        const formatarDataCadastro = (item) => {
-            if (!item.createdAt) return '-';
-            try {
-                return new Date(item.createdAt).toLocaleString('pt-BR', {
-                    day: '2-digit', month: '2-digit', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                });
-            } catch (e) {
-                return '-';
-            }
-        };
-        
+
         let titulo = 'RELATÓRIO DE 2ª CHAMADA';
         let subtitulo = '';
         if (tipo === 'turma') {
@@ -4732,7 +4374,7 @@ class SetorPedagogico {
         } else {
             subtitulo = 'Relatório Geral';
         }
-        
+
         let statsHTML = '';
         if (tipo === 'geral') {
             statsHTML = `
@@ -4760,14 +4402,14 @@ class SetorPedagogico {
                     </tr>
                 </table>`;
         }
-        
+
         let tabelaHTML = '';
-        
+
         if (tipo === 'geral') {
             const porMotivo = Array.isArray(data.porMotivo) ? data.porMotivo : [];
             const porTurma = Array.isArray(data.porTurma) ? data.porTurma : [];
             const registros = Array.isArray(data.registros) ? data.registros : [];
-            
+
             tabelaHTML = `
                 <div class="section-title">DISTRIBUIÇÃO POR MOTIVO</div>
                 <table>
@@ -4780,7 +4422,7 @@ class SetorPedagogico {
                             </tr>`).join('') || '<tr><td colspan="2" style="text-align:center;">Nenhum dado</td></tr>'}
                     </tbody>
                 </table>
-                
+
                 ${(data.porTipoProva || []).length > 0 ? `
                     <div class="section-title">DISTRIBUIÇÃO POR TIPO DE PROVA PERDIDA</div>
                     <table>
@@ -4794,7 +4436,7 @@ class SetorPedagogico {
                         </tbody>
                     </table>
                 ` : ''}
-                
+
                 <div class="section-title">DISTRIBUIÇÃO POR TURMA</div>
                 <table>
                     <thead><tr><th>Turma</th><th style="width:70px;text-align:center;">Total</th><th style="width:70px;text-align:center;">Alunos</th></tr></thead>
@@ -4807,7 +4449,7 @@ class SetorPedagogico {
                             </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
                     </tbody>
                 </table>
-                
+
                 <div class="section-title">ÚLTIMOS REGISTROS</div>
                 <table>
                     <thead>
@@ -4836,7 +4478,7 @@ class SetorPedagogico {
         } else if (tipo === 'turma') {
             const porAluno = Array.isArray(data.porAluno) ? data.porAluno : [];
             const registros = Array.isArray(data.registros) ? data.registros : [];
-            
+
             tabelaHTML = `
                 <div class="section-title">REGISTROS POR ALUNO</div>
                 <table>
@@ -4850,7 +4492,7 @@ class SetorPedagogico {
                             </tr>`).join('') || '<tr><td colspan="3" style="text-align:center;">Nenhum dado</td></tr>'}
                     </tbody>
                 </table>
-                
+
                 ${registros.length > 0 ? `
                     <div class="section-title">ÚLTIMOS REGISTROS</div>
                     <table>
@@ -4878,7 +4520,7 @@ class SetorPedagogico {
             `;
         } else {
             const registros = Array.isArray(data.registros) ? data.registros : [];
-            
+
             tabelaHTML = `
                 <div class="section-title">HISTÓRICO DE REGISTROS</div>
                 <table>
@@ -4904,7 +4546,7 @@ class SetorPedagogico {
                 </table>
             `;
         }
-        
+
         return `<!DOCTYPE html>
         <html lang="pt-BR">
         <head>
@@ -4913,14 +4555,14 @@ class SetorPedagogico {
             <style>
                 @page { size: A4 portrait; margin: 10mm 12mm; }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
-                
+
                 body {
                     font-family: 'Times New Roman', Times, serif;
                     font-size: 9pt;
                     line-height: 1.25;
                     color: #000;
                 }
-                
+
                 .header {
                     text-align: center;
                     border-bottom: 1.5px solid #000;
@@ -4945,7 +4587,7 @@ class SetorPedagogico {
                     margin-top: 2px;
                     color: #333;
                 }
-                
+
                 .titulo {
                     text-align: center;
                     font-size: 11pt;
@@ -4963,7 +4605,7 @@ class SetorPedagogico {
                     margin: 0 0 8px;
                     font-style: italic;
                 }
-                
+
                 .stats-table {
                     width: 100%;
                     margin: 8px 0 12px;
@@ -4988,7 +4630,7 @@ class SetorPedagogico {
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
                 }
-                
+
                 .section-title {
                     font-size: 8.5pt;
                     font-weight: bold;
@@ -4999,7 +4641,7 @@ class SetorPedagogico {
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
                 }
-                
+
                 table {
                     width: 100%;
                     border-collapse: collapse;
@@ -5023,7 +4665,7 @@ class SetorPedagogico {
                     vertical-align: top;
                 }
                 tr:nth-child(even) { background: #f5f5f5; }
-                
+
                 .assinaturas {
                     display: flex;
                     justify-content: center;
@@ -5067,7 +4709,7 @@ class SetorPedagogico {
                     font-size: 8pt;
                     margin-top: 2px;
                 }
-                
+
                 .footer {
                     text-align: center;
                     margin-top: 15px;
@@ -5083,7 +4725,7 @@ class SetorPedagogico {
                     margin-top: 10px;
                     text-align: center;
                 }
-                
+
                 .btn-print {
                     display: block;
                     margin: 15px auto;
@@ -5098,12 +4740,12 @@ class SetorPedagogico {
                     font-family: Arial, sans-serif;
                 }
                 .btn-print:hover { background: #000; }
-                
+
                 @media print {
                     .no-print { display: none !important; }
                     body { padding: 0; }
-                    .section-title { 
-                        page-break-after: avoid; 
+                    .section-title {
+                        page-break-after: avoid;
                         page-break-inside: avoid;
                     }
                     table { page-break-inside: auto; }
@@ -5113,19 +4755,19 @@ class SetorPedagogico {
         </head>
         <body>
             <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-            
+
             <div class="header">
                 <img src="${logoIema}" alt="IEMA" onerror="this.style.display='none'">
                 <h1>IEMA PLENO: SÃO LUÍS - CENTRO</h1>
                 <p>Sistema de Registros — Setor Pedagógico</p>
             </div>
-            
+
             <div class="titulo">${titulo}</div>
             ${subtitulo ? `<div class="subtitulo">${this.escapeHtml(subtitulo)}</div>` : ''}
-            
+
             ${statsHTML}
             ${tabelaHTML}
-            
+
             <div class="assinaturas">
                 <div class="assinatura">
                     <div class="assinatura-container-relatorio">
@@ -5135,11 +4777,11 @@ class SetorPedagogico {
                     <div class="assinatura-linha">Assinatura do Responsável / Setor Pedagógico</div>
                 </div>
             </div>
-            
+
             <div class="registro-info">
                 Relatório gerado em <strong>${dataGeracao}</strong>
             </div>
-            
+
             <div class="footer">
                 <p>Documento gerado automaticamente pelo EducaPleno</p>
                 <p>Setor: Pedagógico — 2ª Chamada</p>
@@ -5147,11 +4789,11 @@ class SetorPedagogico {
         </body>
         </html>`;
     }
-    
+
     exibirRelatorioSegundaChamada(data, tipo) {
         const container = document.getElementById('SegundaChamadaResultadoRelatorio');
         if (!container) return;
-        
+
         if (tipo === 'geral') {
             container.innerHTML = `
                 <div class="card"><div class="card-body">
@@ -5234,14 +4876,14 @@ class SetorPedagogico {
                 </div></div>`;
         }
     }
-    
+
     exportarCSVSegundaChamada() {
         const data = this.relatorio2Chamada;
         if (!data) { this.mostrarNotificacao('Nenhum relatório carregado', 'error'); return; }
-        
+
         const registros = data.registros || [];
         if (registros.length === 0) { this.mostrarNotificacao('Nenhum dado para exportar', 'error'); return; }
-        
+
         let csv = "Data do Registro,Data de Cadastro,Período da Falta,Tipo de Prova Perdida,Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
         registros.forEach(a => {
             let dataCadastro = '';
@@ -5252,7 +4894,7 @@ class SetorPedagogico {
                     dataCadastro = '';
                 }
             }
-            
+
             csv += [
                 a.dataFormatada || '',
                 `"${dataCadastro}"`,
@@ -5266,7 +4908,7 @@ class SetorPedagogico {
                 `"${(a.responsavelNome || '').replace(/"/g, '""')}"`
             ].join(',') + '\n';
         });
-        
+
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -5274,6 +4916,7 @@ class SetorPedagogico {
         link.click();
         URL.revokeObjectURL(link.href);
     }
+
     async imprimirSegundaChamada(id) {
         try {
             const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
@@ -5281,7 +4924,7 @@ class SetorPedagogico {
             });
             const d = await r.json();
             if (!d.success) { this.mostrarNotificacao('Erro ao carregar', 'error'); return; }
-            
+
             const a = d.autorizacao;
             let qr = '';
             try {
@@ -5291,7 +4934,7 @@ class SetorPedagogico {
                 const qrD = await qrR.json();
                 if (qrD.success && qrD.qrCode) qr = qrD.qrCode;
             } catch (e) { console.warn('Sem QR Code'); }
-            
+
             const win = window.open('', '_blank');
             win.document.write(this.gerarHTMLImpressaoSegundaChamada(a, qr));
             win.document.close();
@@ -5301,29 +4944,25 @@ class SetorPedagogico {
             this.mostrarNotificacao('Erro ao imprimir', 'error');
         }
     }
-    
-    // ============================================
-    // 🖨️ GERAR HTML DA IMPRESSÃO 2ª CHAMADA (PADRÃO UNIFICADO)
-    // ============================================
+
     gerarHTMLImpressaoSegundaChamada(a, qrCodeUrl) {
         const logo = '/uploads/logo-iema.png';
         const carimbo = '/icons/assinatura_gestao.ico';
         const dataGeracao = new Date().toLocaleString('pt-BR');
-        
+
         const entrada = new Date(a.data);
         const dataExt = entrada.toLocaleDateString('pt-BR', {
             day: '2-digit', month: '2-digit', year: 'numeric'
         });
-        const horaExt = entrada.toLocaleTimeString('pt-BR', { 
-            hour: '2-digit', minute: '2-digit' 
+        const horaExt = entrada.toLocaleTimeString('pt-BR', {
+            hour: '2-digit', minute: '2-digit'
         });
-        
+
         let detalheMotivo = '';
         if (a.motivo === 'outros' && a.motivoOutros) {
             detalheMotivo = ` <strong>(Especificação: ${this.escapeHtml(a.motivoOutros)})</strong>`;
         }
-        
-        // 🆕 BLOCO DE PERÍODO DA FALTA
+
         let periodoFaltaHTML = '';
         if (a.periodoFaltaInicio) {
             const ini = new Date(a.periodoFaltaInicio);
@@ -5331,7 +4970,7 @@ class SetorPedagogico {
             const iniFmt = ini.toLocaleDateString('pt-BR');
             const fimFmt = fim.toLocaleDateString('pt-BR');
             const texto = iniFmt === fimFmt ? iniFmt : `${iniFmt} a ${fimFmt}`;
-            
+
             periodoFaltaHTML = `
                 <div class="section-title">📆 Período da Falta Justificada</div>
                 <div class="motivo-box" style="background: #dbeafe; border-color: #1e3c72;">
@@ -5341,14 +4980,13 @@ class SetorPedagogico {
                 </div>
             `;
         }
-        
-        // 🆕 BLOCO DE TIPO DE PROVA PERDIDA
+
         let tipoProvaHTML = '';
         if (a.tipoProvaPerdida) {
             const textoProva = a.tipoProvaPerdida === 'Outros' && a.tipoProvaPerdidaOutros
                 ? `Outros (${this.escapeHtml(a.tipoProvaPerdidaOutros)})`
                 : this.escapeHtml(a.tipoProvaPerdida);
-            
+
             tipoProvaHTML = `
                 <div class="section-title">📝 Tipo de Prova Perdida</div>
                 <div class="motivo-box" style="background: #fef3c7; border-color: #f59e0b;">
@@ -5358,11 +4996,11 @@ class SetorPedagogico {
                 </div>
             `;
         }
-        
-        const assinaturaHTML = a.assinaturaBase64 
+
+        const assinaturaHTML = a.assinaturaBase64
             ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura">`
             : '';
-        
+
         const temResponsavel = a.responsavelNome || a.responsavelCPF || a.responsavelTelefone;
         const responsavelHTML = temResponsavel ? `
             <div class="section-title">👤 Responsável</div>
@@ -5372,7 +5010,7 @@ class SetorPedagogico {
                 ${a.responsavelTelefone ? `<span class="det-item"><strong>Telefone:</strong> ${this.escapeHtml(a.responsavelTelefone)}</span>` : ''}
             </div>
         ` : '';
-        
+
         const horariosHTML = a.horarioEntrada ? `
             <div class="info-grid">
                 <div class="info-item">
@@ -5380,7 +5018,7 @@ class SetorPedagogico {
                     <span class="info-value">${a.horarioEntrada}</span>
                 </div>
             </div>` : '';
-        
+
         return `<!DOCTYPE html>
         <html lang="pt-BR">
         <head>
@@ -5395,7 +5033,7 @@ class SetorPedagogico {
                     line-height: 1.25;
                     color: #000;
                 }
-                
+
                 .header {
                     text-align: center;
                     border-bottom: 1.5px double #000;
@@ -5419,7 +5057,7 @@ class SetorPedagogico {
                     font-size: 8pt;
                     margin: 1px 0 0;
                 }
-                
+
                 .titulo {
                     text-align: center;
                     font-size: 11pt;
@@ -5431,7 +5069,7 @@ class SetorPedagogico {
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
                 }
-                
+
                 .aluno-box {
                     display: flex;
                     align-items: center;
@@ -5461,7 +5099,7 @@ class SetorPedagogico {
                     font-size: 8pt;
                     color: #374151;
                 }
-                
+
                 .section-title {
                     font-size: 9pt;
                     font-weight: bold;
@@ -5470,7 +5108,7 @@ class SetorPedagogico {
                     border-left: 3px solid #1e3c72;
                     margin: 5px 0 3px;
                 }
-                
+
                 .info-grid {
                     display: grid;
                     grid-template-columns: 1fr 1fr 1fr;
@@ -5481,7 +5119,7 @@ class SetorPedagogico {
                 .info-item { display: flex; gap: 4px; }
                 .info-label { font-weight: bold; white-space: nowrap; }
                 .info-value { flex: 1; }
-                
+
                 .detalhes-compactos {
                     background: #f9fafb;
                     border: 1px solid #e5e7eb;
@@ -5495,7 +5133,7 @@ class SetorPedagogico {
                     margin-right: 10px;
                     margin-bottom: 2px;
                 }
-                
+
                 .motivo-box {
                     background: #f5f5f5;
                     border: 1px solid #000;
@@ -5505,7 +5143,7 @@ class SetorPedagogico {
                 }
                 .motivo-box strong { font-size: 9pt; }
                 .motivo-box p { margin: 3px 0 0; font-size: 9.5pt; font-weight: bold; }
-                
+
                 .descricao-box {
                     background: #f9fafb;
                     border: 1px solid #e5e7eb;
@@ -5518,7 +5156,7 @@ class SetorPedagogico {
                     overflow: hidden;
                     word-wrap: break-word;
                 }
-                
+
                 .assinaturas {
                     display: flex;
                     justify-content: space-around;
@@ -5529,7 +5167,7 @@ class SetorPedagogico {
                     flex: 0 0 42%;
                     text-align: center;
                 }
-                
+
                 .assinatura-container-relatorio {
                     position: relative;
                     min-height: 18mm;
@@ -5538,7 +5176,7 @@ class SetorPedagogico {
                     justify-content: center;
                     padding-bottom: 0;
                 }
-                
+
                 .assinatura-container-relatorio::after {
                     content: '';
                     position: absolute;
@@ -5547,7 +5185,7 @@ class SetorPedagogico {
                     right: 0;
                     border-bottom: 1px solid #000;
                 }
-                
+
                 .assinatura-img {
                     max-height: 14mm;
                     max-width: 100%;
@@ -5556,7 +5194,7 @@ class SetorPedagogico {
                     z-index: 2;
                     margin-bottom: 1mm;
                 }
-                
+
                 .carimbo-overlay {
                     position: absolute;
                     bottom: 1mm;
@@ -5569,13 +5207,13 @@ class SetorPedagogico {
                     pointer-events: none;
                     z-index: 1;
                 }
-                
+
                 .assinatura-linha {
                     padding-top: 3px;
                     font-size: 8pt;
                     margin-top: 2px;
                 }
-                
+
                 .qr-code {
                     text-align: center;
                     margin-top: 6px;
@@ -5594,7 +5232,7 @@ class SetorPedagogico {
                     color: #444;
                     font-weight: bold;
                 }
-                
+
                 .footer {
                     text-align: center;
                     margin-top: 5px;
@@ -5604,7 +5242,7 @@ class SetorPedagogico {
                     color: #666;
                 }
                 .footer p { margin: 1px 0; }
-                
+
                 .btn-print {
                     display: block;
                     margin: 10px auto;
@@ -5619,7 +5257,7 @@ class SetorPedagogico {
                     font-family: Arial, sans-serif;
                 }
                 .btn-print:hover { background: #2a5298; }
-                
+
                 @media print {
                     .no-print { display: none !important; }
                     body { padding: 0; }
@@ -5629,32 +5267,32 @@ class SetorPedagogico {
         </head>
         <body>
             <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-            
+
             <div class="header">
                 <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
                 <h1>IEMA Pleno: São Luís - Centro</h1>
                 <p>Sistema de Atendimentos — Setor Pedagógico</p>
             </div>
-            
+
             <div class="titulo">📋 2ª CHAMADA</div>
-            
+
             <div class="aluno-box">
-                <img class="aluno-foto" src="${this.gerarAvatarSVG(a.alunoNome)}" 
+                <img class="aluno-foto" src="${this.gerarAvatarSVG(a.alunoNome)}"
                     alt="${this.escapeHtml(a.alunoNome)}"
                     onerror="this.onerror=null; this.src='${this.gerarAvatarSVG(a.alunoNome)}'">
                 <div class="aluno-info">
                     <div class="aluno-nome">${this.escapeHtml(a.alunoNome)}</div>
                     <div class="aluno-detalhes">
-                        <strong>Matrícula:</strong> ${this.escapeHtml(a.alunoMatricula || 'Não informada')} • 
+                        <strong>Matrícula:</strong> ${this.escapeHtml(a.alunoMatricula || 'Não informada')} •
                         <strong>Turma:</strong> ${this.escapeHtml(a.alunoTurma || '-')}
                         ${a.alunoCurso ? ` • <strong>Curso:</strong> ${this.escapeHtml(a.alunoCurso)}` : ''}
                     </div>
                 </div>
             </div>
-            
+
             ${periodoFaltaHTML}
             ${tipoProvaHTML}
-            
+
             <div class="section-title">📌 Dados do Registro</div>
             <div class="info-grid">
                 <div class="info-item">
@@ -5671,21 +5309,21 @@ class SetorPedagogico {
                 </div>
             </div>
             ${horariosHTML}
-            
+
             <div class="motivo-box">
                 <strong>📌 Motivo:</strong>
                 <p>☑ ${this.escapeHtml(a.motivoLabel || a.motivo || '-')}${detalheMotivo}</p>
             </div>
-            
+
             ${responsavelHTML}
-            
+
             ${a.observacoes ? `
                 <div class="section-title">💬 Observações</div>
                 <div class="descricao-box" style="min-height: 20px; max-height: 60px;">
                     ${this.escapeHtml(a.observacoes).replace(/\n/g, '<br>')}
                 </div>
             ` : ''}
-            
+
             <div class="assinaturas">
                 <div class="assinatura">
                     <div class="assinatura-container-relatorio">
@@ -5700,25 +5338,25 @@ class SetorPedagogico {
                     <div class="assinatura-linha">Setor Pedagógico</div>
                 </div>
             </div>
-            
+
             ${qrCodeUrl ? `
                 <div class="qr-code">
                     <img src="${qrCodeUrl}" alt="QR Code">
                     <p>Identificação do Aluno</p>
                 </div>
             ` : ''}
-            
+
             <div class="footer">
                 <p>Documento gerado em <strong>${dataGeracao}</strong> — EducaPleno — Setor Pedagógico</p>
             </div>
         </body>
         </html>`;
     }
-    
+
     async excluirSegundaChamada(id) {
         const confirmar = await this.confirmarAcao('Tem certeza que deseja EXCLUIR este registro de 2ª Chamada?\n\nEsta ação não pode ser desfeita.');
         if (!confirmar) return;
-        
+
         try {
             const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
                 method: 'DELETE',
@@ -5739,33 +5377,33 @@ class SetorPedagogico {
 
     async abrirEditarSegundaChamada(id) {
         if (!id) return;
-        
+
         try {
             const r = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const d = await r.json();
-            
+
             if (!d.success || !d.autorizacao) {
                 this.showToast('Erro ao carregar registro', 'error');
                 return;
             }
-            
+
             const a = d.autorizacao;
             const old = document.getElementById('modalEditar2Chamada');
             if (old) old.remove();
-            
+
             const motivos = [
                 { valor: 'problemas_pessoais', label: 'Problemas Pessoais' },
                 { valor: 'problemas_saude', label: 'Problemas de Saúde' },
                 { valor: 'viagem', label: 'Viagem' },
                 { valor: 'outros', label: 'Outros' }
             ];
-            
-            const motivosOptions = motivos.map(m => 
+
+            const motivosOptions = motivos.map(m =>
                 `<option value="${m.valor}" ${a.motivo === m.valor ? 'selected' : ''}>${m.label}</option>`
             ).join('');
-            
+
             let periodoInicioInput = '';
             let periodoFimInput = '';
             if (a.periodoFaltaInicio) {
@@ -5774,12 +5412,12 @@ class SetorPedagogico {
             if (a.periodoFaltaFim) {
                 periodoFimInput = getDataLocalISO(new Date(a.periodoFaltaFim));
             }
-            
+
             let dataRegistroInput = '';
             if (a.data) {
                 dataRegistroInput = getDataLocalISO(new Date(a.data));
             }
-            
+
             const modalHtml = `
                 <div class="modal fade" id="modalEditar2Chamada" tabindex="-1">
                     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -5792,18 +5430,18 @@ class SetorPedagogico {
                             </div>
                             <div class="modal-body">
                                 <input type="hidden" id="edit2ChamadaId" value="${a.id}">
-                                
+
                                 <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #eef2ff; border-radius: 10px; margin-bottom: 16px;">
                                     <img src="${a.alunoFoto || this.gerarAvatarSVG(a.alunoNome)}" style="width: 50px; height: 50px; border-radius: 50%;" alt="">
                                     <div style="flex: 1;">
                                         <h5 style="margin: 0; color: #1e3c72;">${this.escapeHtml(a.alunoNome)}</h5>
                                         <small style="color: #6b7280;">
-                                            <i class="fas fa-id-card"></i> ${this.escapeHtml(a.alunoMatricula || '-')} • 
+                                            <i class="fas fa-id-card"></i> ${this.escapeHtml(a.alunoMatricula || '-')} •
                                             <i class="fas fa-graduation-cap"></i> ${this.escapeHtml(a.alunoTurma || '-')}
                                         </small>
                                     </div>
                                 </div>
-                                
+
                                 <div class="row">
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Data da Falta (Início) <span class="text-danger">*</span></label>
@@ -5820,7 +5458,7 @@ class SetorPedagogico {
                                         <small class="text-muted">Data em que foi cadastrado</small>
                                     </div>
                                 </div>
-                                
+
                                 <div class="mb-3">
                                     <label class="form-label">Tipo de Prova Perdida <span class="text-danger">*</span></label>
                                     <select id="edit2ChamadaTipoProva" class="form-select" onchange="setorPedagogico.toggleEdit2ChamadaTipoProvaOutros()">
@@ -5839,28 +5477,28 @@ class SetorPedagogico {
                                         <input type="text" id="edit2ChamadaTipoProvaOutros" class="form-control" value="${this.escapeHtml(a.tipoProvaPerdidaOutros || '')}">
                                     </div>
                                 </div>
-                                
+
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Horário</label>
                                         <input type="time" id="edit2ChamadaHorario" class="form-control" value="${a.horarioEntrada || ''}">
                                     </div>
                                 </div>
-                                
+
                                 <div class="mb-3">
                                     <label class="form-label">Motivo <span class="text-danger">*</span></label>
                                     <select id="edit2ChamadaMotivo" class="form-select" onchange="setorPedagogico.toggleEdit2ChamadaOutros()">
                                         ${motivosOptions}
                                     </select>
                                 </div>
-                                
+
                                 <div id="edit2ChamadaCampoOutros" style="display: ${a.motivo === 'outros' ? 'block' : 'none'};">
                                     <div class="mb-3">
                                         <label class="form-label">Especifique o Motivo</label>
                                         <input type="text" id="edit2ChamadaMotivoOutros" class="form-control" value="${this.escapeHtml(a.motivoOutros || '')}">
                                     </div>
                                 </div>
-                                
+
                                 <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
                                     <div class="card-body">
                                         <h6 style="margin-bottom: 15px; color: #1e3c72;">
@@ -5882,7 +5520,7 @@ class SetorPedagogico {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="mb-3">
                                     <label class="form-label">Observações</label>
                                     <textarea id="edit2ChamadaObservacoes" class="form-control" rows="3">${this.escapeHtml(a.observacoes || '')}</textarea>
@@ -5899,7 +5537,7 @@ class SetorPedagogico {
                         </div>
                     </div>
                 </div>`;
-            
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             new bootstrap.Modal(document.getElementById('modalEditar2Chamada')).show();
         } catch (error) {
@@ -5931,41 +5569,40 @@ class SetorPedagogico {
         const responsavelCPF = document.getElementById('edit2ChamadaResponsavelCPF')?.value || '';
         const responsavelTelefone = document.getElementById('edit2ChamadaResponsavelTelefone')?.value || '';
         const observacoes = document.getElementById('edit2ChamadaObservacoes')?.value || '';
-        
+
         const periodoFaltaInicio = document.getElementById('edit2ChamadaPeriodoFaltaInicio')?.value || '';
         const periodoFaltaFim = document.getElementById('edit2ChamadaPeriodoFaltaFim')?.value || '';
-        
+
         if (!motivo) {
             this.showToast('Preencha o motivo', 'warning');
             return;
         }
-        
+
         if (!tipoProvaPerdida) {
             this.showToast('Informe o tipo de prova perdida', 'warning');
             return;
         }
-        
+
         if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
             this.showToast('Especifique o tipo de prova perdida', 'warning');
             return;
         }
-        
+
         if (!periodoFaltaInicio) {
             this.showToast('Informe a data da falta (início)', 'warning');
             return;
         }
-        
+
         if (periodoFaltaFim && periodoFaltaFim < periodoFaltaInicio) {
             this.showToast('Data final não pode ser anterior à data inicial', 'warning');
             return;
         }
-        
+
         if (motivo === 'outros' && !motivoOutros.trim()) {
             this.showToast('Especifique o motivo "Outros"', 'warning');
             return;
         }
-        
-        // Validação CPF
+
         if (responsavelCPF) {
             const validacaoCPF = this.validarCPFCliente(responsavelCPF);
             if (!validacaoCPF.valido) {
@@ -5976,7 +5613,7 @@ class SetorPedagogico {
             this.showToast('⚠️ CPF do responsável é obrigatório!', 'error');
             return;
         }
-        
+
         try {
             const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
                 method: 'PUT',
@@ -6000,18 +5637,18 @@ class SetorPedagogico {
                 })
             });
             const result = await response.json();
-            
+
             if (response.status === 409 || (result.error && result.error.includes('Já existe'))) {
                 let msg = '⚠️ Registro duplicado detectado!\n\n';
                 msg += result.error || 'Já existe outro registro com os mesmos dados.';
                 this.showToast(msg, 'error');
                 return;
             }
-            
+
             if (result.success) {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditar2Chamada'));
                 if (modal) modal.hide();
-                
+
                 this.showToast('✅ Registro atualizado com sucesso!', 'success');
                 await this.carregarListaSegundaChamada();
                 await this.carregarDashboardSegundaChamada();
@@ -6027,11 +5664,6 @@ class SetorPedagogico {
     // ============================================================================
     // 🔧 MÉTODOS AUXILIARES DE PREFIXO
     // ============================================================================
-
-    /**
-     * Retorna o prefixo dos IDs HTML para cada módulo.
-     * Ex: 'segundaChamada' → 'segundaChamada' (usado em #segundaChamadaNecessitaAssinatura, etc)
-     */
     getPrefixo(modulo) {
         const prefixos = {
             'autorizacao': 'autorizacao',
@@ -6041,9 +5673,6 @@ class SetorPedagogico {
         return prefixos[modulo] || modulo;
     }
 
-    /**
-     * Retorna o prefixo dos inputs para cada módulo.
-     */
     getPrefixoInput(modulo) {
         const prefixos = {
             'autorizacao': 'autorizacao',
@@ -6053,9 +5682,6 @@ class SetorPedagogico {
         return prefixos[modulo] || modulo;
     }
 
-    /**
-     * Retorna a configuração de cada módulo.
-     */
     getCfg(modulo) {
         const cfgs = {
             'autorizacao': { tipo: 'autorizacao', nomeAmigavel: 'Autorização' },
@@ -6065,9 +5691,6 @@ class SetorPedagogico {
         return cfgs[modulo] || { tipo: modulo, nomeAmigavel: modulo };
     }
 
-    /**
-     * Retorna o tipo da API para cada módulo.
-     */
     getTipoModulo(modulo) {
         const mapa = {
             'autorizacao': 'autorizacao',
@@ -6077,24 +5700,12 @@ class SetorPedagogico {
         return mapa[modulo] || modulo;
     }
 
-    /**
-     * Gera UUID v4 simples.
-     */
-    gerarUUID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-            const r = Math.random() * 16 | 0;
-            const v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
-    }
-
+        // ============================================================================
+    // 🔥 SUBSTITUIÇÃO DE PROFESSORES
     // ============================================================================
-    // 🔥 SUBSTITUIÇÃO DE PROFESSORES - PARTE 1 (LOAD + ESTRUTURA)
-    // ============================================================================
-
     async loadSubstituicaoProfessores() {
         const content = document.getElementById('content');
-        
+
         if (!this.temPermissaoSubstituicao) {
             content.innerHTML = `
                 <div class="alert alert-warning m-4">
@@ -6105,7 +5716,7 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         content.innerHTML = `
             <div class="substituicao-professores-container">
                 <ul class="nav nav-tabs mb-3" role="tablist">
@@ -6130,7 +5741,6 @@ class SetorPedagogico {
                             <i class="fas fa-file-alt"></i> Relatórios
                         </button>
                     </li>
-                    <!-- 🔥 NOVA ABA: ATRASOS -->
                     <li class="nav-item">
                         <button class="nav-link" id="sp-atrasos-tab" data-bs-toggle="tab" data-bs-target="#sp-atrasos" type="button">
                             <i class="fas fa-clock"></i> Atrasos
@@ -6141,8 +5751,7 @@ class SetorPedagogico {
 
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="sp-registrar">
-                        
-                        <!-- 🔥 NOVO CARD: GERENCIAR PROFESSORES -->
+
                         <div class="card mb-3" style="border: 2px solid #e0e7ff; background: linear-gradient(135deg, #f8faff 0%, #eef2ff 100%);">
                             <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
                                 <div style="display: flex; align-items: center; gap: 15px;">
@@ -6164,7 +5773,7 @@ class SetorPedagogico {
                                         </small>
                                     </div>
                                 </div>
-                                <button class="btn btn-primary" 
+                                <button class="btn btn-primary"
                                         onclick="setorPedagogico.abrirGerenciarProfessores()"
                                         style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; border-radius: 10px; padding: 10px 22px; font-weight: 600; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
                                     <i class="fas fa-user-plus me-2"></i> Gerenciar Professores
@@ -6211,8 +5820,8 @@ class SetorPedagogico {
                                 <div class="mt-3">
                                     <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 15px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                            <input type="checkbox" id="checkSemSubstituto" 
-                                                onchange="setorPedagogico.toggleSemSubstituto()" 
+                                            <input type="checkbox" id="checkSemSubstituto"
+                                                onchange="setorPedagogico.toggleSemSubstituto()"
                                                 style="width: 22px; height: 22px; accent-color: #dc2626; cursor: pointer;">
                                             <div>
                                                 <strong style="font-size: 1rem; color: #dc2626;">
@@ -6223,7 +5832,7 @@ class SetorPedagogico {
                                                 </p>
                                             </div>
                                         </label>
-                                        
+
                                         <div id="camposSemSubstituto" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #fecaca;">
                                             <div class="mb-3">
                                                 <label class="form-label" style="color: #991b1b; font-weight: 600;">
@@ -6242,8 +5851,8 @@ class SetorPedagogico {
                                                 <label class="form-label" style="color: #991b1b; font-weight: 600;">
                                                     <i class="fas fa-comment"></i> Observações
                                                 </label>
-                                                <textarea id="inputObservacoesSemSubstituto" class="form-control" rows="2" 
-                                                        placeholder="Informações adicionais sobre a ausência do substituto..." 
+                                                <textarea id="inputObservacoesSemSubstituto" class="form-control" rows="2"
+                                                        placeholder="Informações adicionais sobre a ausência do substituto..."
                                                         style="border-color: #fecaca;"></textarea>
                                             </div>
                                         </div>
@@ -6570,7 +6179,6 @@ class SetorPedagogico {
                         </div>
                     </div>
 
-                    <!-- 🔥 NOVA ABA: ATRASOS (conteúdo injetado dinamicamente) -->
                     <div class="tab-pane fade" id="sp-atrasos">
                         <div class="text-center py-5">
                             <div class="loading"></div>
@@ -6580,97 +6188,89 @@ class SetorPedagogico {
                 </div>
             </div>
         `;
-        
+
         setTimeout(async () => {
             const hoje = getDataLocalISO();
             const mesAtual = new Date().toISOString().substring(0, 7);
-            
+
             const inputData = document.getElementById('inputDataSubstituicao');
             if (inputData) {
                 inputData.value = hoje;
                 this.substituicaoState.formData.data = hoje;
             }
-            
+
             ['filtroMesSubstituicao', 'dashboardMesSubstituicao', 'relatorioMesSubstituicao'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = mesAtual;
             });
-            
+
             await this.carregarProfessoresSubstituicao();
             await this.carregarTurmasSubstituicao();
             await this.carregarListaSubstituicoes();
             await this.carregarDashboardSubstituicoes();
-            
+
             const buscaAusente = document.getElementById('buscaProfessorAusente');
             if (buscaAusente) {
                 buscaAusente.addEventListener('input', (e) => {
                     this.filtrarProfessoresSubstituicao(e.target.value, 'listaProfessoresAusentes', 'ausente');
                 });
             }
-            
+
             const buscaSubstituto = document.getElementById('buscaProfessorSubstituto');
             if (buscaSubstituto) {
                 buscaSubstituto.addEventListener('input', (e) => {
                     this.filtrarProfessoresSubstituicao(e.target.value, 'listaProfessoresSubstitutos', 'substituto');
                 });
             }
-            
+
             const selectTurma = document.getElementById('selectTurmaSubstituicao');
             if (selectTurma) {
                 selectTurma.addEventListener('change', (e) => {
                     this.substituicaoState.formData.turma = e.target.value;
                 });
             }
-            
+
             const inputDataSub = document.getElementById('inputDataSubstituicao');
             if (inputDataSub) {
                 inputDataSub.addEventListener('change', (e) => {
                     this.substituicaoState.formData.data = e.target.value;
                 });
             }
-            
+
             const selectMotivo = document.getElementById('selectMotivoSubstituicao');
             if (selectMotivo) {
                 selectMotivo.addEventListener('change', (e) => {
                     this.substituicaoState.formData.motivo = e.target.value;
                 });
             }
-            
+
             const inputMotivoDet = document.getElementById('inputMotivoDetalhesSubstituicao');
             if (inputMotivoDet) {
                 inputMotivoDet.addEventListener('input', (e) => {
                     this.substituicaoState.formData.motivoDetalhes = e.target.value;
                 });
             }
-            
+
             const inputObs = document.getElementById('inputObservacoesSubstituicao');
             if (inputObs) {
                 inputObs.addEventListener('input', (e) => {
                     this.substituicaoState.formData.observacoes = e.target.value;
                 });
             }
-            
+
             this.atualizarHorarioPreenchimentoSubstituicao();
             setInterval(() => this.atualizarHorarioPreenchimentoSubstituicao(), 1000);
-            
+
             document.getElementById('sp-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
                 this.carregarDashboardSubstituicoes();
             });
-            
-            // 🔥 QUANDO A ABA ATRASOS FOR MOSTRADA, CARREGA O CONTEÚDO
+
             document.getElementById('sp-atrasos-tab')?.addEventListener('shown.bs.tab', () => {
                 this.carregarConteudoAtrasos();
             });
-            
-            // 🔥 Também carrega de imediato se já estiver ativa (não é o caso, mas por segurança)
-            // Não carrega por padrão pra não pesar — só carrega quando o usuário clicar na aba
-            
+
         }, 200);
     }
-
-        // ============================================================================
-    // 🔥 SUBSTITUIÇÃO DE PROFESSORES - PARTE 2 (PROFESSORES + TURMAS + HORÁRIO)
-    // ============================================================================
 
     async carregarProfessoresSubstituicao() {
         try {
@@ -6678,7 +6278,7 @@ class SetorPedagogico {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (data.success) {
                 this.substituicaoState.professores = data.professores;
                 this.renderizarListaProfessoresSubstituicao(this.substituicaoState.professores, 'listaProfessoresAusentes', 'ausente');
@@ -6688,18 +6288,18 @@ class SetorPedagogico {
             console.error('Erro ao carregar professores:', error);
         }
     }
-    
+
     renderizarListaProfessoresSubstituicao(lista, containerId, tipo) {
         const container = document.getElementById(containerId);
         if (!container) return;
-        
+
         if (lista.length === 0) {
             container.innerHTML = `<div class="empty-state"><i class="fas fa-user-slash"></i><p>Nenhum professor encontrado</p></div>`;
             return;
         }
-        
+
         container.innerHTML = lista.map(p => `
-            <div class="professor-item" data-id="${p.id}" data-tipo="${tipo}" 
+            <div class="professor-item" data-id="${p.id}" data-tipo="${tipo}"
                  onclick="setorPedagogico.selecionarProfessorSubstituicao('${p.id}', '${tipo}')">
                 <div class="professor-avatar">${(p.nome || '?').charAt(0).toUpperCase()}</div>
                 <div class="professor-info">
@@ -6713,11 +6313,11 @@ class SetorPedagogico {
             </div>
         `).join('');
     }
-    
+
     filtrarProfessoresSubstituicao(termo, containerId, tipo) {
         const termoLower = (termo || '').toLowerCase();
         let filtrados = this.substituicaoState.professores;
-        
+
         if (termoLower) {
             filtrados = filtrados.filter(p =>
                 (p.nome || '').toLowerCase().includes(termoLower) ||
@@ -6725,11 +6325,11 @@ class SetorPedagogico {
                 (p.matricula || '').toLowerCase().includes(termoLower)
             );
         }
-        
+
         if (tipo === 'substituto' && this.substituicaoState.formData.professorAusente) {
             filtrados = filtrados.filter(p => p.id !== this.substituicaoState.formData.professorAusente.id);
         }
-        
+
         this.renderizarListaProfessoresSubstituicao(filtrados, containerId, tipo);
     }
 
@@ -6737,16 +6337,16 @@ class SetorPedagogico {
         const check = document.getElementById('checkSemSubstituto');
         const campos = document.getElementById('camposSemSubstituto');
         const blocoMotivo = document.getElementById('blocoMotivoSubstituicao');
-        
+
         if (check && campos) {
             if (check.checked) {
                 campos.style.display = 'block';
                 campos.style.opacity = '0';
-                setTimeout(() => { 
-                    campos.style.transition = 'opacity 0.3s'; 
-                    campos.style.opacity = '1'; 
+                setTimeout(() => {
+                    campos.style.transition = 'opacity 0.3s';
+                    campos.style.opacity = '1';
                 }, 10);
-                
+
                 if (blocoMotivo) blocoMotivo.style.display = 'none';
                 const selectMotivo = document.getElementById('selectMotivoSubstituicao');
                 if (selectMotivo) selectMotivo.value = '';
@@ -6754,14 +6354,14 @@ class SetorPedagogico {
                 if (grupoDet) grupoDet.style.display = 'none';
                 const inputDet = document.getElementById('inputMotivoDetalhesSubstituicao');
                 if (inputDet) inputDet.value = '';
-                
+
                 this.substituicaoState.formData.professorSubstituto = null;
                 document.querySelectorAll('#listaProfessoresSubstitutos .professor-item')
                     .forEach(el => el.classList.remove('selected'));
-                
+
                 document.getElementById('cardDetalhes').style.display = 'block';
                 this.atualizarResumoSubstituicao();
-                
+
                 setTimeout(() => {
                     document.getElementById('cardDetalhes').scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 100);
@@ -6771,42 +6371,42 @@ class SetorPedagogico {
                 const inputObsSemSub = document.getElementById('inputObservacoesSemSubstituto');
                 if (selectMotivoSemSub) selectMotivoSemSub.value = '';
                 if (inputObsSemSub) inputObsSemSub.value = '';
-                
+
                 if (blocoMotivo) blocoMotivo.style.display = 'block';
-                
+
                 if (!this.substituicaoState.formData.professorSubstituto) {
                     document.getElementById('cardDetalhes').style.display = 'none';
                 }
-                
+
                 this.atualizarResumoSubstituicao();
             }
         }
     }
-    
+
     selecionarProfessorSubstituicao(id, tipo) {
         const professor = this.substituicaoState.professores.find(p => p.id === id);
         if (!professor) return;
-        
+
         if (tipo === 'ausente') {
             this.substituicaoState.formData.professorAusente = professor;
             document.querySelectorAll('#listaProfessoresAusentes .professor-item').forEach(el => {
                 el.classList.toggle('selected', el.dataset.id === id);
             });
-            
+
             this.substituicaoState.formData.professorSubstituto = null;
             const checkSemSub = document.getElementById('checkSemSubstituto');
             if (checkSemSub) checkSemSub.checked = false;
             const camposSemSub = document.getElementById('camposSemSubstituto');
             if (camposSemSub) camposSemSub.style.display = 'none';
-            
+
             document.querySelectorAll('#listaProfessoresSubstitutos .professor-item').forEach(el => {
                 el.classList.remove('selected');
             });
-            
+
             document.getElementById('cardDetalhes').style.display = 'none';
             document.getElementById('cardProfessorSubstituto').style.display = 'block';
             this.atualizarResumoSubstituicao();
-            
+
             const busca = document.getElementById('buscaProfessorSubstituto')?.value || '';
             this.filtrarProfessoresSubstituicao(busca, 'listaProfessoresSubstitutos', 'substituto');
             document.getElementById('cardProfessorSubstituto').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -6821,47 +6421,47 @@ class SetorPedagogico {
                 const inputObs = document.getElementById('inputObservacoesSemSubstituto');
                 if (inputObs) inputObs.value = '';
             }
-            
+
             if (this.substituicaoState.formData.professorAusente && this.substituicaoState.formData.professorAusente.id === id) {
                 this.showToast('O substituto deve ser diferente do ausente', 'warning');
                 return;
             }
-            
+
             this.substituicaoState.formData.professorSubstituto = professor;
             document.querySelectorAll('#listaProfessoresSubstitutos .professor-item').forEach(el => {
                 el.classList.toggle('selected', el.dataset.id === id);
             });
-            
+
             document.getElementById('cardDetalhes').style.display = 'block';
             this.atualizarResumoSubstituicao();
             document.getElementById('cardDetalhes').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
-    
+
     atualizarResumoSubstituicao() {
         const ausente = document.getElementById('resumoProfessorAusente');
         const substituto = document.getElementById('resumoProfessorSubstituto');
         if (ausente) ausente.textContent = this.substituicaoState.formData.professorAusente?.nome || '-';
         if (substituto) substituto.textContent = this.substituicaoState.formData.professorSubstituto?.nome || '-';
     }
-    
+
     async carregarTurmasSubstituicao() {
         try {
             const response = await fetch('/api/substituicao-professor/turmas', {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (data.success) {
                 this.substituicaoState.turmas = data.turmas;
                 const options = this.substituicaoState.turmas.map(t => `<option value="${this.escapeHtml(t)}">${this.escapeHtml(t)}</option>`).join('');
-                
+
                 const selectTurma = document.getElementById('selectTurmaSubstituicao');
                 if (selectTurma) selectTurma.innerHTML = '<option value="">Selecione a turma...</option>' + options;
-                
+
                 const filtroTurma = document.getElementById('filtroTurmaSubstituicao');
                 if (filtroTurma) filtroTurma.innerHTML = '<option value="">Todas as turmas</option>' + options;
-                
+
                 const relTurma = document.getElementById('relatorioTurmaSubstituicao');
                 if (relTurma) relTurma.innerHTML = '<option value="">Todas as turmas</option>' + options;
             }
@@ -6869,38 +6469,38 @@ class SetorPedagogico {
             console.error('Erro ao carregar turmas:', error);
         }
     }
-    
+
     toggleHorarioSubstituicao(horario) {
         if (!Array.isArray(this.substituicaoState.formData.horarios)) {
             this.substituicaoState.formData.horarios = [];
         }
-        
+
         const lista = this.substituicaoState.formData.horarios;
         const idx = lista.indexOf(horario);
-        
+
         if (idx >= 0) {
             lista.splice(idx, 1);
         } else {
             lista.push(horario);
         }
-        
+
         lista.sort((a, b) => a - b);
-        
+
         const input = document.getElementById('inputHorariosSubstituicao');
         if (input) input.value = lista.join(',');
-        
+
         document.querySelectorAll('#horariosGridSubstituicao .horario-card').forEach(card => {
             const n = parseInt(card.dataset.horario);
             card.classList.toggle('selected', lista.includes(n));
         });
-        
+
         this.substituicaoState.formData.horario = lista[0] || null;
     }
-    
+
     atualizarMotivoDetalhesSubstituicao() {
         const motivo = document.getElementById('selectMotivoSubstituicao')?.value;
         const grupo = document.getElementById('grupoMotivoDetalhesSubstituicao');
-        
+
         if (motivo === 'outros') {
             grupo?.style.setProperty('display', 'block');
         } else {
@@ -6909,18 +6509,18 @@ class SetorPedagogico {
             if (input) input.value = '';
         }
     }
-    
+
     toggleSubstitutoAusente() {
         const check = document.getElementById('checkSubstitutoAusente');
         const campos = document.getElementById('camposSubstitutoAusente');
-        
+
         if (check && campos) {
             if (check.checked) {
                 campos.style.display = 'block';
                 campos.style.opacity = '0';
-                setTimeout(() => { 
-                    campos.style.transition = 'opacity 0.3s'; 
-                    campos.style.opacity = '1'; 
+                setTimeout(() => {
+                    campos.style.transition = 'opacity 0.3s';
+                    campos.style.opacity = '1';
                 }, 10);
             } else {
                 campos.style.display = 'none';
@@ -6931,7 +6531,7 @@ class SetorPedagogico {
             }
         }
     }
-    
+
     atualizarHorarioPreenchimentoSubstituicao() {
         const el = document.getElementById('horarioPreenchimentoSubstituicao');
         if (el) {
@@ -6941,90 +6541,89 @@ class SetorPedagogico {
             });
         }
     }
-    
+
     async registrarSubstituicao() {
         const formData = this.substituicaoState.formData;
-        
+
         const inputData = document.getElementById('inputDataSubstituicao');
         const valorData = inputData?.value || formData.data || '';
-        
+
         const selectTurma = document.getElementById('selectTurmaSubstituicao');
         const valorTurma = selectTurma?.value || formData.turma || '';
-        
+
         const listaHorarios = Array.isArray(formData.horarios) ? formData.horarios : [];
-        
+
         const selectMotivo = document.getElementById('selectMotivoSubstituicao');
         const valorMotivo = selectMotivo?.value || formData.motivo || '';
-        
+
         const inputDetalhes = document.getElementById('inputMotivoDetalhesSubstituicao');
         const valorDetalhes = inputDetalhes?.value || formData.motivoDetalhes || '';
-        
+
         const inputObs = document.getElementById('inputObservacoesSubstituicao');
         const valorObs = inputObs?.value || formData.observacoes || '';
-        
+
         const semSubstituto = document.getElementById('checkSemSubstituto')?.checked || false;
-        const substitutoAusenteMotivo = semSubstituto 
-            ? (document.getElementById('selectMotivoSemSubstituto')?.value || '') 
+        const substitutoAusenteMotivo = semSubstituto
+            ? (document.getElementById('selectMotivoSemSubstituto')?.value || '')
             : '';
-        const substitutoAusenteObservacoes = semSubstituto 
-            ? (document.getElementById('inputObservacoesSemSubstituto')?.value || '') 
+        const substitutoAusenteObservacoes = semSubstituto
+            ? (document.getElementById('inputObservacoesSemSubstituto')?.value || '')
             : '';
-        
+
         this.substituicaoState.formData.data = valorData;
         this.substituicaoState.formData.turma = valorTurma;
         this.substituicaoState.formData.horarios = listaHorarios;
         this.substituicaoState.formData.motivo = valorMotivo;
         this.substituicaoState.formData.motivoDetalhes = valorDetalhes;
         this.substituicaoState.formData.observacoes = valorObs;
-        
-        // VALIDAÇÕES
-        if (!formData.professorAusente) { 
-            this.showToast('⚠️ Selecione o professor ausente', 'warning'); 
-            return; 
+
+        if (!formData.professorAusente) {
+            this.showToast('⚠️ Selecione o professor ausente', 'warning');
+            return;
         }
-        
-        if (!semSubstituto && !formData.professorSubstituto) { 
-            this.showToast('⚠️ Selecione o professor substituto ou marque "Não há substituto disponível"', 'warning'); 
-            return; 
+
+        if (!semSubstituto && !formData.professorSubstituto) {
+            this.showToast('⚠️ Selecione o professor substituto ou marque "Não há substituto disponível"', 'warning');
+            return;
         }
-        
+
         if (semSubstituto && !substitutoAusenteMotivo) {
             this.showToast('⚠️ Selecione o motivo da ausência do substituto', 'warning');
             return;
         }
-        
-        if (!valorTurma) { 
-            this.showToast('⚠️ Selecione a turma', 'warning'); 
-            return; 
+
+        if (!valorTurma) {
+            this.showToast('⚠️ Selecione a turma', 'warning');
+            return;
         }
-        
-        if (!valorData) { 
-            this.showToast('⚠️ Informe a data', 'warning'); 
-            return; 
+
+        if (!valorData) {
+            this.showToast('⚠️ Informe a data', 'warning');
+            return;
         }
-        
-        if (listaHorarios.length === 0) { 
-            this.showToast('⚠️ Selecione pelo menos um horário', 'warning'); 
-            return; 
+
+        if (listaHorarios.length === 0) {
+            this.showToast('⚠️ Selecione pelo menos um horário', 'warning');
+            return;
         }
-        
+
         if (!semSubstituto) {
-            if (!valorMotivo) { 
-                this.showToast('⚠️ Selecione o motivo', 'warning'); 
-                return; 
+            if (!valorMotivo) {
+                this.showToast('⚠️ Selecione o motivo', 'warning');
+                return;
             }
             if (valorMotivo === 'outros' && !valorDetalhes) {
                 this.showToast('⚠️ Especifique o motivo', 'warning');
                 return;
             }
         }
-        
+
         const btn = document.getElementById('btnRegistrarSubstituicao');
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Registrando...';
         }
-        
+
         try {
             const payload = {
                 professorAusenteId: formData.professorAusente.id,
@@ -7036,13 +6635,13 @@ class SetorPedagogico {
                 substitutoAusenteMotivo: semSubstituto ? substitutoAusenteMotivo : '',
                 substitutoAusenteObservacoes: semSubstituto ? substitutoAusenteObservacoes : ''
             };
-            
+
             if (!semSubstituto) {
                 payload.professorSubstitutoId = formData.professorSubstituto.id;
                 payload.motivo = valorMotivo;
                 payload.motivoDetalhes = valorDetalhes;
             }
-            
+
             const response = await fetch('/api/substituicao-professor/registrar', {
                 method: 'POST',
                 headers: {
@@ -7051,15 +6650,15 @@ class SetorPedagogico {
                 },
                 body: JSON.stringify(payload)
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.showToast('✅ Substituição registrada!', 'success');
                 this.resetarFormularioSubstituicao();
                 await this.carregarListaSubstituicoes();
                 await this.carregarDashboardSubstituicoes();
-                
+
                 const listaTab = document.getElementById('sp-lista-tab');
                 if (listaTab) new bootstrap.Tab(listaTab).show();
             } else {
@@ -7075,7 +6674,7 @@ class SetorPedagogico {
             }
         }
     }
-    
+
     resetarFormularioSubstituicao() {
         const hoje = getDataLocalISO();
         this.substituicaoState.formData = {
@@ -7092,94 +6691,94 @@ class SetorPedagogico {
             substitutoAusenteMotivo: '',
             substitutoAusenteObservacoes: ''
         };
-        
+
         const inputData = document.getElementById('inputDataSubstituicao');
         if (inputData) inputData.value = hoje;
-        
+
         const selectTurma = document.getElementById('selectTurmaSubstituicao');
         if (selectTurma) selectTurma.value = '';
-        
+
         const selectMotivo = document.getElementById('selectMotivoSubstituicao');
         if (selectMotivo) selectMotivo.value = '';
-        
+
         const inputDetalhes = document.getElementById('inputMotivoDetalhesSubstituicao');
         if (inputDetalhes) inputDetalhes.value = '';
-        
+
         const inputObs = document.getElementById('inputObservacoesSubstituicao');
         if (inputObs) inputObs.value = '';
-        
+
         const inputHorarios = document.getElementById('inputHorariosSubstituicao');
         if (inputHorarios) inputHorarios.value = '';
-        
+
         const checkSemSub = document.getElementById('checkSemSubstituto');
         if (checkSemSub) checkSemSub.checked = false;
-        
+
         const camposSemSub = document.getElementById('camposSemSubstituto');
         if (camposSemSub) camposSemSub.style.display = 'none';
-        
+
         const selectMotivoSemSub = document.getElementById('selectMotivoSemSubstituto');
         if (selectMotivoSemSub) selectMotivoSemSub.value = '';
-        
+
         const inputObsSemSub = document.getElementById('inputObservacoesSemSubstituto');
         if (inputObsSemSub) inputObsSemSub.value = '';
-        
+
         const blocoMotivo = document.getElementById('blocoMotivoSubstituicao');
         if (blocoMotivo) blocoMotivo.style.display = 'block';
-        
+
         const grupoDet = document.getElementById('grupoMotivoDetalhesSubstituicao');
         if (grupoDet) grupoDet.style.display = 'none';
-        
+
         document.querySelectorAll('.professor-item').forEach(el => el.classList.remove('selected'));
         document.querySelectorAll('.horario-card').forEach(el => el.classList.remove('selected'));
-        
+
         const cardSub = document.getElementById('cardProfessorSubstituto');
         if (cardSub) cardSub.style.display = 'none';
-        
+
         const cardDet = document.getElementById('cardDetalhes');
         if (cardDet) cardDet.style.display = 'none';
-        
+
         const buscaAusente = document.getElementById('buscaProfessorAusente');
         if (buscaAusente) buscaAusente.value = '';
-        
+
         const buscaSubstituto = document.getElementById('buscaProfessorSubstituto');
         if (buscaSubstituto) buscaSubstituto.value = '';
-        
+
         this.renderizarListaProfessoresSubstituicao(this.substituicaoState.professores, 'listaProfessoresAusentes', 'ausente');
         this.renderizarListaProfessoresSubstituicao(this.substituicaoState.professores, 'listaProfessoresSubstitutos', 'substituto');
-        
+
         this.atualizarResumoSubstituicao();
     }
-    
+
     async carregarListaSubstituicoes() {
         const container = document.getElementById('listaSubstituicoes');
         if (!container) return;
-        
+
         container.innerHTML = '<div class="text-center py-3"><div class="loading"></div><p>Carregando...</p></div>';
-        
+
         try {
             const params = new URLSearchParams();
             const mes = document.getElementById('filtroMesSubstituicao')?.value;
             const busca = document.getElementById('filtroBuscaSubstituicao')?.value;
             const turma = document.getElementById('filtroTurmaSubstituicao')?.value;
             const motivo = document.getElementById('filtroMotivoSubstituicao')?.value;
-            
+
             if (mes) params.append('mes', mes);
             if (busca) params.append('busca', busca);
             if (turma) params.append('turma', turma);
             if (motivo) params.append('motivo', motivo);
-            
+
             const response = await fetch(`/api/substituicao-professor/listar?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (data.success) {
                 this.substituicaoState.substituicoes = data.substituicoes;
                 this.renderizarListaSubstituicoes(data.substituicoes);
-                
+
                 const contador = document.getElementById('contadorListaSubstituicoes');
                 if (contador) contador.textContent = `${data.total} registro${data.total !== 1 ? 's' : ''}`;
-                
+
                 const badge = document.getElementById('badgeTotalSubstituicoes');
                 if (badge) badge.textContent = data.total;
             }
@@ -7188,11 +6787,11 @@ class SetorPedagogico {
             container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Erro ao carregar</p></div>';
         }
     }
-    
+
     renderizarListaSubstituicoes(lista) {
         const container = document.getElementById('listaSubstituicoes');
         if (!container) return;
-        
+
         if (lista.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
@@ -7203,7 +6802,7 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         const MOTIVOS_LABELS = {
             'falta_professor': 'Falta do Professor',
             'licenca_medica': 'Licença Médica',
@@ -7215,7 +6814,7 @@ class SetorPedagogico {
             'outros': 'Outros',
             'sem_substituto': 'Sem Substituto'
         };
-        
+
         const MOTIVOS_CORES = {
             'falta_professor': '#ef4444',
             'licenca_medica': '#f59e0b',
@@ -7225,10 +6824,9 @@ class SetorPedagogico {
             'problema_pessoal': '#f97316',
             'atestado': '#6b7280',
             'sem_substituto': '#dc2626',
-            'outros': '#64748b',
-            'sem_substituto': '#dc2626'
+            'outros': '#64748b'
         };
-        
+
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -7245,20 +6843,20 @@ class SetorPedagogico {
                     </thead>
                     <tbody>
                         ${lista.map(s => {
-                            const badgeSubstitutoAusente = s.substitutoAusente 
+                            const badgeSubstitutoAusente = s.substitutoAusente
                                 ? `<span class="badge-custom" style="background: #fee2e2; color: #dc2626; margin-left: 5px;">
                                     <i class="fas fa-user-slash"></i> Substituto Ausente
-                                </span>` 
+                                </span>`
                                 : '';
-                            
-                            const horariosList = (s.horarios && s.horarios.length > 0) 
-                                ? s.horarios 
+
+                            const horariosList = (s.horarios && s.horarios.length > 0)
+                                ? s.horarios
                                 : (s.horario ? [s.horario] : []);
-                            
+
                             const horariosHTML = horariosList.length > 0
                                 ? horariosList.map(h => `<span class="badge-custom badge-primary" style="margin-right:3px;">${h}º</span>`).join('')
                                 : '<span class="text-muted">-</span>';
-                            
+
                             return `
                             <tr ${s.substitutoAusente ? 'style="background: #fef2f2;"' : ''}>
                                 <td>
@@ -7304,35 +6902,35 @@ class SetorPedagogico {
             </div>
         `;
     }
-    
+
     limparFiltrosSubstituicao() {
         const mes = document.getElementById('filtroMesSubstituicao');
         if (mes) mes.value = new Date().toISOString().substring(0, 7);
-        
+
         const busca = document.getElementById('filtroBuscaSubstituicao');
         if (busca) busca.value = '';
-        
+
         const turma = document.getElementById('filtroTurmaSubstituicao');
         if (turma) turma.value = '';
-        
+
         const motivo = document.getElementById('filtroMotivoSubstituicao');
         if (motivo) motivo.value = '';
-        
+
         this.carregarListaSubstituicoes();
     }
-    
+
     async verDetalhesSubstituicao(id) {
         try {
             const response = await fetch(`/api/substituicao-professor/${id}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) { this.showToast('Não encontrada', 'error'); return; }
-            
+
             const s = data.substituicao;
             this.substituicaoState.substituicaoParaImprimir = s;
-            
+
             const MOTIVOS_LABELS = {
                 'falta_professor': 'Falta do Professor',
                 'licenca_medica': 'Licença Médica',
@@ -7343,7 +6941,7 @@ class SetorPedagogico {
                 'atestado': 'Atestado',
                 'outros': 'Outros'
             };
-            
+
             const SUBSTITUTO_MOTIVOS = {
                 'falta_substituto': 'Falta do Substituto',
                 'atestado_substituto': 'Atestado Médico',
@@ -7351,7 +6949,7 @@ class SetorPedagogico {
                 'conflito_horario': 'Conflito de Horário',
                 'outros': 'Outros'
             };
-            
+
             const alertaSubstitutoAusente = s.substitutoAusente ? `
                 <div style="background: #fef2f2; border: 2px solid #fecaca; padding: 15px; border-radius: 12px; margin-top: 20px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -7362,7 +6960,7 @@ class SetorPedagogico {
                     ${s.substitutoAusenteObservacoes ? `<p style="margin: 5px 0; color: #991b1b;"><strong>Obs:</strong> ${this.escapeHtml(s.substitutoAusenteObservacoes)}</p>` : ''}
                 </div>
             ` : '';
-            
+
             const modalHtml = `
                 <div class="modal fade" id="modalDetalhesSp" tabindex="-1">
                     <div class="modal-dialog modal-lg">
@@ -7408,10 +7006,10 @@ class SetorPedagogico {
                     </div>
                 </div>
             `;
-            
+
             const oldModal = document.getElementById('modalDetalhesSp');
             if (oldModal) oldModal.remove();
-            
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             new bootstrap.Modal(document.getElementById('modalDetalhesSp')).show();
         } catch (error) {
@@ -7419,23 +7017,23 @@ class SetorPedagogico {
             this.showToast('Erro ao carregar detalhes', 'error');
         }
     }
-    
+
     async abrirEdicaoSubstituicao(id) {
         try {
             const response = await fetch(`/api/substituicao-professor/${id}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) return;
-            
+
             const s = data.substituicao;
             this.substituicaoState.editandoId = id;
-            
-            const turmasOptions = this.substituicaoState.turmas.map(t => 
+
+            const turmasOptions = this.substituicaoState.turmas.map(t =>
                 `<option value="${this.escapeHtml(t)}" ${t === s.turma ? 'selected' : ''}>${this.escapeHtml(t)}</option>`
             ).join('');
-            
+
             const MOTIVOS_LABELS = {
                 'falta_professor': 'Falta do Professor',
                 'licenca_medica': 'Licença Médica',
@@ -7447,28 +7045,28 @@ class SetorPedagogico {
                 'outros': 'Outros',
                 'sem_substituto': 'Sem Substituto'
             };
-            
+
             const motivosOptions = Object.entries(MOTIVOS_LABELS).map(([key, label]) =>
                 `<option value="${key}" ${s.motivo === key ? 'selected' : ''}>${label}</option>`
             ).join('');
-            
-            const horariosAtuais = (s.horarios && s.horarios.length > 0) 
-                ? s.horarios 
+
+            const horariosAtuais = (s.horarios && s.horarios.length > 0)
+                ? s.horarios
                 : (s.horario ? [s.horario] : []);
-            
+
             let horariosHTML = '';
             for (let i = 1; i <= 9; i++) {
                 const selected = horariosAtuais.includes(i);
                 horariosHTML += `
-                    <div class="horario-card ${selected ? 'selected' : ''}" 
-                        data-horario="${i}" 
+                    <div class="horario-card ${selected ? 'selected' : ''}"
+                        data-horario="${i}"
                         onclick="setorPedagogico.toggleHorarioEdicaoSubstituicao(${i})">
                         <div class="horario-numero">${i}º</div>
                         <div class="horario-label">Horário</div>
                     </div>
                 `;
             }
-            
+
             const SUBSTITUTO_MOTIVOS = {
                 'falta_substituto': 'Falta do Substituto',
                 'atestado_substituto': 'Atestado Médico',
@@ -7476,11 +7074,11 @@ class SetorPedagogico {
                 'conflito_horario': 'Conflito de Horário',
                 'outros': 'Outros'
             };
-            
+
             const substitutoMotivosOptions = Object.entries(SUBSTITUTO_MOTIVOS).map(([key, label]) =>
                 `<option value="${key}" ${s.substitutoAusenteMotivo === key ? 'selected' : ''}>${label}</option>`
             ).join('');
-            
+
             const modalHtml = `
                 <div class="modal fade" id="modalEditarSp" tabindex="-1">
                     <div class="modal-dialog modal-lg">
@@ -7518,11 +7116,11 @@ class SetorPedagogico {
                                         <input type="text" id="editMotivoDetalhesSp" class="form-control" value="${this.escapeHtml(s.motivoDetalhes || '')}">
                                     </div>
                                 </div>
-                                
+
                                 <div class="mt-3">
                                     <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 12px; padding: 15px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                                            <input type="checkbox" id="editSubstitutoAusente" 
+                                            <input type="checkbox" id="editSubstitutoAusente"
                                                 ${s.substitutoAusente ? 'checked' : ''}
                                                 onchange="document.getElementById('editCamposSubstitutoAusente').style.display = this.checked ? 'block' : 'none'"
                                                 style="width: 22px; height: 22px; accent-color: #dc2626;">
@@ -7550,7 +7148,7 @@ class SetorPedagogico {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="mt-3">
                                     <label class="form-label">Observações</label>
                                     <textarea id="editObservacoesSp" class="form-control" rows="3">${this.escapeHtml(s.observacoes || '')}</textarea>
@@ -7566,67 +7164,67 @@ class SetorPedagogico {
                     </div>
                 </div>
             `;
-            
+
             const oldModal = document.getElementById('modalEditarSp');
             if (oldModal) oldModal.remove();
-            
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             new bootstrap.Modal(document.getElementById('modalEditarSp')).show();
         } catch (error) {
             console.error('Erro:', error);
         }
     }
-    
+
     toggleHorarioEdicaoSubstituicao(horario) {
         const input = document.getElementById('editHorariosSp');
         if (!input) return;
-        
-        let lista = input.value 
-            ? input.value.split(',').map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 9) 
+
+        let lista = input.value
+            ? input.value.split(',').map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 9)
             : [];
-        
+
         const idx = lista.indexOf(horario);
         if (idx >= 0) {
             lista.splice(idx, 1);
         } else {
             lista.push(horario);
         }
-        
+
         lista.sort((a, b) => a - b);
         input.value = lista.join(',');
-        
+
         document.querySelectorAll('#editHorariosGrid .horario-card').forEach(card => {
             const n = parseInt(card.dataset.horario);
             card.classList.toggle('selected', lista.includes(n));
         });
     }
-    
+
     async salvarEdicaoSubstituicao() {
         if (!this.substituicaoState.editandoId) return;
-        
+
         const substitutoAusente = document.getElementById('editSubstitutoAusente')?.checked || false;
-        const substitutoAusenteMotivo = substitutoAusente 
-            ? (document.getElementById('editMotivoSubstitutoAusente')?.value || '') 
+        const substitutoAusenteMotivo = substitutoAusente
+            ? (document.getElementById('editMotivoSubstitutoAusente')?.value || '')
             : '';
-        const substitutoAusenteObservacoes = substitutoAusente 
-            ? (document.getElementById('editObsSubstitutoAusente')?.value || '') 
+        const substitutoAusenteObservacoes = substitutoAusente
+            ? (document.getElementById('editObsSubstitutoAusente')?.value || '')
             : '';
-        
+
         if (substitutoAusente && !substitutoAusenteMotivo) {
             this.showToast('⚠️ Selecione o motivo da ausência do substituto', 'warning');
             return;
         }
-        
+
         const inputHorarios = document.getElementById('editHorariosSp');
-        const horarios = inputHorarios?.value 
+        const horarios = inputHorarios?.value
             ? inputHorarios.value.split(',').map(n => parseInt(n)).filter(n => !isNaN(n) && n >= 1 && n <= 9)
             : [];
-        
+
         if (horarios.length === 0) {
             this.showToast('⚠️ Selecione pelo menos um horário', 'warning');
             return;
         }
-        
+
         const dados = {
             turma: document.getElementById('editTurmaSp').value,
             data: document.getElementById('editDataSp').value,
@@ -7638,7 +7236,7 @@ class SetorPedagogico {
             substitutoAusenteMotivo,
             substitutoAusenteObservacoes
         };
-        
+
         try {
             const response = await fetch(`/api/substituicao-professor/${this.substituicaoState.editandoId}`, {
                 method: 'PUT',
@@ -7648,9 +7246,9 @@ class SetorPedagogico {
                 },
                 body: JSON.stringify(dados)
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.showToast('✅ Atualizada!', 'success');
                 bootstrap.Modal.getInstance(document.getElementById('modalEditarSp'))?.hide();
@@ -7661,19 +7259,19 @@ class SetorPedagogico {
             this.showToast('Erro ao atualizar', 'error');
         }
     }
-    
+
     async excluirSubstituicao(id) {
         const confirmar = await this.confirmarAcao('⚠️ Tem certeza que deseja excluir?\n\nEsta ação não pode ser desfeita.');
         if (!confirmar) return;
-        
+
         try {
             const response = await fetch(`/api/substituicao-professor/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.showToast('✅ Excluída!', 'success');
                 await this.carregarListaSubstituicoes();
@@ -7683,7 +7281,7 @@ class SetorPedagogico {
             this.showToast('Erro ao excluir', 'error');
         }
     }
-    
+
     async imprimirSubstituicao(id) {
         try {
             const response = await fetch(`/api/substituicao-professor/${id}`, {
@@ -7695,13 +7293,13 @@ class SetorPedagogico {
             this.showToast('Erro ao imprimir', 'error');
         }
     }
-    
+
     imprimirSubstituicaoAtual() {
         if (this.substituicaoState.substituicaoParaImprimir) {
             this.gerarImpressaoSubstituicao(this.substituicaoState.substituicaoParaImprimir);
         }
     }
-    
+
     gerarImpressaoSubstituicao(s) {
         const MOTIVOS_LABELS = {
             'falta_professor': 'Falta do Professor',
@@ -7713,7 +7311,7 @@ class SetorPedagogico {
             'atestado': 'Atestado',
             'outros': 'Outros'
         };
-        
+
         const SUBSTITUTO_MOTIVOS = {
             'falta_substituto': 'Falta do Substituto',
             'atestado_substituto': 'Atestado Médico',
@@ -7721,11 +7319,11 @@ class SetorPedagogico {
             'conflito_horario': 'Conflito de Horário',
             'outros': 'Outros'
         };
-        
+
         const dataExt = new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR', {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
-        
+
         const alertaSubstitutoAusenteImpressao = s.substitutoAusente ? `
             <div style="margin-top: 15px; padding: 12px; background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
@@ -7736,7 +7334,7 @@ class SetorPedagogico {
                 ${s.substitutoAusenteObservacoes ? `<p style="margin: 4px 0; color: #991b1b; font-size: 10pt;"><strong>Observações:</strong> ${s.substitutoAusenteObservacoes}</p>` : ''}
             </div>
         ` : '';
-        
+
         const html = `
             <!DOCTYPE html>
             <html lang="pt-BR">
@@ -7825,30 +7423,30 @@ class SetorPedagogico {
             </body>
             </html>
         `;
-        
+
         const win = window.open('', '_blank');
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
     }
-    
+
     async carregarDashboardSubstituicoes() {
         try {
             const mes = document.getElementById('dashboardMesSubstituicao')?.value || new Date().toISOString().substring(0, 7);
-            
+
             const response = await fetch(`/api/substituicao-professor/dashboard/resumo?mes=${mes}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) return;
-            
+
             const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
             setVal('spStatTotalMes', data.resumo.totalMes || 0);
             setVal('spStatProfessoresAusentes', data.professoresMaisAusentes.length || 0);
             setVal('spStatProfessoresSubstitutos', data.professoresMaisSubstituiram.length || 0);
             setVal('spStatSubstitutosAusentes', data.resumo.totalSubstitutosAusentes || 0);
-            
+
             this.renderizarGraficosSubstituicoes(data, mes);
             this.renderizarRankingsSubstituicoes(data);
             this.renderizarUltimasSubstituicoes(data.ultimasSubstituicoes);
@@ -7860,9 +7458,7 @@ class SetorPedagogico {
     // ============================================================================
     // 🔥 GERENCIAMENTO DE PROFESSORES (CRUD)
     // ============================================================================
-
     async abrirGerenciarProfessores() {
-        // Remove modal anterior se existir
         const antigo = document.getElementById('modalGerenciarProfessores');
         if (antigo) antigo.remove();
 
@@ -7870,8 +7466,7 @@ class SetorPedagogico {
             <div class="modal fade" id="modalGerenciarProfessores" tabindex="-1" data-bs-backdrop="static">
                 <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
                     <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                        
-                        <!-- HEADER -->
+
                         <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 22px 28px;">
                             <div style="display: flex; align-items: center; gap: 14px;">
                                 <div style="width: 46px; height: 46px; background: rgba(255,255,255,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
@@ -7885,42 +7480,38 @@ class SetorPedagogico {
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
 
-                        <!-- BARRA DE AÇÕES + FILTROS -->
                         <div style="background: #f8fafc; border-bottom: 1px solid #e5e7eb; padding: 18px 28px;">
-                            
-                            <!-- Linha 1: Busca + Botão Novo -->
                             <div style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
                                 <div style="flex: 1; min-width: 240px; position: relative;">
                                     <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px;"></i>
-                                    <input type="text" id="buscaGerenciarProfessores" 
+                                    <input type="text" id="buscaGerenciarProfessores"
                                         placeholder="Buscar por nome, email ou matrícula..."
                                         style="width: 100%; padding: 11px 16px 11px 44px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: all 0.2s; background: white;">
                                 </div>
-                                <button class="btn" onclick="setorPedagogico.abrirFormProfessor()" 
+                                <button class="btn" onclick="setorPedagogico.abrirFormProfessor()"
                                         style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 11px 22px; border-radius: 10px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(16,185,129,0.3); transition: all 0.2s; white-space: nowrap;">
                                     <i class="fas fa-plus"></i> Novo Professor
                                 </button>
                             </div>
 
-                            <!-- Linha 2: Filtros -->
                             <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                                 <span style="font-size: 13px; color: #64748b; font-weight: 600; margin-right: 4px;">
                                     <i class="fas fa-filter"></i> Filtros:
                                 </span>
-                                
-                                <select id="filtroStatusProfessor" class="form-select form-select-sm" 
+
+                                <select id="filtroStatusProfessor" class="form-select form-select-sm"
                                         style="width: auto; min-width: 140px; padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
                                     <option value="todos">Todos os status</option>
                                     <option value="ativo">✓ Ativos</option>
                                     <option value="inativo">✗ Inativos</option>
                                 </select>
 
-                                <select id="filtroEixoProfessor" class="form-select form-select-sm" 
+                                <select id="filtroEixoProfessor" class="form-select form-select-sm"
                                         style="width: auto; min-width: 160px; padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
                                     <option value="todos">Todos os eixos</option>
                                 </select>
 
-                                <select id="ordenacaoProfessor" class="form-select form-select-sm" 
+                                <select id="ordenacaoProfessor" class="form-select form-select-sm"
                                         style="width: auto; min-width: 160px; padding: 8px 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
                                     <option value="nome_asc">Nome (A-Z)</option>
                                     <option value="nome_desc">Nome (Z-A)</option>
@@ -7935,14 +7526,12 @@ class SetorPedagogico {
                             </div>
                         </div>
 
-                        <!-- CONTADOR -->
                         <div style="padding: 12px 28px; background: white; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
                             <small style="color: #64748b; font-size: 13px; font-weight: 500;" id="contadorProfessoresGerenciar">
                                 <i class="fas fa-spinner fa-spin"></i> Carregando...
                             </small>
                         </div>
 
-                        <!-- LISTA -->
                         <div class="modal-body" style="padding: 20px 28px; background: #f8fafc; max-height: 55vh; overflow-y: auto;">
                             <div id="listaGerenciarProfessores">
                                 <div class="text-center py-5">
@@ -7952,7 +7541,6 @@ class SetorPedagogico {
                             </div>
                         </div>
 
-                        <!-- FOOTER -->
                         <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 28px; background: white;">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
                                     style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
@@ -7968,16 +7556,11 @@ class SetorPedagogico {
         this.modalGerenciarInstance = new bootstrap.Modal(document.getElementById('modalGerenciarProfessores'));
         this.modalGerenciarInstance.show();
 
-        // Carrega a lista
         await this.carregarProfessoresGerenciar();
-
-        // Popula filtro de eixos
         await this.popularFiltroEixosProfessores();
 
-        // ============ EVENTOS ============
         const buscaInput = document.getElementById('buscaGerenciarProfessores');
         if (buscaInput) {
-            // Efeito de foco
             buscaInput.addEventListener('focus', function() {
                 this.style.borderColor = '#6366f1';
                 this.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)';
@@ -7996,30 +7579,23 @@ class SetorPedagogico {
             });
         }
 
-        // Eventos dos filtros
         ['filtroStatusProfessor', 'filtroEixoProfessor', 'ordenacaoProfessor'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', () => this.carregarProfessoresGerenciar());
         });
 
-        // Limpa a instância ao fechar
         document.getElementById('modalGerenciarProfessores').addEventListener('hidden.bs.modal', () => {
             this.modalGerenciarInstance = null;
         });
     }
 
-    // ============================================================================
-    // 📚 POPULAR FILTRO DE EIXOS NO GERENCIAR PROFESSORES
-    // ============================================================================
     async popularFiltroEixosProfessores() {
         try {
             const select = document.getElementById('filtroEixoProfessor');
             if (!select) return;
 
-            // 🔥 Usar a mesma função corrigida (com cache)
             const eixos = await this.carregarEixosDisponiveis();
 
-            // Montar opções — usa "nome" como value (é o que está salvo no professor)
             select.innerHTML = '<option value="todos">Todos os eixos</option>' +
                 eixos.map(e => `
                     <option value="${this.escapeHtml(e.nome)}">
@@ -8051,8 +7627,7 @@ class SetorPedagogico {
         `;
 
         try {
-            // ============ BUSCAR (mesma rota da substituição) ============
-            const url = busca 
+            const url = busca
                 ? `/api/substituicao-professor/professores?busca=${encodeURIComponent(busca)}`
                 : '/api/substituicao-professor/professores';
 
@@ -8065,27 +7640,22 @@ class SetorPedagogico {
                 throw new Error(data.error || 'Erro ao carregar');
             }
 
-            // Guarda na state para referência
             this.substituicaoState.professores = data.professores || [];
 
-            // ============ APLICAR FILTROS NO CLIENTE ============
             let professoresFiltrados = [...(data.professores || [])];
 
-            // Filtro por status
             if (filtroStatus === 'ativo') {
                 professoresFiltrados = professoresFiltrados.filter(p => p.ativo !== false);
             } else if (filtroStatus === 'inativo') {
                 professoresFiltrados = professoresFiltrados.filter(p => p.ativo === false);
             }
 
-            // Filtro por eixo
             if (filtroEixo !== 'todos') {
-                professoresFiltrados = professoresFiltrados.filter(p => 
+                professoresFiltrados = professoresFiltrados.filter(p =>
                     (p.eixo || 'Não definido') === filtroEixo
                 );
             }
 
-            // Ordenação
             professoresFiltrados.sort((a, b) => {
                 switch (ordenacao) {
                     case 'nome_asc':
@@ -8101,12 +7671,11 @@ class SetorPedagogico {
                 }
             });
 
-            // Atualiza contador
             if (contador) {
                 const total = professoresFiltrados.length;
                 const totalGeral = data.total || 0;
                 const temFiltros = busca || filtroStatus !== 'todos' || filtroEixo !== 'todos';
-                
+
                 contador.innerHTML = temFiltros
                     ? `<i class="fas fa-info-circle" style="color: #6366f1;"></i> Mostrando <strong>${total}</strong> de ${totalGeral} professor(es)`
                     : `<i class="fas fa-users" style="color: #6366f1;"></i> <strong>${total}</strong> professor(es) cadastrado(s)`;
@@ -8123,7 +7692,6 @@ class SetorPedagogico {
                 return;
             }
 
-            // ============ RENDERIZAR ============
             container.innerHTML = professoresFiltrados.map(p => `
                 <div class="professor-item-gerenciar" style="
                     display: flex; align-items: center; gap: 15px;
@@ -8131,9 +7699,9 @@ class SetorPedagogico {
                     background: white; border: 1px solid #e5e7eb;
                     border-radius: 12px; transition: all 0.2s;
                     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-                " onmouseover="this.style.borderColor='#c7d2fe'; this.style.boxShadow='0 4px 12px rgba(99,102,241,0.1)'; this.style.transform='translateY(-1px)';" 
+                " onmouseover="this.style.borderColor='#c7d2fe'; this.style.boxShadow='0 4px 12px rgba(99,102,241,0.1)'; this.style.transform='translateY(-1px)';"
                 onmouseout="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)'; this.style.transform='translateY(0)';">
-                    
+
                     <div style="
                         width: 50px; height: 50px; border-radius: 12px;
                         background: linear-gradient(135deg, #1e3c72, #2a5298);
@@ -8149,7 +7717,7 @@ class SetorPedagogico {
                             <span style="font-weight: 700; font-size: 15px; color: #1e293b;">
                                 ${this.escapeHtml(p.nome)}
                             </span>
-                            ${p.ativo === false 
+                            ${p.ativo === false
                                 ? '<span style="background: #fee2e2; color: #991b1b; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">Inativo</span>'
                                 : '<span style="background: #dcfce7; color: #166534; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: uppercase;">Ativo</span>'
                             }
@@ -8162,27 +7730,27 @@ class SetorPedagogico {
                     </div>
 
                     <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                        <button class="btn" 
+                        <button class="btn"
                                 onclick="setorPedagogico.verProfessor('${p.id}')"
                                 title="Visualizar"
                                 style="width: 38px; height: 38px; padding: 0; background: #eff6ff; color: #2563eb; border: none; border-radius: 9px; font-size: 14px; transition: all 0.2s;"
-                                onmouseover="this.style.background='#dbeafe';" 
+                                onmouseover="this.style.background='#dbeafe';"
                                 onmouseout="this.style.background='#eff6ff';">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn" 
+                        <button class="btn"
                                 onclick="setorPedagogico.abrirFormProfessor('${p.id}')"
                                 title="Editar"
                                 style="width: 38px; height: 38px; padding: 0; background: #fef3c7; color: #d97706; border: none; border-radius: 9px; font-size: 14px; transition: all 0.2s;"
-                                onmouseover="this.style.background='#fde68a';" 
+                                onmouseover="this.style.background='#fde68a';"
                                 onmouseout="this.style.background='#fef3c7';">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn" 
+                        <button class="btn"
                                 onclick="setorPedagogico.excluirProfessor('${p.id}', '${this.escapeHtml(p.nome)}')"
                                 title="Excluir"
                                 style="width: 38px; height: 38px; padding: 0; background: #fee2e2; color: #dc2626; border: none; border-radius: 9px; font-size: 14px; transition: all 0.2s;"
-                                onmouseover="this.style.background='#fecaca';" 
+                                onmouseover="this.style.background='#fecaca';"
                                 onmouseout="this.style.background='#fee2e2';">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -8203,7 +7771,6 @@ class SetorPedagogico {
     }
 
     async verProfessor(id) {
-        // Fecha o modal gerenciar
         if (this.modalGerenciarInstance) {
             this.modalGerenciarInstance.hide();
             await new Promise(resolve => setTimeout(resolve, 350));
@@ -8225,7 +7792,7 @@ class SetorPedagogico {
                 <div class="modal fade" id="modalVerProfessor" tabindex="-1" data-bs-backdrop="static">
                     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
                         <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                            
+
                             <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; padding: 22px 28px;">
                                 <div style="display: flex; align-items: center; gap: 14px;">
                                     <div style="width: 46px; height: 46px; background: rgba(255,255,255,0.18); border-radius: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
@@ -8236,14 +7803,13 @@ class SetorPedagogico {
                                         <small style="opacity: 0.9; font-size: 13px;">Informações completas do cadastro</small>
                                     </div>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white" 
+                                <button type="button" class="btn-close btn-close-white"
                                         onclick="setorPedagogico.fecharVerProfessor()"></button>
                             </div>
 
                             <div class="modal-body" style="padding: 28px;">
-                                <!-- Cabeçalho do professor -->
                                 <div style="text-align: center; padding-bottom: 24px; border-bottom: 1px solid #f1f5f9; margin-bottom: 24px;">
-                                    ${u.fotoPerfil 
+                                    ${u.fotoPerfil
                                         ? `<img src="${u.fotoPerfil}" style="width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid #e5e7eb; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">`
                                         : `<div style="width: 90px; height: 90px; border-radius: 50%; background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 38px; font-weight: 700; box-shadow: 0 4px 12px rgba(30,60,114,0.25);">${(u.nome || '?').charAt(0).toUpperCase()}</div>`
                                     }
@@ -8313,12 +7879,12 @@ class SetorPedagogico {
                             </div>
 
                             <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 28px; background: #f8fafc;">
-                                <button type="button" class="btn btn-secondary" 
+                                <button type="button" class="btn btn-secondary"
                                         onclick="setorPedagogico.fecharVerProfessor()"
                                         style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
                                     <i class="fas fa-arrow-left me-2"></i> Voltar
                                 </button>
-                                <button type="button" class="btn btn-warning" 
+                                <button type="button" class="btn btn-warning"
                                         onclick="setorPedagogico.fecharVerProfessor(function(){ setorPedagogico.abrirFormProfessor('${u.id}'); })"
                                         style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
                                     <i class="fas fa-edit me-2"></i> Editar
@@ -8358,37 +7924,31 @@ class SetorPedagogico {
     limparFiltrosProfessores() {
         const busca = document.getElementById('buscaGerenciarProfessores');
         if (busca) busca.value = '';
-        
+
         const status = document.getElementById('filtroStatusProfessor');
         if (status) status.value = 'todos';
-        
+
         const eixo = document.getElementById('filtroEixoProfessor');
         if (eixo) eixo.value = 'todos';
-        
+
         const ord = document.getElementById('ordenacaoProfessor');
         if (ord) ord.value = 'nome_asc';
-        
+
         this.carregarProfessoresGerenciar();
     }
 
-    // ============================================================================
-    // 👨‍🏫 ABRIR MODAL DE PROFESSOR (NOVO OU EDITAR)
-    // ============================================================================
     async abrirFormProfessor(id = null) {
         const editando = !!id;
         let professor = null;
 
-        // 🔥 FECHA O MODAL DE GERENCIAR (evita modal sobre modal)
         const modalGerenciar = document.getElementById('modalGerenciarProfessores');
         if (modalGerenciar && this.modalGerenciarInstance) {
             this.modalGerenciarInstance.hide();
             await new Promise(resolve => setTimeout(resolve, 350));
         }
 
-        // 🔥 CARREGA OS EIXOS DO BANCO (igual ao modal de Curso)
         const eixos = await this.carregarEixosDisponiveis();
 
-        // Se está editando, busca os dados do professor
         if (editando) {
             try {
                 const response = await fetch(`/api/substituicao-professor/professores/${id}`, {
@@ -8407,7 +7967,6 @@ class SetorPedagogico {
         const antigo = document.getElementById('modalFormProfessor');
         if (antigo) antigo.remove();
 
-        // 🔥 MONTAGEM DAS OPÇÕES DO SELECT DE EIXO (padrão do modal de Curso)
         const eixoAtual = editando ? (professor.eixo || '') : '';
         const eixoOptions = `
             <option value="">— Nenhum eixo selecionado —</option>
@@ -8420,7 +7979,6 @@ class SetorPedagogico {
             `).join('')}
         `;
 
-        // Aviso quando não há eixos cadastrados
         const avisoEixos = eixos.length === 0
             ? `<div style="margin-top: 6px; background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px 10px; border-radius: 6px; font-size: 12px; color: #92400e;">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -8436,7 +7994,6 @@ class SetorPedagogico {
                 <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
                     <div class="modal-content" style="border-radius: 16px; overflow: hidden; border: none; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
 
-                        <!-- HEADER -->
                         <div class="modal-header" style="background: linear-gradient(135deg, ${editando ? '#f59e0b 0%, #d97706 100%' : '#10b981 0%, #059669 100%'}); color: white; border: none; padding: 22px 28px;">
                             <div style="display: flex; align-items: center; gap: 14px;">
                                 <div style="width: 46px; height: 46px; background: rgba(255,255,255,0.18); border-radius: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
@@ -8455,7 +8012,6 @@ class SetorPedagogico {
                                     onclick="setorPedagogico.fecharFormProfessor()"></button>
                         </div>
 
-                        <!-- AVISO DE CAMPOS OBRIGATÓRIOS -->
                         <div style="padding: 12px 28px; background: #eff6ff; border-bottom: 1px solid #dbeafe;">
                             <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #1e40af;">
                                 <i class="fas fa-info-circle"></i>
@@ -8469,7 +8025,6 @@ class SetorPedagogico {
                             <input type="hidden" id="formProfessorId" value="${editando ? professor.id : ''}">
 
                             <div class="row g-3">
-                                <!-- NOME (OBRIGATÓRIO) -->
                                 <div class="col-md-8">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Nome Completo <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
@@ -8479,7 +8034,6 @@ class SetorPedagogico {
                                         value="${editando ? this.escapeHtml(professor.nome) : ''}" required>
                                 </div>
 
-                                <!-- MATRÍCULA (OBRIGATÓRIO) -->
                                 <div class="col-md-4">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Matrícula <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
@@ -8489,7 +8043,6 @@ class SetorPedagogico {
                                         value="${editando ? this.escapeHtml(professor.matricula || '') : ''}" required>
                                 </div>
 
-                                <!-- EMAIL (OBRIGATÓRIO) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Email Institucional <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
@@ -8500,7 +8053,6 @@ class SetorPedagogico {
                                     <small class="text-muted" style="font-size: 11px;">Deve terminar com @iemasaoluiscentro.net</small>
                                 </div>
 
-                                <!-- CPF (OBRIGATÓRIO) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         CPF <span style="color: #dc2626; font-size: 14px; font-weight: 700;">*</span>
@@ -8510,7 +8062,6 @@ class SetorPedagogico {
                                         value="${editando ? this.escapeHtml(professor.cpf || '') : ''}" required>
                                 </div>
 
-                                <!-- TELEFONE (OPCIONAL) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Telefone
@@ -8521,7 +8072,6 @@ class SetorPedagogico {
                                         value="${editando ? this.escapeHtml(professor.telefone || '') : ''}">
                                 </div>
 
-                                <!-- 🔥 EIXO (OPCIONAL) - DROPDOWN IGUAL AO DE CURSOS -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Eixo
@@ -8533,7 +8083,6 @@ class SetorPedagogico {
                                     ${avisoEixos}
                                 </div>
 
-                                <!-- DEPARTAMENTO (OPCIONAL) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Departamento
@@ -8544,7 +8093,6 @@ class SetorPedagogico {
                                         value="${editando ? this.escapeHtml(professor.departamento || '') : ''}">
                                 </div>
 
-                                <!-- TITULAÇÃO (OPCIONAL) -->
                                 <div class="col-md-6">
                                     <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
                                         Titulação
@@ -8559,7 +8107,6 @@ class SetorPedagogico {
                                     </select>
                                 </div>
 
-                                <!-- SENHA INICIAL (OBRIGATÓRIO - só ao criar) -->
                                 ${!editando ? `
                                     <div class="col-md-6">
                                         <label class="form-label" style="font-weight: 600; font-size: 13px; color: #374151;">
@@ -8578,7 +8125,6 @@ class SetorPedagogico {
                                     </div>
                                 ` : ''}
 
-                                <!-- STATUS ATIVO (OPCIONAL) -->
                                 <div class="col-12">
                                     <div style="background: #f8fafc; border-radius: 10px; padding: 14px 16px; border: 1px solid #e5e7eb;">
                                         <div class="form-check form-switch" style="margin: 0;">
@@ -8594,7 +8140,6 @@ class SetorPedagogico {
                             </div>
                         </div>
 
-                        <!-- FOOTER -->
                         <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 28px; background: #f8fafc;">
                             <button type="button" class="btn btn-secondary" onclick="setorPedagogico.fecharFormProfessor()"
                                     style="padding: 10px 22px; border-radius: 10px; font-weight: 600;">
@@ -8615,7 +8160,6 @@ class SetorPedagogico {
         this.modalFormProfessorInstance = new bootstrap.Modal(document.getElementById('modalFormProfessor'));
         this.modalFormProfessorInstance.show();
 
-        // ============ MÁSCARAS ============
         setTimeout(() => {
             const cpfInput = document.getElementById('formProfessorCPF');
             const telInput = document.getElementById('formProfessorTelefone');
@@ -8640,13 +8184,11 @@ class SetorPedagogico {
             }
         }, 200);
 
-        // Handler do fechamento
         document.getElementById('modalFormProfessor').addEventListener('hidden.bs.modal', () => {
             this.modalFormProfessorInstance = null;
         });
     }
 
-    // ============ FECHAR FORM E VOLTAR AO GERENCIAR ============
     fecharFormProfessor() {
         const modalForm = document.getElementById('modalFormProfessor');
         if (modalForm && this.modalFormProfessorInstance) {
@@ -8658,17 +8200,13 @@ class SetorPedagogico {
         }
     }
 
-    // ============ REABRIR MODAL GERENCIAR ============
     async reabrirModalGerenciar() {
-        // Só reabre se ainda existir o modal no DOM
         const modalGerenciar = document.getElementById('modalGerenciarProfessores');
         if (modalGerenciar) {
             this.modalGerenciarInstance = new bootstrap.Modal(modalGerenciar);
             this.modalGerenciarInstance.show();
-            // Recarrega a lista (para atualizar após edição/criação)
             await this.carregarProfessoresGerenciar();
         } else {
-            // Se foi removido, reabre tudo do zero
             await this.abrirGerenciarProfessores();
         }
     }
@@ -8682,17 +8220,14 @@ class SetorPedagogico {
         const email = document.getElementById('formProfessorEmail')?.value.trim();
         const cpf = document.getElementById('formProfessorCPF')?.value.trim();
         const telefone = document.getElementById('formProfessorTelefone')?.value.trim();
-        
-        // 🔥 CORREÇÃO PRINCIPAL — converter "" em undefined
+
         const eixoRaw = document.getElementById('formProfessorEixo')?.value || '';
         const eixo = eixoRaw.trim() !== '' ? eixoRaw.trim() : undefined;
-        //    ↑ Se vazio, vira undefined (o Mongoose não valida undefined contra enum)
-        
+
         const departamento = document.getElementById('formProfessorDepartamento')?.value.trim();
         const titulacao = document.getElementById('formProfessorTitulacao')?.value;
         const ativo = document.getElementById('formProfessorAtivo')?.checked;
 
-        // ============ VALIDAÇÕES ============
         if (!nome || nome.length < 3) {
             this.showToast('⚠️ Nome é obrigatório (mínimo 3 caracteres)', 'warning');
             document.getElementById('formProfessorNome')?.focus();
@@ -8742,7 +8277,7 @@ class SetorPedagogico {
                 email,
                 cpf: cpf.replace(/\D/g, ''),
                 telefone: telefone ? telefone.replace(/\D/g, '') : '',
-                eixo: eixo,              // 🔥 undefined se vazio — não envia ""
+                eixo: eixo,
                 departamento: departamento || '',
                 titulacao: titulacao || '',
                 ativo
@@ -8825,7 +8360,7 @@ class SetorPedagogico {
 
         } catch (error) {
             console.error('❌ Erro:', error);
-            
+
             if (error.message.includes('vínculos') || error.message.includes('dados associados')) {
                 this.showToast(
                     '⚠️ Este professor possui vínculos no sistema.\n\nRecomendação: Desative-o ao invés de excluir.',
@@ -8837,11 +8372,7 @@ class SetorPedagogico {
         }
     }
 
-    // ============================================================================
-    // 📚 CARREGAR EIXOS DISPONÍVEIS (com cache) — VERSÃO CORRIGIDA
-    // ============================================================================
     async carregarEixosDisponiveis() {
-        // Cache em memória (evita múltiplas requisições)
         if (this._eixosCache && this._eixosCache.length > 0) {
             return this._eixosCache;
         }
@@ -8849,7 +8380,6 @@ class SetorPedagogico {
         try {
             const token = localStorage.getItem('auth_token');
 
-            // 🔥 ROTA CORRETA (mesma que o admin.js usa e funciona)
             const response = await fetch('/api/admin/eixos', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -8862,7 +8392,6 @@ class SetorPedagogico {
             const data = await response.json();
 
             if (data.success && Array.isArray(data.eixos)) {
-                // 🔥 Normalizar estrutura do eixo
                 this._eixosCache = data.eixos.map(e => ({
                     _id: e._id,
                     nome: e.nome,
@@ -8884,15 +8413,8 @@ class SetorPedagogico {
             return [];
         }
     }
-    
-    // ============================================================================
-    // 🎨 RENDERIZAR GRÁFICOS - COM PALETA DE CORES VARIADA
-    // ============================================================================
+
     renderizarGraficosSubstituicoes(data, mes) {
-        // ==========================================
-        // 🎨 PALETAS DE CORES
-        // ==========================================
-        
         const MOTIVOS_CORES = {
             'falta_professor': '#ef4444',
             'licenca_medica': '#f59e0b',
@@ -8904,46 +8426,24 @@ class SetorPedagogico {
             'sem_substituto': '#dc2626',
             'outros': '#64748b'
         };
-        
+
         const HORARIOS_CORES = [
-            '#6366f1',
-            '#7c3aed',
-            '#8b5cf6',
-            '#a855f7',
-            '#d946ef',
-            '#ec4899',
-            '#f43f5e',
-            '#f97316',
-            '#f59e0b'
+            '#6366f1', '#7c3aed', '#8b5cf6', '#a855f7', '#d946ef',
+            '#ec4899', '#f43f5e', '#f97316', '#f59e0b'
         ];
-        
+
         const TURMAS_CORES = [
-            '#0ea5e9',
-            '#06b6d4',
-            '#14b8a6',
-            '#10b981',
-            '#22c55e',
-            '#84cc16',
-            '#eab308',
-            '#f59e0b',
-            '#f97316',
-            '#ef4444',
-            '#ec4899',
-            '#d946ef',
-            '#a855f7',
-            '#8b5cf6',
-            '#6366f1'
+            '#0ea5e9', '#06b6d4', '#14b8a6', '#10b981', '#22c55e',
+            '#84cc16', '#eab308', '#f59e0b', '#f97316', '#ef4444',
+            '#ec4899', '#d946ef', '#a855f7', '#8b5cf6', '#6366f1'
         ];
-        
-        // ==========================================
-        // 📊 GRÁFICO 1: POR MOTIVO (DOUGHNUT)
-        // ==========================================
+
         const ctxMotivos = document.getElementById('spChartMotivos');
         if (ctxMotivos) {
             if (this.substituicaoState.charts.motivos) {
                 try { this.substituicaoState.charts.motivos.destroy(); } catch(e){}
             }
-            
+
             this.substituicaoState.charts.motivos = new Chart(ctxMotivos.getContext('2d'), {
                 type: 'doughnut',
                 data: {
@@ -8990,24 +8490,21 @@ class SetorPedagogico {
                 }
             });
         }
-        
-        // ==========================================
-        // 📊 GRÁFICO 2: POR HORÁRIO (BARRAS COLORIDAS)
-        // ==========================================
+
         const ctxHorarios = document.getElementById('spChartHorarios');
         if (ctxHorarios) {
             if (this.substituicaoState.charts.horarios) {
                 try { this.substituicaoState.charts.horarios.destroy(); } catch(e){}
             }
-            
+
             const horarios = [];
             for (let i = 1; i <= 9; i++) {
                 const enc = data.porHorario.find(d => d.horario === i);
                 horarios.push(enc ? enc.count : 0);
             }
-            
+
             const coresBarras = horarios.map((_, i) => HORARIOS_CORES[i] || '#6366f1');
-            
+
             this.substituicaoState.charts.horarios = new Chart(ctxHorarios.getContext('2d'), {
                 type: 'bar',
                 data: {
@@ -9064,32 +8561,29 @@ class SetorPedagogico {
                 }
             });
         }
-        
-        // ==========================================
-        // 📊 GRÁFICO 3: POR DIA (LINHA COM GRADIENTE)
-        // ==========================================
+
         const ctxDias = document.getElementById('spChartDias');
         if (ctxDias) {
             if (this.substituicaoState.charts.dias) {
                 try { this.substituicaoState.charts.dias.destroy(); } catch(e){}
             }
-            
+
             const [ano, mesNum] = mes.split('-').map(Number);
             const ultimoDia = new Date(ano, mesNum, 0).getDate();
             const labels = [], valores = [];
-            
+
             for (let i = 1; i <= ultimoDia; i++) {
                 labels.push(i);
                 const diaStr = `${mes}-${String(i).padStart(2, '0')}`;
                 const enc = data.substituicoesPorDia.find(d => d.data === diaStr);
                 valores.push(enc ? enc.count : 0);
             }
-            
+
             const gradiente = ctxDias.getContext('2d').createLinearGradient(0, 0, 0, 300);
             gradiente.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
             gradiente.addColorStop(0.5, 'rgba(139, 92, 246, 0.2)');
             gradiente.addColorStop(1, 'rgba(236, 72, 153, 0.02)');
-            
+
             this.substituicaoState.charts.dias = new Chart(ctxDias.getContext('2d'), {
                 type: 'line',
                 data: {
@@ -9126,8 +8620,8 @@ class SetorPedagogico {
                                 title: (items) => `📅 Dia ${items[0].label}`,
                                 label: function(context) {
                                     const valor = context.parsed.y;
-                                    return valor > 0 
-                                        ? `${valor} substituição(ões)` 
+                                    return valor > 0
+                                        ? `${valor} substituição(ões)`
                                         : 'Nenhuma substituição';
                                 }
                             }
@@ -9156,18 +8650,15 @@ class SetorPedagogico {
                 }
             });
         }
-        
-        // ==========================================
-        // 📊 GRÁFICO 4: POR TURMA (BARRAS HORIZONTAIS COLORIDAS)
-        // ==========================================
+
         const ctxTurmas = document.getElementById('spChartTurmas');
         if (ctxTurmas) {
             if (this.substituicaoState.charts.turmas) {
                 try { this.substituicaoState.charts.turmas.destroy(); } catch(e){}
             }
-            
+
             const coresTurmas = data.porTurma.map((_, i) => TURMAS_CORES[i % TURMAS_CORES.length]);
-            
+
             this.substituicaoState.charts.turmas = new Chart(ctxTurmas.getContext('2d'), {
                 type: 'bar',
                 data: {
@@ -9226,15 +8717,12 @@ class SetorPedagogico {
             });
         }
     }
-    
-    // ============================================================================
-    // 🏆 RENDERIZAR RANKINGS
-    // ============================================================================
+
     renderizarRankingsSubstituicoes(data) {
         const render = (containerId, dados) => {
             const container = document.getElementById(containerId);
             if (!container) return;
-            
+
             if (dados.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state" style="text-align: center; padding: 30px; color: #9ca3af;">
@@ -9244,11 +8732,11 @@ class SetorPedagogico {
                 `;
                 return;
             }
-            
+
             container.innerHTML = dados.map((p, i) => {
                 const posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
                 const medalha = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-                
+
                 return `
                     <div class="ranking-item">
                         <div class="ranking-position ${posClass}">
@@ -9263,18 +8751,15 @@ class SetorPedagogico {
                 `;
             }).join('');
         };
-        
+
         render('spRankingAusentes', data.professoresMaisAusentes);
         render('spRankingSubstitutos', data.professoresMaisSubstituiram);
     }
-    
-    // ============================================================================
-    // 📋 RENDERIZAR ÚLTIMAS SUBSTITUIÇÕES
-    // ============================================================================
+
     renderizarUltimasSubstituicoes(lista) {
         const container = document.getElementById('spUltimasSubstituicoes');
         if (!container) return;
-        
+
         if (!lista || lista.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 30px; color: #9ca3af;">
@@ -9284,7 +8769,7 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -9299,14 +8784,14 @@ class SetorPedagogico {
                     </thead>
                     <tbody>
                         ${lista.map(s => {
-                            const horariosList = (s.horarios && s.horarios.length > 0) 
-                                ? s.horarios 
+                            const horariosList = (s.horarios && s.horarios.length > 0)
+                                ? s.horarios
                                 : (s.horario ? [s.horario] : []);
-                            
+
                             const horariosHTML = horariosList.length > 0
                                 ? horariosList.map(h => `<span class="badge-custom badge-primary" style="margin-right:3px;">${h}º</span>`).join('')
                                 : '<span class="text-muted">-</span>';
-                            
+
                             return `
                                 <tr>
                                     <td>
@@ -9324,13 +8809,13 @@ class SetorPedagogico {
             </div>
         `;
     }
-    
+
     async gerarRelatorioSubstituicoes() {
         const container = document.getElementById('resultadoRelatorioSubstituicoes');
         if (!container) return;
-        
+
         container.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p>Gerando relatório...</p></div>';
-        
+
         try {
             const params = new URLSearchParams();
             const mes = document.getElementById('relatorioMesSubstituicao')?.value;
@@ -9339,28 +8824,28 @@ class SetorPedagogico {
             const turma = document.getElementById('relatorioTurmaSubstituicao')?.value;
             const motivo = document.getElementById('relatorioMotivoSubstituicao')?.value;
             const substitutoAusente = document.getElementById('relatorioSubstitutoAusenteSubstituicao')?.value;
-            
+
             if (mes) params.append('mes', mes);
             if (dataInicio) params.append('dataInicio', dataInicio);
             if (dataFim) params.append('dataFim', dataFim);
             if (turma) params.append('turma', turma);
             if (motivo) params.append('motivo', motivo);
             if (substitutoAusente !== undefined && substitutoAusente !== '') params.append('substitutoAusente', substitutoAusente);
-            
+
             const response = await fetch(`/api/substituicao-professor/relatorio/gerar?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) throw new Error(data.error);
-            
+
             this.substituicaoState.relatorioAtual = data;
-            
+
             const btnCSV = document.getElementById('btnExportarCSVSubstituicao');
             if (btnCSV) btnCSV.disabled = false;
             const btnPDF = document.getElementById('btnImprimirRelatorioSubstituicao');
             if (btnPDF) btnPDF.disabled = false;
-            
+
             let html = `
                 <div class="card">
                     <div class="card-body">
@@ -9370,7 +8855,7 @@ class SetorPedagogico {
                             <div class="metric-label">Total de Substituições</div>
                         </div>
             `;
-            
+
             if (Object.keys(data.estatisticas.porMotivo).length > 0) {
                 html += `<h6 style="margin-top:20px;">Por Motivo</h6><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">`;
                 Object.entries(data.estatisticas.porMotivo).forEach(([k, v]) => {
@@ -9378,7 +8863,7 @@ class SetorPedagogico {
                 });
                 html += `</div>`;
             }
-            
+
             if (Object.keys(data.estatisticas.porTurma).length > 0) {
                 html += `<h6 style="margin-top:20px;">Por Turma</h6><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">`;
                 Object.entries(data.estatisticas.porTurma).forEach(([k, v]) => {
@@ -9386,7 +8871,7 @@ class SetorPedagogico {
                 });
                 html += `</div>`;
             }
-            
+
             if (data.substituicoes.length > 0) {
                 html += `
                     <h6 style="margin-top:20px;">Detalhamento</h6>
@@ -9417,25 +8902,25 @@ class SetorPedagogico {
                     </div>
                 `;
             }
-            
+
             html += `</div></div>`;
             container.innerHTML = html;
-            
+
         } catch (error) {
             console.error(error);
             container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>Erro</h4><p>${error.message}</p></div>`;
         }
     }
-    
+
     exportarCSVSubstituicoes() {
         const data = this.substituicaoState.relatorioAtual;
         if (!data || data.substituicoes.length === 0) {
             this.showToast('Gere um relatório primeiro', 'warning');
             return;
         }
-        
+
         let csv = 'Data,Horário,Professor Ausente,Professor Substituto,Substituto Ausente,Turma,Motivo,Observações\n';
-        
+
         data.substituicoes.forEach(s => {
             csv += [
                 `"${s.dataFormatada}"`,
@@ -9448,24 +8933,24 @@ class SetorPedagogico {
                 `"${(s.observacoes || '').replace(/"/g, '""')}"`
             ].join(',') + '\n';
         });
-        
+
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `substituicoes_${getDataLocalISO()}.csv`;
         link.click();
         URL.revokeObjectURL(link.href);
-        
+
         this.showToast('✅ CSV exportado!', 'success');
     }
-    
+
     imprimirRelatorioSubstituicoes() {
         const data = this.substituicaoState.relatorioAtual;
         if (!data || data.substituicoes.length === 0) {
             this.showToast('Gere um relatório primeiro', 'warning');
             return;
         }
-        
+
         const html = `
             <!DOCTYPE html>
             <html lang="pt-BR">
@@ -9534,26 +9019,28 @@ class SetorPedagogico {
             </body>
             </html>
         `;
-        
+
         const win = window.open('', '_blank');
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
     }
 
+    // ============================================================================
+    // 🔥 MÓDULO DE ATRASOS
+    // ============================================================================
     async carregarConteudoAtrasos() {
         const container = document.querySelector('#sp-atrasos');
         if (!container) return;
-        
+
         container.innerHTML = `
             <div class="text-center py-5">
                 <div class="loading"></div>
                 <p class="mt-3 text-muted">Carregando módulo de atrasos...</p>
             </div>
         `;
-        
+
         try {
-            // Carrega professores e turmas
             const [professoresRes, turmasRes] = await Promise.all([
                 fetch('/api/atraso-professor/professores', {
                     headers: { 'Authorization': `Bearer ${this.token}` }
@@ -9562,28 +9049,26 @@ class SetorPedagogico {
                     headers: { 'Authorization': `Bearer ${this.token}` }
                 })
             ]);
-            
+
             const professoresData = await professoresRes.json();
             const turmasData = await turmasRes.json();
-            
+
             if (professoresData.success) {
                 this.atrasosState = this.atrasosState || {};
                 this.atrasosState.professores = professoresData.professores;
             }
-            
+
             if (turmasData.success) {
                 this.atrasosState = this.atrasosState || {};
                 this.atrasosState.turmas = turmasData.turmas;
             }
-            
-            // Renderiza conteúdo
+
             container.innerHTML = this.getHTMLAtrasos();
-            
-            // Inicializa eventos
+
             setTimeout(() => {
                 this.inicializarEventosAtrasos();
             }, 100);
-            
+
         } catch (error) {
             console.error('❌ Erro ao carregar módulo de atrasos:', error);
             container.innerHTML = `
@@ -9597,7 +9082,6 @@ class SetorPedagogico {
 
     getHTMLAtrasos() {
         return `
-            <!-- Sub-abas: Registrar | Lista | Dashboard | Relatórios -->
             <ul class="nav nav-pills mb-3" role="tablist" style="gap: 8px;">
                 <li class="nav-item">
                     <button class="nav-link active" id="atraso-registrar-tab" data-bs-toggle="pill" data-bs-target="#atraso-registrar" type="button">
@@ -9621,12 +9105,9 @@ class SetorPedagogico {
                     </button>
                 </li>
             </ul>
-            
+
             <div class="tab-content">
-                <!-- SUB-TAB: REGISTRAR -->
                 <div class="tab-pane fade show active" id="atraso-registrar">
-                    
-                    <!-- Etapa 1: Professor -->
                     <div class="card mb-3">
                         <div class="card-body">
                             <div class="etapa-header">
@@ -9636,7 +9117,7 @@ class SetorPedagogico {
                                     <small class="text-muted">Selecione o professor que chegou atrasado</small>
                                 </div>
                             </div>
-                            
+
                             <div class="professor-selecionado-box mt-3" id="professorSelecionadoAtraso" style="display: none;">
                                 <div class="professor-selecionado-content">
                                     <div class="professor-avatar-lg" id="avatarProfessorAtraso">?</div>
@@ -9649,7 +9130,7 @@ class SetorPedagogico {
                                     </button>
                                 </div>
                             </div>
-                            
+
                             <div class="search-box mt-3">
                                 <i class="fas fa-search"></i>
                                 <input type="text" id="buscaProfessorAtraso" placeholder="Buscar professor por nome, email ou matrícula...">
@@ -9662,8 +9143,7 @@ class SetorPedagogico {
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Etapa 2: Detalhes -->
+
                     <div class="card mb-3" id="cardDetalhesAtraso" style="display: none;">
                         <div class="card-body">
                             <div class="etapa-header">
@@ -9673,7 +9153,7 @@ class SetorPedagogico {
                                     <small class="text-muted">Informe os dados do atraso</small>
                                 </div>
                             </div>
-                            
+
                             <div class="row g-3 mt-3">
                                 <div class="col-md-4">
                                     <label class="form-label">Data do Atraso <span class="text-danger">*</span></label>
@@ -9699,7 +9179,7 @@ class SetorPedagogico {
                                     <input type="time" id="inputHorarioChegadaAtraso" class="form-control">
                                 </div>
                             </div>
-                            
+
                             <div class="row g-3 mt-3">
                                 <div class="col-md-4">
                                     <label class="form-label">Minutos de Atraso</label>
@@ -9724,17 +9204,17 @@ class SetorPedagogico {
                                     </select>
                                 </div>
                             </div>
-                            
+
                             <div class="mt-3" id="grupoMotivoDetalhesAtraso" style="display: none;">
                                 <label class="form-label">Especifique o Motivo</label>
                                 <input type="text" id="inputMotivoDetalhesAtraso" class="form-control" placeholder="Descreva o motivo...">
                             </div>
-                            
+
                             <div class="mt-3">
                                 <label class="form-label">Observações</label>
                                 <textarea id="inputObservacoesAtraso" class="form-control" rows="3" placeholder="Informações adicionais (opcional)..."></textarea>
                             </div>
-                            
+
                             <div class="info-preenchimento mt-3">
                                 <i class="fas fa-clock"></i>
                                 <div>
@@ -9742,7 +9222,7 @@ class SetorPedagogico {
                                     <span id="horarioPreenchimentoAtraso"></span>
                                 </div>
                             </div>
-                            
+
                             <div class="d-flex gap-2 mt-4 justify-content-end">
                                 <button class="btn btn-secondary" onclick="setorPedagogico.resetarFormularioAtraso()">
                                     <i class="fas fa-times me-2"></i> Cancelar
@@ -9754,8 +9234,7 @@ class SetorPedagogico {
                         </div>
                     </div>
                 </div>
-                
-                <!-- SUB-TAB: LISTA -->
+
                 <div class="tab-pane fade" id="atraso-lista">
                     <div class="card mb-3">
                         <div class="card-body">
@@ -9807,8 +9286,7 @@ class SetorPedagogico {
                         </div>
                     </div>
                 </div>
-                
-                <!-- SUB-TAB: DASHBOARD -->
+
                 <div class="tab-pane fade" id="atraso-dashboard">
                     <div class="card mb-3">
                         <div class="card-body">
@@ -9825,7 +9303,7 @@ class SetorPedagogico {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="row mb-4">
                         <div class="col-md-3 mb-3">
                             <div class="metric-card">
@@ -9856,7 +9334,7 @@ class SetorPedagogico {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6 mb-4">
                             <div class="card h-100">
@@ -9891,7 +9369,7 @@ class SetorPedagogico {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="card">
                         <div class="card-body">
                             <h6 class="card-title"><i class="fas fa-history"></i> Últimos Atrasos</h6>
@@ -9899,8 +9377,7 @@ class SetorPedagogico {
                         </div>
                     </div>
                 </div>
-                
-                <!-- SUB-TAB: RELATÓRIOS -->
+
                 <div class="tab-pane fade" id="atraso-relatorios">
                     <div class="card mb-3">
                         <div class="card-body">
@@ -9971,48 +9448,42 @@ class SetorPedagogico {
     inicializarEventosAtrasos() {
         const hoje = getDataLocalISO();
         const mesAtual = new Date().toISOString().substring(0, 7);
-        
-        // Preencher datas
+
         const inputData = document.getElementById('inputDataAtraso');
         if (inputData) inputData.value = hoje;
-        
+
         ['filtroMesAtraso', 'dashboardMesAtraso', 'relatorioMesAtraso'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = mesAtual;
         });
-        
-        // Carregar dados iniciais
+
         this.carregarProfessoresAtraso();
         this.carregarTurmasAtraso();
         this.carregarListaAtrasos();
-        
-        // Busca de professores
+
         const busca = document.getElementById('buscaProfessorAtraso');
         if (busca) {
             busca.addEventListener('input', (e) => {
                 this.filtrarProfessoresAtraso(e.target.value);
             });
         }
-        
-        // Motivo "outros"
+
         const selectMotivo = document.getElementById('selectMotivoAtraso');
         if (selectMotivo) {
             selectMotivo.addEventListener('change', () => this.toggleMotivoDetalhesAtraso());
         }
-        
-        // Botão de atualizar dashboard na tab
+
         document.getElementById('atraso-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
             this.carregarDashboardAtrasos();
         });
-        
-        // Preencher select de professores do relatório
+
         this.preencherSelectProfessoresAtraso();
     }
 
     toggleMotivoDetalhesAtraso() {
         const motivo = document.getElementById('selectMotivoAtraso')?.value;
         const grupo = document.getElementById('grupoMotivoDetalhesAtraso');
-        
+
         if (motivo === 'outros') {
             grupo.style.display = 'block';
         } else {
@@ -10025,13 +9496,13 @@ class SetorPedagogico {
     async carregarProfessoresAtraso() {
         const container = document.getElementById('listaProfessoresAtraso');
         if (!container) return;
-        
+
         try {
             const response = await fetch('/api/atraso-professor/professores', {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (data.success) {
                 this.atrasosState = this.atrasosState || {};
                 this.atrasosState.professores = data.professores;
@@ -10046,7 +9517,7 @@ class SetorPedagogico {
     renderizarListaProfessoresAtraso(lista) {
         const container = document.getElementById('listaProfessoresAtraso');
         if (!container) return;
-        
+
         if (lista.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
@@ -10056,7 +9527,7 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         container.innerHTML = lista.map(p => `
             <div class="professor-item" data-id="${p.id}" onclick="setorPedagogico.selecionarProfessorAtraso('${p.id}')">
                 <div class="professor-avatar">${(p.nome || '?').charAt(0).toUpperCase()}</div>
@@ -10074,10 +9545,10 @@ class SetorPedagogico {
 
     filtrarProfessoresAtraso(termo) {
         if (!this.atrasosState || !this.atrasosState.professores) return;
-        
+
         const termoLower = (termo || '').toLowerCase();
         let filtrados = this.atrasosState.professores;
-        
+
         if (termoLower) {
             filtrados = filtrados.filter(p =>
                 (p.nome || '').toLowerCase().includes(termoLower) ||
@@ -10085,24 +9556,22 @@ class SetorPedagogico {
                 (p.matricula || '').toLowerCase().includes(termoLower)
             );
         }
-        
+
         this.renderizarListaProfessoresAtraso(filtrados);
     }
 
     selecionarProfessorAtraso(id) {
         if (!this.atrasosState || !this.atrasosState.professores) return;
-        
+
         const professor = this.atrasosState.professores.find(p => p.id === id);
         if (!professor) return;
-        
+
         this.atrasosState.professorSelecionado = professor;
-        
-        // Atualizar UI
+
         document.querySelectorAll('#listaProfessoresAtraso .professor-item').forEach(el => {
             el.classList.toggle('selected', el.dataset.id === id);
         });
-        
-        // Mostrar box do professor selecionado
+
         const box = document.getElementById('professorSelecionadoAtraso');
         if (box) {
             box.style.display = 'block';
@@ -10110,22 +9579,19 @@ class SetorPedagogico {
             document.getElementById('nomeProfessorAtraso').textContent = professor.nome;
             document.getElementById('emailProfessorAtraso').textContent = professor.email || 'Sem email';
         }
-        
-        // Esconder lista
+
         const lista = document.getElementById('listaProfessoresAtraso');
         if (lista) lista.style.display = 'none';
-        
+
         const busca = document.getElementById('buscaProfessorAtraso');
         if (busca) busca.style.display = 'none';
-        
-        // Mostrar card de detalhes
+
         const card = document.getElementById('cardDetalhesAtraso');
         if (card) {
             card.style.display = 'block';
             card.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        
-        // Inicializar horário de preenchimento
+
         this.atualizarHorarioPreenchimentoAtraso();
         setInterval(() => this.atualizarHorarioPreenchimentoAtraso(), 1000);
     }
@@ -10134,22 +9600,22 @@ class SetorPedagogico {
         if (this.atrasosState) {
             this.atrasosState.professorSelecionado = null;
         }
-        
+
         const box = document.getElementById('professorSelecionadoAtraso');
         if (box) box.style.display = 'none';
-        
+
         const lista = document.getElementById('listaProfessoresAtraso');
         if (lista) lista.style.display = 'block';
-        
+
         const busca = document.getElementById('buscaProfessorAtraso');
         if (busca) {
             busca.style.display = 'block';
             busca.value = '';
         }
-        
+
         const card = document.getElementById('cardDetalhesAtraso');
         if (card) card.style.display = 'none';
-        
+
         document.querySelectorAll('#listaProfessoresAtraso .professor-item').forEach(el => {
             el.classList.remove('selected');
         });
@@ -10171,13 +9637,13 @@ class SetorPedagogico {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (data.success) {
                 this.atrasosState = this.atrasosState || {};
                 this.atrasosState.turmas = data.turmas;
-                
+
                 const options = data.turmas.map(t => `<option value="${this.escapeHtml(t)}">${this.escapeHtml(t)}</option>`).join('');
-                
+
                 const selectTurma = document.getElementById('selectTurmaAtraso');
                 if (selectTurma) {
                     selectTurma.innerHTML = '<option value="">Selecione a turma...</option>' + options;
@@ -10190,44 +9656,41 @@ class SetorPedagogico {
 
     async preencherSelectProfessoresAtraso() {
         if (!this.atrasosState || !this.atrasosState.professores) return;
-        
+
         const select = document.getElementById('relatorioProfessorAtraso');
         if (!select) return;
-        
+
         select.innerHTML = '<option value="">Todos os professores</option>' +
-            this.atrasosState.professores.map(p => 
+            this.atrasosState.professores.map(p =>
                 `<option value="${p.id}">${this.escapeHtml(p.nome)}</option>`
             ).join('');
     }
 
-    // ============================================================================
-    // REGISTRAR ATRASO
-    // ============================================================================
     async registrarAtraso() {
         if (!this.atrasosState || !this.atrasosState.professorSelecionado) {
             this.showToast('⚠️ Selecione um professor', 'warning');
             return;
         }
-        
+
         const data = document.getElementById('inputDataAtraso')?.value;
         const horario = document.getElementById('selectHorarioAtraso')?.value;
-        
+
         if (!data) {
             this.showToast('⚠️ Informe a data', 'warning');
             return;
         }
-        
+
         if (!horario) {
             this.showToast('⚠️ Selecione o horário', 'warning');
             return;
         }
-        
+
         const btn = document.getElementById('btnRegistrarAtraso');
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Registrando...';
         }
-        
+
         try {
             const payload = {
                 professorId: this.atrasosState.professorSelecionado.id,
@@ -10240,7 +9703,7 @@ class SetorPedagogico {
                 motivo: document.getElementById('selectMotivoAtraso')?.value || 'nao_justificado',
                 motivoDetalhes: document.getElementById('inputMotivoDetalhesAtraso')?.value || ''
             };
-            
+
             const response = await fetch('/api/atraso-professor/registrar', {
                 method: 'POST',
                 headers: {
@@ -10249,15 +9712,14 @@ class SetorPedagogico {
                 },
                 body: JSON.stringify(payload)
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 this.showToast('✅ Atraso registrado!', 'success');
                 this.resetarFormularioAtraso();
                 await this.carregarListaAtrasos();
-                
-                // Trocar para tab lista
+
                 const listaTab = document.getElementById('atraso-lista-tab');
                 if (listaTab) new bootstrap.Tab(listaTab).show();
             } else {
@@ -10278,92 +9740,87 @@ class SetorPedagogico {
         if (this.atrasosState) {
             this.atrasosState.professorSelecionado = null;
         }
-        
+
         const box = document.getElementById('professorSelecionadoAtraso');
         if (box) box.style.display = 'none';
-        
+
         const lista = document.getElementById('listaProfessoresAtraso');
         if (lista) lista.style.display = 'block';
-        
+
         const busca = document.getElementById('buscaProfessorAtraso');
         if (busca) {
             busca.style.display = 'block';
             busca.value = '';
         }
-        
+
         const card = document.getElementById('cardDetalhesAtraso');
         if (card) card.style.display = 'none';
-        
-        // Limpar campos
+
         const hoje = getDataLocalISO();
         const inputData = document.getElementById('inputDataAtraso');
         if (inputData) inputData.value = hoje;
-        
+
         const selectHorario = document.getElementById('selectHorarioAtraso');
         if (selectHorario) selectHorario.value = '';
-        
+
         const inputChegada = document.getElementById('inputHorarioChegadaAtraso');
         if (inputChegada) inputChegada.value = '';
-        
+
         const inputMinutos = document.getElementById('inputMinutosAtraso');
         if (inputMinutos) inputMinutos.value = '';
-        
+
         const selectTurma = document.getElementById('selectTurmaAtraso');
         if (selectTurma) selectTurma.value = '';
-        
+
         const selectMotivo = document.getElementById('selectMotivoAtraso');
         if (selectMotivo) selectMotivo.value = 'nao_justificado';
-        
+
         const inputDetalhes = document.getElementById('inputMotivoDetalhesAtraso');
         if (inputDetalhes) inputDetalhes.value = '';
-        
+
         const inputObs = document.getElementById('inputObservacoesAtraso');
         if (inputObs) inputObs.value = '';
-        
+
         const grupo = document.getElementById('grupoMotivoDetalhesAtraso');
         if (grupo) grupo.style.display = 'none';
-        
-        // Resetar lista
+
         if (this.atrasosState && this.atrasosState.professores) {
             this.renderizarListaProfessoresAtraso(this.atrasosState.professores);
         }
     }
 
-    // ============================================================================
-    // LISTA DE ATRASOS
-    // ============================================================================
     async carregarListaAtrasos() {
         const container = document.getElementById('listaAtrasos');
         if (!container) return;
-        
+
         container.innerHTML = '<div class="text-center py-3"><div class="loading"></div><p>Carregando...</p></div>';
-        
+
         try {
             const params = new URLSearchParams();
             const mes = document.getElementById('filtroMesAtraso')?.value;
             const busca = document.getElementById('filtroBuscaAtraso')?.value;
             const motivo = document.getElementById('filtroMotivoAtraso')?.value;
             const dataInicio = document.getElementById('filtroDataInicioAtraso')?.value;
-            
+
             if (mes) params.append('mes', mes);
             if (busca) params.append('busca', busca);
             if (motivo) params.append('motivo', motivo);
             if (dataInicio) params.append('dataInicio', dataInicio);
-            
+
             const response = await fetch(`/api/atraso-professor/listar?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (data.success) {
                 this.atrasosState = this.atrasosState || {};
                 this.atrasosState.atrasos = data.atrasos;
-                
+
                 this.renderizarListaAtrasos(data.atrasos);
-                
+
                 const contador = document.getElementById('contadorListaAtrasos');
                 if (contador) contador.textContent = `${data.total} registro${data.total !== 1 ? 's' : ''}`;
-                
+
                 const badge = document.getElementById('badgeTotalAtrasos');
                 if (badge) badge.textContent = data.total;
             }
@@ -10376,7 +9833,7 @@ class SetorPedagogico {
     renderizarListaAtrasos(lista) {
         const container = document.getElementById('listaAtrasos');
         if (!container) return;
-        
+
         if (lista.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
@@ -10387,7 +9844,7 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         const MOTIVOS_CORES = {
             'nao_justificado': '#ef4444',
             'problema_transporte': '#f59e0b',
@@ -10397,7 +9854,7 @@ class SetorPedagogico {
             'clima': '#06b6d4',
             'outros': '#64748b'
         };
-        
+
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -10429,7 +9886,7 @@ class SetorPedagogico {
                                 </td>
                                 <td>${a.turma ? `<span class="badge-custom badge-gray">${this.escapeHtml(a.turma)}</span>` : '-'}</td>
                                 <td>
-                                    ${a.minutosAtraso > 0 
+                                    ${a.minutosAtraso > 0
                                         ? `<span class="badge-custom" style="background: #fee2e2; color: #dc2626;">${a.minutosAtraso} min</span>`
                                         : '-'
                                     }
@@ -10463,36 +9920,33 @@ class SetorPedagogico {
     limparFiltrosAtraso() {
         const mes = document.getElementById('filtroMesAtraso');
         if (mes) mes.value = new Date().toISOString().substring(0, 7);
-        
+
         const busca = document.getElementById('filtroBuscaAtraso');
         if (busca) busca.value = '';
-        
+
         const motivo = document.getElementById('filtroMotivoAtraso');
         if (motivo) motivo.value = '';
-        
+
         const dataInicio = document.getElementById('filtroDataInicioAtraso');
         if (dataInicio) dataInicio.value = '';
-        
+
         this.carregarListaAtrasos();
     }
 
-    // ============================================================================
-    // DETALHES / EDITAR / EXCLUIR ATRASO
-    // ============================================================================
     async verDetalhesAtraso(id) {
         try {
             const response = await fetch(`/api/atraso-professor/${id}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) {
                 this.showToast('Atraso não encontrado', 'error');
                 return;
             }
-            
+
             const a = data.atraso;
-            
+
             const MOTIVOS_LABELS = {
                 'nao_justificado': 'Não Justificado',
                 'problema_transporte': 'Problema de Transporte',
@@ -10502,7 +9956,7 @@ class SetorPedagogico {
                 'clima': 'Condições Climáticas',
                 'outros': 'Outros'
             };
-            
+
             const modalHtml = `
                 <div class="modal fade" id="modalDetalhesAtraso" tabindex="-1">
                     <div class="modal-dialog modal-lg">
@@ -10524,7 +9978,7 @@ class SetorPedagogico {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                                     <div><strong>Data:</strong> ${new Date(a.data + 'T12:00:00').toLocaleDateString('pt-BR')} (${a.diaSemana})</div>
                                     <div><strong>Horário:</strong> ${a.horario}º Horário</div>
@@ -10533,7 +9987,7 @@ class SetorPedagogico {
                                     ${a.turma ? `<div><strong>Turma:</strong> ${this.escapeHtml(a.turma)}</div>` : ''}
                                     <div><strong>Motivo:</strong> ${MOTIVOS_LABELS[a.motivo] || a.motivo}</div>
                                 </div>
-                                
+
                                 ${a.observacoes ? `
                                     <div style="margin-top: 15px;">
                                         <strong>Observações:</strong>
@@ -10542,7 +9996,7 @@ class SetorPedagogico {
                                         </div>
                                     </div>
                                 ` : ''}
-                                
+
                                 ${a.motivoDetalhes ? `
                                     <div style="margin-top: 15px;">
                                         <strong>Detalhes do Motivo:</strong>
@@ -10551,7 +10005,7 @@ class SetorPedagogico {
                                         </div>
                                     </div>
                                 ` : ''}
-                                
+
                                 <div style="background: #f0fdf4; padding: 15px; border-radius: 10px; margin-top: 20px; font-size: 13px;">
                                     <i class="fas fa-user-check" style="color: #10b981;"></i>
                                     Registrado por <strong>${this.escapeHtml(a.registradoPorNome)}</strong>
@@ -10565,13 +10019,13 @@ class SetorPedagogico {
                     </div>
                 </div>
             `;
-            
+
             const oldModal = document.getElementById('modalDetalhesAtraso');
             if (oldModal) oldModal.remove();
-            
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             new bootstrap.Modal(document.getElementById('modalDetalhesAtraso')).show();
-            
+
         } catch (error) {
             console.error('Erro:', error);
             this.showToast('Erro ao carregar detalhes', 'error');
@@ -10584,13 +10038,13 @@ class SetorPedagogico {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) return;
-            
+
             const a = data.atraso;
             this.atrasosState = this.atrasosState || {};
             this.atrasosState.editandoId = id;
-            
+
             const MOTIVOS_LABELS = {
                 'nao_justificado': 'Não Justificado',
                 'problema_transporte': 'Problema de Transporte',
@@ -10600,21 +10054,20 @@ class SetorPedagogico {
                 'clima': 'Condições Climáticas',
                 'outros': 'Outros'
             };
-            
+
             const motivosOptions = Object.entries(MOTIVOS_LABELS).map(([key, label]) =>
                 `<option value="${key}" ${a.motivo === key ? 'selected' : ''}>${label}</option>`
             ).join('');
-            
-            // Turmas
-            const turmasOptions = (this.atrasosState.turmas || []).map(t => 
+
+            const turmasOptions = (this.atrasosState.turmas || []).map(t =>
                 `<option value="${this.escapeHtml(t)}" ${t === a.turma ? 'selected' : ''}>${this.escapeHtml(t)}</option>`
             ).join('');
-            
+
             let horariosOptions = '';
             for (let i = 1; i <= 9; i++) {
                 horariosOptions += `<option value="${i}" ${a.horario === i ? 'selected' : ''}>${i}º Horário</option>`;
             }
-            
+
             const modalHtml = `
                 <div class="modal fade" id="modalEditarAtraso" tabindex="-1">
                     <div class="modal-dialog modal-lg">
@@ -10628,7 +10081,7 @@ class SetorPedagogico {
                                     <strong>${this.escapeHtml(a.professorNome)}</strong>
                                     <br><small>${this.escapeHtml(a.professorEmail || '')}</small>
                                 </div>
-                                
+
                                 <div class="row g-3">
                                     <div class="col-md-4">
                                         <label class="form-label">Data</label>
@@ -10643,7 +10096,7 @@ class SetorPedagogico {
                                         <input type="time" id="editHorarioChegadaAtraso" class="form-control" value="${a.horarioChegada || ''}">
                                     </div>
                                 </div>
-                                
+
                                 <div class="row g-3 mt-3">
                                     <div class="col-md-4">
                                         <label class="form-label">Minutos de Atraso</label>
@@ -10661,12 +10114,12 @@ class SetorPedagogico {
                                         <select id="editMotivoAtraso" class="form-select">${motivosOptions}</select>
                                     </div>
                                 </div>
-                                
+
                                 <div class="mt-3">
                                     <label class="form-label">Detalhes do Motivo</label>
                                     <input type="text" id="editMotivoDetalhesAtraso" class="form-control" value="${this.escapeHtml(a.motivoDetalhes || '')}">
                                 </div>
-                                
+
                                 <div class="mt-3">
                                     <label class="form-label">Observações</label>
                                     <textarea id="editObservacoesAtraso" class="form-control" rows="3">${this.escapeHtml(a.observacoes || '')}</textarea>
@@ -10682,13 +10135,13 @@ class SetorPedagogico {
                     </div>
                 </div>
             `;
-            
+
             const oldModal = document.getElementById('modalEditarAtraso');
             if (oldModal) oldModal.remove();
-            
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             new bootstrap.Modal(document.getElementById('modalEditarAtraso')).show();
-            
+
         } catch (error) {
             console.error('Erro:', error);
             this.showToast('Erro ao carregar atraso', 'error');
@@ -10697,7 +10150,7 @@ class SetorPedagogico {
 
     async salvarEdicaoAtraso() {
         if (!this.atrasosState || !this.atrasosState.editandoId) return;
-        
+
         const dados = {
             data: document.getElementById('editDataAtraso')?.value,
             horario: parseInt(document.getElementById('editHorarioAtraso')?.value),
@@ -10708,12 +10161,12 @@ class SetorPedagogico {
             motivoDetalhes: document.getElementById('editMotivoDetalhesAtraso')?.value || '',
             observacoes: document.getElementById('editObservacoesAtraso')?.value || ''
         };
-        
+
         if (!dados.data || !dados.horario) {
             this.showToast('Preencha data e horário', 'warning');
             return;
         }
-        
+
         try {
             const response = await fetch(`/api/atraso-professor/${this.atrasosState.editandoId}`, {
                 method: 'PUT',
@@ -10723,9 +10176,9 @@ class SetorPedagogico {
                 },
                 body: JSON.stringify(dados)
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 this.showToast('✅ Atraso atualizado!', 'success');
                 bootstrap.Modal.getInstance(document.getElementById('modalEditarAtraso'))?.hide();
@@ -10742,15 +10195,15 @@ class SetorPedagogico {
     async excluirAtraso(id) {
         const confirmar = await this.confirmarAcao('⚠️ Tem certeza que deseja excluir este registro de atraso?\n\nEsta ação não pode ser desfeita.');
         if (!confirmar) return;
-        
+
         try {
             const response = await fetch(`/api/atraso-professor/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 this.showToast('✅ Atraso excluído!', 'success');
                 await this.carregarListaAtrasos();
@@ -10761,42 +10214,32 @@ class SetorPedagogico {
         }
     }
 
-    // ============================================================================
-    // DASHBOARD DE ATRASOS
-    // ============================================================================
     async carregarDashboardAtrasos() {
         try {
             const mes = document.getElementById('dashboardMesAtraso')?.value || new Date().toISOString().substring(0, 7);
-            
+
             const response = await fetch(`/api/atraso-professor/dashboard/resumo?mes=${mes}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) return;
-            
-            // Stats
+
             this.safeSetText('atrasoStatTotalMes', data.resumo.totalMes || 0);
             this.safeSetText('atrasoStatMediaDiaria', data.resumo.mediaDiaria || 0);
             this.safeSetText('atrasoStatProfessores', data.professoresMaisAtrasam?.length || 0);
             this.safeSetText('atrasoStatTotalMinutos', data.resumo.totalFormatado || '0min');
-            
-            // Charts
+
             this.renderizarGraficosAtrasos(data, mes);
-            
-            // Ranking
             this.renderizarRankingAtrasos(data.professoresMaisAtrasam);
-            
-            // Últimos
             this.renderizarUltimosAtrasos(data.ultimosAtrasos);
-            
+
         } catch (error) {
             console.error('Erro no dashboard de atrasos:', error);
         }
     }
 
     renderizarGraficosAtrasos(data, mes) {
-        // Paleta de cores
         const MOTIVOS_CORES = {
             'nao_justificado': '#ef4444',
             'problema_transporte': '#f59e0b',
@@ -10806,22 +10249,21 @@ class SetorPedagogico {
             'clima': '#06b6d4',
             'outros': '#64748b'
         };
-        
+
         const HORARIOS_CORES = [
             '#6366f1', '#7c3aed', '#8b5cf6', '#a855f7', '#d946ef',
             '#ec4899', '#f43f5e', '#f97316', '#f59e0b'
         ];
-        
-        // Gráfico de Motivos
+
         const ctxMotivos = document.getElementById('atrasoChartMotivos');
         if (ctxMotivos) {
             if (this.atrasosState.charts?.motivos) {
                 try { this.atrasosState.charts.motivos.destroy(); } catch(e){}
             }
-            
+
             this.atrasosState = this.atrasosState || {};
             this.atrasosState.charts = this.atrasosState.charts || {};
-            
+
             this.atrasosState.charts.motivos = new Chart(ctxMotivos.getContext('2d'), {
                 type: 'doughnut',
                 data: {
@@ -10846,20 +10288,19 @@ class SetorPedagogico {
                 }
             });
         }
-        
-        // Gráfico de Horários
+
         const ctxHorarios = document.getElementById('atrasoChartHorarios');
         if (ctxHorarios) {
             if (this.atrasosState.charts?.horarios) {
                 try { this.atrasosState.charts.horarios.destroy(); } catch(e){}
             }
-            
+
             const horarios = [];
             for (let i = 1; i <= 9; i++) {
                 const enc = data.porHorario.find(d => d.horario === i);
                 horarios.push(enc ? enc.count : 0);
             }
-            
+
             this.atrasosState.charts.horarios = new Chart(ctxHorarios.getContext('2d'), {
                 type: 'bar',
                 data: {
@@ -10882,30 +10323,29 @@ class SetorPedagogico {
                 }
             });
         }
-        
-        // Gráfico de Dias
+
         const ctxDias = document.getElementById('atrasoChartDias');
         if (ctxDias) {
             if (this.atrasosState.charts?.dias) {
                 try { this.atrasosState.charts.dias.destroy(); } catch(e){}
             }
-            
+
             const [ano, mesNum] = mes.split('-').map(Number);
             const ultimoDia = new Date(ano, mesNum, 0).getDate();
             const labels = [];
             const valores = [];
-            
+
             for (let i = 1; i <= ultimoDia; i++) {
                 labels.push(i);
                 const diaStr = `${mes}-${String(i).padStart(2, '0')}`;
                 const enc = data.atrasosPorDia.find(d => d.data === diaStr);
                 valores.push(enc ? enc.count : 0);
             }
-            
+
             const gradiente = ctxDias.getContext('2d').createLinearGradient(0, 0, 0, 300);
             gradiente.addColorStop(0, 'rgba(220, 38, 38, 0.4)');
             gradiente.addColorStop(1, 'rgba(220, 38, 38, 0.02)');
-            
+
             this.atrasosState.charts.dias = new Chart(ctxDias.getContext('2d'), {
                 type: 'line',
                 data: {
@@ -10937,7 +10377,7 @@ class SetorPedagogico {
     renderizarRankingAtrasos(lista) {
         const container = document.getElementById('atrasoRankingProfessores');
         if (!container) return;
-        
+
         if (!lista || lista.length === 0) {
             container.innerHTML = `
                 <div class="empty-state" style="padding: 30px;">
@@ -10947,11 +10387,11 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         container.innerHTML = lista.map((p, i) => {
             const posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
             const medalha = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-            
+
             return `
                 <div class="ranking-item">
                     <div class="ranking-position ${posClass}">
@@ -10973,7 +10413,7 @@ class SetorPedagogico {
     renderizarUltimosAtrasos(lista) {
         const container = document.getElementById('atrasoUltimosRegistros');
         if (!container) return;
-        
+
         if (!lista || lista.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 30px; color: #9ca3af;">
@@ -10983,7 +10423,7 @@ class SetorPedagogico {
             `;
             return;
         }
-        
+
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table table-hover">
@@ -11012,15 +10452,12 @@ class SetorPedagogico {
         `;
     }
 
-    // ============================================================================
-    // RELATÓRIOS DE ATRASOS
-    // ============================================================================
     async gerarRelatorioAtrasos() {
         const container = document.getElementById('resultadoRelatorioAtrasos');
         if (!container) return;
-        
+
         container.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p>Gerando relatório...</p></div>';
-        
+
         try {
             const params = new URLSearchParams();
             const mes = document.getElementById('relatorioMesAtraso')?.value;
@@ -11028,33 +10465,33 @@ class SetorPedagogico {
             const dataFim = document.getElementById('relatorioDataFimAtraso')?.value;
             const professorId = document.getElementById('relatorioProfessorAtraso')?.value;
             const motivo = document.getElementById('relatorioMotivoAtraso')?.value;
-            
+
             if (mes) params.append('mes', mes);
             if (dataInicio) params.append('dataInicio', dataInicio);
             if (dataFim) params.append('dataFim', dataFim);
             if (professorId) params.append('professorId', professorId);
             if (motivo) params.append('motivo', motivo);
-            
+
             const response = await fetch(`/api/atraso-professor/relatorio/gerar?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${this.token}` }
             });
             const data = await response.json();
-            
+
             if (!data.success) throw new Error(data.error);
-            
+
             this.atrasosState = this.atrasosState || {};
             this.atrasosState.relatorioAtual = data;
-            
+
             const btnCSV = document.getElementById('btnExportarCSVAtraso');
             if (btnCSV) btnCSV.disabled = false;
             const btnPDF = document.getElementById('btnImprimirRelatorioAtraso');
             if (btnPDF) btnPDF.disabled = false;
-            
+
             let html = `
                 <div class="card">
                     <div class="card-body">
                         <h6><i class="fas fa-chart-bar me-2"></i> Resultado do Relatório</h6>
-                        
+
                         <div class="row mt-3">
                             <div class="col-md-4 mb-3">
                                 <div class="metric-card">
@@ -11076,7 +10513,7 @@ class SetorPedagogico {
                             </div>
                         </div>
             `;
-            
+
             if (Object.keys(data.estatisticas.porMotivo).length > 0) {
                 html += `<h6 style="margin-top:20px;">Por Motivo</h6><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">`;
                 Object.entries(data.estatisticas.porMotivo).forEach(([k, v]) => {
@@ -11084,7 +10521,7 @@ class SetorPedagogico {
                 });
                 html += `</div>`;
             }
-            
+
             if (data.atrasos.length > 0) {
                 html += `
                     <h6 style="margin-top:20px;">Detalhamento</h6>
@@ -11116,10 +10553,10 @@ class SetorPedagogico {
                     </div>
                 `;
             }
-            
+
             html += `</div></div>`;
             container.innerHTML = html;
-            
+
         } catch (error) {
             console.error(error);
             container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h4>Erro</h4><p>${error.message}</p></div>`;
@@ -11132,9 +10569,9 @@ class SetorPedagogico {
             this.showToast('Gere um relatório primeiro', 'warning');
             return;
         }
-        
+
         let csv = 'Data,Dia da Semana,Horário,Professor,Matrícula,Eixo,Turma,Minutos,Motivo,Observações\n';
-        
+
         data.atrasos.forEach(a => {
             csv += [
                 `"${a.dataFormatada}"`,
@@ -11149,14 +10586,14 @@ class SetorPedagogico {
                 `"${(a.observacoes || '').replace(/"/g, '""')}"`
             ].join(',') + '\n';
         });
-        
+
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `atrasos_${getDataLocalISO()}.csv`;
         link.click();
         URL.revokeObjectURL(link.href);
-        
+
         this.showToast('✅ CSV exportado!', 'success');
     }
 
@@ -11166,7 +10603,7 @@ class SetorPedagogico {
             this.showToast('Gere um relatório primeiro', 'warning');
             return;
         }
-        
+
         const html = `
             <!DOCTYPE html>
             <html lang="pt-BR">
@@ -11237,446 +10674,29 @@ class SetorPedagogico {
             </body>
             </html>
         `;
-        
+
         const win = window.open('', '_blank');
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
     }
 
-        // ============================================
-    // 🔥 CARREGAR MÓDULO DE GESTÃO DE PROFESSORES
-    // ============================================
-    async loadGestaoProfessores() {
-        const content = document.getElementById('content');
-        if (!content) return;
-        
-        if (!this.temPermissaoGestaoProfessores) {
-            content.innerHTML = `
-                <div class="alert alert-warning m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Restrito</strong>
-                    <p>Você não tem permissão para acessar este módulo.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        console.log('📋 Carregando módulo de Gestão de Professores...');
-        
-        content.innerHTML = `
-            <div class="gestao-professores-container">
-                <!-- TABS -->
-                <ul class="nav nav-tabs mb-3" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link active" id="gpRegistrarTab" data-bs-toggle="tab" data-bs-target="#gpRegistrar" type="button">
-                            <i class="fas fa-plus-circle"></i> Registrar
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="gpListaTab" data-bs-toggle="tab" data-bs-target="#gpLista" type="button">
-                            <i class="fas fa-list"></i> Registros
-                            <span class="badge bg-primary ms-1" id="gpBadgeTotal">0</span>
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="gpDashboardTab" data-bs-toggle="tab" data-bs-target="#gpDashboard" type="button">
-                            <i class="fas fa-chart-line"></i> Dashboard
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" id="gpRelatorioTab" data-bs-toggle="tab" data-bs-target="#gpRelatorio" type="button">
-                            <i class="fas fa-file-alt"></i> Relatórios
-                        </button>
-                    </li>
-                </ul>
-                
-                <div class="tab-content">
-                    <!-- ==================== TAB REGISTRAR ==================== -->
-                    <div class="tab-pane fade show active" id="gpRegistrar">
-                        
-                        <!-- ETAPA 1: SELECIONAR PROFESSOR -->
-                        <div class="card mb-3" style="border: 2px solid #e0e7ff;">
-                            <div class="card-body">
-                                <div class="etapa-header">
-                                    <div class="etapa-numero">1</div>
-                                    <div class="etapa-titulo">
-                                        <h5><i class="fas fa-user-tie me-2"></i> Selecionar Professor</h5>
-                                        <small class="text-muted">Busque pelo professor cadastrado no sistema</small>
-                                    </div>
-                                </div>
-                                
-                                <div class="search-box mt-3" style="position: relative;">
-                                    <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i>
-                                    <input type="text" id="gpBuscaProfessor" placeholder="Buscar por nome, email, matrícula ou CPF..." 
-                                           style="width: 100%; padding: 14px 16px 14px 44px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 14px;">
-                                </div>
-                                
-                                <div id="gpListaProfessores" class="mt-3" style="max-height: 400px; overflow-y: auto;">
-                                    <div style="text-align: center; padding: 30px;">
-                                        <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #6366f1;"></i>
-                                        <p style="margin-top: 10px; color: #64748b;">Carregando professores...</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- DADOS DO PROFESSOR SELECIONADO -->
-                        <div id="gpDadosProfessor" style="display: none;"></div>
-                        
-                        <!-- ETAPA 2: TURMAS VINCULADAS -->
-                        <div class="card mb-3" id="gpCardTurmas" style="display: none; border: 2px solid #e0e7ff;">
-                            <div class="card-body">
-                                <div class="etapa-header">
-                                    <div class="etapa-numero">2</div>
-                                    <div class="etapa-titulo">
-                                        <h5><i class="fas fa-users me-2"></i> Turmas Vinculadas</h5>
-                                        <small class="text-muted">Vincule as turmas que o professor leciona</small>
-                                    </div>
-                                </div>
-                                
-                                <div class="row g-3 mt-3">
-                                    <div class="col-md-5">
-                                        <label class="form-label" style="font-weight: 600; font-size: 13px;">Turma</label>
-                                        <select id="gpSelectTurma" class="form-select">
-                                            <option value="">Selecione a turma...</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2 d-flex align-items-end">
-                                        <button id="gpBtnAddTurma" class="btn btn-primary w-100" style="height: 42px;">
-                                            <i class="fas fa-plus"></i> Adicionar
-                                        </button>
-                                    </div>
-                                    <div class="col-md-5">
-                                        <label class="form-label" style="font-weight: 600; font-size: 13px;">Data da Coleta <span class="text-danger">*</span></label>
-                                        <input type="date" id="gpDataColeta" class="form-control" style="height: 42px;">
-                                    </div>
-                                </div>
-                                
-                                <div id="gpTurmasVinculadas" class="mt-3"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- ETAPA 3: COMPONENTES CURRICULARES -->
-                        <div class="card mb-3" id="gpCardComponentes" style="display: none; border: 2px solid #e0e7ff;">
-                            <div class="card-body">
-                                <div class="etapa-header">
-                                    <div class="etapa-numero">3</div>
-                                    <div class="etapa-titulo">
-                                        <h5><i class="fas fa-book-open me-2"></i> Componentes Curriculares</h5>
-                                        <small class="text-muted">Adicione os componentes que o professor leciona</small>
-                                    </div>
-                                </div>
-                                
-                                <div id="gpListaComponentes" class="mt-3"></div>
-                                
-                                <div class="mt-3">
-                                    <button id="gpBtnAddComponente" class="btn btn-outline-primary">
-                                        <i class="fas fa-plus"></i> Adicionar Componente
-                                    </button>
-                                </div>
-                                
-                                <div class="mt-3">
-                                    <label class="form-label" style="font-weight: 600; font-size: 13px;">Observações Gerais</label>
-                                    <textarea id="gpObservacoesGerais" class="form-control" rows="3" 
-                                              placeholder="Observações gerais sobre a gestão deste professor..."></textarea>
-                                </div>
-                                
-                                <div class="d-flex gap-2 mt-4 justify-content-end">
-                                    <button id="gpBtnLimpar" class="btn btn-secondary">
-                                        <i class="fas fa-times me-2"></i> Cancelar
-                                    </button>
-                                    <button id="gpBtnRegistrar" class="btn btn-primary">
-                                        <i class="fas fa-save me-2"></i> Registrar Gestão
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- ==================== TAB LISTA ==================== -->
-                    <div class="tab-pane fade" id="gpLista">
-                        <div class="card mb-3">
-                            <div class="card-body">
-                                <h6 class="card-title"><i class="fas fa-filter me-2"></i> Filtros</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-3">
-                                        <label class="form-label">Buscar</label>
-                                        <input type="text" id="gpFiltroBusca" class="form-control" placeholder="Professor ou componente...">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Eixo</label>
-                                        <select id="gpFiltroEixo" class="form-select"><option value="">Todos</option></select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Turma</label>
-                                        <select id="gpFiltroTurma" class="form-select"><option value="">Todas</option></select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Data Início</label>
-                                        <input type="date" id="gpFiltroDataInicio" class="form-control">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Data Fim</label>
-                                        <input type="date" id="gpFiltroDataFim" class="form-control">
-                                    </div>
-                                    <div class="col-md-1 d-flex align-items-end">
-                                        <button class="btn btn-secondary w-100" onclick="GestaoProfessoresModule.carregarLista()">
-                                            <i class="fas fa-search"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="card-title mb-0"><i class="fas fa-list me-2"></i> Registros de Gestão</h6>
-                                    <span class="badge bg-primary" id="gpContadorRegistros">0 registros</span>
-                                </div>
-                                <div id="gpListaRegistros"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- ==================== TAB DASHBOARD ==================== -->
-                    <div class="tab-pane fade" id="gpDashboard">
-                        <div class="card mb-3">
-                            <div class="card-body">
-                                <div class="row g-3 align-items-end">
-                                    <div class="col-md-4">
-                                        <label class="form-label">Mês de Referência</label>
-                                        <input type="month" id="gpDashboardMes" class="form-control">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <button id="gpBtnAtualizarDashboard" class="btn btn-primary w-100">
-                                            <i class="fas fa-sync-alt me-2"></i> Atualizar
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-4">
-                            <div class="col-md-3 mb-3">
-                                <div class="metric-card" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white;">
-                                    <i class="fas fa-clipboard-list fa-2x mb-2"></i>
-                                    <div class="metric-value" id="gpStatTotalGeral">0</div>
-                                    <div class="metric-label">Total Geral</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <div class="metric-card" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
-                                    <i class="fas fa-calendar-alt fa-2x mb-2"></i>
-                                    <div class="metric-value" id="gpStatTotalMes">0</div>
-                                    <div class="metric-label">No Mês</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <div class="metric-card" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
-                                    <i class="fas fa-user-tie fa-2x mb-2"></i>
-                                    <div class="metric-value" id="gpStatProfessores">0</div>
-                                    <div class="metric-label">Professores</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <div class="metric-card" style="background: linear-gradient(135deg, #ec4899, #db2777); color: white;">
-                                    <i class="fas fa-chalkboard fa-2x mb-2"></i>
-                                    <div class="metric-value" id="gpStatAulas">0</div>
-                                    <div class="metric-label">Aulas Registradas</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-4">
-                                <div class="card h-100"><div class="card-body">
-                                    <h6 class="card-title"><i class="fas fa-chart-pie"></i> Distribuição por Eixo</h6>
-                                    <canvas id="gpChartEixo"></canvas>
-                                </div></div>
-                            </div>
-                            <div class="col-md-6 mb-4">
-                                <div class="card h-100"><div class="card-body">
-                                    <h6 class="card-title"><i class="fas fa-chart-bar"></i> Distribuição por Turma</h6>
-                                    <canvas id="gpChartTurma"></canvas>
-                                </div></div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-4">
-                                <div class="card h-100"><div class="card-body">
-                                    <h6 class="card-title"><i class="fas fa-trophy"></i> Professores com Mais Componentes</h6>
-                                    <div id="gpRankingProfessores" class="mt-3"></div>
-                                </div></div>
-                            </div>
-                            <div class="col-md-6 mb-4">
-                                <div class="card h-100"><div class="card-body">
-                                    <h6 class="card-title"><i class="fas fa-history"></i> Últimos Registros</h6>
-                                    <div id="gpUltimosRegistros" class="mt-3"></div>
-                                </div></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- ==================== TAB RELATÓRIO ==================== -->
-                    <div class="tab-pane fade" id="gpRelatorio">
-                        <div class="card mb-3">
-                            <div class="card-body">
-                                <h6 class="card-title"><i class="fas fa-file-alt me-2"></i> Gerar Relatório</h6>
-                                <div class="row g-3">
-                                    <div class="col-md-3">
-                                        <label class="form-label">Tipo de Relatório</label>
-                                        <select id="gpTipoRelatorio" class="form-select">
-                                            <option value="geral">Geral</option>
-                                            <option value="eixo">Por Eixo</option>
-                                            <option value="turma">Por Turma</option>
-                                            <option value="professor">Por Professor</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3" id="gpRelatorioEixoDiv" style="display: none;">
-                                        <label class="form-label">Eixo</label>
-                                        <select id="gpRelatorioEixo" class="form-select">
-                                            <option value="">Selecione...</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3" id="gpRelatorioTurmaDiv" style="display: none;">
-                                        <label class="form-label">Turma</label>
-                                        <select id="gpRelatorioTurma" class="form-select">
-                                            <option value="">Selecione...</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3" id="gpRelatorioProfessorDiv" style="display: none;">
-                                        <label class="form-label">Professor</label>
-                                        <select id="gpRelatorioProfessor" class="form-select">
-                                            <option value="">Selecione...</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Data Início</label>
-                                        <input type="date" id="gpRelatorioDataInicio" class="form-control">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Data Fim</label>
-                                        <input type="date" id="gpRelatorioDataFim" class="form-control">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">&nbsp;</label>
-                                        <button class="btn btn-primary w-100" id="gpBtnGerarRelatorio">
-                                            <i class="fas fa-search me-2"></i> Gerar
-                                        </button>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">&nbsp;</label>
-                                        <div class="btn-group w-100">
-                                            <button class="btn btn-success" id="gpBtnExportarCSV" disabled>
-                                                <i class="fas fa-file-csv me-1"></i> CSV
-                                            </button>
-                                            <button class="btn btn-danger" id="gpBtnImprimirRelatorio" disabled>
-                                                <i class="fas fa-print me-1"></i> PDF
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="gpResultadoRelatorio">
-                            <div class="text-center py-5">
-                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">Selecione os filtros e clique em Gerar</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Inicializa o módulo após renderizar HTML
-        setTimeout(async () => {
-            if (window.GestaoProfessoresModule) {
-                await window.GestaoProfessoresModule.init();
-            }
-        }, 150);
-    }
-
-    // ============================================
-    // 🔥 CARREGAR MÓDULO DE AUTORIZAÇÃO DE VISITAS
-    // ============================================
-    loadVisitas() {
-        const content = document.getElementById('content');
-        if (!content) return;
-        
-        if (!this.temPermissaoVisitas) {
-            content.innerHTML = `
-                <div class="alert alert-warning m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Restrito</strong>
-                    <p>Você não tem permissão para acessar este módulo.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        console.log('📋 Carregando módulo de Autorização de Visitas...');
-        
-        content.innerHTML = `
-            <div id="aba-visitas-content">
-                <div style="text-align: center; padding: 60px;">
-                    <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #667eea; border-radius: 50%; margin: 0 auto 20px; animation: spin 1s linear infinite;"></div>
-                    <p style="color: #6b7280;">Carregando módulo de visitas...</p>
-                </div>
-                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            </div>
-        `;
-        
-        setTimeout(async () => {
-            try {
-                if (typeof window.visitasAdmin !== 'undefined' && window.visitasAdmin) {
-                    await window.visitasAdmin.init();
-                    console.log('✅ Módulo de visitas inicializado');
-                } else {
-                    console.warn('⚠️ visitasAdmin não encontrado, tentando carregar...');
-                    
-                    if (!document.querySelector('script[src*="visitas-admin.js"]')) {
-                        const script = document.createElement('script');
-                        script.src = 'js/visitas-admin.js';
-                        script.onload = async () => {
-                            if (window.visitasAdmin) {
-                                await window.visitasAdmin.init();
-                            }
-                        };
-                        document.body.appendChild(script);
-                    } else {
-                        content.innerHTML = `
-                            <div class="alert alert-danger m-4">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                <strong>Erro:</strong> Módulo de visitas não carregado.
-                                <br><small>Recarregue a página (F5) e tente novamente.</small>
-                            </div>
-                        `;
-                    }
-                }
-            } catch (error) {
-                console.error('❌ Erro ao inicializar módulo de visitas:', error);
-                content.innerHTML = `
-                    <div class="alert alert-danger m-4">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Erro ao carregar módulo:</strong> ${error.message}
-                    </div>
-                `;
-            }
-        }, 150);
-    }
-    
-    // ============ NOTIFICAÇÕES ============
+    // ============================================================================
+    // 📢 NOTIFICAÇÕES
+    // ============================================================================
     async carregarNotificacoes() {
         try {
-            const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', { headers: { 'Authorization': `Bearer ${this.token}` } });
+            const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
             if (countResponse.ok) {
                 const countData = await countResponse.json();
                 this.atualizarBadgesNotificacoes(countData.count || 0);
             }
-            const response = await fetch('/api/notificacoes?limite=20', { headers: { 'Authorization': `Bearer ${this.token}` } });
+
+            const response = await fetch('/api/notificacoes?limite=20', {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
             const data = await response.json();
             if (data.success) {
                 this.notificacoes = data.notificacoes || [];
@@ -11686,7 +10706,7 @@ class SetorPedagogico {
             console.error('Erro ao carregar notificações:', error);
         }
     }
-    
+
     atualizarBadgesNotificacoes(total) {
         const badge = document.getElementById('notificacaoBadge');
         if (badge) {
@@ -11698,26 +10718,53 @@ class SetorPedagogico {
             }
         }
     }
-    
+
     renderizarNotificacoes() {
         const list = document.getElementById('notificacoesList');
         if (!list) return;
+
         if (!this.notificacoes || this.notificacoes.length === 0) {
             list.innerHTML = `<div class="empty-notificacoes"><i class="fas fa-bell-slash"></i><p>Nenhuma notificação</p></div>`;
             return;
         }
+
         let html = '';
         this.notificacoes.slice(0, 10).forEach(notif => {
             const data = new Date(notif.createdAt);
             const agora = new Date();
             const diffMin = Math.floor((agora - data) / 60000);
-            let tempoTexto = diffMin < 1 ? 'agora mesmo' : diffMin < 60 ? `há ${diffMin} min` : diffMin < 1440 ? `há ${Math.floor(diffMin / 60)} h` : `há ${Math.floor(diffMin / 1440)} d`;
+            let tempoTexto = diffMin < 1 ? 'agora mesmo' :
+                diffMin < 60 ? `há ${diffMin} min` :
+                diffMin < 1440 ? `há ${Math.floor(diffMin / 60)} h` :
+                `há ${Math.floor(diffMin / 1440)} d`;
+
             const naoLida = !notif.lida ? 'nao-lida' : '';
-            html += `<div class="notificacao-item ${naoLida}" data-id="${notif._id}" onclick="setorPedagogico.verNotificacao('${notif._id}')"><div class="notificacao-titulo"><span class="notificacao-icone" style="background: ${notif.cor || '#3498db'}20; color: ${notif.cor || '#3498db'};"><i class="fas ${notif.icone || 'fa-bell'}"></i></span>${notif.titulo || 'Notificação'}</div><div class="notificacao-mensagem">${notif.mensagem || ''}</div><div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div><div class="notificacao-actions"><button onclick="event.stopPropagation(); setorPedagogico.marcarLida('${notif._id}')" title="Marcar como lida"><i class="fas fa-check"></i></button><button class="delete" onclick="event.stopPropagation(); setorPedagogico.excluirNotificacao('${notif._id}')" title="Excluir"><i class="fas fa-trash"></i></button></div></div>`;
+
+            html += `
+                <div class="notificacao-item ${naoLida}" data-id="${notif._id}" onclick="setorPedagogico.verNotificacao('${notif._id}')">
+                    <div class="notificacao-titulo">
+                        <span class="notificacao-icone" style="background: ${notif.cor || '#3498db'}20; color: ${notif.cor || '#3498db'};">
+                            <i class="fas ${notif.icone || 'fa-bell'}"></i>
+                        </span>
+                        ${notif.titulo || 'Notificação'}
+                    </div>
+                    <div class="notificacao-mensagem">${notif.mensagem || ''}</div>
+                    <div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div>
+                    <div class="notificacao-actions">
+                        <button onclick="event.stopPropagation(); setorPedagogico.marcarLida('${notif._id}')" title="Marcar como lida">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="delete" onclick="event.stopPropagation(); setorPedagogico.excluirNotificacao('${notif._id}')" title="Excluir">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
         });
+
         list.innerHTML = html;
     }
-    
+
     abrirPainelNotificacoes() {
         const panel = document.getElementById('notificacoesPanel');
         if (panel) {
@@ -11725,49 +10772,66 @@ class SetorPedagogico {
             this.carregarNotificacoes();
         }
     }
-    
+
     fecharPainelNotificacoes() {
         const panel = document.getElementById('notificacoesPanel');
         if (panel) panel.classList.remove('active');
     }
-    
+
     async marcarLida(id) {
         try {
-            const response = await fetch(`/api/notificacoes/${id}/lida`, { method: 'PUT', headers: { 'Authorization': `Bearer ${this.token}` } });
+            const response = await fetch(`/api/notificacoes/${id}/lida`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
             const data = await response.json();
             if (data.success) await this.carregarNotificacoes();
-        } catch (error) { console.error('Erro ao marcar como lida:', error); }
+        } catch (error) {
+            console.error('Erro ao marcar como lida:', error);
+        }
     }
-    
+
     async marcarTodasLidas() {
         try {
-            const response = await fetch('/api/notificacoes/marcar-todas-lidas', { method: 'PUT', headers: { 'Authorization': `Bearer ${this.token}` } });
+            const response = await fetch('/api/notificacoes/marcar-todas-lidas', {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
             const data = await response.json();
             if (data.success) {
                 await this.carregarNotificacoes();
                 this.showToast('✅ Todas notificações marcadas como lidas', 'success');
             }
-        } catch (error) { console.error('Erro ao marcar todas como lidas:', error); }
+        } catch (error) {
+            console.error('Erro ao marcar todas como lidas:', error);
+        }
     }
-    
+
     async excluirNotificacao(id) {
         try {
-            const response = await fetch(`/api/notificacoes/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${this.token}` } });
+            const response = await fetch(`/api/notificacoes/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
             const data = await response.json();
             if (data.success) {
                 await this.carregarNotificacoes();
                 this.showToast('✅ Notificação excluída', 'success');
             }
-        } catch (error) { console.error('Erro ao excluir notificação:', error); }
+        } catch (error) {
+            console.error('Erro ao excluir notificação:', error);
+        }
     }
-    
+
     async verNotificacao(id) {
         await this.marcarLida(id);
         const notif = this.notificacoes.find(n => n._id === id);
         if (notif && notif.link) window.location.href = notif.link;
     }
 
-    // ============ ADAPTAÇÃO DE DOCUMENTOS ============
+    // ============================================================================
+    // ♿ ADAPTAR DOCUMENTO (permanece global no Setor Pedagógico)
+    // ============================================================================
     async abrirModalUploadAdaptarDocumento() {
         let modal = document.getElementById('modalAdaptacaoDocumento');
         if (!modal) {
@@ -11776,7 +10840,7 @@ class SetorPedagogico {
             modal.id = 'modalAdaptacaoDocumento';
             document.body.appendChild(modal);
         }
-        
+
         modal.innerHTML = `
             <div class="modal-dialog modal-dialog-centered" style="max-width: 600px; margin: auto;">
                 <div class="modal-content" style="border-radius: 24px; overflow: hidden; max-height: 85vh; display: flex; flex-direction: column;">
@@ -11786,9 +10850,9 @@ class SetorPedagogico {
                         </h5>
                         <button type="button" class="btn-close btn-close-white" onclick="setorPedagogico.fecharModalAdaptacaoDocumento()"></button>
                     </div>
-                    
+
                     <div style="flex: 1; overflow-y: auto; padding: 25px;">
-                        <div class="upload-area" 
+                        <div class="upload-area"
                             onclick="document.getElementById('fileInputAdaptarSetor').click()"
                             ondrop="setorPedagogico.handleDropAdaptar(event)"
                             ondragover="setorPedagogico.handleDragOverAdaptar(event)"
@@ -11801,7 +10865,7 @@ class SetorPedagogico {
                             </p>
                         </div>
                         <input type="file" id="fileInputAdaptarSetor" style="display: none;" accept=".pdf,.docx,.doc" onchange="setorPedagogico.handleFileSelectAdaptar(event)">
-                        
+
                         <div id="previewArquivoSetor" style="display: none; margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px;">
                             <div style="display: flex; align-items: center; gap: 15px;">
                                 <i id="fileIconSetor" class="fas fa-file-word" style="font-size: 40px; color: #2b5797;"></i>
@@ -11814,14 +10878,14 @@ class SetorPedagogico {
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div id="opcoesAdaptacaoSetor" style="display: none; margin-top: 20px;">
                             <div style="background: #f8fafc; border-radius: 16px; padding: 20px; border: 2px solid #e5e7eb;">
                                 <h3 style="margin: 0 0 15px; display: flex; align-items: center; gap: 8px;">
                                     <i class="fas fa-universal-access" style="color: #10b981;"></i>
                                     Opções de Acessibilidade
                                 </h3>
-                                
+
                                 <div style="display: flex; flex-direction: column; gap: 15px;">
                                     <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
@@ -11840,7 +10904,7 @@ class SetorPedagogico {
                                             <input type="range" id="fonteSliderSetor" min="12" max="24" step="1" value="18" style="width: 100%;">
                                         </div>
                                     </div>
-                                    
+
                                     <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                             <input type="checkbox" id="optCaixaAltaSetor" style="width: 18px; height: 18px;">
@@ -11850,7 +10914,7 @@ class SetorPedagogico {
                                             </div>
                                         </label>
                                     </div>
-                                    
+
                                     <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                             <input type="checkbox" id="optNegritoSetor" style="width: 18px; height: 18px;">
@@ -11860,7 +10924,7 @@ class SetorPedagogico {
                                             </div>
                                         </label>
                                     </div>
-                                    
+
                                     <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                             <input type="checkbox" id="optAltoContrasteSetor" style="width: 18px; height: 18px;">
@@ -11870,7 +10934,7 @@ class SetorPedagogico {
                                             </div>
                                         </label>
                                     </div>
-                                    
+
                                     <div style="background: #f1f5f9; padding: 15px; border-radius: 12px;">
                                         <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                             <input type="checkbox" id="optFonteDislexiaSetor" style="width: 18px; height: 18px;">
@@ -11881,23 +10945,23 @@ class SetorPedagogico {
                                         </label>
                                     </div>
                                 </div>
-                                
+
                                 <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-radius: 12px;">
                                     <p style="margin: 0; font-size: 0.85rem;">
-                                        <i class="fas fa-lightbulb"></i> 
+                                        <i class="fas fa-lightbulb"></i>
                                         <strong>Processado pelo Google Docs!</strong> Mantém 100% da formatação original.
                                     </p>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div id="processandoMsgSetor" style="display: none; margin-top: 20px; padding: 15px; background: #e6f7ff; border-radius: 12px; text-align: center;">
                             <i class="fas fa-spinner fa-spin" style="font-size: 20px; color: #1890ff;"></i>
                             <span style="margin-left: 10px;">Processando documento no Google Docs...</span>
                             <div style="font-size: 12px; color: #666; margin-top: 8px;">Isso pode levar alguns segundos</div>
                         </div>
                     </div>
-                    
+
                     <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;">
                         <button type="button" class="btn btn-secondary" onclick="setorPedagogico.fecharModalAdaptacaoDocumento()" style="border-radius: 12px; padding: 10px 20px;">Cancelar</button>
                         <button type="button" class="btn btn-primary" id="btnAplicarAdaptacoesSetor" onclick="setorPedagogico.aplicarAdaptacoesComGoogle()" style="border-radius: 12px; padding: 10px 20px; background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
@@ -11906,32 +10970,32 @@ class SetorPedagogico {
                     </div>
                 </div>
             </div>
-            
+
             <style>
                 .upload-area:hover { background: #f0f9ff !important; border-color: #8b5cf6 !important; }
                 #modalAdaptacaoDocumento { background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10001; }
             </style>
         `;
-        
+
         this.arquivoSelecionadoSetor = null;
-        
+
         const fonteCheckbox = document.getElementById('optFonteAmpliadaSetor');
         const slider = document.getElementById('fonteSliderSetor');
         const fonteValue = document.getElementById('fonteValueSetor');
-        
+
         if (fonteCheckbox) {
             fonteCheckbox.addEventListener('change', () => {
                 const sliderDiv = document.getElementById('sliderFonteSetor');
                 if (sliderDiv) sliderDiv.style.display = fonteCheckbox.checked ? 'block' : 'none';
             });
         }
-        
+
         if (slider) {
             slider.addEventListener('input', () => {
                 if (fonteValue) fonteValue.textContent = slider.value + 'pt';
             });
         }
-        
+
         modal.style.display = 'flex';
     }
 
@@ -11965,7 +11029,7 @@ class SetorPedagogico {
     processarArquivoAdaptar(file) {
         const extensoes = ['pdf', 'docx', 'doc'];
         const ext = file.name.split('.').pop().toLowerCase();
-        
+
         if (!extensoes.includes(ext)) {
             this.showToast('❌ Tipo de arquivo não suportado', 'error');
             return;
@@ -11974,9 +11038,9 @@ class SetorPedagogico {
             this.showToast('❌ Arquivo muito grande. Máximo 10MB.', 'error');
             return;
         }
-        
+
         this.arquivoSelecionadoSetor = file;
-        
+
         const fileIcon = document.getElementById('fileIconSetor');
         if (fileIcon) {
             if (ext === 'pdf') {
@@ -11987,7 +11051,7 @@ class SetorPedagogico {
                 fileIcon.style.color = '#2b5797';
             }
         }
-        
+
         document.getElementById('previewArquivoSetor').style.display = 'block';
         document.getElementById('nomeArquivoSetor').textContent = file.name;
         document.getElementById('tamanhoArquivoSetor').textContent = `${(file.size / 1024).toFixed(2)} KB`;
@@ -12013,49 +11077,49 @@ class SetorPedagogico {
             this.showToast('❌ Nenhum arquivo selecionado', 'error');
             return;
         }
-        
+
         const opcoes = {
             caixa_alta: document.getElementById('optCaixaAltaSetor')?.checked || false,
             negrito: document.getElementById('optNegritoSetor')?.checked || false,
             alto_contraste: document.getElementById('optAltoContrasteSetor')?.checked || false,
             fonte_dislexia: document.getElementById('optFonteDislexiaSetor')?.checked || false,
-            tamanho_fonte: document.getElementById('optFonteAmpliadaSetor')?.checked 
-                ? parseInt(document.getElementById('fonteSliderSetor')?.value) || 18 
+            tamanho_fonte: document.getElementById('optFonteAmpliadaSetor')?.checked
+                ? parseInt(document.getElementById('fonteSliderSetor')?.value) || 18
                 : 12
         };
-        
-        const nenhumaOpcao = !opcoes.caixa_alta && !opcoes.negrito && 
-                            !opcoes.alto_contraste && !opcoes.fonte_dislexia && 
+
+        const nenhumaOpcao = !opcoes.caixa_alta && !opcoes.negrito &&
+                            !opcoes.alto_contraste && !opcoes.fonte_dislexia &&
                             opcoes.tamanho_fonte === 12;
-        
+
         if (nenhumaOpcao) {
             const confirmar = await this.confirmarAcao('Nenhuma opção de acessibilidade foi selecionada. Deseja apenas converter o documento?');
             if (!confirmar) return;
         }
-        
+
         const processandoDiv = document.getElementById('processandoMsgSetor');
         const btnSalvar = document.getElementById('btnAplicarAdaptacoesSetor');
-        
+
         if (processandoDiv) processandoDiv.style.display = 'block';
         if (btnSalvar) {
             btnSalvar.disabled = true;
             btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
         }
-        
+
         try {
             const token = localStorage.getItem('auth_token');
             const formData = new FormData();
             formData.append('arquivo', this.arquivoSelecionadoSetor);
             formData.append('opcoes', JSON.stringify(opcoes));
-            
+
             const response = await fetch('/api/adaptar-documento', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-            
+
             const data = await response.json();
-            
+
             if (data.success) {
                 const byteCharacters = atob(data.pdf);
                 const byteNumbers = new Array(byteCharacters.length);
@@ -12065,7 +11129,7 @@ class SetorPedagogico {
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: 'application/pdf' });
                 const url = URL.createObjectURL(blob);
-                
+
                 const novaJanela = window.open(url, '_blank');
                 if (novaJanela) {
                     novaJanela.onload = () => setTimeout(() => novaJanela.print(), 1000);
@@ -12088,227 +11152,42 @@ class SetorPedagogico {
             }
         }
     }
-    
-    // ============ RELATÓRIOS ============
-    async loadRelatorios() {
-        const content = document.getElementById('content');
-        content.innerHTML = '<div class="text-center py-5"><div class="loading"></div><p class="mt-3 text-muted">Carregando relatórios...</p></div>';
-        
-        try {
-            const data = await this.apiRequest('/api/setor-pedagogico/relatorio/acessibilidade');
-            if (data.success) {
-                const r = data.relatorio;
-                content.innerHTML = `
-                    <div class="filtros-card">
-                        <h5 class="fw-bold mb-3"><i class="fas fa-chart-bar me-2 text-primary"></i> Gerar Relatório de Alunos com Acessibilidade</h5>
-                        <div class="row g-3">
-                            <div class="col-md-3">
-                                <label class="fw-semibold mb-2">Condição</label>
-                                <select class="form-select" id="relatorioCondicao">
-                                    <option value="">Todas</option>
-                                    ${this.obterListaCondicoes().map(c => `<option value="${c.valor}">${c.label}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="fw-semibold mb-2">Turma</label>
-                                <input type="text" class="form-control" id="relatorioTurma" placeholder="Nome da turma">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="fw-semibold mb-2">Curso</label>
-                                <input type="text" class="form-control" id="relatorioCurso" placeholder="Nome do curso">
-                            </div>
-                            <div class="col-md-3 d-flex align-items-end">
-                                <button class="btn btn-primary w-100" onclick="setorPedagogico.gerarRelatorioFiltrado()">
-                                    <i class="fas fa-chart-bar me-2"></i> Gerar Relatório
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row g-4 mt-2">
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-white border-0 pt-4 px-4">
-                                    <h5 class="mb-0 fw-bold"><i class="fas fa-chart-pie me-2 text-primary"></i> Resumo Geral</h5>
-                                </div>
-                                <div class="card-body px-4 pb-4">
-                                    <p><strong>Data de geração:</strong> ${new Date(r.dataGeracao).toLocaleString('pt-BR')}</p>
-                                    <p><strong>Total de alunos com acessibilidade:</strong> <span class="fw-bold fs-4 text-primary">${r.totalAlunos}</span></p>
-                                    <hr>
-                                    <h6 class="fw-bold">Distribuição por Condição:</h6>
-                                    <ul class="list-unstyled">
-                                        ${r.porCondicao.map(c => `<li class="mb-2"><span class="badge-acessibilidade me-2">${c.condicao}</span> ${c.total} aluno(s)</li>`).join('')}
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-white border-0 pt-4 px-4">
-                                    <h5 class="mb-0 fw-bold"><i class="fas fa-download me-2 text-success"></i> Exportar</h5>
-                                </div>
-                                <div class="card-body px-4 pb-4">
-                                    <div class="d-grid gap-3">
-                                        <button class="btn btn-print py-3" onclick="setorPedagogico.imprimirRelatorioAtual()">
-                                            <i class="fas fa-print me-2"></i> Imprimir Relatório
-                                        </button>
-                                        <button class="btn btn-outline-primary py-3" onclick="setorPedagogico.exportarRelatorioCSV()">
-                                            <i class="fas fa-file-csv me-2"></i> Exportar para CSV
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="table-container mt-4">
-                        <div class="table-header">
-                            <h5 class="mb-0 fw-bold"><i class="fas fa-users me-2 text-primary"></i> Alunos por Turma</h5>
-                        </div>
-                        ${r.porTurma.map(turma => `
-                            <div class="mt-4 px-4 pb-4">
-                                <h6 class="fw-bold mb-3"><i class="fas fa-school me-2 text-warning"></i> ${turma.turma} <span class="badge bg-primary ms-2">${turma.total} alunos</span></h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead class="table-light"><tr><th>Nome</th><th>Matrícula</th><th>Condição</th><th>Detalhes</th></tr></thead>
-                                        <tbody>
-                                            ${turma.alunos.map(a => `<tr><td>${a.nome}</td><td>${a.matricula || '-'}</td><td>${a.condicao}</td><td>${a.detalhes || '-'}</td></tr>`).join('')}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        `).join('')}
-                        ${r.porTurma.length === 0 ? '<div class="text-center text-muted py-5">Nenhum dado disponível</div>' : ''}
-                    </div>
-                `;
-                window.relatorioData = r;
-            }
-        } catch (error) {
-            console.error('Erro ao carregar relatórios:', error);
-            content.innerHTML = '<div class="alert alert-danger">Erro ao carregar relatórios</div>';
-        }
-    }
-    
-    async gerarRelatorioFiltrado() {
-        const condicao = document.getElementById('relatorioCondicao')?.value || '';
-        const turma = document.getElementById('relatorioTurma')?.value || '';
-        const curso = document.getElementById('relatorioCurso')?.value || '';
-        let url = '/api/setor-pedagogico/relatorio/acessibilidade?';
-        if (condicao) url += `condicao=${condicao}&`;
-        if (turma) url += `turma=${turma}&`;
-        if (curso) url += `curso=${curso}&`;
-        try {
-            const data = await this.apiRequest(url);
-            if (data.success) {
-                window.relatorioData = data.relatorio;
-                this.mostrarNotificacao(`✅ Relatório gerado com ${data.relatorio.totalAlunos} alunos`, 'error');
-                this.loadRelatorios();
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            this.mostrarNotificacao('Erro ao gerar relatório filtrado', 'error');
-        }
-    }
-    
-    imprimirRelatorioAtual() {
-        if (!window.relatorioData) { this.mostrarNotificacao('Nenhum relatório carregado', 'error'); return; }
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(`<!DOCTYPE html><html><head><title>Relatório Acessibilidade - EducaPleno</title><style>body{font-family:Arial,sans-serif;padding:40px}h1{color:#4f46e5}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#f3f4f6}.header{text-align:center;margin-bottom:30px}@media print{body{padding:20px}}</style></head><body><div class="header"><h1>Relatório de Alunos com Necessidades Especiais</h1><p>Setor Pedagógico - EducaPleno</p><p>Data: ${new Date().toLocaleString('pt-BR')}</p></div><h3>Resumo Geral</h3><p><strong>Total de alunos:</strong> ${window.relatorioData.totalAlunos}</p><p><strong>Distribuição por condição:</strong></p><ul>${window.relatorioData.porCondicao.map(c => `<li>${c.condicao}: ${c.total}</li>`).join('')}</ul><h3>Alunos por Turma</h3>${window.relatorioData.porTurma.map(turma => `<h4>${turma.turma} (${turma.total} alunos)</h4><table><thead><tr><th>Nome</th><th>Matrícula</th><th>Condição</th><th>Detalhes</th></tr></thead><tbody>${turma.alunos.map(a => `<tr><td>${a.nome}</td><td>${a.matricula || '-'}</td><td>${a.condicao}</td><td>${a.detalhes || '-'}</td></tr>`).join('')}</tbody></table>`).join('')}<div class="footer"><p><small>Documento gerado pelo EducaPleno</small></p></div></body></html>`);
-        printWindow.document.close();
-        printWindow.print();
-    }
-    
-    exportarRelatorioCSV() {
-        if (!window.relatorioData) { this.mostrarNotificacao('Nenhum relatório carregado', 'error'); return; }
-        let csv = "Turma,Nome,Matrícula,Condição,Detalhes\n";
-        window.relatorioData.porTurma.forEach(turma => {
-            turma.alunos.forEach(aluno => {
-                csv += `"${turma.turma}","${aluno.nome}","${aluno.matricula || ''}","${aluno.condicao}","${aluno.detalhes || ''}"\n`;
-            });
-        });
-        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", `relatorio_acessibilidade_${getDataLocalISO()}.csv`);
-        link.style.visibility = "hidden";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-    
-    obterListaCondicoes() {
-        return [
-            { valor: 'visual', label: 'Deficiência Visual' },
-            { valor: 'auditiva', label: 'Deficiência Auditiva' },
-            { valor: 'motora', label: 'Deficiência Motora' },
-            { valor: 'intelectual', label: 'Deficiência Intelectual' },
-            { valor: 'dislexia', label: 'Dislexia' },
-            { valor: 'tdah', label: 'TDAH' },
-            { valor: 'outra', label: 'Outra Condição' }
-        ];
-    }
-    
-    aplicarFiltrosAlunos() { this.loadAlunos(); }
-    limparFiltrosAlunos() {
-        if (document.getElementById('filtroCondicao')) document.getElementById('filtroCondicao').value = 'todos';
-        if (document.getElementById('filtroTurma')) document.getElementById('filtroTurma').value = '';
-        if (document.getElementById('filtroCurso')) document.getElementById('filtroCurso').value = '';
-        this.loadAlunos();
-    }
-    aplicarFiltrosProvas() { this.loadProvas(); }
-    limparFiltrosProvas() {
-        if (document.getElementById('filtroTipoProva')) document.getElementById('filtroTipoProva').value = '';
-        if (document.getElementById('filtroTurmaProva')) document.getElementById('filtroTurmaProva').value = '';
-        if (document.getElementById('filtroStatusProva')) document.getElementById('filtroStatusProva').value = '';
-        this.loadProvas();
-    }
-    carregarProvas() { this.loadProvas(); }
-        // ============================================================================
+
+    // ============================================================================
     // 📱 MÉTODOS DO MENU MOBILE
     // ============================================================================
-
-    /**
-     * Abre o menu lateral
-     */
     abrirMenuLateral() {
         console.log('🍔 Abrindo menu lateral...');
-        
+
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlaySp');
-        
+
         if (!sidebar) {
             console.error('❌ Sidebar não encontrada');
             return;
         }
-        
+
         sidebar.classList.add('mobile-open');
-        
+
         if (overlay) {
             overlay.classList.add('active');
         }
-        
+
         document.body.style.overflow = 'hidden';
     }
 
-    /**
-     * Fecha o menu lateral
-     */
     fecharMenuLateral() {
         console.log('🔚 Fechando menu lateral...');
-        
+
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlaySp');
-        
+
         if (sidebar) sidebar.classList.remove('mobile-open');
         if (overlay) overlay.classList.remove('active');
-        
+
         document.body.style.overflow = '';
     }
 
-    /**
-     * Atualiza o estado ativo da bottom navigation
-     */
     updateBottomNav(section) {
         document.querySelectorAll('#bottomNavSp .nav-item-sp').forEach(item => {
             item.classList.remove('active');
@@ -12325,7 +11204,7 @@ class SetorPedagogico {
 function toggleSenhaVisivel(inputId, btn) {
     const input = document.getElementById(inputId);
     if (!input) return;
-    
+
     if (input.type === 'password') {
         input.type = 'text';
         btn.innerHTML = '<i class="fas fa-eye-slash"></i>';

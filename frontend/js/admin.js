@@ -3160,10 +3160,10 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <!-- ===== 4 CARDS EM LINHA (ONLINE + APP + TURMAS + PROVAS + QUESTÕES) ===== -->
+                        <!-- ===== CARDS EM LINHA (ONLINE + HISTÓRICO + TURMAS + PROVAS + QUESTÕES) ===== -->
                         <div class="dashboard-stats-row">
                             
-                            <!-- CARD: USUÁRIOS ONLINE (CLICÁVEL) -->
+                            <!-- CARD: USUÁRIOS ONLINE -->
                             <div class="dash-card dash-card-online" 
                                 onclick="admin.abrirModalUsuariosOnline()" 
                                 style="cursor: pointer;" 
@@ -3176,7 +3176,7 @@ class AdminPanel {
                                     <div class="dash-card-value" id="usuarios-online">${stats.usuariosOnline || 0}</div>
                                     <div class="dash-card-details">
                                         <span><i class="fas fa-circle" style="font-size:6px;"></i> Ativos agora</span>
-                                        <span><i class="fas fa-clock"></i> últimos 5 min</span>
+                                        <span><i class="fas fa-mobile-alt"></i> <strong id="usuarios-online-app">${stats.usuariosOnlineApp || 0}</strong> no app</span>
                                         <span style="margin-top: 4px; display: block; font-size: 10px; opacity: 0.85;">
                                             <i class="fas fa-hand-pointer"></i> Clique para ver
                                         </span>
@@ -3184,20 +3184,20 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <!-- 🔥 NOVO CARD: USUÁRIOS NO APP -->
-                            <div class="dash-card dash-card-app" 
-                                onclick="admin.abrirModalUsuariosApp()" 
+                            <!-- 🔥 NOVO CARD: HISTÓRICO DE CONEXÕES -->
+                            <div class="dash-card dash-card-historico" 
+                                onclick="admin.abrirModalHistoricoConexoes()" 
                                 style="cursor: pointer;" 
-                                title="Clique para ver quem usa o aplicativo">
-                                <div class="dash-card-icon app-pulse">
-                                    <i class="fas fa-mobile-alt"></i>
+                                title="Clique para ver o histórico de conexões">
+                                <div class="dash-card-icon history-pulse">
+                                    <i class="fas fa-history"></i>
                                 </div>
                                 <div class="dash-card-content">
-                                    <div class="dash-card-label">Usuários no App</div>
-                                    <div class="dash-card-value" id="usuarios-app">${stats.usuariosComApp || 0}</div>
+                                    <div class="dash-card-label">Histórico de Conexões</div>
+                                    <div class="dash-card-value" id="total-conexoes-hoje">${stats.totalConexoesHoje || 0}</div>
                                     <div class="dash-card-details">
-                                        <span><i class="fas fa-download"></i> <strong id="usuarios-online-app">${stats.usuariosOnlineApp || 0}</strong> online agora</span>
-                                        <span><i class="fas fa-mobile-alt"></i> com app instalado</span>
+                                        <span><i class="fas fa-calendar-day"></i> conexões hoje</span>
+                                        <span><i class="fas fa-chart-line"></i> <strong>${stats.mediaConexoesDiarias || 0}</strong> média/dia</span>
                                         <span style="margin-top: 4px; display: block; font-size: 10px; opacity: 0.85;">
                                             <i class="fas fa-hand-pointer"></i> Clique para ver
                                         </span>
@@ -3249,7 +3249,6 @@ class AdminPanel {
                                 </div>
                             </div>
                         </div>
-
                         <!-- GRÁFICOS -->
                         <div class="dashboard-charts-row">
                             <div class="dash-chart-card">
@@ -3573,6 +3572,877 @@ class AdminPanel {
         } catch (error) {
             console.error('❌ Erro:', error);
             this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============================================================================
+    // 🔥 HISTÓRICO DE CONEXÕES DOS USUÁRIOS
+    // ============================================================================
+
+    async abrirModalHistoricoConexoes() {
+        console.log('📊 Abrindo modal de histórico de conexões...');
+        
+        try {
+            this.showToast('🔄 Carregando histórico...', 'info');
+            
+            this.historicoFiltros = {
+                usuario: '',
+                role: 'todos',
+                turma: 'todas',
+                dataInicio: '',
+                dataFim: '',
+                periodo: 'todos',
+                tipo: 'todos',
+                dispositivo: 'todos',
+                page: 1,
+                limit: 50
+            };
+            
+            const [historicoData, turmasDisponiveis] = await Promise.all([
+                this.buscarHistoricoConexoes({ page: 1, limit: 50 }),
+                this.buscarTurmasParaHistorico()
+            ]);
+            
+            this.historicoCompleto = historicoData.conexoes || [];
+            this.historicoFiltrado = [...this.historicoCompleto];
+            this.historicoEstatisticas = historicoData.estatisticas || {};
+            this.historicoTurmas = turmasDisponiveis || [];
+            this.historicoPaginaAtual = 1;
+            this.historicoItensPorPagina = 50;
+            this.historicoTotal = historicoData.total || 0;
+            
+            this.renderizarModalHistoricoConexoes();
+            
+        } catch (error) {
+            console.error('❌ Erro ao abrir histórico:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    async buscarHistoricoConexoes(params = {}) {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const queryParams = new URLSearchParams();
+            
+            if (params.usuario) queryParams.append('usuario', params.usuario);
+            if (params.role && params.role !== 'todos') queryParams.append('role', params.role);
+            if (params.turma && params.turma !== 'todas') queryParams.append('turma', params.turma);
+            if (params.dataInicio) queryParams.append('dataInicio', params.dataInicio);
+            if (params.dataFim) queryParams.append('dataFim', params.dataFim);
+            if (params.periodo && params.periodo !== 'todos') queryParams.append('periodo', params.periodo);
+            if (params.tipo && params.tipo !== 'todos') queryParams.append('tipo', params.tipo);
+            if (params.dispositivo && params.dispositivo !== 'todos') queryParams.append('dispositivo', params.dispositivo);
+            queryParams.append('page', params.page || 1);
+            queryParams.append('limit', params.limit || 50);
+            
+            const response = await fetch(`/api/admin/historico-conexoes?${queryParams.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao buscar histórico');
+            
+            return data;
+            
+        } catch (error) {
+            console.warn('⚠️ API de histórico não disponível, usando fallback:', error.message);
+            return this.buscarHistoricoLocal(params);
+        }
+    }
+
+    async buscarHistoricoLocal(params = {}) {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/admin/usuarios?limit=5000', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        const usuarios = data.usuarios || [];
+        const conexoes = [];
+        
+        usuarios.forEach(usuario => {
+            if (usuario.lastLogin || usuario.updatedAt) {
+                const dataLogin = usuario.lastLogin 
+                    ? new Date(usuario.lastLogin) 
+                    : new Date(usuario.updatedAt);
+                
+                conexoes.push({
+                    id: `login-${usuario._id}-${dataLogin.getTime()}`,
+                    usuarioId: usuario._id,
+                    usuarioNome: usuario.nome || 'Sem nome',
+                    usuarioEmail: usuario.email || '',
+                    usuarioRole: usuario.role || 'desconhecido',
+                    usuarioTurma: usuario.turma || null,
+                    usuarioMatricula: usuario.matricula || null,
+                    usuarioCurso: usuario.curso || null,
+                    usuarioFoto: usuario.fotoPerfil || null,
+                    tipo: 'login',
+                    dispositivo: usuario.onesignalPlayerId ? 'app' : 'web',
+                    ip: 'Não registrado',
+                    userAgent: 'Não registrado',
+                    dataHora: dataLogin.toISOString(),
+                    duracao: null,
+                    status: 'sucesso'
+                });
+            }
+            
+            if (usuario.lastActive && usuario.lastLogin &&
+                new Date(usuario.lastActive).getTime() !== new Date(usuario.lastLogin).getTime() &&
+                new Date(usuario.lastActive) > new Date(usuario.lastLogin)) {
+                
+                const duracaoMin = Math.floor(
+                    (new Date(usuario.lastActive) - new Date(usuario.lastLogin)) / 60000
+                );
+                
+                conexoes.push({
+                    id: `logout-${usuario._id}-${new Date(usuario.lastActive).getTime()}`,
+                    usuarioId: usuario._id,
+                    usuarioNome: usuario.nome || 'Sem nome',
+                    usuarioEmail: usuario.email || '',
+                    usuarioRole: usuario.role || 'desconhecido',
+                    usuarioTurma: usuario.turma || null,
+                    usuarioMatricula: usuario.matricula || null,
+                    usuarioCurso: usuario.curso || null,
+                    usuarioFoto: usuario.fotoPerfil || null,
+                    tipo: 'logout',
+                    dispositivo: usuario.onesignalPlayerId ? 'app' : 'web',
+                    ip: 'Não registrado',
+                    userAgent: 'Não registrado',
+                    dataHora: new Date(usuario.lastActive).toISOString(),
+                    duracao: duracaoMin,
+                    status: 'sucesso'
+                });
+            }
+            
+            if (usuario.lastActive) {
+                const ultima = new Date(usuario.lastActive).getTime();
+                const diffMin = Math.floor((Date.now() - ultima) / 60000);
+                
+                if (diffMin <= 30 && diffMin > 0) {
+                    conexoes.push({
+                        id: `sessao-${usuario._id}-${ultima}`,
+                        usuarioId: usuario._id,
+                        usuarioNome: usuario.nome || 'Sem nome',
+                        usuarioEmail: usuario.email || '',
+                        usuarioRole: usuario.role || 'desconhecido',
+                        usuarioTurma: usuario.turma || null,
+                        usuarioMatricula: usuario.matricula || null,
+                        usuarioCurso: usuario.curso || null,
+                        usuarioFoto: usuario.fotoPerfil || null,
+                        tipo: 'sessao_ativa',
+                        dispositivo: usuario.onesignalPlayerId ? 'app' : 'web',
+                        ip: 'Não registrado',
+                        userAgent: 'Não registrado',
+                        dataHora: new Date(usuario.lastActive).toISOString(),
+                        duracao: diffMin,
+                        status: 'ativo'
+                    });
+                }
+            }
+        });
+        
+        conexoes.sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
+        
+        let filtradas = [...conexoes];
+        
+        if (params.usuario) {
+            const termo = params.usuario.toLowerCase();
+            filtradas = filtradas.filter(c => 
+                c.usuarioNome.toLowerCase().includes(termo) ||
+                c.usuarioEmail.toLowerCase().includes(termo) ||
+                (c.usuarioMatricula && c.usuarioMatricula.includes(termo))
+            );
+        }
+        if (params.role && params.role !== 'todos') filtradas = filtradas.filter(c => c.usuarioRole === params.role);
+        if (params.turma && params.turma !== 'todas') filtradas = filtradas.filter(c => c.usuarioTurma === params.turma);
+        if (params.tipo && params.tipo !== 'todos') filtradas = filtradas.filter(c => c.tipo === params.tipo);
+        if (params.dispositivo && params.dispositivo !== 'todos') filtradas = filtradas.filter(c => c.dispositivo === params.dispositivo);
+        
+        if (params.dataInicio) {
+            const inicio = new Date(params.dataInicio);
+            inicio.setHours(0, 0, 0, 0);
+            filtradas = filtradas.filter(c => new Date(c.dataHora) >= inicio);
+        }
+        if (params.dataFim) {
+            const fim = new Date(params.dataFim);
+            fim.setHours(23, 59, 59, 999);
+            filtradas = filtradas.filter(c => new Date(c.dataHora) <= fim);
+        }
+        if (params.periodo && params.periodo !== 'todos') {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            if (params.periodo === 'hoje') filtradas = filtradas.filter(c => new Date(c.dataHora) >= hoje);
+            else if (params.periodo === 'semana') {
+                const d = new Date(hoje); d.setDate(d.getDate() - 7);
+                filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
+            } else if (params.periodo === 'mes') {
+                const d = new Date(hoje); d.setMonth(d.getMonth() - 1);
+                filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
+            } else if (params.periodo === 'ano') {
+                const d = new Date(hoje); d.setFullYear(d.getFullYear() - 1);
+                filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
+            }
+        }
+        
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        
+        const estatisticas = {
+            totalConexoes: conexoes.length,
+            conexoesHoje: conexoes.filter(c => new Date(c.dataHora) >= hoje).length,
+            totalLogins: conexoes.filter(c => c.tipo === 'login').length,
+            totalLogouts: conexoes.filter(c => c.tipo === 'logout').length,
+            sessoesAtivas: conexoes.filter(c => c.tipo === 'sessao_ativa').length,
+            porDispositivo: {
+                web: conexoes.filter(c => c.dispositivo === 'web').length,
+                app: conexoes.filter(c => c.dispositivo === 'app').length
+            },
+            porRole: conexoes.reduce((acc, c) => {
+                acc[c.usuarioRole] = (acc[c.usuarioRole] || 0) + 1;
+                return acc;
+            }, {})
+        };
+        
+        const total = filtradas.length;
+        const page = params.page || 1;
+        const limit = params.limit || 50;
+        const inicio = (page - 1) * limit;
+        
+        return {
+            success: true,
+            conexoes: filtradas.slice(inicio, inicio + limit),
+            total,
+            page,
+            limit,
+            pages: Math.ceil(total / limit),
+            estatisticas
+        };
+    }
+
+    async buscarTurmasParaHistorico() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/usuarios?role=aluno&limit=5000', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success && data.usuarios) {
+                const turmas = new Set();
+                data.usuarios.forEach(u => {
+                    if (u.turma && u.turma.trim() !== '') turmas.add(u.turma);
+                });
+                return Array.from(turmas).sort();
+            }
+            return [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    renderizarModalHistoricoConexoes() {
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        
+        if (!modalBody) return;
+        
+        const stats = this.historicoEstatisticas || {};
+        
+        modalBody.innerHTML = `
+            <div class="historico-modal-wrapper">
+                
+                <div class="historico-modal-header">
+                    <div class="historico-header-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <div class="historico-header-text">
+                        <h2>Histórico de Conexões</h2>
+                        <p>Acompanhe logins, logouts e sessões de todos os usuários</p>
+                    </div>
+                </div>
+                
+                <div class="historico-stats-grid">
+                    <div class="historico-stat-card primary">
+                        <div class="stat-icon"><i class="fas fa-signal"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Total</span>
+                            <span class="stat-value">${stats.totalConexoes || 0}</span>
+                            <span class="stat-detail">${stats.conexoesHoje || 0} hoje</span>
+                        </div>
+                    </div>
+                    <div class="historico-stat-card success">
+                        <div class="stat-icon"><i class="fas fa-sign-in-alt"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Logins</span>
+                            <span class="stat-value">${stats.totalLogins || 0}</span>
+                            <span class="stat-detail">Acessos</span>
+                        </div>
+                    </div>
+                    <div class="historico-stat-card warning">
+                        <div class="stat-icon"><i class="fas fa-sign-out-alt"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Logouts</span>
+                            <span class="stat-value">${stats.totalLogouts || 0}</span>
+                            <span class="stat-detail">Saídas</span>
+                        </div>
+                    </div>
+                    <div class="historico-stat-card info">
+                        <div class="stat-icon"><i class="fas fa-user-clock"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Ativas</span>
+                            <span class="stat-value">${stats.sessoesAtivas || 0}</span>
+                            <span class="stat-detail">Online agora</span>
+                        </div>
+                    </div>
+                    <div class="historico-stat-card purple">
+                        <div class="stat-icon"><i class="fas fa-mobile-alt"></i></div>
+                        <div class="stat-content">
+                            <span class="stat-label">Via App</span>
+                            <span class="stat-value">${stats.porDispositivo?.app || 0}</span>
+                            <span class="stat-detail">${stats.porDispositivo?.web || 0} web</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="historico-filters">
+                    <div class="historico-filters-header">
+                        <div class="historico-filters-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Filtros</span>
+                        </div>
+                        <button class="btn-clear-historico" onclick="admin.limparFiltrosHistorico()">
+                            <i class="fas fa-eraser"></i> Limpar
+                        </button>
+                    </div>
+                    
+                    <div class="historico-filters-grid">
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-search"></i> Usuário</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="historicoFiltroUsuario" 
+                                    placeholder="Nome, email ou matrícula..."
+                                    oninput="admin.filtrarHistoricoDebounce(this.value)">
+                                <i class="fas fa-search input-icon"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-user-tag"></i> Perfil</label>
+                            <select id="historicoFiltroRole" onchange="admin.aplicarFiltrosHistorico()">
+                                <option value="todos">Todos</option>
+                                <option value="aluno">👨‍🎓 Alunos</option>
+                                <option value="professor">👨‍🏫 Professores</option>
+                                <option value="admin">👑 Admins</option>
+                                <option value="super_admin">⭐ Super Admins</option>
+                                <option value="setor_pedagogico">👩‍🏫 Pedagógico</option>
+                                <option value="coordenacao_patio">🏃 Pátio</option>
+                                <option value="cozinha">🍽️ Cozinha</option>
+                                <option value="gestao_geral">📊 Gestão</option>
+                                <option value="enfermaria">🏥 Enfermaria</option>
+                                <option value="supervisao">🛡️ Supervisão</option>
+                                <option value="psicologia">🧠 Psicologia</option>
+                                <option value="assistente-social">🤝 Assist. Social</option>
+                                <option value="protagonismo">⭐ Protagonismo</option>
+                                <option value="biblioteca">📚 Biblioteca</option>
+                                <option value="secretaria">🎓 Secretaria</option>
+                            </select>
+                        </div>
+                        
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-school"></i> Turma</label>
+                            <select id="historicoFiltroTurma" onchange="admin.aplicarFiltrosHistorico()">
+                                <option value="todas">Todas</option>
+                                ${(this.historicoTurmas || []).map(t => 
+                                    `<option value="${t}">${t}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-exchange-alt"></i> Tipo</label>
+                            <select id="historicoFiltroTipo" onchange="admin.aplicarFiltrosHistorico()">
+                                <option value="todos">Todos</option>
+                                <option value="login">🟢 Login</option>
+                                <option value="logout">🔴 Logout</option>
+                                <option value="sessao_ativa">🔵 Ativo</option>
+                            </select>
+                        </div>
+                        
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-mobile-alt"></i> Dispositivo</label>
+                            <select id="historicoFiltroDispositivo" onchange="admin.aplicarFiltrosHistorico()">
+                                <option value="todos">Todos</option>
+                                <option value="web">💻 Web</option>
+                                <option value="app">📱 App</option>
+                            </select>
+                        </div>
+                        
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-calendar-week"></i> Período</label>
+                            <select id="historicoFiltroPeriodo" onchange="admin.aplicarFiltrosHistorico()">
+                                <option value="todos">Todos</option>
+                                <option value="hoje">📅 Hoje</option>
+                                <option value="semana">📆 7 dias</option>
+                                <option value="mes">🗓️ 30 dias</option>
+                                <option value="ano">📅 1 ano</option>
+                            </select>
+                        </div>
+                        
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-calendar-alt"></i> De</label>
+                            <input type="date" id="historicoFiltroDataInicio" 
+                                onchange="admin.aplicarFiltrosHistorico()">
+                        </div>
+                        
+                        <div class="historico-filter-group">
+                            <label><i class="fas fa-calendar-check"></i> Até</label>
+                            <input type="date" id="historicoFiltroDataFim" 
+                                onchange="admin.aplicarFiltrosHistorico()">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="historico-table-container">
+                    <div class="historico-table-header">
+                        <div class="historico-table-title">
+                            <i class="fas fa-list"></i>
+                            <span>Registros</span>
+                        </div>
+                        <div class="historico-table-actions">
+                            <span class="items-count" id="historicoItensCount">
+                                ${this.historicoTotal} registros
+                            </span>
+                            <button class="btn-export-historico" onclick="admin.exportarHistoricoCSV()">
+                                <i class="fas fa-file-csv"></i> CSV
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="historico-table-responsive">
+                        <table class="historico-table">
+                            <thead>
+                                <tr>
+                                    <th>Usuário</th>
+                                    <th>Perfil</th>
+                                    <th>Turma</th>
+                                    <th>Tipo</th>
+                                    <th>Dispositivo</th>
+                                    <th>Data/Hora</th>
+                                    <th>Duração</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historicoTableBody">
+                                ${this.gerarLinhasHistorico(this.historicoFiltrado)}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="historico-pagination">
+                        <div class="pagination-info">
+                            Mostrando <strong id="historicoInicio">1</strong> a 
+                            <strong id="historicoFim">${Math.min(50, this.historicoFiltrado.length)}</strong> de 
+                            <strong id="historicoTotal">${this.historicoFiltrado.length}</strong>
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="btn-page" onclick="admin.historicoPaginaAnterior()" 
+                                    id="btnHistoricoAnterior" disabled>
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="pagination-pages" id="historicoPaginationPages"></div>
+                            <button class="btn-page" onclick="admin.historicoProximaPagina()" 
+                                    id="btnHistoricoProxima">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        modalTitle.innerHTML = '<i class="fas fa-history" style="color: #6366f1;"></i> Histórico de Conexões';
+        modalSaveBtn.style.display = 'none';
+        
+        const modalContent = document.querySelector('#modal .modal-content');
+        if (modalContent) modalContent.classList.add('modal-content-wide');
+        
+        this.configurarFechamentoModal();
+        this.openModal();
+        
+        setTimeout(() => this.atualizarPaginacaoHistorico(), 100);
+    }
+
+    gerarLinhasHistorico(conexoes) {
+        if (!conexoes || conexoes.length === 0) {
+            return `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 60px;">
+                        <i class="fas fa-history" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px; display: block;"></i>
+                        <h3 style="color: #6b7280; margin-bottom: 5px;">Nenhum registro encontrado</h3>
+                        <p style="color: #9ca3af;">Ajuste os filtros para ver mais resultados</p>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        const inicio = (this.historicoPaginaAtual - 1) * this.historicoItensPorPagina;
+        const paginadas = conexoes.slice(inicio, inicio + this.historicoItensPorPagina);
+        
+        return paginadas.map(c => {
+            const data = new Date(c.dataHora);
+            const dataFormatada = data.toLocaleDateString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric'
+            });
+            const horaFormatada = data.toLocaleTimeString('pt-BR', {
+                hour: '2-digit', minute: '2-digit'
+            });
+            
+            let tipoIcon = 'fa-sign-in-alt';
+            let tipoLabel = 'Login';
+            let tipoCor = '#10b981';
+            let tipoBg = '#d1fae5';
+            
+            if (c.tipo === 'logout') {
+                tipoIcon = 'fa-sign-out-alt';
+                tipoLabel = 'Logout';
+                tipoCor = '#ef4444';
+                tipoBg = '#fee2e2';
+            } else if (c.tipo === 'sessao_ativa') {
+                tipoIcon = 'fa-user-clock';
+                tipoLabel = 'Ativo';
+                tipoCor = '#3b82f6';
+                tipoBg = '#dbeafe';
+            }
+            
+            const dispIcon = c.dispositivo === 'app' ? 'fa-mobile-alt' : 'fa-desktop';
+            const dispLabel = c.dispositivo === 'app' ? 'App' : 'Web';
+            
+            let duracao = '—';
+            if (c.duracao && c.duracao > 0) {
+                if (c.duracao < 60) duracao = `${c.duracao}min`;
+                else {
+                    const h = Math.floor(c.duracao / 60);
+                    const m = c.duracao % 60;
+                    duracao = m > 0 ? `${h}h ${m}min` : `${h}h`;
+                }
+            }
+            
+            const roleInfo = this.getRoleInfo(c.usuarioRole);
+            const iniciais = (c.usuarioNome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const avatarHtml = c.usuarioFoto
+                ? `<img src="${c.usuarioFoto}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`
+                : `<span>${iniciais}</span>`;
+            
+            return `
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="hist-avatar" style="background: ${roleInfo.corGradiente};">
+                                ${avatarHtml}
+                            </div>
+                            <div>
+                                <div style="font-weight: 600; color: #1f2937; font-size: 13px;">
+                                    ${c.usuarioNome || 'Sem nome'}
+                                </div>
+                                <div style="font-size: 11px; color: #6b7280;">
+                                    ${c.usuarioEmail || ''}
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="role-badge-historico" style="background: ${roleInfo.corBg}; color: ${roleInfo.corTexto};">
+                            ${roleInfo.icone} ${roleInfo.label}
+                        </span>
+                    </td>
+                    <td>
+                        ${c.usuarioTurma 
+                            ? `<span class="turma-badge">${c.usuarioTurma}</span>` 
+                            : '<span style="color: #9ca3af;">—</span>'}
+                    </td>
+                    <td>
+                        <span class="tipo-badge-historico" style="background: ${tipoBg}; color: ${tipoCor};">
+                            <i class="fas ${tipoIcon}"></i> ${tipoLabel}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="dispositivo-badge">
+                            <i class="fas ${dispIcon}"></i> ${dispLabel}
+                        </span>
+                    </td>
+                    <td>
+                        <div style="font-size: 12px; font-weight: 500;">${dataFormatada}</div>
+                        <div style="font-size: 11px; color: #6b7280;">${horaFormatada}</div>
+                    </td>
+                    <td>
+                        <span style="font-size: 12px; color: #4b5563;">${duracao}</span>
+                    </td>
+                    <td>
+                        <span class="status-badge-historico ${c.status === 'ativo' ? 'ativo' : 'sucesso'}">
+                            <i class="fas fa-circle" style="font-size: 6px;"></i>
+                            ${c.status === 'ativo' ? 'Ativo' : 'Sucesso'}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn-icon-historico" 
+                                onclick="admin.verDetalhesConexao('${c.id}')"
+                                title="Ver detalhes">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async aplicarFiltrosHistorico() {
+        const usuario = document.getElementById('historicoFiltroUsuario')?.value || '';
+        const role = document.getElementById('historicoFiltroRole')?.value || 'todos';
+        const turma = document.getElementById('historicoFiltroTurma')?.value || 'todas';
+        const tipo = document.getElementById('historicoFiltroTipo')?.value || 'todos';
+        const dispositivo = document.getElementById('historicoFiltroDispositivo')?.value || 'todos';
+        const periodo = document.getElementById('historicoFiltroPeriodo')?.value || 'todos';
+        const dataInicio = document.getElementById('historicoFiltroDataInicio')?.value || '';
+        const dataFim = document.getElementById('historicoFiltroDataFim')?.value || '';
+        
+        this.historicoFiltros = {
+            usuario, role, turma, tipo, dispositivo, periodo,
+            dataInicio, dataFim, page: 1, limit: this.historicoItensPorPagina
+        };
+        
+        try {
+            const resultado = await this.buscarHistoricoConexoes(this.historicoFiltros);
+            
+            this.historicoFiltrado = resultado.conexoes || [];
+            this.historicoTotal = resultado.total || 0;
+            this.historicoPaginaAtual = 1;
+            
+            const tbody = document.getElementById('historicoTableBody');
+            if (tbody) tbody.innerHTML = this.gerarLinhasHistorico(this.historicoFiltrado);
+            
+            const count = document.getElementById('historicoItensCount');
+            if (count) count.textContent = `${this.historicoTotal} registros`;
+            
+            this.atualizarPaginacaoHistorico();
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    filtrarHistoricoDebounce(valor) {
+        clearTimeout(this._debounceHistorico);
+        this._debounceHistorico = setTimeout(() => {
+            this.aplicarFiltrosHistorico();
+        }, 500);
+    }
+
+    limparFiltrosHistorico() {
+        ['historicoFiltroRole', 'historicoFiltroTurma', 'historicoFiltroTipo',
+        'historicoFiltroDispositivo', 'historicoFiltroPeriodo'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.selectedIndex = 0;
+        });
+        
+        ['historicoFiltroUsuario', 'historicoFiltroDataInicio', 'historicoFiltroDataFim'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        
+        this.historicoFiltros = {
+            usuario: '', role: 'todos', turma: 'todas',
+            tipo: 'todos', dispositivo: 'todos', periodo: 'todos',
+            dataInicio: '', dataFim: '', page: 1, limit: this.historicoItensPorPagina
+        };
+        
+        this.aplicarFiltrosHistorico();
+        this.showToast('✅ Filtros limpos!', 'success', 1500);
+    }
+
+    atualizarPaginacaoHistorico() {
+        const total = this.historicoFiltrado.length;
+        const totalPaginas = Math.ceil(total / this.historicoItensPorPagina);
+        const paginaAtual = this.historicoPaginaAtual;
+        
+        const inicio = (paginaAtual - 1) * this.historicoItensPorPagina + 1;
+        const fim = Math.min(paginaAtual * this.historicoItensPorPagina, total);
+        
+        const inicioEl = document.getElementById('historicoInicio');
+        const fimEl = document.getElementById('historicoFim');
+        const totalEl = document.getElementById('historicoTotal');
+        const btnAnt = document.getElementById('btnHistoricoAnterior');
+        const btnProx = document.getElementById('btnHistoricoProxima');
+        const pagesContainer = document.getElementById('historicoPaginationPages');
+        
+        if (inicioEl) inicioEl.textContent = total > 0 ? inicio : 0;
+        if (fimEl) fimEl.textContent = fim;
+        if (totalEl) totalEl.textContent = total;
+        if (btnAnt) btnAnt.disabled = paginaAtual === 1;
+        if (btnProx) btnProx.disabled = paginaAtual >= totalPaginas || totalPaginas === 0;
+        
+        if (pagesContainer) {
+            let html = '';
+            const maxBotoes = 5;
+            let inicioP = Math.max(1, paginaAtual - 2);
+            let fimP = Math.min(totalPaginas, inicioP + maxBotoes - 1);
+            
+            if (fimP - inicioP < maxBotoes - 1) {
+                inicioP = Math.max(1, fimP - maxBotoes + 1);
+            }
+            
+            for (let i = inicioP; i <= fimP; i++) {
+                html += `<button class="btn-page ${i === paginaAtual ? 'active' : ''}" 
+                                onclick="admin.irParaPaginaHistorico(${i})">${i}</button>`;
+            }
+            pagesContainer.innerHTML = html;
+        }
+    }
+
+    irParaPaginaHistorico(pagina) {
+        this.historicoPaginaAtual = pagina;
+        const tbody = document.getElementById('historicoTableBody');
+        if (tbody) tbody.innerHTML = this.gerarLinhasHistorico(this.historicoFiltrado);
+        this.atualizarPaginacaoHistorico();
+    }
+
+    historicoPaginaAnterior() {
+        if (this.historicoPaginaAtual > 1) {
+            this.historicoPaginaAtual--;
+            this.irParaPaginaHistorico(this.historicoPaginaAtual);
+        }
+    }
+
+    historicoProximaPagina() {
+        const totalPaginas = Math.ceil(this.historicoFiltrado.length / this.historicoItensPorPagina);
+        if (this.historicoPaginaAtual < totalPaginas) {
+            this.historicoPaginaAtual++;
+            this.irParaPaginaHistorico(this.historicoPaginaAtual);
+        }
+    }
+
+    verDetalhesConexao(conexaoId) {
+        const conexao = this.historicoFiltrado.find(c => c.id === conexaoId);
+        if (!conexao) {
+            this.showToast('❌ Registro não encontrado', 'error');
+            return;
+        }
+        
+        const data = new Date(conexao.dataHora);
+        const dataCompleta = data.toLocaleString('pt-BR');
+        const roleInfo = this.getRoleInfo(conexao.usuarioRole);
+        
+        const detalheHtml = `
+            <div style="padding: 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="width: 80px; height: 80px; border-radius: 50%; background: ${roleInfo.corGradiente}; display: flex; align-items: center; justify-content: center; color: white; font-size: 28px; font-weight: 700; margin: 0 auto 15px;">
+                        ${(conexao.usuarioNome || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </div>
+                    <h3 style="margin: 0 0 5px;">${conexao.usuarioNome}</h3>
+                    <p style="color: #6b7280; margin: 0;">${conexao.usuarioEmail}</p>
+                </div>
+                
+                <div style="background: #f8fafc; border-radius: 12px; padding: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">PERFIL</div>
+                            <div style="font-weight: 600;">${roleInfo.icone} ${roleInfo.label}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">TURMA</div>
+                            <div style="font-weight: 600;">${conexao.usuarioTurma || '—'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">MATRÍCULA</div>
+                            <div style="font-weight: 600;">${conexao.usuarioMatricula || '—'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">TIPO</div>
+                            <div style="font-weight: 600;">${conexao.tipo === 'login' ? '🟢 Login' : conexao.tipo === 'logout' ? '🔴 Logout' : '🔵 Sessão Ativa'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">DATA/HORA</div>
+                            <div style="font-weight: 600;">${dataCompleta}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">DISPOSITIVO</div>
+                            <div style="font-weight: 600;">${conexao.dispositivo === 'app' ? '📱 App' : '💻 Web'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">IP</div>
+                            <div style="font-weight: 600; font-family: monospace; font-size: 12px;">${conexao.ip || 'Não registrado'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 3px;">DURAÇÃO</div>
+                            <div style="font-weight: 600;">${conexao.duracao ? conexao.duracao + 'min' : '—'}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: right;">
+                    <button onclick="admin.abrirModalHistoricoConexoes()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        const modalBody = document.getElementById('modalBody');
+        if (modalBody) modalBody.innerHTML = detalheHtml;
+    }
+
+    exportarHistoricoCSV() {
+        if (!this.historicoFiltrado || this.historicoFiltrado.length === 0) {
+            this.showToast('❌ Nenhum registro para exportar', 'error');
+            return;
+        }
+        
+        try {
+            const headers = [
+                'Usuário', 'Email', 'Perfil', 'Turma', 'Matrícula',
+                'Tipo', 'Dispositivo', 'Data', 'Hora', 'Duração (min)', 'Status'
+            ];
+            
+            let csv = headers.join(',') + '\n';
+            
+            this.historicoFiltrado.forEach(c => {
+                const data = new Date(c.dataHora);
+                const dataFmt = data.toLocaleDateString('pt-BR');
+                const horaFmt = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                
+                const linha = [
+                    `"${(c.usuarioNome || '').replace(/"/g, '""')}"`,
+                    `"${(c.usuarioEmail || '').replace(/"/g, '""')}"`,
+                    `"${c.usuarioRole || ''}"`,
+                    `"${c.usuarioTurma || ''}"`,
+                    `"${c.usuarioMatricula || ''}"`,
+                    `"${c.tipo || ''}"`,
+                    `"${c.dispositivo || ''}"`,
+                    `"${dataFmt}"`,
+                    `"${horaFmt}"`,
+                    c.duracao || 0,
+                    `"${c.status || ''}"`
+                ].join(',');
+                
+                csv += linha + '\n';
+            });
+            
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `historico-conexoes-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            this.showToast(`✅ ${this.historicoFiltrado.length} registros exportados!`, 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ Erro ao exportar', 'error');
         }
     }
 
@@ -44880,7 +45750,9 @@ class AdminPanel {
                 'relatorios_setor_pedagogico': 'fa-file-alt',
                 'exportar_dados_setor_pedagogico': 'fa-download',
                 'substituicao_professores_setor_pedagogico': 'fa-people-arrows',
-                'autorizacao_visitas': 'fa-map-marked-alt'
+                'autorizacao_visitas': 'fa-map-marked-alt',
+                'gestao_professores_setor_pedagogico': 'fa-chalkboard-teacher',
+                'aee_setor_pedagogico': 'fa-universal-access'
             };
             return icones[modulo] || 'fa-key';
         };
@@ -44891,7 +45763,9 @@ class AdminPanel {
                 'relatorios_setor_pedagogico': 'linear-gradient(135deg, #3b82f6, #2563eb)',
                 'exportar_dados_setor_pedagogico': 'linear-gradient(135deg, #10b981, #059669)',
                 'substituicao_professores_setor_pedagogico': 'linear-gradient(135deg, #ef4444, #dc2626)',
-                'autorizacao_visitas': 'linear-gradient(135deg, #667eea, #764ba2)'
+                'autorizacao_visitas': 'linear-gradient(135deg, #667eea, #764ba2)',
+                'gestao_professores_setor_pedagogico': 'linear-gradient(135deg, #f59e0b, #d97706)',
+                'aee_setor_pedagogico': 'linear-gradient(135deg, #6366f1, #8b5cf6)'
             };
             return cores[modulo] || 'linear-gradient(135deg, #8b5cf6, #7c3aed)';
         };
@@ -44995,283 +45869,6 @@ class AdminPanel {
                     `).join('')}
                 </div>
             </div>
-            
-            <style>
-                .permissoes-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
-                
-                .permissoes-header {
-                    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-                    border-radius: 20px;
-                    padding: 30px;
-                    margin-bottom: 25px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                    box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .permissoes-header::before {
-                    content: '';
-                    position: absolute;
-                    top: -50px;
-                    right: -50px;
-                    width: 200px;
-                    height: 200px;
-                    background: rgba(255,255,255,0.1);
-                    border-radius: 50%;
-                }
-                
-                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
-                .header-icon {
-                    width: 70px; height: 70px;
-                    background: rgba(255,255,255,0.15);
-                    border-radius: 20px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 32px;
-                    color: white;
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255,255,255,0.2);
-                }
-                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
-                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
-                
-                .btn-header {
-                    padding: 12px 24px;
-                    border-radius: 40px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.3s;
-                    border: none;
-                    position: relative;
-                    z-index: 2;
-                    background: rgba(255,255,255,0.15);
-                    color: white;
-                    border: 1px solid rgba(255,255,255,0.3);
-                }
-                .btn-header.btn-refresh { padding: 12px; }
-                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
-                
-                .modulos-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-                    gap: 25px;
-                }
-                
-                .modulo-card {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 25px;
-                    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-                    border: 1px solid #e5e7eb;
-                    transition: all 0.3s;
-                }
-                
-                .modulo-card:hover {
-                    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-                    transform: translateY(-2px);
-                }
-                
-                .modulo-header {
-                    display: flex;
-                    align-items: flex-start;
-                    gap: 15px;
-                    margin-bottom: 20px;
-                    padding-bottom: 15px;
-                    border-bottom: 2px solid #f3f4f6;
-                }
-                
-                .modulo-icon {
-                    width: 50px;
-                    height: 50px;
-                    border-radius: 12px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-size: 22px;
-                    flex-shrink: 0;
-                }
-                
-                .modulo-info {
-                    flex: 1;
-                    min-width: 0;
-                }
-                
-                .modulo-info h3 {
-                    margin: 0 0 5px;
-                    font-size: 16px;
-                    color: #1f2937;
-                    font-weight: 600;
-                }
-                
-                .modulo-info p {
-                    margin: 0;
-                    font-size: 12px;
-                    color: #6b7280;
-                    line-height: 1.4;
-                }
-                
-                .modulo-badge {
-                    padding: 4px 12px;
-                    background: #dbeafe;
-                    color: #1e40af;
-                    border-radius: 30px;
-                    font-size: 11px;
-                    font-weight: 600;
-                    white-space: nowrap;
-                    flex-shrink: 0;
-                }
-                
-                .emails-list {
-                    min-height: 60px;
-                    max-height: 200px;
-                    overflow-y: auto;
-                    margin-bottom: 15px;
-                    padding-right: 5px;
-                }
-                
-                .emails-list::-webkit-scrollbar { width: 6px; }
-                .emails-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-                
-                .email-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 10px 12px;
-                    background: #f9fafb;
-                    border-radius: 10px;
-                    margin-bottom: 8px;
-                    transition: all 0.2s;
-                }
-                
-                .email-item:hover {
-                    background: #f3f4f6;
-                }
-                
-                .email-icon {
-                    width: 32px;
-                    height: 32px;
-                    background: #e0e7ff;
-                    border-radius: 8px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: #4f46e5;
-                    font-size: 14px;
-                    flex-shrink: 0;
-                }
-                
-                .email-text {
-                    flex: 1;
-                    font-size: 13px;
-                    color: #1f2937;
-                    word-break: break-all;
-                    font-family: 'Courier New', monospace;
-                }
-                
-                .btn-remove-email {
-                    width: 28px;
-                    height: 28px;
-                    border: none;
-                    border-radius: 6px;
-                    background: #fee2e2;
-                    color: #dc2626;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: all 0.2s;
-                    flex-shrink: 0;
-                }
-                
-                .btn-remove-email:hover {
-                    background: #ef4444;
-                    color: white;
-                    transform: scale(1.1);
-                }
-                
-                .empty-emails {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 8px;
-                    padding: 20px;
-                    color: #9ca3af;
-                    font-size: 13px;
-                    background: #f9fafb;
-                    border-radius: 10px;
-                    border: 1px dashed #d1d5db;
-                }
-                
-                .empty-emails i { font-size: 18px; }
-                
-                .add-email-form {
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 12px;
-                }
-                
-                .add-email-form .form-control {
-                    flex: 1;
-                    padding: 10px 14px;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 10px;
-                    font-size: 13px;
-                    transition: all 0.3s;
-                }
-                
-                .add-email-form .form-control:focus {
-                    outline: none;
-                    border-color: #8b5cf6;
-                    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-                }
-                
-                .btn-add-email {
-                    padding: 10px 18px;
-                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                    color: white;
-                    border: none;
-                    border-radius: 10px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    transition: all 0.3s;
-                    white-space: nowrap;
-                }
-                
-                .btn-add-email:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
-                }
-                
-                .modulo-footer {
-                    padding-top: 12px;
-                    border-top: 1px solid #f3f4f6;
-                    font-size: 11px;
-                    color: #9ca3af;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                
-                @media (max-width: 768px) {
-                    .modulos-grid { grid-template-columns: 1fr; }
-                    .add-email-form { flex-direction: column; }
-                }
-            </style>
         `;
     }
 

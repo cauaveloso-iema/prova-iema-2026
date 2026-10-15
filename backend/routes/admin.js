@@ -356,6 +356,8 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
       totalQuestoes: 0,
       totalResultados: 0,
       alunosComAcessibilidade: 0,
+      totalConexoesHoje: 0,
+      mediaConexoesDiarias: 0,
       provasPorStatus: {},
       usuariosPorMes: [],
       atividadesRecentes: []
@@ -473,11 +475,255 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
       data: r.createdAt || r.dataRealizacao
     }));
 
+        // 🔥 ESTATÍSTICAS DE CONEXÕES
+    const hojeInicio = new Date();
+    hojeInicio.setHours(0, 0, 0, 0);
+
+    const usuariosParaConexoes = await User.find({})
+      .select('lastLogin')
+      .lean();
+
+    stats.totalConexoesHoje = usuariosParaConexoes.filter(u =>
+      u.lastLogin && new Date(u.lastLogin) >= hojeInicio
+    ).length;
+
+    let totalUltimos7 = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(hojeInicio);
+      d.setDate(d.getDate() - i);
+      const dProx = new Date(d);
+      dProx.setDate(dProx.getDate() + 1);
+
+      totalUltimos7 += usuariosParaConexoes.filter(u =>
+        u.lastLogin &&
+        new Date(u.lastLogin) >= d &&
+        new Date(u.lastLogin) < dProx
+      ).length;
+    }
+    stats.mediaConexoesDiarias = Math.round(totalUltimos7 / 7);
+
     res.json({ success: true, data: stats });
 
   } catch (error) {
     logger.error('❌ Erro no dashboard admin:', error);
     res.status(500).json({ success: false, error: 'Erro ao carregar dados do dashboard: ' + error.message });
+  }
+});
+
+// ============================================================================
+// HISTÓRICO DE CONEXÕES
+// ============================================================================
+
+/**
+ * GET /api/admin/historico-conexoes
+ * Busca histórico de login/logout dos usuários com filtros completos
+ */
+router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
+  try {
+    const {
+      usuario,
+      role,
+      turma,
+      dataInicio,
+      dataFim,
+      periodo,
+      tipo,
+      dispositivo,
+      page = 1,
+      limit = 50
+    } = req.query;
+
+    logger.info(`📊 Admin ${req.userId} buscando histórico de conexões`);
+
+    // ===== 1. BUSCAR USUÁRIOS =====
+    let userQuery = {};
+    if (role && role !== 'todos') userQuery.role = role;
+    if (turma && turma !== 'todas') userQuery.turma = turma;
+
+    if (usuario && usuario.trim() !== '') {
+      const termo = usuario.trim();
+      userQuery.$or = [
+        { nome: { $regex: termo, $options: 'i' } },
+        { email: { $regex: termo, $options: 'i' } },
+        { matricula: { $regex: termo, $options: 'i' } }
+      ];
+    }
+
+    const usuarios = await User.find(userQuery)
+      .select('nome email role turma matricula lastLogin lastActive createdAt onesignalPlayerId fotoPerfil curso')
+      .lean();
+
+    // ===== 2. GERAR HISTÓRICO =====
+    const conexoes = [];
+
+    usuarios.forEach(u => {
+      // LOGIN
+      if (u.lastLogin) {
+        conexoes.push({
+          id: `login-${u._id}-${new Date(u.lastLogin).getTime()}`,
+          usuarioId: u._id,
+          usuarioNome: u.nome || 'Sem nome',
+          usuarioEmail: u.email || '',
+          usuarioRole: u.role || 'desconhecido',
+          usuarioTurma: u.turma || null,
+          usuarioMatricula: u.matricula || null,
+          usuarioCurso: u.curso || null,
+          usuarioFoto: u.fotoPerfil || null,
+          tipo: 'login',
+          dispositivo: u.onesignalPlayerId ? 'app' : 'web',
+          ip: 'Não registrado',
+          userAgent: 'Não registrado',
+          dataHora: new Date(u.lastLogin).toISOString(),
+          duracao: null,
+          status: 'sucesso'
+        });
+      }
+
+      // LOGOUT
+      if (u.lastActive && u.lastLogin &&
+          new Date(u.lastActive).getTime() !== new Date(u.lastLogin).getTime() &&
+          new Date(u.lastActive) > new Date(u.lastLogin)) {
+
+        const duracaoMin = Math.floor(
+          (new Date(u.lastActive) - new Date(u.lastLogin)) / 60000
+        );
+
+        conexoes.push({
+          id: `logout-${u._id}-${new Date(u.lastActive).getTime()}`,
+          usuarioId: u._id,
+          usuarioNome: u.nome || 'Sem nome',
+          usuarioEmail: u.email || '',
+          usuarioRole: u.role || 'desconhecido',
+          usuarioTurma: u.turma || null,
+          usuarioMatricula: u.matricula || null,
+          usuarioCurso: u.curso || null,
+          usuarioFoto: u.fotoPerfil || null,
+          tipo: 'logout',
+          dispositivo: u.onesignalPlayerId ? 'app' : 'web',
+          ip: 'Não registrado',
+          userAgent: 'Não registrado',
+          dataHora: new Date(u.lastActive).toISOString(),
+          duracao: duracaoMin,
+          status: 'sucesso'
+        });
+      }
+
+      // SESSÃO ATIVA
+      if (u.lastActive) {
+        const agora = Date.now();
+        const ultima = new Date(u.lastActive).getTime();
+        const diffMin = Math.floor((agora - ultima) / 60000);
+
+        if (diffMin <= 30 && diffMin > 0) {
+          conexoes.push({
+            id: `sessao-${u._id}-${ultima}`,
+            usuarioId: u._id,
+            usuarioNome: u.nome || 'Sem nome',
+            usuarioEmail: u.email || '',
+            usuarioRole: u.role || 'desconhecido',
+            usuarioTurma: u.turma || null,
+            usuarioMatricula: u.matricula || null,
+            usuarioCurso: u.curso || null,
+            usuarioFoto: u.fotoPerfil || null,
+            tipo: 'sessao_ativa',
+            dispositivo: u.onesignalPlayerId ? 'app' : 'web',
+            ip: 'Não registrado',
+            userAgent: 'Não registrado',
+            dataHora: new Date(u.lastActive).toISOString(),
+            duracao: diffMin,
+            status: 'ativo'
+          });
+        }
+      }
+    });
+
+    // ===== 3. ORDENAR =====
+    conexoes.sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
+
+    // ===== 4. FILTROS =====
+    let filtradas = [...conexoes];
+
+    if (tipo && tipo !== 'todos') {
+      filtradas = filtradas.filter(c => c.tipo === tipo);
+    }
+
+    if (dispositivo && dispositivo !== 'todos') {
+      filtradas = filtradas.filter(c => c.dispositivo === dispositivo);
+    }
+
+    if (dataInicio) {
+      const inicio = new Date(dataInicio);
+      inicio.setHours(0, 0, 0, 0);
+      filtradas = filtradas.filter(c => new Date(c.dataHora) >= inicio);
+    }
+
+    if (dataFim) {
+      const fim = new Date(dataFim);
+      fim.setHours(23, 59, 59, 999);
+      filtradas = filtradas.filter(c => new Date(c.dataHora) <= fim);
+    }
+
+    if (periodo && periodo !== 'todos') {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+
+      if (periodo === 'hoje') {
+        filtradas = filtradas.filter(c => new Date(c.dataHora) >= hoje);
+      } else if (periodo === 'semana') {
+        const d = new Date(hoje);
+        d.setDate(d.getDate() - 7);
+        filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
+      } else if (periodo === 'mes') {
+        const d = new Date(hoje);
+        d.setMonth(d.getMonth() - 1);
+        filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
+      } else if (periodo === 'ano') {
+        const d = new Date(hoje);
+        d.setFullYear(d.getFullYear() - 1);
+        filtradas = filtradas.filter(c => new Date(c.dataHora) >= d);
+      }
+    }
+
+    // ===== 5. PAGINAÇÃO =====
+    const total = filtradas.length;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const inicioP = (pageNum - 1) * limitNum;
+    const paginadas = filtradas.slice(inicioP, inicioP + limitNum);
+
+    // ===== 6. ESTATÍSTICAS =====
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const estatisticas = {
+      totalConexoes: conexoes.length,
+      conexoesHoje: conexoes.filter(c => new Date(c.dataHora) >= hoje).length,
+      totalLogins: conexoes.filter(c => c.tipo === 'login').length,
+      totalLogouts: conexoes.filter(c => c.tipo === 'logout').length,
+      sessoesAtivas: conexoes.filter(c => c.tipo === 'sessao_ativa').length,
+      porDispositivo: {
+        web: conexoes.filter(c => c.dispositivo === 'web').length,
+        app: conexoes.filter(c => c.dispositivo === 'app').length
+      },
+      porRole: conexoes.reduce((acc, c) => {
+        acc[c.usuarioRole] = (acc[c.usuarioRole] || 0) + 1;
+        return acc;
+      }, {})
+    };
+
+    res.json({
+      success: true,
+      conexoes: paginadas,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      pages: Math.ceil(total / limitNum),
+      estatisticas
+    });
+
+  } catch (error) {
+    logger.error('❌ Erro ao buscar histórico de conexões:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

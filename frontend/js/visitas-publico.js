@@ -615,6 +615,10 @@ class VisitasPublico {
             document.getElementById('totpLoading').style.display = 'flex';
             document.getElementById('totpQRCodeBox').style.display = 'none';
             
+            // 🔥 Esconder o box do secret ao recomeçar
+            const secretBox = document.getElementById('totpSecretBox');
+            if (secretBox) secretBox.style.display = 'none';
+            
             const response = await fetch(`${this.apiBase}/gerar-qrcode-totp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -640,6 +644,9 @@ class VisitasPublico {
             
             this.totpSecret = data.secret;
             
+            // 🔥 MOSTRAR A CHAVE SECRETA PARA DIGITAÇÃO MANUAL
+            this.mostrarSecretTOTP(data.secret);
+            
             console.log('✅ QR Code TOTP pronto');
             
             setTimeout(() => {
@@ -655,6 +662,77 @@ class VisitasPublico {
                     <i class="fas fa-sync-alt"></i> Tentar novamente
                 </button>
             `;
+        }
+    }
+
+    // 🔥 NOVO: Exibe a chave secreta formatada
+    mostrarSecretTOTP(secret) {
+        if (!secret) return;
+        
+        const box = document.getElementById('totpSecretBox');
+        const textEl = document.getElementById('totpSecretText');
+        
+        if (!box || !textEl) return;
+        
+        // Formata o secret em grupos de 4 caracteres para facilitar leitura
+        // Ex: JBSWY3DPEHPK3PXP -> JBSW Y3DP EHPK 3PXP
+        const secretFormatado = secret.match(/.{1,4}/g)?.join(' ') || secret;
+        
+        textEl.textContent = secretFormatado;
+        // Guarda o valor "cru" (sem espaços) para copiar
+        textEl.dataset.secretRaw = secret;
+        
+        box.style.display = 'block';
+    }
+
+    // 🔥 NOVO: Copia a chave secreta para a área de transferência
+    async copiarSecretTOTP() {
+        const textEl = document.getElementById('totpSecretText');
+        const valueEl = document.getElementById('totpSecretValue');
+        
+        if (!textEl || !this.totpSecret) {
+            this.showToast('Nenhuma chave disponível para copiar', 'error');
+            return;
+        }
+        
+        // Usa o valor "cru" (sem espaços)
+        const secretRaw = textEl.dataset.secretRaw || this.totpSecret;
+        
+        try {
+            // Tentar API moderna primeiro
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(secretRaw);
+            } else {
+                // Fallback para navegadores antigos / HTTP
+                const textarea = document.createElement('textarea');
+                textarea.value = secretRaw;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                textarea.setSelectionRange(0, 99999);
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+            
+            // Feedback visual
+            if (valueEl) {
+                valueEl.classList.add('copiado');
+                const icon = valueEl.querySelector('i.fa-copy');
+                if (icon) icon.className = 'fas fa-check';
+                
+                setTimeout(() => {
+                    valueEl.classList.remove('copiado');
+                    if (icon) icon.className = 'fas fa-copy';
+                }, 2000);
+            }
+            
+            this.showToast('✅ Chave copiada! Cole no Google Authenticator', 'success');
+            
+        } catch (error) {
+            console.error('❌ Erro ao copiar:', error);
+            this.showToast('❌ Não foi possível copiar. Selecione manualmente.', 'error');
         }
     }
 
