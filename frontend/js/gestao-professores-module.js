@@ -1909,7 +1909,7 @@ window.GestaoProfessoresModule = {
     },
 
     // ============================================
-    // RELATÓRIO
+    // GERAR RELATÓRIO (VERSÃO CORRIGIDA — por tipo)
     // ============================================
     async gerarRelatorio() {
         const container = this.safeGet('gpResultadoRelatorio');
@@ -1923,14 +1923,14 @@ window.GestaoProfessoresModule = {
             
             const eixo = this.safeGet('gpRelatorioEixo')?.value;
             const turma = this.safeGet('gpRelatorioTurma')?.value;
-            const periodo = this.safeGet('gpRelatorioPeriodo')?.value;  // 🆕
+            const periodo = this.safeGet('gpRelatorioPeriodo')?.value;
             const professorId = this.safeGet('gpRelatorioProfessor')?.value;
             const dataInicio = this.safeGet('gpRelatorioDataInicio')?.value;
             const dataFim = this.safeGet('gpRelatorioDataFim')?.value;
             
             if (eixo) params.append('eixo', eixo);
             if (turma) params.append('turma', turma);
-            if (periodo) params.append('periodo', periodo);              // 🆕
+            if (periodo) params.append('periodo', periodo);
             if (professorId) params.append('professorId', professorId);
             if (dataInicio) params.append('dataInicio', dataInicio);
             if (dataFim) params.append('dataFim', dataFim);
@@ -1948,123 +1948,478 @@ window.GestaoProfessoresModule = {
             const btnPDF = this.safeGet('gpBtnImprimirRelatorio');
             if (btnPDF) btnPDF.disabled = false;
             
-            let html = `
-                <div class="card">
-                    <div class="card-body">
-                        <h5><i class="fas fa-chart-bar"></i> Resultado do Relatório</h5>
-                        <div style="display:flex; gap:15px; flex-wrap:wrap; margin:20px 0;">
-                            <div style="flex:1; min-width:150px; text-align:center; padding:20px; background:#eef2ff; border-radius:12px;">
-                                <div style="font-size:32px; font-weight:700; color:#4f46e5;">${data.total || 0}</div>
-                                <div style="font-size:12px; color:#64748b;">Registros</div>
-                            </div>
-                            <div style="flex:1; min-width:150px; text-align:center; padding:20px; background:#f0fdf4; border-radius:12px;">
-                                <div style="font-size:32px; font-weight:700; color:#10b981;">${data.totalComponentes || 0}</div>
-                                <div style="font-size:12px; color:#64748b;">Componentes</div>
-                            </div>
-                            <div style="flex:1; min-width:150px; text-align:center; padding:20px; background:#fef3c7; border-radius:12px;">
-                                <div style="font-size:32px; font-weight:700; color:#f59e0b;">${data.totalAulas || 0}</div>
-                                <div style="font-size:12px; color:#64748b;">Aulas Registradas</div>
-                            </div>
-                        </div>
-            `;
+            // ============================================
+            // MONTAR HTML DO RESULTADO POR TIPO
+            // ============================================
+            let html = this.renderizarResumoRelatorio(data, tipo);
             
-            if (data.estatisticas?.porEixo && Object.keys(data.estatisticas.porEixo).length > 0) {
-                html += `<h6 style="margin-top:20px;">Por Eixo</h6><div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">`;
-                Object.entries(data.estatisticas.porEixo).forEach(([k, v]) => {
-                    html += `<span style="background:#eef2ff; color:#4f46e5; padding:8px 14px; border-radius:8px; font-weight:600; font-size:13px;">${k}: ${v}</span>`;
-                });
-                html += `</div>`;
+            // ------ Tipo: GERAL ------
+            if (tipo === 'geral') {
+                html += this.renderizarRelatorioGeral(data);
+            }
+            // ------ Tipo: PROFESSOR ------
+            else if (tipo === 'professor') {
+                html += this.renderizarRelatorioPorProfessor(data);
+            }
+            // ------ Tipo: TURMA ------
+            else if (tipo === 'turma') {
+                html += this.renderizarRelatorioPorTurma(data);
+            }
+            // ------ Tipo: EIXO ------
+            else if (tipo === 'eixo') {
+                html += this.renderizarRelatorioPorEixo(data);
             }
             
-            if (data.estatisticas?.porPeriodo && Object.keys(data.estatisticas.porPeriodo).length > 0) {
-                html += `<h6 style="margin-top:20px;">Por Período</h6><div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">`;
-                Object.entries(data.estatisticas.porPeriodo).forEach(([k, v]) => {
-                    html += `<span style="background:#fef3c7; color:#92400e; padding:8px 14px; border-radius:8px; font-weight:600; font-size:13px;">${this.getPeriodoLabel(k)}: ${v} aula(s)</span>`;
-                });
-                html += `</div>`;
-            }
-            
-            if (data.registros?.length > 0) {
-                html += `
-                    <h6 style="margin-top:20px;">Detalhamento</h6>
-                    <div class="table-responsive" style="margin-top:10px;">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr><th>Data</th><th>Professor</th><th>Eixo</th><th>Componentes</th><th>Aulas</th></tr>
-                            </thead>
-                            <tbody>
-                                ${data.registros.map(r => {
-                                    let totalAulas = 0;
-                                    (r.componentes || []).forEach(c => {
-                                        totalAulas += this.normalizarAulas(c.aulasRegistradas).aulas;
-                                    });
-                                    return `
-                                        <tr>
-                                            <td>${r.dataColetaFormatada}</td>
-                                            <td>${this.escapeHtml(r.professorNome)}</td>
-                                            <td>${this.escapeHtml(r.professorEixo || '-')}</td>
-                                            <td>${r.componentes?.length || 0}</td>
-                                            <td>${totalAulas}</td>
-                                        </tr>
-                                    `;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            
-            html += `</div></div>`;
             container.innerHTML = html;
         } catch (error) {
             console.error(error);
-            container.innerHTML = `<div style="text-align:center; padding:50px; color:#ef4444;"><i class="fas fa-exclamation-triangle" style="font-size:48px;"></i><h4>Erro</h4><p>${error.message}</p></div>`;
+            container.innerHTML = `<div style="text-align:center; padding:50px; color:#ef4444;">
+                <i class="fas fa-exclamation-triangle" style="font-size:48px;"></i>
+                <h4>Erro</h4>
+                <p>${error.message}</p>
+            </div>`;
         }
     },
-    
-    exportarCSV() {
-        const data = this.relatorioAtual;
-        if (!data || !data.registros || data.registros.length === 0) {
-            this.mostrarToast('Gere um relatório primeiro', 'warning');
-            return;
+
+    // ============================================
+    // RENDERIZAR RESUMO (cards do topo — comum a todos os tipos)
+    // ============================================
+    renderizarResumoRelatorio(data, tipo) {
+        const total = data.total || 0;
+        const totalComponentes = data.totalComponentes || 0;
+        const totalAulas = data.totalAulas || 0;
+        const totalRegistros = data.totalRegistros || data.total || 0;
+        
+        let labelTotal = 'Registros';
+        if (tipo === 'professor') labelTotal = 'Professores';
+        else if (tipo === 'turma') labelTotal = 'Turmas';
+        else if (tipo === 'eixo') labelTotal = 'Eixos';
+        
+        return `
+            <div class="card" style="margin-bottom:20px;">
+                <div class="card-body">
+                    <h5><i class="fas fa-chart-bar"></i> Resultado do Relatório ${this.labelTipo(tipo)}</h5>
+                    <div style="display:flex; gap:15px; flex-wrap:wrap; margin:20px 0;">
+                        <div style="flex:1; min-width:150px; text-align:center; padding:20px; background:#eef2ff; border-radius:12px;">
+                            <div style="font-size:32px; font-weight:700; color:#4f46e5;">${total}</div>
+                            <div style="font-size:12px; color:#64748b;">${labelTotal}</div>
+                        </div>
+                        <div style="flex:1; min-width:150px; text-align:center; padding:20px; background:#f0fdf4; border-radius:12px;">
+                            <div style="font-size:32px; font-weight:700; color:#10b981;">${totalComponentes}</div>
+                            <div style="font-size:12px; color:#64748b;">Componentes</div>
+                        </div>
+                        <div style="flex:1; min-width:150px; text-align:center; padding:20px; background:#fef3c7; border-radius:12px;">
+                            <div style="font-size:32px; font-weight:700; color:#f59e0b;">${totalAulas}</div>
+                            <div style="font-size:12px; color:#64748b;">Aulas Registradas</div>
+                        </div>
+                        ${tipo !== 'geral' ? `
+                            <div style="flex:1; min-width:150px; text-align:center; padding:20px; background:#ede9fe; border-radius:12px;">
+                                <div style="font-size:32px; font-weight:700; color:#8b5cf6;">${totalRegistros}</div>
+                                <div style="font-size:12px; color:#64748b;">Registros Totais</div>
+                            </div>
+                        ` : ''}
+                    </div>
+        `;
+    },
+
+    labelTipo(tipo) {
+        const labels = {
+            'geral': 'Geral',
+            'professor': 'por Professor',
+            'turma': 'por Turma',
+            'eixo': 'por Eixo'
+        };
+        return labels[tipo] || '';
+    },
+
+    // ============================================
+    // RENDERIZAR RELATÓRIO GERAL
+    // ============================================
+    renderizarRelatorioGeral(data) {
+        let html = '';
+        
+        if (data.estatisticas?.porEixo && Object.keys(data.estatisticas.porEixo).length > 0) {
+            html += `<h6 style="margin-top:20px;">Por Eixo</h6><div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">`;
+            Object.entries(data.estatisticas.porEixo).forEach(([k, v]) => {
+                html += `<span style="background:#eef2ff; color:#4f46e5; padding:8px 14px; border-radius:8px; font-weight:600; font-size:13px;">${k}: ${v}</span>`;
+            });
+            html += `</div>`;
         }
         
-        let csv = 'Data Coleta,Professor,Matrícula,Eixo,Componente,Turma,Curso,Período,Aulas Registradas,CH Anual,CH Semanal,Observações\n';
+        if (data.estatisticas?.porPeriodo && Object.keys(data.estatisticas.porPeriodo).length > 0) {
+            html += `<h6 style="margin-top:20px;">Aulas por Período</h6><div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">`;
+            Object.entries(data.estatisticas.porPeriodo).forEach(([k, v]) => {
+                html += `<span style="background:#fef3c7; color:#92400e; padding:8px 14px; border-radius:8px; font-weight:600; font-size:13px;">${this.getPeriodoLabel(k)}: ${v} aula(s)</span>`;
+            });
+            html += `</div>`;
+        }
         
-        data.registros.forEach(r => {
-            if (!r.componentes || r.componentes.length === 0) {
-                csv += `"${r.dataColetaFormatada}","${r.professorNome}","${r.professorMatricula || ''}","${r.professorEixo || ''}","","","","","","","","",""\n`;
-            } else {
-                r.componentes.forEach(c => {
-                    const norm = this.normalizarAulas(c.aulasRegistradas);
-                    const periodoLabel = this.getPeriodoLabel(c.periodo || norm.periodoLegado);
+        if (data.registros?.length > 0) {
+            html += `
+                <h6 style="margin-top:20px;">Detalhamento (${data.registros.length} registro(s))</h6>
+                <div class="table-responsive" style="margin-top:10px;">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Professor</th>
+                                <th>Eixo</th>
+                                <th>Componentes</th>
+                                <th>Aulas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.registros.map(r => {
+                                let totalAulasR = 0;
+                                (r.componentes || []).forEach(c => {
+                                    totalAulasR += this.normalizarAulas(c.aulasRegistradas).aulas;
+                                });
+                                return `
+                                    <tr>
+                                        <td>${r.dataColetaFormatada}</td>
+                                        <td>${this.escapeHtml(r.professorNome)}</td>
+                                        <td>${this.escapeHtml(r.professorEixo || '-')}</td>
+                                        <td>${r.componentes?.length || 0}</td>
+                                        <td>${totalAulasR}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        html += `</div></div>`;
+        return html;
+    },
+
+    // ============================================
+    // RENDERIZAR RELATÓRIO POR PROFESSOR
+    // ============================================
+    renderizarRelatorioPorProfessor(data) {
+        let html = '';
+        
+        if (!data.professores || data.professores.length === 0) {
+            return `<div style="text-align:center; padding:40px; color:#94a3b8;">
+                <i class="fas fa-user-slash" style="font-size:48px; opacity:0.5;"></i>
+                <p>Nenhum professor encontrado com os filtros aplicados</p>
+            </div></div></div>`;
+        }
+        
+        html += `
+            <h6 style="margin-top:20px;"><i class="fas fa-chalkboard-teacher"></i> Detalhamento por Professor (${data.professores.length})</h6>
+            <div style="display:flex; flex-direction:column; gap:15px; margin-top:15px;">
+                ${data.professores.map(p => `
+                    <div style="background:white; border:2px solid #e5e7eb; border-radius:12px; padding:18px; border-left:4px solid #6366f1;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                            <div>
+                                <h6 style="margin:0; color:#1e293b; font-weight:700; font-size:15px;">
+                                    <i class="fas fa-user-tie" style="color:#6366f1;"></i> ${this.escapeHtml(p.professorNome)}
+                                </h6>
+                                <div style="font-size:12px; color:#64748b; margin-top:4px;">
+                                    ${p.professorMatricula ? `<i class="fas fa-id-card"></i> ${this.escapeHtml(p.professorMatricula)}` : ''}
+                                    ${p.professorEixo ? ` • <i class="fas fa-sitemap"></i> ${this.escapeHtml(p.professorEixo)}` : ''}
+                                    ${p.professorEmail ? ` • <i class="fas fa-envelope"></i> ${this.escapeHtml(p.professorEmail)}` : ''}
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <span style="background:#eef2ff; color:#4f46e5; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${p.totalRegistros} registro(s)
+                                </span>
+                                <span style="background:#f0fdf4; color:#065f46; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${p.totalComponentes} componente(s)
+                                </span>
+                                <span style="background:#fef3c7; color:#92400e; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${p.totalAulas} aula(s)
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; font-size:13px; color:#475569;">
+                            <div>
+                                <strong>Turmas (${p.totalTurmas}):</strong><br>
+                                ${p.turmas.length > 0 ? p.turmas.map(t => `<span style="background:#dbeafe; color:#1e40af; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.escapeHtml(t)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                            <div>
+                                <strong>Componentes (${p.totalComponentesUnicos}):</strong><br>
+                                ${p.componentes.length > 0 ? p.componentes.map(c => `<span style="background:#e0e7ff; color:#4f46e5; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.escapeHtml(c)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                            <div>
+                                <strong>Períodos (${p.totalPeriodos}):</strong><br>
+                                ${p.periodos.length > 0 ? p.periodos.map(pe => `<span style="background:#fef3c7; color:#92400e; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.getPeriodoLabel(pe)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        html += `</div></div>`;
+        return html;
+    },
+
+    // ============================================
+    // RENDERIZAR RELATÓRIO POR TURMA
+    // ============================================
+    renderizarRelatorioPorTurma(data) {
+        let html = '';
+        
+        if (!data.turmas || data.turmas.length === 0) {
+            return `<div style="text-align:center; padding:40px; color:#94a3b8;">
+                <i class="fas fa-users-slash" style="font-size:48px; opacity:0.5;"></i>
+                <p>Nenhuma turma encontrada com os filtros aplicados</p>
+            </div></div></div>`;
+        }
+        
+        html += `
+            <h6 style="margin-top:20px;"><i class="fas fa-users"></i> Detalhamento por Turma (${data.turmas.length})</h6>
+            <div style="display:flex; flex-direction:column; gap:15px; margin-top:15px;">
+                ${data.turmas.map(t => `
+                    <div style="background:white; border:2px solid #e5e7eb; border-radius:12px; padding:18px; border-left:4px solid #10b981;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                            <div>
+                                <h6 style="margin:0; color:#1e293b; font-weight:700; font-size:15px;">
+                                    <i class="fas fa-school" style="color:#10b981;"></i> Turma ${this.escapeHtml(t.turma)}
+                                </h6>
+                                <div style="font-size:12px; color:#64748b; margin-top:4px;">
+                                    <i class="fas fa-graduation-cap"></i> ${this.escapeHtml(t.curso || 'Não informado')}
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <span style="background:#dbeafe; color:#1e40af; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${t.totalProfessores} professor(es)
+                                </span>
+                                <span style="background:#f0fdf4; color:#065f46; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${t.totalComponentes} componente(s)
+                                </span>
+                                <span style="background:#fef3c7; color:#92400e; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${t.totalAulas} aula(s)
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; font-size:13px; color:#475569;">
+                            <div>
+                                <strong>Professores (${t.totalProfessores}):</strong><br>
+                                ${t.professores.length > 0 ? t.professores.map(p => `<span style="background:#eef2ff; color:#4f46e5; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.escapeHtml(p)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                            <div>
+                                <strong>Componentes (${t.totalComponentesUnicos}):</strong><br>
+                                ${t.componentes.length > 0 ? t.componentes.map(c => `<span style="background:#e0e7ff; color:#4f46e5; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.escapeHtml(c)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                            <div>
+                                <strong>Períodos (${t.totalPeriodos}):</strong><br>
+                                ${t.periodos.length > 0 ? t.periodos.map(pe => `<span style="background:#fef3c7; color:#92400e; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.getPeriodoLabel(pe)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        html += `</div></div>`;
+        return html;
+    },
+
+    // ============================================
+    // RENDERIZAR RELATÓRIO POR EIXO (com nomes de componentes)
+    // ============================================
+    renderizarRelatorioPorEixo(data) {
+        let html = '';
+        
+        if (!data.eixos || data.eixos.length === 0) {
+            return `<div style="text-align:center; padding:40px; color:#94a3b8;">
+                <i class="fas fa-sitemap" style="font-size:48px; opacity:0.5;"></i>
+                <p>Nenhum eixo encontrado com os filtros aplicados</p>
+            </div></div></div>`;
+        }
+        
+        html += `
+            <h6 style="margin-top:20px;"><i class="fas fa-sitemap"></i> Detalhamento por Eixo (${data.eixos.length})</h6>
+            <div style="display:flex; flex-direction:column; gap:15px; margin-top:15px;">
+                ${data.eixos.map(e => `
+                    <div style="background:white; border:2px solid #e5e7eb; border-radius:12px; padding:18px; border-left:4px solid #f59e0b;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                            <div>
+                                <h6 style="margin:0; color:#1e293b; font-weight:700; font-size:15px;">
+                                    <i class="fas fa-layer-group" style="color:#f59e0b;"></i> ${this.escapeHtml(e.eixo)}
+                                </h6>
+                            </div>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <span style="background:#dbeafe; color:#1e40af; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${e.totalProfessores} professor(es)
+                                </span>
+                                <span style="background:#fef3c7; color:#92400e; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${e.totalTurmas} turma(s)
+                                </span>
+                                <span style="background:#f0fdf4; color:#065f46; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${e.totalComponentesUnicos} componente(s)
+                                </span>
+                                <span style="background:#fee2e2; color:#991b1b; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                                    ${e.totalAulas} aula(s)
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; font-size:13px; color:#475569; margin-bottom:12px;">
+                            <div>
+                                <strong>Professores:</strong><br>
+                                ${e.professores.length > 0 ? e.professores.map(p => `<span style="background:#eef2ff; color:#4f46e5; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.escapeHtml(p)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                            <div>
+                                <strong>Turmas:</strong><br>
+                                ${e.turmas.length > 0 ? e.turmas.map(t => `<span style="background:#dbeafe; color:#1e40af; padding:3px 8px; border-radius:6px; font-size:11px; margin:2px; display:inline-block;">${this.escapeHtml(t)}</span>`).join('') : '<span style="color:#94a3b8;">-</span>'}
+                            </div>
+                        </div>
+                        
+                        <div style="background:#f8fafc; border-radius:8px; padding:12px; margin-top:8px;">
+                            <strong style="font-size:12px; color:#475569;">
+                                <i class="fas fa-book-open"></i> Componentes Curriculares (${e.componentes.length}):
+                            </strong>
+                            <table style="width:100%; margin-top:8px; font-size:13px; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#e2e8f0;">
+                                        <th style="padding:6px 10px; text-align:left; border-radius:6px 0 0 6px;">Componente</th>
+                                        <th style="padding:6px 10px; text-align:center; width:100px;">Registros</th>
+                                        <th style="padding:6px 10px; text-align:center; width:100px; border-radius:0 6px 6px 0;">Aulas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${e.componentes.map(c => `
+                                        <tr style="border-bottom:1px solid #e2e8f0;">
+                                            <td style="padding:6px 10px; color:#1e293b; font-weight:500;">
+                                                <i class="fas fa-book" style="color:#6366f1; margin-right:6px;"></i>
+                                                ${this.escapeHtml(c.nome)}
+                                            </td>
+                                            <td style="padding:6px 10px; text-align:center; color:#4f46e5; font-weight:600;">${c.count}</td>
+                                            <td style="padding:6px 10px; text-align:center; color:#f59e0b; font-weight:600;">${c.aulas}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        html += `</div></div>`;
+        return html;
+    },
+    
+    // ============================================
+    // EXPORTAR CSV (VERSÃO CORRIGIDA — por tipo)
+    // ============================================
+    exportarCSV() {
+        const data = this.relatorioAtual;
+        if (!data) { this.mostrarToast('Gere um relatório primeiro', 'warning'); return; }
+        
+        const tipo = data.tipo || 'geral';
+        let csv = '';
+        
+        if (tipo === 'professor') {
+            csv = 'Professor,Matrícula,Email,Eixo,Registros,Componentes,Aulas,Turmas,Componentes_Únicos,Períodos\n';
+            (data.professores || []).forEach(p => {
+                csv += [
+                    `"${(p.professorNome || '').replace(/"/g, '""')}"`,
+                    `"${(p.professorMatricula || '').replace(/"/g, '""')}"`,
+                    `"${(p.professorEmail || '').replace(/"/g, '""')}"`,
+                    `"${(p.professorEixo || '').replace(/"/g, '""')}"`,
+                    p.totalRegistros,
+                    p.totalComponentes,
+                    p.totalAulas,
+                    `"${p.turmas.join(', ')}"`,
+                    `"${p.componentes.join(', ')}"`,
+                    `"${p.periodos.map(pe => this.getPeriodoLabel(pe)).join(', ')}"`
+                ].join(',') + '\n';
+            });
+        }
+        else if (tipo === 'turma') {
+            csv = 'Turma,Curso,Registros,Componentes,Aulas,Professores,Componentes_Únicos,Períodos\n';
+            (data.turmas || []).forEach(t => {
+                csv += [
+                    `"${(t.turma || '').replace(/"/g, '""')}"`,
+                    `"${(t.curso || '').replace(/"/g, '""')}"`,
+                    t.totalRegistros,
+                    t.totalComponentes,
+                    t.totalAulas,
+                    `"${t.professores.join(', ')}"`,
+                    `"${t.componentes.join(', ')}"`,
+                    `"${t.periodos.map(pe => this.getPeriodoLabel(pe)).join(', ')}"`
+                ].join(',') + '\n';
+            });
+        }
+        else if (tipo === 'eixo') {
+            csv = 'Eixo,Professores,Turmas,Componentes,Aulas,Componente,Nome_Componente,Registros_Componente,Aulas_Componente\n';
+            (data.eixos || []).forEach(e => {
+                if (e.componentes && e.componentes.length > 0) {
+                    e.componentes.forEach(c => {
+                        csv += [
+                            `"${(e.eixo || '').replace(/"/g, '""')}"`,
+                            e.totalProfessores,
+                            e.totalTurmas,
+                            e.totalComponentesUnicos,
+                            e.totalAulas,
+                            `"${(c.nome || '').replace(/"/g, '""')}"`,
+                            `"${(c.nome || '').replace(/"/g, '""')}"`,
+                            c.count,
+                            c.aulas
+                        ].join(',') + '\n';
+                    });
+                } else {
                     csv += [
-                        `"${r.dataColetaFormatada}"`,
-                        `"${(r.professorNome || '').replace(/"/g, '""')}"`,
-                        `"${(r.professorMatricula || '').replace(/"/g, '""')}"`,
-                        `"${(r.professorEixo || '').replace(/"/g, '""')}"`,
-                        `"${(c.nome || '').replace(/"/g, '""')}"`,
-                        `"${(c.turma || '').replace(/"/g, '""')}"`,
-                        `"${(c.curso || '').replace(/"/g, '""')}"`,
-                        `"${periodoLabel}"`,
-                        norm.aulas,
-                        c.cargaHorariaAnual || 0,
-                        c.cargaHorariaSemanal || 0,
-                        `"${(c.observacoes || '').replace(/"/g, '""')}"`
+                        `"${(e.eixo || '').replace(/"/g, '""')}"`,
+                        e.totalProfessores,
+                        e.totalTurmas,
+                        e.totalComponentesUnicos,
+                        e.totalAulas,
+                        '', '', '', ''
                     ].join(',') + '\n';
-                });
-            }
-        });
+                }
+            });
+        }
+        else {
+            // Geral — CSV detalhado com todas as colunas dos componentes
+            csv = 'Data Coleta,Professor,Matrícula,Eixo,Componente,Turma,Curso,Período,Aulas Registradas,CH Anual,CH Semanal,Observações\n';
+            (data.registros || []).forEach(r => {
+                if (!r.componentes || r.componentes.length === 0) {
+                    csv += `"${r.dataColetaFormatada}","${r.professorNome}","${r.professorMatricula || ''}","${r.professorEixo || ''}","","","","","","","",""\n`;
+                } else {
+                    r.componentes.forEach(c => {
+                        const norm = this.normalizarAulas(c.aulasRegistradas);
+                        const periodoLabel = this.getPeriodoLabel(c.periodo || norm.periodoLegado);
+                        csv += [
+                            `"${r.dataColetaFormatada}"`,
+                            `"${(r.professorNome || '').replace(/"/g, '""')}"`,
+                            `"${(r.professorMatricula || '').replace(/"/g, '""')}"`,
+                            `"${(r.professorEixo || '').replace(/"/g, '""')}"`,
+                            `"${(c.nome || '').replace(/"/g, '""')}"`,
+                            `"${(c.turma || '').replace(/"/g, '""')}"`,
+                            `"${(c.curso || '').replace(/"/g, '""')}"`,
+                            `"${periodoLabel}"`,
+                            norm.aulas,
+                            c.cargaHorariaAnual || 0,
+                            c.cargaHorariaSemanal || 0,
+                            `"${(c.observacoes || '').replace(/"/g, '""')}"`
+                        ].join(',') + '\n';
+                    });
+                }
+            });
+        }
         
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `gestao-professores_${this.getDataLocalISO()}.csv`;
+        link.download = `gestao-professores-${tipo}_${this.getDataLocalISO()}.csv`;
         link.click();
         URL.revokeObjectURL(link.href);
         this.mostrarToast('✅ CSV exportado!', 'success');
     },
     
+    // ============================================
+    // IMPRIMIR RELATÓRIO (VERSÃO CORRIGIDA — por tipo)
+    // ============================================
     imprimirRelatorio() {
         const data = this.relatorioAtual;
         if (!data) { this.mostrarToast('Gere um relatório primeiro', 'warning'); return; }
@@ -2072,31 +2427,76 @@ window.GestaoProfessoresModule = {
         const logo = '/uploads/logo-iema.png';
         const carimbo = '/icons/assinatura_gpeda.ico';
         const dataGeracao = new Date().toLocaleString('pt-BR');
+        const tipo = data.tipo || 'geral';
+        
+        // Título dinâmico
+        const titulos = {
+            'geral': 'RELATÓRIO GERAL DE GESTÃO DE PROFESSORES',
+            'professor': 'RELATÓRIO DE GESTÃO POR PROFESSOR',
+            'turma': 'RELATÓRIO DE GESTÃO POR TURMA',
+            'eixo': 'RELATÓRIO DE GESTÃO POR EIXO'
+        };
+        const titulo = titulos[tipo] || 'RELATÓRIO DE GESTÃO DE PROFESSORES';
+        
+        // Subtítulo com filtros aplicados
+        const filtros = [];
+        if (data.filtros?.eixo) filtros.push(`Eixo: ${this.escapeHtml(data.filtros.eixo)}`);
+        if (data.filtros?.turma) filtros.push(`Turma: ${this.escapeHtml(data.filtros.turma)}`);
+        if (data.filtros?.periodo) filtros.push(`Período: ${this.getPeriodoLabel(data.filtros.periodo)}`);
+        if (data.filtros?.dataInicio) filtros.push(`De: ${data.filtros.dataInicio}`);
+        if (data.filtros?.dataFim) filtros.push(`Até: ${data.filtros.dataFim}`);
+        const subtituloFiltros = filtros.length > 0 
+            ? `<p style="margin-top:5px; font-size:9pt; color:#333; font-style:italic;">Filtros: ${filtros.join(' | ')}</p>` 
+            : '';
+        
+        // Montar conteúdo por tipo
+        let conteudoHTML = '';
+        
+        if (tipo === 'professor') {
+            conteudoHTML = this.gerarHTMLRelatorioProfessor(data);
+        } else if (tipo === 'turma') {
+            conteudoHTML = this.gerarHTMLRelatorioTurma(data);
+        } else if (tipo === 'eixo') {
+            conteudoHTML = this.gerarHTMLRelatorioEixo(data);
+        } else {
+            conteudoHTML = this.gerarHTMLRelatorioGeral(data);
+        }
+        
+        // Stats
+        const totalMostrar = data.total || 0;
+        const labelTotal = tipo === 'professor' ? 'Professores' : tipo === 'turma' ? 'Turmas' : tipo === 'eixo' ? 'Eixos' : 'Registros';
         
         const html = `
             <!DOCTYPE html>
             <html lang="pt-BR">
             <head>
                 <meta charset="UTF-8">
-                <title>Relatório de Gestão de Professores</title>
+                <title>${titulo}</title>
                 <style>
-                    @page { size: A4 landscape; margin: 10mm; }
+                    @page { size: A4 portrait; margin: 12mm; }
                     * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body { font-family: 'Times New Roman', serif; font-size: 9pt; }
+                    body { font-family: 'Times New Roman', Times, serif; font-size: 9pt; line-height: 1.3; }
                     .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 6px; margin-bottom: 10px; }
                     .header img { max-height: 18mm; display: block; margin: 0 auto 4px; }
                     .header h1 { font-size: 12pt; text-transform: uppercase; }
-                    .titulo { text-align: center; font-size: 13pt; font-weight: bold; background: #eef2ff; padding: 8px; border: 2px solid #000; margin: 12px 0; }
-                    .stats { display: flex; gap: 15px; margin: 12px 0; }
-                    .stat { flex: 1; text-align: center; padding: 10px; background: #f8fafc; border: 1px solid #ccc; border-radius: 6px; }
-                    .stat-value { font-size: 22pt; font-weight: bold; color: #1e3c72; }
-                    .stat-label { font-size: 8pt; color: #666; text-transform: uppercase; }
-                    table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 10px; }
-                    th { background: #1e3c72; color: white; padding: 6px; text-align: left; }
-                    td { padding: 4px 6px; border-bottom: 1px solid #ddd; }
-                    tr:nth-child(even) { background: #f9fafb; }
-                    .assinaturas { display: flex; justify-content: center; margin-top: 30px; }
-                    .assinatura { flex: 0 0 40%; text-align: center; }
+                    .titulo { text-align: center; font-size: 12pt; font-weight: bold; background: #eef2ff; padding: 8px; border: 2px solid #000; margin: 12px 0; }
+                    .stats { display: flex; gap: 10px; margin: 10px 0; }
+                    .stat { flex: 1; text-align: center; padding: 8px; background: #f8fafc; border: 1px solid #999; border-radius: 6px; }
+                    .stat-value { font-size: 18pt; font-weight: bold; color: #1e3c72; }
+                    .stat-label { font-size: 8pt; color: #333; text-transform: uppercase; }
+                    .section-title { font-size: 10pt; font-weight: bold; background: #e8e8e8; padding: 4px 8px; border-left: 4px solid #1e3c72; margin: 12px 0 6px; }
+                    table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 6px; }
+                    th { background: #1e3c72; color: white; padding: 5px; text-align: left; border: 1px solid #000; }
+                    td { padding: 4px 6px; border: 1px solid #999; vertical-align: top; }
+                    tr:nth-child(even) { background: #f5f5f5; }
+                    .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 7pt; margin: 1px; background: #e0e7ff; color: #3730a3; }
+                    .tag-turma { background: #dbeafe; color: #1e40af; }
+                    .tag-periodo { background: #fef3c7; color: #92400e; }
+                    .bloco { border: 1px solid #000; border-radius: 6px; padding: 8px; margin-bottom: 10px; background: #fafafa; page-break-inside: avoid; }
+                    .bloco-title { font-size: 10pt; font-weight: bold; color: #1e3c72; border-bottom: 1px solid #999; padding-bottom: 3px; margin-bottom: 6px; }
+                    .bloco-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 8pt; margin-bottom: 6px; }
+                    .assinaturas { display: flex; justify-content: center; margin-top: 25px; }
+                    .assinatura { flex: 0 0 45%; text-align: center; }
                     .assinatura-container { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; }
                     .assinatura-container::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; }
                     .carimbo-overlay { max-height: 16mm; max-width: 45mm; opacity: 0.95; margin-bottom: 2mm; }
@@ -2108,33 +2508,23 @@ window.GestaoProfessoresModule = {
             </head>
             <body>
                 <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
+                
                 <div class="header">
                     <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
                     <h1>IEMA Pleno: São Luís - Centro</h1>
-                    <p>Relatório de Gestão de Professores — Setor Pedagógico</p>
+                    <p>Sistema de Gestão de Professores — Setor Pedagógico</p>
                 </div>
-                <div class="titulo">📊 RELATÓRIO DE GESTÃO DE PROFESSORES</div>
+                
+                <div class="titulo">${titulo}</div>
+                ${subtituloFiltros}
                 
                 <div class="stats">
-                    <div class="stat"><div class="stat-value">${data.total || 0}</div><div class="stat-label">Registros</div></div>
+                    <div class="stat"><div class="stat-value">${totalMostrar}</div><div class="stat-label">${labelTotal}</div></div>
                     <div class="stat"><div class="stat-value">${data.totalComponentes || 0}</div><div class="stat-label">Componentes</div></div>
                     <div class="stat"><div class="stat-value">${data.totalAulas || 0}</div><div class="stat-label">Aulas Registradas</div></div>
                 </div>
                 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Data</th><th>Professor</th><th>Eixo</th><th>Componentes</th><th>Aulas</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${(data.registros || []).map(r => {
-                            let ta = 0;
-                            (r.componentes||[]).forEach(c => { ta += this.normalizarAulas(c.aulasRegistradas).aulas; });
-                            return `<tr><td>${r.dataColetaFormatada}</td><td>${this.escapeHtml(r.professorNome)}</td><td>${this.escapeHtml(r.professorEixo||'-')}</td><td>${r.componentes?.length||0}</td><td>${ta}</td></tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
+                ${conteudoHTML}
                 
                 <div class="assinaturas">
                     <div class="assinatura">
@@ -2149,12 +2539,187 @@ window.GestaoProfessoresModule = {
                     <p>Gerado em ${dataGeracao} — EducaPleno</p>
                 </div>
             </body>
-            </html>`;
+            </html>
+        `;
         
         const win = window.open('', '_blank');
         win.document.write(html);
         win.document.close();
         win.onload = () => setTimeout(() => win.print(), 500);
+    },
+
+    // ============================================
+    // HTML DO RELATÓRIO — GERAL
+    // ============================================
+    gerarHTMLRelatorioGeral(data) {
+        if (!data.registros || data.registros.length === 0) {
+            return '<p style="text-align:center; padding:20px; color:#666;">Nenhum registro encontrado</p>';
+        }
+        
+        return `
+            <div class="section-title">📋 Detalhamento dos Registros (${data.registros.length})</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:70px;">Data</th>
+                        <th>Professor</th>
+                        <th style="width:80px;">Eixo</th>
+                        <th style="width:60px; text-align:center;">Componentes</th>
+                        <th style="width:60px; text-align:center;">Aulas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.registros.map(r => {
+                        let totalAulasR = 0;
+                        (r.componentes || []).forEach(c => {
+                            totalAulasR += this.normalizarAulas(c.aulasRegistradas).aulas;
+                        });
+                        return `
+                            <tr>
+                                <td>${r.dataColetaFormatada}</td>
+                                <td>${this.escapeHtml(r.professorNome)}</td>
+                                <td>${this.escapeHtml(r.professorEixo || '-')}</td>
+                                <td style="text-align:center;">${r.componentes?.length || 0}</td>
+                                <td style="text-align:center;"><strong>${totalAulasR}</strong></td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    },
+
+    // ============================================
+    // HTML DO RELATÓRIO — PROFESSOR
+    // ============================================
+    gerarHTMLRelatorioProfessor(data) {
+        if (!data.professores || data.professores.length === 0) {
+            return '<p style="text-align:center; padding:20px; color:#666;">Nenhum professor encontrado</p>';
+        }
+        
+        return `
+            <div class="section-title">👨‍🏫 Detalhamento por Professor (${data.professores.length})</div>
+            ${data.professores.map(p => `
+                <div class="bloco">
+                    <div class="bloco-title">
+                        <strong>${this.escapeHtml(p.professorNome)}</strong>
+                        ${p.professorMatricula ? ` — Mat: ${this.escapeHtml(p.professorMatricula)}` : ''}
+                    </div>
+                    <div class="bloco-grid">
+                        <div><strong>Eixo:</strong> ${this.escapeHtml(p.professorEixo || '-')}</div>
+                        <div><strong>Registros:</strong> ${p.totalRegistros}</div>
+                        <div><strong>Componentes:</strong> ${p.totalComponentes}</div>
+                        <div><strong>Aulas:</strong> <strong style="color:#1e3c72;">${p.totalAulas}</strong></div>
+                    </div>
+                    <div style="font-size:8pt; margin-bottom:5px;">
+                        <strong>Turmas (${p.totalTurmas}):</strong>
+                        ${p.turmas.length > 0 ? p.turmas.map(t => `<span class="tag tag-turma">${this.escapeHtml(t)}</span>`).join(' ') : '-'}
+                    </div>
+                    <div style="font-size:8pt; margin-bottom:5px;">
+                        <strong>Componentes (${p.totalComponentesUnicos}):</strong>
+                        ${p.componentes.length > 0 ? p.componentes.map(c => `<span class="tag">${this.escapeHtml(c)}</span>`).join(' ') : '-'}
+                    </div>
+                    <div style="font-size:8pt;">
+                        <strong>Períodos (${p.totalPeriodos}):</strong>
+                        ${p.periodos.length > 0 ? p.periodos.map(pe => `<span class="tag tag-periodo">${this.getPeriodoLabel(pe)}</span>`).join(' ') : '-'}
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    },
+
+    // ============================================
+    // HTML DO RELATÓRIO — TURMA
+    // ============================================
+    gerarHTMLRelatorioTurma(data) {
+        if (!data.turmas || data.turmas.length === 0) {
+            return '<p style="text-align:center; padding:20px; color:#666;">Nenhuma turma encontrada</p>';
+        }
+        
+        return `
+            <div class="section-title">👥 Detalhamento por Turma (${data.turmas.length})</div>
+            ${data.turmas.map(t => `
+                <div class="bloco">
+                    <div class="bloco-title">
+                        <strong>Turma ${this.escapeHtml(t.turma)}</strong>
+                        — ${this.escapeHtml(t.curso || 'Não informado')}
+                    </div>
+                    <div class="bloco-grid">
+                        <div><strong>Registros:</strong> ${t.totalRegistros}</div>
+                        <div><strong>Componentes:</strong> ${t.totalComponentes}</div>
+                        <div><strong>Professores:</strong> ${t.totalProfessores}</div>
+                        <div><strong>Aulas:</strong> <strong style="color:#1e3c72;">${t.totalAulas}</strong></div>
+                    </div>
+                    <div style="font-size:8pt; margin-bottom:5px;">
+                        <strong>Professores (${t.totalProfessores}):</strong>
+                        ${t.professores.length > 0 ? t.professores.map(p => `<span class="tag">${this.escapeHtml(p)}</span>`).join(' ') : '-'}
+                    </div>
+                    <div style="font-size:8pt; margin-bottom:5px;">
+                        <strong>Componentes (${t.totalComponentesUnicos}):</strong>
+                        ${t.componentes.length > 0 ? t.componentes.map(c => `<span class="tag">${this.escapeHtml(c)}</span>`).join(' ') : '-'}
+                    </div>
+                    <div style="font-size:8pt;">
+                        <strong>Períodos (${t.totalPeriodos}):</strong>
+                        ${t.periodos.length > 0 ? t.periodos.map(pe => `<span class="tag tag-periodo">${this.getPeriodoLabel(pe)}</span>`).join(' ') : '-'}
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    },
+
+    // ============================================
+    // HTML DO RELATÓRIO — EIXO (com tabela de componentes)
+    // ============================================
+    gerarHTMLRelatorioEixo(data) {
+        if (!data.eixos || data.eixos.length === 0) {
+            return '<p style="text-align:center; padding:20px; color:#666;">Nenhum eixo encontrado</p>';
+        }
+        
+        return `
+            <div class="section-title">🗂️ Detalhamento por Eixo (${data.eixos.length})</div>
+            ${data.eixos.map(e => `
+                <div class="bloco">
+                    <div class="bloco-title">
+                        <strong>Eixo: ${this.escapeHtml(e.eixo)}</strong>
+                    </div>
+                    <div class="bloco-grid">
+                        <div><strong>Professores:</strong> ${e.totalProfessores}</div>
+                        <div><strong>Turmas:</strong> ${e.totalTurmas}</div>
+                        <div><strong>Componentes:</strong> ${e.totalComponentesUnicos}</div>
+                        <div><strong>Aulas:</strong> <strong style="color:#1e3c72;">${e.totalAulas}</strong></div>
+                    </div>
+                    
+                    <div style="font-size:8pt; margin-bottom:5px;">
+                        <strong>Professores:</strong>
+                        ${e.professores.length > 0 ? e.professores.map(p => `<span class="tag">${this.escapeHtml(p)}</span>`).join(' ') : '-'}
+                    </div>
+                    
+                    <div style="font-size:8pt; margin-bottom:5px;">
+                        <strong>Turmas:</strong>
+                        ${e.turmas.length > 0 ? e.turmas.map(t => `<span class="tag tag-turma">${this.escapeHtml(t)}</span>`).join(' ') : '-'}
+                    </div>
+                    
+                    <table style="margin-top:8px;">
+                        <thead>
+                            <tr>
+                                <th>Componente Curricular</th>
+                                <th style="width:80px; text-align:center;">Registros</th>
+                                <th style="width:80px; text-align:center;">Aulas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${e.componentes.map(c => `
+                                <tr>
+                                    <td>${this.escapeHtml(c.nome)}</td>
+                                    <td style="text-align:center;">${c.count}</td>
+                                    <td style="text-align:center;"><strong>${c.aulas}</strong></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `).join('')}
+        `;
     },
 
     // ============================================

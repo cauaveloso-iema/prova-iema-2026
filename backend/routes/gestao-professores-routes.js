@@ -1,6 +1,6 @@
 // routes/gestao-professores-routes.js
 // Rotas para Gestão de Professores - Setor Pedagógico
-// ⚠️ VERSÃO 2.0 — Aulas vinculadas a PERÍODO (select) + Turma + Disciplina
+// ⚠️ VERSÃO 2.1 — Relatórios corrigidos (por professor, turma, eixo com nomes de componentes)
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -79,8 +79,7 @@ function parseIntSeguro(valor, padrao = 0) {
     return isNaN(n) ? padrao : n;
 }
 
-// 🆕 Normaliza aulasRegistradas (compatibilidade com formato antigo periodo1..4)
-// Aceita number OU objeto { periodo1..4 } e sempre retorna um NUMBER.
+// Normaliza aulasRegistradas (compatibilidade com formato antigo periodo1..4)
 function normalizarAulas(aulas) {
     if (aulas === null || aulas === undefined) return 0;
     if (typeof aulas === 'number') return isNaN(aulas) ? 0 : aulas;
@@ -98,7 +97,7 @@ function normalizarAulas(aulas) {
     return 0;
 }
 
-// 🆕 Detecta período legado (para registros antigos que tenham periodo1..4 mas sem campo periodo)
+// Detecta período legado (para registros antigos)
 function detectarPeriodoLegado(aulas) {
     if (!aulas || typeof aulas !== 'object') return null;
     if ((parseInt(aulas.periodo1, 10) || 0) > 0) return '1';
@@ -108,12 +107,11 @@ function detectarPeriodoLegado(aulas) {
     return null;
 }
 
-// 🆕 Normaliza um componente antes de gravar (garante periodo + aulasRegistradas number)
+// Normaliza um componente antes de gravar
 function normalizarComponentePayload(c) {
     const aulasRaw = c.aulasRegistradas;
     let periodo = sanitizarString(c.periodo);
     
-    // Se não veio periodo, tenta detectar em formato antigo
     if (!periodo) {
         const legado = detectarPeriodoLegado(aulasRaw);
         if (legado) periodo = legado;
@@ -138,7 +136,7 @@ function normalizarComponentePayload(c) {
 // ============================================
 
 // ============================================
-// GET /professores - Lista professores cadastrados
+// GET /professores
 // ============================================
 router.get('/professores', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -187,7 +185,7 @@ router.get('/professores', authenticateToken, verificarPermissaoModulo, async (r
 });
 
 // ============================================
-// GET /professores/:id - Busca professor específico
+// GET /professores/:id
 // ============================================
 router.get('/professores/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -234,7 +232,7 @@ router.get('/professores/:id', authenticateToken, verificarPermissaoModulo, asyn
 });
 
 // ============================================
-// GET /turmas - Lista turmas com seus cursos
+// GET /turmas
 // ============================================
 router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -279,7 +277,7 @@ router.get('/turmas', authenticateToken, verificarPermissaoModulo, async (req, r
 });
 
 // ============================================
-// GET /componentes-curriculares - Lista componentes por eixo
+// GET /componentes-curriculares
 // ============================================
 router.get('/componentes-curriculares', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -332,7 +330,7 @@ router.get('/componentes-curriculares', authenticateToken, verificarPermissaoMod
 });
 
 // ============================================
-// GET /eixos - Lista eixos disponíveis
+// GET /eixos
 // ============================================
 router.get('/eixos', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -372,11 +370,10 @@ router.get('/eixos', authenticateToken, verificarPermissaoModulo, async (req, re
 });
 
 // ============================================
-// 🆕 GET /periodos - Lista períodos letivos disponíveis
+// GET /periodos
 // ============================================
 router.get('/periodos', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
-        // Tenta buscar de uma collection configurável
         let periodos = [];
         
         try {
@@ -386,7 +383,6 @@ router.get('/periodos', authenticateToken, verificarPermissaoModulo, async (req,
                 .sort({ ordem: 1 })
                 .lean();
         } catch (e) {
-            // Fallback: períodos padrão
             console.log('ℹ️ Model Periodo não encontrado, usando fallback');
         }
         
@@ -412,7 +408,6 @@ router.get('/periodos', authenticateToken, verificarPermissaoModulo, async (req,
         });
     } catch (error) {
         console.error('❌ Erro ao listar períodos:', error);
-        // Mesmo em erro, retorna fallback
         res.json({
             success: true,
             periodos: [
@@ -427,7 +422,7 @@ router.get('/periodos', authenticateToken, verificarPermissaoModulo, async (req,
 });
 
 // ============================================
-// POST /registrar - Registra nova gestão de professor
+// POST /registrar
 // ============================================
 router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -442,47 +437,27 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
             observacoesGerais
         } = req.body;
         
-        // ============ VALIDAÇÕES ============
-        if (!professorId) {
-            return res.status(400).json({ success: false, error: 'Professor é obrigatório' });
-        }
-        if (!dataColeta) {
-            return res.status(400).json({ success: false, error: 'Data da coleta é obrigatória' });
-        }
+        if (!professorId) return res.status(400).json({ success: false, error: 'Professor é obrigatório' });
+        if (!dataColeta) return res.status(400).json({ success: false, error: 'Data da coleta é obrigatória' });
         if (!componentes || !Array.isArray(componentes) || componentes.length === 0) {
             return res.status(400).json({ success: false, error: 'Pelo menos um componente curricular é obrigatório' });
         }
         
-        // ============ BUSCAR PROFESSOR ============
         const professor = await User.findById(professorId)
             .select('nome email cpf telefone matricula eixo departamento titulacao')
             .lean();
         
-        if (!professor) {
-            return res.status(404).json({ success: false, error: 'Professor não encontrado' });
-        }
+        if (!professor) return res.status(404).json({ success: false, error: 'Professor não encontrado' });
         
-        // ============ VALIDAR COMPONENTES ============
         for (let i = 0; i < componentes.length; i++) {
             const c = componentes[i];
-            if (!c.nome) {
-                return res.status(400).json({ success: false, error: `Componente ${i + 1}: nome é obrigatório` });
-            }
-            if (!c.turma) {
-                return res.status(400).json({ success: false, error: `Componente ${i + 1}: turma é obrigatória` });
-            }
-            // 🆕 Período obrigatório
+            if (!c.nome) return res.status(400).json({ success: false, error: `Componente ${i + 1}: nome é obrigatório` });
+            if (!c.turma) return res.status(400).json({ success: false, error: `Componente ${i + 1}: turma é obrigatória` });
             if (!c.periodo && !detectarPeriodoLegado(c.aulasRegistradas)) {
                 return res.status(400).json({ success: false, error: `Componente ${i + 1}: período é obrigatório` });
             }
-            // 🆕 Aulas obrigatórias (deve ter número >= 0)
-            const aulasNorm = normalizarAulas(c.aulasRegistradas);
-            if (isNaN(aulasNorm)) {
-                return res.status(400).json({ success: false, error: `Componente ${i + 1}: aulas registradas inválidas` });
-            }
         }
         
-        // ============ MONTAR DADOS ============
         const dataColetaObj = new Date(dataColeta + 'T12:00:00');
         
         const novoRegistro = new GestaoProfessor({
@@ -495,18 +470,13 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
             professorCPF: professor.cpf || '',
             professorDepartamento: professor.departamento || '',
             professorTitulacao: professor.titulacao || '',
-            
             turmasVinculadas: (turmasVinculadas || []).map(t => ({
                 turma: sanitizarString(t.turma),
                 curso: sanitizarString(t.curso)
             })),
-            
-            // 🆕 Normaliza cada componente (periodo + aulasRegistradas number)
             componentes: componentes.map(normalizarComponentePayload),
-            
             dataColeta: dataColetaObj,
             observacoesGerais: sanitizarString(observacoesGerais),
-            
             registradoPor: req.userId,
             registradoPorNome: req.userNome,
             registradoPorEmail: req.userEmail
@@ -514,7 +484,7 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
         
         await novoRegistro.save();
         
-        console.log(`✅ Gestão de professor registrada: ${professor.nome} (ID: ${novoRegistro._id})`);
+        console.log(`✅ Gestão de professor registrada: ${professor.nome}`);
         
         res.status(201).json({
             success: true,
@@ -524,32 +494,24 @@ router.post('/registrar', authenticateToken, verificarPermissaoModulo, async (re
         
     } catch (error) {
         console.error('❌ Erro ao registrar gestão:', error);
-        
         if (error.name === 'ValidationError') {
             const msgs = Object.values(error.errors).map(e => e.message);
             return res.status(400).json({ success: false, error: msgs.join('; ') });
         }
-        
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // ============================================
-// GET /listar - Lista registros com filtros e paginação
+// GET /listar
 // ============================================
 router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
         const GestaoProfessor = getGestaoProfessorModel();
         const { 
-            busca, 
-            eixo, 
-            turma, 
-            periodo,       // 🆕
-            professorId,
-            dataInicio, 
-            dataFim,
-            limit = 50, 
-            page = 1 
+            busca, eixo, turma, periodo, professorId,
+            dataInicio, dataFim,
+            limit = 50, page = 1 
         } = req.query;
         
         let filtro = { ativo: true };
@@ -564,7 +526,7 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
         
         if (eixo) filtro['componentes.eixo'] = eixo;
         if (turma) filtro['componentes.turma'] = turma;
-        if (periodo) filtro['componentes.periodo'] = String(periodo); // 🆕
+        if (periodo) filtro['componentes.periodo'] = String(periodo);
         if (professorId) filtro.professorId = professorId;
         
         if (dataInicio || dataFim) {
@@ -594,7 +556,6 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
                 professorMatricula: r.professorMatricula,
                 professorEixo: r.professorEixo,
                 turmasVinculadas: r.turmasVinculadas || [],
-                // 🆕 Normaliza componentes para o formato novo (number + periodo)
                 componentes: (r.componentes || []).map(c => ({
                     _id: c._id,
                     componenteCurricularId: c.componenteCurricularId,
@@ -630,7 +591,7 @@ router.get('/listar', authenticateToken, verificarPermissaoModulo, async (req, r
 });
 
 // ============================================
-// GET /:id - Busca registro específico
+// GET /:id
 // ============================================
 router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -647,7 +608,6 @@ router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
             return res.status(404).json({ success: false, error: 'Registro não encontrado' });
         }
         
-        // 🆕 Normaliza componentes antes de retornar (garante formato novo)
         const registroNormalizado = {
             ...registro,
             componentes: (registro.componentes || []).map(c => ({
@@ -674,7 +634,7 @@ router.get('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
 });
 
 // ============================================
-// PUT /:id - Edita registro
+// PUT /:id
 // ============================================
 router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -697,7 +657,6 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
             return res.status(404).json({ success: false, error: 'Registro não encontrado' });
         }
         
-        // ============ VALIDAÇÕES ============
         if (componentes !== undefined) {
             if (!Array.isArray(componentes) || componentes.length === 0) {
                 return res.status(400).json({ success: false, error: 'Pelo menos um componente é obrigatório' });
@@ -705,19 +664,14 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
             
             for (let i = 0; i < componentes.length; i++) {
                 const c = componentes[i];
-                if (!c.nome) {
-                    return res.status(400).json({ success: false, error: `Componente ${i + 1}: nome é obrigatório` });
-                }
-                if (!c.turma) {
-                    return res.status(400).json({ success: false, error: `Componente ${i + 1}: turma é obrigatória` });
-                }
+                if (!c.nome) return res.status(400).json({ success: false, error: `Componente ${i + 1}: nome é obrigatório` });
+                if (!c.turma) return res.status(400).json({ success: false, error: `Componente ${i + 1}: turma é obrigatória` });
                 if (!c.periodo && !detectarPeriodoLegado(c.aulasRegistradas)) {
                     return res.status(400).json({ success: false, error: `Componente ${i + 1}: período é obrigatório` });
                 }
             }
         }
         
-        // ============ ATUALIZAR CAMPOS ============
         if (turmasVinculadas !== undefined) {
             registro.turmasVinculadas = turmasVinculadas.map(t => ({
                 turma: sanitizarString(t.turma),
@@ -726,7 +680,6 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
         }
         
         if (componentes !== undefined) {
-            // 🆕 Normaliza cada componente
             registro.componentes = componentes.map(normalizarComponentePayload);
         }
         
@@ -759,7 +712,7 @@ router.put('/:id', authenticateToken, verificarPermissaoModulo, async (req, res)
 });
 
 // ============================================
-// DELETE /:id - Remove registro
+// DELETE /:id
 // ============================================
 router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -787,7 +740,7 @@ router.delete('/:id', authenticateToken, verificarPermissaoModulo, async (req, r
 });
 
 // ============================================
-// GET /dashboard/resumo - Dashboard com estatísticas
+// GET /dashboard/resumo
 // ============================================
 router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -839,7 +792,6 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             GestaoProfessor.distinct('professorId', filtro)
         ]);
         
-        // Top professores
         const topProfessores = await GestaoProfessor.aggregate([
             { $match: filtro },
             { 
@@ -855,7 +807,6 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
             { $limit: 10 }
         ]);
         
-        // 🆕 Total de aulas (novo formato: number, + fallback para antigo)
         const aulasAgregadas = await GestaoProfessor.aggregate([
             { $match: filtro },
             { $unwind: '$componentes' },
@@ -883,7 +834,6 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
         ]);
         const totalAulas = aulasAgregadas.length > 0 ? aulasAgregadas[0].total : 0;
         
-        // 🆕 Aulas por período (agrega total de aulas E quantidade de componentes por período)
         const porPeriodo = await GestaoProfessor.aggregate([
             { $match: filtro },
             { $unwind: '$componentes' },
@@ -949,7 +899,6 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
                 turma: t._id || 'Sem Turma',
                 count: t.count
             })),
-            // 🆕 Aulas por período
             porPeriodo: porPeriodo.map(p => ({
                 periodo: p._id,
                 totalAulas: p.totalAulas,
@@ -979,7 +928,7 @@ router.get('/dashboard/resumo', authenticateToken, verificarPermissaoModulo, asy
 });
 
 // ============================================
-// GET /relatorio/gerar - Gera relatório
+// GET /relatorio/gerar - ⚠️ VERSÃO CORRIGIDA (relatórios por tipo)
 // ============================================
 router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, async (req, res) => {
     try {
@@ -988,7 +937,7 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
             tipo = 'geral',
             eixo, 
             turma, 
-            periodo,      // 🆕
+            periodo,
             professorId,
             dataInicio, 
             dataFim 
@@ -1002,127 +951,302 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
             if (dataFim) filtro.dataColeta.$lte = new Date(dataFim + 'T23:59:59');
         }
         
-        let registros = [];
+        // Filtros opcionais
+        if (eixo) filtro['componentes.eixo'] = eixo;
+        if (turma) filtro['componentes.turma'] = turma;
+        if (periodo) filtro['componentes.periodo'] = String(periodo);
+        if (professorId) filtro.professorId = professorId;
         
-        // ============ TIPO: PROFESSOR ============
-        if (tipo === 'professor' && professorId) {
-            filtro.professorId = professorId;
-            registros = await GestaoProfessor.find(filtro).sort({ dataColeta: -1 }).lean();
-            
-            if (registros.length === 0) {
-                return res.json({
-                    success: true,
-                    tipo: 'professor',
-                    professor: null,
-                    total: 0,
-                    registros: [],
-                    estatisticas: { totalComponentes: 0, totalAulas: 0 }
-                });
-            }
-            
-            const professor = {
-                id: registros[0].professorId,
-                nome: registros[0].professorNome,
-                email: registros[0].professorEmail,
-                matricula: registros[0].professorMatricula,
-                eixo: registros[0].professorEixo
-            };
-            
-            let totalComponentes = 0;
-            let totalAulas = 0;
-            let componentesUnicos = new Set();
-            let turmasUnicas = new Set();
-            let periodosUnicos = new Set();
+        const registros = await GestaoProfessor.find(filtro).sort({ dataColeta: -1 }).lean();
+        
+        // ============================================
+        // CONTADORES GERAIS
+        // ============================================
+        let totalComponentes = 0;
+        let totalAulas = 0;
+        
+        registros.forEach(r => {
+            (r.componentes || []).forEach(c => {
+                totalComponentes++;
+                totalAulas += normalizarAulas(c.aulasRegistradas);
+            });
+        });
+        
+        // ============================================
+        // TIPO: PROFESSOR (agrupado por professor)
+        // ============================================
+        if (tipo === 'professor') {
+            const professoresMap = {};
             
             registros.forEach(r => {
-                if (r.componentes) {
-                    r.componentes.forEach(c => {
-                        totalComponentes++;
-                        totalAulas += normalizarAulas(c.aulasRegistradas);
-                        componentesUnicos.add(c.nome);
-                        if (c.turma) turmasUnicas.add(c.turma);
-                        const p = c.periodo || detectarPeriodoLegado(c.aulasRegistradas);
-                        if (p) periodosUnicos.add(p);
-                    });
+                const key = String(r.professorId);
+                
+                if (!professoresMap[key]) {
+                    professoresMap[key] = {
+                        professorId: r.professorId,
+                        professorNome: r.professorNome || 'Sem nome',
+                        professorEmail: r.professorEmail || '',
+                        professorMatricula: r.professorMatricula || '',
+                        professorEixo: r.professorEixo || '',
+                        totalRegistros: 0,
+                        totalComponentes: 0,
+                        totalAulas: 0,
+                        turmasSet: new Set(),
+                        componentesSet: new Set(),
+                        periodosSet: new Set(),
+                        datasColeta: []
+                    };
                 }
+                
+                const prof = professoresMap[key];
+                prof.totalRegistros++;
+                
+                if (r.dataColeta) {
+                    prof.datasColeta.push(r.dataColeta);
+                }
+                
+                (r.componentes || []).forEach(c => {
+                    prof.totalComponentes++;
+                    prof.totalAulas += normalizarAulas(c.aulasRegistradas);
+                    
+                    if (c.turma) prof.turmasSet.add(c.turma);
+                    if (c.nome) prof.componentesSet.add(c.nome);
+                    
+                    const p = c.periodo || detectarPeriodoLegado(c.aulasRegistradas);
+                    if (p) prof.periodosSet.add(p);
+                });
             });
+            
+            const professores = Object.values(professoresMap).map(p => ({
+                professorId: p.professorId,
+                professorNome: p.professorNome,
+                professorEmail: p.professorEmail,
+                professorMatricula: p.professorMatricula,
+                professorEixo: p.professorEixo,
+                totalRegistros: p.totalRegistros,
+                totalComponentes: p.totalComponentes,
+                totalAulas: p.totalAulas,
+                totalTurmas: p.turmasSet.size,
+                totalComponentesUnicos: p.componentesSet.size,
+                totalPeriodos: p.periodosSet.size,
+                turmas: Array.from(p.turmasSet).sort(),
+                componentes: Array.from(p.componentesSet).sort(),
+                periodos: Array.from(p.periodosSet).sort()
+            })).sort((a, b) => a.professorNome.localeCompare(b.professorNome));
             
             return res.json({
                 success: true,
                 tipo: 'professor',
-                professor,
-                total: registros.length,
+                filtros: { eixo, turma, periodo, professorId, dataInicio, dataFim },
+                total: professores.length,
+                totalRegistros: registros.length,
+                totalComponentes,
+                totalAulas,
+                professores,
+                // Compatibilidade: registros completos
                 registros: registros.map(r => ({
                     id: r._id,
+                    professorId: r.professorId,
+                    professorNome: r.professorNome,
+                    professorEixo: r.professorEixo,
                     dataColeta: r.dataColeta,
                     dataColetaFormatada: new Date(r.dataColeta).toLocaleDateString('pt-BR'),
                     componentes: (r.componentes || []).map(c => ({
                         ...c,
                         periodo: c.periodo || detectarPeriodoLegado(c.aulasRegistradas),
                         aulasRegistradas: normalizarAulas(c.aulasRegistradas)
-                    })),
-                    turmasVinculadas: r.turmasVinculadas || [],
-                    observacoesGerais: r.observacoesGerais || '',
-                    registradoPorNome: r.registradoPorNome,
-                    editadoPorNome: r.editadoPorNome
-                })),
-                estatisticas: {
-                    totalComponentes,
-                    totalAulas,
-                    componentesUnicos: componentesUnicos.size,
-                    turmasUnicas: turmasUnicas.size,
-                    periodosUnicos: periodosUnicos.size
-                }
+                    }))
+                }))
             });
         }
         
-        // ============ FILTROS POR TIPO ============
-        if (tipo === 'eixo' && eixo) filtro['componentes.eixo'] = eixo;
-        if (tipo === 'turma' && turma) filtro['componentes.turma'] = turma;
-        if (periodo) filtro['componentes.periodo'] = String(periodo); // 🆕
+        // ============================================
+        // TIPO: TURMA (agrupado por turma)
+        // ============================================
+        if (tipo === 'turma') {
+            const turmasMap = {};
+            
+            registros.forEach(r => {
+                (r.componentes || []).forEach(c => {
+                    const turmaKey = c.turma || 'Sem Turma';
+                    
+                    if (!turmasMap[turmaKey]) {
+                        turmasMap[turmaKey] = {
+                            turma: turmaKey,
+                            curso: c.curso || 'Não informado',
+                            totalRegistros: 0,
+                            totalComponentes: 0,
+                            totalAulas: 0,
+                            professoresSet: new Set(),
+                            componentesSet: new Set(),
+                            periodosSet: new Set()
+                        };
+                    }
+                    
+                    const t = turmasMap[turmaKey];
+                    t.totalRegistros++;
+                    t.totalComponentes++;
+                    t.totalAulas += normalizarAulas(c.aulasRegistradas);
+                    
+                    if (r.professorNome) t.professoresSet.add(r.professorNome);
+                    if (c.nome) t.componentesSet.add(c.nome);
+                    
+                    const p = c.periodo || detectarPeriodoLegado(c.aulasRegistradas);
+                    if (p) t.periodosSet.add(p);
+                });
+            });
+            
+            const turmas = Object.values(turmasMap).map(t => ({
+                turma: t.turma,
+                curso: t.curso,
+                totalRegistros: t.totalRegistros,
+                totalComponentes: t.totalComponentes,
+                totalAulas: t.totalAulas,
+                totalProfessores: t.professoresSet.size,
+                totalComponentesUnicos: t.componentesSet.size,
+                totalPeriodos: t.periodosSet.size,
+                professores: Array.from(t.professoresSet).sort(),
+                componentes: Array.from(t.componentesSet).sort(),
+                periodos: Array.from(t.periodosSet).sort()
+            })).sort((a, b) => a.turma.localeCompare(b.turma));
+            
+            return res.json({
+                success: true,
+                tipo: 'turma',
+                filtros: { eixo, turma, periodo, professorId, dataInicio, dataFim },
+                total: turmas.length,
+                totalRegistros: registros.length,
+                totalComponentes,
+                totalAulas,
+                turmas,
+                registros: registros.map(r => ({
+                    id: r._id,
+                    professorId: r.professorId,
+                    professorNome: r.professorNome,
+                    professorEixo: r.professorEixo,
+                    dataColeta: r.dataColeta,
+                    dataColetaFormatada: new Date(r.dataColeta).toLocaleDateString('pt-BR'),
+                    componentes: (r.componentes || []).map(c => ({
+                        ...c,
+                        periodo: c.periodo || detectarPeriodoLegado(c.aulasRegistradas),
+                        aulasRegistradas: normalizarAulas(c.aulasRegistradas)
+                    }))
+                }))
+            });
+        }
         
-        registros = await GestaoProfessor.find(filtro).sort({ dataColeta: -1 }).lean();
+        // ============================================
+        // TIPO: EIXO (agrupado por eixo, com nomes de componentes)
+        // ============================================
+        if (tipo === 'eixo') {
+            const eixosMap = {};
+            
+            registros.forEach(r => {
+                (r.componentes || []).forEach(c => {
+                    const eixoKey = c.eixo || 'Sem Eixo';
+                    
+                    if (!eixosMap[eixoKey]) {
+                        eixosMap[eixoKey] = {
+                            eixo: eixoKey,
+                            totalRegistros: 0,
+                            totalComponentes: 0,
+                            totalAulas: 0,
+                            professoresSet: new Set(),
+                            turmasSet: new Set(),
+                            componentesMap: new Map() // nome → { nome, count, aulas }
+                        };
+                    }
+                    
+                    const e = eixosMap[eixoKey];
+                    e.totalRegistros++;
+                    e.totalComponentes++;
+                    
+                    const aulas = normalizarAulas(c.aulasRegistradas);
+                    e.totalAulas += aulas;
+                    
+                    if (r.professorNome) e.professoresSet.add(r.professorNome);
+                    if (c.turma) e.turmasSet.add(c.turma);
+                    
+                    if (c.nome) {
+                        const atual = e.componentesMap.get(c.nome) || { nome: c.nome, count: 0, aulas: 0 };
+                        atual.count++;
+                        atual.aulas += aulas;
+                        e.componentesMap.set(c.nome, atual);
+                    }
+                });
+            });
+            
+            const eixos = Object.values(eixosMap).map(e => ({
+                eixo: e.eixo,
+                totalRegistros: e.totalRegistros,
+                totalComponentes: e.totalComponentes,
+                totalAulas: e.totalAulas,
+                totalProfessores: e.professoresSet.size,
+                totalTurmas: e.turmasSet.size,
+                totalComponentesUnicos: e.componentesMap.size,
+                professores: Array.from(e.professoresSet).sort(),
+                turmas: Array.from(e.turmasSet).sort(),
+                componentes: Array.from(e.componentesMap.values()).sort((a, b) => a.nome.localeCompare(b.nome))
+            })).sort((a, b) => a.eixo.localeCompare(b.eixo));
+            
+            return res.json({
+                success: true,
+                tipo: 'eixo',
+                filtros: { eixo, turma, periodo, professorId, dataInicio, dataFim },
+                total: eixos.length,
+                totalRegistros: registros.length,
+                totalComponentes,
+                totalAulas,
+                eixos,
+                registros: registros.map(r => ({
+                    id: r._id,
+                    professorId: r.professorId,
+                    professorNome: r.professorNome,
+                    professorEixo: r.professorEixo,
+                    dataColeta: r.dataColeta,
+                    dataColetaFormatada: new Date(r.dataColeta).toLocaleDateString('pt-BR'),
+                    componentes: (r.componentes || []).map(c => ({
+                        ...c,
+                        periodo: c.periodo || detectarPeriodoLegado(c.aulasRegistradas),
+                        aulasRegistradas: normalizarAulas(c.aulasRegistradas)
+                    }))
+                }))
+            });
+        }
         
-        // ============ ESTATÍSTICAS ============
+        // ============================================
+        // TIPO: GERAL (padrão)
+        // ============================================
         const porEixo = {};
         const porTurma = {};
         const porProfessor = {};
         const porComponente = {};
-        const porPeriodo = {};        // 🆕
-        let totalAulas = 0;
-        let totalComponentes = 0;
+        const porPeriodo = {};
         
         registros.forEach(r => {
-            if (r.componentes) {
-                r.componentes.forEach(c => {
-                    totalComponentes++;
-                    
-                    const eixoKey = c.eixo || 'Sem Eixo';
-                    porEixo[eixoKey] = (porEixo[eixoKey] || 0) + 1;
-                    
-                    const turmaKey = c.turma || 'Sem Turma';
-                    porTurma[turmaKey] = (porTurma[turmaKey] || 0) + 1;
-                    
-                    const profKey = r.professorNome;
-                    porProfessor[profKey] = (porProfessor[profKey] || 0) + 1;
-                    
-                    const compKey = c.nome || 'Sem Nome';
-                    porComponente[compKey] = (porComponente[compKey] || 0) + 1;
-                    
-                    const aulas = normalizarAulas(c.aulasRegistradas);
-                    totalAulas += aulas;
-                    
-                    // 🆕 Agregação por período
-                    const periodoKey = c.periodo || detectarPeriodoLegado(c.aulasRegistradas) || 'sem_periodo';
-                    if (!porPeriodo[periodoKey]) porPeriodo[periodoKey] = 0;
-                    porPeriodo[periodoKey] += aulas;
-                });
-            }
+            (r.componentes || []).forEach(c => {
+                const eixoKey = c.eixo || 'Sem Eixo';
+                porEixo[eixoKey] = (porEixo[eixoKey] || 0) + 1;
+                
+                const turmaKey = c.turma || 'Sem Turma';
+                porTurma[turmaKey] = (porTurma[turmaKey] || 0) + 1;
+                
+                const profKey = r.professorNome;
+                porProfessor[profKey] = (porProfessor[profKey] || 0) + 1;
+                
+                const compKey = c.nome || 'Sem Nome';
+                porComponente[compKey] = (porComponente[compKey] || 0) + 1;
+                
+                const aulas = normalizarAulas(c.aulasRegistradas);
+                const periodoKey = c.periodo || detectarPeriodoLegado(c.aulasRegistradas) || 'sem_periodo';
+                if (!porPeriodo[periodoKey]) porPeriodo[periodoKey] = 0;
+                porPeriodo[periodoKey] += aulas;
+            });
         });
         
         res.json({
             success: true,
-            tipo,
+            tipo: 'geral',
             filtros: { eixo, turma, periodo, professorId, dataInicio, dataFim },
             total: registros.length,
             totalComponentes,
@@ -1132,7 +1256,7 @@ router.get('/relatorio/gerar', authenticateToken, verificarPermissaoModulo, asyn
                 porTurma,
                 porProfessor,
                 porComponente,
-                porPeriodo   // 🆕 { '1': 150, '2': 120, ... }
+                porPeriodo
             },
             registros: registros.map(r => ({
                 id: r._id,
