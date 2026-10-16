@@ -12580,7 +12580,7 @@ class AdminPanel {
             if (!turmasData.success) throw new Error(turmasData.error || 'Erro ao carregar turmas');
 
             let todasTurmas = turmasData.turmas || [];
-            this.turmas = todasTurmas; // Guardar todas
+            this.turmas = todasTurmas;
             
             // 🔥 LISTA COMPLETA DE PROFESSORES
             const todosProfessores = (professoresData.success && professoresData.usuarios) 
@@ -12622,6 +12622,9 @@ class AdminPanel {
             const turmasPaginadas = turmasFiltradas.slice(inicio, fim);
             const totalPaginas = Math.ceil(turmasFiltradas.length / limit);
 
+            // 🔥 CARREGAR EIXOS DO BANCO
+            const eixos = await this.carregarEixosParaSelect();
+
             contentArea.innerHTML = this.renderTurmasHTML({
                 search, eixo, page, limit,
                 totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, 
@@ -12634,10 +12637,11 @@ class AdminPanel {
                 },
                 turmas: turmasPaginadas,
                 todosProfessores: todosProfessores,
-                contagemPorProfessor: contagemPorProfessor
+                contagemPorProfessor: contagemPorProfessor,
+                eixos: eixos
             });
 
-            console.log(`✅ ${turmasFiltradas.length} turmas | ${todosProfessores.length} professores`);
+            console.log(`✅ ${turmasFiltradas.length} turmas | ${todosProfessores.length} professores | ${eixos.length} eixos`);
 
         } catch (error) {
             console.error('❌ Erro ao carregar turmas:', error);
@@ -12665,7 +12669,7 @@ class AdminPanel {
     }
 
     // ============ RENDERIZAR HTML DAS TURMAS (VERSÃO COMPLETA) ============
-    renderTurmasHTML({ search, eixo, totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, alunosComAcessibilidade, mediaAlunosPorTurma, pagination, turmas, todosProfessores = [], contagemPorProfessor = {} }) {
+    renderTurmasHTML({ search, eixo, totalTurmas, turmasAtivas, turmasInativas, totalAlunos, totalProvas, alunosComAcessibilidade, mediaAlunosPorTurma, pagination, turmas, todosProfessores = [], contagemPorProfessor = {}, eixos = [] }) {
         
         // 🔥 USAR A LISTA COMPLETA DE PROFESSORES
         const professores = todosProfessores && todosProfessores.length > 0 
@@ -12673,6 +12677,7 @@ class AdminPanel {
             : [...new Set(turmas.map(t => t.professor?.nome).filter(Boolean))].sort();
         
         console.log(`🎓 Professores para o filtro: ${professores.length}`);
+        console.log(`🗂️ Eixos para o filtro: ${eixos.length}`);
         
         // Contagem local (fallback)
         const contagemLocal = { ...contagemPorProfessor };
@@ -12682,6 +12687,15 @@ class AdminPanel {
                 contagemLocal[prof] = (contagemLocal[prof] || 0) + 1;
             });
         }
+        
+        // 🔥 OPÇÕES DE EIXOS DINÂMICAS
+        const opcoesEixosFiltro = eixos.length > 0
+            ? eixos.map(e => `
+                <option value="${e.nome}" ${eixo === e.nome ? 'selected' : ''}>
+                    ${e.label || e.nome}
+                </option>
+            `).join('')
+            : '<option value="" disabled>Nenhum eixo cadastrado</option>';
         
         // Filtros ativos
         const filtrosAtivos = [];
@@ -13419,23 +13433,18 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <!-- EIXO -->
+                        <!-- 🔥 EIXO - DINÂMICO DO BANCO -->
                         <div class="trm-filter-card">
                             <div class="trm-filter-label">
                                 <i class="fas fa-sitemap"></i>
                                 <span>Eixo</span>
+                                ${eixos.length > 0 ? `<span class="trm-filter-count">${eixos.length}</span>` : ''}
                             </div>
                             <div class="trm-select-wrapper">
                                 <i class="fas fa-book trm-select-icon"></i>
                                 <select id="filterEixo" onchange="admin.filtrarTurmas()">
                                     <option value="todos">Todos os eixos</option>
-                                    <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
-                                    <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
-                                    <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
-                                    <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
-                                    <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
-                                    <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
-                                    <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
+                                    ${opcoesEixosFiltro}
                                 </select>
                                 <i class="fas fa-chevron-down trm-select-arrow"></i>
                             </div>
@@ -14560,8 +14569,8 @@ class AdminPanel {
         }
     }
     
-    // ============ ABRIR MODAL TURMA (VERSÃO COM CARREGAMENTO DE PROFESSORES) ============
-    abrirModalTurma(param1 = null, param2 = null) {
+    // ============ ABRIR MODAL TURMA ============
+    async abrirModalTurma(param1 = null, param2 = null) {
         console.log('📝 Abrindo modal turma. Parâmetros:', { param1, param2 });
         
         let turma = null;
@@ -14640,11 +14649,11 @@ class AdminPanel {
         }
         
         // ===== RENDERIZAR MODAL =====
-        this.renderizarModalTurma(turma, cursoId, turmaId);
+        await this.renderizarModalTurma(turma, cursoId, turmaId);
     }
 
-    // ============ RENDERIZAR MODAL TURMA (COM SELECT VAZIO INICIALMENTE) ============
-    renderizarModalTurma(turma, cursoId, turmaId) {
+    // ============ RENDERIZAR MODAL TURMA (COM EIXOS DO BANCO) ============
+    async renderizarModalTurma(turma, cursoId, turmaId) {
         const modalBody = document.getElementById('modalBody');
         if (!modalBody) {
             console.error('❌ Modal body não encontrado');
@@ -14654,10 +14663,22 @@ class AdminPanel {
         const isMenuCursos = window.location.hash.includes('cursos') || 
                             document.querySelector('.cursos-container') !== null;
         
+        // 🔥 BUSCAR EIXOS DO BANCO
+        const eixos = await this.carregarEixosParaSelect();
+        
+        // Gerar options dos eixos
+        const opcoesEixos = eixos.length > 0
+            ? eixos.map(e => `
+                <option value="${e.nome}" ${turma?.eixo === e.nome ? 'selected' : ''}>
+                    ${e.icone ? `<i class="fas ${e.icone}"></i> ` : ''}${e.label || e.nome}
+                </option>
+            `).join('')
+            : '<option value="">Nenhum eixo cadastrado</option>';
+        
         let html = '';
         
         if (isMenuCursos) {
-            // HTML para menu de Cursos (mantém como está)
+            // HTML para menu de Cursos
             html = `
                 <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
                     <div style="padding: 20px;">
@@ -14688,7 +14709,7 @@ class AdminPanel {
                 </form>
             `;
         } else {
-            // 🔥 HTML PARA MENU DE TURMAS - SELECT VAZIO (será preenchido via JS)
+            // HTML PARA MENU DE TURMAS - COM EIXOS DO BANCO
             html = `
                 <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
                     <!-- HEADER -->
@@ -14744,18 +14765,22 @@ class AdminPanel {
                                         style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: white;"
                                         required>
                                         <option value="">Selecione um eixo...</option>
-                                        <option value="natureza" ${turma?.eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
-                                        <option value="humanas" ${turma?.eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
-                                        <option value="linguagens" ${turma?.eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
-                                        <option value="desenvolvimento" ${turma?.eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
-                                        <option value="gestao" ${turma?.eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
-                                        <option value="turismo" ${turma?.eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
-                                        <option value="ambiente" ${turma?.eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
+                                        ${opcoesEixos}
                                     </select>
+                                    ${eixos.length === 0 ? `
+                                        <div style="margin-top: 5px; font-size: 11px; color: #dc2626;">
+                                            <i class="fas fa-exclamation-triangle"></i> 
+                                            Nenhum eixo cadastrado. 
+                                            <a href="#" onclick="event.preventDefault(); admin.closeModal(); admin.switchSection('eixos');" 
+                                            style="color: #667eea; text-decoration: underline;">
+                                                Cadastrar eixos
+                                            </a>
+                                        </div>
+                                    ` : ''}
                                 </div>
                             </div>
 
-                            <!-- 🔥 PROFESSOR RESPONSÁVEL - SELECT VAZIO (será preenchido via JS) -->
+                            <!-- Professor Responsável -->
                             <div class="form-group" style="margin-bottom: 20px;">
                                 <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #334155; margin-bottom: 8px;">
                                     <i class="fas fa-chalkboard-teacher" style="color: #667eea;"></i>
@@ -14857,7 +14882,7 @@ class AdminPanel {
             }, 200);
         }
         
-        console.log('✅ Modal renderizado');
+        console.log('✅ Modal renderizado com', eixos.length, 'eixos do banco');
     }
 
     // ============ CARREGAR PROFESSORES NO MODAL DE TURMA ============
@@ -15933,6 +15958,28 @@ class AdminPanel {
     getEixoColor(eixo) {
         const cores = { 'natureza': '#10b981', 'humanas': '#8b5cf6', 'linguagens': '#f59e0b', 'desenvolvimento': '#3b82f6', 'gestao': '#6b7280', 'turismo': '#ef4444', 'ambiente': '#14b8a6' };
         return cores[eixo] || '#667eea';
+    }
+
+    // ============ CARREGAR EIXOS DO BANCO (padrão do sistema) ============
+    async carregarEixosParaSelect() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/eixos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.eixos = data.eixos || [];
+                console.log(`✅ ${this.eixos.length} eixos carregados do banco`);
+                return this.eixos;
+            }
+            console.warn('⚠️ Resposta sem eixos:', data);
+            return [];
+        } catch (error) {
+            console.error('❌ Erro ao carregar eixos:', error);
+            return [];
+        }
     }
 
     // ============ CARREGAR PROFESSORES PARA SELECT ============

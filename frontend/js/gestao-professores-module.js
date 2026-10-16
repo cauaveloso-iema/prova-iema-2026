@@ -855,7 +855,7 @@ window.GestaoProfessoresModule = {
         } finally {
             if (btn) {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-save me-2"></i> Registrar Gestão';
+                btn.innerHTML = '<i class="fas fa-save me-2"></i> Registrar';
             }
         }
     },
