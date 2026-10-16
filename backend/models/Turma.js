@@ -125,7 +125,7 @@ TurmaSchema.pre(/^find/, function(next) {
     select: 'nome email'
   }).populate({
     path: 'alunos',
-    select: 'nome email matricula'
+    select: 'nome email matricula precisaAcessibilidade condicaoAcessibilidade'
   });
   next();
 });
