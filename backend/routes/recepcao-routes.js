@@ -349,17 +349,25 @@ router.get('/autorizacao/:id', authenticateToken, verificarRecepcao, async (req,
 });
 
 // ============================================
-// 7. LISTAR AUTORIZAÇÕES DO DIA (RESUMO)
+// 7. LISTAR AUTORIZAÇÕES DO DIA (COM PAGINAÇÃO)
 // ============================================
 router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
         const Autorizacao = getAutorizacao();
-        const { data, turma } = req.query;
+        const { data, turma, page = 1, limit = 10 } = req.query;
         
         const dataBusca = data || getDataLocalISO();
         const inicio = inicioDoDiaBrasil(dataBusca);
         const fim = fimDoDiaBrasil(dataBusca);
 
+        // 🔥 LIMITAR O LIMIT (entre 5 e 100)
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        const limitNum = Math.min(100, Math.max(5, parseInt(limit) || 10));
+        const skip = (pageNum - 1) * limitNum;
+
+        // ==========================================
+        // CONSTRÓI O FILTRO
+        // ==========================================
         let query = {
             tipo: 'autorizacao',
             ativo: true,
@@ -376,15 +384,31 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
             query.alunoTurma = turma;
         }
 
-        const autorizacoes = await Autorizacao.find(query)
-            .select('-assinaturaBase64')
-            .sort({ alunoNome: 1 });
+        // ==========================================
+        // BUSCAR TOTAL + PÁGINA ATUAL
+        // ==========================================
+        const [total, autorizacoes] = await Promise.all([
+            Autorizacao.countDocuments(query),
+            Autorizacao.find(query)
+                .select('-assinaturaBase64')
+                .sort({ alunoNome: 1 })     // 🔥 Ordena alfabeticamente
+                .skip(skip)
+                .limit(limitNum)
+        ]);
 
+        const totalPages = Math.ceil(total / limitNum);
+
+        // ==========================================
+        // RETORNA COM METADADOS DE PAGINAÇÃO
+        // ==========================================
         res.json({
             success: true,
             data: dataBusca,
             dataFormatada: new Date(dataBusca + 'T12:00:00').toLocaleDateString('pt-BR'),
-            total: autorizacoes.length,
+            total: total,
+            page: pageNum,
+            limit: limitNum,
+            totalPages: totalPages,
             autorizacoes: autorizacoes.map(a => ({
                 id: a._id,
                 alunoNome: a.alunoNome,
@@ -397,6 +421,7 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
             }))
         });
     } catch (error) {
+        console.error('Erro ao listar autorizações do dia:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

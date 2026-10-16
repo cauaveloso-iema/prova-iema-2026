@@ -11,6 +11,12 @@ let turmasDisponiveis = [];
 let alunosPorTurma = [];
 let dataVerificacaoAtual = null;
 
+// 🔥 ESTADO DA PAGINAÇÃO DAS AUTORIZAÇÕES DO DIA
+let paginaAtualResumoDia = 1;
+let totalPaginasResumoDia = 0;
+let totalRegistrosResumoDia = 0;
+const itensPorPaginaResumoDia = 10;
+
 // ============================================
 // UTILITÁRIOS
 // ============================================
@@ -74,7 +80,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
     safeGet('filtroBuscaManual')?.addEventListener('input', () => filtrarAlunosManual());
     safeGet('dataVerificacao')?.addEventListener('change', onDataChange);
-    safeGet('filtroResumoTurma')?.addEventListener('change', () => carregarResumoDia());
+    safeGet('filtroResumoTurma')?.addEventListener('change', () => {
+        paginaAtualResumoDia = 1;  // 🔥 RESETAR PÁGINA AO MUDAR FILTRO
+        carregarResumoDia();
+    });
     
     // Inicia scanner
     setTimeout(() => iniciarScannerAutomatico(), 1000);
@@ -106,6 +115,9 @@ function onDataChange() {
     if (!data) return;
     
     dataVerificacaoAtual = data;
+    
+    // 🔥 RESETAR PÁGINA AO MUDAR DATA
+    paginaAtualResumoDia = 1;
     
     const hoje = getDataLocalISO();
     const ontem = new Date();
@@ -1012,11 +1024,16 @@ async function verDetalhesCompletos(id) {
 }
 
 // ============================================
-// RESUMO DO DIA (COM BOTÃO OLHINHO 👁️)
+// RESUMO DO DIA (COM PAGINAÇÃO - 10 POR PÁGINA)
 // ============================================
-async function carregarResumoDia() {
+async function carregarResumoDia(pagina = null) {
     const container = safeGet('listaResumoDia');
     if (!container) return;
+    
+    // 🔥 SE PASSAR PÁGINA, USA ELA; SENÃO, USA A ATUAL
+    if (pagina !== null) {
+        paginaAtualResumoDia = pagina;
+    }
     
     const data = safeGet('dataVerificacao')?.value || getDataLocalISO();
     const turma = safeGet('filtroResumoTurma')?.value || 'todas';
@@ -1030,6 +1047,8 @@ async function carregarResumoDia() {
     try {
         const params = new URLSearchParams();
         params.append('data', data);
+        params.append('page', paginaAtualResumoDia);
+        params.append('limit', itensPorPaginaResumoDia);
         if (turma && turma !== 'todas') params.append('turma', turma);
         
         const response = await fetch(`/api/recepcao/autorizacoes-do-dia?${params.toString()}`, {
@@ -1042,10 +1061,14 @@ async function carregarResumoDia() {
             return;
         }
         
-        const contador = safeGet('contadorAutorizacoes');
-        if (contador) contador.textContent = result.total;
+        // 🔥 ATUALIZAR ESTADO DA PAGINAÇÃO
+        totalRegistrosResumoDia = result.total || 0;
+        totalPaginasResumoDia = result.totalPages || 0;
         
-        if (result.total === 0) {
+        const contador = safeGet('contadorAutorizacoes');
+        if (contador) contador.textContent = totalRegistrosResumoDia;
+        
+        if (totalRegistrosResumoDia === 0) {
             container.innerHTML = `
                 <div class="text-center py-4 text-muted">
                     <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
@@ -1054,6 +1077,9 @@ async function carregarResumoDia() {
             return;
         }
         
+        // ==========================================
+        // RENDERIZAR TABELA + PAGINAÇÃO
+        // ==========================================
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table-resumo">
@@ -1102,11 +1128,171 @@ async function carregarResumoDia() {
                     </tbody>
                 </table>
             </div>
+            
+            ${renderizarPaginacaoResumoDia(result)}
         `;
+        
+        // Configurar listeners dos botões de página
+        container.querySelectorAll('.btn-page-resumo').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const novaPagina = parseInt(btn.getAttribute('data-page'));
+                if (!isNaN(novaPagina) && novaPagina !== paginaAtualResumoDia) {
+                    carregarResumoDia(novaPagina);
+                }
+            });
+        });
+        
     } catch (error) {
         console.error('Erro:', error);
         container.innerHTML = `<div class="alert alert-danger">Erro ao carregar resumo</div>`;
     }
+}
+
+// ============================================
+// 🆕 RENDERIZAR PAGINAÇÃO
+// ============================================
+function renderizarPaginacaoResumoDia(result) {
+    const { page, totalPages, total, limit } = result;
+    
+    if (totalPages <= 1) {
+        return `<div style="text-align:center;padding:15px 0;color:#6b7280;font-size:13px;">
+            Mostrando <strong>${total}</strong> registro(s)
+        </div>`;
+    }
+    
+    // Calcular intervalo exibido
+    const de = ((page - 1) * limit) + 1;
+    const ate = Math.min(page * limit, total);
+    
+    // ==========================================
+    // CALCULAR BOTÕES DE PÁGINA A EXIBIR
+    // ==========================================
+    const maxBotoes = 5;
+    let inicio = Math.max(1, page - Math.floor(maxBotoes / 2));
+    let fim = Math.min(totalPages, inicio + maxBotoes - 1);
+    
+    if (fim - inicio + 1 < maxBotoes) {
+        inicio = Math.max(1, fim - maxBotoes + 1);
+    }
+    
+    let botoesHTML = '';
+    
+    // Botão PRIMEIRA
+    if (page > 1) {
+        botoesHTML += `
+            <button class="btn-page-resumo" data-page="1" title="Primeira página"
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:white;
+                       border-radius:8px;cursor:pointer;color:#4b5563;font-size:13px;">
+                <i class="fas fa-angle-double-left"></i>
+            </button>`;
+    } else {
+        botoesHTML += `
+            <button disabled
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:#f9fafb;
+                       border-radius:8px;color:#d1d5db;font-size:13px;cursor:not-allowed;">
+                <i class="fas fa-angle-double-left"></i>
+            </button>`;
+    }
+    
+    // Botão ANTERIOR
+    if (page > 1) {
+        botoesHTML += `
+            <button class="btn-page-resumo" data-page="${page - 1}" title="Anterior"
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:white;
+                       border-radius:8px;cursor:pointer;color:#4b5563;font-size:13px;">
+                <i class="fas fa-angle-left"></i>
+            </button>`;
+    } else {
+        botoesHTML += `
+            <button disabled
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:#f9fafb;
+                       border-radius:8px;color:#d1d5db;font-size:13px;cursor:not-allowed;">
+                <i class="fas fa-angle-left"></i>
+            </button>`;
+    }
+    
+    // Reticências iniciais
+    if (inicio > 1) {
+        botoesHTML += `<span style="padding:0 5px;color:#9ca3af;font-size:13px;">…</span>`;
+    }
+    
+    // Botões NUMÉRICOS
+    for (let i = inicio; i <= fim; i++) {
+        if (i === page) {
+            botoesHTML += `
+                <button disabled
+                    style="min-width:36px;height:36px;border:1px solid #1e3c72;background:#1e3c72;
+                           color:white;border-radius:8px;font-size:13px;font-weight:600;cursor:default;">
+                    ${i}
+                </button>`;
+        } else {
+            botoesHTML += `
+                <button class="btn-page-resumo" data-page="${i}"
+                    style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:white;
+                           border-radius:8px;cursor:pointer;color:#4b5563;font-size:13px;font-weight:500;">
+                    ${i}
+                </button>`;
+        }
+    }
+    
+    // Reticências finais
+    if (fim < totalPages) {
+        botoesHTML += `<span style="padding:0 5px;color:#9ca3af;font-size:13px;">…</span>`;
+    }
+    
+    // Botão PRÓXIMA
+    if (page < totalPages) {
+        botoesHTML += `
+            <button class="btn-page-resumo" data-page="${page + 1}" title="Próxima"
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:white;
+                       border-radius:8px;cursor:pointer;color:#4b5563;font-size:13px;">
+                <i class="fas fa-angle-right"></i>
+            </button>`;
+    } else {
+        botoesHTML += `
+            <button disabled
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:#f9fafb;
+                       border-radius:8px;color:#d1d5db;font-size:13px;cursor:not-allowed;">
+                <i class="fas fa-angle-right"></i>
+            </button>`;
+    }
+    
+    // Botão ÚLTIMA
+    if (page < totalPages) {
+        botoesHTML += `
+            <button class="btn-page-resumo" data-page="${totalPages}" title="Última página"
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:white;
+                       border-radius:8px;cursor:pointer;color:#4b5563;font-size:13px;">
+                <i class="fas fa-angle-double-right"></i>
+            </button>`;
+    } else {
+        botoesHTML += `
+            <button disabled
+                style="min-width:36px;height:36px;border:1px solid #e5e7eb;background:#f9fafb;
+                       border-radius:8px;color:#d1d5db;font-size:13px;cursor:not-allowed;">
+                <i class="fas fa-angle-double-right"></i>
+            </button>`;
+    }
+    
+    // ==========================================
+    // RETORNO
+    // ==========================================
+    return `
+        <div class="paginacao-resumo-dia" style="display:flex;justify-content:space-between;
+            align-items:center;flex-wrap:wrap;gap:15px;margin-top:20px;padding-top:15px;
+            border-top:1px solid #e5e7eb;">
+            
+            <div style="font-size:13px;color:#6b7280;">
+                Mostrando <strong>${de}</strong>–<strong>${ate}</strong> de 
+                <strong>${total}</strong> autorização(ões)
+            </div>
+            
+            <div style="display:flex;gap:5px;align-items:center;">
+                ${botoesHTML}
+            </div>
+        </div>
+    `;
 }
 
 // ============================================
@@ -1374,4 +1560,4 @@ window.fecharNotificacoes = fecharNotificacoes;
 window.marcarTodasLidas = marcarTodasLidas;
 window.logout = logout;
 
-console.log('✅ Recepção JS carregado');
+console.log('✅ Recepção JS carregado (com paginação de 10 por página)');
