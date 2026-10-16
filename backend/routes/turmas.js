@@ -16,6 +16,18 @@
 //   - GET    /api/turmas/:id/provas   - Listar provas da turma
 //   - POST   /api/turmas/:id/prova-v2 - Criar prova com IA (Groq)
 //
+// Rotas públicas (expostas em /api via publicoRouter):
+//   - GET    /api/cursos              - Listar cursos + turmas (para cadastro)
+//   - GET    /api/cursos/:id          - Buscar curso específico
+//   - GET    /api/eixos               - Listar eixos (para cadastro)
+//   - GET    /api/eixos/:id           - Buscar eixo específico
+//
+// 🔥 IMPORTANTE (v2):
+//   O GET /api/cursos agora busca turmas em 3 níveis:
+//   1. Array embutido curso.turmas (onde o ADMIN cadastra)
+//   2. Coleção Turma por cursoId (turmas criadas por professores)
+//   3. Coleção Turma por nome do curso (fallback final)
+//
 // Autor: Equipe de Desenvolvimento
 // ============================================================================
 
@@ -484,7 +496,6 @@ router.get('/:id', authenticateTokenLocal, async (req, res) => {
       });
     }
 
-    // Para setor_pedagogico, não precisa verificar se é o professor da turma
     if (userRole !== 'setor_pedagogico' && turma.professorId._id.toString() !== userId && userRole !== 'admin' && userRole !== 'super_admin') {
       return res.status(403).json({
         success: false,
@@ -771,15 +782,12 @@ router.post('/:id/prova-v2', authenticateTokenLocal, uploadMultiple, async (req,
 
     let isProfessorDaTurma = false;
 
-    // Verificar por professorId._id (após populate)
     if (turma.professorId && turma.professorId._id) {
       isProfessorDaTurma = turma.professorId._id.toString() === req.userId;
     }
-    // Fallback: verificar se é o dono pelo ID direto
     else if (turma.professorId && typeof turma.professorId === 'object' && turma.professorId.toString) {
       isProfessorDaTurma = turma.professorId.toString() === req.userId;
     }
-    // Fallback: verificar por professorId como string
     else if (turma.professorId) {
       isProfessorDaTurma = turma.professorId.toString() === req.userId;
     }
@@ -814,7 +822,7 @@ router.post('/:id/prova-v2', authenticateTokenLocal, uploadMultiple, async (req,
       horarioTermino,
       anexosData = '[]',
       recursosAcessibilidade,
-      professorId // <-- RECEBER DO BODY (enviado pelo admin)
+      professorId
     } = req.body;
 
     // Processar anexos
@@ -912,7 +920,6 @@ router.post('/:id/prova-v2', authenticateTokenLocal, uploadMultiple, async (req,
 
     // 🔥 ========== VALIDAÇÕES DAS CONFIGURAÇÕES DE PROVAS ========== 🔥
 
-    // Buscar configurações de tempo
     const [configTempoMax, configTempoMin, configQuestoesMin, configQuestoesMax] = await Promise.all([
       Config.findOne({ chave: 'provas.tempoMaximo' }),
       Config.findOne({ chave: 'provas.tempoMinimo' }),
@@ -920,12 +927,11 @@ router.post('/:id/prova-v2', authenticateTokenLocal, uploadMultiple, async (req,
       Config.findOne({ chave: 'provas.questoesMaximas' })
     ]);
 
-    const tempoMaximo = configTempoMax?.valor || 240; // Padrão: 240 minutos (4 horas)
-    const tempoMinimo = configTempoMin?.valor || 10;  // Padrão: 10 minutos
-    const questoesMinimas = configQuestoesMin?.valor || 5;  // Padrão: 5 questões
-    const questoesMaximas = configQuestoesMax?.valor || 50; // Padrão: 50 questões
+    const tempoMaximo = configTempoMax?.valor || 240;
+    const tempoMinimo = configTempoMin?.valor || 10;
+    const questoesMinimas = configQuestoesMin?.valor || 5;
+    const questoesMaximas = configQuestoesMax?.valor || 50;
 
-    // Validar duração da prova
     if (duracaoMinutos < tempoMinimo) {
       return res.status(400).json({
         success: false,
@@ -940,7 +946,6 @@ router.post('/:id/prova-v2', authenticateTokenLocal, uploadMultiple, async (req,
       });
     }
 
-    // Validar quantidade de questões
     if (quantidadeQuestoes < questoesMinimas) {
       return res.status(400).json({
         success: false,
@@ -957,8 +962,6 @@ router.post('/:id/prova-v2', authenticateTokenLocal, uploadMultiple, async (req,
 
     logger.info(`🤖 Professor ${req.userId} solicitando prova tipo ${tipoProva} sobre: "${conteudo}"`);
     logger.info(`📎 Anexos recebidos: ${anexos.length}`);
-
-    // 🔥 FIM DAS VALIDAÇÕES - SE CHEGOU AQUI, PASSOU EM TODAS AS VALIDAÇÕES
 
     // ========== LÓGICA PARA PROVA ADAPTADA ==========
     let alunosDestino = [];
@@ -1116,14 +1119,14 @@ router.post('/:id/prova-v2', authenticateTokenLocal, uploadMultiple, async (req,
       }
 
       const modelosAtuais = [
-        "llama-3.3-70b-versatile",      // Melhor qualidade (se disponível)
-        "llama-3.1-8b-instant",         // Rápido e confiável
-        "openai/gpt-oss-120b",          // Alternativa OpenAI (Groq)
-        "openai/gpt-oss-20b",           // Alternativa OpenAI menor
-        "qwen/qwen3-32b",               // Alternativa Qwen
-        "moonshotai/kimi-k2-instruct",  // Alternativa Moonshot
-        "gemma2-9b-it",                 // Alternativa Google
-        "allam-2-7b"                    // Fallback final
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3-32b",
+        "moonshotai/kimi-k2-instruct",
+        "gemma2-9b-it",
+        "allam-2-7b"
       ];
 
       const contextoAnexos = await processarAnexosParaIA(anexos);
@@ -1694,11 +1697,9 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
     logger.info(`🔍 ProfessorId recebido do frontend: ${professorId || 'NÃO FORNECIDO'}`);
 
     if (isAdmin && professorId) {
-      // ✅ Admin/Super Admin está criando para outro professor
       professorDaProva = professorId;
       logger.info(`✅ Admin/Super Admin criando prova para professor ID: ${professorId}`);
 
-      // Verificar se o professor realmente existe
       const professorExiste = await User.findById(professorId);
       if (!professorExiste) {
         logger.info(`❌ Professor com ID ${professorId} não encontrado!`);
@@ -1710,7 +1711,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       logger.info(`✅ Professor verificado: ${professorExiste.nome} (${professorExiste.email})`);
 
     } else if (isAdmin && !professorId) {
-      // Admin/Super Admin tentou criar sem selecionar professor
       logger.info(`❌ Admin tentou criar prova sem selecionar professor`);
       return res.status(400).json({
         success: false,
@@ -1718,7 +1718,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       });
 
     } else {
-      // ✅ Professor criando sua própria prova
       professorDaProva = req.userId;
       logger.info(`✅ Professor criando própria prova: ${req.userId}`);
     }
@@ -1727,7 +1726,7 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
 
     // ========== CRIAR PROVA COM O PROFESSOR CORRETO ==========
     const prova = new Prova({
-      userId: professorDaProva,  // <-- USAR O PROFESSOR CORRETO
+      userId: professorDaProva,
       turmaId: turma._id,
       eixo: turma.eixo,
       disciplina: turma.disciplina,
@@ -1757,12 +1756,11 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       ],
       fonteGeracao: `Groq AI - Área: ${areaDetectada}`,
       publicada: false,
-      criadoPor: req.userId // Guardar quem criou (admin ou professor)
+      criadoPor: req.userId
     });
 
     await prova.save();
 
-    // Adicionar a prova à turma
     turma.provas.push(prova._id);
     await turma.save();
 
@@ -1779,12 +1777,10 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
       const OneSignalService = require('../services/onesignal-service');
       const oneSignal = pushAtivado ? new OneSignalService() : null;
 
-      // Buscar dados do criador
       const criador = await User.findById(req.userId).select('nome');
 
       for (const aluno of alunosDestino) {
         try {
-          // Notificação no sistema
           const notificacao = new Notificacao({
             usuarioId: aluno._id,
             tipo: 'sistema',
@@ -1809,7 +1805,6 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
           await notificacao.save();
           logger.info(`✅ Notificação criada para aluno ${aluno.nome}`);
 
-          // Push se ativado
           if (pushAtivado && oneSignal && aluno.onesignalPlayerId) {
             await oneSignal.enviarPush(
               aluno._id,
@@ -1879,6 +1874,314 @@ Agora crie ${quantidadeQuestoes} questões DESAFIADORAS sobre "${conteudo}" (ár
 });
 
 // ============================================================================
-// EXPORTAR ROUTER
+// ROUTER AUXILIAR: rotas públicas (cursos + eixos)
+// ============================================================================
+// ⚠️ IMPORTANTE: Este router é SEPARADO do router principal.
+// Ele é montado em /api (server.js) para expor APENAS as rotas públicas
+// sem expor as rotas autenticadas (que têm /:id e causariam conflito).
+//
+// Montado como: app.use('/api', turmasRouter.publicoRouter)
+// Resultado: GET /api/cursos e GET /api/eixos
+// ============================================================================
+
+const publicoRouter = express.Router();
+
+// ============================================================================
+// GET /cursos - Listar cursos com suas turmas (para cadastro)
+// ============================================================================
+// 🔥 v2 - Busca turmas em 3 níveis de fallback:
+//   1. Array embutido curso.turmas (onde o ADMIN cadastra)
+//   2. Coleção Turma por cursoId (turmas criadas por professores)
+//   3. Coleção Turma por nome do curso (último recurso)
+// ============================================================================
+publicoRouter.get('/cursos', async (req, res) => {
+  try {
+    if (!Curso) {
+      return res.status(503).json({
+        success: false,
+        error: 'Modelo Curso não disponível no servidor'
+      });
+    }
+
+    logger.info('📚 [publico] Listando cursos...');
+
+    const cursos = await Curso.find({ ativo: { $ne: false } })
+      .sort({ nome: 1 })
+      .lean();
+
+    const cursosComTurmas = await Promise.all(cursos.map(async (curso) => {
+      let turmasFormatadas = [];
+
+      // ============================================================
+      // 1️⃣ PRIMEIRO: turmas do ARRAY EMBUTIDO do Curso
+      //    (é onde o admin cadastra via /admin/cursos/:id/turmas)
+      // ============================================================
+      if (Array.isArray(curso.turmas) && curso.turmas.length > 0) {
+        turmasFormatadas = curso.turmas
+          .filter(t => t.ativa !== false)
+          .map(t => ({
+            _id: t._id ? t._id.toString() : `${curso._id}_${t.codigo}`,
+            codigo: t.codigo,
+            nome: `Turma ${t.codigo}`,
+            periodo: t.periodo,
+            vagas: t.vagas || 40,
+            ativa: t.ativa !== false,
+            eixo: curso.eixo,
+            disciplina: null,
+            origem: 'array_embutido'
+          }));
+
+        logger.info(`📚 Curso "${curso.nome}": ${turmasFormatadas.length} turma(s) do array embutido`);
+      }
+
+      // ============================================================
+      // 2️⃣ FALLBACK: se não tiver turma no array, buscar da coleção Turma
+      //    (turmas criadas por professores via /api/turmas)
+      // ============================================================
+      if (turmasFormatadas.length === 0 && Turma) {
+        try {
+          const turmasReais = await Turma.find({
+            cursoId: curso._id,
+            ativa: { $ne: false }
+          })
+            .select('codigo nome periodo vagas ativa eixo disciplina')
+            .sort({ codigo: 1 })
+            .lean();
+
+          if (turmasReais.length > 0) {
+            turmasFormatadas = turmasReais.map(t => ({
+              _id: t._id,
+              codigo: t.codigo,
+              nome: t.nome || `Turma ${t.codigo}`,
+              periodo: t.periodo,
+              vagas: t.vagas,
+              ativa: t.ativa !== false,
+              eixo: t.eixo,
+              disciplina: t.disciplina,
+              origem: 'colecao_turma'
+            }));
+
+            logger.info(`📚 Curso "${curso.nome}": ${turmasFormatadas.length} turma(s) da coleção Turma`);
+          } else {
+            // ============================================================
+            // 3️⃣ ÚLTIMO RECURSO: buscar turmas pelo NOME do curso
+            // ============================================================
+            const turmasPorNome = await Turma.find({
+              $or: [
+                { curso: curso.nome },
+                { cursoNome: curso.nome }
+              ],
+              ativa: { $ne: false }
+            })
+              .select('codigo nome periodo vagas ativa eixo disciplina')
+              .sort({ codigo: 1 })
+              .lean();
+
+            if (turmasPorNome.length > 0) {
+              turmasFormatadas = turmasPorNome.map(t => ({
+                _id: t._id,
+                codigo: t.codigo,
+                nome: t.nome || `Turma ${t.codigo}`,
+                periodo: t.periodo,
+                vagas: t.vagas,
+                ativa: t.ativa !== false,
+                eixo: t.eixo,
+                disciplina: t.disciplina,
+                origem: 'colecao_turma_por_nome'
+              }));
+
+              logger.info(`📚 Curso "${curso.nome}": ${turmasFormatadas.length} turma(s) da coleção Turma (por nome)`);
+            } else {
+              logger.info(`⚠️ Curso "${curso.nome}": NENHUMA turma encontrada`);
+            }
+          }
+        } catch (err) {
+          logger.warn(`⚠️ Erro ao buscar turmas reais do curso ${curso.nome}:`, err.message);
+        }
+      }
+
+      return {
+        _id: curso._id,
+        nome: curso.nome,
+        eixo: curso.eixo,
+        eixoId: curso.eixoId,
+        descricao: curso.descricao,
+        ativo: curso.ativo !== false,
+        turmas: turmasFormatadas
+      };
+    }));
+
+    const totalTurmas = cursosComTurmas.reduce((acc, c) => acc + c.turmas.length, 0);
+    logger.info(`✅ [publico] ${cursosComTurmas.length} curso(s) e ${totalTurmas} turma(s) retornados`);
+
+    res.json({
+      success: true,
+      total: cursosComTurmas.length,
+      totalTurmas,
+      cursos: cursosComTurmas
+    });
+
+  } catch (error) {
+    logger.error('❌ [publico] Erro ao listar cursos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao listar cursos: ' + error.message
+    });
+  }
+});
+
+// ---------- GET /eixos ----------
+publicoRouter.get('/eixos', async (req, res) => {
+  try {
+    if (!Eixo) {
+      return res.status(503).json({
+        success: false,
+        error: 'Modelo Eixo não disponível no servidor'
+      });
+    }
+
+    logger.info('📚 [publico] Listando eixos...');
+
+    const eixos = await Eixo.find({ ativo: { $ne: false } })
+      .sort({ label: 1 })
+      .lean();
+
+    logger.info(`✅ [publico] ${eixos.length} eixos retornados`);
+
+    res.json({
+      success: true,
+      total: eixos.length,
+      eixos: eixos.map(e => ({
+        _id: e._id,
+        nome: e.nome,
+        label: e.label,
+        icone: e.icone || 'fa-graduation-cap',
+        cor: e.cor || '#667eea',
+        descricao: e.descricao,
+        ativo: e.ativo !== false
+      }))
+    });
+
+  } catch (error) {
+    logger.error('❌ [publico] Erro ao listar eixos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao listar eixos: ' + error.message
+    });
+  }
+});
+
+// ---------- GET /cursos/:id ----------
+publicoRouter.get('/cursos/:id', async (req, res) => {
+  try {
+    if (!Curso) {
+      return res.status(503).json({
+        success: false,
+        error: 'Modelo Curso não disponível'
+      });
+    }
+
+    const curso = await Curso.findById(req.params.id).lean();
+
+    if (!curso) {
+      return res.status(404).json({
+        success: false,
+        error: 'Curso não encontrado'
+      });
+    }
+
+    let turmasFormatadas = [];
+
+    // Primeiro tenta do array embutido
+    if (Array.isArray(curso.turmas) && curso.turmas.length > 0) {
+      turmasFormatadas = curso.turmas
+        .filter(t => t.ativa !== false)
+        .map(t => ({
+          _id: t._id ? t._id.toString() : `${curso._id}_${t.codigo}`,
+          codigo: t.codigo,
+          nome: `Turma ${t.codigo}`,
+          periodo: t.periodo,
+          vagas: t.vagas || 40,
+          ativa: t.ativa !== false,
+          origem: 'array_embutido'
+        }));
+    }
+
+    // Fallback: coleção Turma
+    if (turmasFormatadas.length === 0 && Turma) {
+      const turmasReais = await Turma.find({
+        cursoId: curso._id,
+        ativa: { $ne: false }
+      }).select('codigo nome periodo vagas ativa').sort({ codigo: 1 }).lean();
+
+      turmasFormatadas = turmasReais.map(t => ({
+        _id: t._id,
+        codigo: t.codigo,
+        nome: t.nome || `Turma ${t.codigo}`,
+        periodo: t.periodo,
+        vagas: t.vagas,
+        ativa: t.ativa !== false,
+        origem: 'colecao_turma'
+      }));
+    }
+
+    res.json({
+      success: true,
+      curso: {
+        _id: curso._id,
+        nome: curso.nome,
+        eixo: curso.eixo,
+        eixoId: curso.eixoId,
+        descricao: curso.descricao,
+        ativo: curso.ativo !== false,
+        turmas: turmasFormatadas
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ [publico] Erro ao buscar curso:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar curso: ' + error.message
+    });
+  }
+});
+
+// ---------- GET /eixos/:id ----------
+publicoRouter.get('/eixos/:id', async (req, res) => {
+  try {
+    if (!Eixo) {
+      return res.status(503).json({
+        success: false,
+        error: 'Modelo Eixo não disponível'
+      });
+    }
+
+    const eixo = await Eixo.findById(req.params.id).lean();
+
+    if (!eixo) {
+      return res.status(404).json({
+        success: false,
+        error: 'Eixo não encontrado'
+      });
+    }
+
+    res.json({
+      success: true,
+      eixo
+    });
+
+  } catch (error) {
+    logger.error('❌ [publico] Erro ao buscar eixo:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao buscar eixo: ' + error.message
+    });
+  }
+});
+
+// ============================================================================
+// EXPORTAR ROUTER (principal + publico)
 // ============================================================================
 module.exports = router;
+module.exports.publicoRouter = publicoRouter;

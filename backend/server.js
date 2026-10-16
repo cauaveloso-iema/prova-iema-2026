@@ -2,7 +2,7 @@
 // SERVIDOR EDUCAPLENO 2026
 // ============================================================================
 // Descrição: Backend principal do EducaPleno (rotas NÃO migradas)
-// Versão:    1.1 (refatorado completo)
+// Versão:    1.2 (correção de ordem de middlewares e rotas públicas)
 //
 // ⚠️ Todas as rotas migradas estão em routes/*.js
 //    Este arquivo contém APENAS as rotas remanescentes.
@@ -508,34 +508,6 @@ const verificarPermissaoSetorPedagogico = (req, res, next) => {
   next();
 };
 
-// ---------- Rastrear atividade do usuário (JWT global) ----------
-// ⚠️ Este middleware roda ANTES das rotas, para atualizar lastActive em TODA
-//    requisição autenticada (não apenas naquelas que passam por authenticateToken).
-const rastrearAtividade = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      // Só atualiza para tokens normais (não temporários de 2FA)
-      if (!decoded.temp && decoded.id) {
-        User.findByIdAndUpdate(decoded.id, {
-          lastActive: new Date()
-        }).catch(() => {});
-      }
-    } catch (err) {
-      // Token inválido — apenas ignora
-    }
-  }
-
-  next();
-};
-
-// 🔥 Registra ANTES das rotas (para pegar TODAS as requisições autenticadas)
-app.use('/api', rastrearAtividade);
-
 // ============================================================================
 // FUNÇÕES AUXILIARES
 // ============================================================================
@@ -662,7 +634,6 @@ async function processarAnexosParaIA(anexos) {
 
 /**
  * Testa quais modelos Groq estão disponíveis
- * (executado em background no startup)
  */
 async function testarModelosDisponiveis(groqInstance) {
   if (!groqInstance) {
@@ -739,7 +710,6 @@ logger.info('✅ Middlewares e funções auxiliares configurados');
 // CONEXÃO COM MONGODB
 // ============================================================================
 
-// Buffer timeout aumentado para Render
 mongoose.set('bufferTimeoutMS', 60000);
 
 const connectToDatabase = async () => {
@@ -821,7 +791,6 @@ const connectToDatabase = async () => {
     logger.info(`🌍 Tipo: ${isAtlas ? 'MongoDB Atlas' : 'MongoDB Local'}`);
     logger.info('='.repeat(60));
 
-    // Cron jobs LGPD
     try {
       const retencaoService = require('./services/retencao-visitas');
       retencaoService.iniciarCronJobs();
@@ -829,7 +798,6 @@ const connectToDatabase = async () => {
       logger.warn('⚠️ Erro ao iniciar cron jobs LGPD:', error.message);
     }
 
-    // Eventos de conexão
     let reconectando = false;
 
     mongoose.connection.on('disconnected', () => {
@@ -858,14 +826,12 @@ const connectToDatabase = async () => {
       reconectando = false;
     });
 
-    // Importar matrículas
     try {
       await matriculasManager.importarDadosIniciais();
     } catch (error) {
       logger.warn('⚠️ Erro ao importar matrículas:', error.message);
     }
 
-    // Testar modelos Groq em background
     if (groq) {
       setTimeout(() => {
         testarModelosDisponiveis(groq).catch(err => {
@@ -905,7 +871,6 @@ const connectToDatabase = async () => {
   }
 };
 
-// Executar conexão com retry
 let databaseReady = false;
 let databaseConnectionPromise = null;
 
@@ -937,23 +902,161 @@ const iniciarConexaoComRetry = async () => {
 
 databaseConnectionPromise = iniciarConexaoComRetry();
 
-// Exportar estado
 global.isDatabaseReady = () => databaseReady;
 global.waitForDatabase = () => databaseConnectionPromise;
 
 logger.info('✅ Módulo de conexão MongoDB configurado');
 
 // ============================================================================
-// ROUTERS MIGRADOS (registrados aqui)
+// ROTAS PÚBLICAS (DEVEM VIR ANTES DE TUDO QUE EXIGE AUTH!)
+// ============================================================================
+// ⚠️ IMPORTANTE: Rotas públicas DEVEM ser registradas antes de qualquer
+//    router que aplique authenticateToken globalmente (ex: adaptar-documento).
+// ============================================================================
+
+logger.info('📌 Registrando rotas públicas (health, cursos, eixos)...');
+
+// ---------- Health checks ----------
+app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    status: 'online',
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    memory: {
+      usage: process.memoryUsage(),
+      heapMB: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)
+    }
+  });
+});
+
+app.get('/api/health-check', async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const stats = await db.stats();
+
+    res.json({
+      success: true,
+      status: 'online',
+      timestamp: new Date().toISOString(),
+      database: {
+        name: db.databaseName,
+        type: mongoose.connection.host.includes('mongodb.net') ? 'MongoDB Atlas' : 'MongoDB Local',
+        collections: stats.collections,
+        documents: stats.objects,
+        dataSizeMB: (stats.dataSize / 1024 / 1024).toFixed(2),
+        storageSizeMB: (stats.storageSize / 1024 / 1024).toFixed(2),
+        connected: mongoose.connection.readyState === 1
+      },
+      connection: {
+        host: mongoose.connection.host,
+        port: mongoose.connection.port,
+        atlas: mongoose.connection.host.includes('mongodb.net')
+      },
+      message: '✅ Sistema online'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      status: 'error',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'API está funcionando!',
+    database: mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/database-info', async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    const stats = await db.stats();
+
+    res.json({
+      success: true,
+      database: {
+        name: db.databaseName,
+        type: 'MongoDB Atlas',
+        collections: stats.collections,
+        documents: stats.objects,
+        dataSize: (stats.dataSize / 1024 / 1024).toFixed(2) + ' MB',
+        storageSize: (stats.storageSize / 1024 / 1024).toFixed(2) + ' MB',
+        connected: mongoose.connection.readyState === 1
+      },
+      connection: {
+        host: mongoose.connection.host,
+        port: mongoose.connection.port,
+        atlas: mongoose.connection.host.includes('mongodb.net')
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------- Status do sistema (público) ----------
+app.get('/api/sistema/status', async (req, res) => {
+  try {
+    const [configManutencao, configMensagem] = await Promise.all([
+      Config.findOne({ chave: 'sistema.modoManutencao' }),
+      Config.findOne({ chave: 'sistema.manutencaoMensagem' })
+    ]);
+
+    res.json({
+      success: true,
+      modoManutencao: configManutencao ? configManutencao.valor : false,
+      mensagem: configMensagem ? configMensagem.valor : 'Sistema em manutenção. Volte mais tarde.',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('❌ Erro ao verificar status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------- Turmas (público: /api/cursos e /api/eixos) ----------
+// ⚠️ Registrado AQUI (antes de tudo) para evitar bloqueio por auth global
+try {
+  const turmasRouter = require('./routes/turmas');
+  app.use('/api/turmas', turmasRouter);
+  app.use('/api', turmasRouter.publicoRouter);   // /api/cursos, /api/eixos
+  logger.info('✅ Rotas públicas de turmas/cursos/eixos registradas');
+} catch (error) {
+  logger.error('❌ Erro ao registrar turmasRouter:', error.message);
+}
+
+// ---------- Login (auth) - registrar CEDO para não ser bloqueado ----------
+try {
+  app.use('/api', require('./routes/login'));
+  logger.info('✅ Rotas de login registradas');
+} catch (error) {
+  logger.error('❌ Erro ao registrar login:', error.message);
+}
+
+// ============================================================================
+// ROUTERS MIGRADOS (registrados DEPOIS das rotas públicas)
 // ============================================================================
 // ⚠️ A ordem importa! Routers mais específicos ANTES dos genéricos.
-// ============================================================================
+
+logger.info('📌 Registrando routers autenticados...');
 
 // ---------- Monitoramento ----------
 app.use('/api/admin/monitoramento', require('./routes/monitoramento'));
 
 // ---------- Adaptar Documento ----------
-app.use('/api', require('./adaptar-documento'));
+// ⚠️ Este router pode ter auth global — por isso vem DEPOIS das rotas públicas
+try {
+  app.use('/api', require('./adaptar-documento'));
+  logger.info('✅ adaptar-documento registrado');
+} catch (error) {
+  logger.error('❌ Erro ao registrar adaptar-documento:', error.message);
+}
 
 // ---------- Push (Web Push API) ----------
 app.use('/api/push', require('./routes/push-routes'));
@@ -1042,17 +1145,11 @@ app.use('/api/professor', require('./routes/professor'));
 app.use('/api/biblioteca', require('./routes/biblioteca'));
 app.use('/api/biblioteca-publica', require('./routes/biblioteca-publica'));
 
-// ---------- Login (auth) ----------
-app.use('/api', require('./routes/login'));
-
 // ---------- Secretaria ----------
 app.use('/api/secretaria', require('./routes/secretaria'));
 
 // ---------- Sessões de Assinatura ----------
 app.use('/api/sessoes-assinatura', require('./routes/sessao-assinatura-routes'));
-
-// ---------- Turmas ----------
-app.use('/api/turmas', require('./routes/turmas'));
 
 // ---------- Provas ----------
 app.use('/api/provas', require('./routes/provas'));
@@ -1084,10 +1181,36 @@ app.use('/api/admin', require('./routes/admin'));
 logger.info('✅ Todos os routers migrados foram registrados');
 
 // ============================================================================
+// MIDDLEWARE DE RASTREAMENTO DE ATIVIDADE
+// ============================================================================
+// ⚠️ Registrado DEPOIS das rotas públicas para não interferir nelas
+const rastrearAtividade = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      if (!decoded.temp && decoded.id) {
+        User.findByIdAndUpdate(decoded.id, {
+          lastActive: new Date()
+        }).catch(() => {});
+      }
+    } catch (err) {
+      // Token inválido — apenas ignora
+    }
+  }
+
+  next();
+};
+
+app.use('/api', rastrearAtividade);
+
+// ============================================================================
 // MIDDLEWARE DE MODO MANUTENÇÃO
 // ============================================================================
 const manutencaoMiddleware = async (req, res, next) => {
-  // Rotas que SEMPRE funcionam (públicas)
   const rotasPublicas = [
     '/api/auth/login',
     '/api/auth/register',
@@ -1097,6 +1220,8 @@ const manutencaoMiddleware = async (req, res, next) => {
     '/api/health-check',
     '/api/matriculas-autorizadas/verificar',
     '/api/sistema/status',
+    '/api/cursos',
+    '/api/eixos',
     '/login.html',
     '/register.html',
     '/recuperar-senha.html',
@@ -1107,7 +1232,6 @@ const manutencaoMiddleware = async (req, res, next) => {
     '/uploads/'
   ];
 
-  // Se for rota pública, libera SEMPRE
   if (rotasPublicas.some(rota => req.path.startsWith(rota))) {
     return next();
   }
@@ -1116,12 +1240,8 @@ const manutencaoMiddleware = async (req, res, next) => {
     const configManutencao = await Config.findOne({ chave: 'sistema.modoManutencao' });
     const modoManutencao = configManutencao ? configManutencao.valor : false;
 
-    // Se NÃO está em manutenção, libera
     if (!modoManutencao) return next();
 
-    // ===== EM MANUTENÇÃO =====
-
-    // Verificação 1: Token no header (APIs)
     const token = req.headers.authorization?.split(' ')[1];
     if (token) {
       try {
@@ -1135,7 +1255,6 @@ const manutencaoMiddleware = async (req, res, next) => {
       } catch (err) { /* ignora */ }
     }
 
-    // Verificação 2: Cookie (páginas HTML)
     const cookieToken = req.cookies?.auth_token;
     if (cookieToken) {
       try {
@@ -1149,7 +1268,6 @@ const manutencaoMiddleware = async (req, res, next) => {
       } catch (err) { /* ignora */ }
     }
 
-    // Verificação 3: Sessão
     if (req.session?.userId) {
       try {
         const user = await User.findById(req.session.userId).select('role nome');
@@ -1161,8 +1279,6 @@ const manutencaoMiddleware = async (req, res, next) => {
         }
       } catch (err) { /* ignora */ }
     }
-
-    // ===== NÃO É ADMIN =====
 
     const configMensagem = await Config.findOne({ chave: 'sistema.manutencaoMensagem' });
     const mensagem = configMensagem ? configMensagem.valor : 'Sistema em manutenção. Volte mais tarde.';
@@ -1234,173 +1350,11 @@ app.use(async (req, res, next) => {
   }
 });
 
-// ============================================================================
-// MIDDLEWARE DE AUTENTICAÇÃO GLOBAL (popula req.user* em TODAS as rotas)
-// ============================================================================
-app.use((req, res, next) => {
-  // Rotas que NÃO precisam de autenticação
-  const rotasPublicas = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/reset-password',
-    '/api/health',
-    '/api/test',
-    '/api/health-check',
-    '/api/matriculas-autorizadas/verificar',
-    '/login.html',
-    '/register.html',
-    '/recuperar-senha.html',
-    '/trocar-senha.html',
-    '/css/',
-    '/js/',
-    '/uploads/'
-  ];
-
-  if (rotasPublicas.some(rota => req.path.startsWith(rota))) {
-    return next();
-  }
-
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    req.user = null;
-    return next();
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      req.user = null;
-    } else {
-      req.userId = user.id;
-      req.userRole = user.role;
-      req.userNome = user.nome;
-    }
-    next();
-  });
-});
-
 logger.info('✅ Middlewares especiais configurados');
 
 // ============================================================================
-// ROTAS REMANESCENTES (NÃO MIGRADAS)
+// ROTAS REMANESCENTES (NÃO MIGRADAS) - AUTENTICADAS
 // ============================================================================
-// ⚠️ Estas rotas ficaram no server.js porque NÃO foram migradas para nenhum
-// arquivo em routes/. Todas estão completas e testadas.
-// ============================================================================
-
-// ============================================================================
-// HEALTH CHECKS PÚBLICOS
-// ============================================================================
-
-// Health check básico
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    status: 'online',
-    timestamp: new Date().toISOString(),
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    memory: {
-      usage: process.memoryUsage(),
-      heapMB: (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)
-    }
-  });
-});
-
-// Health check com info do banco
-app.get('/api/health-check', async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const stats = await db.stats();
-
-    res.json({
-      success: true,
-      status: 'online',
-      timestamp: new Date().toISOString(),
-      database: {
-        name: db.databaseName,
-        type: mongoose.connection.host.includes('mongodb.net') ? 'MongoDB Atlas' : 'MongoDB Local',
-        collections: stats.collections,
-        documents: stats.objects,
-        dataSizeMB: (stats.dataSize / 1024 / 1024).toFixed(2),
-        storageSizeMB: (stats.storageSize / 1024 / 1024).toFixed(2),
-        connected: mongoose.connection.readyState === 1
-      },
-      connection: {
-        host: mongoose.connection.host,
-        port: mongoose.connection.port,
-        atlas: mongoose.connection.host.includes('mongodb.net')
-      },
-      message: '✅ Sistema online'
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      status: 'error',
-      error: error.message
-    });
-  }
-});
-
-// Rota de teste simples
-app.get('/api/test', (req, res) => {
-  res.json({
-    success: true,
-    message: 'API está funcionando!',
-    database: mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Info do banco de dados (admin)
-app.get('/api/database-info', async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const stats = await db.stats();
-
-    res.json({
-      success: true,
-      database: {
-        name: db.databaseName,
-        type: 'MongoDB Atlas',
-        collections: stats.collections,
-        documents: stats.objects,
-        dataSize: (stats.dataSize / 1024 / 1024).toFixed(2) + ' MB',
-        storageSize: (stats.storageSize / 1024 / 1024).toFixed(2) + ' MB',
-        connected: mongoose.connection.readyState === 1
-      },
-      connection: {
-        host: mongoose.connection.host,
-        port: mongoose.connection.port,
-        atlas: mongoose.connection.host.includes('mongodb.net')
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================================================
-// ROTA: STATUS DO SISTEMA (público)
-// ============================================================================
-app.get('/api/sistema/status', async (req, res) => {
-  try {
-    const [configManutencao, configMensagem] = await Promise.all([
-      Config.findOne({ chave: 'sistema.modoManutencao' }),
-      Config.findOne({ chave: 'sistema.manutencaoMensagem' })
-    ]);
-
-    res.json({
-      success: true,
-      modoManutencao: configManutencao ? configManutencao.valor : false,
-      mensagem: configMensagem ? configMensagem.valor : 'Sistema em manutenção. Volte mais tarde.',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('❌ Erro ao verificar status:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // ============================================================================
 // ROTA: CONFIG DE ENVIO DE PROVAS
@@ -1570,7 +1524,6 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
       });
     }
 
-    // Validar política de senhas
     const [configSenhaTamanho, configSenhaMaiuscula, configSenhaNumero, configSenhaEspecial] = await Promise.all([
       Config.findOne({ chave: 'seguranca.senha.tamanhoMinimo' }),
       Config.findOne({ chave: 'seguranca.senha.exigirMaiuscula' }),
@@ -1637,7 +1590,6 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
 // ROTAS DE PERFIL DO USUÁRIO
 // ============================================================================
 
-// ---------- GET /api/perfil/me - Obter perfil do usuário logado ----------
 app.get('/api/perfil/me', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId)
@@ -1729,7 +1681,6 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
   }
 });
 
-// ---------- PUT /api/perfil/me - Atualizar perfil ----------
 app.put('/api/perfil/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.userId;
@@ -1763,7 +1714,6 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
       }
     }
 
-    // Validações específicas
     if (dadosAtualizar.estado) {
       dadosAtualizar.estado = dadosAtualizar.estado.toUpperCase().substring(0, 2);
     }
@@ -1784,7 +1734,6 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
       }
     }
 
-    // Validar perfil alimentar
     if (dadosAtualizar.perfilAlimentar) {
       const valoresPermitidos = ['sempre', 'as_vezes', 'nunca', 'nao_informado'];
       if (!valoresPermitidos.includes(dadosAtualizar.perfilAlimentar)) {
@@ -1795,7 +1744,6 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
       }
     }
 
-    // Validar refeições
     if (dadosAtualizar.refeicoesQueParticipa) {
       const refeicoesPermitidas = ['manha', 'almoco', 'tarde'];
       for (const ref of dadosAtualizar.refeicoesQueParticipa) {
@@ -1839,7 +1787,6 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
   }
 });
 
-// ---------- POST /api/perfil/upload-foto - Upload de foto ----------
 app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('foto'), async (req, res) => {
   try {
     if (!req.file) {
@@ -1868,7 +1815,6 @@ app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('
       });
     }
 
-    // Converter para base64 (armazenar no banco)
     const imageBuffer = fs.readFileSync(file.path);
     const base64Image = imageBuffer.toString('base64');
     const dataUrl = `data:${file.mimetype};base64,${base64Image}`;
@@ -1883,7 +1829,6 @@ app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('
       { new: true }
     ).select('fotoPerfil fotoPerfilTipo nome email');
 
-    // Remover arquivo temporário
     fs.unlinkSync(file.path);
 
     logger.info(`✅ Foto de perfil atualizada: ${user.nome} (${user.email})`);
@@ -1906,7 +1851,6 @@ app.post('/api/perfil/upload-foto', authenticateToken, uploadMiddleware.single('
   }
 });
 
-// ---------- DELETE /api/perfil/remover-foto - Remover foto ----------
 app.delete('/api/perfil/remover-foto', authenticateToken, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
@@ -1941,7 +1885,6 @@ app.delete('/api/perfil/remover-foto', authenticateToken, async (req, res) => {
   }
 });
 
-// ---------- GET /api/perfil/publico/:id - Perfil público ----------
 app.get('/api/perfil/publico/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1985,7 +1928,6 @@ app.get('/api/perfil/publico/:id', authenticateToken, async (req, res) => {
 // ROTAS DE UPLOAD
 // ============================================================================
 
-// ---------- POST /api/upload/temp - Upload temporário ----------
 app.post('/api/upload/temp', authenticateToken, uploadMiddleware.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) {
@@ -2025,7 +1967,6 @@ app.post('/api/upload/temp', authenticateToken, uploadMiddleware.single('arquivo
   }
 });
 
-// ---------- POST /api/upload/imagem - Upload de imagem para questão ----------
 app.post('/api/upload/imagem', authenticateToken, async (req, res) => {
   try {
     const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
@@ -2093,7 +2034,6 @@ app.post('/api/upload/imagem', authenticateToken, async (req, res) => {
   }
 });
 
-// ---------- DELETE /api/upload/limpar-imagens - Limpar imagens não usadas ----------
 app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => {
   try {
     if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
@@ -2108,7 +2048,6 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
     const uploadsDir = path.join(__dirname, 'uploads');
     const imagensDir = path.join(__dirname, 'uploads', 'imagens-questoes');
 
-    // Coletar imagens referenciadas no banco
     const imagensEmUso = new Set();
 
     const provas = await Prova.find({
@@ -2226,7 +2165,6 @@ app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
       });
     }
 
-    // Gerar QR Code se não existir
     if (!user.qrCodeUsuario) {
       const BASE_URL = IS_DEVELOPMENT
         ? 'http://localhost:3000'
@@ -2255,7 +2193,6 @@ app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
       await user.save();
     }
 
-    // Página de destino
     let paginaExibicao = '';
     let tituloExibicao = '';
 
@@ -2361,7 +2298,6 @@ app.get('/api/identificar-usuario/:id', async (req, res) => {
 // ROTAS DE PÁGINAS HTML PROTEGIDAS
 // ============================================================================
 
-// ---------- GET /realizar-prova.html - Página protegida de prova ----------
 app.get('/realizar-prova.html', async (req, res) => {
   try {
     const { token } = req.query;
@@ -2427,7 +2363,6 @@ app.get('/realizar-prova.html', async (req, res) => {
   }
 });
 
-// ---------- GET /corrigir-prova - Página protegida de correção ----------
 app.get('/corrigir-prova', async (req, res) => {
   try {
     const token = req.query.token || req.headers.authorization?.split(' ')[1];
@@ -2623,17 +2558,11 @@ function limparTodosTimers() {
 }
 
 // ============================================================================
-// SERVIÇOS DE BACKGROUND
-// ============================================================================
-
-// ============================================================================
 // SERVIÇO: NOTIFICAÇÃO BASEADA NO TEMPO DO BOTÃO
 // ============================================================================
 const NotificacaoBotaoService = {
-  // Cache para evitar duplicatas
   notificacoesEnviadas: new Set(),
 
-  // Limpar cache antigo (mais de 1h)
   limparCache: function () {
     const umaHoraAtras = Date.now() - (60 * 60 * 1000);
     for (const key of this.notificacoesEnviadas) {
@@ -2644,7 +2573,6 @@ const NotificacaoBotaoService = {
     }
   },
 
-  // Verificar provas que estão com botão "Disponível em X min"
   verificarNotificacoes: async function () {
     try {
       const agora = new Date();
@@ -2652,7 +2580,6 @@ const NotificacaoBotaoService = {
       const mes = String(agora.getMonth() + 1).padStart(2, '0');
       const dia = String(agora.getDate()).padStart(2, '0');
 
-      // Buscar provas ativas
       const provas = await Prova.find({
         publicada: true,
         status: 'ativa',
@@ -2662,11 +2589,9 @@ const NotificacaoBotaoService = {
       for (const prova of provas) {
         if (!prova.horarioInicio) continue;
 
-        // Calcular minutos até o início
         const inicioProva = new Date(`${ano}-${mes}-${dia}T${prova.horarioInicio}:00-03:00`);
         const diffMinutos = Math.floor((inicioProva - agora) / (1000 * 60));
 
-        // Notificar apenas nos valores 10 e 5
         if (diffMinutos === 10 || diffMinutos === 5) {
           const chave = `botao_${prova._id}_${diffMinutos}_${Date.now()}`;
 
@@ -2800,11 +2725,9 @@ registrarTimer(setTimeout(() => {
 // ============================================================================
 app.get('/', async (req, res) => {
   try {
-    // Tentar obter token do cookie ou do header
     let token = req.cookies?.auth_token ||
                 (req.headers.authorization?.split(' ')[1]);
 
-    // Se não tem token, vai para login
     if (!token) {
       return res.redirect('/login.html');
     }
@@ -2812,14 +2735,12 @@ app.get('/', async (req, res) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Buscar usuário
       const user = await User.findById(decoded.id).select('role ativo');
 
       if (!user || !user.ativo) {
         return res.redirect('/login.html');
       }
 
-      // Redirecionar baseado no role
       const redirectMap = {
         'super_admin': '/admin.html',
         'admin': '/admin-simples.html',
@@ -2861,7 +2782,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // CATCH-ALL
 // ============================================================================
 app.get('*', (req, res) => {
-  // Se for API, retornar 404 JSON
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({
       success: false,
@@ -2869,7 +2789,6 @@ app.get('*', (req, res) => {
     });
   }
 
-  // Qualquer outra rota vai para login
   res.redirect('/login.html');
 });
 
@@ -2892,25 +2811,17 @@ server.listen(PORT, '0.0.0.0', () => {
   logger.info('=================================');
   logger.info(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
   logger.info('='.repeat(50));
-  logger.info('\n📊 Principais rotas disponíveis:');
-  logger.info('  • POST /api/auth/login - Login');
-  logger.info('  • POST /api/auth/register - Registrar usuário');
-  logger.info('  • GET  /api/auth/me - Dados do usuário logado');
-  logger.info('  • GET  /api/perfil/me - Perfil completo do usuário');
-  logger.info('  • GET  /api/aluno/provas/pendentes - Provas pendentes');
-  logger.info('  • GET  /api/professor/provas - Provas do professor');
-  logger.info('='.repeat(50));
 });
 
 // ============================================================================
 // TIMEOUTS DO SERVIDOR
 // ============================================================================
-server.timeout = 120000; // 2 minutos
+server.timeout = 120000;
 server.keepAliveTimeout = 120000;
 logger.info('⏱️ Timeout do servidor configurado para 2 minutos');
 
 // ============================================================================
-// GRACEFUL SHUTDOWN (com força após timeout)
+// GRACEFUL SHUTDOWN
 // ============================================================================
 let shuttingDown = false;
 
@@ -2924,22 +2835,18 @@ const gracefulShutdown = (sinal) => {
   shuttingDown = true;
   logger.info(`⚠️ ${sinal} recebido. Encerrando servidor...`);
 
-  // 1. Limpar TODOS os timers
   try {
     limparTodosTimers();
   } catch (e) { /* ignora */ }
 
-  // 2. Timeout de segurança: se não fechar em 5s, força saída
   const forceExit = setTimeout(() => {
     logger.warn('⚠️ Timeout de 5s. Forçando encerramento...');
     process.exit(1);
   }, 5000);
 
-  // 3. Fechar servidor HTTP
   server.close(async () => {
     logger.info('✅ Servidor HTTP encerrado.');
 
-    // 4. Fechar conexão MongoDB (SEM CALLBACK — Mongoose 8+)
     try {
       await mongoose.connection.close(false);
       logger.info('✅ Conexão MongoDB encerrada.');
@@ -2951,12 +2858,10 @@ const gracefulShutdown = (sinal) => {
     process.exit(0);
   });
 
-  // 5. Fechar conexões abertas à força (keep-alive)
   if (typeof server.closeAllConnections === 'function') {
     server.closeAllConnections();
   }
 
-  // 6. Fechar conexões idle
   if (typeof server.closeIdleConnections === 'function') {
     server.closeIdleConnections();
   }
@@ -2965,9 +2870,6 @@ const gracefulShutdown = (sinal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// ============================================================================
-// TRATAMENTO DE ERROS NÃO CAPTURADOS (evita processos zumbis)
-// ============================================================================
 process.on('uncaughtException', (err) => {
   logger.error('❌ Exceção não capturada:', err);
   gracefulShutdown('uncaughtException');

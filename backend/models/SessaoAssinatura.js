@@ -15,10 +15,11 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
             'justificativa', 
             'segunda_chamada', 
             'atraso',
-            'atraso_aluno',   // 🆕 Assinatura do aluno em atrasos
+            'atraso_aluno',
             'psicologia',
             'assistente_social',
             'supervisao',
+            'supervisao_participante',
             'biblioteca'
         ],
         required: true 
@@ -31,6 +32,7 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
     },
     
     dadosAtendimento: {
+        // Aluno
         alunoId: mongoose.Schema.Types.ObjectId,
         alunoNome: String,
         alunoMatricula: String,
@@ -38,6 +40,7 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
         alunoCurso: String,
         alunoFoto: String,
         
+        // Genéricos (usado por vários setores)
         motivo: String,
         motivoLabel: String,
         descricao: String,
@@ -46,6 +49,7 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
         dataHoraFormatada: String,
         data: Date,
         
+        // Justificativa / 2ª chamada
         periodoFaltaInicio: Date,
         periodoFaltaFim: Date,
         periodoFaltaFormatado: String,
@@ -54,13 +58,22 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
         responsavelNome: String,
         responsavelCPF: String,
         
-        // 🆕 Identifica quem vai assinar: 'responsavel' ou 'aluno'
+        // Identifica quem assina: 'responsavel', 'aluno' ou 'participante'
         tipoAssinante: String,
         
+        // Supervisão / Atendimentos
         tipoTarefa: String,
         tipoTarefaLabel: String,
         gravidade: String,
         prioridade: String,
+        
+        // 🆕 Participante da supervisão
+        participanteNome: String,
+        participanteTipo: String,
+        tipoSessao: String, // 'participante' ou undefined
+        participantes: [mongoose.Schema.Types.Mixed],
+        
+        // Detalhes livres (aceita qualquer estrutura)
         detalhes: mongoose.Schema.Types.Mixed,
         atendimentoId: mongoose.Schema.Types.ObjectId
     },
@@ -78,4 +91,5 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
 
 SessaoAssinaturaSchema.index({ expiraEm: 1 }, { expireAfterSeconds: 0 });
 
+// ⚠️ ESSA É A LINHA CRÍTICA - PRECISA SER ASSIM
 module.exports = mongoose.model('SessaoAssinatura', SessaoAssinaturaSchema);

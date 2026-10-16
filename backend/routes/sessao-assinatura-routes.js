@@ -34,7 +34,7 @@ const authenticateToken = async (req, res, next) => {
 };
 
 // ============================================
-// 🆕 ROLES QUE PODEM CRIAR/ASSINAR SESSÕES
+// ROLES QUE PODEM CRIAR/ASSINAR SESSÕES
 // Aceita BOTH formas (com hífen E com underscore)
 // ============================================
 const verificarGestaoGeral = (req, res, next) => {
@@ -80,6 +80,23 @@ const verificarGestaoGeral = (req, res, next) => {
 };
 
 // ============================================
+// 🆕 LISTA CENTRALIZADA DE TIPOS VÁLIDOS
+// Use essa constante em TODOS os lugares que validam tipo
+// ============================================
+const TIPOS_VALIDOS = [
+    'autorizacao',
+    'justificativa',
+    'segunda_chamada',
+    'atraso',
+    'atraso_aluno',              // Assinatura do aluno em atrasos
+    'psicologia',
+    'assistente_social',
+    'supervisao',
+    'supervisao_participante',   // 🆕 Assinatura de participante da supervisão
+    'biblioteca'
+];
+
+// ============================================
 // HEALTH CHECK (público)
 // ============================================
 router.get('/health', (req, res) => {
@@ -87,6 +104,8 @@ router.get('/health', (req, res) => {
         success: true, 
         status: 'online', 
         service: 'Sessões de Assinatura (QR Code)',
+        versao: '2.0-participantes',
+        tiposSuportados: TIPOS_VALIDOS,
         timestamp: new Date().toISOString()
     });
 });
@@ -97,7 +116,7 @@ router.get('/health', (req, res) => {
 // ============================================
 
 // ============================================
-// 1. CRIAR / ATUALIZAR SESSÃO (AUTENTICADO - quem cria é o profissional logado)
+// 1. CRIAR / ATUALIZAR SESSÃO (AUTENTICADO)
 // ============================================
 router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
@@ -108,15 +127,13 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
         if (!sessaoId) return res.status(400).json({ success: false, error: 'sessaoId obrigatório' });
         if (!tipo) return res.status(400).json({ success: false, error: 'tipo obrigatório' });
         
-        const tiposValidos = [
-            'autorizacao', 'justificativa', 'segunda_chamada', 'atraso',
-            'psicologia', 'assistente_social', 'supervisao', 'biblioteca'
-        ];
-        if (!tiposValidos.includes(tipo)) {
+        // 🆕 VALIDAÇÃO ATUALIZADA — aceita todos os tipos suportados
+        if (!TIPOS_VALIDOS.includes(tipo)) {
+            console.warn(`⚠️ Tipo inválido recebido: "${tipo}"`);
             return res.status(400).json({ 
                 success: false, 
                 error: `Tipo "${tipo}" inválido`,
-                tiposPermitidos: tiposValidos
+                tiposPermitidos: TIPOS_VALIDOS
             });
         }
         
@@ -235,7 +252,6 @@ router.get('/:sessaoId', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
         }
         
-        // Verifica se expirou
         if (sessao.expiraEm && new Date() > new Date(sessao.expiraEm)) {
             return res.status(404).json({ success: false, error: 'Sessão expirada' });
         }
@@ -293,7 +309,6 @@ router.put('/:sessaoId/assinar', async (req, res) => {
             });
         }
         
-        // Verifica expiração
         if (sessao.expiraEm && new Date() > new Date(sessao.expiraEm)) {
             return res.status(400).json({ success: false, error: 'Sessão expirada' });
         }
@@ -301,12 +316,12 @@ router.put('/:sessaoId/assinar', async (req, res) => {
         sessao.status = 'assinado';
         sessao.assinaturaBase64 = assinaturaBase64;
         sessao.assinadaEm = new Date();
-        sessao.assinadaPor = null; // sem usuário logado (é o responsável)
+        sessao.assinadaPor = null;
         sessao.assinadaPorNome = assinanteNome || 'Responsável';
         
         await sessao.save();
         
-        console.log(`✍️ Sessão ${sessao.sessaoId} assinada por ${sessao.assinadaPorNome}`);
+        console.log(`✍️ Sessão ${sessao.sessaoId} (${sessao.tipo}) assinada por ${sessao.assinadaPorNome}`);
         
         res.json({ 
             success: true, 

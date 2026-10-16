@@ -36,6 +36,13 @@ function mascararItem(item, req) {
     if (obj.entrada.descricao) obj.entrada.descricao = MASCARA_TEXTO;
     if (obj.entrada.observacoes) obj.entrada.observacoes = MASCARA_TEXTO;
     if (obj.entrada.assinaturaBase64) obj.entrada.assinaturaBase64 = null;
+    
+    if (Array.isArray(obj.entrada.participantes)) {
+      obj.entrada.participantes = obj.entrada.participantes.map(p => ({
+        ...p,
+        assinaturaBase64: null
+      }));
+    }
   }
   if (obj.descricao) obj.descricao = MASCARA_TEXTO;
   if (obj.saida) {
@@ -113,7 +120,6 @@ async function criarNotificacaoInterna({ usuarioId, titulo, mensagem, tipo, link
 
 // ============================================
 // PROCESSAR ALERTAS 24H
-// Envia 1 notificação por dia por atendimento
 // ============================================
 async function processarAlertas24h() {
   const atendimentos = await AtendimentoSupervisao.buscarAtendimentosParaAlerta();
@@ -122,13 +128,12 @@ async function processarAlertas24h() {
   let processados = 0;
   let pulados = 0;
   const agora = new Date();
-  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000; // 24 horas entre alertas
+  const INTERVALO_MINIMO_MS = 24 * 60 * 60 * 1000;
   
   for (const atendimento of atendimentos) {
     const registradoPor = atendimento.entrada?.registradoPor;
     if (!registradoPor) continue;
     
-    // 🛡️ Só envia se passou 24h desde o último alerta
     if (atendimento.ultimoAlerta24h) {
       const diff = agora - new Date(atendimento.ultimoAlerta24h);
       if (diff < INTERVALO_MINIMO_MS) {
@@ -206,15 +211,13 @@ function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:0
 
 // ============================================
 // HEALTH CHECK
-// Retorna status do serviço (online/versão/timestamp)
 // ============================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Supervisão', versao: '2.0-alertas-24h' });
+  res.json({ success: true, status: 'online', service: 'Supervisão', versao: '4.0-participantes-filtros' });
 });
 
 // ============================================
 // MIGRAÇÃO
-// Inicializa campos de alerta 24h em atendimentos existentes
 // ============================================
 router.post('/admin/migrar-alertas-24h', async (req, res) => {
   try {
@@ -229,37 +232,151 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
 });
 
 // ============================================
-// TURMAS E ALUNOS
+// 🆕 PERFIS DISPONÍVEIS PARA PARTICIPANTES (SEM ADMINS)
 // ============================================
+router.get('/perfis-participantes', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const perfis = [
+      { valor: 'professor', label: 'Professor', temFiltro: 'eixo', filtroLabel: 'Eixo' },
+      { valor: 'aluno', label: 'Aluno', temFiltro: 'turma', filtroLabel: 'Turma' },
+      { valor: 'supervisao', label: 'Supervisão', temFiltro: null, filtroLabel: null },
+      { valor: 'gestao_geral', label: 'Gestão Geral', temFiltro: null, filtroLabel: null },
+      { valor: 'psicologia', label: 'Psicologia', temFiltro: null, filtroLabel: null },
+      { valor: 'assistente_social', label: 'Assistente Social', temFiltro: null, filtroLabel: null },
+      { valor: 'biblioteca', label: 'Biblioteca', temFiltro: null, filtroLabel: null }
+    ];
+    res.json({ success: true, perfis });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
-// Lista todas as turmas distintas de alunos ativos
+// ============================================
+// 🆕 EIXOS DISPONÍVEIS (para select intermediário de professores)
+// ============================================
+router.get('/eixos', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const eixos = await User.distinct('eixo', { 
+      role: 'professor', 
+      ativo: true, 
+      eixo: { $nin: [null, '', 'Não informado'] } 
+    });
+    res.json({ success: true, eixos: eixos.filter(Boolean).sort() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🆕 PROFESSORES POR EIXO
+// ============================================
+router.get('/professores-por-eixo', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const { eixo } = req.query;
+    if (!eixo) return res.status(400).json({ success: false, error: 'Eixo é obrigatório' });
+    
+    const professores = await User.find({ 
+      role: 'professor', 
+      ativo: true, 
+      eixo: eixo 
+    }).select('nome matricula eixo fotoPerfil').sort({ nome: 1 });
+    
+    res.json({
+      success: true,
+      total: professores.length,
+      usuarios: professores.map(u => ({
+        id: u._id,
+        nome: u.nome,
+        matricula: u.matricula || '',
+        eixo: u.eixo || '',
+        fotoPerfil: u.fotoPerfil || null
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🆕 TURMAS DISPONÍVEIS (para select intermediário de alunos)
+// ============================================
 router.get('/turmas', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const turmas = await User.distinct('turma', { 
       role: 'aluno', ativo: true, turma: { $nin: [null, '', 'Não informada'] } 
     });
-    res.json({ success: true, turmas: turmas.sort() });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+    res.json({ success: true, turmas: turmas.filter(Boolean).sort() });
+  } catch (error) { 
+    res.status(500).json({ success: false, error: error.message }); 
+  }
 });
 
-// Lista alunos de uma turma específica
+// ============================================
+// 🆕 ALUNOS POR TURMA
+// ============================================
 router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { turma } = req.query;
     if (!turma) return res.status(400).json({ success: false, error: 'Turma é obrigatória' });
-    const alunos = await User.find({ role: 'aluno', ativo: true, turma })
-      .select('nome matricula turma curso fotoPerfil').sort({ nome: 1 });
+    
+    const alunos = await User.find({ 
+      role: 'aluno', ativo: true, turma 
+    }).select('nome matricula turma curso fotoPerfil').sort({ nome: 1 });
+    
     res.json({
-      success: true, total: alunos.length,
+      success: true, 
+      total: alunos.length,
+      usuarios: alunos.map(a => ({
+        id: a._id, nome: a.nome, matricula: a.matricula,
+        turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
+      })),
+      // Compatibilidade com frontend antigo
       alunos: alunos.map(a => ({
         id: a._id, nome: a.nome, matricula: a.matricula,
         turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
       }))
     });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+  } catch (error) { 
+    res.status(500).json({ success: false, error: error.message }); 
+  }
 });
 
-// Busca dados de um aluno (atendimentos ativos + histórico recente)
+// ============================================
+// 🆕 USUÁRIOS POR PERFIL (para outros perfis sem filtro)
+// ============================================
+router.get('/usuarios-por-perfil', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const { perfil } = req.query;
+    if (!perfil) return res.status(400).json({ success: false, error: 'Perfil é obrigatório' });
+    
+    const perfisValidos = ['supervisao', 'gestao_geral', 'psicologia', 'assistente_social', 'biblioteca'];
+    if (!perfisValidos.includes(perfil)) {
+      return res.status(400).json({ success: false, error: 'Perfil inválido para este endpoint' });
+    }
+    
+    const usuarios = await User.find({ 
+      role: perfil, 
+      ativo: true 
+    }).select('nome matricula fotoPerfil').sort({ nome: 1 });
+    
+    res.json({
+      success: true,
+      total: usuarios.length,
+      usuarios: usuarios.map(u => ({
+        id: u._id,
+        nome: u.nome,
+        matricula: u.matricula || '',
+        fotoPerfil: u.fotoPerfil || null
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// BUSCAR ALUNO POR ID
+// ============================================
 router.get('/aluno/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const aluno = await User.findOne({ _id: req.params.id, ativo: true })
@@ -294,7 +411,9 @@ router.get('/aluno/:id', authenticateToken, verificarSupervisao, async (req, res
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Busca alunos por nome ou matrícula (mínimo 2 caracteres)
+// ============================================
+// BUSCAR ALUNO POR NOME/MATRÍCULA
+// ============================================
 router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { termo } = req.query;
@@ -319,12 +438,15 @@ router.get('/buscar-aluno', authenticateToken, verificarSupervisao, async (req, 
 });
 
 // ============================================
-// REGISTRAR
-// Cria uma nova ocorrência de supervisão com dados do aluno e assinatura opcional
+// REGISTRAR ATENDIMENTO (COM PARTICIPANTES)
 // ============================================
 router.post('/registrar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const { alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, assinaturaBase64, precisaAssinatura = false } = req.body;
+    const { 
+      alunoId, tipoTarefa, descricao, observacoes, gravidade, prioridade, 
+      detalhes, assinaturaBase64, precisaAssinatura = false,
+      participantes = []
+    } = req.body;
     
     if (!descricao || descricao.trim() === '') {
       return res.status(400).json({ success: false, error: 'A descrição é obrigatória' });
@@ -355,6 +477,35 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
       ? 'pendente'
       : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
     
+    // Processa participantes
+    const participantesProcessados = (Array.isArray(participantes) ? participantes : [])
+      .filter(p => p && p.usuarioId && p.usuarioNome)
+      .map(p => {
+        let assinaturaPartValida = '';
+        if (p.assinaturaBase64 && typeof p.assinaturaBase64 === 'string') {
+          if (p.assinaturaBase64.startsWith('data:image/') && p.assinaturaBase64.length < 500000) {
+            assinaturaPartValida = p.assinaturaBase64;
+          }
+        }
+        return {
+          usuarioId: p.usuarioId,
+          usuarioNome: p.usuarioNome,
+          usuarioMatricula: p.usuarioMatricula || null,
+          usuarioFoto: p.usuarioFoto || null,
+          tipo: p.tipo || 'outros',
+          tipoLabel: p.tipoLabel || p.tipo || 'Outros',
+          turma: p.turma || null,
+          eixo: p.eixo || null,
+          filtroValor: p.filtroValor || '',
+          precisaAssinatura: !!p.precisaAssinatura,
+          assinaturaBase64: assinaturaPartValida,
+          temAssinatura: assinaturaPartValida.length > 100,
+          assinadaEm: assinaturaPartValida.length > 100 ? new Date() : null,
+          assinadaPorNome: assinaturaPartValida.length > 100 ? p.usuarioNome : null,
+          sessaoAssinaturaId: p.sessaoId || null
+        };
+      });
+    
     const atendimento = new AtendimentoSupervisao({
       alunoId: aluno._id, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
       alunoTurma: aluno.turma || 'Não informada', alunoCurso: aluno.curso || 'Não informado',
@@ -371,7 +522,8 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
         statusAssinatura: statusAssinatura,
         assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
         assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
-        assinadaPorNome: assinaturaValida.length > 100 ? (supervisor?.nome || req.userNome) : null
+        assinadaPorNome: assinaturaValida.length > 100 ? (supervisor?.nome || req.userNome) : null,
+        participantes: participantesProcessados
       },
       detalhes: detalhes || {},
       prioridade: prioridade || 'normal',
@@ -392,15 +544,18 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
         status: atendimento.status,
         dataHora: atendimento.entrada.dataHora,
         temAssinatura: atendimento.entrada.temAssinatura,
-        statusAssinatura: atendimento.entrada.statusAssinatura
+        statusAssinatura: atendimento.entrada.statusAssinatura,
+        totalParticipantes: participantesProcessados.length
       }
     });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+  } catch (error) { 
+    console.error('Erro ao registrar:', error);
+    res.status(500).json({ success: false, error: error.message }); 
+  }
 });
 
 // ============================================
-// APLICAR ASSINATURA
-// Aplica assinatura capturada via QR Code em um atendimento
+// APLICAR ASSINATURA DO RESPONSÁVEL
 // ============================================
 router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -440,8 +595,47 @@ router.post('/aplicar-assinatura', authenticateToken, verificarSupervisao, async
 });
 
 // ============================================
+// APLICAR ASSINATURA DE PARTICIPANTE
+// ============================================
+router.post('/aplicar-assinatura-participante', authenticateToken, verificarSupervisao, async (req, res) => {
+  try {
+    const { atendimentoId, participanteId, sessaoId } = req.body;
+    if (!atendimentoId || !participanteId || !sessaoId) {
+      return res.status(400).json({ success: false, error: 'atendimentoId, participanteId e sessaoId são obrigatórios' });
+    }
+    
+    const sessao = await SessaoAssinatura.findOne({ sessaoId });
+    if (!sessao) return res.status(404).json({ success: false, error: 'Sessão não encontrada' });
+    if (sessao.status !== 'assinado') return res.status(400).json({ success: false, error: 'Sessão ainda não foi assinada' });
+    
+    const atendimento = await AtendimentoSupervisao.findById(atendimentoId);
+    if (!atendimento) return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    
+    const participante = atendimento.entrada.participantes.id(participanteId);
+    if (!participante) return res.status(404).json({ success: false, error: 'Participante não encontrado' });
+    
+    participante.assinaturaBase64 = sessao.assinaturaBase64;
+    participante.temAssinatura = true;
+    participante.assinadaEm = sessao.assinadaEm;
+    participante.assinadaPorNome = sessao.assinadaPorNome;
+    participante.sessaoAssinaturaId = sessaoId;
+    atendimento.updatedAt = new Date();
+    await atendimento.save();
+    
+    res.json({
+      success: true,
+      message: 'Assinatura do participante aplicada com sucesso!',
+      participante: {
+        id: participante._id,
+        usuarioNome: participante.usuarioNome,
+        temAssinatura: true
+      }
+    });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+// ============================================
 // FINALIZAR
-// Finaliza um atendimento com resultado e observações finais
 // ============================================
 router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -489,7 +683,6 @@ router.post('/finalizar', authenticateToken, verificarSupervisao, async (req, re
 
 // ============================================
 // REMARCAR
-// Adiciona uma remarcação a um atendimento existente
 // ============================================
 router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -545,7 +738,6 @@ router.post('/remarcar', authenticateToken, verificarSupervisao, async (req, res
 
 // ============================================
 // REMARCAÇÕES PENDENTES
-// Lista todas as remarcações com status pendente
 // ============================================
 router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -590,7 +782,9 @@ router.get('/remarcacoes/pendentes', authenticateToken, verificarSupervisao, asy
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Busca uma remarcação específica pelo ID
+// ============================================
+// BUSCAR REMARCAÇÃO POR ID
+// ============================================
 router.get('/remarcacoes/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const atendimento = await AtendimentoSupervisao.findOne({ 'remarcacoes.id': req.params.id });
@@ -613,7 +807,9 @@ router.get('/remarcacoes/:id', authenticateToken, verificarSupervisao, async (re
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Finaliza uma remarcação (realizado ou cancelado)
+// ============================================
+// FINALIZAR REMARCAÇÃO
+// ============================================
 router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { remarcacaoId, acao } = req.body;
@@ -657,8 +853,7 @@ router.post('/remarcacoes/finalizar', authenticateToken, verificarSupervisao, as
 });
 
 // ============================================
-// ATENDIMENTOS COM +24H
-// Lista ocorrências em andamento há mais de 24h (com máscara para super_admin)
+// ATENDIMENTOS +24H
 // ============================================
 router.get('/atendimentos-antigos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -706,16 +901,13 @@ router.get('/atendimentos-antigos', authenticateToken, verificarSupervisao, asyn
       };
     });
     
-    // 🔒 APLICA A MÁSCARA PARA SUPER_ADMIN
     const listaMascarada = mascararParaAdmin(lista, req);
-    
     res.json({ success: true, total: listaMascarada.length, atendimentos: listaMascarada });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 // ============================================
 // VERIFICAR ATENDIMENTO +24H
-// Permite encerrar ou manter aberto um atendimento com +24h
 // ============================================
 router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -779,7 +971,6 @@ router.post('/atendimento/:id/verificar-24h', authenticateToken, verificarSuperv
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Processa manualmente os alertas de +24h (usado para testes)
 router.post('/processar-alertas-24h', async (req, res) => {
   try {
     const resultado = await processarAlertas24h();
@@ -789,7 +980,6 @@ router.post('/processar-alertas-24h', async (req, res) => {
 
 // ============================================
 // DASHBOARD
-// Retorna métricas, gráficos e tendências das ocorrências
 // ============================================
 router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -909,7 +1099,6 @@ router.get('/dashboard', authenticateToken, verificarSupervisao, async (req, res
 
 // ============================================
 // ATENDIMENTOS ATIVOS
-// Lista todos os atendimentos em andamento (com máscara para super_admin)
 // ============================================
 router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -931,6 +1120,8 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
         temRemarcacaoPendente: a.temRemarcacaoPendente || false,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
         statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+        totalParticipantes: (a.entrada?.participantes || []).length,
+        participantesComAssinatura: (a.entrada?.participantes || []).filter(p => p.temAssinatura).length,
         entrada: {
           descricao: a.entrada.descricao, observacoes: a.entrada.observacoes,
           registradoPor: a.entrada.registradoPor,
@@ -946,8 +1137,7 @@ router.get('/atendimentos-ativos', authenticateToken, verificarSupervisao, async
 });
 
 // ============================================
-// LISTAR ATENDIMENTOS
-// Lista atendimentos com filtros e paginação (com máscara para super_admin)
+// LISTAR ATENDIMENTOS (COM FILTROS E PAGINAÇÃO)
 // ============================================
 router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1005,6 +1195,7 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
         registradoPor: a.entrada.registradoPorNome, registradoPorId: a.entrada.registradoPor,
         temAssinatura: !!(a.entrada?.assinaturaBase64),
         statusAssinatura: a.entrada?.statusAssinatura || 'nao_necessaria',
+        totalParticipantes: (a.entrada?.participantes || []).length,
         saida: a.saida ? {
           dataHora: a.saida.dataHora,
           dataHoraFormatada: new Date(a.saida.dataHora).toLocaleString('pt-BR'),
@@ -1038,7 +1229,6 @@ router.get('/atendimentos', authenticateToken, verificarSupervisao, async (req, 
 
 // ============================================
 // BUSCAR ATENDIMENTO POR ID
-// Retorna um atendimento específico (com máscara para super_admin)
 // ============================================
 router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1066,7 +1256,24 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
         assinaturaBase64: atendimento.entrada?.assinaturaBase64 || null,
         assinadaEm: atendimento.entrada?.assinadaEm || null,
         assinadaPorNome: atendimento.entrada?.assinadaPorNome || null,
-        sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null
+        sessaoAssinaturaId: atendimento.entrada?.sessaoAssinaturaId || null,
+        participantes: (atendimento.entrada?.participantes || []).map(p => ({
+          id: p._id,
+          usuarioId: p.usuarioId,
+          usuarioNome: p.usuarioNome,
+          usuarioMatricula: p.usuarioMatricula,
+          usuarioFoto: p.usuarioFoto,
+          tipo: p.tipo,
+          tipoLabel: p.tipoLabel,
+          turma: p.turma,
+          eixo: p.eixo,
+          filtroValor: p.filtroValor,
+          precisaAssinatura: p.precisaAssinatura,
+          temAssinatura: p.temAssinatura,
+          assinaturaBase64: p.assinaturaBase64 || null,
+          assinadaEm: p.assinadaEm,
+          assinadaPorNome: p.assinadaPorNome
+        }))
       },
       detalhes: atendimento.detalhes,
       saida: atendimento.saida ? {
@@ -1094,8 +1301,7 @@ router.get('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
 });
 
 // ============================================
-// EDITAR
-// Atualiza um atendimento (com verificação de permissão para super_admin)
+// EDITAR (COM PARTICIPANTES)
 // ============================================
 router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1107,7 +1313,11 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
       return res.status(403).json({ success: false, error: check.motivo, code: 'ADMIN_NAO_CRIADOR' });
     }
     
-    const { tipoTarefa, descricao, observacoes, gravidade, prioridade, detalhes, status, saida } = req.body;
+    const { 
+      tipoTarefa, descricao, observacoes, gravidade, prioridade, 
+      detalhes, status, saida,
+      participantes
+    } = req.body;
     
     if (tipoTarefa) atendimento.tipoTarefa = tipoTarefa;
     if (descricao) atendimento.entrada.descricao = descricao;
@@ -1116,6 +1326,43 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     if (prioridade) atendimento.prioridade = prioridade;
     if (detalhes) atendimento.detalhes = { ...atendimento.detalhes, ...detalhes };
     if (status) atendimento.status = status;
+    
+    if (Array.isArray(participantes)) {
+      const participantesProcessados = participantes
+        .filter(p => p && p.usuarioId && p.usuarioNome)
+        .map(p => {
+          let assinaturaPartValida = '';
+          if (p.assinaturaBase64 && typeof p.assinaturaBase64 === 'string') {
+            if (p.assinaturaBase64.startsWith('data:image/') && p.assinaturaBase64.length < 500000) {
+              assinaturaPartValida = p.assinaturaBase64;
+            }
+          }
+          return {
+            _id: p._id || undefined,
+            usuarioId: p.usuarioId,
+            usuarioNome: p.usuarioNome,
+            usuarioMatricula: p.usuarioMatricula || null,
+            usuarioFoto: p.usuarioFoto || null,
+            tipo: p.tipo || 'outros',
+            tipoLabel: p.tipoLabel || p.tipo || 'Outros',
+            turma: p.turma || null,
+            eixo: p.eixo || null,
+            filtroValor: p.filtroValor || '',
+            precisaAssinatura: !!p.precisaAssinatura,
+            assinaturaBase64: assinaturaPartValida,
+            temAssinatura: assinaturaPartValida.length > 100,
+            assinadaEm: assinaturaPartValida.length > 100 
+              ? (p.assinadaEm || new Date()) 
+              : null,
+            assinadaPorNome: assinaturaPartValida.length > 100 
+              ? (p.assinadaPorNome || p.usuarioNome) 
+              : null,
+            sessaoAssinaturaId: p.sessaoId || p.sessaoAssinaturaId || null
+          };
+        });
+      
+      atendimento.entrada.participantes = participantesProcessados;
+    }
     
     if (saida) {
       atendimento.saida = { 
@@ -1129,13 +1376,19 @@ router.put('/atendimento/:id', authenticateToken, verificarSupervisao, async (re
     
     atendimento.updatedAt = new Date();
     await atendimento.save();
-    res.json({ success: true, message: 'Atualizado', atendimento: { id: atendimento._id } });
+    res.json({ 
+      success: true, 
+      message: 'Atualizado', 
+      atendimento: { 
+        id: atendimento._id,
+        totalParticipantes: (atendimento.entrada.participantes || []).length
+      } 
+    });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 // ============================================
 // EXCLUIR
-// Exclui um atendimento (com verificação de permissão para super_admin)
 // ============================================
 router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1154,7 +1407,6 @@ router.delete('/atendimento/:id', authenticateToken, verificarSupervisao, async 
 
 // ============================================
 // EXCLUSÃO EM MASSA
-// Exclui atendimentos finalizados antes de uma data (bloqueado para super_admin)
 // ============================================
 router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -1181,10 +1433,8 @@ router.post('/atendimentos/exclusao-massa', authenticateToken, verificarSupervis
 });
 
 // ============================================
-// RELATÓRIOS
+// RELATÓRIO POR ALUNO
 // ============================================
-
-// Relatório individual de um aluno
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1227,14 +1477,17 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarSupervisao, 
           dataSaida: a.saida?.dataHora || null, resultado: a.saida?.resultado || null,
           tempoTexto: tempo.texto,
           temAssinatura: !!(a.entrada?.assinaturaBase64),
-          assinaturaBase64: a.entrada?.assinaturaBase64 || null
+          assinaturaBase64: a.entrada?.assinaturaBase64 || null,
+          totalParticipantes: (a.entrada?.participantes || []).length
         };
       })
     });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Relatório por turma
+// ============================================
+// RELATÓRIO POR TURMA
+// ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim } = req.query;
@@ -1287,7 +1540,9 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarSupervisao, as
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Relatório geral com filtros
+// ============================================
+// RELATÓRIO GERAL
+// ============================================
 router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { dataInicio, dataFim, turma, tipo } = req.query;
@@ -1359,7 +1614,8 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
           tempoTexto: tempo.texto,
           temAssinatura: !!(a.entrada?.assinaturaBase64),
           assinaturaBase64: a.entrada?.assinaturaBase64 || null,
-          registradoPorNome: a.entrada?.registradoPorNome
+          registradoPorNome: a.entrada?.registradoPorNome,
+          totalParticipantes: (a.entrada?.participantes || []).length
         };
       }),
       atendimentos: atendimentos.slice(0, 100).map(a => {
@@ -1382,7 +1638,6 @@ router.get('/relatorio/geral', authenticateToken, verificarSupervisao, async (re
 
 // ============================================
 // SCHEDULER
-// Executa alertas de +24h a cada 5 minutos
 // ============================================
 let schedulerInterval = null;
 

@@ -4161,6 +4161,40 @@ router.get('/cursos', authenticateTokenLocal, isSuperAdmin, async (req, res) => 
   }
 });
 
+// ============================================================================
+// CURSOS — BUSCAR POR ID
+// ============================================================================
+router.get('/cursos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const curso = await Curso.findById(id)
+      .populate('eixoId', 'nome label cor icone')
+      .lean();
+
+    if (!curso) {
+      return res.status(404).json({ success: false, error: 'Curso não encontrado' });
+    }
+
+    res.json({
+      success: true,
+      curso: {
+        _id: curso._id,
+        nome: curso.nome,
+        eixoId: curso.eixoId,
+        turmas: curso.turmas || [],
+        ativo: curso.ativo,
+        createdAt: curso.createdAt,
+        totalTurmas: curso.turmas?.length || 0
+      }
+    });
+
+  } catch (error) {
+    logger.error('❌ Erro ao buscar curso:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/cursos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { nome, eixoId } = req.body;

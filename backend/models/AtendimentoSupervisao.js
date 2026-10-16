@@ -12,7 +12,6 @@ const RemarcacaoSchema = new mongoose.Schema({
   dataRemarcacao: { type: String, required: true },
   horarioRemarcacao: { type: String, required: true },
   
-  // 🔐 Criptografados
   motivoRemarcacao: { 
     type: String, 
     required: true, 
@@ -44,6 +43,82 @@ const RemarcacaoSchema = new mongoose.Schema({
   toObject: { getters: true }
 });
 
+// ============================================
+// 🆕 SUB-SCHEMA: PARTICIPANTE DO ATENDIMENTO
+// ============================================
+const ParticipanteSchema = new mongoose.Schema({
+  usuarioId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true 
+  },
+  usuarioNome: { 
+    type: String, 
+    required: true 
+  },
+  usuarioMatricula: { 
+    type: String, 
+    default: null 
+  },
+  usuarioFoto: { 
+    type: String, 
+    default: null 
+  },
+  tipo: { 
+    type: String, 
+    required: true 
+  }, // 'professor', 'aluno', 'supervisao', 'gestao_geral', 'psicologia', 'assistente_social', 'biblioteca'
+  tipoLabel: { 
+    type: String, 
+    required: true 
+  },
+  turma: { 
+    type: String, 
+    default: null 
+  }, // Se for aluno
+  eixo: { 
+    type: String, 
+    default: null 
+  }, // Se for professor
+  filtroValor: { 
+    type: String, 
+    default: '' 
+  }, // Valor do select intermediário (turma ou eixo)
+  precisaAssinatura: { 
+    type: Boolean, 
+    default: false 
+  },
+  assinaturaBase64: { 
+    type: String, 
+    default: '',
+    set: criptografar,
+    get: descriptografar
+  },
+  temAssinatura: { 
+    type: Boolean, 
+    default: false 
+  },
+  assinadaEm: { 
+    type: Date, 
+    default: null 
+  },
+  assinadaPorNome: { 
+    type: String, 
+    default: null 
+  },
+  sessaoAssinaturaId: { 
+    type: String, 
+    default: null 
+  }
+}, {
+  _id: true,
+  toJSON: { getters: true },
+  toObject: { getters: true }
+});
+
+// ============================================
+// SCHEMA PRINCIPAL
+// ============================================
 const AtendimentoSupervisaoSchema = new mongoose.Schema({
   alunoId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -74,7 +149,6 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
   entrada: {
     dataHora: { type: Date, default: Date.now },
     
-    // 🔐 Criptografados
     descricao: { 
       type: String, 
       required: true,
@@ -95,7 +169,7 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String,
     
-    // 🔐 Criptografado
+    // Assinatura do responsável
     assinaturaBase64: { 
       type: String, 
       default: '',
@@ -112,10 +186,18 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     assinadaEm: { type: Date, default: null },
     assinadaPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     assinadaPorNome: { type: String, default: null },
-    sessaoAssinaturaId: { type: String, default: null }
+    sessaoAssinaturaId: { type: String, default: null },
+    
+    // ============================================
+    // 🆕 PARTICIPANTES DO ATENDIMENTO
+    // ============================================
+    participantes: {
+      type: [ParticipanteSchema],
+      default: []
+    }
   },
   
-  // 🔐 Todos os campos de detalhes criptografados
+  // Detalhes específicos
   detalhes: {
     testemunhas: { 
       type: [String],
@@ -147,11 +229,8 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
       enum: ['resolvido', 'em_acompanhamento', 'reincidente', 'encaminhado', 'pendente'],
       required: false
     },
-    
-    // 🔐 Criptografados
     resultadoTexto: { type: String, set: criptografar, get: descriptografar },
     observacoesFinais: { type: String, set: criptografar, get: descriptografar },
-    
     registradoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registradoPorNome: String
   },
@@ -165,9 +244,7 @@ const AtendimentoSupervisaoSchema = new mongoose.Schema({
     default: false
   },
   
-  // ============================================
-  // 🆕 CONTROLE DE ALERTAS DE 24H
-  // ============================================
+  // Controle de alertas de 24h
   ultimoAlerta24h: {
     type: Date,
     default: null,
@@ -218,7 +295,6 @@ AtendimentoSupervisaoSchema.index({ createdAt: -1 });
 AtendimentoSupervisaoSchema.index({ temRemarcacaoPendente: 1, status: 1 });
 AtendimentoSupervisaoSchema.index({ 'remarcacoes.status': 1 });
 AtendimentoSupervisaoSchema.index({ 'entrada.statusAssinatura': 1, createdAt: -1 });
-// 🆕 Índice para busca de atendimentos antigos
 AtendimentoSupervisaoSchema.index({ status: 1, 'entrada.dataHora': 1, ultimoAlerta24h: 1 });
 
 // ============================================
@@ -226,6 +302,7 @@ AtendimentoSupervisaoSchema.index({ status: 1, 'entrada.dataHora': 1, ultimoAler
 // ============================================
 AtendimentoSupervisaoSchema.pre('save', function(next) {
   if (this.entrada) {
+    // Assinatura do responsável
     const temAssinaturaReal = !!(this.entrada.assinaturaBase64 && this.entrada.assinaturaBase64.length > 100);
     this.entrada.temAssinatura = temAssinaturaReal;
     
@@ -236,6 +313,17 @@ AtendimentoSupervisaoSchema.pre('save', function(next) {
       }
     } else if (this.entrada.statusAssinatura !== 'pendente') {
       this.entrada.statusAssinatura = 'nao_necessaria';
+    }
+    
+    // Assinaturas dos participantes
+    if (Array.isArray(this.entrada.participantes)) {
+      this.entrada.participantes.forEach(p => {
+        const temAssinaturaPart = !!(p.assinaturaBase64 && p.assinaturaBase64.length > 100);
+        p.temAssinatura = temAssinaturaPart;
+        if (temAssinaturaPart && !p.assinadaEm) {
+          p.assinadaEm = new Date();
+        }
+      });
     }
   }
   
@@ -269,9 +357,6 @@ AtendimentoSupervisaoSchema.statics.getTipoTarefaLabel = function(tipo) {
   return labels[tipo] || tipo;
 };
 
-// ============================================
-// 🆕 BUSCAR ATENDIMENTOS QUE PRECISAM DE ALERTA 24H
-// ============================================
 AtendimentoSupervisaoSchema.statics.buscarAtendimentosParaAlerta = async function() {
   const agora = new Date();
   const limite24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
@@ -288,6 +373,9 @@ AtendimentoSupervisaoSchema.statics.buscarAtendimentosParaAlerta = async functio
   });
 };
 
+// ============================================
+// MÉTODOS DE INSTÂNCIA
+// ============================================
 AtendimentoSupervisaoSchema.methods.adicionarRemarcacao = function(dados) {
   if (!this.remarcacoes) this.remarcacoes = [];
   
