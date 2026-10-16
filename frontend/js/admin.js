@@ -12545,6 +12545,94 @@ class AdminPanel {
         }
     }
 
+        // ============ GERAR PAGINAÇÃO PROFISSIONAL ============
+    gerarPaginacaoProfissional(pagination, tipo) {
+        if (!pagination || pagination.pages <= 1) return '';
+
+        const { page, pages, total, limit } = pagination;
+        const inicio = ((page - 1) * limit) + 1;
+        const fim = Math.min(page * limit, total);
+
+        // Gerar botões de página
+        let botoesPagina = '';
+        const maxBotoes = 5;
+        let paginaInicial = Math.max(1, page - Math.floor(maxBotoes / 2));
+        let paginaFinal = Math.min(pages, paginaInicial + maxBotoes - 1);
+
+        // Ajustar se estiver no final
+        if (paginaFinal - paginaInicial < maxBotoes - 1) {
+            paginaInicial = Math.max(1, paginaFinal - maxBotoes + 1);
+        }
+
+        // Botão primeira página
+        if (paginaInicial > 1) {
+            botoesPagina += `
+                <button class="btn-page" onclick="admin.mudarPagina('${tipo}', 1)" title="Primeira página">
+                    <i class="fas fa-angle-double-left"></i>
+                </button>
+            `;
+        }
+
+        // Botão página anterior
+        if (page > 1) {
+            botoesPagina += `
+                <button class="btn-page" onclick="admin.mudarPagina('${tipo}', ${page - 1})" title="Página anterior">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            `;
+        }
+
+        // Botões das páginas
+        for (let i = paginaInicial; i <= paginaFinal; i++) {
+            botoesPagina += `
+                <button class="btn-page ${i === page ? 'active' : ''}" 
+                        onclick="admin.mudarPagina('${tipo}', ${i})"
+                        ${i === page ? 'disabled' : ''}>
+                    ${i}
+                </button>
+            `;
+        }
+
+        // Botão próxima página
+        if (page < pages) {
+            botoesPagina += `
+                <button class="btn-page" onclick="admin.mudarPagina('${tipo}', ${page + 1})" title="Próxima página">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+        }
+
+        // Botão última página
+        if (paginaFinal < pages) {
+            botoesPagina += `
+                <button class="btn-page" onclick="admin.mudarPagina('${tipo}', ${pages})" title="Última página">
+                    <i class="fas fa-angle-double-right"></i>
+                </button>
+            `;
+        }
+
+        return `
+            <div class="pagination-professional">
+                <div class="pagination-info">
+                    <span>Mostrando <strong>${inicio}</strong> a <strong>${fim}</strong> de <strong>${total}</strong> registros</span>
+                </div>
+                <div class="pagination-controls">
+                    ${botoesPagina}
+                </div>
+                <div class="pagination-jump">
+                    <label>Ir para:</label>
+                    <input type="number" 
+                           min="1" 
+                           max="${pages}" 
+                           value="${page}"
+                           onchange="admin.mudarPagina('${tipo}', Math.min(Math.max(1, parseInt(this.value) || 1), ${pages}))"
+                           class="page-input">
+                    <span>de ${pages}</span>
+                </div>
+            </div>
+        `;
+    }
+
     // ============================================================================
     // ============ TURMAS (VERSÃO UNIFICADA E CORRIGIDA) ============
     // ============================================================================
