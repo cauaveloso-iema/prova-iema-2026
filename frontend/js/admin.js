@@ -1326,8 +1326,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-link"></i> Vincular Dispositivo';
-            document.getElementById('modalSaveBtn').onclick = () => this.vincularDispositivo(playerId);
-            document.getElementById('modalSaveBtn').textContent = '🔗 Vincular';
+            this.configurarModal({ title: '<i class="fas fa-link"></i> Vincular Dispositivo', saveText: '🔗 Vincular', onSave: () => this.vincularDispositivo(playerId) });
             this.openModal();
             
             // Adicionar busca em tempo real
@@ -1865,8 +1864,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Dispositivo';
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoDispositivo(playerId);
-        document.getElementById('modalSaveBtn').textContent = '💾 Salvar Alterações';
+        this.configurarModal({ saveText: '💾 Salvar Alterações', onSave: () => this.salvarEdicaoDispositivo(playerId) });
         
         // Inicializar as tags
         setTimeout(() => {
@@ -2636,8 +2634,7 @@ class AdminPanel {
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-paper-plane"></i> Envio em Massa';
             // 🔥 CORREÇÃO: usar `enviarNotificacaoEmMassa` (com "Em")
-            document.getElementById('modalSaveBtn').onclick = () => this.enviarNotificacaoEmMassa();
-            document.getElementById('modalSaveBtn').textContent = '📤 Enviar Notificações';
+            this.configurarModal({ saveText: '📤 Enviar Notificações', onSave: () => this.enviarNotificacaoEmMassa() });
             this.openModal();
             
         } catch (error) {
@@ -2925,7 +2922,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-user"></i> Detalhes do Usuário';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             this.openModal();
             
         } catch (error) {
@@ -2951,26 +2948,6 @@ class AdminPanel {
 
     // ============ DASHBOARD ============
 
-    async carregarDadosReais() {
-        try {
-            const response = await fetch(`${this.apiBase}/dashboard`, {
-                headers: { 
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}` 
-                }
-            });
-            
-            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                this.atualizarEstatisticas(data.data);
-                console.log('✅ Dados do dashboard atualizados');
-            }
-        } catch (error) {
-            console.error('❌ Erro ao carregar dados reais:', error);
-        }
-    }
 
     // ============ GERAR ATIVIDADES RECENTES (VERSÃO MELHORADA) ============
     gerarAtividadesRecentes(atividades = []) {
@@ -3474,7 +3451,7 @@ class AdminPanel {
                 `;
                 
                 document.getElementById('modalTitle').innerHTML = '<i class="fas fa-mobile-alt"></i> Usuários no App';
-                document.getElementById('modalSaveBtn').style.display = 'none';
+                this.configurarModal({ hideSave: true });
                 this.openModal();
                 return;
             }
@@ -3566,7 +3543,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-mobile-alt" style="color: #8b5cf6;"></i> Usuários no App';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             this.openModal();
             
         } catch (error) {
@@ -4487,7 +4464,7 @@ class AdminPanel {
                 `;
                 
                 document.getElementById('modalTitle').innerHTML = '<i class="fas fa-signal"></i> Usuários Online';
-                document.getElementById('modalSaveBtn').style.display = 'none';
+                this.configurarModal({ hideSave: true });
                 
                 const modalContent = document.querySelector('#modal .modal-content');
                 if (modalContent) modalContent.classList.add('modal-content-wide');
@@ -4605,7 +4582,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-signal" style="color: #10b981;"></i> Usuários Online';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             
             // 🔥 Expandir o modal
             const modalContent = document.querySelector('#modal .modal-content');
@@ -5830,7 +5807,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-upload"></i> Upload de Alunos';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         
         this.arquivoExcel = null;
         this.dadosExcel = null;
@@ -6068,7 +6045,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-envelope"></i> Vincular Emails por Turma';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         
         this.arquivoExcelEmails = null;
         this.dadosExcelEmails = null;
@@ -7594,7 +7571,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-chalkboard-teacher"></i> Gerenciar Professores';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         
         this.arquivoExcelProfessores = null;
         this.dadosExcelProfessores = null;
@@ -8603,7 +8580,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-envelope"></i> Vincular Emails - Professores';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         
         this.arquivoExcelEmailsProfessores = null;
         this.dadosExcelEmailsProfessores = null;
@@ -9360,7 +9337,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-school"></i> Gerenciar Turmas';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         
         // Carregar turmas
         this.carregarTurmasParaGerenciar();
@@ -10294,7 +10271,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-layer-group"></i> Todos os Perfis';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
     }
 
@@ -10923,7 +10900,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-layer-group"></i> Todos os Perfis - QR Codes';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
     }
 
@@ -11093,7 +11070,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-qrcode" style="color: #8b5cf6;"></i> QR Code do Usuário';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             
             this.openModal();
             
@@ -11631,7 +11608,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = `<i class="fas fa-user-circle" style="color: ${roleColor};"></i> Perfil de ${user.nome || 'Usuário'}`;
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             
             this.openModal();
             
@@ -14088,23 +14065,73 @@ class AdminPanel {
     }
 
     // ============================================================================
-    // 📝 ABRIR MODAL TURMA (com eixos do banco)
+    // 📝 ABRIR MODAL DE TURMA (UNIFICADO)
+    // Aceita 1 ou 2 argumentos:
+    //   - abrirModalTurma() → abre para criar nova turma (sem curso)
+    //   - abrirModalTurma(turmaId) → abre para editar turma existente
+    //   - abrirModalTurma(cursoId, null) → abre para criar turma em um curso
+    //   - abrirModalTurma(cursoId, turmaId) → abre para editar turma de um curso
     // ============================================================================
-    async abrirModalTurma(turmaId = null) {
-        console.log('📝 Abrindo modal turma. ID:', turmaId);
+    async abrirModalTurma(arg1 = null, arg2 = null) {
+        console.log('📝 Abrindo modal turma. Args:', { arg1, arg2 });
+        
+        // 🔥 DETECTAR: 1 arg ou 2 args?
+        let cursoId = null;
+        let turmaId = null;
+        
+        if (arg2 !== null) {
+            // Chamada com 2 argumentos: (cursoId, turmaId)
+            cursoId = arg1;
+            turmaId = arg2;
+        } else if (arg1 !== null) {
+            // Chamada com 1 argumento: pode ser turmaId OU cursoId
+            const ehTurma = this.turmas?.find(t => 
+                (t.id === arg1 || t._id === arg1)
+            );
+            if (ehTurma) {
+                turmaId = arg1;
+            } else {
+                cursoId = arg1;
+            }
+        }
+        
+        console.log('📌 Interpretado:', { cursoId, turmaId });
         
         let turma = null;
         
-        // Buscar turma se for edição
+        // Buscar turma se for edição (procura em this.turmas E nos cursos)
         if (turmaId) {
             turma = this.turmas.find(t => (t.id === turmaId || t._id === turmaId));
+            
+            // Se não achou em this.turmas, procurar dentro do curso
+            if (!turma && cursoId) {
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(`/api/admin/cursos/${cursoId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    if (data.success && data.curso && data.curso.turmas) {
+                        const turmaNoCurso = data.curso.turmas.find(t => 
+                            (t._id && t._id.toString() === turmaId.toString()) ||
+                            (t.id && t.id.toString() === turmaId.toString())
+                        );
+                        if (turmaNoCurso) {
+                            turma = turmaNoCurso;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Erro ao buscar turma no curso:', e.message);
+                }
+            }
+            
             if (!turma) {
                 this.showToast('❌ Turma não encontrada', 'error');
                 return;
             }
         }
         
-        // 🔥 BUSCAR EIXOS DO BANCO
+        // Buscar eixos
         let eixos = [];
         try {
             const token = localStorage.getItem('auth_token');
@@ -14117,7 +14144,6 @@ class AdminPanel {
             console.error('Erro ao buscar eixos:', e);
         }
         
-        // Gerar options dos eixos
         const opcoesEixos = eixos.length > 0
             ? eixos.map(e => `
                 <option value="${e.nome}" ${turma?.eixo === e.nome ? 'selected' : ''}>
@@ -14128,8 +14154,12 @@ class AdminPanel {
         
         const modalBody = document.getElementById('modalBody');
         
+        // Verificar se é edição (tem turmaId) ou criação (só cursoId ou nada)
+        const modoEdicao = turmaId !== null;
+        const modoCriarNoCurso = cursoId !== null && turmaId === null;
+        
         modalBody.innerHTML = `
-            <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}')">
+            <form id="turmaForm" onsubmit="event.preventDefault(); admin.salvarTurma('${turmaId || ''}', '${cursoId || ''}')">
                 <!-- HEADER -->
                 <div style="background: linear-gradient(135deg, #667eea, #764ba2); margin: -20px -20px 20px -20px; padding: 25px 30px; border-radius: 12px 12px 0 0; color: white;">
                     <div style="display: flex; align-items: center; gap: 15px;">
@@ -14137,9 +14167,16 @@ class AdminPanel {
                             <i class="fas fa-school"></i>
                         </div>
                         <div>
-                            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">${turmaId ? '✏️ Editar Turma' : '➕ Nova Turma'}</h2>
+                            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">
+                                ${modoEdicao ? '✏️ Editar Turma' : '➕ Nova Turma'}
+                            </h2>
                             <p style="margin: 5px 0 0; opacity: 0.9; font-size: 0.9rem;">
-                                <i class="fas fa-users"></i> Gerencie as informações da turma
+                                <i class="fas fa-users"></i> 
+                                ${modoEdicao 
+                                    ? 'Atualize as informações da turma' 
+                                    : (modoCriarNoCurso 
+                                        ? 'Preencha os dados da nova turma deste curso' 
+                                        : 'Preencha os dados da nova turma')}
                             </p>
                         </div>
                     </div>
@@ -14220,25 +14257,20 @@ class AdminPanel {
             </form>
         `;
         
-        const modalTitle = document.getElementById('modalTitle');
-        if (modalTitle) {
-            modalTitle.innerHTML = turmaId ? 
-                '<i class="fas fa-edit"></i> Editar Turma' : 
-                '<i class="fas fa-plus-circle"></i> Nova Turma';
-        }
-        
-        const modalSaveBtn = document.getElementById('modalSaveBtn');
-        if (modalSaveBtn) {
-            modalSaveBtn.onclick = () => this.salvarTurma(turmaId);
-            modalSaveBtn.style.display = 'inline-block';
-            modalSaveBtn.innerHTML = turmaId ? 
-                '<i class="fas fa-save"></i> Salvar Alterações' : 
-                '<i class="fas fa-check-circle"></i> Criar Turma';
-        }
+        // 🔥 CONFIGURAR MODAL (aqui é onde o cursoId É PASSADO para salvarTurma)
+        this.configurarModal({
+            title: modoEdicao 
+                ? '<i class="fas fa-edit"></i> Editar Turma' 
+                : '<i class="fas fa-plus-circle"></i> Nova Turma',
+            saveText: modoEdicao 
+                ? '💾 Salvar Alterações' 
+                : '➕ Criar Turma',
+            onSave: () => this.salvarTurma(turmaId, cursoId)   // ← 🔥 AGORA PASSA cursoId!
+        });
         
         this.openModal();
         
-        // Carregar professores após renderizar
+        // Carregar professores
         setTimeout(() => {
             this.carregarProfessoresNoModalTurma(turma);
             document.getElementById('turmaNome')?.focus();
@@ -14281,10 +14313,14 @@ class AdminPanel {
     }
 
     // ============================================================================
-    // 💾 SALVAR TURMA
+    // 💾 SALVAR TURMA (CRIAR OU ATUALIZAR)
+    // Aceita cursoId opcional para vincular a um curso específico
     // ============================================================================
-    async salvarTurma(turmaId = null) {
+    async salvarTurma(turmaId = null, cursoId = null) {
+        console.log('💾 Salvando turma:', { turmaId, cursoId });
+        
         try {
+            // Coletar dados do formulário
             const dados = {
                 nome: document.getElementById('turmaNome')?.value?.trim(),
                 disciplina: document.getElementById('turmaDisciplina')?.value?.trim(),
@@ -14294,16 +14330,28 @@ class AdminPanel {
                 ativa: document.getElementById('turmaAtiva')?.checked !== false
             };
             
+            // 🔥 VINCULAR AO CURSO (se cursoId foi passado)
+            if (cursoId && cursoId.trim() !== '') {
+                dados.cursoId = cursoId;
+                console.log('📚 Vinculando turma ao curso:', cursoId);
+            }
+            
+            // Validação
             if (!dados.nome || !dados.disciplina || !dados.eixo) {
                 this.showToast('❌ Nome, disciplina e eixo são obrigatórios', 'error');
                 return;
             }
             
             const token = localStorage.getItem('auth_token');
-            const url = turmaId ? `${this.apiBase}/turmas/${turmaId}` : `${this.apiBase}/turmas`;
+            const url = turmaId 
+                ? `${this.apiBase}/turmas/${turmaId}` 
+                : `${this.apiBase}/turmas`;
             const method = turmaId ? 'PUT' : 'POST';
             
-            this.showToast('💾 Salvando...', 'info');
+            console.log('📤 Enviando para', method, url);
+            console.log('📦 Dados:', dados);
+            
+            this.showToast(turmaId ? '💾 Atualizando turma...' : '💾 Criando turma...', 'info');
             
             const response = await fetch(url, {
                 method,
@@ -14316,18 +14364,31 @@ class AdminPanel {
             
             const data = await response.json();
             
+            console.log('📥 Resposta:', data);
+            
             if (data.success) {
-                this.showToast(turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 'success');
+                this.showToast(
+                    turmaId ? '✅ Turma atualizada!' : '✅ Turma criada!', 
+                    'success'
+                );
                 this.closeModal();
                 
-                await this.loadTurmas();
+                // 🔥 Se foi criada dentro de um curso, recarregar CURSOS
+                if (cursoId && !turmaId) {
+                    console.log('🔄 Recarregando cursos...');
+                    await this.loadCursos();
+                } else {
+                    // Caso contrário, recarregar TURMAS
+                    await this.loadTurmas();
+                }
+                
                 await this.carregarDadosReais();
             } else {
-                throw new Error(data.error || 'Erro ao salvar');
+                throw new Error(data.error || 'Erro ao salvar turma');
             }
             
         } catch (error) {
-            console.error('❌ Erro:', error);
+            console.error('❌ Erro ao salvar turma:', error);
             this.showToast('❌ ' + error.message, 'error');
         }
     }
@@ -14468,7 +14529,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-eye"></i> Detalhes da Turma';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
     }
 
@@ -14609,13 +14670,6 @@ class AdminPanel {
 
     renderErroTurmas(mensagem) {
         return this.renderErroPadrao(mensagem);
-    }
-
-    // ============================================================================
-    // ✏️ EDITAR TURMA (apenas redireciona para abrirModalTurma)
-    // ============================================================================
-    editarTurma(turmaId) {
-        this.abrirModalTurma(turmaId);
     }
 
 
@@ -15065,7 +15119,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-map-marked-alt"></i> Histórico de Localizações';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             
             this.configurarFechamentoModal();
             this.openModal();
@@ -16613,7 +16667,7 @@ class AdminPanel {
             `;
 
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-id-card" style="color: #667eea;"></i> Detalhes da Face ID';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             
             this.configurarFechamentoModal();
             this.openModal();
@@ -16679,8 +16733,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Face ID';
-            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoFace(faceId);
-            document.getElementById('modalSaveBtn').textContent = 'Salvar Alterações';
+            this.configurarModal({ saveText: '💾 Salvar Alterações', onSave: () => this.salvarEdicaoFace(faceId) });
             this.openModal();
             
         } catch (error) {
@@ -16865,8 +16918,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-cog"></i> Configurações do Face ID';
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarConfigFaceID();
-        document.getElementById('modalSaveBtn').textContent = 'Salvar Configurações';
+        this.configurarModal({ saveText: 'Salvar Configurações', onSave: () => this.salvarConfigFaceID() });
         this.openModal();
     }
 
@@ -17799,13 +17851,6 @@ class AdminPanel {
     }
 
     // ============ FILTRAR POR STATUS (CLICANDO NOS CARDS) ============
-    filtrarPorStatus(status) {
-        const select = document.getElementById('filterStatus');
-        if (select) {
-            select.value = status;
-            this.aplicarFiltrosProvas();
-        }
-    }
 
     // ============ ATUALIZAR PROVAS ============
     async atualizarProvas() {
@@ -19975,8 +20020,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editor de Questões';
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicoesQuestoes();
-        document.getElementById('modalSaveBtn').textContent = 'Salvar Todas as Alterações';
+        this.configurarModal({ saveText: 'Salvar Todas as Alterações', onSave: () => this.salvarEdicoesQuestoes() });
         this.openModal();
     }
 
@@ -21837,18 +21881,6 @@ class AdminPanel {
     }
 
     // Adicione este método para limpar a conexão ao mudar de aba
-    limparConexaoWebSocket() {
-        if (this.ws) {
-            try {
-                this.ws.close();
-            } catch (e) {}
-            this.ws = null;
-        }
-        if (this.wsReconnectTimer) {
-            clearTimeout(this.wsReconnectTimer);
-            this.wsReconnectTimer = null;
-        }
-    }
 
     // ===== ADICIONAR LOG DO SERVIDOR (VERSÃO CORRIGIDA) =====
     adicionarLogServidor(log) {
@@ -26137,7 +26169,7 @@ class AdminPanel {
                 '<i class="fas fa-edit"></i> Editar Eixo' : 
                 '<i class="fas fa-plus"></i> Novo Eixo';
             
-            document.getElementById('modalSaveBtn').onclick = () => this.salvarEixo(eixoId);
+            this.configurarModal({ saveText: eixoId ? '💾 Salvar Alterações' : '➕ Criar Eixo', onSave: () => this.salvarEixo(eixoId) });
             this.openModal();
         }
 
@@ -26277,35 +26309,14 @@ class AdminPanel {
             }
         }
 
-        // ============ RENDERIZAR CURSOS (VERSÃO COMPLETA E CORRIGIDA) ============
-        renderizarCursos() {
-            if (!this.eixos || this.eixos.length === 0) {
-                return `
-                    <div class="cursos-container">
-                        <div class="page-header">
-                            <h1><i class="fas fa-graduation-cap"></i> Cursos</h1>
-                            <button class="btn-primary" onclick="admin.abrirModalCurso()">
-                                <i class="fas fa-plus"></i> Novo Curso
-                            </button>
-                        </div>
-                        <div class="empty-state">
-                            <i class="fas fa-sitemap"></i>
-                            <h3>Nenhum eixo cadastrado</h3>
-                            <p>Cadastre um eixo primeiro</p>
-                            <button class="btn-primary" onclick="admin.loadEixos()">
-                                <i class="fas fa-sync-alt"></i> Carregar Eixos
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }
-
-            // Criar um mapa de eixos para acesso rápido por ID
-            const eixosMap = {};
-            this.eixos.forEach(eixo => {
-                eixosMap[eixo._id] = eixo;
-            });
-
+    // ============================================================================
+    // 🎓 RENDERIZAR CURSOS (VERSÃO CORRIGIDA)
+    // - Botão "Nova Turma" chama abrirModalTurmaCurricular()
+    // - Botão ✏️ chama abrirModalTurmaCurricular(cursoId, turmaId)
+    // - Botão 🗑️ chama excluirTurmaCurricular(cursoId, turmaId)
+    // ============================================================================
+    renderizarCursos() {
+        if (!this.eixos || this.eixos.length === 0) {
             return `
                 <div class="cursos-container">
                     <div class="page-header">
@@ -26314,318 +26325,346 @@ class AdminPanel {
                             <i class="fas fa-plus"></i> Novo Curso
                         </button>
                     </div>
-
-                    <div class="cursos-list">
-                        ${this.cursos.map(curso => {
-                            // ===== LÓGICA PARA ENCONTRAR O EIXO =====
-                            let eixo = null;
-                            
-                            // Caso 1: eixoId já veio populado do backend (objeto completo)
-                            if (curso.eixoId && typeof curso.eixoId === 'object' && curso.eixoId._id) {
-                                eixo = curso.eixoId;
-                            } 
-                            // Caso 2: eixoId é apenas um ID, buscar no mapa
-                            else if (curso.eixoId && eixosMap[curso.eixoId]) {
-                                eixo = eixosMap[curso.eixoId];
-                            }
-                            // Caso 3: procurar na lista de eixos (fallback)
-                            else if (curso.eixoId) {
-                                eixo = this.eixos.find(e => e._id === curso.eixoId);
-                            }
-                            
-                            // Definir valores baseados no eixo encontrado
-                            const icone = eixo?.icone || 'fa-graduation-cap';
-                            const cor = eixo?.cor || '#667eea';
-                            const eixoLabel = eixo?.label || 'Eixo não definido';
-                            
-                            return `
-                                <div class="curso-card" style="border-left: 4px solid ${cor};">
-                                    <div class="curso-header">
-                                        <div class="curso-title">
-                                            <i class="fas ${icone}" style="color: ${cor};"></i>
-                                            <h3>${curso.nome}</h3>
-                                            <span class="eixo-badge" style="background: ${cor}20; color: ${cor}; border: 1px solid ${cor}40;">
-                                                <i class="fas ${icone}"></i> ${eixoLabel}
-                                            </span>
-                                        </div>
-                                        <div class="curso-actions">
-                                            <button class="btn-icon" onclick="admin.editarCurso('${curso._id}')" title="Editar curso">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="btn-icon danger" onclick="admin.excluirCurso('${curso._id}')" title="Excluir curso">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="turmas-section">
-                                        <div class="turmas-header">
-                                            <span class="turmas-title">
-                                                <i class="fas fa-users"></i> Turmas (${curso.turmas?.length || 0})
-                                            </span>
-                                            <button class="btn-add-turma" onclick="admin.abrirModalTurma('${curso._id}')">
-                                                <i class="fas fa-plus"></i> Nova Turma
-                                            </button>
-                                        </div>
-                                        
-                                        <div class="turmas-list">
-                                            ${curso.turmas?.map(t => `
-                                                <div class="turma-item ${t.ativa ? '' : 'inativa'}">
-                                                    <span class="turma-codigo">${t.codigo}</span>
-                                                    <span class="turma-periodo">${t.periodo}ª Série</span>
-                                                    <span class="turma-vagas">${t.vagas} vagas</span>
-                                                    <span class="turma-status ${t.ativa ? 'ativa' : 'inativa'}">
-                                                        ${t.ativa ? 'Ativa' : 'Inativa'}
-                                                    </span>
-                                                    <div class="turma-actions">
-                                                        <!-- 🔥 BOTÕES CORRIGIDOS - AGORA USAM editarTurmaCurricular -->
-                                                        <button class="btn-icon-small" onclick="admin.editarTurmaCurricular('${curso._id}', '${t._id}')" title="Editar turma do curso">
-                                                            <i class="fas fa-edit"></i>
-                                                        </button>
-                                                        <button class="btn-icon-small danger" onclick="admin.excluirTurmaCurricular('${curso._id}', '${t._id}')" title="Excluir turma do curso">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            `).join('') || '<p class="sem-turmas">Nenhuma turma cadastrada</p>'}
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="curso-footer">
-                                        <span class="curso-data">
-                                            <i class="fas fa-calendar-alt"></i> Criado em: ${new Date(curso.createdAt).toLocaleDateString('pt-BR')}
-                                        </span>
-                                        <span class="curso-status ${curso.ativo ? 'ativo' : 'inativo'}">
-                                            ${curso.ativo ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                        
-                        ${this.cursos.length === 0 ? `
-                            <div class="empty-state">
-                                <i class="fas fa-graduation-cap"></i>
-                                <h3>Nenhum curso cadastrado</h3>
-                                <p>Clique em "Novo Curso" para começar</p>
-                            </div>
-                        ` : ''}
+                    <div class="empty-state">
+                        <i class="fas fa-sitemap"></i>
+                        <h3>Nenhum eixo cadastrado</h3>
+                        <p>Cadastre um eixo primeiro</p>
+                        <button class="btn-primary" onclick="admin.loadEixos()">
+                            <i class="fas fa-sync-alt"></i> Carregar Eixos
+                        </button>
                     </div>
                 </div>
-
-                <style>
-                    .cursos-container { padding: 24px; max-width: 1200px; margin: 0 auto; }
-                    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-                    .page-header h1 { margin: 0; font-size: 24px; color: #1f2937; display: flex; align-items: center; gap: 10px; }
-                    
-                    .cursos-list { display: flex; flex-direction: column; gap: 20px; }
-                    
-                    .curso-card {
-                        background: white;
-                        border-radius: 16px;
-                        padding: 20px;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                        border: 1px solid #e5e7eb;
-                        transition: all 0.3s;
-                    }
-                    .curso-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-                    
-                    .curso-header {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin-bottom: 20px;
-                        padding-bottom: 15px;
-                        border-bottom: 1px solid #e5e7eb;
-                    }
-                    
-                    .curso-title {
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                        flex-wrap: wrap;
-                    }
-                    
-                    .curso-title i { font-size: 24px; }
-                    .curso-title h3 { margin: 0; font-size: 18px; color: #1f2937; }
-                    
-                    .eixo-badge {
-                        padding: 4px 12px;
-                        border-radius: 30px;
-                        font-size: 12px;
-                        display: flex;
-                        align-items: center;
-                        gap: 5px;
-                    }
-                    
-                    .curso-actions { display: flex; gap: 8px; }
-                    
-                    .turmas-section {
-                        background: #f9fafb;
-                        border-radius: 12px;
-                        padding: 15px;
-                        margin-bottom: 15px;
-                    }
-                    
-                    .turmas-header {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin-bottom: 15px;
-                    }
-                    
-                    .turmas-title {
-                        font-size: 14px;
-                        font-weight: 600;
-                        color: #4b5563;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    }
-                    
-                    .btn-add-turma {
-                        background: #10b981;
-                        color: white;
-                        border: none;
-                        padding: 6px 12px;
-                        border-radius: 6px;
-                        font-size: 12px;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        gap: 5px;
-                    }
-                    .btn-add-turma:hover { background: #059669; }
-                    
-                    .turmas-list {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 8px;
-                    }
-                    
-                    .turma-item {
-                        background: white;
-                        border-radius: 8px;
-                        padding: 12px;
-                        display: flex;
-                        align-items: center;
-                        gap: 15px;
-                        border: 1px solid #e5e7eb;
-                    }
-                    .turma-item.inativa { opacity: 0.7; background: #f3f4f6; }
-                    
-                    .turma-codigo {
-                        font-weight: 600;
-                        color: #1f2937;
-                        min-width: 80px;
-                    }
-                    
-                    .turma-periodo {
-                        background: #667eea;
-                        color: white;
-                        padding: 2px 8px;
-                        border-radius: 20px;
-                        font-size: 11px;
-                    }
-                    
-                    .turma-vagas {
-                        color: #6b7280;
-                        font-size: 13px;
-                    }
-                    
-                    .turma-status {
-                        padding: 2px 8px;
-                        border-radius: 20px;
-                        font-size: 11px;
-                        font-weight: 500;
-                    }
-                    .turma-status.ativa { background: #d1fae5; color: #065f46; }
-                    .turma-status.inativa { background: #fee2e2; color: #991b1b; }
-                    
-                    .turma-actions {
-                        margin-left: auto;
-                        display: flex;
-                        gap: 5px;
-                    }
-                    
-                    .btn-icon-small {
-                        width: 28px;
-                        height: 28px;
-                        border: none;
-                        background: transparent;
-                        color: #6b7280;
-                        cursor: pointer;
-                        border-radius: 4px;
-                    }
-                    .btn-icon-small:hover { background: #f3f4f6; }
-                    .btn-icon-small.danger:hover { color: #dc3545; }
-                    
-                    .sem-turmas {
-                        text-align: center;
-                        color: #9ca3af;
-                        padding: 20px;
-                        margin: 0;
-                    }
-                    
-                    .curso-footer {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        font-size: 12px;
-                        color: #6b7280;
-                    }
-                    
-                    .curso-data i { margin-right: 5px; }
-                    
-                    .curso-status {
-                        padding: 4px 12px;
-                        border-radius: 30px;
-                    }
-                    .curso-status.ativo { background: #d1fae5; color: #065f46; }
-                    .curso-status.inativo { background: #fee2e2; color: #991b1b; }
-                    
-                    .empty-state {
-                        text-align: center;
-                        padding: 60px;
-                        background: white;
-                        border-radius: 16px;
-                    }
-                    .empty-state i { font-size: 64px; color: #d1d5db; margin-bottom: 15px; }
-                    .empty-state h3 { color: #374151; margin-bottom: 10px; }
-                    .empty-state p { color: #6b7280; margin-bottom: 20px; }
-                    
-                    .btn-primary {
-                        background: linear-gradient(135deg, #667eea, #764ba2);
-                        color: white;
-                        border: none;
-                        padding: 10px 20px;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        font-weight: 600;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    }
-                    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.3); }
-                    
-                    .btn-icon {
-                        width: 32px; height: 32px;
-                        border: none;
-                        border-radius: 6px;
-                        background: transparent;
-                        color: #6c757d;
-                        cursor: pointer;
-                        display: inline-flex;
-                        align-items: center;
-                        justify-content: center;
-                        transition: all 0.2s;
-                    }
-                    .btn-icon:hover { background: #e9ecef; color: #667eea; }
-                    .btn-icon.danger:hover { color: #dc3545; }
-                </style>
             `;
         }
+
+        // Criar um mapa de eixos para acesso rápido por ID
+        const eixosMap = {};
+        this.eixos.forEach(eixo => {
+            eixosMap[eixo._id] = eixo;
+        });
+
+        return `
+            <div class="cursos-container">
+                <div class="page-header">
+                    <h1><i class="fas fa-graduation-cap"></i> Cursos</h1>
+                    <button class="btn-primary" onclick="admin.abrirModalCurso()">
+                        <i class="fas fa-plus"></i> Novo Curso
+                    </button>
+                </div>
+
+                <div class="cursos-list">
+                    ${this.cursos.map(curso => {
+                        // ===== LÓGICA PARA ENCONTRAR O EIXO =====
+                        let eixo = null;
+                        
+                        if (curso.eixoId && typeof curso.eixoId === 'object' && curso.eixoId._id) {
+                            eixo = curso.eixoId;
+                        } 
+                        else if (curso.eixoId && eixosMap[curso.eixoId]) {
+                            eixo = eixosMap[curso.eixoId];
+                        }
+                        else if (curso.eixoId) {
+                            eixo = this.eixos.find(e => e._id === curso.eixoId);
+                        }
+                        
+                        const icone = eixo?.icone || 'fa-graduation-cap';
+                        const cor = eixo?.cor || '#667eea';
+                        const eixoLabel = eixo?.label || 'Eixo não definido';
+                        
+                        return `
+                            <div class="curso-card" style="border-left: 4px solid ${cor};">
+                                <div class="curso-header">
+                                    <div class="curso-title">
+                                        <i class="fas ${icone}" style="color: ${cor};"></i>
+                                        <h3>${curso.nome}</h3>
+                                        <span class="eixo-badge" style="background: ${cor}20; color: ${cor}; border: 1px solid ${cor}40;">
+                                            <i class="fas ${icone}"></i> ${eixoLabel}
+                                        </span>
+                                    </div>
+                                    <div class="curso-actions">
+                                        <button class="btn-icon" onclick="admin.editarCurso('${curso._id}')" title="Editar curso">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn-icon danger" onclick="admin.excluirCurso('${curso._id}')" title="Excluir curso">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="turmas-section">
+                                    <div class="turmas-header">
+                                        <span class="turmas-title">
+                                            <i class="fas fa-users"></i> Turmas (${curso.turmas?.length || 0})
+                                        </span>
+                                        <!-- 🔥 CORRIGIDO: chama abrirModalTurmaCurricular -->
+                                        <button class="btn-add-turma" onclick="admin.abrirModalTurmaCurricular('${curso._id}')">
+                                            <i class="fas fa-plus"></i> Nova Turma
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="turmas-list">
+                                        ${curso.turmas?.map(t => `
+                                            <div class="turma-item ${t.ativa ? '' : 'inativa'}">
+                                                <span class="turma-codigo">${t.codigo}</span>
+                                                <span class="turma-periodo">${t.periodo}ª Série</span>
+                                                <span class="turma-vagas">${t.vagas} vagas</span>
+                                                <span class="turma-status ${t.ativa ? 'ativa' : 'inativa'}">
+                                                    ${t.ativa ? 'Ativa' : 'Inativa'}
+                                                </span>
+                                                <div class="turma-actions">
+                                                    <!-- 🔥 CORRIGIDO: chama abrirModalTurmaCurricular com 2 args -->
+                                                    <button class="btn-icon-small" 
+                                                            onclick="admin.abrirModalTurmaCurricular('${curso._id}', '${t._id}')" 
+                                                            title="Editar turma">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <!-- 🔥 CORRIGIDO: chama excluirTurmaCurricular -->
+                                                    <button class="btn-icon-small danger" 
+                                                            onclick="admin.excluirTurmaCurricular('${curso._id}', '${t._id}')" 
+                                                            title="Excluir turma">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `).join('') || '<p class="sem-turmas">Nenhuma turma cadastrada</p>'}
+                                    </div>
+                                </div>
+                                
+                                <div class="curso-footer">
+                                    <span class="curso-data">
+                                        <i class="fas fa-calendar-alt"></i> Criado em: ${new Date(curso.createdAt).toLocaleDateString('pt-BR')}
+                                    </span>
+                                    <span class="curso-status ${curso.ativo ? 'ativo' : 'inativo'}">
+                                        ${curso.ativo ? 'Ativo' : 'Inativo'}
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                    
+                    ${this.cursos.length === 0 ? `
+                        <div class="empty-state">
+                            <i class="fas fa-graduation-cap"></i>
+                            <h3>Nenhum curso cadastrado</h3>
+                            <p>Clique em "Novo Curso" para começar</p>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <style>
+                .cursos-container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+                .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+                .page-header h1 { margin: 0; font-size: 24px; color: #1f2937; display: flex; align-items: center; gap: 10px; }
+                
+                .cursos-list { display: flex; flex-direction: column; gap: 20px; }
+                
+                .curso-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 20px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    border: 1px solid #e5e7eb;
+                    transition: all 0.3s;
+                }
+                .curso-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+                
+                .curso-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    padding-bottom: 15px;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                
+                .curso-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                }
+                
+                .curso-title i { font-size: 24px; }
+                .curso-title h3 { margin: 0; font-size: 18px; color: #1f2937; }
+                
+                .eixo-badge {
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                
+                .curso-actions { display: flex; gap: 8px; }
+                
+                .turmas-section {
+                    background: #f9fafb;
+                    border-radius: 12px;
+                    padding: 15px;
+                    margin-bottom: 15px;
+                }
+                
+                .turmas-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 15px;
+                }
+                
+                .turmas-title {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .btn-add-turma {
+                    background: #10b981;
+                    color: white;
+                    border: none;
+                    padding: 6px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                .btn-add-turma:hover { background: #059669; }
+                
+                .turmas-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                
+                .turma-item {
+                    background: white;
+                    border-radius: 8px;
+                    padding: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    border: 1px solid #e5e7eb;
+                }
+                .turma-item.inativa { opacity: 0.7; background: #f3f4f6; }
+                
+                .turma-codigo {
+                    font-weight: 600;
+                    color: #1f2937;
+                    min-width: 80px;
+                }
+                
+                .turma-periodo {
+                    background: #667eea;
+                    color: white;
+                    padding: 2px 8px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                }
+                
+                .turma-vagas {
+                    color: #6b7280;
+                    font-size: 13px;
+                }
+                
+                .turma-status {
+                    padding: 2px 8px;
+                    border-radius: 20px;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+                .turma-status.ativa { background: #d1fae5; color: #065f46; }
+                .turma-status.inativa { background: #fee2e2; color: #991b1b; }
+                
+                .turma-actions {
+                    margin-left: auto;
+                    display: flex;
+                    gap: 5px;
+                }
+                
+                .btn-icon-small {
+                    width: 28px;
+                    height: 28px;
+                    border: none;
+                    background: transparent;
+                    color: #6b7280;
+                    cursor: pointer;
+                    border-radius: 4px;
+                }
+                .btn-icon-small:hover { background: #f3f4f6; }
+                .btn-icon-small.danger:hover { color: #dc3545; }
+                
+                .sem-turmas {
+                    text-align: center;
+                    color: #9ca3af;
+                    padding: 20px;
+                    margin: 0;
+                }
+                
+                .curso-footer {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+                
+                .curso-data i { margin-right: 5px; }
+                
+                .curso-status {
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                }
+                .curso-status.ativo { background: #d1fae5; color: #065f46; }
+                .curso-status.inativo { background: #fee2e2; color: #991b1b; }
+                
+                .empty-state {
+                    text-align: center;
+                    padding: 60px;
+                    background: white;
+                    border-radius: 16px;
+                }
+                .empty-state i { font-size: 64px; color: #d1d5db; margin-bottom: 15px; }
+                .empty-state h3 { color: #374151; margin-bottom: 10px; }
+                .empty-state p { color: #6b7280; margin-bottom: 20px; }
+                
+                .btn-primary {
+                    background: linear-gradient(135deg, #667eea, #764ba2);
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.3); }
+                
+                .btn-icon {
+                    width: 32px; height: 32px;
+                    border: none;
+                    border-radius: 6px;
+                    background: transparent;
+                    color: #6c757d;
+                    cursor: pointer;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.2s;
+                }
+                .btn-icon:hover { background: #e9ecef; color: #667eea; }
+                .btn-icon.danger:hover { color: #dc3545; }
+            </style>
+        `;
+    }
 
         // ============ EDITAR CURSO ============
         async editarCurso(cursoId) {
@@ -26702,11 +26741,389 @@ class AdminPanel {
                 '<i class="fas fa-edit"></i> Editar Curso' : 
                 '<i class="fas fa-plus"></i> Novo Curso';
             
-            document.getElementById('modalSaveBtn').onclick = () => this.salvarCurso(cursoId);
-            document.getElementById('modalSaveBtn').style.display = 'inline-block';
-            document.getElementById('modalSaveBtn').textContent = cursoId ? 'Salvar Alterações' : 'Criar Curso';
+            this.configurarModal({ saveText: cursoId ? '💾 Salvar Alterações' : '➕ Criar Curso', onSave: () => this.salvarCurso(cursoId) });
             
             this.openModal();
+        }
+
+        // ============================================================================
+        // 📚 ABRIR MODAL DE TURMA CURRICULAR (série/código/vagas do CURSO)
+        // NÃO é a mesma coisa que "Turma" (que tem disciplina/professor/alunos)
+        // ============================================================================
+        async abrirModalTurmaCurricular(cursoId, turmaId = null) {
+            console.log('📚 abrirModalTurmaCurricular:', { cursoId, turmaId });
+            
+            if (!cursoId) {
+                this.showToast('❌ ID do curso não fornecido', 'error');
+                return;
+            }
+            
+            // 🔥 Buscar dados do curso (para pegar as turmas cadastradas)
+            let curso = null;
+            let turma = null;
+            
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/cursos`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.cursos) {
+                    curso = data.cursos.find(c => 
+                        c._id?.toString() === cursoId.toString() || 
+                        c.id?.toString() === cursoId.toString()
+                    );
+                    
+                    if (curso && turmaId && curso.turmas) {
+                        turma = curso.turmas.find(t => 
+                            t._id?.toString() === turmaId.toString() || 
+                            t.id?.toString() === turmaId.toString()
+                        );
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Erro ao buscar curso:', error);
+                this.showToast('❌ Erro ao carregar dados do curso', 'error');
+                return;
+            }
+            
+            if (!curso) {
+                this.showToast('❌ Curso não encontrado', 'error');
+                return;
+            }
+            
+            if (turmaId && !turma) {
+                this.showToast('❌ Turma curricular não encontrada', 'error');
+                return;
+            }
+            
+            const modoEdicao = turmaId !== null;
+            const modalBody = document.getElementById('modalBody');
+            
+            modalBody.innerHTML = `
+                <form id="turmaCurricularForm" onsubmit="event.preventDefault(); admin.salvarTurmaCurricular('${cursoId}', '${turmaId || ''}')">
+                    <!-- HEADER -->
+                    <div style="background: linear-gradient(135deg, #3b82f6, #2563eb); margin: -20px -20px 20px -20px; padding: 25px 30px; border-radius: 12px 12px 0 0; color: white;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                                <i class="fas fa-layer-group"></i>
+                            </div>
+                            <div>
+                                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 600;">
+                                    ${modoEdicao ? '✏️ Editar Turma Curricular' : '➕ Nova Turma Curricular'}
+                                </h2>
+                                <p style="margin: 5px 0 0; opacity: 0.9; font-size: 0.9rem;">
+                                    <i class="fas fa-graduation-cap"></i>
+                                    Curso: <strong>${curso.nome}</strong>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Info explicativa -->
+                    <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 15px; border-radius: 8px; margin: 0 20px 20px 20px; font-size: 13px; color: #1e40af;">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>O que é uma Turma Curricular?</strong>
+                        É a <strong>série/código do curso</strong> (ex: 101, 201, 301). Ela define o período e o número de vagas. Depois, nas "Turmas" do sistema, você vincula professores e alunos a essas séries.
+                    </div>
+
+                    <div style="padding: 10px 20px 20px 20px;">
+                        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                            
+                            <!-- Código -->
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                    <i class="fas fa-hashtag" style="color: #3b82f6;"></i>
+                                    Código da Turma <span style="color: #ef4444;">*</span>
+                                </label>
+                                <input type="text" id="turmaCurricularCodigo" class="form-control" 
+                                    value="${turma?.codigo || ''}" 
+                                    placeholder="Ex: 101, 201, 301"
+                                    style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; box-sizing: border-box; text-transform: uppercase;"
+                                    maxlength="10"
+                                    required>
+                                <small style="color: #6b7280; font-size: 12px;">Use números e letras. Ex: 101 = 1º período</small>
+                            </div>
+
+                            <!-- Período -->
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                    <i class="fas fa-calendar-alt" style="color: #3b82f6;"></i>
+                                    Período / Série <span style="color: #ef4444;">*</span>
+                                </label>
+                                <select id="turmaCurricularPeriodo" 
+                                    style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; background: white; box-sizing: border-box;"
+                                    required>
+                                    <option value="">Selecione o período...</option>
+                                    <option value="1" ${turma?.periodo == 1 ? 'selected' : ''}>1ª Série / Período</option>
+                                    <option value="2" ${turma?.periodo == 2 ? 'selected' : ''}>2ª Série / Período</option>
+                                    <option value="3" ${turma?.periodo == 3 ? 'selected' : ''}>3ª Série / Período</option>
+                                    <option value="4" ${turma?.periodo == 4 ? 'selected' : ''}>4ª Série / Período</option>
+                                </select>
+                            </div>
+
+                            <!-- Vagas -->
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 8px;">
+                                    <i class="fas fa-users" style="color: #3b82f6;"></i>
+                                    Número de Vagas <span style="color: #ef4444;">*</span>
+                                </label>
+                                <input type="number" id="turmaCurricularVagas" class="form-control" 
+                                    value="${turma?.vagas || 40}" 
+                                    placeholder="Ex: 40"
+                                    min="1"
+                                    max="200"
+                                    style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 14px; box-sizing: border-box;"
+                                    required>
+                                <small style="color: #6b7280; font-size: 12px;">Quantas vagas esta turma oferece</small>
+                            </div>
+
+                            <!-- Status -->
+                            <div style="background: #f8fafc; border-radius: 12px; padding: 15px; border: 1px solid #e2e8f0;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <input type="checkbox" id="turmaCurricularAtiva" ${turma?.ativa !== false ? 'checked' : ''} 
+                                        style="width: 18px; height: 18px; cursor: pointer;">
+                                    <label for="turmaCurricularAtiva" style="font-weight: 600; cursor: pointer; color: #1e293b;">
+                                        Turma Ativa
+                                    </label>
+                                </div>
+                                <small style="color: #6b7280; font-size: 12px; display: block; margin-top: 5px; margin-left: 30px;">
+                                    Desative para impedir novas matrículas nesta turma
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            `;
+            
+            // 🔥 CONFIGURAR MODAL
+            this.configurarModal({
+                title: modoEdicao 
+                    ? '<i class="fas fa-edit"></i> Editar Turma Curricular' 
+                    : '<i class="fas fa-plus-circle"></i> Nova Turma Curricular',
+                saveText: modoEdicao 
+                    ? '💾 Salvar Alterações' 
+                    : '➕ Adicionar Turma',
+                onSave: () => this.salvarTurmaCurricular(cursoId, turmaId)
+            });
+            
+            this.openModal();
+            
+            setTimeout(() => {
+                document.getElementById('turmaCurricularCodigo')?.focus();
+            }, 150);
+        }
+
+        // ============================================================================
+        // 💾 SALVAR TURMA CURRICULAR (criar ou editar)
+        // ============================================================================
+        async salvarTurmaCurricular(cursoId, turmaId = null) {
+            console.log('💾 Salvando turma curricular:', { cursoId, turmaId });
+            
+            try {
+                const codigo = document.getElementById('turmaCurricularCodigo')?.value?.trim()?.toUpperCase();
+                const periodo = document.getElementById('turmaCurricularPeriodo')?.value;
+                const vagas = parseInt(document.getElementById('turmaCurricularVagas')?.value) || 40;
+                const ativa = document.getElementById('turmaCurricularAtiva')?.checked !== false;
+                
+                // Validações
+                if (!codigo) {
+                    this.showToast('❌ Código da turma é obrigatório', 'error');
+                    return;
+                }
+                if (!periodo) {
+                    this.showToast('❌ Período é obrigatório', 'error');
+                    return;
+                }
+                if (vagas < 1) {
+                    this.showToast('❌ Número de vagas deve ser maior que 0', 'error');
+                    return;
+                }
+                
+                const dados = {
+                    codigo,
+                    periodo: parseInt(periodo),
+                    vagas,
+                    ativa
+                };
+                
+                const token = localStorage.getItem('auth_token');
+                const url = turmaId 
+                    ? `/api/admin/cursos/${cursoId}/turmas/${turmaId}`
+                    : `/api/admin/cursos/${cursoId}/turmas`;
+                const method = turmaId ? 'PUT' : 'POST';
+                
+                console.log('📤 Enviando:', method, url, dados);
+                
+                this.showToast(turmaId ? '💾 Atualizando...' : '💾 Adicionando...', 'info');
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const data = await response.json();
+                console.log('📥 Resposta:', data);
+                
+                if (data.success) {
+                    this.showToast(
+                        turmaId ? '✅ Turma curricular atualizada!' : '✅ Turma curricular adicionada!',
+                        'success'
+                    );
+                    this.closeModal();
+                    await this.loadCursos();
+                } else {
+                    throw new Error(data.error || 'Erro ao salvar');
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
+        }
+
+        // ============================================================================
+        // 🗑️ EXCLUIR TURMA CURRICULAR
+        // ============================================================================
+        async excluirTurmaCurricular(cursoId, turmaId) {
+            console.log('🗑️ Excluindo turma curricular:', { cursoId, turmaId });
+            
+            if (!turmaId) {
+                this.showToast('❌ ID da turma não fornecido', 'error');
+                return;
+            }
+            
+            // Buscar nome/código da turma para a confirmação
+            let codigoTurma = turmaId;
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/cursos`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success && data.cursos) {
+                    const curso = data.cursos.find(c => c._id?.toString() === cursoId.toString());
+                    if (curso && curso.turmas) {
+                        const turma = curso.turmas.find(t => t._id?.toString() === turmaId.toString());
+                        if (turma) codigoTurma = turma.codigo || turmaId;
+                    }
+                }
+            } catch (e) {
+                console.warn('Não foi possível buscar o código da turma');
+            }
+            
+            const confirmar = await this.confirmar(
+                '🗑️ Excluir Turma Curricular',
+                `Tem certeza que deseja excluir a turma <strong>${codigoTurma}</strong> do curso?<br><br>
+                <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>`
+            );
+            
+            if (!confirmar) return;
+            
+            try {
+                this.showToast('🗑️ Excluindo...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/cursos/${cursoId}/turmas/${turmaId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast('✅ Turma curricular excluída!', 'success');
+                    await this.loadCursos();
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir');
+                }
+            } catch (error) {
+                console.error('❌ Erro:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Editar turma de um curso (botão ✏️ no card do curso)
+         * Chamado por: onclick="admin.editarTurmaCurricular('cursoId', 'turmaId')"
+         */
+        async editarTurmaCurricular(cursoId, turmaId) {
+            console.log('✏️ editarTurmaCurricular:', { cursoId, turmaId });
+            
+            if (!turmaId) {
+                this.showToast('❌ ID da turma não fornecido', 'error');
+                return;
+            }
+            
+            // Abre o modal de turma com cursoId E turmaId
+            return this.abrirModalTurma(cursoId, turmaId);
+        }
+
+        /**
+         * Excluir turma de um curso (botão 🗑️ no card do curso)
+         * Chamado por: onclick="admin.excluirTurmaCurricular('cursoId', 'turmaId')"
+         */
+        async excluirTurmaCurricular(cursoId, turmaId) {
+            console.log('🗑️ excluirTurmaCurricular:', { cursoId, turmaId });
+            
+            if (!turmaId) {
+                this.showToast('❌ ID da turma não fornecido', 'error');
+                return;
+            }
+            
+            // Buscar a turma para mostrar o nome na confirmação
+            let nomeTurma = turmaId;
+            try {
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/cursos/${cursoId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success && data.curso && data.curso.turmas) {
+                    const turma = data.curso.turmas.find(t => 
+                        (t._id && t._id.toString() === turmaId.toString()) ||
+                        (t.id && t.id.toString() === turmaId.toString())
+                    );
+                    if (turma) nomeTurma = turma.codigo || turma.nome || turmaId;
+                }
+            } catch (e) {
+                console.warn('⚠️ Não foi possível buscar nome da turma:', e.message);
+            }
+            
+            const confirmar = await this.confirmar(
+                '🗑️ Excluir Turma do Curso',
+                `Tem certeza que deseja excluir a turma <strong>${nomeTurma}</strong> deste curso?<br><br>
+                <span style="color: #dc3545;">⚠️ Esta ação não pode ser desfeita!</span>`
+            );
+            
+            if (!confirmar) return;
+            
+            try {
+                this.showToast('🗑️ Excluindo turma...', 'info');
+                
+                const token = localStorage.getItem('auth_token');
+                const response = await fetch(`/api/admin/cursos/${cursoId}/turmas/${turmaId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showToast('✅ Turma excluída com sucesso!', 'success');
+                    await this.loadCursos();
+                } else {
+                    throw new Error(data.error || 'Erro ao excluir turma');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao excluir turma:', error);
+                this.showToast('❌ ' + error.message, 'error');
+            }
         }
 
         // ============ SALVAR CURSO ============
@@ -27351,9 +27768,7 @@ class AdminPanel {
             `;
 
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Resultado';
-            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoResultado(resultadoId);
-            document.getElementById('modalSaveBtn').style.display = 'inline-block';
-            document.getElementById('modalSaveBtn').textContent = 'Salvar Alterações';
+            this.configurarModal({ saveText: '💾 Salvar Alterações', onSave: () => this.salvarEdicaoResultado(resultadoId) });
             this.openModal();
         }
 
@@ -33126,10 +33541,6 @@ class AdminPanel {
         this.loadProvas();
     }
 
-    limparFiltrosProvas() {
-        this.filtros.provas = { status: 'todos', dificuldade: 'todas', periodo: 'todos', search: '', page: 1, limit: 10 };
-        this.loadProvas();
-    }
 
     // ============ VER DETALHES DA PROVA (VERSÃO CORRIGIDA - BUSCA DA API) ============
     async verProva(provaId) {
@@ -33282,7 +33693,7 @@ class AdminPanel {
             `;
 
             document.getElementById('modalTitle').innerHTML = `<i class="fas fa-eye"></i> Detalhes da Prova`;
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             this.openModal();
             
         } catch (error) {
@@ -34392,8 +34803,7 @@ class AdminPanel {
         // 🔥 CORREÇÃO: usar openModal em vez de abrirModal
         document.getElementById('modalTitle').innerHTML = '📅 Adiar Prova';
         document.getElementById('modalBody').innerHTML = html;
-        document.getElementById('modalSaveBtn').style.display = 'inline-block';
-        document.getElementById('modalSaveBtn').onclick = () => this.confirmarAdiamento(provaId);
+        this.configurarModal({ saveText: '💾 Confirmar Adiamento', onSave: () => this.confirmarAdiamento(provaId) });
         
         this.openModal(); // <-- MUDANÇA AQUI!
     }
@@ -34887,8 +35297,7 @@ class AdminPanel {
             // Injetar no modal
             document.getElementById('modalBody').innerHTML = modalHtml;
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editor de Prova';
-            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoProva(provaId, questoes.length);
-            document.getElementById('modalSaveBtn').textContent = '💾 Salvar Alterações';
+            this.configurarModal({ saveText: '💾 Salvar Alterações', onSave: () => this.salvarEdicaoProva(provaId, questoes.length) });
             
             // Configurar eventos para atualizar a duração quando os horários mudarem
             setTimeout(() => {
@@ -36588,6 +36997,53 @@ class AdminPanel {
         }, duracao);
     }
 
+    // ============================================================
+    // 🔥 HELPER CENTRAL: CONFIGURA TÍTULO, BOTÃO E AÇÃO DO MODAL
+    // Deve ser chamado SEMPRE antes de openModal()
+    // ============================================================
+    configurarModal({ title, saveText, onSave, hideSave, wide }) {
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        const modalContent = document.querySelector('#modal .modal-content');
+        
+        // Título
+        if (modalTitle && title !== undefined) {
+            modalTitle.innerHTML = title;
+        }
+        
+        // Botão Salvar (SEMPRE resetar antes)
+        if (modalSaveBtn) {
+            // Reset total
+            modalSaveBtn.onclick = null;
+            modalSaveBtn.textContent = saveText || 'Salvar';
+            modalSaveBtn.disabled = false;
+            modalSaveBtn.className = 'btn-primary';
+            
+            // Visibilidade
+            if (hideSave) {
+                modalSaveBtn.style.display = 'none';
+            } else {
+                modalSaveBtn.style.display = 'inline-block';
+                
+                // Só define onclick APÓS resetar
+                if (onSave && typeof onSave === 'function') {
+                    modalSaveBtn.onclick = onSave;
+                }
+            }
+        }
+        
+        // Largura do modal
+        if (modalContent) {
+            modalContent.classList.remove('modal-content-wide');
+            if (wide) {
+                modalContent.classList.add('modal-content-wide');
+            }
+        }
+    }
+
+    // ============================================================
+    // 🔥 OPEN MODAL (versão simplificada - use configurarModal antes)
+    // ============================================================
     openModal() {
         console.log('📂 Abrindo modal');
         const modal = document.getElementById('modal');
@@ -36596,25 +37052,46 @@ class AdminPanel {
         }
     }
 
+    // ============================================================
+    // 🔥 CLOSE MODAL (reset completo do estado)
+    // ============================================================
     closeModal() {
         console.log('🔚 Fechando modal');
+        
         const modal = document.getElementById('modal');
         if (modal) {
             modal.style.display = 'none';
         }
         
-        // 🔥 REMOVER classe especial do modal
+        // Reset total do botão salvar
+        const modalSaveBtn = document.getElementById('modalSaveBtn');
+        if (modalSaveBtn) {
+            modalSaveBtn.onclick = null;
+            modalSaveBtn.textContent = 'Salvar';
+            modalSaveBtn.style.display = 'inline-block';
+            modalSaveBtn.disabled = false;
+            modalSaveBtn.className = 'btn-primary';
+        }
+        
+        // Reset do título
+        const modalTitle = document.getElementById('modalTitle');
+        if (modalTitle) {
+            modalTitle.innerHTML = '';
+        }
+        
+        // Reset do body
+        const modalBody = document.getElementById('modalBody');
+        if (modalBody) {
+            modalBody.innerHTML = '';
+        }
+        
+        // Remover classe wide
         const modalContent = document.querySelector('#modal .modal-content');
         if (modalContent) {
             modalContent.classList.remove('modal-content-wide');
         }
-        
-        const modalSaveBtn = document.getElementById('modalSaveBtn');
-        if (modalSaveBtn) {
-            modalSaveBtn.style.display = 'inline-block';
-            modalSaveBtn.onclick = null;
-        }
     }
+
 
     closeConfirmModal() {
         document.getElementById('confirmModal').style.display = 'none';
@@ -36671,7 +37148,7 @@ class AdminPanel {
             '<i class="fas fa-edit"></i> Editar Matrícula' : 
             '<i class="fas fa-plus"></i> Nova Matrícula';
         
-        document.getElementById('modalSaveBtn').onclick = () => this.salvarMatricula(isEdit ? matriculaExistente : null);
+        this.configurarModal({ saveText: isEdit ? '💾 Salvar Alterações' : '➕ Criar Matrícula', onSave: () => this.salvarMatricula(isEdit ? matriculaExistente : null) });
         
         this.openModal();
     }
@@ -38814,7 +39291,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-file-pdf"></i> Gerar PDF';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
     }
 
@@ -38871,7 +39348,7 @@ class AdminPanel {
         `;
         
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-archive"></i> Exportar ZIP';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
     }
 
@@ -39396,7 +39873,7 @@ class AdminPanel {
             </div>
         `;
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-cog"></i> Configurações do Cartão';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
         
         const tamanhoSelect = document.getElementById('configTamanhoCartao');
@@ -39650,7 +40127,7 @@ class AdminPanel {
             </div>
         `;
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-school"></i> Imprimir Cartões por Turma';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
     }
 
@@ -40138,12 +40615,6 @@ class AdminPanel {
         return labels[role] || role;
     }
 
-    escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     // ============ FILTROS ============
     aplicarFiltrosQR() {
@@ -40169,7 +40640,6 @@ class AdminPanel {
 
     filtrarQRPorRole(role) { const select = document.getElementById('filtroRoleQR'); if (select) select.value = role; this.aplicarFiltrosQR(); }
     filtrarQRPorTurma() { this.aplicarFiltrosQR(); }
-    filtrarQRPorStatus() { this.aplicarFiltrosQR(); }
     filtrarQRPorAcessibilidade() { this.aplicarFiltrosQR(); }
 
     limparBuscaQR() { const search = document.getElementById('buscaQR'); if (search) search.value = ''; this.aplicarFiltrosQR(); }
@@ -40506,7 +40976,7 @@ class AdminPanel {
             </div>
         `;
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-qrcode"></i> QR Code';
-        document.getElementById('modalSaveBtn').style.display = 'none';
+        this.configurarModal({ hideSave: true });
         this.openModal();
     }
 
@@ -40529,28 +40999,8 @@ class AdminPanel {
         return `<div style="text-align: center; padding: 60px;"><i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #dc3545;"></i><h2>Erro</h2><p>${mensagem}</p><button onclick="admin.loadQRCodeManagement()" class="btn-primary">Tentar novamente</button></div>`;
     }
 
-    async confirmar(titulo, mensagem) {
-        return new Promise((resolve) => {
-            const modal = document.getElementById('confirmModal');
-            document.getElementById('confirmMessage').innerHTML = mensagem;
-            modal.style.display = 'flex';
-            document.getElementById('confirmBtn').onclick = () => { modal.style.display = 'none'; resolve(true); };
-            document.querySelectorAll('#confirmModal .modal-close, #confirmModal .btn-cancel').forEach(btn => {
-                btn.onclick = () => { modal.style.display = 'none'; resolve(false); };
-            });
-        });
-    }
 
-    showToast(mensagem, tipo) {
-        const toast = document.createElement('div');
-        toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; background: ${tipo === 'success' ? '#10b981' : '#ef4444'}; color: white; padding: 12px 20px; border-radius: 8px; z-index: 10000;`;
-        toast.innerHTML = mensagem;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-    }
 
-    openModal() { document.getElementById('modal').style.display = 'flex'; }
-    closeModal() { document.getElementById('modal').style.display = 'none'; }
 
     // ============ BACKUPS E RESTAURAÇÃO ============
 
@@ -41792,9 +42242,7 @@ class AdminPanel {
             document.getElementById('modalTitle').innerHTML = turma ? 
                 '<i class="fas fa-edit"></i> Editar Rodízio' : 
                 '<i class="fas fa-plus"></i> Novo Rodízio';
-            document.getElementById('modalSaveBtn').onclick = () => this.salvarRodizioGestao(turma);
-            document.getElementById('modalSaveBtn').style.display = 'inline-block';
-            document.getElementById('modalSaveBtn').textContent = 'Salvar Rodízio';
+            this.configurarModal({ saveText: '💾 Salvar Rodízio', onSave: () => this.salvarRodizioGestao(turma) });
             
             // Configurar evento de mudança para atualizar resumo
             setTimeout(() => {
@@ -42236,8 +42684,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Registro de Refeição';
-            document.getElementById('modalSaveBtn').onclick = () => this.salvarEdicaoRegistro(registroId);
-            document.getElementById('modalSaveBtn').textContent = '💾 Salvar Alterações';
+            this.configurarModal({ saveText: '💾 Salvar Alterações', onSave: () => this.salvarEdicaoRegistro(registroId) });
             this.openModal();
             
         } catch (error) {
@@ -42401,7 +42848,7 @@ class AdminPanel {
             `;
             
             document.getElementById('modalTitle').innerHTML = '<i class="fas fa-info-circle"></i> Detalhes do Registro';
-            document.getElementById('modalSaveBtn').style.display = 'none';
+            this.configurarModal({ hideSave: true });
             this.openModal();
             
         } catch (error) {
@@ -42524,7 +42971,7 @@ class AdminPanel {
     `;
     
     document.getElementById('modalTitle').innerHTML = '<i class="fas fa-trash-alt"></i> Limpeza de Registros';
-    document.getElementById('modalSaveBtn').style.display = 'none';
+    this.configurarModal({ hideSave: true });
     this.openModal();
     
     // Carregar estatísticas

@@ -1,6 +1,11 @@
 // ============================================
 // SUPERVISÃO - SISTEMA DE ATENDIMENTOS
 // Com Filtros, Remarcação, Assinatura via QR Code, Sino e Notificações
+// + MÚLTIPLOS PARTICIPANTES COM ASSINATURA
+// Fluxo de participantes:
+//   PROFESSOR: Perfil → Eixo → Professor do eixo
+//   ALUNO:     Perfil → Turma → Aluno da turma
+//   OUTROS:    Perfil → Usuário direto
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -33,7 +38,14 @@ let __concluidosTotal = 0;
 let __concluidosDados = [];
 
 // ============================================
-// 🆕 ESTADO DA SESSÃO DE ASSINATURA (QR CODE)
+// ESTADO DOS PARTICIPANTES DO ATENDIMENTO
+// ============================================
+let __participantesAtendimento = []; 
+let __perfisDisponiveis = [];
+let __contadorParticipanteId = 0;
+
+// ============================================
+// ESTADO DA SESSÃO DE ASSINATURA (RESPONSÁVEL)
 // ============================================
 const estadoSessaoAssinatura = {
     supervisao: {
@@ -102,7 +114,7 @@ function gerarUUID() {
 }
 
 // ============================================
-// 🛡️ PROTEÇÃO CONTRA alert() NATIVO
+// PROTEÇÃO CONTRA alert() NATIVO
 // ============================================
 (function protegerContraAlertNativo() {
     let __alertaEmProgresso = false;
@@ -158,7 +170,7 @@ function notificar(mensagem, tipo = 'success', duracao = 3500) {
 window.notificar = notificar;
 
 // ============================================
-// 🍞 TOAST
+// TOAST
 // ============================================
 function mostrarToastConcluido(mensagem, tipo = 'info') {
     const msg = String(mensagem || '');
@@ -199,8 +211,9 @@ function mostrarToastConcluido(mensagem, tipo = 'info') {
     }, 3500);
 }
 window.mostrarToastConcluido = mostrarToastConcluido;
+
 // ============================================
-// 🔔 NOTIFICAÇÕES DO NAVEGADOR
+// NOTIFICAÇÕES DO NAVEGADOR
 // ============================================
 async function solicitarPermissaoNotificacao() {
     if (!('Notification' in window)) return false;
@@ -349,7 +362,6 @@ function atualizarBadgeComUrgencia() {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // 🆕 MODO ASSINATURA (URL ?assinatura=UUID)
     const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
     if (modoAssinatura) {
         console.log('📱 Modo assinatura detectado:', modoAssinatura);
@@ -357,7 +369,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     
-    // 🆕 VERIFICA SE VEIO COM ?verificar=ID
     const verificarAtendimentoId = new URLSearchParams(window.location.search).get('verificar');
     
     if (!token) { 
@@ -397,7 +408,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (permitido) setTimeout(() => verificarLembretesNotificar(), 2000);
     }, 3000);
     
-    // 🆕 Polling de +24h
     setTimeout(() => atualizarContadorAtendimentosAntigos(), 5000);
     setInterval(() => atualizarContadorAtendimentosAntigos(), 60000);
     
@@ -414,7 +424,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 60000);
     
-    // 🆕 Se veio com ?verificar=ID
     if (verificarAtendimentoId) {
         setTimeout(async () => {
             const urlLimpa = new URL(window.location.href);
@@ -454,7 +463,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.addEventListener('beforeunload', () => {
     pararScannerAutomatico();
     pararMonitoramentoSessao();
-    // 🆕 Remove listener de redimensionamento
     window.removeEventListener('resize', handleResizeCanvasTela);
 });
 
@@ -468,8 +476,862 @@ async function carregarFotoPerfil() {
         }
     } catch (error) { console.error('Erro:', error); }
 }
+
+// ============================================================================
+// 🆕 SISTEMA DE PARTICIPANTES DO ATENDIMENTO (NOVO FLUXO)
+// Professor → Eixo → Professor do eixo
+// Aluno     → Turma → Aluno da turma
+// Outros    → Usuário direto
+// ============================================================================
+
+/**
+ * Toggle do checkbox "Mais pessoas participaram?"
+ */
+function toggleMaisParticipantes() {
+    const check = safeGet('supervisaoMaisParticipantes');
+    const container = safeGet('containerParticipantes');
+    
+    if (!check || !container) return;
+    
+    if (check.checked) {
+        container.style.display = 'block';
+        carregarPerfisParticipantes();
+    } else {
+        container.style.display = 'none';
+        limparTodosParticipantes();
+    }
+}
+
+/**
+ * Carrega perfis disponíveis (sem admins).
+ */
+async function carregarPerfisParticipantes() {
+    const select = safeGet('participantePerfil');
+    if (!select) return;
+    
+    // Se já foi carregado, não recarrega
+    if (select.dataset.carregado === 'true') return;
+    
+    const perfisFallback = [
+        { valor: 'professor', label: 'Professor', temFiltro: 'eixo', filtroLabel: 'Eixo' },
+        { valor: 'aluno', label: 'Aluno', temFiltro: 'turma', filtroLabel: 'Turma' },
+        { valor: 'supervisao', label: 'Supervisão', temFiltro: null, filtroLabel: null },
+        { valor: 'gestao_geral', label: 'Gestão Geral', temFiltro: null, filtroLabel: null },
+        { valor: 'psicologia', label: 'Psicologia', temFiltro: null, filtroLabel: null },
+        { valor: 'assistente_social', label: 'Assistente Social', temFiltro: null, filtroLabel: null },
+        { valor: 'biblioteca', label: 'Biblioteca', temFiltro: null, filtroLabel: null }
+    ];
+    
+    try {
+        const response = await fetch('/api/supervisao/perfis-participantes', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        __perfisDisponiveis = (data.success && Array.isArray(data.perfis) && data.perfis.length > 0)
+            ? data.perfis
+            : perfisFallback;
+    } catch (error) {
+        console.error('Erro ao carregar perfis:', error);
+        __perfisDisponiveis = perfisFallback;
+    }
+    
+    select.innerHTML = '<option value="">Selecione o perfil...</option>';
+    __perfisDisponiveis.forEach(p => {
+        select.innerHTML += `<option value="${escapeHTML(p.valor)}">${escapeHTML(p.label)}</option>`;
+    });
+    select.dataset.carregado = 'true';
+}
+
+/**
+ * Ao mudar o PERFIL: decide o fluxo.
+ * - Professor → mostra select de EIXO
+ * - Aluno     → mostra select de TURMA
+ * - Outros    → carrega direto os usuários do perfil
+ */
+async function carregarUsuariosPorPerfil() {
+    const perfil = safeGet('participantePerfil')?.value;
+    const selectUsuario = safeGet('participanteUsuario');
+    const rowFiltro = safeGet('rowParticipanteFiltro');
+    const labelFiltro = safeGet('labelParticipanteFiltro');
+    const selectFiltro = safeGet('participanteFiltro');
+    
+    if (!selectUsuario) return;
+    
+    // Reset
+    selectUsuario.innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
+    selectUsuario.disabled = true;
+    if (rowFiltro) rowFiltro.style.display = 'none';
+    if (selectFiltro) selectFiltro.innerHTML = '<option value="">Selecione...</option>';
+    
+    if (!perfil) return;
+    
+    const perfilInfo = __perfisDisponiveis.find(p => p.valor === perfil);
+    const temFiltro = perfilInfo?.temFiltro;
+    
+    // ==========================================
+    // PROFESSOR → EIXO → PROFESSOR DO EIXO
+    // ==========================================
+    if (perfil === 'professor') {
+        if (labelFiltro) labelFiltro.textContent = 'Eixo';
+        if (selectFiltro) selectFiltro.innerHTML = '<option value="">Carregando eixos...</option>';
+        if (rowFiltro) rowFiltro.style.display = 'flex';
+        
+        try {
+            const response = await fetch('/api/supervisao/eixos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success && Array.isArray(data.eixos) && data.eixos.length > 0) {
+                selectFiltro.innerHTML = '<option value="">Selecione o eixo...</option>';
+                data.eixos.forEach(e => {
+                    selectFiltro.innerHTML += `<option value="${escapeHTML(e)}">${escapeHTML(e)}</option>`;
+                });
+            } else {
+                selectFiltro.innerHTML = '<option value="">Nenhum eixo encontrado</option>';
+            }
+        } catch (error) {
+            console.error('Erro ao carregar eixos:', error);
+            selectFiltro.innerHTML = '<option value="">Erro ao carregar</option>';
+        }
+        
+        // Atualiza onchange do filtro para buscar professores do eixo
+        selectFiltro.onchange = () => carregarProfessoresDoEixo();
+        return;
+    }
+    
+    // ==========================================
+    // ALUNO → TURMA → ALUNOS DA TURMA
+    // ==========================================
+    if (perfil === 'aluno') {
+        if (labelFiltro) labelFiltro.textContent = 'Turma';
+        if (selectFiltro) selectFiltro.innerHTML = '<option value="">Carregando turmas...</option>';
+        if (rowFiltro) rowFiltro.style.display = 'flex';
+        
+        try {
+            const response = await fetch('/api/supervisao/turmas', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            
+            if (data.success && Array.isArray(data.turmas) && data.turmas.length > 0) {
+                selectFiltro.innerHTML = '<option value="">Selecione a turma...</option>';
+                data.turmas.forEach(t => {
+                    selectFiltro.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`;
+                });
+            } else {
+                selectFiltro.innerHTML = '<option value="">Nenhuma turma encontrada</option>';
+            }
+        } catch (error) {
+            console.error('Erro ao carregar turmas:', error);
+            selectFiltro.innerHTML = '<option value="">Erro ao carregar</option>';
+        }
+        
+        // Atualiza onchange do filtro para buscar alunos da turma
+        selectFiltro.onchange = () => carregarAlunosDaTurma();
+        return;
+    }
+    
+    // ==========================================
+    // OUTROS PERFIS → USUÁRIO DIRETO
+    // ==========================================
+    selectUsuario.innerHTML = '<option value="">Carregando...</option>';
+    
+    try {
+        const response = await fetch(`/api/supervisao/usuarios-por-perfil?perfil=${encodeURIComponent(perfil)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.usuarios)) {
+            if (data.usuarios.length === 0) {
+                selectUsuario.innerHTML = '<option value="">Nenhum usuário encontrado</option>';
+                return;
+            }
+            selectUsuario.innerHTML = '<option value="">Selecione o usuário...</option>';
+            data.usuarios.forEach(u => {
+                selectUsuario.innerHTML += `
+                    <option value="${escapeHTML(u.id)}" 
+                            data-nome="${escapeHTML(u.nome)}"
+                            data-matricula="${escapeHTML(u.matricula || '')}"
+                            data-foto="${u.fotoPerfil ? escapeHTML(u.fotoPerfil) : ''}">
+                        ${escapeHTML(u.nome)}
+                    </option>
+                `;
+            });
+            selectUsuario.disabled = false;
+        } else {
+            selectUsuario.innerHTML = '<option value="">Erro ao carregar</option>';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar usuários:', error);
+        selectUsuario.innerHTML = '<option value="">Erro ao carregar</option>';
+    }
+}
+
+/**
+ * Busca PROFESSORES do EIXO selecionado.
+ */
+async function carregarProfessoresDoEixo() {
+    const eixo = safeGet('participanteFiltro')?.value;
+    const selectUsuario = safeGet('participanteUsuario');
+    
+    if (!selectUsuario) return;
+    
+    selectUsuario.innerHTML = '<option value="">Selecione o eixo primeiro...</option>';
+    selectUsuario.disabled = true;
+    
+    if (!eixo) return;
+    
+    selectUsuario.innerHTML = '<option value="">Carregando professores...</option>';
+    
+    try {
+        const response = await fetch(`/api/supervisao/professores-por-eixo?eixo=${encodeURIComponent(eixo)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.usuarios)) {
+            if (data.usuarios.length === 0) {
+                selectUsuario.innerHTML = '<option value="">Nenhum professor neste eixo</option>';
+                return;
+            }
+            selectUsuario.innerHTML = '<option value="">Selecione o professor...</option>';
+            data.usuarios.forEach(u => {
+                selectUsuario.innerHTML += `
+                    <option value="${escapeHTML(u.id)}" 
+                            data-nome="${escapeHTML(u.nome)}"
+                            data-matricula="${escapeHTML(u.matricula || '')}"
+                            data-eixo="${escapeHTML(u.eixo || '')}"
+                            data-foto="${u.fotoPerfil ? escapeHTML(u.fotoPerfil) : ''}">
+                        ${escapeHTML(u.nome)}
+                    </option>
+                `;
+            });
+            selectUsuario.disabled = false;
+        } else {
+            selectUsuario.innerHTML = '<option value="">Erro ao carregar</option>';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar professores:', error);
+        selectUsuario.innerHTML = '<option value="">Erro ao carregar</option>';
+    }
+}
+
+/**
+ * Busca ALUNOS da TURMA selecionada.
+ */
+async function carregarAlunosDaTurma() {
+    const turma = safeGet('participanteFiltro')?.value;
+    const selectUsuario = safeGet('participanteUsuario');
+    
+    if (!selectUsuario) return;
+    
+    selectUsuario.innerHTML = '<option value="">Selecione a turma primeiro...</option>';
+    selectUsuario.disabled = true;
+    
+    if (!turma) return;
+    
+    selectUsuario.innerHTML = '<option value="">Carregando alunos...</option>';
+    
+    try {
+        const response = await fetch(`/api/supervisao/alunos-por-turma?turma=${encodeURIComponent(turma)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        const listaAlunos = data.usuarios || data.alunos || [];
+        
+        if (data.success && Array.isArray(listaAlunos)) {
+            if (listaAlunos.length === 0) {
+                selectUsuario.innerHTML = '<option value="">Nenhum aluno nesta turma</option>';
+                return;
+            }
+            selectUsuario.innerHTML = '<option value="">Selecione o aluno...</option>';
+            listaAlunos.forEach(a => {
+                selectUsuario.innerHTML += `
+                    <option value="${escapeHTML(a.id)}" 
+                            data-nome="${escapeHTML(a.nome)}"
+                            data-matricula="${escapeHTML(a.matricula || '')}"
+                            data-turma="${escapeHTML(a.turma || turma)}"
+                            data-curso="${escapeHTML(a.curso || '')}"
+                            data-foto="${a.fotoPerfil ? escapeHTML(a.fotoPerfil) : ''}">
+                        ${escapeHTML(a.nome)}${a.matricula ? ` (${escapeHTML(a.matricula)})` : ''}
+                    </option>
+                `;
+            });
+            selectUsuario.disabled = false;
+        } else {
+            selectUsuario.innerHTML = '<option value="">Erro ao carregar</option>';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar alunos:', error);
+        selectUsuario.innerHTML = '<option value="">Erro ao carregar</option>';
+    }
+}
+
+/**
+ * Remove o onchange antigo (mantido para compatibilidade).
+ * Não faz nada agora, pois o onchange é setado dentro de carregarUsuariosPorPerfil.
+ */
+function onParticipanteUsuarioChange() {
+    // Não faz mais nada - o select de filtro já foi configurado
+}
+
+/**
+ * Adiciona um participante ao atendimento.
+ */
+async function adicionarParticipante() {
+    const perfil = safeGet('participantePerfil')?.value;
+    const usuarioSelect = safeGet('participanteUsuario');
+    const usuarioId = usuarioSelect?.value;
+    const usuarioOption = usuarioSelect?.options[usuarioSelect.selectedIndex];
+    const usuarioNome = usuarioOption?.getAttribute('data-nome') || '';
+    const usuarioMatricula = usuarioOption?.getAttribute('data-matricula') || '';
+    const usuarioTurma = usuarioOption?.getAttribute('data-turma') || '';
+    const usuarioEixo = usuarioOption?.getAttribute('data-eixo') || '';
+    const usuarioCurso = usuarioOption?.getAttribute('data-curso') || '';
+    const usuarioFoto = usuarioOption?.getAttribute('data-foto') || '';
+    const filtroValor = safeGet('participanteFiltro')?.value || '';
+    
+    if (!perfil) {
+        notificar('Selecione o perfil', 'error');
+        return;
+    }
+    if (!usuarioId) {
+        notificar('Selecione o usuário', 'error');
+        return;
+    }
+    
+    // Verifica duplicidade
+    if (__participantesAtendimento.some(p => p.usuarioId === usuarioId)) {
+        notificar('⚠️ Este usuário já foi adicionado!', 'warning');
+        return;
+    }
+    
+    // Valida filtro obrigatório para aluno/professor
+    if ((perfil === 'aluno' || perfil === 'professor') && !filtroValor) {
+        notificar(`Selecione ${perfil === 'aluno' ? 'a turma' : 'o eixo'}`, 'error');
+        return;
+    }
+    
+    const participanteId = `part_${++__contadorParticipanteId}_${Date.now()}`;
+    const tipoLabel = __perfisDisponiveis.find(p => p.valor === perfil)?.label || perfil;
+    
+    // Define turma/eixo com base no perfil
+    let turmaFinal = usuarioTurma;
+    let eixoFinal = usuarioEixo;
+    
+    if (perfil === 'aluno') {
+        turmaFinal = usuarioTurma || filtroValor;
+        eixoFinal = '';
+    } else if (perfil === 'professor') {
+        eixoFinal = usuarioEixo || filtroValor;
+        turmaFinal = '';
+    } else {
+        turmaFinal = '';
+        eixoFinal = '';
+    }
+    
+    const novoParticipante = {
+        id: participanteId,
+        tipo: perfil,
+        tipoLabel: tipoLabel,
+        usuarioId: usuarioId,
+        usuarioNome: usuarioNome,
+        usuarioMatricula: usuarioMatricula,
+        usuarioTurma: turmaFinal,
+        usuarioEixo: eixoFinal,
+        usuarioCurso: usuarioCurso,
+        usuarioFoto: usuarioFoto,
+        filtroValor: filtroValor,
+        precisaAssinatura: false,
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null
+    };
+    
+    __participantesAtendimento.push(novoParticipante);
+    
+    renderizarParticipantesAdicionados();
+    
+    // Reset do formulário
+    safeGet('participantePerfil').value = '';
+    safeGet('participanteUsuario').innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
+    safeGet('participanteUsuario').disabled = true;
+    safeGet('rowParticipanteFiltro').style.display = 'none';
+    safeGet('participanteFiltro').innerHTML = '<option value="">Selecione...</option>';
+    safeGet('participanteFiltro').onchange = null;
+    
+    notificar(`✅ ${usuarioNome} adicionado como participante!`, 'success');
+}
+
+/**
+ * Remove um participante.
+ */
+async function removerParticipante(participanteId) {
+    const index = __participantesAtendimento.findIndex(p => p.id === participanteId);
+    if (index === -1) return;
+    
+    const participante = __participantesAtendimento[index];
+    
+    if (participante.sessaoId) {
+        try {
+            await fetch(`/api/sessoes-assinatura/${participante.sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    if (participante.monitoramentoInterval) {
+        clearInterval(participante.monitoramentoInterval);
+    }
+    
+    __participantesAtendimento.splice(index, 1);
+    
+    renderizarParticipantesAdicionados();
+    
+    notificar(`Participante ${participante.usuarioNome} removido.`, 'info');
+}
+
+/**
+ * Limpa todos os participantes.
+ */
+async function limparTodosParticipantes() {
+    for (const p of __participantesAtendimento) {
+        if (p.sessaoId) {
+            try {
+                await fetch(`/api/sessoes-assinatura/${p.sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) { console.warn(e); }
+        }
+        if (p.monitoramentoInterval) {
+            clearInterval(p.monitoramentoInterval);
+        }
+    }
+    __participantesAtendimento = [];
+    renderizarParticipantesAdicionados();
+}
+
+/**
+ * Renderiza a lista de participantes adicionados.
+ */
+function renderizarParticipantesAdicionados() {
+    const container = safeGet('listaParticipantesAdicionados');
+    if (!container) return;
+    
+    if (__participantesAtendimento.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-3" style="font-size: 13px;">
+                <i class="fas fa-users" style="font-size: 24px; color: #cbd5e1; display: block; margin-bottom: 8px;"></i>
+                Nenhum participante adicionado ainda
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = __participantesAtendimento.map(p => {
+        let statusAssinatura = '';
+        
+        if (p.precisaAssinatura) {
+            if (p.assinaturaCapturada) {
+                statusAssinatura = `
+                    <div class="participante-status-assinatura assinado">
+                        <i class="fas fa-check-circle"></i>
+                        <span style="flex: 1;">Assinatura capturada</span>
+                    </div>`;
+            } else {
+                statusAssinatura = `
+                    <div class="participante-status-assinatura aguardando">
+                        <i class="fas fa-clock"></i>
+                        <span style="flex: 1;">Aguardando assinatura</span>
+                        <button class="btn-reabrir-qr" onclick="reabrirModalAssinaturaParticipante('${p.id}')">
+                            <i class="fas fa-qrcode"></i> Mostrar QR
+                        </button>
+                    </div>`;
+            }
+        }
+        
+        const detalhes = [];
+        if (p.usuarioTurma) detalhes.push(`Turma: ${escapeHTML(p.usuarioTurma)}`);
+        if (p.usuarioEixo) detalhes.push(`Eixo: ${escapeHTML(p.usuarioEixo)}`);
+        if (p.usuarioMatricula) detalhes.push(`Mat: ${escapeHTML(p.usuarioMatricula)}`);
+        
+        return `
+            <div class="participante-card" data-participante-id="${p.id}">
+                <div class="participante-header">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="${p.usuarioFoto || gerarAvatarSVG(p.usuarioNome)}" 
+                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;"
+                             onerror="this.onerror=null; this.src='${gerarAvatarSVG(p.usuarioNome)}'">
+                        <div>
+                            <div style="font-weight: 700; color: #1e293b; font-size: 14px;">${escapeHTML(p.usuarioNome)}</div>
+                            <div style="font-size: 11px; color: #64748b;">
+                                <span class="badge" style="background: #0ea5e9; font-size: 10px;">${escapeHTML(p.tipoLabel)}</span>
+                                ${detalhes.length > 0 ? ' • ' + detalhes.join(' • ') : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-remover-participante" onclick="removerParticipante('${p.id}')" title="Remover">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="form-check" style="margin-top: 8px; padding-left: 0;">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           id="check_assinatura_${p.id}"
+                           ${p.precisaAssinatura ? 'checked' : ''}
+                           onchange="toggleAssinaturaParticipante('${p.id}', this.checked)"
+                           style="width: 18px; height: 18px; cursor: pointer; border: 2px solid #0ea5e9; margin-left: 0;">
+                    <label class="form-check-label" for="check_assinatura_${p.id}" style="font-size: 13px; color: #075985; cursor: pointer; margin-left: 6px;">
+                        <i class="fas fa-signature"></i> Precisa de assinatura deste participante?
+                    </label>
+                </div>
+                
+                ${statusAssinatura}
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Toggle da assinatura de um participante.
+ */
+async function toggleAssinaturaParticipante(participanteId, precisa) {
+    const participante = __participantesAtendimento.find(p => p.id === participanteId);
+    if (!participante) return;
+    
+    if (precisa) {
+        const sessaoId = gerarUUID();
+        participante.sessaoId = sessaoId;
+        participante.assinaturaCapturada = null;
+        participante.precisaAssinatura = true;
+        
+        try {
+            const snapshot = montarSnapshotAtendimento();
+            snapshot.participanteNome = participante.usuarioNome;
+            snapshot.participanteTipo = participante.tipoLabel;
+            
+            const response = await fetch('/api/sessoes-assinatura', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    sessaoId,
+                    tipo: 'supervisao_participante',
+                    dadosAtendimento: snapshot
+                })
+            });
+            
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
+            
+            const urlAssinatura = `${window.location.origin}/supervisao.html?assinatura=${sessaoId}`;
+            
+            try {
+                const qrResp = await fetch('/api/qrcode/gerar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ url: urlAssinatura })
+                });
+                const qrData = await qrResp.json();
+                
+                if (qrData.success && qrData.qrCode) {
+                    participante.qrCodeDataUrl = qrData.qrCode;
+                } else {
+                    participante.qrCodeDataUrl = 
+                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                }
+            } catch (e) {
+                participante.qrCodeDataUrl = 
+                    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+            }
+            
+            abrirModalAssinaturaParticipante(participanteId, urlAssinatura);
+            iniciarPollingAssinaturaParticipante(participanteId, sessaoId);
+            
+            notificar(`📱 QR Code gerado para ${participante.usuarioNome}!`, 'info');
+            
+        } catch (e) {
+            console.error('Erro ao criar sessão do participante:', e);
+            notificar('❌ Erro ao criar sessão de assinatura', 'error');
+            participante.precisaAssinatura = false;
+            participante.sessaoId = null;
+            renderizarParticipantesAdicionados();
+        }
+    } else {
+        if (participante.sessaoId) {
+            try {
+                await fetch(`/api/sessoes-assinatura/${participante.sessaoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) { console.warn(e); }
+        }
+        
+        if (participante.monitoramentoInterval) {
+            clearInterval(participante.monitoramentoInterval);
+            participante.monitoramentoInterval = null;
+        }
+        
+        participante.precisaAssinatura = false;
+        participante.sessaoId = null;
+        participante.assinaturaCapturada = null;
+        participante.qrCodeDataUrl = null;
+        
+        renderizarParticipantesAdicionados();
+    }
+}
+
+/**
+ * Abre o modal de assinatura do participante.
+ */
+function abrirModalAssinaturaParticipante(participanteId, urlAssinatura) {
+    const participante = __participantesAtendimento.find(p => p.id === participanteId);
+    if (!participante) return;
+    
+    const antigo = safeGet('modalAssinaturaParticipante');
+    if (antigo) antigo.remove();
+    
+    const qrUrl = participante.qrCodeDataUrl || 
+        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+    
+    const modalHtml = `
+        <div class="modal fade" id="modalAssinaturaParticipante" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 20px; border: none; overflow: hidden;">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 20px 25px;">
+                        <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-signature"></i> 
+                            Assinatura do Participante
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="fecharModalAssinaturaParticipante()"></button>
+                    </div>
+                    
+                    <div class="modal-body" style="padding: 30px; text-align: center;">
+                        <div style="background: #f0fdf4; border-radius: 12px; padding: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; text-align: left;">
+                            <img src="${participante.usuarioFoto || gerarAvatarSVG(participante.usuarioNome)}" 
+                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;"
+                                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(participante.usuarioNome)}'">
+                            <div>
+                                <strong style="color: #065f46;">${escapeHTML(participante.usuarioNome)}</strong>
+                                <p style="margin: 2px 0 0; font-size: 12px; color: #047857;">
+                                    ${escapeHTML(participante.tipoLabel)}
+                                    ${participante.usuarioTurma ? ` • ${escapeHTML(participante.usuarioTurma)}` : ''}
+                                    ${participante.usuarioEixo ? ` • ${escapeHTML(participante.usuarioEixo)}` : ''}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="statusAssinaturaParticipante" style="margin-bottom: 20px;">
+                            <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                                <div style="width: 40px; height: 40px; border-radius: 50%; border: 4px solid #f59e0b; border-top-color: transparent; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+                                <div>
+                                    <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                                    <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                        Peça para o participante escanear o QR Code
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 20px; display: inline-block;">
+                            <img src="${qrUrl}" 
+                                alt="QR Code para assinatura" 
+                                style="width: 240px; height: 240px; display: block;"
+                                id="qrCodeParticipanteImage">
+                            <p style="margin: 12px 0 0; font-size: 13px; color: #64748b;">
+                                <i class="fas fa-mobile-alt"></i> 
+                                Aponte a câmera do celular
+                            </p>
+                        </div>
+                        
+                        <div style="margin-top: 16px;">
+                            <button onclick="copiarLinkAssinatura('${urlAssinatura}')"
+                                    class="btn-copiar-link">
+                                <i class="fas fa-link"></i> Copiar link de assinatura
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; justify-content: space-between;">
+                        <button type="button" class="btn btn-outline-secondary" onclick="fecharModalAssinaturaParticipante()" style="border-radius: 10px;">
+                            <i class="fas fa-eye-slash"></i> Ocultar
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="cancelarAssinaturaParticipante('${participanteId}')" style="border-radius: 10px;">
+                            <i class="fas fa-times"></i> Cancelar Assinatura
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+            @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    new bootstrap.Modal(safeGet('modalAssinaturaParticipante')).show();
+}
+
+function fecharModalAssinaturaParticipante() {
+    const modalEl = safeGet('modalAssinaturaParticipante');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        setTimeout(() => modalEl.remove(), 300);
+    }
+}
+
+function reabrirModalAssinaturaParticipante(participanteId) {
+    const participante = __participantesAtendimento.find(p => p.id === participanteId);
+    if (!participante || !participante.sessaoId) {
+        notificar('⚠️ Nenhuma sessão ativa', 'warning');
+        return;
+    }
+    const urlAssinatura = `${window.location.origin}/supervisao.html?assinatura=${participante.sessaoId}`;
+    abrirModalAssinaturaParticipante(participanteId, urlAssinatura);
+}
+
+async function cancelarAssinaturaParticipante(participanteId) {
+    const confirmar = await confirm('Cancelar a assinatura deste participante?');
+    if (!confirmar) return;
+    
+    const participante = __participantesAtendimento.find(p => p.id === participanteId);
+    if (!participante) return;
+    
+    if (participante.sessaoId) {
+        try {
+            await fetch(`/api/sessoes-assinatura/${participante.sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    
+    if (participante.monitoramentoInterval) {
+        clearInterval(participante.monitoramentoInterval);
+        participante.monitoramentoInterval = null;
+    }
+    
+    participante.precisaAssinatura = false;
+    participante.sessaoId = null;
+    participante.assinaturaCapturada = null;
+    participante.qrCodeDataUrl = null;
+    
+    fecharModalAssinaturaParticipante();
+    
+    const check = safeGet(`check_assinatura_${participanteId}`);
+    if (check) check.checked = false;
+    
+    renderizarParticipantesAdicionados();
+    
+    notificar('Sessão de assinatura cancelada', 'info');
+}
+
+function iniciarPollingAssinaturaParticipante(participanteId, sessaoId) {
+    const participante = __participantesAtendimento.find(p => p.id === participanteId);
+    if (!participante) return;
+    
+    if (participante.monitoramentoInterval) {
+        clearInterval(participante.monitoramentoInterval);
+    }
+    
+    participante.monitoramentoInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    clearInterval(participante.monitoramentoInterval);
+                    participante.monitoramentoInterval = null;
+                }
+                return;
+            }
+            
+            const data = await response.json();
+            if (!data.success) return;
+            
+            if (data.sessao.status === 'assinado') {
+                participante.assinaturaCapturada = data.sessao.assinaturaBase64;
+                
+                clearInterval(participante.monitoramentoInterval);
+                participante.monitoramentoInterval = null;
+                
+                fecharModalAssinaturaParticipante();
+                renderizarParticipantesAdicionados();
+                
+                notificar(`✅ Assinatura de ${participante.usuarioNome} capturada!`, 'success');
+            } else if (data.sessao.status === 'cancelado') {
+                clearInterval(participante.monitoramentoInterval);
+                participante.monitoramentoInterval = null;
+            }
+        } catch (e) {
+            console.warn('Erro no polling do participante:', e);
+        }
+    }, 3000);
+}
+
+/**
+ * Limpa todos os participantes e cancela sessões.
+ */
+function limparParticipantesCompleto() {
+    for (const p of __participantesAtendimento) {
+        if (p.sessaoId) {
+            fetch(`/api/sessoes-assinatura/${p.sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).catch(e => console.warn(e));
+        }
+        if (p.monitoramentoInterval) {
+            clearInterval(p.monitoramentoInterval);
+        }
+    }
+    __participantesAtendimento = [];
+    
+    const check = safeGet('supervisaoMaisParticipantes');
+    if (check) check.checked = false;
+    
+    const container = safeGet('containerParticipantes');
+    if (container) container.style.display = 'none';
+    
+    const selectPerfil = safeGet('participantePerfil');
+    if (selectPerfil) selectPerfil.value = '';
+    
+    const selectUsuario = safeGet('participanteUsuario');
+    if (selectUsuario) {
+        selectUsuario.innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
+        selectUsuario.disabled = true;
+    }
+    
+    const rowFiltro = safeGet('rowParticipanteFiltro');
+    if (rowFiltro) rowFiltro.style.display = 'none';
+    
+    const selectFiltro = safeGet('participanteFiltro');
+    if (selectFiltro) {
+        selectFiltro.innerHTML = '<option value="">Selecione...</option>';
+        selectFiltro.onchange = null;
+    }
+    
+    renderizarParticipantesAdicionados();
+}
+
 // ============================================
-// 🎯 FILTROS DA ABA EM ANDAMENTO
+// FILTROS DA ABA EM ANDAMENTO
 // ============================================
 function configurarFiltrosAndamento() {
     const ids = ['filtroAndamentoBusca', 'filtroAndamentoTurma', 'filtroAndamentoTipo',
@@ -625,7 +1487,7 @@ function popularFiltroTurmasAndamento() {
 }
 
 // ============================================
-// 🗑️ FILTROS DOS CONCLUÍDOS
+// FILTROS DOS CONCLUÍDOS
 // ============================================
 function configurarFiltrosConcluidos() {
     ['filtroConcluidosBusca', 'filtroConcluidosTipo', 'filtroConcluidosResultado'].forEach(id => {
@@ -734,6 +1596,7 @@ async function verAtendimento(atendimentoId) {
             });
         }
         
+        // Assinatura do responsável
         let assinaturaHTML = '';
         if (!estaMascarado && a.entrada?.temAssinatura && a.entrada?.assinaturaBase64) {
             assinaturaHTML = `
@@ -741,6 +1604,55 @@ async function verAtendimento(atendimentoId) {
                 <div class="assinatura-preview">
                     <img src="${a.entrada.assinaturaBase64}" alt="Assinatura">
                 </div>`;
+        }
+        
+        // Participantes
+        let participantesHTML = '';
+        if (!estaMascarado && a.entrada?.participantes && a.entrada.participantes.length > 0) {
+            participantesHTML = '<div class="section-title">👥 Participantes do Atendimento</div>';
+            a.entrada.participantes.forEach(p => {
+                const detalhesPart = [];
+                if (p.turma) detalhesPart.push(`Turma: ${escapeHTML(p.turma)}`);
+                if (p.eixo) detalhesPart.push(`Eixo: ${escapeHTML(p.eixo)}`);
+                if (p.usuarioMatricula) detalhesPart.push(`Mat: ${escapeHTML(p.usuarioMatricula)}`);
+                
+                let statusAssinaturaHTML = '';
+                if (p.precisaAssinatura) {
+                    if (p.assinaturaBase64) {
+                        statusAssinaturaHTML = `
+                            <div style="margin-top: 8px;">
+                                <span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>
+                                <div class="assinatura-preview mt-2">
+                                    <img src="${p.assinaturaBase64}" alt="Assinatura">
+                                    ${p.assinadaEm ? `<p style="margin: 6px 0 0; font-size: 11px; color: #065f46;">Assinado em ${new Date(p.assinadaEm).toLocaleString('pt-BR')}</p>` : ''}
+                                </div>
+                            </div>`;
+                    } else {
+                        statusAssinaturaHTML = `
+                            <div style="margin-top: 8px;">
+                                <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Aguardando assinatura</span>
+                            </div>`;
+                    }
+                }
+                
+                participantesHTML += `
+                    <div style="background: #f0f9ff; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 3px solid #0ea5e9;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img src="${p.usuarioFoto || gerarAvatarSVG(p.usuarioNome)}" 
+                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;"
+                                 onerror="this.onerror=null; this.src='${gerarAvatarSVG(p.usuarioNome)}'">
+                            <div style="flex: 1;">
+                                <strong style="color: #075985;">${escapeHTML(p.usuarioNome)}</strong>
+                                <p style="margin: 4px 0 0; font-size: 12px; color: #6b7280;">
+                                    <span class="badge" style="background: #0ea5e9; font-size: 10px;">${escapeHTML(p.tipoLabel)}</span>
+                                    ${detalhesPart.length > 0 ? ' • ' + detalhesPart.join(' • ') : ''}
+                                </p>
+                            </div>
+                        </div>
+                        ${statusAssinaturaHTML}
+                    </div>
+                `;
+            });
         }
         
         let remarcacoesHTML = '';
@@ -848,6 +1760,7 @@ async function verAtendimento(atendimentoId) {
                                 </div>` : ''}
                             
                             ${detalhesHTML}
+                            ${participantesHTML}
                             ${assinaturaHTML}
                             ${remarcacoesHTML}
                             
@@ -904,7 +1817,7 @@ function fecharVerAtendimento() {
 }
 
 // ============================================
-// ✏️ EDITAR ATENDIMENTO
+// EDITAR ATENDIMENTO (COM PARTICIPANTES)
 // ============================================
 async function abrirEditarAtendimento(atendimentoId) {
     if (!atendimentoId) return;
@@ -921,6 +1834,27 @@ async function abrirEditarAtendimento(atendimentoId) {
         }
         
         const a = data.atendimento;
+        
+        // Carrega participantes existentes
+        __participantesAtendimento = (a.entrada?.participantes || []).map((p, idx) => ({
+            id: `part_${idx}_${Date.now()}`,
+            _id: p.id,
+            tipo: p.tipo,
+            tipoLabel: p.tipoLabel,
+            usuarioId: p.usuarioId,
+            usuarioNome: p.usuarioNome,
+            usuarioTurma: p.turma || '',
+            usuarioEixo: p.eixo || '',
+            usuarioMatricula: p.usuarioMatricula || '',
+            usuarioFoto: p.usuarioFoto || '',
+            filtroValor: p.filtroValor || '',
+            precisaAssinatura: p.precisaAssinatura || false,
+            assinaturaCapturada: p.assinaturaBase64 || null,
+            sessaoId: null,
+            qrCodeDataUrl: null,
+            monitoramentoInterval: null
+        }));
+        
         const oldModal = safeGet('modalEditarAtendimento');
         if (oldModal) oldModal.remove();
         
@@ -989,6 +1923,65 @@ async function abrirEditarAtendimento(atendimentoId) {
                                 <label class="form-label">Observações</label>
                                 <textarea id="editObservacoes" class="form-control" rows="2">${escapeHTML(a.entrada?.observacoes || '')}</textarea>
                             </div>
+                            
+                            <!-- SEÇÃO DE PARTICIPANTES -->
+                            <div class="checkbox-assinatura-box mb-3" style="background: #f0fdf4; border-color: #86efac;">
+                                <div class="form-check d-flex align-items-start">
+                                    <input class="form-check-input" 
+                                        type="checkbox" 
+                                        id="editMaisParticipantes" 
+                                        ${__participantesAtendimento.length > 0 ? 'checked' : ''}
+                                        onchange="toggleEditMaisParticipantes()">
+                                    <label class="form-check-label fw-bold" for="editMaisParticipantes" style="color: #065f46;">
+                                        <i class="fas fa-users"></i> Mais pessoas participaram do atendimento?
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div id="editContainerParticipantes" style="display: ${__participantesAtendimento.length > 0 ? 'block' : 'none'};">
+                                <div class="participantes-container">
+                                    <h6 style="color: #065f46; margin-bottom: 12px;">
+                                        <i class="fas fa-user-plus"></i> Participantes do Atendimento
+                                    </h6>
+                                    
+                                    <div id="editListaParticipantes"></div>
+                                    
+                                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-top: 10px;">
+                                        <h6 style="font-size: 13px; color: #0ea5e9; margin-bottom: 12px;">
+                                            <i class="fas fa-plus-circle"></i> Adicionar Participante
+                                        </h6>
+                                        
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label" style="font-size: 12px; font-weight: 600;">Perfil <span class="text-danger">*</span></label>
+                                                <select id="editParticipantePerfil" class="form-select form-select-sm" onchange="carregarUsuariosEditParticipante()">
+                                                    <option value="">Selecione o perfil...</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label" style="font-size: 12px; font-weight: 600;">Usuário <span class="text-danger">*</span></label>
+                                                <select id="editParticipanteUsuario" class="form-select form-select-sm" disabled>
+                                                    <option value="">Selecione o perfil primeiro...</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row g-2 mb-2" id="editRowParticipanteFiltro" style="display: none;">
+                                            <div class="col-md-6">
+                                                <label class="form-label" style="font-size: 12px; font-weight: 600;" id="editLabelParticipanteFiltro">Turma</label>
+                                                <select id="editParticipanteFiltro" class="form-select form-select-sm">
+                                                    <option value="">Selecione...</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6 d-flex align-items-end">
+                                                <button type="button" class="btn btn-success btn-sm w-100" onclick="adicionarParticipanteEdit()" style="border-radius: 8px;">
+                                                    <i class="fas fa-plus"></i> Adicionar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -1004,10 +1997,397 @@ async function abrirEditarAtendimento(atendimentoId) {
         
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         new bootstrap.Modal(safeGet('modalEditarAtendimento')).show();
+        
+        // Renderiza participantes existentes
+        renderizarEditParticipantes();
+        carregarPerfisEditParticipante();
+        
     } catch (error) {
         console.error('Erro:', error);
         notificar('Erro ao carregar para edição', 'error');
     }
+}
+
+// ============================================
+// FUNÇÕES DO EDITOR DE PARTICIPANTES (mesmo fluxo)
+// ============================================
+function toggleEditMaisParticipantes() {
+    const check = safeGet('editMaisParticipantes');
+    const container = safeGet('editContainerParticipantes');
+    if (!check || !container) return;
+    
+    if (check.checked) {
+        container.style.display = 'block';
+        carregarPerfisEditParticipante();
+    } else {
+        container.style.display = 'none';
+        limparTodosParticipantes();
+        renderizarEditParticipantes();
+    }
+}
+
+async function carregarPerfisEditParticipante() {
+    const select = safeGet('editParticipantePerfil');
+    if (!select) return;
+    
+    if (select.dataset.carregado === 'true') return;
+    
+    await carregarPerfisParticipantes();
+    
+    select.innerHTML = '<option value="">Selecione o perfil...</option>';
+    __perfisDisponiveis.forEach(p => {
+        select.innerHTML += `<option value="${escapeHTML(p.valor)}">${escapeHTML(p.label)}</option>`;
+    });
+    select.dataset.carregado = 'true';
+}
+
+async function carregarUsuariosEditParticipante() {
+    const perfil = safeGet('editParticipantePerfil')?.value;
+    const selectUsuario = safeGet('editParticipanteUsuario');
+    const rowFiltro = safeGet('editRowParticipanteFiltro');
+    const labelFiltro = safeGet('editLabelParticipanteFiltro');
+    const selectFiltro = safeGet('editParticipanteFiltro');
+    
+    if (!selectUsuario) return;
+    
+    selectUsuario.innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
+    selectUsuario.disabled = true;
+    if (rowFiltro) rowFiltro.style.display = 'none';
+    if (selectFiltro) selectFiltro.innerHTML = '<option value="">Selecione...</option>';
+    
+    if (!perfil) return;
+    
+    // PROFESSOR → EIXO
+    if (perfil === 'professor') {
+        if (labelFiltro) labelFiltro.textContent = 'Eixo';
+        if (selectFiltro) selectFiltro.innerHTML = '<option value="">Carregando eixos...</option>';
+        if (rowFiltro) rowFiltro.style.display = 'flex';
+        
+        try {
+            const response = await fetch('/api/supervisao/eixos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            selectFiltro.innerHTML = '<option value="">Selecione o eixo...</option>';
+            (data.eixos || []).forEach(e => {
+                selectFiltro.innerHTML += `<option value="${escapeHTML(e)}">${escapeHTML(e)}</option>`;
+            });
+        } catch (error) {
+            selectFiltro.innerHTML = '<option value="">Erro</option>';
+        }
+        
+        selectFiltro.onchange = () => carregarProfessoresDoEixoEdit();
+        return;
+    }
+    
+    // ALUNO → TURMA
+    if (perfil === 'aluno') {
+        if (labelFiltro) labelFiltro.textContent = 'Turma';
+        if (selectFiltro) selectFiltro.innerHTML = '<option value="">Carregando turmas...</option>';
+        if (rowFiltro) rowFiltro.style.display = 'flex';
+        
+        try {
+            const response = await fetch('/api/supervisao/turmas', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            selectFiltro.innerHTML = '<option value="">Selecione a turma...</option>';
+            (data.turmas || []).forEach(t => {
+                selectFiltro.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`;
+            });
+        } catch (error) {
+            selectFiltro.innerHTML = '<option value="">Erro</option>';
+        }
+        
+        selectFiltro.onchange = () => carregarAlunosDaTurmaEdit();
+        return;
+    }
+    
+    // OUTROS → usuário direto
+    selectUsuario.innerHTML = '<option value="">Carregando...</option>';
+    
+    try {
+        const response = await fetch(`/api/supervisao/usuarios-por-perfil?perfil=${encodeURIComponent(perfil)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.usuarios)) {
+            selectUsuario.innerHTML = '<option value="">Selecione o usuário...</option>';
+            data.usuarios.forEach(u => {
+                selectUsuario.innerHTML += `
+                    <option value="${escapeHTML(u.id)}" 
+                            data-nome="${escapeHTML(u.nome)}"
+                            data-matricula="${escapeHTML(u.matricula || '')}"
+                            data-foto="${u.fotoPerfil ? escapeHTML(u.fotoPerfil) : ''}">
+                        ${escapeHTML(u.nome)}
+                    </option>
+                `;
+            });
+            selectUsuario.disabled = false;
+        }
+    } catch (error) {
+        selectUsuario.innerHTML = '<option value="">Erro</option>';
+    }
+}
+
+async function carregarProfessoresDoEixoEdit() {
+    const eixo = safeGet('editParticipanteFiltro')?.value;
+    const selectUsuario = safeGet('editParticipanteUsuario');
+    
+    if (!selectUsuario) return;
+    
+    selectUsuario.innerHTML = '<option value="">Selecione o eixo primeiro...</option>';
+    selectUsuario.disabled = true;
+    
+    if (!eixo) return;
+    
+    selectUsuario.innerHTML = '<option value="">Carregando...</option>';
+    
+    try {
+        const response = await fetch(`/api/supervisao/professores-por-eixo?eixo=${encodeURIComponent(eixo)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.usuarios)) {
+            selectUsuario.innerHTML = '<option value="">Selecione o professor...</option>';
+            data.usuarios.forEach(u => {
+                selectUsuario.innerHTML += `
+                    <option value="${escapeHTML(u.id)}" 
+                            data-nome="${escapeHTML(u.nome)}"
+                            data-matricula="${escapeHTML(u.matricula || '')}"
+                            data-eixo="${escapeHTML(u.eixo || '')}"
+                            data-foto="${u.fotoPerfil ? escapeHTML(u.fotoPerfil) : ''}">
+                        ${escapeHTML(u.nome)}
+                    </option>
+                `;
+            });
+            selectUsuario.disabled = false;
+        }
+    } catch (error) {
+        selectUsuario.innerHTML = '<option value="">Erro</option>';
+    }
+}
+
+async function carregarAlunosDaTurmaEdit() {
+    const turma = safeGet('editParticipanteFiltro')?.value;
+    const selectUsuario = safeGet('editParticipanteUsuario');
+    
+    if (!selectUsuario) return;
+    
+    selectUsuario.innerHTML = '<option value="">Selecione a turma primeiro...</option>';
+    selectUsuario.disabled = true;
+    
+    if (!turma) return;
+    
+    selectUsuario.innerHTML = '<option value="">Carregando...</option>';
+    
+    try {
+        const response = await fetch(`/api/supervisao/alunos-por-turma?turma=${encodeURIComponent(turma)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        const listaAlunos = data.usuarios || data.alunos || [];
+        
+        if (data.success && Array.isArray(listaAlunos)) {
+            selectUsuario.innerHTML = '<option value="">Selecione o aluno...</option>';
+            listaAlunos.forEach(a => {
+                selectUsuario.innerHTML += `
+                    <option value="${escapeHTML(a.id)}" 
+                            data-nome="${escapeHTML(a.nome)}"
+                            data-matricula="${escapeHTML(a.matricula || '')}"
+                            data-turma="${escapeHTML(a.turma || turma)}"
+                            data-curso="${escapeHTML(a.curso || '')}"
+                            data-foto="${a.fotoPerfil ? escapeHTML(a.fotoPerfil) : ''}">
+                        ${escapeHTML(a.nome)}
+                    </option>
+                `;
+            });
+            selectUsuario.disabled = false;
+        }
+    } catch (error) {
+        selectUsuario.innerHTML = '<option value="">Erro</option>';
+    }
+}
+
+async function adicionarParticipanteEdit() {
+    const perfil = safeGet('editParticipantePerfil')?.value;
+    const usuarioSelect = safeGet('editParticipanteUsuario');
+    const usuarioId = usuarioSelect?.value;
+    const usuarioOption = usuarioSelect?.options[usuarioSelect.selectedIndex];
+    const usuarioNome = usuarioOption?.getAttribute('data-nome') || '';
+    const usuarioMatricula = usuarioOption?.getAttribute('data-matricula') || '';
+    const usuarioTurma = usuarioOption?.getAttribute('data-turma') || '';
+    const usuarioEixo = usuarioOption?.getAttribute('data-eixo') || '';
+    const usuarioCurso = usuarioOption?.getAttribute('data-curso') || '';
+    const usuarioFoto = usuarioOption?.getAttribute('data-foto') || '';
+    const filtroValor = safeGet('editParticipanteFiltro')?.value || '';
+    
+    if (!perfil || !usuarioId) {
+        notificar('Selecione perfil e usuário', 'error');
+        return;
+    }
+    if (__participantesAtendimento.some(p => p.usuarioId === usuarioId)) {
+        notificar('⚠️ Este usuário já foi adicionado!', 'warning');
+        return;
+    }
+    if ((perfil === 'aluno' || perfil === 'professor') && !filtroValor) {
+        notificar(`Selecione ${perfil === 'aluno' ? 'a turma' : 'o eixo'}`, 'error');
+        return;
+    }
+    
+    const tipoLabel = __perfisDisponiveis.find(p => p.valor === perfil)?.label || perfil;
+    
+    let turmaFinal = usuarioTurma;
+    let eixoFinal = usuarioEixo;
+    
+    if (perfil === 'aluno') {
+        turmaFinal = usuarioTurma || filtroValor;
+        eixoFinal = '';
+    } else if (perfil === 'professor') {
+        eixoFinal = usuarioEixo || filtroValor;
+        turmaFinal = '';
+    } else {
+        turmaFinal = '';
+        eixoFinal = '';
+    }
+    
+    __participantesAtendimento.push({
+        id: `part_${++__contadorParticipanteId}_${Date.now()}`,
+        tipo: perfil,
+        tipoLabel: tipoLabel,
+        usuarioId: usuarioId,
+        usuarioNome: usuarioNome,
+        usuarioMatricula: usuarioMatricula,
+        usuarioTurma: turmaFinal,
+        usuarioEixo: eixoFinal,
+        usuarioCurso: usuarioCurso,
+        usuarioFoto: usuarioFoto,
+        filtroValor: filtroValor,
+        precisaAssinatura: false,
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null
+    });
+    
+    renderizarEditParticipantes();
+    
+    safeGet('editParticipantePerfil').value = '';
+    safeGet('editParticipanteUsuario').innerHTML = '<option value="">Selecione o perfil primeiro...</option>';
+    safeGet('editParticipanteUsuario').disabled = true;
+    safeGet('editRowParticipanteFiltro').style.display = 'none';
+    safeGet('editParticipanteFiltro').onchange = null;
+    
+    notificar(`✅ ${usuarioNome} adicionado!`, 'success');
+}
+
+function renderizarEditParticipantes() {
+    const container = safeGet('editListaParticipantes');
+    if (!container) return;
+    
+    if (__participantesAtendimento.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-3" style="font-size: 13px;">
+                <i class="fas fa-users" style="font-size: 24px; color: #cbd5e1; display: block; margin-bottom: 8px;"></i>
+                Nenhum participante adicionado ainda
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = __participantesAtendimento.map(p => {
+        let statusAssinatura = '';
+        if (p.precisaAssinatura) {
+            if (p.assinaturaCapturada) {
+                statusAssinatura = `
+                    <div class="participante-status-assinatura assinado">
+                        <i class="fas fa-check-circle"></i>
+                        <span style="flex: 1;">Assinatura capturada</span>
+                    </div>`;
+            } else {
+                statusAssinatura = `
+                    <div class="participante-status-assinatura aguardando">
+                        <i class="fas fa-clock"></i>
+                        <span style="flex: 1;">Aguardando assinatura</span>
+                        <button class="btn-reabrir-qr" onclick="reabrirModalAssinaturaParticipante('${p.id}')">
+                            <i class="fas fa-qrcode"></i> Mostrar QR
+                        </button>
+                    </div>`;
+            }
+        }
+        
+        const detalhes = [];
+        if (p.usuarioTurma) detalhes.push(`Turma: ${escapeHTML(p.usuarioTurma)}`);
+        if (p.usuarioEixo) detalhes.push(`Eixo: ${escapeHTML(p.usuarioEixo)}`);
+        
+        return `
+            <div class="participante-card" data-participante-id="${p.id}">
+                <div class="participante-header">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img src="${p.usuarioFoto || gerarAvatarSVG(p.usuarioNome)}" 
+                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;"
+                             onerror="this.onerror=null; this.src='${gerarAvatarSVG(p.usuarioNome)}'">
+                        <div>
+                            <div style="font-weight: 700; color: #1e293b; font-size: 14px;">${escapeHTML(p.usuarioNome)}</div>
+                            <div style="font-size: 11px; color: #64748b;">
+                                <span class="badge" style="background: #0ea5e9; font-size: 10px;">${escapeHTML(p.tipoLabel)}</span>
+                                ${detalhes.length > 0 ? ' • ' + detalhes.join(' • ') : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-remover-participante" onclick="removerParticipanteEdit('${p.id}')" title="Remover">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="form-check" style="margin-top: 8px; padding-left: 0;">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           id="edit_check_assinatura_${p.id}"
+                           ${p.precisaAssinatura ? 'checked' : ''}
+                           onchange="toggleAssinaturaParticipanteEdit('${p.id}', this.checked)"
+                           style="width: 18px; height: 18px; cursor: pointer; border: 2px solid #0ea5e9; margin-left: 0;">
+                    <label class="form-check-label" for="edit_check_assinatura_${p.id}" style="font-size: 13px; color: #075985; cursor: pointer; margin-left: 6px;">
+                        <i class="fas fa-signature"></i> Precisa de assinatura deste participante?
+                    </label>
+                </div>
+                
+                ${statusAssinatura}
+            </div>
+        `;
+    }).join('');
+}
+
+async function removerParticipanteEdit(participanteId) {
+    const index = __participantesAtendimento.findIndex(p => p.id === participanteId);
+    if (index === -1) return;
+    
+    const participante = __participantesAtendimento[index];
+    
+    if (participante.sessaoId) {
+        try {
+            await fetch(`/api/sessoes-assinatura/${participante.sessaoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) { console.warn(e); }
+    }
+    if (participante.monitoramentoInterval) {
+        clearInterval(participante.monitoramentoInterval);
+    }
+    
+    __participantesAtendimento.splice(index, 1);
+    renderizarEditParticipantes();
+    
+    notificar(`Participante removido.`, 'info');
+}
+
+async function toggleAssinaturaParticipanteEdit(participanteId, precisa) {
+    await toggleAssinaturaParticipante(participanteId, precisa);
+    renderizarEditParticipantes();
 }
 
 async function salvarEdicaoAtendimento() {
@@ -1023,6 +2403,28 @@ async function salvarEdicaoAtendimento() {
         return;
     }
     
+    const pendentes = __participantesAtendimento.filter(p => p.precisaAssinatura && !p.assinaturaCapturada);
+    if (pendentes.length > 0) {
+        notificar(`⚠️ Aguardando assinatura de: ${pendentes.map(p => p.usuarioNome).join(', ')}`, 'warning', 5000);
+        return;
+    }
+    
+    const participantesParaEnvio = __participantesAtendimento.map(p => ({
+        _id: p._id || undefined,
+        usuarioId: p.usuarioId,
+        usuarioNome: p.usuarioNome,
+        usuarioMatricula: p.usuarioMatricula,
+        usuarioFoto: p.usuarioFoto,
+        tipo: p.tipo,
+        tipoLabel: p.tipoLabel,
+        turma: p.usuarioTurma || null,
+        eixo: p.usuarioEixo || null,
+        filtroValor: p.filtroValor,
+        precisaAssinatura: p.precisaAssinatura,
+        assinaturaBase64: p.assinaturaCapturada || null,
+        sessaoId: p.sessaoId
+    }));
+    
     try {
         const response = await fetch(`/api/supervisao/atendimento/${atendimentoId}`, {
             method: 'PUT',
@@ -1030,7 +2432,10 @@ async function salvarEdicaoAtendimento() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ tipoTarefa, descricao, gravidade, prioridade, observacoes })
+            body: JSON.stringify({ 
+                tipoTarefa, descricao, gravidade, prioridade, observacoes,
+                participantes: participantesParaEnvio
+            })
         });
         const data = await response.json();
         
@@ -1039,6 +2444,8 @@ async function salvarEdicaoAtendimento() {
             if (modal) modal.hide();
             
             mostrarToastConcluido('✅ Atendimento atualizado com sucesso!', 'success');
+            
+            limparTodosParticipantes();
             
             carregarAtendimentosAtivos();
             carregarDashboard();
@@ -1060,18 +2467,12 @@ async function salvarEdicaoAtendimento() {
 }
 
 // ============================================================================
-// 🔥 ASSINATURA VIA QR CODE (MESMO FLUXO DA GESTÃO GERAL / PSICOLOGIA)
+// ASSINATURA VIA QR CODE (RESPONSÁVEL)
 // ============================================================================
 
-/**
- * Marca/desmarca necessidade de assinatura.
- */
 async function toggleNecessitaAssinatura(modulo) {
     const check = safeGet('supervisaoNecessitaAssinatura');
-    if (!check) {
-        console.error('❌ Checkbox #supervisaoNecessitaAssinatura não encontrado');
-        return;
-    }
+    if (!check) return;
     
     if (check.checked) {
         if (!currentAluno || !currentAluno.id) {
@@ -1103,8 +2504,6 @@ async function toggleNecessitaAssinatura(modulo) {
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
             
-            console.log('✅ Sessão de assinatura criada:', sessaoId);
-            
             const urlAssinatura = `${window.location.origin}/supervisao.html?assinatura=${sessaoId}`;
             
             try {
@@ -1125,7 +2524,6 @@ async function toggleNecessitaAssinatura(modulo) {
                         `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
                 }
             } catch (e) {
-                console.warn('Fallback QR Code:', e);
                 estadoSessaoAssinatura.supervisao.qrCodeDataUrl = 
                     `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
@@ -1146,9 +2544,6 @@ async function toggleNecessitaAssinatura(modulo) {
     }
 }
 
-/**
- * Monta snapshot dos dados atuais.
- */
 function montarSnapshotAtendimento() {
     return {
         alunoId: currentAluno?.id,
@@ -1165,13 +2560,21 @@ function montarSnapshotAtendimento() {
         prioridade: safeGet('prioridade')?.value || 'normal',
         dataHora: new Date().toISOString(),
         dataHoraFormatada: new Date().toLocaleString('pt-BR'),
-        registradoPorNome: JSON.parse(localStorage.getItem('user_data') || '{}').nome || 'Supervisão'
+        registradoPorNome: JSON.parse(localStorage.getItem('user_data') || '{}').nome || 'Supervisão',
+        participantes: __participantesAtendimento.map(p => ({
+            usuarioId: p.usuarioId,
+            usuarioNome: p.usuarioNome,
+            tipo: p.tipo,
+            tipoLabel: p.tipoLabel,
+            turma: p.usuarioTurma || null,
+            eixo: p.usuarioEixo || null,
+            filtroValor: p.filtroValor,
+            precisaAssinatura: p.precisaAssinatura,
+            assinaturaBase64: p.assinaturaCapturada || null
+        }))
     };
 }
 
-/**
- * Abre o modal com QR Code.
- */
 function abrirModalAssinaturaQR(urlAssinatura) {
     const antigo = safeGet('modalAssinaturaQR');
     if (antigo) antigo.remove();
@@ -1254,14 +2657,6 @@ function abrirModalAssinaturaQR(urlAssinatura) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     estadoSessaoAssinatura.supervisao.modalInstance = new bootstrap.Modal(safeGet('modalAssinaturaQR'));
     estadoSessaoAssinatura.supervisao.modalInstance.show();
-    
-    setTimeout(() => {
-        const img = safeGet('qrCodeImage');
-        if (img && window.innerWidth < 500) {
-            img.style.width = '200px';
-            img.style.height = '200px';
-        }
-    }, 200);
 }
 
 function fecharModalAssinaturaQR() {
@@ -1326,8 +2721,6 @@ async function copiarLinkAssinatura(url) {
 function iniciarPollingAssinatura(sessaoId) {
     pararPollingAssinatura();
     
-    console.log('👀 Monitorando sessão:', sessaoId);
-    
     estadoSessaoAssinatura.supervisao.monitoramentoInterval = setInterval(async () => {
         try {
             const response = await fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -1336,7 +2729,6 @@ function iniciarPollingAssinatura(sessaoId) {
             
             if (!response.ok) {
                 if (response.status === 404) {
-                    console.warn('Sessão expirou');
                     pararPollingAssinatura();
                 }
                 return;
@@ -1346,8 +2738,6 @@ function iniciarPollingAssinatura(sessaoId) {
             if (!data.success || !data.sessao) return;
             
             if (data.sessao.status === 'assinado') {
-                console.log('✅ Assinatura capturada!');
-                
                 estadoSessaoAssinatura.supervisao.assinaturaCapturada = data.sessao.assinaturaBase64;
                 atualizarStatusAssinado(data.sessao);
                 pararPollingAssinatura();
@@ -1362,7 +2752,6 @@ function iniciarPollingAssinatura(sessaoId) {
                 mostrarToastConcluido(`✅ Assinatura capturada por ${data.sessao.assinadaPorNome || 'Responsável'}!`, 'success');
                 
             } else if (data.sessao.status === 'cancelado') {
-                console.log('Sessão cancelada');
                 pararPollingAssinatura();
             }
         } catch (e) {
@@ -1587,8 +2976,9 @@ async function carregarAlunosPorTurma() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        if (data.success && Array.isArray(data.alunos)) {
-            alunosPorTurma = data.alunos;
+        const lista = data.alunos || data.usuarios || [];
+        if (data.success && Array.isArray(lista)) {
+            alunosPorTurma = lista;
             filtrarAlunosManual();
         } else {
             safeGet('listaAlunosManual').innerHTML = '<div class="notificar notificar-warning">Nenhum aluno</div>';
@@ -1714,7 +3104,6 @@ function mostrarFormRegistro() {
     safeGet('prioridade').value = 'normal';
     safeSetHTML('camposEspecificos', '');
     
-    // Limpa estado de assinatura
     const check = safeGet('supervisaoNecessitaAssinatura');
     if (check) check.checked = false;
     
@@ -1739,6 +3128,8 @@ function mostrarFormRegistro() {
         if (modal) modal.hide();
         setTimeout(() => modalEl.remove(), 300);
     }
+    
+    limparParticipantesCompleto();
 }
 
 function selecionarTipo(tipo) {
@@ -1920,7 +3311,7 @@ function coletarDetalhes() {
 }
 
 // ============================================
-// REGISTRAR
+// REGISTRAR (COM PARTICIPANTES)
 // ============================================
 async function registrarOcorrencia() {
     if (!tipoTarefaSelecionado) { notificar('Selecione o tipo de tarefa', 'error'); return; }
@@ -1928,7 +3319,6 @@ async function registrarOcorrencia() {
     if (!descricao) { notificar('Descreva o ocorrido', 'error'); return; }
     if (!currentAluno || !currentAluno.id) { notificar('Nenhum aluno selecionado', 'error'); return; }
     
-    // Valida assinatura
     const precisaAssinatura = !!safeGet('supervisaoNecessitaAssinatura')?.checked;
     const assinaturaBase64 = estadoSessaoAssinatura.supervisao?.assinaturaCapturada || '';
     
@@ -1938,10 +3328,33 @@ async function registrarOcorrencia() {
         return;
     }
     
+    const participantesPendentes = __participantesAtendimento.filter(p => p.precisaAssinatura && !p.assinaturaCapturada);
+    if (participantesPendentes.length > 0) {
+        const nomes = participantesPendentes.map(p => p.usuarioNome).join(', ');
+        mostrarToastConcluido(`⚠️ Aguardando assinatura de: ${nomes}`, 'warning', 5000);
+        reabrirModalAssinaturaParticipante(participantesPendentes[0].id);
+        return;
+    }
+    
     const btn = document.querySelector('#formRegistro .btn-primary-custom');
     if (btn) btn.disabled = true;
     
     try {
+        const participantesEnvio = __participantesAtendimento.map(p => ({
+            usuarioId: p.usuarioId,
+            usuarioNome: p.usuarioNome,
+            usuarioMatricula: p.usuarioMatricula,
+            usuarioFoto: p.usuarioFoto,
+            tipo: p.tipo,
+            tipoLabel: p.tipoLabel,
+            turma: p.usuarioTurma || null,
+            eixo: p.usuarioEixo || null,
+            filtroValor: p.filtroValor,
+            precisaAssinatura: p.precisaAssinatura,
+            assinaturaBase64: p.assinaturaCapturada || null,
+            sessaoId: p.sessaoId
+        }));
+        
         const response = await fetch('/api/supervisao/registrar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1954,13 +3367,13 @@ async function registrarOcorrencia() {
                 prioridade: safeGet('prioridade')?.value || 'normal',
                 detalhes: coletarDetalhes(),
                 precisaAssinatura: precisaAssinatura,
-                assinaturaBase64: assinaturaBase64
+                assinaturaBase64: assinaturaBase64,
+                participantes: participantesEnvio
             })
         });
         const data = await response.json();
         
         if (data.success) {
-            // Aplica assinatura se houver sessão
             if (assinaturaBase64 && data.atendimento?.id) {
                 try {
                     const sessaoId = estadoSessaoAssinatura.supervisao.sessaoId;
@@ -1975,13 +3388,11 @@ async function registrarOcorrencia() {
                             sessaoId: sessaoId
                         })
                     });
-                    console.log('✅ Assinatura aplicada ao atendimento');
                 } catch (e) {
                     console.warn('Erro ao aplicar assinatura:', e);
                 }
             }
             
-            // Limpa sessão
             const sessaoId = estadoSessaoAssinatura.supervisao.sessaoId;
             if (sessaoId) {
                 fetch(`/api/sessoes-assinatura/${sessaoId}`, {
@@ -1997,6 +3408,18 @@ async function registrarOcorrencia() {
             
             const bloco = safeGet('supervisaoBlocoAssinaturaInfo');
             if (bloco) bloco.style.display = 'none';
+            
+            for (const p of __participantesAtendimento) {
+                if (p.sessaoId) {
+                    fetch(`/api/sessoes-assinatura/${p.sessaoId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).catch(e => console.warn(e));
+                }
+                if (p.monitoramentoInterval) {
+                    clearInterval(p.monitoramentoInterval);
+                }
+            }
             
             mostrarToastConcluido(`✅ ${data.message}`, 'success');
             finalizarAposSucesso();
@@ -2042,6 +3465,8 @@ function limparTela() {
     
     const bloco = safeGet('supervisaoBlocoAssinaturaInfo');
     if (bloco) { bloco.style.display = 'none'; bloco.innerHTML = ''; }
+    
+    limparParticipantesCompleto();
 }
 
 function reiniciarScannerAutomatico() {
@@ -2049,6 +3474,7 @@ function reiniciarScannerAutomatico() {
         if (!scannerAutoAtivo && modoAtual === 'automatico') iniciarScannerAutomatico();
     }, 1000);
 }
+
 // ============================================
 // ATENDIMENTOS ATIVOS
 // ============================================
@@ -2064,36 +3490,12 @@ async function carregarAtendimentosAtivos() {
         popularFiltroTurmasAndamento();
         aplicarFiltrosAndamento();
         atualizarBadgeTabAtivos(__atendimentosAtivosBrutos.length);
-        atualizarContadorAtendimentosAntigos();  // 🆕
+        atualizarContadorAtendimentosAntigos();
     } catch (error) {
         container.innerHTML = `<div class="notificar notificar-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
     }
 }
 
-// ============================================
-// 🆕 HELPER: FORMATAÇÃO DE TEMPO (frontend)
-// ============================================
-function formatarTempoAtendimentoFront(minutos) {
-    if (minutos < 60) {
-        return { texto: `${minutos} min`, critico: false, nivel: minutos >= 45 ? 'atencao' : 'normal' };
-    }
-    if (minutos < 1440) {
-        const h = Math.floor(minutos / 60), m = minutos % 60;
-        const texto = m > 0 ? `${h}h ${m}min` : `${h}h`;
-        return { texto, critico: false, nivel: minutos >= 720 ? 'alerta' : 'atencao' };
-    }
-    const d = Math.floor(minutos / 1440);
-    const h = Math.floor((minutos % 1440) / 60);
-    const m = minutos % 60;
-    let texto = `${d}d`;
-    if (h > 0) texto += ` ${h}h`;
-    if (m > 0) texto += ` ${m}min`;
-    return { texto, critico: true, nivel: 'critico' };
-}
-
-// ============================================
-// 🆕 ATUALIZAR CONTADOR DE ATENDIMENTOS +24H
-// ============================================
 async function atualizarContadorAtendimentosAntigos() {
     try {
         const response = await fetch(`/api/supervisao/atendimentos-antigos?t=${Date.now()}`, {
@@ -2156,26 +3558,13 @@ async function atualizarContadorAtendimentosAntigos() {
             if (total > 0) card.classList.add('tem-alerta');
             else card.classList.remove('tem-alerta');
         }
-        
-        if (total > 0 && !sessionStorage.getItem('alerta24hNotificadoSup')) {
-            if ('Notification' in window && Notification.permission === 'granted') {
-                try {
-                    new Notification('⚠️ Ocorrências há mais de 24h na Supervisão', {
-                        body: `Você tem ${total} ocorrência(s) em andamento há mais de 24h. Verifique se precisam ser finalizadas.`,
-                        icon: '/icons/favicon.ico',
-                        tag: 'alerta-24h-sup'
-                    });
-                } catch (e) {}
-            }
-            sessionStorage.setItem('alerta24hNotificadoSup', 'true');
-        }
     } catch (error) {
         console.warn('[CARD-24H-SUP] Erro:', error);
     }
 }
 
 // ============================================
-// 🆕 MODAL DE VERIFICAÇÃO DE ATENDIMENTOS >24H
+// MODAL DE VERIFICAÇÃO DE ATENDIMENTOS >24H
 // ============================================
 async function abrirModalVerificacao24h() {
     try {
@@ -2247,11 +3636,6 @@ async function abrirModalVerificacao24h() {
                                                         <div style="background: #fef2f2; color: #991b1b; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
                                                             <i class="fas fa-clock"></i> ${escapeHTML(a.tempoTexto)}
                                                         </div>
-                                                        ${a.totalAlertas24h > 0 ? `
-                                                            <div style="font-size: 10px; color: #9ca3af; margin-top: 4px;">
-                                                                ${a.totalAlertas24h} alerta(s) enviado(s)
-                                                            </div>
-                                                        ` : ''}
                                                     </div>
                                                 </div>
                                                 
@@ -2313,9 +3697,6 @@ async function abrirModalVerificacao24h() {
     }
 }
 
-// ============================================
-// 🆕 VERIFICAR ATENDIMENTO DE 24H
-// ============================================
 async function verificarAtendimento24h(atendimentoId, acao) {
     try {
         let resultado = 'resolvido';
@@ -2382,6 +3763,24 @@ function atualizarBadgeTabAtivos(total) {
     else badge.style.display = 'none';
 }
 
+function formatarTempoAtendimentoFront(minutos) {
+    if (minutos < 60) {
+        return { texto: `${minutos} min`, critico: false, nivel: minutos >= 45 ? 'atencao' : 'normal' };
+    }
+    if (minutos < 1440) {
+        const h = Math.floor(minutos / 60), m = minutos % 60;
+        const texto = m > 0 ? `${h}h ${m}min` : `${h}h`;
+        return { texto, critico: false, nivel: minutos >= 720 ? 'alerta' : 'atencao' };
+    }
+    const d = Math.floor(minutos / 1440);
+    const h = Math.floor((minutos % 1440) / 60);
+    const m = minutos % 60;
+    let texto = `${d}d`;
+    if (h > 0) texto += ` ${h}h`;
+    if (m > 0) texto += ` ${m}min`;
+    return { texto, critico: true, nivel: 'critico' };
+}
+
 function renderizarListaAtendimentosAtivos(lista) {
     const container = safeGet('listaAtendimentosAtivos');
     if (!container) return;
@@ -2412,7 +3811,6 @@ function renderizarListaAtendimentosAtivos(lista) {
         const estaMascarado = a._mascarado === true;
         const podeEditar = !estaMascarado;
         
-        // 🎯 Tempo formatado vindo do backend
         const tempoTexto = a.tempoTexto || '0 min';
         const tempoClasse = a.nivelTempo === 'critico' 
             ? 'text-danger fw-bold' 
@@ -2431,7 +3829,6 @@ function renderizarListaAtendimentosAtivos(lista) {
                 <div style="background: #fef2f2; border-left: 3px solid #dc2626; padding: 6px 10px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-exclamation-triangle" style="color: #dc2626;"></i>
                     <strong style="color: #991b1b;">Atendimento há mais de 24h!</strong>
-                    <span style="color: #991b1b; font-size: 11px;">${a.totalAlertas24h || 0} alerta(s) enviado(s)</span>
                 </div>
             ` : ''}
             
@@ -2450,10 +3847,10 @@ function renderizarListaAtendimentosAtivos(lista) {
                         ${a.temRemarcacaoPendente ? '<span class="badge bg-warning text-dark"><i class="fas fa-calendar"></i> Remarcado</span>' : ''}
                         ${a.temAssinatura ? '<span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>' : ''}
                         ${a.statusAssinatura === 'pendente' ? '<span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Aguardando assinatura</span>' : ''}
+                        ${a.totalParticipantes > 0 ? `<span class="badge" style="background: #8b5cf6;"><i class="fas fa-users"></i> ${a.totalParticipantes} participante(s)</span>` : ''}
                     </div>
                 </div>
                 <div class="text-end">
-                    <!-- 🎯 TEMPO FORMATADO (corrigido) -->
                     <small class="${tempoClasse} d-block">
                         <i class="fas ${tempoIcone}"></i> ${escapeHTML(tempoTexto)}
                     </small>
@@ -2756,7 +4153,7 @@ async function excluirAtendimento(atendimentoId) {
 }
 
 // ============================================
-// 🗑️ GERENCIAR ATENDIMENTOS CONCLUÍDOS
+// GERENCIAR ATENDIMENTOS CONCLUÍDOS
 // ============================================
 async function carregarAtendimentosConcluidos(pagina = 1) {
     const container = safeGet('listaConcluidos');
@@ -3121,8 +4518,9 @@ async function carregarAlunosParaRelatorio() {
             try {
                 const res = await fetch(`/api/supervisao/alunos-por-turma?turma=${encodeURIComponent(turma)}`, { headers: { 'Authorization': `Bearer ${token}` } });
                 const data = await res.json();
-                if (data.success && Array.isArray(data.alunos)) {
-                    data.alunos.forEach(a => todos.push({ id: a.id, nome: a.nome, matricula: a.matricula || '', turma: a.turma || turma, curso: a.curso || '' }));
+                const lista = data.alunos || data.usuarios || [];
+                if (data.success && Array.isArray(lista)) {
+                    lista.forEach(a => todos.push({ id: a.id, nome: a.nome, matricula: a.matricula || '', turma: a.turma || turma, curso: a.curso || '' }));
                 }
             } catch (e) {}
         }
@@ -3445,7 +4843,7 @@ function gerarHTMLRelatorioSupervisao(data) {
 }
 
 // ============================================
-// 🖨️ IMPRESSÃO DE ATENDIMENTO
+// IMPRESSÃO DE ATENDIMENTO (COM PARTICIPANTES)
 // ============================================
 async function imprimirAtendimento(atendimentoId) {
     if (!atendimentoId) return;
@@ -3487,9 +4885,24 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         ? '<span class="badge-finalizado">✅ FINALIZADO</span>'
         : '<span class="badge-andamento">⏳ EM ANDAMENTO</span>';
     
-    const assinaturaHTML = (a.entrada?.temAssinatura && a.entrada?.assinaturaBase64)
-        ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura">`
+    const assinaturaRespHTML = (a.entrada?.temAssinatura && a.entrada?.assinaturaBase64)
+        ? `<img class="assinatura-img" src="${a.entrada.assinaturaBase64}" alt="Assinatura Responsável">`
         : '';
+    
+    const participantes = a.entrada?.participantes || [];
+    const participantesComAssinatura = participantes.filter(p => p.precisaAssinatura && p.assinaturaBase64);
+    
+    const assinaturasParticipantesHTML = participantesComAssinatura.map(p => `
+        <div class="assinatura">
+            <div class="assinatura-container-relatorio">
+                <img class="assinatura-img" src="${p.assinaturaBase64}" alt="Assinatura ${escapeHTML(p.usuarioNome)}">
+            </div>
+            <div class="assinatura-linha">
+                ${escapeHTML(p.usuarioNome)}<br>
+                <small>${escapeHTML(p.tipoLabel)}</small>
+            </div>
+        </div>
+    `).join('');
     
     let detalhesHTML = '';
     if (a.entrada?.detalhes && Object.keys(a.entrada.detalhes).length > 0) {
@@ -3516,11 +4929,83 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         if (linhas.length > 0) detalhesHTML = `<div class="section-title">📋 Detalhes</div><div class="detalhes-compactos">${linhas.join('')}</div>`;
     }
     
+    let participantesHTML = '';
+    if (participantes.length > 0) {
+        participantesHTML = `
+            <div class="section-title">👥 Participantes do Atendimento</div>
+            <div class="detalhes-compactos">
+                ${participantes.map(p => {
+                    const det = [];
+                    if (p.turma) det.push(`Turma: ${escapeHTML(p.turma)}`);
+                    if (p.eixo) det.push(`Eixo: ${escapeHTML(p.eixo)}`);
+                    return `<span class="det-item">
+                        <strong>${escapeHTML(p.usuarioNome)}</strong> (${escapeHTML(p.tipoLabel)})${det.length > 0 ? ' — ' + det.join(', ') : ''}
+                    </span>`;
+                }).join('')}
+            </div>`;
+    }
+    
     let saidaHTML = '';
     if (a.saida) {
         saidaHTML = `<div class="section-title">✅ Resultado Final</div>
             <div class="linha-compacta"><span><strong>Resultado:</strong> ${escapeHTML(a.saida.resultadoTexto || a.saida.resultado || '-')}</span>
             <span><strong>Data:</strong> ${a.saida.dataHoraFormatada || '-'}</span></div>`;
+    }
+    
+    let assinaturasHTML = '';
+    const temResp = !!assinaturaRespHTML;
+    const temParticipantes = participantesComAssinatura.length > 0;
+    
+    if (temResp && temParticipantes) {
+        assinaturasHTML = `
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-container-relatorio">${assinaturaRespHTML}</div>
+                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                </div>
+                ${assinaturasParticipantesHTML}
+                <div class="assinatura">
+                    <div class="assinatura-container-relatorio">
+                        <img class="carimbo-overlay" src="${carimbo}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="assinatura-linha">Supervisão</div>
+                </div>
+            </div>`;
+    } else if (temParticipantes && !temResp) {
+        assinaturasHTML = `
+            <div class="assinaturas">
+                ${assinaturasParticipantesHTML}
+                <div class="assinatura">
+                    <div class="assinatura-container-relatorio">
+                        <img class="carimbo-overlay" src="${carimbo}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="assinatura-linha">Supervisão</div>
+                </div>
+            </div>`;
+    } else if (temResp && !temParticipantes) {
+        assinaturasHTML = `
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-container-relatorio">${assinaturaRespHTML}</div>
+                    <div class="assinatura-linha">Assinatura do Responsável</div>
+                </div>
+                <div class="assinatura">
+                    <div class="assinatura-container-relatorio">
+                        <img class="carimbo-overlay" src="${carimbo}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="assinatura-linha">Supervisão</div>
+                </div>
+            </div>`;
+    } else {
+        assinaturasHTML = `
+            <div class="assinaturas">
+                <div class="assinatura">
+                    <div class="assinatura-container-relatorio">
+                        <img class="carimbo-overlay" src="${carimbo}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="assinatura-linha">Supervisão</div>
+                </div>
+            </div>`;
     }
     
     return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Atendimento - ${escapeHTML(a.alunoNome)}</title>
@@ -3550,12 +5035,12 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
         .detalhes-compactos { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 6px; font-size: 8pt; line-height: 1.35; }
         .det-item { display: inline-block; margin-right: 10px; margin-bottom: 2px; }
         .linha-compacta { display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; background: #f9fafb; border-radius: 4px; font-size: 8.5pt; }
-        .assinaturas { display: flex; justify-content: space-around; margin-top: 25px; gap: 20px; }
-        .assinatura { flex: 0 0 42%; text-align: center; }
-        .assinatura-container-relatorio { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; }
+        .assinaturas { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 20px; }
+        .assinatura { flex: 1 1 30%; min-width: 120px; max-width: 200px; text-align: center; }
+        .assinatura-container-relatorio { position: relative; min-height: 15mm; display: flex; align-items: flex-end; justify-content: center; }
         .assinatura-container-relatorio::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; }
-        .assinatura-img { max-height: 14mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
-        .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 45mm; object-fit: contain; opacity: 0.95; z-index: 1; }
+        .assinatura-img { max-height: 12mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
+        .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 13mm; max-width: 45mm; object-fit: contain; opacity: 0.95; z-index: 1; }
         .assinatura-linha { padding-top: 3px; font-size: 8pt; }
         .qr-code { text-align: center; margin-top: 10px; }
         .qr-code img { width: 22mm; height: 22mm; border: 1.5px solid #000; padding: 2px; }
@@ -3582,23 +5067,22 @@ function gerarHTMLImpressaoSupervisao(a, qrCodeUrl) {
             <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
             <div class="info-item"><span class="info-label">Gravidade:</span><span class="info-value">${escapeHTML((a.entrada?.gravidade || 'media').toUpperCase())}</span></div>
             <div class="info-item"><span class="info-label">Prioridade:</span><span class="info-value">${escapeHTML((a.prioridade || 'normal').toUpperCase())}</span></div>
-            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.entrada?.registradoPor || '-')}</span></div>
+            <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.entrada?.registradoPorNome || '-')}</span></div>
         </div>
         <div class="section-title">📝 Descrição</div>
         <div class="descricao-box">${escapeHTML(a.entrada?.descricao || '-').replace(/\n/g, '<br>')}</div>
         ${a.entrada?.observacoes ? `<div class="section-title">💬 Observações</div><div class="descricao-box" style="min-height: 20px; max-height: 40px;">${escapeHTML(a.entrada.observacoes)}</div>` : ''}
-        ${detalhesHTML}${saidaHTML}
-        <div class="assinaturas">
-            <div class="assinatura"><div class="assinatura-container-relatorio">${assinaturaHTML}</div><div class="assinatura-linha">Assinatura do Responsável</div></div>
-            <div class="assinatura"><div class="assinatura-container-relatorio"><img class="carimbo-overlay" src="${carimbo}" onerror="this.style.display='none'"></div><div class="assinatura-linha">Supervisão</div></div>
-        </div>
+        ${detalhesHTML}
+        ${participantesHTML}
+        ${saidaHTML}
+        ${assinaturasHTML}
         ${qrCodeUrl ? `<div class="qr-code"><img src="${qrCodeUrl}" alt="QR"><p>Identificação do Aluno</p></div>` : ''}
         <div class="footer"><p>Gerado em <strong>${dataGeracao}</strong> — EducaPleno — Supervisão</p></div>
     </body></html>`;
 }
 
 // ============================================
-// 🔔 SISTEMA DE NOTIFICAÇÕES UNIFICADO
+// SISTEMA DE NOTIFICAÇÕES UNIFICADO
 // ============================================
 let notificacoesInterval = null;
 let __notificacoesCache = [];
@@ -3880,9 +5364,9 @@ async function logout() {
     }
 }
 
-// ============================================
-// 📱 MODO ASSINATURA (via URL ?assinatura=UUID)
-// ============================================
+// ============================================================================
+// MODO ASSINATURA (via URL ?assinatura=UUID)
+// ============================================================================
 async function mostrarTelaAssinatura(sessaoId) {
     document.querySelectorAll('.header-top, .container > .card').forEach(el => {
         if (el) el.style.display = 'none';
@@ -3984,17 +5468,21 @@ async function mostrarTelaAssinatura(sessaoId) {
         }
         
         const d = data.sessao.dadosAtendimento || {};
+        const tipoLabel = data.sessao.tipo === 'supervisao_participante' ? 'Assinatura do Participante' : 'Supervisão';
+        
+        const nomeExibido = d.participanteNome || d.alunoNome;
+        const tipoInfo = d.participanteTipo || d.tipoTarefaLabel;
         
         safeGet('telaAssinaturaInfo').innerHTML = `
             <div style="border-left: 4px solid #0ea5e9; padding-left: 10px; margin-bottom: 10px;">
-                <h2 style="margin: 0 0 4px; font-size: 16px; color: #075985;">Supervisão</h2>
+                <h2 style="margin: 0 0 4px; font-size: 16px; color: #075985;">${tipoLabel}</h2>
                 <p style="margin: 0; color: #64748b; font-size: 12px;">Confirme os dados e assine abaixo</p>
             </div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                 <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Aluno</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span>
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">${d.participanteNome ? 'Participante' : 'Aluno'}</span>
+                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(nomeExibido || '-')}</span>
                 </div>
                 <div>
                     <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Turma</span>
@@ -4002,7 +5490,7 @@ async function mostrarTelaAssinatura(sessaoId) {
                 </div>
                 <div>
                     <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Tipo</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.tipoTarefaLabel || '-')}</span>
+                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(tipoInfo || '-')}</span>
                 </div>
                 <div>
                     <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Gravidade</span>
@@ -4036,7 +5524,6 @@ async function mostrarTelaAssinatura(sessaoId) {
     }
 }
 
-// 🆕 Função auxiliar para redimensionar o canvas quando a tela gira
 function handleResizeCanvasTela() {
     const canvas = safeGet('canvasAssinatura');
     const wrapper = safeGet('canvasWrapper');
@@ -4195,8 +5682,70 @@ function limparAssinaturaTela() {
     }
 }
 
+async function salvarAssinaturaTela() {
+    if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
+    
+    const btn = safeGet('btnSalvarAssinatura');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    }
+    
+    try {
+        const base64 = telaCanvas.toDataURL('image/png');
+        
+        const response = await fetch(`/api/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                assinaturaBase64: base64,
+                assinanteNome: 'Responsável'
+            })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
+        
+        safeGet('telaAssinaturaInfo').innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;">
+                <i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i>
+                <h2 style="color: #10b981; margin: 0 0 8px; font-size: 20px;">Assinatura Confirmada!</h2>
+                <p style="color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5;">
+                    A assinatura foi registrada com sucesso.<br>
+                    Você já pode fechar esta janela.
+                </p>
+                <button onclick="window.close()" 
+                        style="padding: 12px 28px; background: #0ea5e9; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        `;
+        safeGet('telaAssinaturaArea').style.display = 'none';
+        
+        const telaInfo = safeGet('telaAssinaturaInfo');
+        if (telaInfo) {
+            telaInfo.style.flex = '1';
+            telaInfo.style.display = 'flex';
+            telaInfo.style.alignItems = 'center';
+            telaInfo.style.justifyContent = 'center';
+            telaInfo.style.maxHeight = 'none';
+            telaInfo.style.borderLeft = 'none';
+            telaInfo.style.borderRadius = '0 0 16px 16px';
+        }
+        
+    } catch (e) {
+        console.error('Erro ao salvar assinatura:', e);
+        mostrarToastConcluido('❌ ' + e.message, 'error');
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
+        }
+    }
+}
+
 // ============================================
-// 🆕 EXCLUSÃO EM MASSA
+// EXCLUSÃO EM MASSA
 // ============================================
 function abrirExclusaoEmMassa() {
     const modalHtml = `
@@ -4283,71 +5832,6 @@ async function confirmarExclusaoMassa() {
     }
 }
 
-async function salvarAssinaturaTela() {
-    if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
-    
-    const btn = safeGet('btnSalvarAssinatura');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-    }
-    
-    try {
-        const base64 = telaCanvas.toDataURL('image/png');
-        
-        const response = await fetch(`/api/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                assinaturaBase64: base64,
-                assinanteNome: 'Responsável'
-            })
-        });
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
-        
-        // 🆕 TELA DE SUCESSO CORRIGIDA
-        safeGet('telaAssinaturaInfo').innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;">
-                <i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i>
-                <h2 style="color: #10b981; margin: 0 0 8px; font-size: 20px;">Assinatura Confirmada!</h2>
-                <p style="color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5;">
-                    A assinatura foi registrada com sucesso.<br>
-                    Você já pode fechar esta janela.
-                </p>
-                <button onclick="window.close()" 
-                        style="padding: 12px 28px; background: #0ea5e9; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
-            </div>
-        `;
-        safeGet('telaAssinaturaArea').style.display = 'none';
-        
-        const telaInfo = safeGet('telaAssinaturaInfo');
-        if (telaInfo) {
-            telaInfo.style.flex = '1';
-            telaInfo.style.display = 'flex';
-            telaInfo.style.alignItems = 'center';
-            telaInfo.style.justifyContent = 'center';
-            telaInfo.style.maxHeight = 'none';
-            telaInfo.style.borderLeft = 'none';
-            telaInfo.style.borderRadius = '0 0 16px 16px';
-        }
-        
-    } catch (e) {
-        console.error('Erro ao salvar assinatura:', e);
-        mostrarToastConcluido('❌ ' + e.message, 'error');
-        
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
-        }
-    }
-}
-
 // ============================================
 // EXPORTAR FUNÇÕES GLOBAIS
 // ============================================
@@ -4390,7 +5874,7 @@ window.mostrarNotificacaoInterna = mostrarNotificacaoInterna;
 window.confirmarInterno = confirmarInterno;
 window.habilitarBotoesRelatorio = habilitarBotoesRelatorio;
 
-// Assinatura via QR Code
+// Assinatura via QR Code (Responsável)
 window.toggleNecessitaAssinatura = toggleNecessitaAssinatura;
 window.abrirModalAssinaturaQR = abrirModalAssinaturaQR;
 window.fecharModalAssinaturaQR = fecharModalAssinaturaQR;
@@ -4402,7 +5886,26 @@ window.mostrarTelaAssinatura = mostrarTelaAssinatura;
 window.limparAssinaturaTela = limparAssinaturaTela;
 window.salvarAssinaturaTela = salvarAssinaturaTela;
 
-// 🆕 Verificação 24h
+// Múltiplos Participantes
+window.toggleMaisParticipantes = toggleMaisParticipantes;
+window.adicionarParticipante = adicionarParticipante;
+window.removerParticipante = removerParticipante;
+window.carregarUsuariosPorPerfil = carregarUsuariosPorPerfil;
+window.onParticipanteUsuarioChange = onParticipanteUsuarioChange;
+window.toggleAssinaturaParticipante = toggleAssinaturaParticipante;
+window.reabrirModalAssinaturaParticipante = reabrirModalAssinaturaParticipante;
+window.fecharModalAssinaturaParticipante = fecharModalAssinaturaParticipante;
+window.cancelarAssinaturaParticipante = cancelarAssinaturaParticipante;
+window.limparTodosParticipantes = limparTodosParticipantes;
+
+// Edição de Participantes
+window.toggleEditMaisParticipantes = toggleEditMaisParticipantes;
+window.carregarUsuariosEditParticipante = carregarUsuariosEditParticipante;
+window.adicionarParticipanteEdit = adicionarParticipanteEdit;
+window.removerParticipanteEdit = removerParticipanteEdit;
+window.toggleAssinaturaParticipanteEdit = toggleAssinaturaParticipanteEdit;
+
+// Verificação 24h
 window.abrirModalVerificacao24h = abrirModalVerificacao24h;
 window.verificarAtendimento24h = verificarAtendimento24h;
 window.atualizarContadorAtendimentosAntigos = atualizarContadorAtendimentosAntigos;

@@ -6791,3 +6791,15 @@ body {
         justify-content: center;
     }
 }
+
+/* 🔥 CORREÇÃO: garantir que o botão fique clicável */
+.turmas-header {
+    position: relative;
+    z-index: 1;
+}
+
+.btn-add-turma {
+    position: relative;
+    z-index: 10 !important;
+    pointer-events: auto !important;
+}
