@@ -29,273 +29,6 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/supervisao.css">
-
-    <style>
-        /* AUTOCOMPLETE */
-        .autocomplete-aluno-wrapper { position: relative; }
-        .autocomplete-aluno-list {
-            position: absolute; top: 100%; left: 0; right: 0;
-            background: white; border: 2px solid #0ea5e9; border-radius: 10px;
-            max-height: 280px; overflow-y: auto; z-index: 1000;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15); margin-top: 4px;
-        }
-        .autocomplete-aluno-list::-webkit-scrollbar { width: 6px; }
-        .autocomplete-aluno-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .autocomplete-aluno-item {
-            padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6;
-            transition: background 0.15s; display: flex; justify-content: space-between;
-            align-items: center; gap: 10px;
-        }
-        .autocomplete-aluno-item:last-child { border-bottom: none; }
-        .autocomplete-aluno-item:hover, .autocomplete-aluno-item.selected { background: #f0f9ff; }
-        .autocomplete-aluno-item .aluno-nome { font-weight: 600; color: #1f2937; flex: 1; }
-        .autocomplete-aluno-item .aluno-nome mark {
-            background: #fef3c7; color: #92400e; padding: 0 2px;
-            border-radius: 3px; font-weight: 700;
-        }
-        .autocomplete-aluno-item .aluno-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-        .autocomplete-aluno-item .aluno-turma {
-            background: #e0f2fe; color: #075985; font-size: 11px;
-            padding: 2px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap;
-        }
-        .autocomplete-aluno-item .aluno-matricula { font-size: 10px; color: #9ca3af; }
-        .autocomplete-aluno-empty { padding: 16px; text-align: center; color: #9ca3af; font-size: 13px; }
-        .autocomplete-aluno-loading {
-            padding: 16px; text-align: center; color: #6b7280; font-size: 13px;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
-        .autocomplete-aluno-loading::before {
-            content: ''; width: 14px; height: 14px;
-            border: 2px solid #e5e7eb; border-top: 2px solid #0ea5e9;
-            border-radius: 50%; animation: spin 0.8s linear infinite;
-        }
-
-        /* MODAL DETALHES */
-        .detalhe-atendimento .info-row { display: flex; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
-        .detalhe-atendimento .info-row:last-child { border-bottom: none; }
-        .detalhe-atendimento .info-label { font-weight: 600; color: #6b7280; min-width: 140px; font-size: 13px; }
-        .detalhe-atendimento .info-value { color: #1f2937; font-size: 14px; flex: 1; }
-        .detalhe-atendimento .section-title {
-            font-size: 13px; font-weight: 700; color: #0284c7;
-            text-transform: uppercase; letter-spacing: 0.5px;
-            margin: 16px 0 8px 0; padding-bottom: 4px; border-bottom: 2px solid #e0f2fe;
-        }
-        .assinatura-preview { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; text-align: center; }
-        .assinatura-preview img { max-height: 80px; max-width: 100%; }
-
-        /* FILTROS EM ANDAMENTO */
-        .filtros-andamento {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #bae6fd;
-        }
-        .filtros-andamento .filtro-titulo {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
-        }
-        .filtros-andamento .filtro-titulo h6 { margin: 0; color: #0284c7; font-weight: 700; font-size: 14px; }
-        .filtros-andamento .filtro-titulo .contador-resultados {
-            background: #0284c7; color: white; font-size: 12px;
-            padding: 3px 12px; border-radius: 20px; font-weight: 700;
-        }
-        .filtros-andamento .filtro-titulo .contador-resultados.zero { background: #9ca3af; }
-        .filtros-andamento .form-label { font-size: 12px; font-weight: 600; color: #075985; margin-bottom: 4px; }
-        .filtros-andamento .form-control,
-        .filtros-andamento .form-select {
-            font-size: 13px; border: 1px solid #7dd3fc;
-            border-radius: 8px; background: white;
-        }
-        .filtros-andamento .form-control:focus,
-        .filtros-andamento .form-select:focus {
-            border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
-        }
-        .filtros-andamento .btn-limpar-filtros {
-            background: white; border: 1px solid #0ea5e9; color: #0284c7;
-            font-size: 12px; padding: 4px 12px; border-radius: 20px;
-            transition: all 0.2s; font-weight: 600;
-        }
-        .filtros-andamento .btn-limpar-filtros:hover { background: #0ea5e9; color: white; }
-        .filtros-andamento .btn-limpar-filtros:disabled { opacity: 0.5; cursor: not-allowed; }
-        .filtro-avancado-toggle {
-            background: transparent; border: 1px dashed #0ea5e9; color: #0284c7;
-            font-size: 12px; padding: 6px 12px; border-radius: 8px;
-            width: 100%; margin-top: 8px; transition: all 0.2s; font-weight: 600;
-        }
-        .filtro-avancado-toggle:hover { background: #e0f2fe; }
-        .chips-filtros-ativos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-        .chip-filtro {
-            background: #0284c7; color: white; font-size: 11px;
-            padding: 4px 10px; border-radius: 20px;
-            display: inline-flex; align-items: center; gap: 6px; font-weight: 600;
-        }
-        .chip-filtro i.fa-times { cursor: pointer; opacity: 0.8; font-size: 10px; }
-        .chip-filtro i.fa-times:hover { opacity: 1; }
-        .estado-vazio-filtro { text-align: center; padding: 40px 20px; color: #9ca3af; }
-        .estado-vazio-filtro i { font-size: 48px; color: #cbd5e1; margin-bottom: 12px; display: block; }
-        .estado-vazio-filtro p { margin: 0; font-size: 14px; }
-        .estado-vazio-filtro .btn { margin-top: 12px; }
-        .list-group-item.filtrado { animation: fadeInItem 0.3s ease-out; }
-        @keyframes fadeInItem {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* ============================================ */
-        /* CHECKBOX DE ASSINATURA VIA QR CODE            */
-        /* ============================================ */
-        .checkbox-assinatura-box {
-            background: #f0f9ff;
-            border: 2px solid #bae6fd;
-            border-radius: 12px;
-            padding: 16px;
-            transition: all 0.2s;
-        }
-        .checkbox-assinatura-box:hover {
-            border-color: #0ea5e9;
-            background: #e0f2fe;
-        }
-        .checkbox-assinatura-box .form-check-input {
-            width: 22px;
-            height: 22px;
-            margin-top: 2px;
-            cursor: pointer;
-            border: 2px solid #0ea5e9;
-        }
-        .checkbox-assinatura-box .form-check-input:checked {
-            background-color: #0ea5e9;
-            border-color: #0ea5e9;
-        }
-        .checkbox-assinatura-box .form-check-label {
-            cursor: pointer;
-            font-size: 15px;
-            color: #075985;
-            margin-left: 8px;
-        }
-
-        /* MODAL QR CODE ASSINATURA */
-        @keyframes spinQR { to { transform: rotate(360deg); } }
-        #modalAssinaturaQR .modal-content { border: none; overflow: hidden; }
-        #modalAssinaturaQR img#qrCodeImage { image-rendering: pixelated; }
-        .btn-copiar-link {
-            background: #f1f5f9;
-            border: 1px solid #cbd5e0;
-            color: #475569;
-            border-radius: 10px;
-            padding: 8px 16px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-copiar-link:hover { background: #e2e8f0; border-color: #94a3b8; }
-
-        /* 🆕 CARD DE ATENDIMENTOS +24H */
-        .metric-card.metric-card-alerta {
-            border-left: 4px solid #dc2626 !important;
-            position: relative;
-        }
-        .metric-card.metric-card-alerta .metric-value { color: #dc2626 !important; }
-        .metric-card.metric-card-alerta .metric-label { color: #991b1b !important; font-weight: 700; }
-        .metric-card.metric-card-alerta.tem-alerta { animation: pulsaAlerta 2s infinite; }
-        @keyframes pulsaAlerta {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
-            50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
-        }
-
-        /* ============================================ */
-        /* 🆕 MÚLTIPLOS PARTICIPANTES                   */
-        /* ============================================ */
-        .participantes-container {
-            background: #f8fafc;
-            border: 2px dashed #cbd5e0;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-        .participante-card {
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 10px;
-            position: relative;
-        }
-        .participante-card:last-child { margin-bottom: 0; }
-        .participante-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .participante-titulo {
-            font-weight: 700;
-            color: #0ea5e9;
-            font-size: 13px;
-        }
-        .btn-remover-participante {
-            background: #fee2e2;
-            color: #dc2626;
-            border: none;
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-remover-participante:hover {
-            background: #dc2626;
-            color: white;
-        }
-        .btn-adicionar-participante {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 10px 20px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-        .btn-adicionar-participante:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-        }
-        .participante-status-assinatura {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            margin-top: 8px;
-        }
-        .participante-status-assinatura.aguardando {
-            background: #fef3c7;
-            color: #92400e;
-        }
-        .participante-status-assinatura.assinado {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        .participante-status-assinatura .btn-reabrir-qr {
-            background: #f59e0b;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 4px 10px;
-            font-size: 11px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        @media (max-width: 768px) {
-            .filtros-andamento { padding: 12px; }
-        }
-    </style>
 </head>
 <body>
     <div class="container">
@@ -320,25 +53,25 @@
                     <div class="notificacoes-dropdown" id="notificacoesDropdown">
                         <div class="notificacoes-header">
                             <h3>
-                                <i class="fas fa-bell" style="color: #0ea5e9;"></i>
+                                <i class="fas fa-bell icon-primary"></i>
                                 Notificações
                             </h3>
-                            <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                            <div class="notificacoes-acoes">
+                                <button onclick="marcarTodasLidas()" class="btn-notif-acao" title="Marcar todas as notificações como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                <button onclick="limparMinhasNotificacoes(event)" class="btn-notif-acao" title="Excluir todas as notificações">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="fecharNotificacoes()" class="btn-notif-fechar">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <div id="notificacoesLista" style="max-height: 500px; overflow-y: auto;">
-                            <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <div id="notificacoesLista" class="notificacoes-lista">
+                            <div class="notificacoes-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
                                 <p>Carregando...</p>
                             </div>
                         </div>
@@ -352,13 +85,7 @@
                 </div>
 
                 <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" 
-                   target="_blank" class="btn-icon" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 50%; width: 45px; height: 45px;
-                    display: inline-flex; align-items: center; justify-content: center;
-                    text-decoration: none; color: white; transition: all 0.3s;
-                    border: none; cursor: pointer;
-                " title="Baixar App">
+                   target="_blank" class="btn-icon btn-download-app" title="Baixar App">
                     <i class="fas fa-download"></i>
                 </a>
                 <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
@@ -582,16 +309,14 @@
                                           placeholder="Informações complementares..."></textarea>
                             </div>
 
-                            <!-- ============================================ -->
-                            <!-- 🆕 CHECKBOX: MAIS PARTICIPANTES              -->
-                            <!-- ============================================ -->
-                            <div class="checkbox-assinatura-box mb-3" style="background: #f0fdf4; border-color: #86efac;">
+                            <!-- Checkbox: Mais participantes -->
+                            <div class="checkbox-assinatura-box checkbox-participantes mb-3">
                                 <div class="form-check d-flex align-items-start">
                                     <input class="form-check-input" 
                                         type="checkbox" 
                                         id="supervisaoMaisParticipantes" 
                                         onchange="toggleMaisParticipantes()">
-                                    <label class="form-check-label fw-bold" for="supervisaoMaisParticipantes" style="color: #065f46;">
+                                    <label class="form-check-label fw-bold label-participantes" for="supervisaoMaisParticipantes">
                                         <i class="fas fa-users"></i> Mais pessoas participaram do atendimento?
                                     </label>
                                 </div>
@@ -604,27 +329,35 @@
                             <!-- Container de Participantes -->
                             <div id="containerParticipantes" style="display: none;">
                                 <div class="participantes-container">
-                                    <h6 style="color: #065f46; margin-bottom: 12px;">
+                                    <h6 class="titulo-participantes">
                                         <i class="fas fa-user-plus"></i> Participantes do Atendimento
                                     </h6>
                                     
                                     <div id="listaParticipantesAdicionados"></div>
                                     
                                     <!-- Formulário para adicionar novo participante -->
-                                    <div id="formNovoParticipante" style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-top: 10px;">
-                                        <h6 style="font-size: 13px; color: #0ea5e9; margin-bottom: 12px;">
+                                    <div id="formNovoParticipante" class="form-novo-participante">
+                                        <h6 class="titulo-add-participante">
                                             <i class="fas fa-plus-circle"></i> Adicionar Participante
                                         </h6>
                                         
                                         <div class="row g-2 mb-2">
                                             <div class="col-md-6">
-                                                <label class="form-label" style="font-size: 12px; font-weight: 600;">Perfil <span class="text-danger">*</span></label>
-                                                <select id="participantePerfil" class="form-select form-select-sm" onchange="carregarUsuariosPorPerfil()">
-                                                    <option value="">Selecione o perfil...</option>
-                                                </select>
+                                                <label class="form-label label-participante">Perfil <span class="text-danger">*</span></label>
+                                                <div class="input-group input-group-sm">
+                                                    <select id="participantePerfil" class="form-select form-select-sm" onchange="carregarUsuariosPorPerfil()">
+                                                        <option value="">Selecione o perfil...</option>
+                                                    </select>
+                                                    <button type="button" 
+                                                            class="btn btn-refresh-perfis" 
+                                                            onclick="recarregarPerfisParticipantes(event)" 
+                                                            title="Recarregar lista de perfis">
+                                                        <i class="fas fa-sync-alt"></i>
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div class="col-md-6">
-                                                <label class="form-label" style="font-size: 12px; font-weight: 600;">Usuário <span class="text-danger">*</span></label>
+                                                <label class="form-label label-participante">Usuário <span class="text-danger">*</span></label>
                                                 <select id="participanteUsuario" class="form-select form-select-sm" onchange="onParticipanteUsuarioChange()" disabled>
                                                     <option value="">Selecione o perfil primeiro...</option>
                                                 </select>
@@ -634,13 +367,13 @@
                                         <!-- Filtro dinâmico: Turma (se aluno) ou Eixo (se professor) -->
                                         <div class="row g-2 mb-2" id="rowParticipanteFiltro" style="display: none;">
                                             <div class="col-md-6">
-                                                <label class="form-label" style="font-size: 12px; font-weight: 600;" id="labelParticipanteFiltro">Turma</label>
+                                                <label class="form-label label-participante" id="labelParticipanteFiltro">Turma</label>
                                                 <select id="participanteFiltro" class="form-select form-select-sm">
                                                     <option value="">Selecione...</option>
                                                 </select>
                                             </div>
                                             <div class="col-md-6 d-flex align-items-end">
-                                                <button type="button" class="btn btn-success btn-sm w-100" onclick="adicionarParticipante()" style="border-radius: 8px;">
+                                                <button type="button" class="btn btn-success btn-sm w-100 btn-add-participante" onclick="adicionarParticipante()">
                                                     <i class="fas fa-plus"></i> Adicionar
                                                 </button>
                                             </div>
@@ -649,9 +382,7 @@
                                 </div>
                             </div>
 
-                            <!-- ============================================ -->
-                            <!-- 🔥 CHECKBOX DE ASSINATURA VIA QR CODE          -->
-                            <!-- ============================================ -->
+                            <!-- Checkbox de assinatura via QR Code -->
                             <div class="checkbox-assinatura-box mb-3">
                                 <div class="form-check d-flex align-items-start">
                                     <input class="form-check-input" 
@@ -792,7 +523,6 @@
                     <!-- ABA DASHBOARD -->
                     <div class="tab-pane fade" id="dashboard" role="tabpanel">
 
-                        <!-- 🆕 ALERTA DE ATENDIMENTOS +24H -->
                         <div id="alertaAtendimentosAntigos" style="display: none;"></div>
 
                         <div class="row mb-4">
@@ -825,14 +555,12 @@
                                 </div>
                             </div>
 
-                            <!-- 🆕 CARD DE ATENDIMENTOS +24H -->
                             <div class="col-md-6 col-lg-4 mb-3">
                                 <div class="metric-card metric-card-alerta" id="cardAtendimentosAntigos">
-                                    <i class="fas fa-exclamation-triangle fa-2x mb-2" style="color: #dc2626;"></i>
+                                    <i class="fas fa-exclamation-triangle fa-2x mb-2 icon-perigo"></i>
                                     <div class="metric-value" id="totalAtendimentosAntigos">0</div>
                                     <div class="metric-label">Há +24h Abertos</div>
-                                    <span class="badge bg-danger" id="badgeAtendimentosAntigos" 
-                                          style="display: none; position: absolute; top: 8px; right: 8px;">0</span>
+                                    <span class="badge bg-danger badge-alerta-canto" id="badgeAtendimentosAntigos">0</span>
                                 </div>
                             </div>
                         </div>
@@ -877,7 +605,7 @@
                         </div>
 
                         <div class="card" id="cardConcluidos">
-                            <div class="card-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                            <div class="card-header card-header-concluidos">
                                 <div>
                                     <i class="fas fa-archive"></i> 
                                     <strong>Atendimentos Concluídos</strong>
@@ -940,7 +668,7 @@
                             </div>
                         </div>
 
-                        <div class="card mt-4" style="border-left: 4px solid #dc2626;">
+                        <div class="card mt-4 card-acoes-massa">
                             <div class="card-body">
                                 <h6 class="text-danger mb-3">
                                     <i class="fas fa-exclamation-triangle"></i> Ações em Massa

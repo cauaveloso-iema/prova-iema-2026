@@ -1148,6 +1148,10 @@ app.use('/api/biblioteca-publica', require('./routes/biblioteca-publica'));
 // ---------- Secretaria ----------
 app.use('/api/secretaria', require('./routes/secretaria'));
 
+// ---------- Recepcao ----------
+const recepcaoRoutes = require('./routes/recepcao-routes');
+app.use('/api/recepcao', recepcaoRoutes);
+
 // ---------- Sessões de Assinatura ----------
 app.use('/api/sessoes-assinatura', require('./routes/sessao-assinatura-routes'));
 

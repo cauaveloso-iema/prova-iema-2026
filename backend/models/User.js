@@ -82,7 +82,7 @@ const UserSchema = new mongoose.Schema({
   
   role: {
     type: String,
-    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria'],
+    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria','recepcao'],
     default: 'aluno'
   },
 
@@ -116,7 +116,8 @@ const UserSchema = new mongoose.Schema({
   genero: {
     type: String,
     enum: ['masculino', 'feminino', 'outro', null],
-    default: null
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
   },
   
   endereco: {
@@ -204,15 +205,17 @@ const UserSchema = new mongoose.Schema({
   
   qrCodeUsuarioTipo: {
     type: String,
-    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria', null],
-    default: null
+    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria', 'recepcao', null],
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
   },
 
   // ========== PERFIL ALIMENTAR ==========
   perfilAlimentar: {
       type: String,
       enum: ['sempre', 'as_vezes', 'nunca', 'nao_informado'],
-      default: 'nao_informado'
+      default: 'nao_informado',
+      set: v => (v === '' || v === undefined) ? 'nao_informado' : v
   },
   refeicoesQueParticipa: {
       type: [String],
@@ -261,7 +264,8 @@ const UserSchema = new mongoose.Schema({
   eixo: {
     type: String,
     default: null,
-    trim: true
+    trim: true,
+    set: v => (v === '' || v === undefined) ? null : v
   },
   
   matricula: {
@@ -272,7 +276,8 @@ const UserSchema = new mongoose.Schema({
   
   turma: {
     type: String,
-    default: null
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
   },
   
   turmas: [{
@@ -286,16 +291,19 @@ const UserSchema = new mongoose.Schema({
     default: false
   },
   
+  // 🔥 CORREÇÃO: Aceita null E converte '' automaticamente para null
   condicaoAcessibilidade: {
     type: String,
     enum: ['visual', 'auditiva', 'motora', 'intelectual', 'dislexia', 'tdah', 'outra', null],
-    default: null
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
   },
   
   outraCondicao: {
     type: String,
     default: null,
-    trim: true
+    trim: true,
+    set: v => (v === '' || v === undefined) ? null : v
   },
   
   dataSolicitacaoAcessibilidade: {
@@ -309,11 +317,60 @@ const UserSchema = new mongoose.Schema({
     default: null
   },
   
-  curso: String,
-  periodo: String,
+  curso: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
   
-  departamento: String,
-  titulacao: String,
+  periodo: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
+  
+  departamento: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
+  
+  titulacao: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
+  
+  atribuicoes: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
+  
+  // ========== CAMPOS ADICIONAIS PARA PERFIS ESPECÍFICOS ==========
+  especialidade: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
+  
+  crp: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
+  
+  cress: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
+  
+  coren: {
+    type: String,
+    default: null,
+    set: v => (v === '' || v === undefined) ? null : v
+  },
   
   // ========== CAMPOS DE CONTROLE DE LOGIN E 2FA ==========
   loginAttempts: {
@@ -400,7 +457,9 @@ const UserSchema = new mongoose.Schema({
 });
 
 
-// Middleware para formatar CPF e TELEFONE antes de salvar
+// ============================================
+// MIDDLEWARE: Formatar CPF e TELEFONE antes de salvar
+// ============================================
 UserSchema.pre('save', async function(next) {
   if (this.cpf) {
     this.cpf = this.cpf.replace(/\D/g, '');
@@ -418,6 +477,41 @@ UserSchema.pre('save', async function(next) {
     }
   }
   
+  // 🔥 LIMPEZA GERAL: Converter strings vazias em null para campos opcionais
+  const camposOpcionais = [
+    'condicaoAcessibilidade',
+    'outraCondicao',
+    'genero',
+    'eixo',
+    'turma',
+    'curso',
+    'periodo',
+    'departamento',
+    'titulacao',
+    'atribuicoes',
+    'especialidade',
+    'crp',
+    'cress',
+    'coren',
+    'fotoPerfil',
+    'fotoPerfilTipo',
+    'bio',
+    'endereco',
+    'cidade',
+    'estado',
+    'cep',
+    'instagram',
+    'linkedin',
+    'website',
+    'ultimoLoginDispositivo'
+  ];
+  
+  camposOpcionais.forEach(campo => {
+    if (this[campo] === '') {
+      this[campo] = null;
+    }
+  });
+  
   if (!this.isModified('password')) return next();
   
   try {
@@ -429,7 +523,9 @@ UserSchema.pre('save', async function(next) {
   }
 });
 
-// ====== MÉTODO PARA COMPARAR SENHA ======
+// ============================================
+// MÉTODO: Comparar senha
+// ============================================
 UserSchema.methods.comparePassword = async function(candidatePassword) {
     try {
         if (!candidatePassword || typeof candidatePassword !== 'string') {
@@ -449,12 +545,16 @@ UserSchema.methods.comparePassword = async function(candidatePassword) {
     }
 };
 
-// Verificar se conta está bloqueada
+// ============================================
+// MÉTODO: Verificar se conta está bloqueada
+// ============================================
 UserSchema.methods.isLocked = function() {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 };
 
-// Incrementar tentativas de login
+// ============================================
+// MÉTODO: Incrementar tentativas de login
+// ============================================
 UserSchema.methods.incLoginAttempts = async function() {
   if (this.lockUntil && this.lockUntil < Date.now()) {
     this.loginAttempts = 1;
@@ -471,19 +571,25 @@ UserSchema.methods.incLoginAttempts = async function() {
   return await this.save();
 };
 
-// Método estático para buscar por CPF
+// ============================================
+// MÉTODO ESTÁTICO: Buscar por CPF
+// ============================================
 UserSchema.statics.findByCPF = async function(cpf) {
   const cpfNumeros = cpf.replace(/\D/g, '');
   return await this.findOne({ cpf: cpfNumeros });
 };
 
-// Método estático para buscar por Telefone
+// ============================================
+// MÉTODO ESTÁTICO: Buscar por Telefone
+// ============================================
 UserSchema.statics.findByTelefone = async function(telefone) {
   const telefoneNumeros = telefone.replace(/\D/g, '');
   return await this.findOne({ telefone: telefoneNumeros });
 };
 
-// Virtual para CPF formatado
+// ============================================
+// VIRTUAL: CPF formatado
+// ============================================
 UserSchema.virtual('cpfFormatado').get(function() {
   if (!this.cpf) return '';
   
@@ -493,7 +599,9 @@ UserSchema.virtual('cpfFormatado').get(function() {
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
 });
 
-// Virtual para Telefone formatado
+// ============================================
+// VIRTUAL: Telefone formatado
+// ============================================
 UserSchema.virtual('telefoneFormatado').get(function() {
   if (!this.telefone) return '';
   
@@ -508,11 +616,15 @@ UserSchema.virtual('telefoneFormatado').get(function() {
   return telefone;
 });
 
-// Configurar para incluir virtuais no JSON
+// ============================================
+// CONFIGURAÇÃO: Incluir virtuais no JSON
+// ============================================
 UserSchema.set('toJSON', { virtuals: true });
 UserSchema.set('toObject', { virtuals: true });
 
-// Índices para melhor performance
+// ============================================
+// ÍNDICES para melhor performance
+// ============================================
 UserSchema.index({ email: 1 });
 UserSchema.index({ cpf: 1 });
 UserSchema.index({ telefone: 1 });

@@ -37,6 +37,10 @@ let __concluidosPorPagina = 10;
 let __concluidosTotal = 0;
 let __concluidosDados = [];
 
+// Cache de perfis de participantes (TTL de 1 minuto)
+let __perfisCache = { dados: null, timestamp: 0 };
+const PERFIS_CACHE_TTL_MS = 60 * 1000; // 1 minuto
+
 // ============================================
 // ESTADO DOS PARTICIPANTES DO ATENDIMENTO
 // ============================================
@@ -504,43 +508,96 @@ function toggleMaisParticipantes() {
 
 /**
  * Carrega perfis disponíveis (sem admins).
+ * 
+ * Usa cache em memória com TTL de 1 minuto.
+ * Para forçar refresh, passe `forceRefresh = true` ou chame `recarregarPerfisParticipantes()`.
  */
-async function carregarPerfisParticipantes() {
+async function carregarPerfisParticipantes(forceRefresh = false) {
     const select = safeGet('participantePerfil');
     if (!select) return;
     
-    // Se já foi carregado, não recarrega
-    if (select.dataset.carregado === 'true') return;
+    const agora = Date.now();
+    const cacheValido = !forceRefresh && 
+                        __perfisCache.dados && 
+                        (agora - __perfisCache.timestamp < PERFIS_CACHE_TTL_MS);
     
-    const perfisFallback = [
-        { valor: 'professor', label: 'Professor', temFiltro: 'eixo', filtroLabel: 'Eixo' },
-        { valor: 'aluno', label: 'Aluno', temFiltro: 'turma', filtroLabel: 'Turma' },
-        { valor: 'supervisao', label: 'Supervisão', temFiltro: null, filtroLabel: null },
-        { valor: 'gestao_geral', label: 'Gestão Geral', temFiltro: null, filtroLabel: null },
-        { valor: 'psicologia', label: 'Psicologia', temFiltro: null, filtroLabel: null },
-        { valor: 'assistente_social', label: 'Assistente Social', temFiltro: null, filtroLabel: null },
-        { valor: 'biblioteca', label: 'Biblioteca', temFiltro: null, filtroLabel: null }
-    ];
+    // ─── Usa cache se ainda válido ───
+    if (cacheValido) {
+        const restante = Math.round((PERFIS_CACHE_TTL_MS - (agora - __perfisCache.timestamp)) / 1000);
+        console.log(`📦 [PERFIS] Usando cache (expira em ${restante}s)`);
+        __perfisDisponiveis = __perfisCache.dados;
+        renderizarSelectPerfis();
+        return;
+    }
+    
+    // ─── Busca do servidor ───
+    console.log('🌐 [PERFIS] Buscando do servidor...');
+    select.innerHTML = '<option value="">Carregando perfis...</option>';
+    select.disabled = true;
     
     try {
         const response = await fetch('/api/supervisao/perfis-participantes', {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Cache-Control': 'no-cache'
+            }
         });
         const data = await response.json();
         
-        __perfisDisponiveis = (data.success && Array.isArray(data.perfis) && data.perfis.length > 0)
-            ? data.perfis
-            : perfisFallback;
+        __perfisDisponiveis = (data.success && Array.isArray(data.perfis)) ? data.perfis : [];
+        __perfisCache = { dados: __perfisDisponiveis, timestamp: agora };
+        
+        console.log(`✅ [PERFIS] ${__perfisDisponiveis.length} perfis carregados`);
     } catch (error) {
-        console.error('Erro ao carregar perfis:', error);
-        __perfisDisponiveis = perfisFallback;
+        console.error('❌ [PERFIS] Erro ao carregar:', error);
+        __perfisDisponiveis = [];
     }
+    
+    renderizarSelectPerfis();
+}
+
+/**
+ * Renderiza os perfis no select (separado para reuso).
+ */
+function renderizarSelectPerfis() {
+    const select = safeGet('participantePerfil');
+    if (!select) return;
     
     select.innerHTML = '<option value="">Selecione o perfil...</option>';
     __perfisDisponiveis.forEach(p => {
         select.innerHTML += `<option value="${escapeHTML(p.valor)}">${escapeHTML(p.label)}</option>`;
     });
-    select.dataset.carregado = 'true';
+    select.disabled = false;
+}
+
+/**
+ * Força recarregamento dos perfis (ignora cache).
+ * Usado pelo botão de refresh no HTML.
+ */
+async function recarregarPerfisParticipantes(event) {
+    const btn = event?.target?.closest('button') 
+             || document.querySelector('button[onclick*="recarregarPerfisParticipantes"]');
+    
+    if (btn) {
+        btn.disabled = true;
+        const iconOriginal = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i>';
+        
+        try {
+            await carregarPerfisParticipantes(true);
+            notificar('✅ Perfis atualizados!', 'success');
+        } catch (error) {
+            notificar('❌ Erro ao recarregar perfis', 'error');
+        } finally {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = iconOriginal;
+            }, 500);
+        }
+    } else {
+        await carregarPerfisParticipantes(true);
+        notificar('✅ Perfis atualizados!', 'success');
+    }
 }
 
 /**
@@ -2030,15 +2087,12 @@ async function carregarPerfisEditParticipante() {
     const select = safeGet('editParticipantePerfil');
     if (!select) return;
     
-    if (select.dataset.carregado === 'true') return;
-    
     await carregarPerfisParticipantes();
     
     select.innerHTML = '<option value="">Selecione o perfil...</option>';
     __perfisDisponiveis.forEach(p => {
         select.innerHTML += `<option value="${escapeHTML(p.valor)}">${escapeHTML(p.label)}</option>`;
     });
-    select.dataset.carregado = 'true';
 }
 
 async function carregarUsuariosEditParticipante() {
@@ -5913,3 +5967,6 @@ window.formatarTempoAtendimentoFront = formatarTempoAtendimentoFront;
 
 window.abrirExclusaoEmMassa = abrirExclusaoEmMassa;
 window.confirmarExclusaoMassa = confirmarExclusaoMassa;
+
+window.recarregarPerfisParticipantes = recarregarPerfisParticipantes;
+window.renderizarSelectPerfis = renderizarSelectPerfis;

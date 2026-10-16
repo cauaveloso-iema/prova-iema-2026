@@ -881,7 +881,8 @@ class AdminSimples {
             'assistente-social': todosUsuarios.filter(u => u.role === 'assistente-social').length,
             protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: todosUsuarios.filter(u => u.role === 'biblioteca').length,
-            secretaria: todosUsuarios.filter(u => u.role === 'secretaria').length
+            secretaria: todosUsuarios.filter(u => u.role === 'secretaria').length,
+            recepcao: todosUsuarios.filter(u => u.role === 'recepcao').length
         };
 
         // Estado
@@ -1047,6 +1048,12 @@ class AdminSimples {
                             style="padding:12px;border:2px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;text-align:left;">
                             <div style="font-weight:700;color:#059669;font-size:0.9rem;">🎓 Secretaria</div>
                             <div style="font-size:0.75rem;color:#6b7280;margin-top:3px;">${c.secretaria} usuários</div>
+                        </button>
+                        <button type="button" class="perfil-notif-btn" data-role="recepcao"
+                            onclick="adminSimples.filtrarNotificacaoPorRole('recepcao')"
+                            style="padding:12px;border:2px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;text-align:left;">
+                            <div style="font-weight:700;color:#0891b2;font-size:0.9rem;">🛎️ Recepção</div>
+                            <div style="font-size:0.75rem;color:#6b7280;margin-top:3px;">${c.recepcao} usuários</div>
                         </button>
                     </div>
                 </div>
@@ -1315,7 +1322,8 @@ class AdminSimples {
             'setor_pedagogico': '👩‍🏫', 'coordenacao_patio': '🏃', 'cozinha': '🍽️',
             'gestao_geral': '📊', 'enfermaria': '🏥', 'supervisao': '🛡️',
             'psicologia': '🧠', 'assistente-social': '🤝', 'protagonismo': '⭐',
-            'biblioteca': '📚', 'secretaria': '🎓'
+            'biblioteca': '📚', 'secretaria': '🎓',
+            'recepcao': '🛎️'
         };
         return icons[role] || '👤';
     }
@@ -1348,7 +1356,8 @@ class AdminSimples {
             'gestao_geral': '📊 Gestão Geral', 'enfermaria': '🏥 Enfermaria',
             'supervisao': '🛡️ Supervisão', 'psicologia': '🧠 Psicologia',
             'assistente-social': '🤝 Assistente Social', 'protagonismo': '⭐ Protagonismo',
-            'biblioteca': '📚 Biblioteca', 'secretaria': '🎓 Secretaria'
+            'biblioteca': '📚 Biblioteca', 'secretaria': '🎓 Secretaria',
+            'recepcao': '🛎️ Recepção', 'recepcao': '🛎️ Recepção',
         };
 
         const infoEl = document.getElementById('infoDestinatariosNotificacao');
@@ -1984,6 +1993,7 @@ class AdminSimples {
                             <option value="protagonismo">Protagonismo</option>
                             <option value="biblioteca">Biblioteca</option>
                             <option value="secretaria">Secretaria</option>
+                            <option value="recepcao">Recepção</option>
                             <option value="admin">Admins</option>
                         </select>
                     </div>
@@ -2063,7 +2073,8 @@ class AdminSimples {
                 'assistente-social': { class: 'assistente-social', icon: 'fa-hands-helping', label: 'Assistente Social' },
                 'protagonismo': { class: 'protagonismo', icon: 'fa-star', label: 'Protagonismo' },
                 'biblioteca': { class: 'biblioteca', icon: 'fa-book-reader', label: 'Biblioteca' },
-                'secretaria': { class: 'secretaria', icon: 'fa-graduation-cap', label: 'Secretaria' }
+                'secretaria': { class: 'secretaria', icon: 'fa-graduation-cap', label: 'Secretaria' },
+                'recepcao': { class: 'recepcao', icon: 'fa-concierge-bell', label: 'Recepção' }
             };
 
             const roleInfo = roleMap[u.role] || { class: '', icon: 'fa-user', label: u.role || 'Desconhecido' };
@@ -2639,6 +2650,7 @@ class AdminSimples {
                             <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
                             <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>Biblioteca</option>
                             <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>Secretaria</option>
+                            <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>Recepção</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -2822,7 +2834,8 @@ class AdminSimples {
             'assistente-social': 'assistenteSocialFields',
             'protagonismo': 'protagonismoFields',
             'biblioteca': 'bibliotecaFields',
-            'secretaria': 'secretariaFields'
+            'secretaria': 'secretariaFields',
+            'recepcao': 'recepcaoFields'
         };
         Object.entries(map).forEach(([roleKey, fieldId]) => {
             const el = document.getElementById(fieldId);
@@ -2838,7 +2851,7 @@ class AdminSimples {
             'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria',
             'supervisao': 'Supervisão', 'psicologia': 'Psicologia',
             'assistente-social': 'Assistente Social', 'protagonismo': 'Protagonismo',
-            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria'
+            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção'
         };
         return labels[role] || role || 'Desconhecido';
     }
@@ -2851,7 +2864,7 @@ class AdminSimples {
             'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria',
             'supervisao': 'Supervisão', 'psicologia': 'Psicologia',
             'assistente-social': 'Assist. Social', 'protagonismo': 'Protagonismo',
-            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria'
+            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção'
         };
         return labels[role] || role;
     }
@@ -2871,6 +2884,7 @@ class AdminSimples {
             'protagonismo': '⭐ Protagonismo',
             'biblioteca': '📚 Biblioteca',
             'secretaria': '🎓 Secretaria',
+            'recepcao': '🛎️ Recepção',
             'admin': '👑 Área Administrativa',
             'super_admin': '⭐ Super Administrador'
         };
@@ -2920,7 +2934,7 @@ class AdminSimples {
                 dados.refeicoesQueParticipa = refeicoes;
             } else if (roleSelecionada === 'professor') {
                 dados.eixo = document.getElementById('eixoUsuario')?.value || '';
-            } else if (roleSelecionada === 'biblioteca' || roleSelecionada === 'secretaria') {
+            } else if (roleSelecionada === 'biblioteca' || roleSelecionada === 'secretaria ||') {
                 dados.departamento = document.getElementById('departamentoUsuario')?.value || '';
                 dados.matricula = document.getElementById('matriculaUsuario')?.value || '';
             }

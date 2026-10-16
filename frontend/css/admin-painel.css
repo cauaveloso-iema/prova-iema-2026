@@ -6803,3 +6803,8 @@ body {
     z-index: 10 !important;
     pointer-events: auto !important;
 }
+
+.role-badge.recepcao {
+    background: #cffafe;
+    color: #0891b2;
+}

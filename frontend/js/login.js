@@ -290,6 +290,7 @@ function obterDestinoPorPerfil(role) {
         'assistente-social': '/assistente-social.html',
         'protagonismo': '/protagonismo.html',
         'secretaria': '/secretaria.html',
+        'recepcao': '/recepcao.html',
         'aluno': '/aluno.html'
     };
     return redirectMap[role] || '/login.html';

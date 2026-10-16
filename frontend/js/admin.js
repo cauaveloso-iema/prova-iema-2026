@@ -253,6 +253,7 @@ class AdminPanel {
             'total-protagonismo': stats.totalProtagonismo,
             'total-biblioteca': stats.totalBiblioteca,
             'total-secretaria': stats.totalSecretaria,
+            'total-recepcao': stats.totalRecepcao,
             
             // Turmas
             'total-turmas': stats.totalTurmas,
@@ -478,6 +479,7 @@ class AdminPanel {
             'permissoes-especiais': 'Permissões Especiais',
             'qrcode-management': 'Gerenciamento de QR Codes',
             'secretaria': 'Painel da Secretaria',
+            'recepcao': 'Painel da Recepção',
             'admin-simples': 'Admin Simples'
         };
         
@@ -710,6 +712,9 @@ class AdminPanel {
                 break;
             case 'secretaria':
                 await this.loadSecretaria();       
+                break;
+            case 'recepcao':
+                await this.loadRecepcao();
                 break;
             case 'eixos':
                 await this.loadEixos();
@@ -1175,7 +1180,8 @@ class AdminPanel {
                 'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
                 protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
                 biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
-                secretaria: usuarios.filter(u => u.role === 'secretaria').length
+                secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+                recepcao: usuarios.filter(u => u.role === 'recepcao').length  
             };
             
             // Buscar dispositivo
@@ -1286,6 +1292,10 @@ class AdminPanel {
                                     style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #10b981;">
                                     🎓 Secretaria (${contagemPorPerfil.secretaria || 0})
                                 </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="recepcao" onclick="admin.filtrarVincularPorRole('recepcao')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #0891b2;">
+                                    🛎️ Recepção (${contagemPorPerfil.recepcao || 0})
+                                </button>
                             </div>
                         </div>
                         
@@ -1378,7 +1388,8 @@ class AdminPanel {
             'assistente-social': 'Assist. Social',
             'protagonismo': 'Protagonismo',
             'biblioteca': 'Biblioteca',
-            'secretaria': 'Secretaria'
+            'secretaria': 'Secretaria',
+            'recepcao': 'Recepção',
         };
         return labels[role] || role;
     }
@@ -2295,6 +2306,7 @@ class AdminPanel {
             
             // Contar dispositivos não vinculados
             const naoVinculados = this.onesignalDispositivos?.filter(d => d.status === 'nao_vinculado') || [];
+            const usuariosRecepcao = todosUsuarios.filter(u => u.role === 'recepcao').length;
             
             const modalBody = document.getElementById('modalBody');
             modalBody.innerHTML = `
@@ -3084,6 +3096,7 @@ class AdminPanel {
                 { id: 'total-protagonismo', label: 'Protagonismo', valor: stats.totalProtagonismo, icone: '⭐', cor: '#ea580c' },
                 { id: 'total-biblioteca', label: 'Biblioteca', valor: stats.totalBiblioteca, icone: '📚', cor: '#0ea5e9' },
                 { id: 'total-secretaria', label: 'Secretaria', valor: stats.totalSecretaria, icone: '🎓', cor: '#10b981' },
+                { id: 'total-recepcao', label: 'Recepção', valor: stats.totalRecepcao, icone: '🛎️', cor: '#0891b2' },
             ];
 
             contentArea.innerHTML = `
@@ -3924,6 +3937,7 @@ class AdminPanel {
                                 <option value="protagonismo">⭐ Protagonismo</option>
                                 <option value="biblioteca">📚 Biblioteca</option>
                                 <option value="secretaria">🎓 Secretaria</option>
+                                <option value="recepcao">🛎️ Recepção</option>
                             </select>
                         </div>
                         
@@ -4539,6 +4553,7 @@ class AdminPanel {
                                 <option value="protagonismo">⭐ Protagonismo</option>
                                 <option value="biblioteca">📚 Biblioteca</option>
                                 <option value="secretaria">🎓 Secretaria</option>
+                                <option value="recepcao">🛎️ Recepcao</option>
                             </select>
                             
                             <select id="onlineFiltroTurma" class="online-select" onchange="admin.filtrarUsuariosOnline()" ${turmasUnicas.length === 0 ? 'disabled' : ''}>
@@ -4934,6 +4949,14 @@ class AdminPanel {
                 corBg: '#d1fae5', 
                 corTexto: '#065f46',
                 corGradiente: 'linear-gradient(135deg, #10b981, #059669)'
+            },
+
+            'recepcao': { 
+                icone: '🛎️', 
+                label: 'Recepção', 
+                corBg: '#cffafe', 
+                corTexto: '#0891b2',
+                corGradiente: 'linear-gradient(135deg, #0891b2, #06b6d4)'
             }
         };
         
@@ -5066,7 +5089,7 @@ class AdminPanel {
                 setor_pedagogico: 0, coordenacao_patio: 0, cozinha: 0,
                 gestao_geral: 0, enfermaria: 0, supervisao: 0,
                 psicologia: 0, 'assistente-social': 0, protagonismo: 0,
-                biblioteca: 0, secretaria: 0
+                biblioteca: 0, secretaria: 0, recepcao: 0
             };
 
             usuariosParaStats.forEach(u => {
@@ -5123,7 +5146,8 @@ class AdminPanel {
             'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
-            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
         return `
@@ -5286,6 +5310,7 @@ class AdminPanel {
                                 <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>🎓 Secretaria</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
                                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
+                                <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>🛎️ Recepção</option>
                             </select>
                         </div>
                         
@@ -10200,7 +10225,8 @@ class AdminPanel {
             'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
-            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
         const perfis = [
@@ -10217,7 +10243,8 @@ class AdminPanel {
             { role: 'assistente-social', label: 'Assist. Social', icon: '🤝', cor: '#7c3aed', bg: '#ede9fe' },
             { role: 'protagonismo', label: 'Protagonismo', icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
             { role: 'biblioteca', label: 'Biblioteca', icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
-            { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' }
+            { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' },
+            { role: 'recepcao', label: 'Recepção', icon: '🛎️', cor: '#0891b2', bg: '#cffafe' }
         ];
         
         const modalBody = document.getElementById('modalBody');
@@ -10445,7 +10472,8 @@ class AdminPanel {
             'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
-            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
         // Atualizar os cards por ID
@@ -10466,7 +10494,8 @@ class AdminPanel {
             'assistenteSocialCard': contagem['assistente-social'],
             'protagonismoCard': contagem.protagonismo,
             'bibliotecaCard': contagem.biblioteca,
-            'secretariaCard': contagem.secretaria
+            'secretariaCard': contagem.secretaria,
+            'recepcaoCard': contagem.recepcao
         };
         
         for (const [id, valor] of Object.entries(updates)) {
@@ -10659,7 +10688,9 @@ class AdminPanel {
         }
 
         return usuarios.map(user => {
-            // Badge do perfil - ATUALIZADO COM NOVOS PERFIS
+            // ============================================
+            // BADGE DO PERFIL - COM TODOS OS PERFIS
+            // ============================================
             let roleBadge = '';
             if (user.role === 'aluno') {
                 roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
@@ -10691,6 +10722,8 @@ class AdminPanel {
                 roleBadge = '<span class="role-badge biblioteca"><i class="fas fa-book-reader"></i> Biblioteca</span>'
             } else if (user.role === 'secretaria') {
                 roleBadge = '<span class="role-badge secretaria"><i class="fas fa-graduation-cap"></i> Secretaria</span>'
+            } else if (user.role === 'recepcao') {
+                roleBadge = '<span class="role-badge recepcao"><i class="fas fa-concierge-bell"></i> Recepção</span>';
             } else {
                 roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
             }
@@ -10760,10 +10793,18 @@ class AdminPanel {
                 }
             }
             
-            // Informações extras (turma para alunos)
+            // ============================================
+            // INFORMAÇÕES EXTRAS (por perfil)
+            // ============================================
             let extraInfo = '';
+            
             if (user.role === 'aluno' && user.turma) {
                 extraInfo = `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${user.turma}</div>`;
+            }
+            
+            // 🔥 EIXO DINÂMICO para professores
+            if (user.role === 'professor' && user.eixo) {
+                extraInfo += `<div style="font-size: 11px; color: #f59e0b; margin-top: 4px;"><i class="fas fa-sitemap"></i> ${user.eixo}</div>`;
             }
             
             return `
@@ -10788,7 +10829,6 @@ class AdminPanel {
                             <button class="btn-icon" onclick="admin.editarUsuario('${user._id}')" title="Editar">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <!-- 🔥 BOTÃO QR CODE -->
                             <button class="btn-icon" onclick="admin.visualizarQRCodeUsuario('${user._id}')" title="Ver QR Code do usuário">
                                 <i class="fas fa-qrcode" style="color: #8b5cf6;"></i>
                             </button>
@@ -10829,7 +10869,8 @@ class AdminPanel {
             'assistente-social': usuarios.filter(u => u.role === 'assistente-social').length,
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
-            secretaria: usuarios.filter(u => u.role === 'secretaria').length
+            secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
         const perfis = [
@@ -10846,7 +10887,8 @@ class AdminPanel {
             { role: 'assistente-social', label: 'Assist. Social', icon: '🤝', cor: '#7c3aed', bg: '#ede9fe' },
             { role: 'protagonismo', label: 'Protagonismo', icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
             { role: 'biblioteca', label: 'Biblioteca', icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
-            { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' }
+            { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' },
+            { role: 'recepcao', label: 'Recepção', icon: '🛎️', cor: '#0891b2', bg: '#cffafe' }
         ];
         
         const modalBody = document.getElementById('modalBody');
@@ -11096,7 +11138,8 @@ class AdminPanel {
             'assistente-social': 'Assistente Social',
             'protagonismo': 'Protagonismo',
             'biblioteca': 'Biblioteca',
-            'secretaria': 'Secretaria'
+            'secretaria': 'Secretaria',
+            'recepcao': 'Recepção'
         };
         return labels[role] || role || 'Desconhecido';
     }
@@ -11265,6 +11308,11 @@ class AdminPanel {
                     roleIcon = '🎓';                  
                     roleColor = '#10b981';            
                     roleBg = '#d1fae5';              
+                    break;
+                case 'recepcao':
+                    roleIcon = '🛎️';
+                    roleColor = '#0891b2';
+                    roleBg = '#cffafe';
                     break;                            
                 default:
                     roleIcon = '👤';
@@ -11445,6 +11493,7 @@ class AdminPanel {
                                         user.role === 'coordenacao_patio' ? 'fa-utensils' :
                                         user.role === 'cozinha' ? 'fa-kitchen-set' : 
                                         user.role === 'secretaria' ? 'fa-graduation-cap' :
+                                        user.role === 'recepcao' ? 'fas fa-concierge-bell':
                                         'fa-user-tie'}" 
                                 style="color: ${roleColor};"></i>
                                 ${user.role === 'aluno' ? 'Dados Acadêmicos' : 
@@ -11453,6 +11502,7 @@ class AdminPanel {
                                 user.role === 'coordenacao_patio' ? 'Dados da Coordenação' :
                                 user.role === 'cozinha' ? 'Dados da Cozinha' : 
                                 user.role === 'secretaria' ? 'Dados da Secretaria' :
+                                user.rolde === 'recepcao' ? 'Dados da Recepção' :
                                 'Dados Administrativos'}
                             </h3>
                             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
@@ -11518,6 +11568,21 @@ class AdminPanel {
                                         <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Nível de Acesso</div>
                                         <div style="background: #d1fae5; color: #065f46; padding: 10px 14px; border-radius: 8px; font-weight: 600; display: inline-block;">
                                             🎓 Secretaria
+                                        </div>
+                                    </div>
+                                    ` : user.role === 'recepcao' ? `
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Departamento</div>
+                                        <div style="font-weight: 600; color: #0f172a;">${user.departamento || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Matrícula</div>
+                                        <div style="font-family: monospace;">${user.matricula || '—'}</div>
+                                    </div>
+                                    <div style="grid-column: span 2;">
+                                        <div style="font-size: 0.7rem; color: #64748b; margin-bottom: 2px;">Nível de Acesso</div>
+                                        <div style="background: #cffafe; color: #0891b2; padding: 10px 14px; border-radius: 8px; font-weight: 600; display: inline-block;">
+                                            🛎️ Recepção
                                         </div>
                                     </div>
                                 ` : `
@@ -11695,7 +11760,7 @@ class AdminPanel {
 
     // ============ MODAL USUÁRIO ============
 
-    // ============ ABRIR MODAL USUÁRIO (CURSOS DO BANCO) ============
+    // ============ ABRIR MODAL USUÁRIO (CURSOS + EIXOS DO BANCO) ============
     async abrirModalUsuario(usuarioId = null) {
         let usuario = null;
         
@@ -11719,7 +11784,9 @@ class AdminPanel {
             }
         }
 
-        // Buscar cursos do banco
+        // ============================================
+        // 🔥 BUSCAR CURSOS DO BANCO
+        // ============================================
         let cursosDoBanco = [];
         
         try {
@@ -11735,6 +11802,40 @@ class AdminPanel {
             }
         } catch (error) {
             console.error('❌ Erro ao buscar cursos:', error);
+        }
+
+        // ============================================
+        // 🔥 BUSCAR EIXOS DO BANCO
+        // ============================================
+        let eixosDoBanco = [];
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/eixos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.eixos) {
+                eixosDoBanco = data.eixos;
+            }
+        } catch (error) {
+            console.error('❌ Erro ao buscar eixos:', error);
+        }
+
+        // 🔥 Fallback: se não tiver eixos no banco, usar padrão (opcional)
+        if (eixosDoBanco.length === 0) {
+            eixosDoBanco = [
+                { nome: 'natureza', label: '🌿 Ciências da Natureza', icone: 'fa-leaf', cor: '#10b981' },
+                { nome: 'humanas', label: '📜 Ciências Humanas', icone: 'fa-book', cor: '#8b5cf6' },
+                { nome: 'linguagens', label: '📚 Linguagens', icone: 'fa-language', cor: '#f59e0b' },
+                { nome: 'desenvolvimento', label: '💻 Desenvolvimento de Sistemas', icone: 'fa-code', cor: '#3b82f6' },
+                { nome: 'gestao', label: '📊 Gestão e Negócios', icone: 'fa-chart-line', cor: '#ec4899' },
+                { nome: 'turismo', label: '✈️ Turismo e Hospitalidade', icone: 'fa-plane', cor: '#06b6d4' },
+                { nome: 'ambiente', label: '🌱 Meio Ambiente', icone: 'fa-seedling', cor: '#10b981' }
+            ];
+            console.log('⚠️ Usando eixos padrão (banco vazio)');
         }
 
         const nome = usuario?.nome || '';
@@ -11757,6 +11858,9 @@ class AdminPanel {
         
         const escapeStr = (str) => String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         
+        // ============================================
+        // 🔥 GERAR OPÇÕES DE CURSOS
+        // ============================================
         const gerarOpcoesCursos = () => {
             if (!cursosDoBanco || cursosDoBanco.length === 0) {
                 return '<option value="">Nenhum curso disponível</option>';
@@ -11771,6 +11875,37 @@ class AdminPanel {
                 
                 const selected = cursoSelecionado === curso.nome ? 'selected' : '';
                 options += `<option value="${escapeStr(curso.nome)}" ${selected}>${curso.nome}</option>`;
+            });
+            
+            return options;
+        };
+
+        // ============================================
+        // 🔥 GERAR OPÇÕES DE EIXOS (DINÂMICO DO BANCO)
+        // ============================================
+        const gerarOpcoesEixos = () => {
+            if (!eixosDoBanco || eixosDoBanco.length === 0) {
+                return '<option value="">Nenhum eixo cadastrado</option>';
+            }
+            
+            let options = '<option value="">Selecione um eixo...</option>';
+            
+            // Ordenar por label/nome
+            const eixosOrdenados = [...eixosDoBanco].sort((a, b) => 
+                (a.label || a.nome).localeCompare(b.label || b.nome)
+            );
+            
+            eixosOrdenados.forEach(item => {
+                // Verificar se está ativo
+                if (item.ativo === false) return;
+                
+                // Usar o nome como valor (para compatibilidade)
+                const valor = item.nome;
+                const label = item.label || item.nome;
+                const icone = item.icone ? `<i class="fas ${item.icone}"></i> ` : '';
+                const selected = eixo === valor ? 'selected' : '';
+                
+                options += `<option value="${escapeStr(valor)}" ${selected}>${icone}${label}</option>`;
             });
             
             return options;
@@ -11809,6 +11944,7 @@ class AdminPanel {
                             <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
                             <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>Biblioteca</option>
                             <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>Secretaria</option>
+                            <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>Recepção</option>
                         </select>
                     </div>
                     
@@ -11837,7 +11973,9 @@ class AdminPanel {
                     <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
                 </div>
                 
-                <!-- Campos específicos para Aluno -->
+                <!-- ============================================ -->
+                <!-- ALUNO -->
+                <!-- ============================================ -->
                 <div id="alunoFields" class="role-specific" style="${role === 'aluno' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11889,21 +12027,24 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- Professor -->
+                <!-- ============================================ -->
+                <!-- PROFESSOR -->
+                <!-- ============================================ -->
                 <div id="professorFields" class="role-specific" style="${role === 'professor' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
                             <label><i class="fas fa-sitemap"></i> Eixo</label>
                             <select id="userEixo" class="form-control">
-                                <option value="">Selecione...</option>
-                                <option value="natureza" ${eixo === 'natureza' ? 'selected' : ''}>🌿 Natureza</option>
-                                <option value="humanas" ${eixo === 'humanas' ? 'selected' : ''}>📜 Humanas</option>
-                                <option value="linguagens" ${eixo === 'linguagens' ? 'selected' : ''}>📚 Linguagens</option>
-                                <option value="desenvolvimento" ${eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento</option>
-                                <option value="gestao" ${eixo === 'gestao' ? 'selected' : ''}>📊 Gestão</option>
-                                <option value="turismo" ${eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo</option>
-                                <option value="ambiente" ${eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente</option>
+                                ${gerarOpcoesEixos()}
                             </select>
+                            ${eixosDoBanco.length === 0 ? `
+                                <small style="color: #ef4444; font-size: 11px;">
+                                    <i class="fas fa-exclamation-triangle"></i> Nenhum eixo cadastrado. 
+                                    <a href="#" onclick="admin.closeModal(); admin.loadEixos(); return false;" style="color: #3b82f6;">
+                                        Cadastrar eixos
+                                    </a>
+                                </small>
+                            ` : ''}
                         </div>
                         <div class="form-group">
                             <label><i class="fas fa-building"></i> Departamento</label>
@@ -11916,7 +12057,9 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- Setor Pedagógico -->
+                <!-- ============================================ -->
+                <!-- SETOR PEDAGÓGICO -->
+                <!-- ============================================ -->
                 <div id="setorPedagogicoFields" class="role-specific" style="${role === 'setor_pedagogico' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11934,7 +12077,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Gestão Geral -->
+                <!-- ============================================ -->
+                <!-- GESTÃO GERAL -->
+                <!-- ============================================ -->
                 <div id="gestaoGeralFields" class="role-specific" style="${role === 'gestao_geral' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -11950,7 +12095,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Supervisão -->
+                <!-- ============================================ -->
+                <!-- SUPERVISÃO -->
+                <!-- ============================================ -->
                 <div id="supervisaoFields" class="role-specific" style="${role === 'supervisao' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11968,7 +12115,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Psicologia -->
+                <!-- ============================================ -->
+                <!-- PSICOLOGIA -->
+                <!-- ============================================ -->
                 <div id="psicologiaFields" class="role-specific" style="${role === 'psicologia' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -11998,7 +12147,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Assistente Social -->
+                <!-- ============================================ -->
+                <!-- ASSISTENTE SOCIAL -->
+                <!-- ============================================ -->
                 <div id="assistenteSocialFields" class="role-specific" style="${role === 'assistente-social' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12022,7 +12173,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Protagonismo -->
+                <!-- ============================================ -->
+                <!-- PROTAGONISMO -->
+                <!-- ============================================ -->
                 <div id="protagonismoFields" class="role-specific" style="${role === 'protagonismo' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12040,7 +12193,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Biblioteca -->
+                <!-- ============================================ -->
+                <!-- BIBLIOTECA -->
+                <!-- ============================================ -->
                 <div id="bibliotecaFields" class="role-specific" style="${role === 'biblioteca' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12058,7 +12213,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Secretaria -->
+                <!-- ============================================ -->
+                <!-- SECRETARIA -->
+                <!-- ============================================ -->
                 <div id="secretariaFields" class="role-specific" style="${role === 'secretaria' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -12073,8 +12230,30 @@ class AdminPanel {
                         <span>Secretaria consulta as justificativas de falta cadastradas pela Gestão Geral.</span>
                     </div>
                 </div>
-                
-                <!-- Coordenação de Pátio -->
+
+                <!-- ============================================ -->
+                <!-- 🔥 RECEPÇÃO -->
+                <!-- ============================================ -->
+                <div id="recepcaoFields" class="role-specific" style="${role === 'recepcao' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #cffafe; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>A Recepção verifica/busca as autorizações de alunos por QR Code ou manualmente, com filtro por data.</span>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- COORDENAÇÃO DE PÁTIO -->
+                <!-- ============================================ -->
                 <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -12086,7 +12265,9 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- Enfermaria -->
+                <!-- ============================================ -->
+                <!-- ENFERMARIA -->
+                <!-- ============================================ -->
                 <div id="enfermariaFields" class="role-specific" style="${role === 'enfermaria' ? 'display: block;' : 'display: none;'}">
                     <div class="form-row">
                         <div class="form-group">
@@ -12112,7 +12293,9 @@ class AdminPanel {
                     </div>
                 </div>
                 
-                <!-- Cozinha -->
+                <!-- ============================================ -->
+                <!-- COZINHA -->
+                <!-- ============================================ -->
                 <div id="cozinhaFields" class="role-specific" style="${role === 'cozinha' ? 'display: block;' : 'display: none;'}">
                     <div class="form-group">
                         <label><i class="fas fa-building"></i> Departamento</label>
@@ -12206,12 +12389,12 @@ class AdminPanel {
         }
     }
 
-    // ============ TOGGLE CAMPOS POR ROLE ============
 
+    // ============ TOGGLE CAMPOS POR ROLE ============
     toggleCamposRole() {
         const role = document.getElementById('userRole')?.value;
         
-        // Campos existentes
+        // Todos os campos específicos por role
         const alunoFields = document.getElementById('alunoFields');
         const professorFields = document.getElementById('professorFields');
         const setorPedagogicoFields = document.getElementById('setorPedagogicoFields');
@@ -12225,8 +12408,9 @@ class AdminPanel {
         const protagonismoFields = document.getElementById('protagonismoFields');
         const bibliotecaFields = document.getElementById('bibliotecaFields');
         const secretariaFields = document.getElementById('secretariaFields');
+        const recepcaoFields = document.getElementById('recepcaoFields'); // 🔥 NOVO
         
-        // Ocultar todos
+        // Ocultar/mostrar todos
         if (alunoFields) alunoFields.style.display = role === 'aluno' ? 'block' : 'none';
         if (professorFields) professorFields.style.display = role === 'professor' ? 'block' : 'none';
         if (setorPedagogicoFields) setorPedagogicoFields.style.display = role === 'setor_pedagogico' ? 'block' : 'none';
@@ -12240,6 +12424,7 @@ class AdminPanel {
         if (protagonismoFields) protagonismoFields.style.display = role === 'protagonismo' ? 'block' : 'none';
         if (bibliotecaFields) bibliotecaFields.style.display = role === 'biblioteca' ? 'block' : 'none';
         if (secretariaFields) secretariaFields.style.display = role === 'secretaria' ? 'block' : 'none';
+        if (recepcaoFields) recepcaoFields.style.display = role === 'recepcao' ? 'block' : 'none'; // 🔥 NOVO
     }
 
     gerarSenha() {
@@ -12388,6 +12573,10 @@ class AdminPanel {
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
 
             } else if (role === 'secretaria') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'recepcao') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             
@@ -24037,7 +24226,8 @@ class AdminPanel {
                 'assistente-social': todosUsuarios.filter(u => u.role === 'assistente-social').length,
                 protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length,
                 biblioteca: todosUsuarios.filter(u => u.role === 'biblioteca').length,
-                secretaria: todosUsuarios.filter(u => u.role === 'secretaria').length
+                secretaria: todosUsuarios.filter(u => u.role === 'secretaria').length,
+                recepcao: todosUsuarios.filter(u => u.role === 'recepcao').length
             };
             
             // ===== ARMAZENAR ESTADO =====
@@ -24183,6 +24373,18 @@ class AdminPanel {
                                 style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                                 <div style="font-weight: 700; color: #10b981; font-size: 0.9rem;">🎓 Secretaria</div>
                                 <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.secretaria} usuários</div>
+                            </button>
+
+                            <button type="button" class="perfil-notif-btn" data-role="recepcao" onclick="admin.filtrarNotificacaoPorRole('recepcao')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #0891b2; font-size: 0.9rem;">🛎️ Recepção</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.recepcao} usuários</div>
+                            </button>
+
+                            <button type="button" class="perfil-notif-btn" data-role="recepcao" onclick="admin.filtrarNotificacaoPorRole('recepcao')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #0891b2; font-size: 0.9rem;">🛎️ Recepção</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.recepcao} usuários</div>
                             </button>
                         </div>
                     </div>
@@ -24487,7 +24689,8 @@ class AdminPanel {
                 'assistente-social': '🤝',
                 'protagonismo': '⭐',
                 'biblioteca': '📚',
-                'secretaria': '🎓'
+                'secretaria': '🎓',
+                'recepcao': '🛎️'
             };
             return icons[role] || '👤';
     }
@@ -24537,7 +24740,8 @@ class AdminPanel {
                 'assistente-social': '🤝 Assistente Social',
                 'protagonismo': '⭐ Protagonismo',
                 'biblioteca': '📚 Biblioteca',
-                'secretaria': '🎓 Secretaria'
+                'secretaria': '🎓 Secretaria',
+                'recepcao': '🛎️ Recepção'
             };
             
             const infoEl = document.getElementById('infoDestinatariosNotificacao');
@@ -38645,6 +38849,7 @@ class AdminPanel {
                                 <option value="protagonismo">⭐ Protagonismo</option>
                                 <option value="biblioteca">📚 Biblioteca</option>
                                 <option value="secretaria">🎓 Secretaria</option>
+                                <option value="recepcao">🛎️ Recepção'</option>
                                 <option value="admin">👑 Administradores</option>
                             </select>
                         </div>
@@ -40610,7 +40815,7 @@ class AdminPanel {
         const labels = {
             'aluno': 'Aluno', 'professor': 'Professor', 'admin': 'Admin', 'super_admin': 'Super Admin',
             'setor_pedagogico': 'Setor Pedagógico', 'coordenacao_patio': 'Coord. Pátio',
-            'cozinha': 'Cozinha', 'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria', 'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria'
+            'cozinha': 'Cozinha', 'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria', 'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção'
         };
         return labels[role] || role;
     }
@@ -44243,7 +44448,7 @@ class AdminPanel {
         }
     }
 
-        // ============================================
+    // ============================================
     // MÓDULO: SECRETARIA
     // ============================================
     async loadSecretaria() {
@@ -44392,6 +44597,166 @@ class AdminPanel {
         window.open('/secretaria.html', '_blank');
         if (typeof this.showToast === 'function') {
             this.showToast('✅ Secretaria aberta em nova aba', 'success');
+        }
+    }
+
+    // ============================================
+    // MÓDULO: RECEPÇÃO
+    // ============================================
+    async loadRecepcao() {
+        const contentArea = document.getElementById('contentArea');
+        
+        // Verificar se o usuário é admin ou super_admin
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
+        
+        if (!isAuthorized) {
+            contentArea.innerHTML = `
+                <div class="alert alert-danger m-4">
+                    <i class="fas fa-lock"></i>
+                    <strong>Acesso Negado</strong>
+                    <p>Apenas administradores podem acessar o Painel da Recepção.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        contentArea.innerHTML = `
+            <div class="recepcao-wrapper" style="
+                height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+            ">
+                <!-- Header da Recepção -->
+                <div style="
+                    padding: 16px 24px;
+                    background: linear-gradient(135deg, #0891b2, #06b6d4);
+                    color: white;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+                    border-radius: 12px 12px 0 0;
+                    margin: 16px 16px 0 16px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 44px; height: 44px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 22px;
+                        ">
+                            <i class="fas fa-concierge-bell"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel da Recepção</h2>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
+                                <i class="fas fa-info-circle"></i> 
+                                Acesso total como Super Admin - Verifique autorizações de alunos por QR Code ou busca manual
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button 
+                            onclick="admin.recarregarRecepcao()" 
+                            style="
+                                background: rgba(255,255,255,0.2);
+                                border: 1px solid rgba(255,255,255,0.3);
+                                color: white;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
+                            title="Recarregar o painel da recepção"
+                        >
+                            <i class="fas fa-sync-alt"></i> Recarregar
+                        </button>
+                        <button 
+                            onclick="admin.abrirRecepcaoNovaAba()" 
+                            style="
+                                background: white;
+                                border: none;
+                                color: #0891b2;
+                                padding: 10px 18px;
+                                border-radius: 30px;
+                                font-size: 13px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'"
+                            title="Abrir em nova aba"
+                        >
+                            <i class="fas fa-external-link-alt"></i> Nova Aba
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Iframe da Recepção -->
+                <div style="
+                    flex: 1;
+                    margin: 0 16px 16px 16px;
+                    border-radius: 0 0 12px 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    background: white;
+                ">
+                    <iframe 
+                        id="recepcaoIframe"
+                        src="/recepcao.html" 
+                        style="
+                            width: 100%;
+                            height: 100%;
+                            border: none;
+                            display: block;
+                        "
+                        title="Painel da Recepção"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+            </div>
+        `;
+
+        console.log('✅ Painel da Recepção carregado em iframe.');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA RECEPÇÃO
+    // ============================================
+    recarregarRecepcao() {
+        const iframe = document.getElementById('recepcaoIframe');
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando painel da recepção...', 'info');
+            }
+            console.log('🔄 Iframe da recepção recarregado');
+        }
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: ABRIR RECEPÇÃO EM NOVA ABA
+    // ============================================
+    abrirRecepcaoNovaAba() {
+        window.open('/recepcao.html', '_blank');
+        if (typeof this.showToast === 'function') {
+            this.showToast('✅ Recepção aberta em nova aba', 'success');
         }
     }
 
@@ -45205,6 +45570,7 @@ class AdminPanel {
                     { icone: 'fa-star', label: 'Protagonismo', section: 'protagonismo' },
                     { icone: 'fa-book-reader', label: 'Biblioteca', section: 'biblioteca' },
                     { icone: 'fa-graduation-cap', label: 'Secretaria', section: 'secretaria' },
+                    { icone: 'fa-concierge-bell', label: 'Recepção', section: 'recepcao' }
                 ]
             },
             {

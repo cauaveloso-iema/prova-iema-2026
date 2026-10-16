@@ -7,6 +7,7 @@ const User = require('../models/User');
 const AtendimentoSupervisao = require('../models/AtendimentoSupervisao');
 const SessaoAssinatura = require('../models/SessaoAssinatura');
 const Notificacao = require('../models/Notificacao');
+const PerfilParticipante = require('../models/PerfilParticipante');
 
 const MASCARA_TEXTO = '🔒 Conteúdo protegido (visível apenas para o profissional responsável)';
 const ROLES_MASCARADOS = ['super_admin'];
@@ -206,14 +207,28 @@ const verificarSupervisao = (req, res, next) => {
   next();
 };
 
+const apenasSuperAdmin = (req, res, next) => {
+  if (req.userRole !== 'super_admin') {
+    return res.status(403).json({ success: false, error: 'Acesso restrito ao super_admin' });
+  }
+  next();
+};
+
 function inicioDoDiaBrasil(dataStr) { return new Date(dataStr + 'T00:00:00.000-03:00'); }
 function fimDoDiaBrasil(dataStr) { return new Date(dataStr + 'T23:59:59.999-03:00'); }
+
+// ============================================
+// SEED INICIAL (delega ao model)
+// ============================================
+PerfilParticipante.seedInicial().catch(err =>
+  console.error('❌ [SEED PERFIS] Erro:', err.message)
+);
 
 // ============================================
 // HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
-  res.json({ success: true, status: 'online', service: 'Supervisão', versao: '4.0-participantes-filtros' });
+  res.json({ success: true, status: 'online', service: 'Supervisão', versao: '4.1-perfis-cacheados' });
 });
 
 // ============================================
@@ -232,27 +247,114 @@ router.post('/admin/migrar-alertas-24h', async (req, res) => {
 });
 
 // ============================================
-// 🆕 PERFIS DISPONÍVEIS PARA PARTICIPANTES (SEM ADMINS)
+// PERFIS DISPONÍVEIS PARA PARTICIPANTES (DO BANCO)
 // ============================================
 router.get('/perfis-participantes', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
-    const perfis = [
-      { valor: 'professor', label: 'Professor', temFiltro: 'eixo', filtroLabel: 'Eixo' },
-      { valor: 'aluno', label: 'Aluno', temFiltro: 'turma', filtroLabel: 'Turma' },
-      { valor: 'supervisao', label: 'Supervisão', temFiltro: null, filtroLabel: null },
-      { valor: 'gestao_geral', label: 'Gestão Geral', temFiltro: null, filtroLabel: null },
-      { valor: 'psicologia', label: 'Psicologia', temFiltro: null, filtroLabel: null },
-      { valor: 'assistente_social', label: 'Assistente Social', temFiltro: null, filtroLabel: null },
-      { valor: 'biblioteca', label: 'Biblioteca', temFiltro: null, filtroLabel: null }
-    ];
+    const perfis = await PerfilParticipante.listarAtivos();
+    res.json({ success: true, perfis });
+  } catch (error) {
+    console.error('Erro ao buscar perfis:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// CRUD DE PERFIS (apenas super_admin)
+// ============================================
+
+// Listar todos (incluindo inativos)
+router.get('/admin/perfis', authenticateToken, apenasSuperAdmin, async (req, res) => {
+  try {
+    const perfis = await PerfilParticipante.listarTodos();
     res.json({ success: true, perfis });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// Criar
+router.post('/admin/perfis', authenticateToken, apenasSuperAdmin, async (req, res) => {
+  try {
+    const userInfo = { userId: req.userId, nome: req.userNome };
+    const novo = await PerfilParticipante.criar(req.body, userInfo);
+    res.json({ success: true, perfil: novo, message: 'Perfil criado' });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, error: 'Já existe um perfil com este valor' });
+    }
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Atualizar
+router.put('/admin/perfis/:id', authenticateToken, apenasSuperAdmin, async (req, res) => {
+  try {
+    const userInfo = { userId: req.userId, nome: req.userNome };
+    const perfil = await PerfilParticipante.atualizar(req.params.id, req.body, userInfo);
+    res.json({ success: true, perfil, message: 'Perfil atualizado' });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Desativar (soft delete)
+router.delete('/admin/perfis/:id', authenticateToken, apenasSuperAdmin, async (req, res) => {
+  try {
+    const userInfo = { userId: req.userId, nome: req.userNome };
+    const perfil = await PerfilParticipante.desativar(req.params.id, userInfo);
+    res.json({ success: true, message: 'Perfil desativado', perfil });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Reativar
+router.put('/admin/perfis/:id/reativar', authenticateToken, apenasSuperAdmin, async (req, res) => {
+  try {
+    const userInfo = { userId: req.userId, nome: req.userNome };
+    const perfil = await PerfilParticipante.reativar(req.params.id, userInfo);
+    res.json({ success: true, message: 'Perfil reativado', perfil });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Excluir permanentemente (hard delete)
+router.delete('/admin/perfis/:id/permanente', authenticateToken, apenasSuperAdmin, async (req, res) => {
+  try {
+    await PerfilParticipante.excluirPermanentemente(req.params.id);
+    res.json({ success: true, message: 'Perfil excluído permanentemente' });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Forçar seed (recria se vazio, ou força com {force: true})
+router.post('/admin/perfis/seed', authenticateToken, apenasSuperAdmin, async (req, res) => {
+  try {
+    const { force } = req.body;
+    
+    if (force) {
+      await PerfilParticipante.deleteMany({});
+      console.log('🗑️  [SEED FORCE] Perfis antigos removidos');
+    }
+    
+    await PerfilParticipante.seedInicial();
+    const total = await PerfilParticipante.countDocuments();
+    
+    res.json({
+      success: true,
+      message: `${total} perfis cadastrados`,
+      total
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============================================
-// 🆕 EIXOS DISPONÍVEIS (para select intermediário de professores)
+// EIXOS DISPONÍVEIS
 // ============================================
 router.get('/eixos', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -268,7 +370,7 @@ router.get('/eixos', authenticateToken, verificarSupervisao, async (req, res) =>
 });
 
 // ============================================
-// 🆕 PROFESSORES POR EIXO
+// PROFESSORES POR EIXO
 // ============================================
 router.get('/professores-por-eixo', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -298,7 +400,7 @@ router.get('/professores-por-eixo', authenticateToken, verificarSupervisao, asyn
 });
 
 // ============================================
-// 🆕 TURMAS DISPONÍVEIS (para select intermediário de alunos)
+// TURMAS DISPONÍVEIS
 // ============================================
 router.get('/turmas', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -312,7 +414,7 @@ router.get('/turmas', authenticateToken, verificarSupervisao, async (req, res) =
 });
 
 // ============================================
-// 🆕 ALUNOS POR TURMA
+// ALUNOS POR TURMA
 // ============================================
 router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
@@ -323,18 +425,16 @@ router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (r
       role: 'aluno', ativo: true, turma 
     }).select('nome matricula turma curso fotoPerfil').sort({ nome: 1 });
     
+    const lista = alunos.map(a => ({
+      id: a._id, nome: a.nome, matricula: a.matricula,
+      turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
+    }));
+    
     res.json({
       success: true, 
       total: alunos.length,
-      usuarios: alunos.map(a => ({
-        id: a._id, nome: a.nome, matricula: a.matricula,
-        turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
-      })),
-      // Compatibilidade com frontend antigo
-      alunos: alunos.map(a => ({
-        id: a._id, nome: a.nome, matricula: a.matricula,
-        turma: a.turma, curso: a.curso, fotoPerfil: a.fotoPerfil
-      }))
+      usuarios: lista,
+      alunos: lista
     });
   } catch (error) { 
     res.status(500).json({ success: false, error: error.message }); 
@@ -342,22 +442,41 @@ router.get('/alunos-por-turma', authenticateToken, verificarSupervisao, async (r
 });
 
 // ============================================
-// 🆕 USUÁRIOS POR PERFIL (para outros perfis sem filtro)
+// USUÁRIOS POR PERFIL (valida contra o banco)
 // ============================================
 router.get('/usuarios-por-perfil', authenticateToken, verificarSupervisao, async (req, res) => {
   try {
     const { perfil } = req.query;
-    if (!perfil) return res.status(400).json({ success: false, error: 'Perfil é obrigatório' });
+    if (!perfil) {
+      return res.status(400).json({ success: false, error: 'Perfil é obrigatório' });
+    }
     
-    const perfisValidos = ['supervisao', 'gestao_geral', 'psicologia', 'assistente_social', 'biblioteca'];
-    if (!perfisValidos.includes(perfil)) {
-      return res.status(400).json({ success: false, error: 'Perfil inválido para este endpoint' });
+    const perfilLower = perfil.toLowerCase().trim();
+    
+    // Valida contra o banco (já bloqueia admins internamente)
+    const perfilConfig = await PerfilParticipante.buscarPorValor(perfilLower);
+    if (!perfilConfig) {
+      console.warn(`[USUARIOS-PERFIL] Perfil não cadastrado: "${perfilLower}"`);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Perfil "${perfilLower}" não cadastrado. Cadastre em /admin/perfis` 
+      });
+    }
+    
+    // Se o perfil tem filtro (eixo/turma), deve usar o endpoint específico
+    if (perfilConfig.temFiltro) {
+      return res.status(400).json({
+        success: false,
+        error: `Este perfil requer filtro por ${perfilConfig.filtroLabel}. Use o endpoint específico.`
+      });
     }
     
     const usuarios = await User.find({ 
-      role: perfil, 
+      role: perfilLower, 
       ativo: true 
-    }).select('nome matricula fotoPerfil').sort({ nome: 1 });
+    }).select('nome matricula fotoPerfil').sort({ nome: 1 }).lean();
+    
+    console.log(`[USUARIOS-PERFIL] role="${perfilLower}" → ${usuarios.length} usuário(s)`);
     
     res.json({
       success: true,
@@ -370,6 +489,7 @@ router.get('/usuarios-por-perfil', authenticateToken, verificarSupervisao, async
       }))
     });
   } catch (error) {
+    console.error('[USUARIOS-PERFIL] Erro:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -477,7 +597,6 @@ router.post('/registrar', authenticateToken, verificarSupervisao, async (req, re
       ? 'pendente'
       : (assinaturaValida.length > 100 ? 'assinada' : 'nao_necessaria');
     
-    // Processa participantes
     const participantesProcessados = (Array.isArray(participantes) ? participantes : [])
       .filter(p => p && p.usuarioId && p.usuarioNome)
       .map(p => {

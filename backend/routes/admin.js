@@ -376,6 +376,7 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
       totalProtagonismo: 0,
       totalBiblioteca: 0,
       totalSecretaria: 0,
+      totalRecepcao: 0,
       totalTurmas: 0,
       turmasAtivas: 0,
       totalProvas: 0,
@@ -413,6 +414,7 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
         case 'assistente-social': stats.totalAssistenteSocial = count; break;
         case 'protagonismo': stats.totalProtagonismo = count; break;
         case 'secretaria': stats.totalSecretaria = count; break;
+        case 'recepcao': stats.totalRecepcao = count; break;
         default:
           logger.info(`   ⚠️ Role não mapeado: ${role} (${count} usuários)`);
       }
