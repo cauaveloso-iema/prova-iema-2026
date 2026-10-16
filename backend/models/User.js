@@ -21,7 +21,6 @@ const UserSchema = new mongoose.Schema({
       message: 'Email deve ser institucional (@iemasaoluiscentro.net)'
     }
   },
-  // CAMPO CPF
   cpf: {
     type: String,
     unique: true,
@@ -36,7 +35,6 @@ const UserSchema = new mongoose.Schema({
       message: 'CPF deve ter 11 dígitos'
     }
   },
-  // CAMPO TELEFONE
   telefone: {
     type: String,
     required: [true, 'Telefone é obrigatório'],
@@ -70,7 +68,7 @@ const UserSchema = new mongoose.Schema({
   
   forcePasswordChange: {
       type: Boolean,
-      default: false  // false = não precisa trocar senha no login
+      default: false
   },
 
   onesignalPlayerId: {
@@ -192,11 +190,11 @@ const UserSchema = new mongoose.Schema({
     default: null
   },
 
-  // ========== QR CODE DO USUÁRIO (GERADO NO CADASTRO PARA TODOS) ==========
+  // ========== QR CODE DO USUÁRIO ==========
   qrCodeUsuario: {
     type: String,
     default: null,
-    select: false  // Não retornar por padrão por ser grande (base64)
+    select: false
   },
   
   qrCodeUsuarioGeradoEm: {
@@ -259,10 +257,7 @@ const UserSchema = new mongoose.Schema({
     type: Date
   },
   
-  // ========== ✅ EIXO DINÂMICO (SEM ENUM) ==========
-  // O enum foi REMOVIDO para permitir que o Super Admin crie novos eixos
-  // pelo painel. A validação de "eixo existente" deve ser feita no controller
-  // consultando a coleção 'Eixo'.
+  // ========== EIXO DINÂMICO (SEM ENUM) ==========
   eixo: {
     type: String,
     default: null,
@@ -314,11 +309,9 @@ const UserSchema = new mongoose.Schema({
     default: null
   },
   
-  // Para alunos
   curso: String,
   periodo: String,
   
-  // Para professores
   departamento: String,
   titulacao: String,
   
@@ -334,6 +327,24 @@ const UserSchema = new mongoose.Schema({
     type: Date
   },
   
+  // 🔥 NOVO: Última vez que o usuário teve atividade (atualizado a cada requisição)
+  lastActive: {
+    type: Date,
+    default: null
+  },
+  
+  // 🔥 NOVO: Último logout EXPLÍCITO (só quando o usuário clica em "Sair")
+  ultimoLogout: {
+    type: Date,
+    default: null
+  },
+  
+  // 🔥 NOVO: Contador de versão do token (para reset global)
+  tokenVersion: {
+    type: Number,
+    default: 0
+  },
+  
   // ========== CAMPOS PARA 2FA ==========
   telefoneVerificado: {
     type: Boolean,
@@ -347,7 +358,7 @@ const UserSchema = new mongoose.Schema({
   
   twoFactorSecret: {
     type: String,
-    select: false  // Não retornar por padrão
+    select: false
   },
   
   twoFactorBackupCodes: {
@@ -362,7 +373,7 @@ const UserSchema = new mongoose.Schema({
   
   twoFactorTempSecret: {
     type: String,
-    select: false  // Para ativação temporária
+    select: false
   },
   
   lastOtpRequest: {
@@ -373,6 +384,11 @@ const UserSchema = new mongoose.Schema({
   otpRequestCount: {
     type: Number,
     default: 0
+  },
+  
+  dataAtivacao2FA: {
+    type: Date,
+    default: null
   },
   
   dataCadastro: {
@@ -386,27 +402,22 @@ const UserSchema = new mongoose.Schema({
 
 // Middleware para formatar CPF e TELEFONE antes de salvar
 UserSchema.pre('save', async function(next) {
-  // Format CPF
   if (this.cpf) {
     this.cpf = this.cpf.replace(/\D/g, '');
   }
   
-  // Format Telefone
   if (this.telefone) {
     this.telefone = this.telefone.replace(/\D/g, '');
   }
   
-  // VALIDAÇÃO: Converter email para lowercase e garantir domínio correto
   if (this.email) {
     this.email = this.email.toLowerCase().trim();
     
-    // Adicionar domínio se não tiver (opcional)
     if (!this.email.includes('@')) {
       this.email = this.email + '@iemasaoluiscentro.net';
     }
   }
   
-  // Criptografar senha
   if (!this.isModified('password')) return next();
   
   try {
@@ -421,19 +432,16 @@ UserSchema.pre('save', async function(next) {
 // ====== MÉTODO PARA COMPARAR SENHA ======
 UserSchema.methods.comparePassword = async function(candidatePassword) {
     try {
-        // Verificar se candidatePassword é válido
         if (!candidatePassword || typeof candidatePassword !== 'string') {
             console.error('❌ comparePassword: candidatePassword inválido:', candidatePassword);
             return false;
         }
         
-        // Verificar se this.password existe
         if (!this.password) {
             console.error('❌ comparePassword: this.password não existe');
             return false;
         }
         
-        // Comparar senhas
         return await bcrypt.compare(candidatePassword, this.password);
     } catch (error) {
         console.error('❌ Erro em comparePassword:', error);
@@ -511,6 +519,8 @@ UserSchema.index({ telefone: 1 });
 UserSchema.index({ matricula: 1 });
 UserSchema.index({ role: 1 });
 UserSchema.index({ precisaAcessibilidade: 1 });
-UserSchema.index({ eixo: 1 }); // índice para filtros por eixo
+UserSchema.index({ eixo: 1 });
+UserSchema.index({ lastActive: -1 });
+UserSchema.index({ lastLogin: -1 });
 
 module.exports = mongoose.model('User', UserSchema);

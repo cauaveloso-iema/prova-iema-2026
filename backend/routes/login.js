@@ -431,6 +431,7 @@ router.post('/auth/login', async (req, res) => {
           // 🔥 ATUALIZAR lastActive e lastLogin após 2FA bem-sucedido
           user.lastActive = new Date();
           user.lastLogin = new Date();
+          user.ultimoLogout = null;
           await user.save();
 
           const jwtExpiracao = await obterJwtExpiracao();
@@ -561,6 +562,7 @@ router.post('/auth/login', async (req, res) => {
     user.lockUntil = null;
     user.lastLogin = new Date();
     user.lastActive = new Date();  // 🔥 ATUALIZAR ATIVIDADE
+    user.ultimoLogout = null;
     await user.save();
 
     // Verificar 2FA
@@ -662,11 +664,10 @@ router.post('/auth/login', async (req, res) => {
 // POST /api/auth/logout
 // ============================================================================
 // ============================================================================
-// POST /api/auth/logout — Marca usuário como OFFLINE
+// POST /api/auth/logout — Marca usuário como OFFLINE e registra logout explícito
 // ============================================================================
 router.post('/auth/logout', async (req, res) => {
   try {
-    // 🔥 Tentar marcar o usuário como offline (sem bloquear)
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
@@ -675,19 +676,23 @@ router.post('/auth/logout', async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         if (decoded.id) {
+          const agora = new Date();
+          
+          // 🔥 REGISTRAR LOGOUT EXPLÍCITO
+          // - ultimoLogout: marca a hora exata do logout (usado para calcular duração)
+          // - lastActive: mantém como referência (não zerar, senão perde o histórico)
           await User.findByIdAndUpdate(decoded.id, {
-            lastActive: new Date(0), // Data antiga = offline
-            lastLogin: new Date(0)
+            ultimoLogout: agora,
+            lastActive: agora
           });
-          logger.info(`🚪 Logout: usuário ${decoded.id} marcado como offline`);
+          
+          logger.info(`🚪 Logout explícito registrado para usuário ${decoded.id} às ${agora.toISOString()}`);
         }
       } catch (jwtError) {
-        // Token inválido/expirado — apenas ignora, ainda limpa o cookie
         logger.info('⚠️ Logout com token inválido (ignorando)');
       }
     }
 
-    // 🔥 Limpar cookie de autenticação
     res.clearCookie('auth_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -1028,6 +1033,7 @@ router.post('/auth/2fa/validate-totp', authenticateTokenLocal, async (req, res) 
     // 🔥 ATUALIZAR lastActive e lastLogin após validação TOTP
     user.lastActive = new Date();
     user.lastLogin = new Date();
+    user.ultimoLogout = null;
     await user.save();
 
     const jwtExpiracao = await obterJwtExpiracao();
@@ -1705,6 +1711,7 @@ router.post('/login-social/:provider', async (req, res) => {
 
     // ---------- CASO 3: LOGIN OK ----------
     user.lastLogin = new Date();
+    user.ultimoLogout = null;
     user.lastActive = new Date();  // 🔥 ATUALIZAR ATIVIDADE
     if (picture && !user.fotoPerfil) {
       user.fotoPerfil = picture;

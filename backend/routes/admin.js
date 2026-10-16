@@ -517,6 +517,12 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
 /**
  * GET /api/admin/historico-conexoes
  * Busca histórico de login/logout dos usuários com filtros completos
+ * 
+ * LÓGICA DE DURAÇÃO:
+ *   - Se o usuário tem `ultimoLogout` > `lastLogin` → duração REAL (logout explícito)
+ *   - Se não tem logout explícito mas tem `lastActive` > `lastLogin` → duração até última atividade
+ *   - Se está online agora → duração em andamento (agora - lastLogin)
+ *   - Se `ultimoLogout` for zerado em novo login → recomeça
  */
 router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
@@ -550,17 +556,41 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
     }
 
     const usuarios = await User.find(userQuery)
-      .select('nome email role turma matricula lastLogin lastActive createdAt onesignalPlayerId fotoPerfil curso')
+      .select('nome email role turma matricula lastLogin lastActive ultimoLogout createdAt onesignalPlayerId fotoPerfil curso')
       .lean();
 
     // ===== 2. GERAR HISTÓRICO =====
     const conexoes = [];
+    const JANELA_ONLINE_MIN = 30; // mesma janela usada em usuarios-online
+    const agoraMs = Date.now();
 
     usuarios.forEach(u => {
-      // LOGIN
+      // ============================================
+      // 1. REGISTRO DE LOGIN
+      // ============================================
       if (u.lastLogin) {
+        const loginMs = new Date(u.lastLogin).getTime();
+        
+        // Duração: se houver logout explícito, usa ele; senão usa lastActive
+        let fimSessaoMs = loginMs;
+        let tipoSessao = 'ativa';
+        
+        if (u.ultimoLogout && new Date(u.ultimoLogout).getTime() > loginMs) {
+          fimSessaoMs = new Date(u.ultimoLogout).getTime();
+          tipoSessao = 'encerrada';
+        } else if (u.lastActive && new Date(u.lastActive).getTime() > loginMs) {
+          fimSessaoMs = new Date(u.lastActive).getTime();
+          tipoSessao = 'ativa';
+        }
+        
+        const duracaoMin = Math.max(0, Math.floor((fimSessaoMs - loginMs) / 60000));
+        
+        // Está online agora?
+        const ultimaAtividadeMs = u.lastActive ? new Date(u.lastActive).getTime() : loginMs;
+        const estaOnline = !u.ultimoLogout && (agoraMs - ultimaAtividadeMs) <= (JANELA_ONLINE_MIN * 60 * 1000);
+        
         conexoes.push({
-          id: `login-${u._id}-${new Date(u.lastLogin).getTime()}`,
+          id: `login-${u._id}-${loginMs}`,
           usuarioId: u._id,
           usuarioNome: u.nome || 'Sem nome',
           usuarioEmail: u.email || '',
@@ -574,49 +604,76 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
           ip: 'Não registrado',
           userAgent: 'Não registrado',
           dataHora: new Date(u.lastLogin).toISOString(),
-          duracao: null,
-          status: 'sucesso'
+          duracao: duracaoMin > 0 ? duracaoMin : null,
+          status: 'sucesso',
+          online: estaOnline
         });
       }
 
-      // LOGOUT
-      if (u.lastActive && u.lastLogin &&
-          new Date(u.lastActive).getTime() !== new Date(u.lastLogin).getTime() &&
-          new Date(u.lastActive) > new Date(u.lastLogin)) {
-
-        const duracaoMin = Math.floor(
-          (new Date(u.lastActive) - new Date(u.lastLogin)) / 60000
-        );
-
-        conexoes.push({
-          id: `logout-${u._id}-${new Date(u.lastActive).getTime()}`,
-          usuarioId: u._id,
-          usuarioNome: u.nome || 'Sem nome',
-          usuarioEmail: u.email || '',
-          usuarioRole: u.role || 'desconhecido',
-          usuarioTurma: u.turma || null,
-          usuarioMatricula: u.matricula || null,
-          usuarioCurso: u.curso || null,
-          usuarioFoto: u.fotoPerfil || null,
-          tipo: 'logout',
-          dispositivo: u.onesignalPlayerId ? 'app' : 'web',
-          ip: 'Não registrado',
-          userAgent: 'Não registrado',
-          dataHora: new Date(u.lastActive).toISOString(),
-          duracao: duracaoMin,
-          status: 'sucesso'
-        });
-      }
-
-      // SESSÃO ATIVA
-      if (u.lastActive) {
-        const agora = Date.now();
-        const ultima = new Date(u.lastActive).getTime();
-        const diffMin = Math.floor((agora - ultima) / 60000);
-
-        if (diffMin <= 30 && diffMin > 0) {
+      // ============================================
+      // 2. REGISTRO DE LOGOUT / SESSÃO ENCERRADA
+      // ============================================
+      if (u.lastLogin) {
+        const loginMs = new Date(u.lastLogin).getTime();
+        const ultimaAtividadeMs = u.lastActive ? new Date(u.lastActive).getTime() : loginMs;
+        const temLogoutExplicito = u.ultimoLogout && new Date(u.ultimoLogout).getTime() > loginMs;
+        
+        // Houve sessão com duração real?
+        const teveAtividade = ultimaAtividadeMs > loginMs;
+        
+        // Só registra "logout" se:
+        //  a) Houve logout explícito, OU
+        //  b) Passou da janela de online (usuário saiu sem clicar em sair)
+        const saiuDaJanela = (agoraMs - ultimaAtividadeMs) > (JANELA_ONLINE_MIN * 60 * 1000);
+        
+        if (temLogoutExplicito || (teveAtividade && saiuDaJanela)) {
+          const fimMs = temLogoutExplicito 
+            ? new Date(u.ultimoLogout).getTime()
+            : ultimaAtividadeMs;
+          
+          const duracaoMin = Math.max(0, Math.floor((fimMs - loginMs) / 60000));
+          
           conexoes.push({
-            id: `sessao-${u._id}-${ultima}`,
+            id: `logout-${u._id}-${fimMs}`,
+            usuarioId: u._id,
+            usuarioNome: u.nome || 'Sem nome',
+            usuarioEmail: u.email || '',
+            usuarioRole: u.role || 'desconhecido',
+            usuarioTurma: u.turma || null,
+            usuarioMatricula: u.matricula || null,
+            usuarioCurso: u.curso || null,
+            usuarioFoto: u.fotoPerfil || null,
+            tipo: 'logout',
+            dispositivo: u.onesignalPlayerId ? 'app' : 'web',
+            ip: 'Não registrado',
+            userAgent: 'Não registrado',
+            dataHora: new Date(fimMs).toISOString(),
+            duracao: duracaoMin,
+            status: 'encerrada',
+            online: false,
+            // 🔥 Informação extra: foi logout explícito ou por inatividade?
+            logoutExplicito: !!temLogoutExplicito
+          });
+        }
+      }
+
+      // ============================================
+      // 3. SESSÃO ATIVA (usuário ainda online)
+      // ============================================
+      if (u.lastActive && u.lastLogin) {
+        const loginMs = new Date(u.lastLogin).getTime();
+        const ultimaAtividadeMs = new Date(u.lastActive).getTime();
+        
+        // Se já houve logout explícito, não é mais sessão ativa
+        const temLogoutExplicito = u.ultimoLogout && new Date(u.ultimoLogout).getTime() > loginMs;
+        const estaOnline = !temLogoutExplicito && (agoraMs - ultimaAtividadeMs) <= (JANELA_ONLINE_MIN * 60 * 1000);
+
+        if (estaOnline) {
+          // Duração em andamento (desde o login até agora)
+          const duracaoSessao = Math.floor((agoraMs - loginMs) / 60000);
+          
+          conexoes.push({
+            id: `sessao-${u._id}-${ultimaAtividadeMs}`,
             usuarioId: u._id,
             usuarioNome: u.nome || 'Sem nome',
             usuarioEmail: u.email || '',
@@ -630,8 +687,9 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
             ip: 'Não registrado',
             userAgent: 'Não registrado',
             dataHora: new Date(u.lastActive).toISOString(),
-            duracao: diffMin,
-            status: 'ativo'
+            duracao: duracaoSessao,
+            status: 'ativo',
+            online: true
           });
         }
       }
