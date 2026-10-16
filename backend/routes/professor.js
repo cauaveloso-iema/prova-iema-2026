@@ -20,7 +20,7 @@
 //   - POST   /api/professor/provas/:provaId/corrigir
 //   - POST   /api/professor/provas/:provaId/liberar-notas
 //   - POST   /api/professor/provas/:provaId/nota-manual
-//   - GET    /api/professor/resultados        ← 🔥 CORRIGIDA (busca em 2 coleções)
+//   - GET    /api/professor/resultados
 //   - GET    /api/professor/resultados/notas-alunos
 //   - GET    /api/professor/provas/:provaId/cancelamento-detailed
 //   - DELETE /api/professor/provas/:provaId
@@ -67,7 +67,7 @@ try {
   Eixo = require('../models/Eixo');
   console.log('✅ [professor] Model Eixo carregado');
 } catch (err) {
-  console.warn('⚠️ [professor] Eixo não disponível (usará fallback):', err.message);
+  console.warn('⚠️ [professor] Eixo não disponível:', err.message);
 }
 
 let Resultado = null;
@@ -105,6 +105,29 @@ try {
 // ============================================
 // CONSTANTES
 // ============================================
+
+// 🔥 CAMPOS COMPLETOS DO ALUNO PARA POPULATE
+// Todos os campos que devem ser retornados quando populamos
+// a referência de alunos em turmas
+const CAMPOS_ALUNO_POPULATE = [
+  'nome',
+  'email',
+  'matricula',
+  'cpf',
+  'telefone',
+  'curso',
+  'turma',
+  'eixo',
+  'ativo',
+  'precisaAcessibilidade',
+  'condicaoAcessibilidade',
+  'perfilAlimentar',
+  'refeicoesQueParticipa',
+  'onesignalPlayerId',
+  'createdAt',
+  'updatedAt'
+].join(' ');
+
 const PALAVRAS_VIOLACAO = [
   'violação', 'violacao', 'violou', 'viola', 'multiplas', 'múltiplas',
   'regras', 'monitoramento', 'trapaça', 'trapaca', 'fraude'
@@ -237,6 +260,10 @@ router.get('/health', (req, res) => {
 // ============================================================================
 // GET /api/professor/turmas
 // ============================================================================
+// 🔥 CORRIGIDO: Agora retorna TODOS os campos do aluno (via CAMPOS_ALUNO_POPULATE),
+//              incluindo precisaAcessibilidade, condicaoAcessibilidade, etc.
+//              Também adiciona o campo calculado "alunosComAcessibilidade".
+// ============================================================================
 router.get('/turmas', authenticateTokenLocal, verificarProfessor, async (req, res) => {
   try {
     const professorId = req.userId;
@@ -264,24 +291,32 @@ router.get('/turmas', authenticateTokenLocal, verificarProfessor, async (req, re
     }
 
     const turmas = await Turma.find(query)
-      .populate('alunos', 'nome email matricula')
+      .populate('alunos', CAMPOS_ALUNO_POPULATE)
       .sort({ nome: 1 })
       .lean();
 
-    const turmasFormatadas = turmas.map(turma => ({
-      id: turma._id,
-      nome: turma.nome || 'Turma sem nome',
-      disciplina: turma.disciplina || '',
-      eixo: turma.eixo || 'sem-eixo',
-      codigo: turma.codigo || '',
-      descricao: turma.descricao || '',
-      ativa: turma.ativa !== false,
-      totalAlunos: turma.alunos ? turma.alunos.length : 0,
-      totalProvas: turma.provas ? turma.provas.length : 0,
-      dataCriacao: turma.createdAt,
-      professorId: turma.professorId || turma.criadoPor || null,
-      alunos: turma.alunos || []
-    }));
+    const turmasFormatadas = turmas.map(turma => {
+      const alunos = turma.alunos || [];
+      const alunosComAcessibilidade = alunos.filter(
+        aluno => aluno && aluno.precisaAcessibilidade === true
+      ).length;
+
+      return {
+        id: turma._id,
+        nome: turma.nome || 'Turma sem nome',
+        disciplina: turma.disciplina || '',
+        eixo: turma.eixo || 'sem-eixo',
+        codigo: turma.codigo || '',
+        descricao: turma.descricao || '',
+        ativa: turma.ativa !== false,
+        totalAlunos: alunos.length,
+        totalProvas: turma.provas ? turma.provas.length : 0,
+        alunosComAcessibilidade: alunosComAcessibilidade,
+        dataCriacao: turma.createdAt,
+        professorId: turma.professorId || turma.criadoPor || null,
+        alunos: alunos
+      };
+    });
 
     logger.info(`✅ ${turmasFormatadas.length} turmas encontradas para o professor`);
 
@@ -303,31 +338,40 @@ router.get('/turmas', authenticateTokenLocal, verificarProfessor, async (req, re
 // ============================================================================
 // GET /api/professor/eixos
 // ============================================================================
+// 🔥 CORRIGIDO: Busca SEMPRE do banco de dados. Sem fallback hardcoded.
+//              Se o model Eixo não existir OU se o banco estiver vazio,
+//              retorna ERRO explícito para o frontend tratar.
+// ============================================================================
 router.get('/eixos', authenticateTokenLocal, verificarProfessor, async (req, res) => {
   try {
-    logger.info(`📚 Professor ${req.userId} buscando eixos disponíveis`);
+    logger.info(`📚 Professor ${req.userId} buscando eixos do banco`);
 
+    // 🔥 Se o model não existe, retorna erro (não fallback)
     if (!Eixo) {
-      logger.warn('⚠️ Model Eixo não encontrado, retornando eixos padrão');
-      return res.json({
-        success: true,
-        eixos: [
-          { nome: 'natureza', label: '🔬 Natureza e Matemática', cor: '#10b981', icone: 'fa-leaf' },
-          { nome: 'humanas', label: '🏛️ Humanas', cor: '#8b5cf6', icone: 'fa-scroll' },
-          { nome: 'linguagens', label: '🎭 Linguagens', cor: '#f59e0b', icone: 'fa-language' },
-          { nome: 'desenvolvimento', label: '💻 Desenvolvimento de Sistemas', cor: '#3b82f6', icone: 'fa-code' },
-          { nome: 'redes', label: '🌐 Redes de Computadores', cor: '#06b6d4', icone: 'fa-network-wired' },
-          { nome: 'gestao', label: '📊 Gestão e Negócios', cor: '#8b5cf6', icone: 'fa-chart-line' },
-          { nome: 'producao', label: '🎬 Produção Cultural e Design', cor: '#ec4899', icone: 'fa-film' },
-          { nome: 'turismo', label: '✈️ Turismo, Hospitalidade e Lazer', cor: '#14b8a6', icone: 'fa-plane' },
-          { nome: 'ambiente', label: '🌱 Ambiente e Saúde', cor: '#22c55e', icone: 'fa-heartbeat' }
-        ],
-        total: 9,
-        fallback: true
+      logger.error('❌ Model Eixo não disponível no servidor');
+      return res.status(500).json({
+        success: false,
+        error: 'Model Eixo não disponível no servidor. Verifique se o model está registrado.',
+        eixos: [],
+        total: 0
       });
     }
 
+    // 🔥 Buscar SEMPRE do banco
     const eixos = await Eixo.find().sort({ nome: 1 }).lean();
+
+    logger.info(`✅ ${eixos.length} eixos encontrados no banco`);
+
+    // 🔥 Se o banco estiver vazio, retorna aviso (não fallback)
+    if (eixos.length === 0) {
+      logger.warn('⚠️ Nenhum eixo cadastrado no banco de dados');
+      return res.json({
+        success: true,
+        eixos: [],
+        total: 0,
+        aviso: 'Nenhum eixo cadastrado. Cadastre eixos na área administrativa.'
+      });
+    }
 
     const eixosFormatados = eixos.map(e => ({
       _id: e._id,
@@ -338,8 +382,6 @@ router.get('/eixos', authenticateTokenLocal, verificarProfessor, async (req, res
       descricao: e.descricao || ''
     }));
 
-    logger.info(`✅ ${eixosFormatados.length} eixos encontrados`);
-
     res.json({
       success: true,
       eixos: eixosFormatados,
@@ -347,10 +389,12 @@ router.get('/eixos', authenticateTokenLocal, verificarProfessor, async (req, res
     });
 
   } catch (error) {
-    logger.error('❌ Erro ao buscar eixos:', error);
+    logger.error('❌ Erro ao buscar eixos do banco:', error);
     res.status(500).json({
       success: false,
-      error: 'Erro interno ao buscar eixos: ' + error.message
+      error: 'Erro interno ao buscar eixos: ' + error.message,
+      eixos: [],
+      total: 0
     });
   }
 });
@@ -1622,13 +1666,7 @@ router.post('/provas/:provaId/nota-manual', authenticateTokenLocal, verificarPro
 });
 
 // ============================================================================
-// 🔥🔥🔥 GET /api/professor/resultados — CORRIGIDA! 🔥🔥🔥
-// ============================================================================
-// MUDANÇA PRINCIPAL:
-//   ANTES: buscava apenas em ProvaRealizada (retornava 0 quando o aluno fez
-//          a prova pelo fluxo antigo que salva em "Resultado")
-//   AGORA: busca em AMBAS as coleções (ProvaRealizada E Resultado) e
-//          unifica os resultados, usando um Set para evitar duplicatas.
+// GET /api/professor/resultados
 // ============================================================================
 router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req, res) => {
   try {
@@ -1636,7 +1674,6 @@ router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req
 
     logger.info(`📊 Professor ${professorId} buscando resultados (ProvaRealizada + Resultado)`);
 
-    // Buscar provas do professor
     const provas = await Prova.find({ userId: professorId })
       .populate('turmaId', 'nome disciplina')
       .lean();
@@ -1662,7 +1699,6 @@ router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req
     const alunosProcessados = new Set();
 
     for (const prova of provas) {
-      // 🔥 BUSCAR EM **AMBAS** AS COLEÇÕES
       const provasRealizadas = await ProvaRealizada.find({ provaId: prova._id })
         .populate('alunoId', 'nome email matricula')
         .lean();
@@ -1673,7 +1709,6 @@ router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req
 
       logger.info(`   Prova "${prova.titulo}": ${provasRealizadas.length} em ProvaRealizada + ${resultados.length} em Resultado`);
 
-      // ============ PROCESSAR ProvaRealizada ============
       for (const pr of provasRealizadas) {
         if (!pr.alunoId) {
           logger.warn(`⚠️ ProvaRealizada ${pr._id} sem referência de aluno`);
@@ -1730,7 +1765,6 @@ router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req
         }
       }
 
-      // ============ PROCESSAR Resultado (NOVO) ============
       for (const r of resultados) {
         if (!r.userId) {
           logger.warn(`⚠️ Resultado ${r._id} sem referência de usuário`);
@@ -1742,7 +1776,6 @@ router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req
         const notaFinal = r.nota;
         const notaLiberada = r.notaLiberada;
 
-        // 🔥 Evitar duplicata (se o aluno já foi processado via ProvaRealizada)
         if (!alunosProcessados.has(`${prova._id}-${alunoId}`)) {
           alunosProcessados.add(`${prova._id}-${alunoId}`);
 
@@ -1788,7 +1821,6 @@ router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req
       }
     }
 
-    // Calcular estatísticas
     const totalAlunosUnicos = alunosProcessados.size;
     const mediaGeral = contadorNotas > 0 ? (somaNotas / contadorNotas).toFixed(1) : '0.0';
     const taxaConclusao = totalAlunosUnicos > 0
@@ -1812,9 +1844,6 @@ router.get('/resultados', authenticateTokenLocal, verificarProfessor, async (req
     };
 
     logger.info(`✅ Resultados carregados: ${resultadosCompletos.length} registros`);
-    logger.info(`   - Notas automáticas: ${estatisticas.totalNotasAutomaticas}`);
-    logger.info(`   - Notas manuais: ${estatisticas.totalNotasManuais}`);
-    logger.info(`   - Média geral: ${estatisticas.mediaGeral}`);
 
     return res.json({
       success: true,

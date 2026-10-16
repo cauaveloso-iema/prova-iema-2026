@@ -94,13 +94,39 @@ try {
 }
 
 // ============================================================================
-// MIDDLEWARES LOCAIS
+// MIDDLEWARE DE AUTENTICAÇÃO
+// ============================================================================
+// 🔥 CORRIGIDO: Agora aceita token de 3 fontes:
+//   1. Header Authorization: Bearer <token>  (padrão)
+//   2. Query string: ?token=<token>          (para links diretos)
+//   3. Cookie: token=<token>                 (opcional)
 // ============================================================================
 
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  let token = null;
 
+  // ========== 1️⃣ Tentar pelo header Authorization ==========
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  }
+
+  // ========== 2️⃣ Tentar pela query string (?token=...) ==========
+  if (!token && req.query && req.query.token) {
+    token = req.query.token;
+  }
+
+  // ========== 3️⃣ Tentar pelo body (para POST com token no corpo) ==========
+  if (!token && req.body && req.body.token) {
+    token = req.body.token;
+  }
+
+  // ========== 4️⃣ Tentar pelo cookie ==========
+  if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  // ========== VALIDAÇÃO ==========
   if (!token) {
     return res.status(401).json({
       success: false,

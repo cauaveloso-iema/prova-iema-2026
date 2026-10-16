@@ -2428,7 +2428,7 @@ app.get('/realizar-prova.html', async (req, res) => {
 });
 
 // ---------- GET /corrigir-prova - Página protegida de correção ----------
-app.get('/corrigir-prova', authenticateToken, async (req, res) => {
+app.get('/corrigir-prova', async (req, res) => {
   try {
     const token = req.query.token || req.headers.authorization?.split(' ')[1];
 

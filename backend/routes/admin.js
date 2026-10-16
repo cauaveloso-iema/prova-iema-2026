@@ -7,26 +7,10 @@
 //   - Ordem correta: /usuarios/estatisticas ANTES de /usuarios/:id
 //   - Removida duplicata /faces/:usuarioId
 //   - Todos os path.join ajustados para '..' (arquivo em routes/)
-//
-// Rotas incluídas (resumo):
-//   - Dashboard, Usuários Online, Usuários App
-//   - CRUD de Usuários (listar, criar, editar, reset senha, toggle, excluir)
-//   - Turmas (CRUD + alunos)
-//   - Provas (listar, editar, resultados)
-//   - Resultados (listar, salvar, editar, excluir, cancelamento)
-//   - Backups (listar, criar, restaurar, download, excluir)
-//   - Monitoramento (violações)
-//   - Matrículas Autorizadas
-//   - Professores (listar, toggle, excluir, reativar, cadastrados)
-//   - Configurações (CRUD)
-//   - Email (testes, boas-vindas)
-//   - 2FA Backup Codes
-//   - Reset Access
-//   - Eixos, Cursos, Turmas de Cursos
-//   - Faces (Face ID)
-//   - Localizações
-//   - OneSignal (dispositivos, vínculos, testes, massa)
-//   - OMR (imagens de debug)
+//   - 🔥 PUT /usuarios/:id sincroniza turma.alunos (array + string)
+//   - 🔥 POST /turmas/:id/alunos sincroniza aluno.turma (string)
+//   - 🔥 DELETE /turmas/:id/alunos/:alunoId limpa aluno.turma (string)
+//   - 🔥 GET /turmas retorna totalAlunos calculado pelo array
 //
 // Autor: Equipe de Desenvolvimento
 // ============================================================================
@@ -163,10 +147,6 @@ if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
 // MIDDLEWARES LOCAIS
 // ============================================================================
 
-// ============================================================================
-// MIDDLEWARE DE AUTENTICAÇÃO (atualiza lastActive automaticamente)
-// ============================================================================
-
 const authenticateTokenLocal = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -202,7 +182,6 @@ const authenticateTokenLocal = (req, res, next) => {
         });
       }
 
-      // 🔥 ATUALIZAR lastActive A CADA REQUISIÇÃO (não bloqueia a resposta)
       User.findByIdAndUpdate(decoded.id, { 
         lastActive: new Date() 
       }).catch(() => {});
@@ -294,6 +273,57 @@ function extrairInfoDoNome(nomeArquivo) {
   return info;
 }
 
+/**
+ * 🔥 SINCRONIZA O ARRAY turma.alunos E O CAMPO aluno.turma
+ * 
+ * @param {ObjectId} alunoId - ID do aluno
+ * @param {string} turmaAntiga - Nome da turma antiga (ou vazio)
+ * @param {string} turmaNova - Nome da turma nova (ou vazio)
+ * 
+ * Esta função:
+ *  1. Remove o aluno do array da turma antiga
+ *  2. Adiciona o aluno no array da turma nova
+ *  3. Atualiza o campo string aluno.turma
+ * 
+ * Use sempre que precisar mover o aluno entre turmas.
+ */
+async function sincronizarTurmaDoAluno(alunoId, turmaAntiga, turmaNova) {
+  const turmaAntigaLimpa = (turmaAntiga || '').toString().trim();
+  const turmaNovaLimpa = (turmaNova || '').toString().trim();
+
+  try {
+    // 1. Remover do array da turma antiga
+    if (turmaAntigaLimpa && turmaAntigaLimpa !== turmaNovaLimpa) {
+      const result = await Turma.updateOne(
+        { nome: turmaAntigaLimpa },
+        { $pull: { alunos: alunoId } }
+      );
+      logger.info(`🔓 [SyncTurma] Aluno ${alunoId} removido do array de "${turmaAntigaLimpa}" (modificados: ${result.modifiedCount})`);
+    }
+
+    // 2. Adicionar ao array da turma nova
+    if (turmaNovaLimpa && turmaNovaLimpa !== turmaAntigaLimpa) {
+      const result = await Turma.updateOne(
+        { nome: turmaNovaLimpa },
+        { $addToSet: { alunos: alunoId } }
+      );
+      logger.info(`🔗 [SyncTurma] Aluno ${alunoId} adicionado ao array de "${turmaNovaLimpa}" (modificados: ${result.modifiedCount})`);
+
+      if (result.matchedCount === 0) {
+        logger.warn(`⚠️ [SyncTurma] Turma "${turmaNovaLimpa}" NÃO EXISTE no banco!`);
+      }
+    }
+
+    // 3. Atualizar o campo string do aluno
+    await User.findByIdAndUpdate(alunoId, { turma: turmaNovaLimpa || '' });
+    logger.info(`📝 [SyncTurma] Campo aluno.turma atualizado para "${turmaNovaLimpa}"`);
+
+  } catch (error) {
+    logger.error('❌ [SyncTurma] Erro na sincronização:', error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // HEALTH CHECK
 // ============================================================================
@@ -317,10 +347,6 @@ router.get('/health', (req, res) => {
     }
   });
 });
-
-// ============================================================================
-// DASHBOARD
-// ============================================================================
 
 // ============================================================================
 // DASHBOARD
@@ -392,19 +418,17 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
       }
     });
 
-    // 🔥 ATUALIZAR lastActive DO PRÓPRIO ADMIN (garante que ele conte como online)
     await User.findByIdAndUpdate(req.userId, {
       lastActive: new Date()
     });
 
-    // 🔥 Janela de 30 minutos
     const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000);
     stats.usuariosOnline = await User.countDocuments({
       ativo: true,
       $or: [
         { lastActive: { $gte: trintaMinutosAtras } },
         { lastLogin: { $gte: trintaMinutosAtras } },
-        { _id: req.userId } // 🔥 Inclui o próprio admin
+        { _id: req.userId }
       ]
     });
 
@@ -475,7 +499,6 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
       data: r.createdAt || r.dataRealizacao
     }));
 
-        // 🔥 ESTATÍSTICAS DE CONEXÕES
     const hojeInicio = new Date();
     hojeInicio.setHours(0, 0, 0, 0);
 
@@ -514,16 +537,6 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
 // HISTÓRICO DE CONEXÕES
 // ============================================================================
 
-/**
- * GET /api/admin/historico-conexoes
- * Busca histórico de login/logout dos usuários com filtros completos
- * 
- * LÓGICA DE DURAÇÃO:
- *   - Se o usuário tem `ultimoLogout` > `lastLogin` → duração REAL (logout explícito)
- *   - Se não tem logout explícito mas tem `lastActive` > `lastLogin` → duração até última atividade
- *   - Se está online agora → duração em andamento (agora - lastLogin)
- *   - Se `ultimoLogout` for zerado em novo login → recomeça
- */
 router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const {
@@ -541,7 +554,6 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
 
     logger.info(`📊 Admin ${req.userId} buscando histórico de conexões`);
 
-    // ===== 1. BUSCAR USUÁRIOS =====
     let userQuery = {};
     if (role && role !== 'todos') userQuery.role = role;
     if (turma && turma !== 'todas') userQuery.turma = turma;
@@ -559,19 +571,14 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
       .select('nome email role turma matricula lastLogin lastActive ultimoLogout createdAt onesignalPlayerId fotoPerfil curso')
       .lean();
 
-    // ===== 2. GERAR HISTÓRICO =====
     const conexoes = [];
-    const JANELA_ONLINE_MIN = 30; // mesma janela usada em usuarios-online
+    const JANELA_ONLINE_MIN = 30;
     const agoraMs = Date.now();
 
     usuarios.forEach(u => {
-      // ============================================
-      // 1. REGISTRO DE LOGIN
-      // ============================================
       if (u.lastLogin) {
         const loginMs = new Date(u.lastLogin).getTime();
         
-        // Duração: se houver logout explícito, usa ele; senão usa lastActive
         let fimSessaoMs = loginMs;
         let tipoSessao = 'ativa';
         
@@ -585,7 +592,6 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
         
         const duracaoMin = Math.max(0, Math.floor((fimSessaoMs - loginMs) / 60000));
         
-        // Está online agora?
         const ultimaAtividadeMs = u.lastActive ? new Date(u.lastActive).getTime() : loginMs;
         const estaOnline = !u.ultimoLogout && (agoraMs - ultimaAtividadeMs) <= (JANELA_ONLINE_MIN * 60 * 1000);
         
@@ -610,20 +616,12 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
         });
       }
 
-      // ============================================
-      // 2. REGISTRO DE LOGOUT / SESSÃO ENCERRADA
-      // ============================================
       if (u.lastLogin) {
         const loginMs = new Date(u.lastLogin).getTime();
         const ultimaAtividadeMs = u.lastActive ? new Date(u.lastActive).getTime() : loginMs;
         const temLogoutExplicito = u.ultimoLogout && new Date(u.ultimoLogout).getTime() > loginMs;
         
-        // Houve sessão com duração real?
         const teveAtividade = ultimaAtividadeMs > loginMs;
-        
-        // Só registra "logout" se:
-        //  a) Houve logout explícito, OU
-        //  b) Passou da janela de online (usuário saiu sem clicar em sair)
         const saiuDaJanela = (agoraMs - ultimaAtividadeMs) > (JANELA_ONLINE_MIN * 60 * 1000);
         
         if (temLogoutExplicito || (teveAtividade && saiuDaJanela)) {
@@ -651,25 +649,19 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
             duracao: duracaoMin,
             status: 'encerrada',
             online: false,
-            // 🔥 Informação extra: foi logout explícito ou por inatividade?
             logoutExplicito: !!temLogoutExplicito
           });
         }
       }
 
-      // ============================================
-      // 3. SESSÃO ATIVA (usuário ainda online)
-      // ============================================
       if (u.lastActive && u.lastLogin) {
         const loginMs = new Date(u.lastLogin).getTime();
         const ultimaAtividadeMs = new Date(u.lastActive).getTime();
         
-        // Se já houve logout explícito, não é mais sessão ativa
         const temLogoutExplicito = u.ultimoLogout && new Date(u.ultimoLogout).getTime() > loginMs;
         const estaOnline = !temLogoutExplicito && (agoraMs - ultimaAtividadeMs) <= (JANELA_ONLINE_MIN * 60 * 1000);
 
         if (estaOnline) {
-          // Duração em andamento (desde o login até agora)
           const duracaoSessao = Math.floor((agoraMs - loginMs) / 60000);
           
           conexoes.push({
@@ -695,10 +687,8 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
       }
     });
 
-    // ===== 3. ORDENAR =====
     conexoes.sort((a, b) => new Date(b.dataHora) - new Date(a.dataHora));
 
-    // ===== 4. FILTROS =====
     let filtradas = [...conexoes];
 
     if (tipo && tipo !== 'todos') {
@@ -742,14 +732,12 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
       }
     }
 
-    // ===== 5. PAGINAÇÃO =====
     const total = filtradas.length;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const inicioP = (pageNum - 1) * limitNum;
     const paginadas = filtradas.slice(inicioP, inicioP + limitNum);
 
-    // ===== 6. ESTATÍSTICAS =====
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
@@ -789,16 +777,10 @@ router.get('/historico-conexoes', authenticateTokenLocal, isSuperAdmin, async (r
 // USUÁRIOS ONLINE
 // ============================================================================
 
-// ============================================================================
-// USUÁRIOS ONLINE (janela de 30min + inclui o próprio admin)
-// ============================================================================
-
 router.get('/usuarios-online', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
-    // 🔥 Janela de 30 minutos
     const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000);
 
-    // 🔥 GARANTIR QUE O PRÓPRIO ADMIN ESTEJA SEMPRE NA LISTA
     await User.findByIdAndUpdate(req.userId, {
       lastActive: new Date()
     });
@@ -808,7 +790,7 @@ router.get('/usuarios-online', authenticateTokenLocal, isSuperAdmin, async (req,
       $or: [
         { lastActive: { $gte: trintaMinutosAtras } },
         { lastLogin: { $gte: trintaMinutosAtras } },
-        { _id: req.userId } // 🔥 Sempre inclui o próprio admin
+        { _id: req.userId }
       ]
     })
       .select('nome email role matricula turma curso eixo departamento ultimaAtualizacaoPerfil lastActive lastLogin fotoPerfil qrCodeUsuario onesignalPlayerId')
@@ -912,7 +894,7 @@ router.get('/usuarios-app', authenticateTokenLocal, isSuperAdmin, async (req, re
 });
 
 // ============================================================================
-// USUÁRIOS — ROTAS ESPECÍFICAS PRIMEIRO (estatisticas, professores-lista, alunos-lista)
+// USUÁRIOS — ROTAS ESPECÍFICAS PRIMEIRO
 // ============================================================================
 
 router.get('/usuarios/estatisticas', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
@@ -1160,6 +1142,19 @@ router.post('/usuarios', authenticateTokenLocal, isSuperAdmin, verificarPermissa
 
     await user.save();
 
+    // 🔥 SINCRONIZAR TURMA SE FOR ALUNO COM TURMA
+    if (userData.role === 'aluno' && userData.turma && Turma) {
+      try {
+        const result = await Turma.updateOne(
+          { nome: userData.turma },
+          { $addToSet: { alunos: user._id } }
+        );
+        logger.info(`🔗 Aluno ${user._id} vinculado ao array da turma "${userData.turma}" (modificados: ${result.modifiedCount})`);
+      } catch (syncError) {
+        logger.warn('⚠️ Erro ao sincronizar turma do aluno:', syncError.message);
+      }
+    }
+
     logger.info(`✅ Usuário criado pelo admin: ${user.email}`);
     logger.info(`   🔐 forcePasswordChange: ${user.forcePasswordChange}`);
 
@@ -1267,6 +1262,9 @@ router.get('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, async (req, re
   }
 });
 
+// ============================================================
+// 🔥 PUT /usuarios/:id — COM SINCRONIZAÇÃO turma.alunos
+// ============================================================
 router.put('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, verificarPermissaoSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1315,8 +1313,25 @@ router.put('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, verificarPermi
       updates.telefone = updates.telefone.replace(/\D/g, '');
     }
 
+    // 🔥 GUARDAR VALORES ANTES DE ATUALIZAR
+    const turmaAntiga = (existingUser.turma || '').toString().trim();
+    const turmaNova = updates.turma !== undefined ? (updates.turma || '').toString().trim() : turmaAntiga;
+    const mudouTurma = updates.turma !== undefined && turmaAntiga !== turmaNova;
+    const eraAluno = existingUser.role === 'aluno';
+    const continuaAluno = (updates.role || existingUser.role) === 'aluno';
+
     const user = await User.findByIdAndUpdate(id, updates, { new: true })
       .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
+
+    // 🔥 SINCRONIZAR ARRAY turma.alunos SE A TURMA MUDOU
+    if (mudouTurma && eraAluno && continuaAluno && Turma) {
+      try {
+        await sincronizarTurmaDoAluno(existingUser._id, turmaAntiga, turmaNova);
+      } catch (syncError) {
+        logger.error('❌ Erro ao sincronizar turma.alunos:', syncError);
+        // Não falha a requisição — o aluno.turma já foi salvo
+      }
+    }
 
     logger.info(`✅ Usuário ${id} atualizado com sucesso`);
 
@@ -1328,7 +1343,8 @@ router.put('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, verificarPermi
         nome: user.nome,
         email: user.email,
         role: user.role,
-        ativo: user.ativo
+        ativo: user.ativo,
+        turma: user.turma
       }
     });
 
@@ -1531,6 +1547,19 @@ router.delete('/usuarios/:id', authenticateTokenLocal, isSuperAdmin, verificarPe
       });
     }
 
+    // 🔥 REMOVER O ALUNO DO ARRAY turma.alunos (se for aluno)
+    if (user.role === 'aluno' && user.turma && Turma) {
+      try {
+        const result = await Turma.updateOne(
+          { nome: user.turma },
+          { $pull: { alunos: user._id } }
+        );
+        logger.info(`🔓 Aluno ${user._id} removido do array da turma "${user.turma}" (modificados: ${result.modifiedCount})`);
+      } catch (syncError) {
+        logger.warn('⚠️ Erro ao remover aluno do array da turma:', syncError.message);
+      }
+    }
+
     await User.findByIdAndDelete(id);
     logger.info(`✅ Usuário ${user.email} excluído permanentemente`);
 
@@ -1583,6 +1612,9 @@ router.get('/turmas/:id/alunos', authenticateTokenLocal, isSuperAdmin, async (re
   }
 });
 
+// ============================================================
+// 🔥 POST /turmas/:id/alunos — COM SINCRONIZAÇÃO REVERSA
+// ============================================================
 router.post('/turmas/:id/alunos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const turmaId = req.params.id;
@@ -1604,10 +1636,18 @@ router.post('/turmas/:id/alunos', authenticateTokenLocal, isSuperAdmin, async (r
       return res.status(400).json({ success: false, error: 'Aluno já está matriculado nesta turma' });
     }
 
+    // 🔥 GUARDAR TURMA ANTIGA (para sincronizar)
+    const turmaAntiga = (aluno.turma || '').toString().trim();
+    const turmaNova = turma.nome;
+
+    // 🔥 1. ADICIONAR AO ARRAY DA TURMA
     turma.alunos.push(alunoId);
     await turma.save();
 
-    logger.info(`✅ Aluno ${aluno.nome} adicionado à turma ${turma.nome}`);
+    // 🔥 2. ATUALIZAR O CAMPO STRING DO ALUNO (sincronização reversa)
+    await sincronizarTurmaDoAluno(aluno._id, turmaAntiga, turmaNova);
+
+    logger.info(`✅ Aluno ${aluno.nome} adicionado à turma ${turma.nome} (array + string sincronizados)`);
 
     const configDoc = await Config.findOne({ chave: 'notificacoes' });
     const pushAtivado = configDoc?.valor?.push === true;
@@ -1653,6 +1693,9 @@ router.post('/turmas/:id/alunos', authenticateTokenLocal, isSuperAdmin, async (r
   }
 });
 
+// ============================================================
+// 🔥 DELETE /turmas/:id/alunos/:alunoId — LIMPA CAMPO STRING
+// ============================================================
 router.delete('/turmas/:id/alunos/:alunoId', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const turmaId = req.params.id;
@@ -1670,10 +1713,14 @@ router.delete('/turmas/:id/alunos/:alunoId', authenticateTokenLocal, isSuperAdmi
       return res.status(400).json({ success: false, error: 'Aluno não está matriculado nesta turma' });
     }
 
+    // 🔥 1. REMOVER DO ARRAY DA TURMA
     turma.alunos = turma.alunos.filter(id => id.toString() !== alunoId.toString());
     await turma.save();
 
-    logger.info(`✅ Aluno ${aluno.nome} removido da turma ${turma.nome}`);
+    // 🔥 2. LIMPAR O CAMPO STRING DO ALUNO (sincronização)
+    await sincronizarTurmaDoAluno(aluno._id, turma.nome, '');
+
+    logger.info(`✅ Aluno ${aluno.nome} removido da turma ${turma.nome} (array + string sincronizados)`);
 
     const configDoc = await Config.findOne({ chave: 'notificacoes' });
     const pushAtivado = configDoc?.valor?.push === true;
@@ -1772,10 +1819,9 @@ router.get('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, res)
   }
 });
 
-// ============================================================================
-// TURMAS — LISTAR / CRIAR
-// ============================================================================
-
+// ============================================================
+// 🔥 GET /turmas — COM totalAlunos CALCULADO PELO ARRAY
+// ============================================================
 router.get('/turmas', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const turmas = await Turma.find()
@@ -1800,9 +1846,12 @@ router.get('/turmas', authenticateTokenLocal, isSuperAdmin, async (req, res) => 
         nome: turma.professorId.nome,
         email: turma.professorId.email
       } : null,
-      totalAlunos: turma.alunos?.length || 0,
-      totalProvas: turma.provas?.length || 0,
-      alunosComAcessibilidade: turma.alunos?.filter(a => a.precisaAcessibilidade).length || 0,
+      // 🔥 CONTAGEM DIRETA DO ARRAY
+      totalAlunos: Array.isArray(turma.alunos) ? turma.alunos.length : 0,
+      totalProvas: Array.isArray(turma.provas) ? turma.provas.length : 0,
+      alunosComAcessibilidade: Array.isArray(turma.alunos) 
+        ? turma.alunos.filter(a => a && a.precisaAcessibilidade).length 
+        : 0,
       alunos: turma.alunos?.map(a => ({
         id: a._id,
         nome: a.nome,
@@ -1958,11 +2007,13 @@ router.delete('/turmas/:id', authenticateTokenLocal, isSuperAdmin, async (req, r
       await Prova.findByIdAndDelete(prova._id);
     }
 
+    // 🔥 LIMPAR O CAMPO STRING DOS ALUNOS DESTA TURMA
     if (turma.alunos && turma.alunos.length > 0) {
       await User.updateMany(
         { _id: { $in: turma.alunos } },
-        { $pull: { turmas: turmaId } }
+        { $set: { turma: '' } }
       );
+      logger.info(`🔓 Campo "turma" limpo para ${turma.alunos.length} alunos`);
     }
 
     await Turma.findByIdAndDelete(turmaId);
@@ -2065,15 +2116,6 @@ router.put('/provas/:id', authenticateTokenLocal, isSuperAdmin, async (req, res)
     const updates = req.body;
 
     logger.info(`✏️ Admin ${req.userId} editando prova ${provaId}`);
-    logger.info('📦 Dados recebidos:', {
-      titulo: updates.titulo,
-      conteudo: updates.conteudo,
-      dataLimite: updates.dataLimite,
-      horarioInicio: updates.horarioInicio,
-      horarioTermino: updates.horarioTermino,
-      duracaoMinutos: updates.duracaoMinutos,
-      questoes: updates.questoes?.length || 0
-    });
 
     const prova = await Prova.findById(provaId);
     if (!prova) return res.status(404).json({ success: false, error: 'Prova não encontrada' });
@@ -2089,31 +2131,18 @@ router.put('/provas/:id', authenticateTokenLocal, isSuperAdmin, async (req, res)
       } else {
         prova.dataLimite = new Date(`${updates.dataLimite}T23:59:59`);
       }
-      logger.info(`📅 Data limite atualizada: ${prova.dataLimite.toLocaleString('pt-BR')}`);
     }
 
-    if (updates.horarioInicio) {
-      prova.horarioInicio = updates.horarioInicio;
-      logger.info(`⏰ Horário início atualizado: ${prova.horarioInicio}`);
-    }
-
-    if (updates.horarioTermino) {
-      prova.horarioTermino = updates.horarioTermino;
-      logger.info(`⏰ Horário término atualizado: ${prova.horarioTermino}`);
-    }
-
+    if (updates.horarioInicio) prova.horarioInicio = updates.horarioInicio;
+    if (updates.horarioTermino) prova.horarioTermino = updates.horarioTermino;
     if (updates.duracaoMinutos) prova.duracaoMinutos = updates.duracaoMinutos;
 
     if (updates.questoes && Array.isArray(updates.questoes)) {
       prova.questoes = updates.questoes;
       prova.quantidadeQuestoes = updates.questoes.length;
-      logger.info(`📝 ${prova.quantidadeQuestoes} questões atualizadas`);
     }
 
     await prova.save();
-
-    logger.info(`✅ Prova ${provaId} atualizada com sucesso`);
-    logger.info(`   Horários salvos: ${prova.horarioInicio} - ${prova.horarioTermino}`);
 
     res.json({
       success: true,
@@ -2403,18 +2432,14 @@ router.put('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (req, 
     const { nota, acertos, total, tempoGasto, observacoes, notaLiberada } = req.body;
 
     logger.info(`📝 Admin ${req.userId} atualizando resultado ${id}`);
-    logger.info('   Nova nota:', nota);
-    logger.info('   Acertos recebidos:', acertos, '/', total);
 
     const acertosCalculados = Math.round((nota / 10) * total);
-    logger.info(`   🔄 Acertos calculados: ${acertosCalculados} (${nota} / 10 * ${total})`);
 
     let acertosFinais = acertosCalculados;
 
     if (Math.abs(acertos - acertosCalculados) > 1) {
       logger.warn(`⚠️ Inconsistência detectada: recebido ${acertos}, calculado ${acertosCalculados}. Usando valor calculado.`);
     } else if (acertos !== acertosCalculados) {
-      logger.info(`ℹ️ Pequena diferença (${acertos} vs ${acertosCalculados}) - mantendo valor original`);
       acertosFinais = acertos;
     }
 
@@ -2422,16 +2447,9 @@ router.put('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (req, 
 
     let resultado = await Resultado.findById(id);
     let tipoAcao = 'editada';
-    let resultadoAntigo = null;
 
     if (resultado) {
-      resultadoAntigo = {
-        nota: resultado.nota,
-        acertos: resultado.acertos,
-        notaLiberada: resultado.notaLiberada
-      };
-
-      if (!resultadoAntigo.notaLiberada && notaLiberada) tipoAcao = 'liberada';
+      if (!resultado.notaLiberada && notaLiberada) tipoAcao = 'liberada';
 
       resultado.nota = nota;
       resultado.acertos = acertosFinais;
@@ -2442,10 +2460,6 @@ router.put('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (req, 
       resultado.porcentagem = total > 0 ? ((acertosFinais / total) * 100).toFixed(1) : '0.0';
 
       await resultado.save();
-
-      logger.info(`✅ Resultado ${id} atualizado:`);
-      logger.info(`   Nota: ${resultado.nota}`);
-      logger.info(`   Acertos: ${resultado.acertos}/${resultado.total} (${resultado.porcentagem}%)`);
 
       const aluno = await User.findById(resultado.userId).select('nome email');
       const prova = await Prova.findById(resultado.provaId).select('titulo userId');
@@ -2495,8 +2509,6 @@ router.put('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (req, 
 
       await provaRealizada.save();
 
-      logger.info(`✅ ProvaRealizada ${id} atualizada: ${acertosCalculados}/${total} acertos`);
-
       return res.json({
         success: true,
         message: 'Resultado atualizado com sucesso!',
@@ -2537,7 +2549,6 @@ router.delete('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (re
       await Resultado.findByIdAndDelete(id);
       excluidos.resultado = true;
       excluidos.resultadoId = id;
-      logger.info(`✅ Resultado ${id} excluído`);
 
       if (userId && provaId) {
         const provaRealizada = await ProvaRealizada.findOne({ provaId, alunoId: userId });
@@ -2546,7 +2557,6 @@ router.delete('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (re
           await ProvaRealizada.findByIdAndDelete(provaRealizada._id);
           excluidos.provaRealizada = true;
           excluidos.provaRealizadaId = provaRealizada._id;
-          logger.info(`✅ ProvaRealizada ${provaRealizada._id} também excluída (mesmo aluno/prova)`);
         }
       }
     } else {
@@ -2555,7 +2565,6 @@ router.delete('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (re
         await ProvaRealizada.findByIdAndDelete(id);
         excluidos.provaRealizada = true;
         excluidos.provaRealizadaId = id;
-        logger.info(`✅ ProvaRealizada ${id} excluída`);
 
         if (provaRealizada.alunoId && provaRealizada.provaId) {
           const resultado = await Resultado.findOne({
@@ -2567,7 +2576,6 @@ router.delete('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (re
             await Resultado.findByIdAndDelete(resultado._id);
             excluidos.resultado = true;
             excluidos.resultadoId = resultado._id;
-            logger.info(`✅ Resultado ${resultado._id} também excluído (mesmo aluno/prova)`);
           }
         }
       }
@@ -2604,7 +2612,6 @@ router.delete('/resultados/:id', authenticateTokenLocal, isSuperAdmin, async (re
           prova.totalParticipantes = totalParticipantes;
 
           await prova.save();
-          logger.info(`📊 Estatísticas da prova ${provaId} atualizadas`);
         }
       }
     }
@@ -2961,15 +2968,12 @@ router.get('/backups/download/:arquivo', authenticateTokenLocal, isSuperAdmin, a
     }
 
     const backupPath = path.join(__dirname, '..', 'backups', arquivo);
-    logger.info('📁 Caminho do arquivo:', backupPath);
 
     if (!fs.existsSync(backupPath)) {
-      logger.warn(`❌ Arquivo não encontrado: ${backupPath}`);
       return res.status(404).json({ success: false, error: 'Arquivo de backup não encontrado' });
     }
 
     const stats = fs.statSync(backupPath);
-    logger.info(`📊 Tamanho: ${stats.size} bytes`);
 
     res.setHeader('Content-Type', 'application/gzip');
     res.setHeader('Content-Disposition', `attachment; filename="${arquivo}"`);
@@ -2986,8 +2990,6 @@ router.get('/backups/download/:arquivo', authenticateTokenLocal, isSuperAdmin, a
         res.status(500).json({ success: false, error: 'Erro ao enviar arquivo' });
       }
     });
-
-    fileStream.on('end', () => logger.info(`✅ Download concluído: ${arquivo}`));
 
   } catch (error) {
     logger.error('❌ Erro ao baixar backup:', error);
@@ -3060,7 +3062,6 @@ router.delete('/backups/excluir/:arquivo', authenticateTokenLocal, isSuperAdmin,
     logger.info(`🗑️ Admin ${req.userId} excluindo backup: ${arquivo}`);
 
     if (arquivo.includes('..') || arquivo.includes('/') || arquivo.includes('\\')) {
-      logger.warn(`🚫 Tentativa de path traversal: ${arquivo}`);
       return res.status(400).json({ success: false, error: 'Nome de arquivo inválido' });
     }
 
@@ -3337,8 +3338,6 @@ router.put('/professores/:id/toggle-status', authenticateTokenLocal, isSuperAdmi
     professor.ativo = ativo;
     await professor.save();
 
-    logger.info(`✅ Professor ${professor.nome} agora está ${ativo ? 'ATIVO' : 'INATIVO'}`);
-
     res.json({
       success: true,
       message: `Professor ${ativo ? 'ativado' : 'inativado'} com sucesso!`,
@@ -3405,8 +3404,6 @@ router.put('/professores/:id/reativar', authenticateTokenLocal, isSuperAdmin, as
     professor.ativo = true;
     await professor.save();
 
-    logger.info(`✅ Professor ${professor.nome} reativado!`);
-
     res.json({
       success: true,
       message: 'Professor reativado com sucesso!',
@@ -3420,7 +3417,7 @@ router.put('/professores/:id/reativar', authenticateTokenLocal, isSuperAdmin, as
 });
 
 // ============================================================================
-// CONFIGURAÇÕES DO SISTEMA
+// CONFIGURAÇÕES
 // ============================================================================
 
 router.get('/configuracoes', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
@@ -3429,114 +3426,60 @@ router.get('/configuracoes', authenticateTokenLocal, isSuperAdmin, async (req, r
 
     const configPadrao = {
       aparencia: {
-        corPrimaria: '#667eea',
-        corSecundaria: '#764ba2',
-        modoEscuro: false,
-        tema: 'padrao',
-        animacoes: true,
-        arredondamento: true,
-        logoUrl: '',
-        faviconUrl: ''
+        corPrimaria: '#667eea', corSecundaria: '#764ba2', modoEscuro: false, tema: 'padrao',
+        animacoes: true, arredondamento: true, logoUrl: '', faviconUrl: ''
       },
       sistema: {
-        nome: 'EducaPleno',
-        versao: '1.0.0',
-        ambiente: process.env.NODE_ENV || 'development',
+        nome: 'EducaPleno', versao: '1.0.0', ambiente: process.env.NODE_ENV || 'development',
         urlBase: process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
-        modoManutencao: false,
-        modoDebug: process.env.NODE_ENV !== 'production',
-        timeoutSessao: 60,
-        manutencaoMensagem: 'Sistema em manutenção. Volte mais tarde.'
+        modoManutencao: false, modoDebug: process.env.NODE_ENV !== 'production',
+        timeoutSessao: 60, manutencaoMensagem: 'Sistema em manutenção. Volte mais tarde.'
       },
       seguranca: {
-        jwtExpiracao: process.env.JWT_EXPIRES_IN || '24h',
-        tentativasLogin: 5,
-        bloqueioTempo: 15,
-        doisFatores: false,
-        exigirFaceIdProvas: false,
+        jwtExpiracao: process.env.JWT_EXPIRES_IN || '24h', tentativasLogin: 5,
+        bloqueioTempo: 15, doisFatores: false, exigirFaceIdProvas: false,
         permitirMultiplosLogins: true,
         senha: {
-          forcarTrocaInicial: true,
-          tamanhoMinimo: 6,
-          expiracaoDias: 90,
-          exigirMaiuscula: false,
-          exigirNumero: false,
-          exigirEspecial: false
+          forcarTrocaInicial: true, tamanhoMinimo: 6, expiracaoDias: 90,
+          exigirMaiuscula: false, exigirNumero: false, exigirEspecial: false
         }
       },
       provas: {
-        tempoMaximo: 240,
-        tempoMinimo: 10,
-        tempoAdicionalAcessibilidade: true,
-        tempoAdicionalPercent: 50,
-        questoesMinimas: 5,
-        questoesMaximas: 50,
-        correcaoAutomatica: true,
-        liberacaoAutomatica: false,
-        permitirRevisao: true,
-        mostrarGabarito: false,
-        permitirCancelamento: true,
-        notificarProfessorCancelamento: true,
-        habilitarEnvioProva: true
+        tempoMaximo: 240, tempoMinimo: 10, tempoAdicionalAcessibilidade: true,
+        tempoAdicionalPercent: 50, questoesMinimas: 5, questoesMaximas: 50,
+        correcaoAutomatica: true, liberacaoAutomatica: false, permitirRevisao: true,
+        mostrarGabarito: false, permitirCancelamento: true,
+        notificarProfessorCancelamento: true, habilitarEnvioProva: true
       },
       notificacoes: {
-        email: true,
-        sistema: true,
-        push: false,
-        whatsapp: false,
-        lembreteProva: 24,
-        lembreteCorrecao: true,
-        notificarResultado: true,
+        email: true, sistema: true, push: false, whatsapp: false,
+        lembreteProva: 24, lembreteCorrecao: true, notificarResultado: true,
         notificarCancelamento: true
       },
       email: {
-        servico: process.env.EMAIL_SERVICE || 'brevo',
-        host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
-        porta: parseInt(process.env.EMAIL_PORT) || 587,
-        seguranca: process.env.EMAIL_SECURITY || 'tls',
-        usuario: process.env.EMAIL_USER || '',
-        senha: process.env.EMAIL_PASS ? '********' : '',
+        servico: process.env.EMAIL_SERVICE || 'brevo', host: process.env.EMAIL_HOST || 'smtp-relay.brevo.com',
+        porta: parseInt(process.env.EMAIL_PORT) || 587, seguranca: process.env.EMAIL_SECURITY || 'tls',
+        usuario: process.env.EMAIL_USER || '', senha: process.env.EMAIL_PASS ? '********' : '',
         remetente: process.env.EMAIL_FROM || 'naoresponder@iemasaoluiscentro.net',
         nomeRemetente: process.env.EMAIL_FROM_NAME || 'EducaPleno',
-        notificacoes: true,
-        lembretes: true,
-        resultados: true
+        notificacoes: true, lembretes: true, resultados: true
       },
       logs: {
-        nivel: process.env.LOG_LEVEL || 'info',
-        retencaoDias: 30,
-        console: true,
-        arquivo: true,
-        auditoria: true,
-        nivelAuditoria: 'medio'
+        nivel: process.env.LOG_LEVEL || 'info', retencaoDias: 30, console: true,
+        arquivo: true, auditoria: true, nivelAuditoria: 'medio'
       },
       backups: {
-        automatico: true,
-        frequencia: 'daily',
-        horario: '03:00',
-        manterPor: 30,
-        local: 'local',
-        maxBackups: 50,
-        incluirArquivos: true,
-        compactar: true,
-        ultimoBackup: null,
-        espacoUtilizado: '0 MB'
+        automatico: true, frequencia: 'daily', horario: '03:00', manterPor: 30,
+        local: 'local', maxBackups: 50, incluirArquivos: true, compactar: true,
+        ultimoBackup: null, espacoUtilizado: '0 MB'
       },
       desempenho: {
-        cacheTempo: 300,
-        paginacaoPadrao: 20,
-        maxResultados: 1000,
-        compressaoRespostas: true,
-        timeoutRequisicao: 30,
-        limiteArquivo: 10
+        cacheTempo: 300, paginacaoPadrao: 20, maxResultados: 1000,
+        compressaoRespostas: true, timeoutRequisicao: 30, limiteArquivo: 10
       },
       api: {
-        rateLimit: 100,
-        versao: 'v1',
-        documentacao: true,
-        chaveObrigatoria: false,
-        cors: true,
-        dominiosPermitidos: ['localhost']
+        rateLimit: 100, versao: 'v1', documentacao: true,
+        chaveObrigatoria: false, cors: true, dominiosPermitidos: ['localhost']
       }
     };
 
@@ -3544,7 +3487,6 @@ router.get('/configuracoes', authenticateTokenLocal, isSuperAdmin, async (req, r
     try {
       configuracoes = await Config.find().lean();
     } catch (dbError) {
-      logger.info('⚠️ Erro ao buscar configs do banco:', dbError.message);
       return res.json({ success: true, configuracoes: configPadrao, origem: 'padrao' });
     }
 
@@ -3570,23 +3512,16 @@ router.get('/configuracoes', authenticateTokenLocal, isSuperAdmin, async (req, r
         const lastKey = parts[parts.length - 1];
         target[lastKey] = c.valor;
         camposEncontrados.add(c.chave);
-
-        logger.info(`✅ Configuração aplicada: ${c.chave} = ${c.valor}`);
       } catch (pathError) {
         logger.warn(`⚠️ Erro ao processar chave ${c.chave}:`, pathError.message);
       }
     });
 
-    logger.info('📊 Campos encontrados no banco:', Array.from(camposEncontrados));
-
     const faceIdDoc = await Config.findOne({ chave: 'seguranca.exigirFaceIdProvas' }).lean();
     if (faceIdDoc) {
       if (!configObj.seguranca) configObj.seguranca = {};
       configObj.seguranca.exigirFaceIdProvas = faceIdDoc.valor;
-      logger.info(`✅ Face ID carregado diretamente: ${faceIdDoc.valor}`);
     }
-
-    logger.info('🎯 Objeto seguranca final:', configObj.seguranca);
 
     res.json({ success: true, configuracoes: configObj, total: configuracoes.length });
 
@@ -3649,8 +3584,6 @@ router.put('/configuracoes', authenticateTokenLocal, isSuperAdmin, async (req, r
         logger.error(`❌ Erro ao salvar ${chave}:`, itemError.message);
       }
     }
-
-    logger.info(`✅ ${resultados.length} configurações salvas`);
 
     res.json({ success: true, message: 'Configurações salvas com sucesso!', total: resultados.length });
 
@@ -3721,7 +3654,7 @@ router.post('/configuracoes/reset', authenticateTokenLocal, isSuperAdmin, async 
 });
 
 // ============================================================================
-// EMAIL (TESTES)
+// EMAIL
 // ============================================================================
 
 router.post('/testar-email', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
@@ -3765,10 +3698,6 @@ router.post('/testar-email-enviar', authenticateTokenLocal, isSuperAdmin, async 
       return res.status(400).json({ success: false, error: 'Destinatário não informado' });
     }
 
-    logger.info(`\n📧 ===== TESTE DE EMAIL =====`);
-    logger.info(`📨 Para: ${destinatario}`);
-    logger.info(`📝 Assunto: ${assunto || 'Teste do Sistema'}`);
-
     const emailService = new EmailService();
     await emailService.init();
 
@@ -3804,7 +3733,6 @@ router.post('/testar-email-enviar', authenticateTokenLocal, isSuperAdmin, async 
     });
 
     if (resultado.success) {
-      logger.info(`✅ Email de teste enviado para ${destinatario}`);
       res.json({
         success: true,
         message: 'Email de teste enviado com sucesso!',
@@ -3831,17 +3759,12 @@ router.post('/enviar-email-boas-vindas', authenticateTokenLocal, isSuperAdmin, a
 
     const nomeDestino = nome || destinatario.split('@')[0] || 'Usuário';
 
-    logger.info(`\n🎉 ===== EMAIL DE BOAS-VINDAS =====`);
-    logger.info(`📨 Para: ${destinatario}`);
-    logger.info(`👤 Nome: ${nomeDestino}`);
-
     const emailService = new EmailService();
     await emailService.init();
 
     const resultado = await emailService.sendWelcomeEmail(destinatario, nomeDestino);
 
     if (resultado.success) {
-      logger.info(`✅ Email de boas-vindas enviado para ${destinatario}`);
       res.json({
         success: true,
         message: 'Email de boas-vindas enviado com sucesso!',
@@ -3937,9 +3860,6 @@ router.post('/2fa/gerar-backup-codes/:userId', authenticateTokenLocal, async (re
     user.twoFactorBackupCodes = backupCodes;
     user.twoFactorBackupCodesShown = false;
     await user.save();
-
-    logger.info(`✅ Admin gerou 10 códigos para ${user.email}:`, backupCodes);
-    logger.info(`📝 LOG: Admin ${req.userId} gerou códigos para ${user.email} em ${new Date().toISOString()}`);
 
     res.json({
       success: true,
@@ -4060,7 +3980,6 @@ router.post('/reset-access', authenticateTokenLocal, async (req, res) => {
         });
 
         await notificacao.save();
-        logger.info(`✅ Notificação enviada para ${user.email}`);
 
         if (pushAtivado && oneSignal && user.onesignalPlayerId) {
           await oneSignal.enviarPush(
@@ -4079,8 +3998,6 @@ router.post('/reset-access', authenticateTokenLocal, async (req, res) => {
       else if (user.role === 'professor') estatisticas.professores++;
       else if (user.role === 'admin') estatisticas.admins++;
     }
-
-    logger.info(`✅ Reset concluído! ${contador} usuários afetados`);
 
     res.json({
       success: true,
@@ -4102,7 +4019,6 @@ router.post('/reset-access', authenticateTokenLocal, async (req, res) => {
 
 router.get('/eixos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
-    logger.info(`📋 Admin ${req.userId} listando eixos`);
     const eixos = await Eixo.find().sort({ label: 1 }).lean();
     res.json({ success: true, eixos });
   } catch (error) {
@@ -4114,7 +4030,6 @@ router.get('/eixos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
 router.post('/eixos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { nome, label, cor, icone, descricao } = req.body;
-    logger.info(`📝 Admin ${req.userId} criando eixo: ${nome}`);
 
     if (!nome || !label) {
       return res.status(400).json({ success: false, error: 'Nome e label são obrigatórios' });
@@ -4134,7 +4049,6 @@ router.post('/eixos', authenticateTokenLocal, isSuperAdmin, async (req, res) => 
     });
 
     await eixo.save();
-    logger.info(`✅ Eixo ${nome} criado com sucesso`);
 
     res.status(201).json({
       success: true,
@@ -4159,7 +4073,6 @@ router.put('/eixos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) 
   try {
     const { id } = req.params;
     const { nome, label, cor, icone, descricao } = req.body;
-    logger.info(`✏️ Admin ${req.userId} atualizando eixo ${id}`);
 
     const eixo = await Eixo.findById(id);
     if (!eixo) return res.status(404).json({ success: false, error: 'Eixo não encontrado' });
@@ -4176,7 +4089,6 @@ router.put('/eixos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) 
     if (descricao !== undefined) eixo.descricao = descricao;
 
     await eixo.save();
-    logger.info(`✅ Eixo ${eixo.nome} atualizado com sucesso`);
 
     res.json({
       success: true,
@@ -4200,7 +4112,6 @@ router.put('/eixos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) 
 router.delete('/eixos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    logger.info(`🗑️ Admin ${req.userId} excluindo eixo ${id}`);
 
     const cursosComEixo = await Curso.countDocuments({ eixoId: id });
     if (cursosComEixo > 0) {
@@ -4213,7 +4124,6 @@ router.delete('/eixos/:id', authenticateTokenLocal, isSuperAdmin, async (req, re
     const eixo = await Eixo.findByIdAndDelete(id);
     if (!eixo) return res.status(404).json({ success: false, error: 'Eixo não encontrado' });
 
-    logger.info(`✅ Eixo ${eixo.nome} excluído com sucesso`);
     res.json({ success: true, message: 'Eixo excluído com sucesso!' });
 
   } catch (error) {
@@ -4228,7 +4138,6 @@ router.delete('/eixos/:id', authenticateTokenLocal, isSuperAdmin, async (req, re
 
 router.get('/cursos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
-    logger.info(`📋 Admin ${req.userId} listando cursos`);
     const cursos = await Curso.find()
       .populate('eixoId', 'nome label cor icone')
       .sort({ nome: 1 })
@@ -4255,7 +4164,6 @@ router.get('/cursos', authenticateTokenLocal, isSuperAdmin, async (req, res) => 
 router.post('/cursos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { nome, eixoId } = req.body;
-    logger.info(`📝 Admin ${req.userId} criando curso: ${nome}`);
 
     if (!nome || !eixoId) {
       return res.status(400).json({ success: false, error: 'Nome do curso e Eixo são obrigatórios' });
@@ -4275,7 +4183,6 @@ router.post('/cursos', authenticateTokenLocal, isSuperAdmin, async (req, res) =>
     });
 
     await curso.save();
-    logger.info(`✅ Curso ${curso.nome} criado com sucesso`);
 
     const cursoCompleto = await Curso.findById(curso._id).populate('eixoId');
 
@@ -4301,7 +4208,6 @@ router.put('/cursos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res)
   try {
     const { id } = req.params;
     const { nome, eixoId, ativo } = req.body;
-    logger.info(`✏️ Admin ${req.userId} atualizando curso ${id}`);
 
     const curso = await Curso.findById(id);
     if (!curso) return res.status(404).json({ success: false, error: 'Curso não encontrado' });
@@ -4321,7 +4227,6 @@ router.put('/cursos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res)
     if (ativo !== undefined) curso.ativo = ativo;
 
     await curso.save();
-    logger.info(`✅ Curso ${curso.nome} atualizado com sucesso`);
 
     const cursoCompleto = await Curso.findById(curso._id).populate('eixoId');
 
@@ -4346,7 +4251,6 @@ router.put('/cursos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res)
 router.delete('/cursos/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    logger.info(`🗑️ Admin ${req.userId} excluindo curso ${id}`);
 
     const curso = await Curso.findById(id);
     if (!curso) return res.status(404).json({ success: false, error: 'Curso não encontrado' });
@@ -4367,7 +4271,6 @@ router.delete('/cursos/:id', authenticateTokenLocal, isSuperAdmin, async (req, r
     }
 
     await Curso.findByIdAndDelete(id);
-    logger.info(`✅ Curso ${curso.nome} excluído com sucesso`);
 
     res.json({ success: true, message: 'Curso excluído com sucesso!' });
 
@@ -4385,7 +4288,6 @@ router.post('/cursos/:cursoId/turmas', authenticateTokenLocal, isSuperAdmin, asy
   try {
     const { cursoId } = req.params;
     const { codigo, periodo, vagas } = req.body;
-    logger.info(`📝 Admin ${req.userId} adicionando turma ao curso ${cursoId}`);
 
     const curso = await Curso.findById(cursoId);
     if (!curso) return res.status(404).json({ success: false, error: 'Curso não encontrado' });
@@ -4409,8 +4311,6 @@ router.post('/cursos/:cursoId/turmas', authenticateTokenLocal, isSuperAdmin, asy
     curso.turmas.push(novaTurma);
     await curso.save();
 
-    logger.info(`✅ Turma ${codigo} adicionada ao curso ${curso.nome}`);
-
     res.status(201).json({ success: true, message: 'Turma adicionada com sucesso!', turma: novaTurma });
 
   } catch (error) {
@@ -4423,7 +4323,6 @@ router.put('/cursos/:cursoId/turmas/:turmaId', authenticateTokenLocal, isSuperAd
   try {
     const { cursoId, turmaId } = req.params;
     const { codigo, periodo, vagas, ativa } = req.body;
-    logger.info(`✏️ Admin ${req.userId} editando turma ${turmaId} do curso ${cursoId}`);
 
     const curso = await Curso.findById(cursoId);
     if (!curso) return res.status(404).json({ success: false, error: 'Curso não encontrado' });
@@ -4437,7 +4336,6 @@ router.put('/cursos/:cursoId/turmas/:turmaId', authenticateTokenLocal, isSuperAd
     if (ativa !== undefined) turma.ativa = ativa;
 
     await curso.save();
-    logger.info(`✅ Turma ${turma.codigo} atualizada com sucesso`);
 
     res.json({ success: true, message: 'Turma atualizada com sucesso!', turma });
 
@@ -4450,7 +4348,6 @@ router.put('/cursos/:cursoId/turmas/:turmaId', authenticateTokenLocal, isSuperAd
 router.delete('/cursos/:cursoId/turmas/:turmaId', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { cursoId, turmaId } = req.params;
-    logger.info(`🗑️ Admin ${req.userId} removendo turma ${turmaId} do curso ${cursoId}`);
 
     const curso = await Curso.findById(cursoId);
     if (!curso) return res.status(404).json({ success: false, error: 'Curso não encontrado' });
@@ -4460,7 +4357,6 @@ router.delete('/cursos/:cursoId/turmas/:turmaId', authenticateTokenLocal, isSupe
 
     await Curso.updateOne({ _id: cursoId }, { $pull: { turmas: { _id: turmaId } } });
 
-    logger.info(`✅ Turma ${turma.codigo} removida com sucesso`);
     res.json({ success: true, message: 'Turma removida com sucesso!' });
 
   } catch (error) {
@@ -4470,7 +4366,7 @@ router.delete('/cursos/:cursoId/turmas/:turmaId', authenticateTokenLocal, isSupe
 });
 
 // ============================================================================
-// FACES — ROTAS ESPECÍFICAS PRIMEIRO
+// FACES
 // ============================================================================
 
 router.get('/faces/todos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
@@ -4478,14 +4374,10 @@ router.get('/faces/todos', authenticateTokenLocal, isSuperAdmin, async (req, res
     const { page = 1, limit = 50 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    logger.info(`📋 Admin ${req.userId} listando faces (página ${page}, limite ${limit})`);
-
     const [faces, total] = await Promise.all([
       FaceID.find().sort({ dataCadastro: -1 }).skip(skip).limit(parseInt(limit)).lean(),
       FaceID.countDocuments()
     ]);
-
-    logger.info(`✅ ${faces.length} faces encontradas (total: ${total})`);
 
     res.json({
       success: true,
@@ -4517,15 +4409,9 @@ router.get('/faces/usuario/:usuarioId', authenticateTokenLocal, isSuperAdmin, as
   }
 });
 
-// ============================================================================
-// FACES — :id
-// ============================================================================
-
 router.get('/faces/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    logger.info(`🔍 Admin ${req.userId} buscando face ${id}`);
-
     const face = await FaceID.findById(id).lean();
     if (!face) return res.status(404).json({ success: false, error: 'Face não encontrada' });
 
@@ -4541,7 +4427,6 @@ router.put('/faces/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) 
   try {
     const { id } = req.params;
     const { ativo, totalValidacoes } = req.body;
-    logger.info(`✏️ Admin ${req.userId} atualizando face ${id}`);
 
     const face = await FaceID.findById(id);
     if (!face) return res.status(404).json({ success: false, error: 'Face não encontrada' });
@@ -4550,7 +4435,6 @@ router.put('/faces/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) 
     if (totalValidacoes !== undefined) face.totalValidacoes = totalValidacoes;
 
     await face.save();
-    logger.info(`✅ Face ${id} atualizada com sucesso`);
 
     res.json({ success: true, message: 'Face atualizada com sucesso' });
 
@@ -4563,7 +4447,6 @@ router.put('/faces/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) 
 router.post('/faces/:id/registrar-validacao', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    logger.info(`📸 Admin ${req.userId} registrando validação manual para face ${id}`);
 
     const face = await FaceID.findById(id);
     if (!face) return res.status(404).json({ success: false, error: 'Face não encontrada' });
@@ -4571,8 +4454,6 @@ router.post('/faces/:id/registrar-validacao', authenticateTokenLocal, isSuperAdm
     face.totalValidacoes = (face.totalValidacoes || 0) + 1;
     face.ultimaValidacao = new Date();
     await face.save();
-
-    logger.info(`✅ Validação registrada para face ${id}. Total: ${face.totalValidacoes}`);
 
     res.json({
       success: true,
@@ -4611,15 +4492,12 @@ router.put('/faces/:id/toggle-status', authenticateTokenLocal, isSuperAdmin, asy
   try {
     const { id } = req.params;
     const { ativo } = req.body;
-    logger.info(`🔄 Admin ${req.userId} alterando status da face ${id} para ${ativo ? 'ATIVO' : 'INATIVO'}`);
 
     const face = await FaceID.findById(id);
     if (!face) return res.status(404).json({ success: false, error: 'Face não encontrada' });
 
     face.ativo = ativo;
     await face.save();
-
-    logger.info(`✅ Status da face ${id} alterado para ${ativo ? 'ativo' : 'inativo'}`);
 
     res.json({ success: true, message: `Face ${ativo ? 'ativada' : 'inativada'} com sucesso` });
 
@@ -4632,12 +4510,10 @@ router.put('/faces/:id/toggle-status', authenticateTokenLocal, isSuperAdmin, asy
 router.delete('/faces/:id', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    logger.info(`🗑️ Admin ${req.userId} excluindo face ${id}`);
 
     const face = await FaceID.findByIdAndDelete(id);
     if (!face) return res.status(404).json({ success: false, error: 'Face não encontrada' });
 
-    logger.info(`✅ Face ${id} excluída com sucesso`);
     res.json({ success: true, message: 'Face excluída com sucesso' });
 
   } catch (error) {
@@ -4656,7 +4532,6 @@ router.get('/localizacoes/ativas', authenticateTokenLocal, isSuperAdmin, async (
     const dataLimite = new Date(Date.now() - minutos * 60 * 1000);
 
     if (!Localizacao) {
-      logger.error('❌ Modelo Localizacao não encontrado!');
       return res.status(500).json({ success: false, error: 'Modelo de localização não configurado' });
     }
 
@@ -4697,21 +4572,15 @@ router.get('/localizacoes/ativas', authenticateTokenLocal, isSuperAdmin, async (
       timestamp: l.timestamp
     });
 
-    const ativas = localizacoesAtivas.map(formatarLocalizacao);
-    const ultimas = ultimasLocalizacoes.map(formatarLocalizacao);
-
     res.json({
       success: true,
-      localizacoes: ativas,
-      ultimasLocalizacoes: ultimas,
-      total: ativas.length + ultimas.length
+      localizacoes: localizacoesAtivas.map(formatarLocalizacao),
+      ultimasLocalizacoes: ultimasLocalizacoes.map(formatarLocalizacao),
+      total: localizacoesAtivas.length + ultimasLocalizacoes.length
     });
 
   } catch (error) {
-    logger.error('❌ Erro ao buscar localizações:');
-    logger.error('   Nome:', error.name);
-    logger.error('   Mensagem:', error.message);
-    logger.error('   Stack:', error.stack);
+    logger.error('❌ Erro ao buscar localizações:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -4720,8 +4589,6 @@ router.get('/localizacoes/historico/:alunoId', authenticateTokenLocal, isSuperAd
   try {
     const { alunoId } = req.params;
     const { limite = 20 } = req.query;
-
-    logger.info(`📋 Admin ${req.userId} buscando histórico de localizações do aluno ${alunoId}`);
 
     const localizacoes = await Localizacao.find({ alunoId })
       .populate('alunoId', 'nome email matricula turma')
@@ -4740,8 +4607,6 @@ router.get('/localizacoes/historico/:alunoId', authenticateTokenLocal, isSuperAd
       provaId: l.provaId
     }));
 
-    logger.info(`✅ ${resultado.length} registros encontrados`);
-
     res.json({ success: true, localizacoes: resultado, total: resultado.length });
 
   } catch (error) {
@@ -4751,7 +4616,7 @@ router.get('/localizacoes/historico/:alunoId', authenticateTokenLocal, isSuperAd
 });
 
 // ============================================================================
-// ONESIGNAL (ADMIN)
+// ONESIGNAL
 // ============================================================================
 
 router.get('/onesignal/dispositivos', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
@@ -4855,8 +4720,6 @@ router.post('/onesignal/vincular', authenticateTokenLocal, isSuperAdmin, async (
   try {
     const { playerId, usuarioId } = req.body;
 
-    logger.info(`🔗 Admin ${req.userId} vinculando dispositivo ${playerId} ao usuário ${usuarioId}`);
-
     const usuario = await User.findById(usuarioId);
     if (!usuario) return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
 
@@ -4904,7 +4767,6 @@ router.post('/onesignal/vincular', authenticateTokenLocal, isSuperAdmin, async (
 router.post('/onesignal/desvincular/:playerId', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { playerId } = req.params;
-    logger.info(`🔓 Admin ${req.userId} desvinculando dispositivo ${playerId}`);
 
     const usuario = await User.findOne({ onesignalPlayerId: playerId });
 
@@ -4930,7 +4792,6 @@ router.post('/onesignal/desvincular/:playerId', authenticateTokenLocal, isSuperA
 router.delete('/onesignal/dispositivo/:playerId', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { playerId } = req.params;
-    logger.info(`🗑️ Admin ${req.userId} deletando dispositivo ${playerId} do OneSignal`);
 
     await User.findOneAndUpdate({ onesignalPlayerId: playerId }, { onesignalPlayerId: null });
 
@@ -4949,8 +4810,6 @@ router.post('/onesignal/testar/:playerId', authenticateTokenLocal, isSuperAdmin,
   try {
     const { playerId } = req.params;
     const { titulo, mensagem } = req.body;
-
-    logger.info(`📱 Admin ${req.userId} enviando teste para ${playerId}`);
 
     const admin = await User.findById(req.userId).select('nome');
     const adminNome = admin?.nome || 'Administrador';
@@ -5015,8 +4874,6 @@ router.post('/onesignal/enviar-massa', authenticateTokenLocal, isSuperAdmin, asy
     if (!playerIds || !Array.isArray(playerIds) || playerIds.length === 0) {
       return res.status(400).json({ success: false, error: 'Lista de playerIds é obrigatória' });
     }
-
-    logger.info(`📤 Enviando push em massa para ${playerIds.length} dispositivos`);
 
     const axios = require('axios');
 
@@ -5090,7 +4947,6 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
     }
 
     const todosDispositivos = dispositivosResp.players || dispositivosResp.dispositivos || [];
-    logger.info(`📱 ${todosDispositivos.length} dispositivos no OneSignal`);
 
     const usuariosVinculados = await User.find({
       onesignalPlayerId: { $exists: true, $ne: null, $ne: '' }
@@ -5102,8 +4958,6 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
       const pid = d.id || d.playerId;
       return pid && !playerIdsVinculados.has(pid);
     });
-
-    logger.info(`📱 ${dispositivosOrfaos.length} órfãos encontrados`);
 
     if (dispositivosOrfaos.length === 0) {
       return res.json({
@@ -5122,17 +4976,11 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
 
     let enviados = 0;
     let erros = 0;
-    const errosDetalhes = [];
-
-    logger.info(`\n📱 ENVIANDO PUSH PARA ${dispositivosOrfaos.length} DISPOSITIVOS...`);
 
     for (const dispositivo of dispositivosOrfaos) {
       const playerId = dispositivo.id || dispositivo.playerId;
 
-      if (!playerId) {
-        erros++;
-        continue;
-      }
+      if (!playerId) { erros++; continue; }
 
       try {
         const linkVinculo = `${BASE_URL}/vincular-dispositivo.html?playerId=${playerId}`;
@@ -5154,35 +5002,17 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
           }
         );
 
-        if (resultado && resultado.success) {
-          enviados++;
-          logger.info(`   ✅ Push: ${playerId.substring(0, 20)}...`);
-        } else {
-          erros++;
-          errosDetalhes.push({
-            playerId: playerId.substring(0, 20) + '...',
-            motivo: resultado?.error || 'Falha no envio'
-          });
-        }
+        if (resultado && resultado.success) enviados++;
+        else erros++;
 
         await new Promise(resolve => setTimeout(resolve, 150));
 
       } catch (error) {
         erros++;
-        errosDetalhes.push({
-          playerId: playerId.substring(0, 20) + '...',
-          motivo: error.message
-        });
       }
     }
 
-    logger.info(`\n✅ Push: ${enviados} enviados | ${erros} erros`);
-
-    logger.info(`\n🔔 CRIANDO NOTIFICAÇÕES INTERNAS...`);
-
     let notificacoesInternasCriadas = 0;
-    let notificacoesComLinkEspecifico = 0;
-    let notificacoesComLinkGenerico = 0;
 
     try {
       const usuariosParaNotificar = await User.find({
@@ -5190,22 +5020,11 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
         _id: { $ne: req.userId }
       }).select('_id nome role onesignalPlayerId');
 
-      logger.info(`   📋 ${usuariosParaNotificar.length} usuários ativos`);
-
       for (const u of usuariosParaNotificar) {
         try {
-          let linkEspecifico = null;
-          let tipoLink = '';
-
-          if (u.onesignalPlayerId && u.onesignalPlayerId.length > 0) {
-            linkEspecifico = `/vincular-dispositivo.html?playerId=${u.onesignalPlayerId}`;
-            tipoLink = 'especifico';
-            notificacoesComLinkEspecifico++;
-          } else {
-            linkEspecifico = `/vincular-dispositivo.html`;
-            tipoLink = 'generico';
-            notificacoesComLinkGenerico++;
-          }
+          let linkEspecifico = u.onesignalPlayerId
+            ? `/vincular-dispositivo.html?playerId=${u.onesignalPlayerId}`
+            : `/vincular-dispositivo.html`;
 
           const notificacao = new Notificacao({
             usuarioId: u._id,
@@ -5223,7 +5042,6 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
               origem: 'admin_envio_massa',
               enviadoPor: req.userId,
               totalDispositivos: dispositivosOrfaos.length,
-              tipoLink: tipoLink,
               temPlayerId: !!u.onesignalPlayerId,
               data: new Date().toISOString()
             }
@@ -5246,8 +5064,6 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
       message: `Push enviado para ${enviados} dispositivo(s). Notificação interna criada para ${notificacoesInternasCriadas} usuários.`,
       enviados,
       notificacoesInternas: notificacoesInternasCriadas,
-      notificacoesEspecificas: notificacoesComLinkEspecifico,
-      notificacoesGenericas: notificacoesComLinkGenerico,
       erros,
       total: dispositivosOrfaos.length
     });
@@ -5259,13 +5075,11 @@ router.post('/onesignal/solicitar-vinculo-massa', authenticateTokenLocal, isSupe
 });
 
 // ============================================================================
-// OMR (IMAGENS DE DEBUG)
+// OMR
 // ============================================================================
 
 router.get('/omr/imagens', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
-    logger.info(`📋 Admin ${req.userId} listando imagens OMR da pasta: ${OMR_DEBUG_FOLDER}`);
-
     if (!fs.existsSync(OMR_DEBUG_FOLDER)) {
       return res.json({
         success: true,
@@ -5279,8 +5093,6 @@ router.get('/omr/imagens', authenticateTokenLocal, isSuperAdmin, async (req, res
 
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
     const imageFiles = files.filter(file => imageExtensions.includes(path.extname(file).toLowerCase()));
-
-    logger.info(`📊 Encontrados ${imageFiles.length} arquivos de imagem`);
 
     const imagens = await Promise.all(imageFiles.map(async (file) => {
       const filePath = path.join(OMR_DEBUG_FOLDER, file);
@@ -5318,8 +5130,6 @@ router.get('/omr/imagens', authenticateTokenLocal, isSuperAdmin, async (req, res
       resultados: imagens.filter(i => i.tipo === 'resultado').length
     };
 
-    logger.info(`✅ Retornando ${imagens.length} imagens`);
-
     res.json({ success: true, imagens, total: imagens.length, estatisticas });
 
   } catch (error) {
@@ -5331,7 +5141,6 @@ router.get('/omr/imagens', authenticateTokenLocal, isSuperAdmin, async (req, res
 router.delete('/omr/imagens/:nomeArquivo', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
     const { nomeArquivo } = req.params;
-    logger.info(`🗑️ Admin ${req.userId} excluindo imagem OMR: ${nomeArquivo}`);
 
     if (nomeArquivo.includes('..') || nomeArquivo.includes('/') || nomeArquivo.includes('\\')) {
       return res.status(400).json({ success: false, error: 'Nome de arquivo inválido' });
@@ -5343,7 +5152,6 @@ router.delete('/omr/imagens/:nomeArquivo', authenticateTokenLocal, isSuperAdmin,
     }
 
     fs.unlinkSync(filePath);
-    logger.info(`✅ Imagem ${nomeArquivo} excluída com sucesso`);
 
     res.json({ success: true, message: 'Imagem excluída com sucesso!' });
 
@@ -5355,8 +5163,6 @@ router.delete('/omr/imagens/:nomeArquivo', authenticateTokenLocal, isSuperAdmin,
 
 router.delete('/omr/limpar', authenticateTokenLocal, isSuperAdmin, async (req, res) => {
   try {
-    logger.info(`🗑️ Admin ${req.userId} limpando TODAS as imagens OMR`);
-
     const files = await readdir(OMR_DEBUG_FOLDER);
     let deletados = 0;
 
@@ -5369,8 +5175,6 @@ router.delete('/omr/limpar', authenticateTokenLocal, isSuperAdmin, async (req, r
         deletados++;
       }
     }
-
-    logger.info(`✅ ${deletados} arquivos excluídos da pasta debug_omr`);
 
     res.json({
       success: true,

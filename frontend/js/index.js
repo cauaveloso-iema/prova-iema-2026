@@ -2812,52 +2812,109 @@ async function carregarDadosProfessor() {
     }
 }
 
+// ============================================
+// CARREGAR EIXOS DO BANCO PARA O SELECT
+// ============================================
 async function carregarEixosParaSelect() {
     try {
-        console.log('📥 Carregando eixos do banco...');
+        console.log('📥 Carregando eixos do banco de dados...');
         
-        const response = await fetch('/api/eixos');
+        const token = localStorage.getItem('auth_token');
+        
+        if (!token) {
+            console.error('❌ Token não encontrado');
+            mostrarAlerta('mostrarAlertaGeralTurma', '❌ Sessão expirada. Faça login novamente.', 'error');
+            return [];
+        }
+        
+        const selectEixo = document.getElementById('eixoTurma');
+        if (!selectEixo) {
+            console.warn('⚠️ Select #eixoTurma não encontrado no DOM');
+            return [];
+        }
+        
+        // Estado de "carregando"
+        selectEixo.innerHTML = '<option value="">⏳ Carregando eixos...</option>';
+        selectEixo.disabled = true;
+        
+        // ✅ ROTA CORRETA (professor)
+        const response = await fetch('/api/professor/eixos', {
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
         if (!data.success) {
             throw new Error(data.error || 'Erro ao carregar eixos');
         }
         
-        const selectEixo = document.getElementById('eixoTurma');
-        if (!selectEixo) return;
+        // 🔥 Se o backend retornou 0 eixos, avisa o usuário (SEM fallback)
+        if (!data.eixos || data.eixos.length === 0) {
+            console.warn('⚠️ Nenhum eixo cadastrado no banco de dados');
+            
+            selectEixo.innerHTML = `
+                <option value="">⚠️ Nenhum eixo cadastrado no sistema</option>
+            `;
+            selectEixo.disabled = true;
+            
+            mostrarAlerta(
+                'mostrarAlertaGeralTurma', 
+                '⚠️ Nenhum eixo cadastrado no sistema. Entre em contato com o administrador para cadastrar os eixos antes de criar turmas.', 
+                'warning'
+            );
+            
+            return [];
+        }
         
+        // 🔥 Popular select com os eixos DO BANCO
         selectEixo.innerHTML = '<option value="">Selecione um eixo...</option>';
         
         data.eixos.forEach(eixo => {
             const option = document.createElement('option');
             option.value = eixo.nome;
-            option.textContent = eixo.label;
+            option.textContent = eixo.label || eixo.nome;
             option.style.borderLeft = `3px solid ${eixo.cor || '#667eea'}`;
             option.style.padding = '5px 10px';
             option.style.marginBottom = '2px';
+            option.dataset.cor = eixo.cor || '#667eea';
+            option.dataset.icone = eixo.icone || 'fa-graduation-cap';
             selectEixo.appendChild(option);
         });
         
-        console.log(`✅ ${data.eixos.length} eixos carregados do banco`);
+        selectEixo.disabled = false;
+        
+        console.log(`✅ ${data.eixos.length} eixos carregados do banco de dados:`);
+        data.eixos.forEach(e => {
+            console.log(`   • ${e.label || e.nome} (${e.nome})`);
+        });
+        
+        return data.eixos;
         
     } catch (error) {
-        console.error('❌ Erro ao carregar eixos:', error);
+        console.error('❌ Erro ao carregar eixos do banco:', error);
         
         const selectEixo = document.getElementById('eixoTurma');
         if (selectEixo) {
             selectEixo.innerHTML = `
-                <option value="">Selecione um eixo...</option>
-                <option value="natureza">🔬 Natureza e Matemática</option>
-                <option value="humanas">🏛️ Humanas</option>
-                <option value="linguagens">🎭 Linguagens</option>
-                <option value="desenvolvimento">💻 Desenvolvimento de Sistemas</option>
-                <option value="redes">🌐 Redes de Computadores</option>
-                <option value="gestao">📊 Gestão e Negócios</option>
-                <option value="producao">🎬 Produção Cultural e Design</option>
-                <option value="turismo">✈️ Turismo, Hospitalidade e Lazer</option>
-                <option value="ambiente">🌱 Ambiente e Saúde</option>
+                <option value="">❌ Erro ao carregar eixos</option>
             `;
+            selectEixo.disabled = true;
         }
+        
+        mostrarAlerta(
+            'mostrarAlertaGeralTurma', 
+            `❌ Erro ao carregar eixos do banco: ${error.message}. Verifique sua conexão.`, 
+            'error'
+        );
+        
+        return [];
     }
 }
 
@@ -3911,41 +3968,59 @@ window.visualizarProva = async function(provaId) {
     }
 };
 
+// ============================================
+// VER DETALHES DA TURMA
+// ============================================
 window.verTurma = async function(turmaId) {
+    console.log(`🔍 [verTurma] Buscando turma: ${turmaId}`);
+    
     try {
-        console.log(`🔍 Buscando detalhes da turma: ${turmaId}`);
-        
         const token = localStorage.getItem('auth_token');
         
-        const loadingHTML = `
-            <div class="modal-header">
-                <h3><i class="fas fa-school"></i> Detalhes da Turma</h3>
-                <button class="modal-close" onclick="fecharModal('modalDetalhesTurma')">&times;</button>
-            </div>
-            <div style="padding: 40px; text-align: center;">
-                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #8b5cf6; margin-bottom: 15px;"></i>
-                <p style="color: #6b7280;">Carregando informações da turma...</p>
-            </div>
-        `;
-        
+        // ========== 1. ABRIR MODAL COM LOADING ==========
         let modal = document.getElementById('modalDetalhesTurma');
         if (!modal) {
             modal = document.createElement('div');
-            modal.className = 'modal';
             modal.id = 'modalDetalhesTurma';
-            modal.innerHTML = `
-                <div class="modal-content" style="max-width: 650px; max-height: 85vh; overflow-y: auto; padding: 0; border-radius: 24px;">
-                    ${loadingHTML}
-                </div>
+            modal.style.cssText = `
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 9999;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                box-sizing: border-box;
             `;
             document.body.appendChild(modal);
-        } else {
-            modal.querySelector('.modal-content').innerHTML = loadingHTML;
         }
         
+        modal.innerHTML = `
+            <div class="modal-content" style="
+                background: white;
+                border-radius: 24px;
+                max-width: 750px;
+                width: 100%;
+                max-height: 90vh;
+                overflow-y: auto;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            ">
+                <div style="padding: 60px; text-align: center;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: #667eea; margin-bottom: 20px;"></i>
+                    <p style="color: #6b7280; font-size: 1rem;">Carregando informações da turma...</p>
+                </div>
+            </div>
+        `;
         modal.style.display = 'flex';
         
-        const response = await fetch(`/api/turmas/${turmaId}`, {
+        // ========== 2. 🔥 BUSCAR DE /api/professor/turmas ==========
+        console.log('📡 Buscando /api/professor/turmas (rota que TEM alunosComAcessibilidade)...');
+        
+        const response = await fetch('/api/professor/turmas', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -3955,566 +4030,883 @@ window.verTurma = async function(turmaId) {
         
         const data = await response.json();
         
-        if (data.success) {
-            const turma = data.turma;
-            
-            console.log('✅ Dados da API:', turma);
-            
-            let dataCriacao = 'Não disponível';
-            
-            if (turma.dataCriacao && turma.dataCriacao.$date) {
-                try {
-                    const date = new Date(turma.dataCriacao.$date);
-                    if (!isNaN(date.getTime())) {
-                        dataCriacao = date.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        console.log('✅ Data extraída do formato $date:', dataCriacao);
-                    }
-                } catch (e) {
-                    console.warn('Erro ao processar $date:', e);
+        if (!data.success || !data.turmas) {
+            throw new Error('Erro ao carregar turmas');
+        }
+        
+        // Encontrar a turma específica
+        const turma = data.turmas.find(t => 
+            String(t.id) === String(turmaId) || 
+            String(t._id) === String(turmaId)
+        );
+        
+        if (!turma) {
+            throw new Error('Turma não encontrada');
+        }
+        
+        console.log('📦 Turma encontrada:', turma);
+        
+        // ========== 3. USAR CAMPOS DO BACKEND DIRETAMENTE ==========
+        const alunos = turma.alunos || [];
+        const totalAlunos = turma.totalAlunos || alunos.length;
+        const alunosComAcessibilidade = turma.alunosComAcessibilidade || 0;  // 🔥 AGORA É 1!
+        const totalProvas = turma.totalProvas || 0;
+        
+        console.log('📊 Contadores (do backend):', {
+            totalAlunos,
+            alunosComAcessibilidade,  // ← VAI MOSTRAR 1
+            totalProvas
+        });
+        
+        // Provas
+        const provas = turma.provas || [];
+        const provasAtivas = provas.filter(p => p.publicada === true || p.status === 'ativa').length;
+        
+        // ========== 4. PROCESSAR DADOS VISUAIS ==========
+        // Data
+        let dataCriacao = 'Não disponível';
+        if (turma.dataCriacao || turma.createdAt) {
+            try {
+                const date = new Date(turma.dataCriacao || turma.createdAt);
+                if (!isNaN(date.getTime())) {
+                    dataCriacao = date.toLocaleDateString('pt-BR');
+                }
+            } catch (e) {}
+        }
+        
+        // Professor
+        const professorNome = turma.professor?.nome || turma.professorNome || 'Não informado';
+        const professorEmail = turma.professor?.email || '';
+        const professorIniciais = professorNome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        
+        // Eixo (vem como objeto ou string)
+        let eixoColor = '#667eea';
+        let eixoBg = '#e0e7ff';
+        let eixoIcon = 'fa-graduation-cap';
+        let eixoLabel = 'Não definido';
+        
+        if (turma.eixo && typeof turma.eixo === 'object') {
+            eixoColor = turma.eixo.cor || '#667eea';
+            eixoIcon = turma.eixo.icone || 'fa-graduation-cap';
+            eixoLabel = turma.eixo.label || turma.eixo.nome || 'Não definido';
+        } else if (turma.eixo) {
+            eixoLabel = turma.eixo;
+            if (typeof eixosProfessorCache !== 'undefined' && eixosProfessorCache) {
+                const enc = eixosProfessorCache.find(e => e.nome === turma.eixo);
+                if (enc) {
+                    eixoColor = enc.cor || '#667eea';
+                    eixoIcon = enc.icone || 'fa-graduation-cap';
+                    eixoLabel = enc.label || enc.nome;
                 }
             }
-            else if (turma.dataCriacao && typeof turma.dataCriacao === 'string') {
-                try {
-                    const date = new Date(turma.dataCriacao);
-                    if (!isNaN(date.getTime())) {
-                        dataCriacao = date.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        console.log('✅ Data extraída da string ISO:', dataCriacao);
-                    }
-                } catch (e) {
-                    console.warn('Erro ao processar string ISO:', e);
-                }
-            }
-            else if (turma.dataCriacao && typeof turma.dataCriacao === 'number') {
-                try {
-                    const date = new Date(turma.dataCriacao);
-                    if (!isNaN(date.getTime())) {
-                        dataCriacao = date.toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        console.log('✅ Data extraída do timestamp:', dataCriacao);
-                    }
-                } catch (e) {
-                    console.warn('Erro ao processar timestamp:', e);
-                }
-            }
-            
-            if (dataCriacao === 'Não disponível') {
-                const outrasPropriedades = [
-                    turma.createdAt,
-                    turma.criadoEm,
-                    turma.created_at
-                ];
+        }
+        eixoBg = `${eixoColor}20`;
+        
+        // ========== 5. HTML DOS ALUNOS ==========
+        let alunosHTML = '';
+        if (alunos.length > 0) {
+            alunosHTML = alunos.map(aluno => {
+                const nome = aluno.nome || 'Nome não disponível';
+                const email = aluno.email || 'Sem email';
+                const matricula = aluno.matricula || '';
+                const iniciais = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                const temAcessibilidade = aluno.precisaAcessibilidade === true;
+                const isAtivo = aluno.ativo !== false;
                 
-                for (const prop of outrasPropriedades) {
-                    if (prop) {
-                        try {
-                            let dateValue = prop;
-                            if (prop.$date) dateValue = prop.$date;
-                            
-                            const date = new Date(dateValue);
-                            if (!isNaN(date.getTime())) {
-                                dataCriacao = date.toLocaleDateString('pt-BR', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                });
-                                console.log('✅ Data extraída de outra propriedade:', dataCriacao);
-                                break;
-                            }
-                        } catch (e) {
-                            continue;
-                        }
-                    }
-                }
-            }
-            
-            let eixoColor = '#8b5cf6';
-            let eixoIcon = 'globe';
-            let eixoBg = '#f3e8ff';
-            let eixoText = 'Geral';
-            
-            if (turma.eixo === 'natureza') {
-                eixoColor = '#10b981';
-                eixoIcon = 'leaf';
-                eixoBg = '#d1fae5';
-                eixoText = 'Natureza';
-            } else if (turma.eixo === 'humanas') {
-                eixoColor = '#8b5cf6';
-                eixoIcon = 'scroll';
-                eixoBg = '#ede9fe';
-                eixoText = 'Humanas';
-            } else if (turma.eixo === 'linguagens') {
-                eixoColor = '#f59e0b';
-                eixoIcon = 'language';
-                eixoBg = '#fef3c7';
-                eixoText = 'Linguagens';
-            }
-            
-            const provasAtivas = turma.provas ? turma.provas.filter(p => p.status === 'ativa').length : 0;
-            
-            const professorNome = turma.professor?.nome || 
-                                turma.professorNome || 
-                                turma.nomeProfessor || 
-                                'Não informado';
-            
-            let alunosHTML = '';
-            if (turma.alunos && turma.alunos.length > 0) {
-                alunosHTML = turma.alunos.slice(0, 5).map(aluno => `
+                return `
                     <div style="
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                        padding: 12px;
-                        background: white;
-                        border-radius: 12px;
-                        margin-bottom: 8px;
-                        border: 1px solid #e5e7eb;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-                        transition: all 0.2s;
+                        display: flex; align-items: center; gap: 12px;
+                        padding: 12px; background: white; border-radius: 12px;
+                        margin-bottom: 8px; border: 1px solid #e5e7eb;
                     ">
                         <div style="
-                            width: 40px;
-                            height: 40px;
-                            background: ${eixoColor}20;
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: ${eixoColor};
-                            font-weight: 600;
-                            font-size: 1.2rem;
+                            width: 42px; height: 42px;
+                            background: linear-gradient(135deg, ${eixoColor}, ${eixoColor}cc);
+                            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+                            color: white; font-weight: 600; font-size: 14px; flex-shrink: 0;
                         ">
-                            ${aluno.nome ? aluno.nome.charAt(0).toUpperCase() : '?'}
+                            ${iniciais}
                         </div>
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; color: #1f2937;">${aluno.nome || 'Nome não disponível'}</div>
-                            <div style="font-size: 0.8rem; color: #6b7280; display: flex; gap: 10px; margin-top: 2px;">
-                                <span><i class="fas fa-envelope"></i> ${aluno.email || 'Sem email'}</span>
-                                <span><i class="fas fa-id-card"></i> ${aluno.matricula || 'N/A'}</span>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span style="font-weight: 600; color: #1f2937; font-size: 14px;">${nome}</span>
+                                ${temAcessibilidade ? `
+                                    <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                        <i class="fas fa-wheelchair"></i> Acess.
+                                    </span>
+                                ` : ''}
+                                ${!isAtivo ? `
+                                    <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                        Inativo
+                                    </span>
+                                ` : ''}
+                            </div>
+                            <div style="font-size: 12px; color: #6b7280; margin-top: 3px; display: flex; gap: 12px;">
+                                <span><i class="fas fa-envelope"></i> ${email}</span>
+                                ${matricula ? `<span><i class="fas fa-id-card"></i> ${matricula}</span>` : ''}
                             </div>
                         </div>
-                    </div>
-                `).join('');
-                
-                if (turma.alunos.length > 5) {
-                    alunosHTML += `
-                        <div style="
-                            text-align: center;
-                            margin-top: 10px;
-                            padding: 10px;
-                            background: #f3f4f6;
-                            border-radius: 10px;
-                            font-size: 0.9rem;
-                            color: #6b7280;
-                        ">
-                            <i class="fas fa-ellipsis-h"></i> +${turma.alunos.length - 5} alunos
-                        </div>
-                    `;
-                }
-            } else {
-                alunosHTML = `
-                    <div style="
-                        text-align: center;
-                        padding: 30px;
-                        background: #f9fafb;
-                        border-radius: 16px;
-                        color: #6b7280;
-                        border: 1px dashed #e5e7eb;
-                    ">
-                        <i class="fas fa-users-slash" style="font-size: 2rem; margin-bottom: 10px; color: #9ca3af;"></i>
-                        <p>Nenhum aluno matriculado</p>
                     </div>
                 `;
-            }
-            
-            let provasHTML = '';
-            if (turma.provas && turma.provas.length > 0) {
-                provasHTML = turma.provas.slice(0, 5).map(prova => {
-                    const statusColor = prova.status === 'ativa' ? '#10b981' : '#6b7280';
-                    const statusBg = prova.status === 'ativa' ? '#d1fae5' : '#f3f4f6';
-                    
-                    return `
-                        <div style="
-                            display: flex;
-                            align-items: center;
-                            justify-content: space-between;
-                            padding: 12px;
-                            background: white;
-                            border-radius: 12px;
-                            margin-bottom: 8px;
-                            border: 1px solid #e5e7eb;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-                        ">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <div style="
-                                    width: 36px;
-                                    height: 36px;
-                                    background: ${statusBg};
-                                    border-radius: 10px;
-                                    display: flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    color: ${statusColor};
-                                ">
-                                    <i class="fas fa-file-alt"></i>
-                                </div>
-                                <div>
-                                    <div style="font-weight: 600; color: #1f2937;">${prova.titulo || 'Sem título'}</div>
-                                    <div style="font-size: 0.75rem; color: #6b7280; display: flex; gap: 10px;">
-                                        <span><i class="fas fa-question-circle"></i> ${prova.quantidadeQuestoes || 0} questões</span>
-                                        ${prova.dataLimite ? `<span><i class="fas fa-calendar"></i> ${new Date(prova.dataLimite).toLocaleDateString('pt-BR')}</span>` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                            <span style="
-                                padding: 4px 10px;
-                                border-radius: 30px;
-                                font-size: 0.7rem;
-                                font-weight: 600;
-                                background: ${statusBg};
-                                color: ${statusColor};
+            }).join('');
+        } else {
+            alunosHTML = `
+                <div style="text-align: center; padding: 40px 20px; background: #f9fafb; border-radius: 16px; border: 2px dashed #e5e7eb;">
+                    <i class="fas fa-user-graduate" style="font-size: 2.5rem; color: #d1d5db; margin-bottom: 12px;"></i>
+                    <p style="color: #6b7280; margin: 0; font-size: 14px;">Nenhum aluno matriculado</p>
+                </div>
+            `;
+        }
+        
+        // ========== 6. HTML DAS PROVAS ==========
+        let provasHTML = '';
+        if (provas.length > 0) {
+            provasHTML = provas.map(prova => {
+                const isAtiva = prova.publicada === true || prova.status === 'ativa';
+                const statusColor = isAtiva ? '#10b981' : '#6b7280';
+                const statusBg = isAtiva ? '#d1fae5' : '#f3f4f6';
+                const statusText = isAtiva ? 'Ativa' : 'Rascunho';
+                
+                return `
+                    <div style="
+                        display: flex; align-items: center; justify-content: space-between;
+                        padding: 12px; background: white; border-radius: 12px;
+                        margin-bottom: 8px; border: 1px solid #e5e7eb;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
+                            <div style="
+                                width: 40px; height: 40px; background: ${statusBg};
+                                border-radius: 10px; display: flex; align-items: center; justify-content: center;
+                                color: ${statusColor}; flex-shrink: 0;
                             ">
-                                ${prova.status === 'ativa' ? 'Ativa' : prova.status || 'Rascunho'}
-                            </span>
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div style="min-width: 0;">
+                                <div style="font-weight: 600; color: #1f2937; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${prova.titulo || 'Sem título'}
+                                </div>
+                            </div>
                         </div>
-                    `;
-                }).join('');
-                
-                if (turma.provas.length > 5) {
-                    provasHTML += `
-                        <div style="
-                            text-align: center;
-                            margin-top: 10px;
-                            padding: 10px;
-                            background: #f3f4f6;
-                            border-radius: 10px;
-                            font-size: 0.9rem;
-                            color: #6b7280;
-                        ">
-                            <i class="fas fa-ellipsis-h"></i> +${turma.provas.length - 5} provas
-                        </div>
-                    `;
-                }
-            } else {
-                provasHTML = `
-                    <div style="
-                        text-align: center;
-                        padding: 30px;
-                        background: #f9fafb;
-                        border-radius: 16px;
-                        color: #6b7280;
-                        border: 1px dashed #e5e7eb;
-                    ">
-                        <i class="fas fa-file-alt" style="font-size: 2rem; margin-bottom: 10px; color: #9ca3af;"></i>
-                        <p>Nenhuma prova criada</p>
+                        <span style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: ${statusBg}; color: ${statusColor};">
+                            ${statusText}
+                        </span>
                     </div>
                 `;
-            }
-            
-            const modalHTML = `
-                <div style="
-                    position: sticky;
-                    top: 0;
-                    background: white;
-                    z-index: 10;
-                    padding: 20px 25px;
-                    border-bottom: 1px solid #e5e7eb;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                ">
-                    <div style="display: flex; align-items: center; gap: 15px;">
+            }).join('');
+        } else {
+            provasHTML = `
+                <div style="text-align: center; padding: 40px 20px; background: #f9fafb; border-radius: 16px; border: 2px dashed #e5e7eb;">
+                    <i class="fas fa-file-alt" style="font-size: 2.5rem; color: #d1d5db; margin-bottom: 12px;"></i>
+                    <p style="color: #6b7280; margin: 0; font-size: 14px;">Nenhuma prova criada</p>
+                </div>
+            `;
+        }
+        
+        // ========== 7. MONTAR MODAL ==========
+        modal.querySelector('.modal-content').innerHTML = `
+            <!-- HEADER -->
+            <div style="
+                position: sticky; top: 0;
+                background: linear-gradient(135deg, ${eixoColor}, ${eixoColor}cc);
+                z-index: 10; padding: 25px; border-radius: 24px 24px 0 0; color: white;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
                         <div style="
-                            width: 50px;
-                            height: 50px;
-                            background: linear-gradient(135deg, ${eixoColor}, ${eixoColor}80);
-                            border-radius: 16px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                            font-size: 24px;
+                            width: 60px; height: 60px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 18px;
+                            display: flex; align-items: center; justify-content: center;
+                            font-size: 28px;
                         ">
                             <i class="fas fa-school"></i>
                         </div>
                         <div>
-                            <h2 style="margin: 0; color: #1f2937; font-size: 1.4rem;">${turma.nome}</h2>
-                            <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9rem;">
-                                ${turma.disciplina} • Código: <span style="font-family: monospace; font-weight: 600;">${turma.codigo || 'N/A'}</span>
+                            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">
+                                ${turma.nome || 'Turma sem nome'}
+                            </h2>
+                            <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                                <i class="fas fa-book"></i> ${turma.disciplina || 'Disciplina não definida'}
                             </p>
+                            ${turma.codigo ? `
+                                <div style="
+                                    display: inline-flex; align-items: center; gap: 6px;
+                                    margin-top: 10px; padding: 4px 12px;
+                                    background: rgba(255,255,255,0.2);
+                                    border-radius: 20px; font-size: 12px; font-weight: 600;
+                                ">
+                                    <i class="fas fa-hashtag"></i> ${turma.codigo}
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
-                    <button onclick="fecharModal('modalDetalhesTurma')" style="
-                        background: none;
-                        border: none;
-                        font-size: 1.8rem;
-                        cursor: pointer;
-                        color: #9ca3af;
-                        width: 40px;
-                        height: 40px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        border-radius: 10px;
-                        transition: all 0.2s;
-                    " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                    <button onclick="document.getElementById('modalDetalhesTurma').style.display='none'" style="
+                        background: rgba(255,255,255,0.2);
+                        border: none; font-size: 1.5rem; cursor: pointer; color: white;
+                        width: 42px; height: 42px;
+                        display: flex; align-items: center; justify-content: center;
+                        border-radius: 12px;
+                    ">
                         &times;
                     </button>
                 </div>
+            </div>
+            
+            <!-- CORPO -->
+            <div style="padding: 25px;">
                 
-                <div style="padding: 25px;">
-                    <div style="
-                        display: grid;
-                        grid-template-columns: repeat(4, 1fr);
-                        gap: 10px;
-                        margin-bottom: 25px;
-                    ">
-                        <div style="
-                            background: ${eixoBg};
-                            padding: 15px 5px;
-                            border-radius: 16px;
-                            text-align: center;
-                        ">
-                            <div style="font-size: 1.6rem; font-weight: 700; color: ${eixoColor};">${turma.alunos?.length || 0}</div>
-                            <div style="font-size: 0.75rem; color: #6b7280;">Alunos</div>
+                <!-- ESTATÍSTICAS -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px;">
+                    <div style="background: ${eixoBg}; padding: 18px 12px; border-radius: 16px; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 700; color: ${eixoColor};">${totalAlunos}</div>
+                        <div style="font-size: 0.75rem; color: #6b7280; font-weight: 500; margin-top: 4px;">Alunos</div>
+                    </div>
+                    <div style="background: ${eixoBg}; padding: 18px 12px; border-radius: 16px; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 700; color: ${eixoColor};">${totalProvas}</div>
+                        <div style="font-size: 0.75rem; color: #6b7280; font-weight: 500; margin-top: 4px;">Provas</div>
+                    </div>
+                    <div style="background: #d1fae5; padding: 18px 12px; border-radius: 16px; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 700; color: #10b981;">${provasAtivas}</div>
+                        <div style="font-size: 0.75rem; color: #6b7280; font-weight: 500; margin-top: 4px;">Ativas</div>
+                    </div>
+                    <div style="background: #dbeafe; padding: 18px 12px; border-radius: 16px; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 700; color: #3b82f6;">${alunosComAcessibilidade}</div>
+                        <div style="font-size: 0.75rem; color: #6b7280; font-weight: 500; margin-top: 4px;">Acessibilidade</div>
+                    </div>
+                </div>
+                
+                <!-- INFORMAÇÕES -->
+                <div style="background: #f9fafb; border-radius: 20px; padding: 20px; margin-bottom: 25px; border: 1px solid #e5e7eb;">
+                    <h4 style="margin: 0 0 18px 0; color: #374151; font-size: 1rem; display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 32px; height: 32px; background: ${eixoColor}; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;">
+                            <i class="fas fa-info-circle"></i>
                         </div>
-                        <div style="
-                            background: ${eixoBg};
-                            padding: 15px 5px;
-                            border-radius: 16px;
-                            text-align: center;
-                        ">
-                            <div style="font-size: 1.6rem; font-weight: 700; color: ${eixoColor};">${turma.provas?.length || 0}</div>
-                            <div style="font-size: 0.75rem; color: #6b7280;">Provas</div>
+                        Informações da Turma
+                    </h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 6px; font-weight: 600; text-transform: uppercase;">
+                                <i class="fas ${eixoIcon}" style="color: ${eixoColor}; margin-right: 4px;"></i>
+                                Eixo
+                            </div>
+                            <div style="background: white; padding: 12px 14px; border-radius: 12px; border: 1px solid #e5e7eb; font-weight: 600; color: #1f2937; font-size: 14px;">
+                                ${eixoLabel}
+                            </div>
                         </div>
-                        <div style="
-                            background: ${eixoBg};
-                            padding: 15px 5px;
-                            border-radius: 16px;
-                            text-align: center;
-                        ">
-                            <div style="font-size: 1.6rem; font-weight: 700; color: ${eixoColor};">${provasAtivas}</div>
-                            <div style="font-size: 0.75rem; color: #6b7280;">Ativas</div>
+                        
+                        <div>
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 6px; font-weight: 600; text-transform: uppercase;">
+                                <i class="fas fa-circle" style="color: ${turma.ativa !== false ? '#10b981' : '#ef4444'}; margin-right: 4px; font-size: 10px;"></i>
+                                Status
+                            </div>
+                            <div style="background: ${turma.ativa !== false ? '#d1fae5' : '#fee2e2'}; padding: 12px 14px; border-radius: 12px; font-weight: 600; color: ${turma.ativa !== false ? '#065f46' : '#991b1b'}; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-${turma.ativa !== false ? 'check-circle' : 'times-circle'}"></i>
+                                ${turma.ativa !== false ? 'Turma Ativa' : 'Turma Inativa'}
+                            </div>
                         </div>
-                        <div style="
-                            background: ${eixoBg};
-                            padding: 15px 5px;
-                            border-radius: 16px;
-                            text-align: center;
-                        ">
-                            <div style="font-size: 1.1rem; font-weight: 600; color: ${eixoColor};">${eixoText}</div>
-                            <div style="font-size: 0.75rem; color: #6b7280;">Eixo</div>
+                        
+                        <div>
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 6px; font-weight: 600; text-transform: uppercase;">
+                                <i class="fas fa-chalkboard-teacher" style="color: ${eixoColor}; margin-right: 4px;"></i>
+                                Professor
+                            </div>
+                            <div style="background: white; padding: 12px 14px; border-radius: 12px; border: 1px solid #e5e7eb; display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, ${eixoColor}, ${eixoColor}cc); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px; flex-shrink: 0;">
+                                    ${professorIniciais || '?'}
+                                </div>
+                                <div style="min-width: 0;">
+                                    <div style="font-weight: 600; color: #1f2937; font-size: 13px;">${professorNome}</div>
+                                    ${professorEmail ? `<div style="font-size: 11px; color: #6b7280;">${professorEmail}</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 6px; font-weight: 600; text-transform: uppercase;">
+                                <i class="far fa-calendar-alt" style="color: ${eixoColor}; margin-right: 4px;"></i>
+                                Criada em
+                            </div>
+                            <div style="background: white; padding: 12px 14px; border-radius: 12px; border: 1px solid #e5e7eb; font-weight: 500; color: #1f2937; font-size: 14px;">
+                                ${dataCriacao}
+                            </div>
                         </div>
                     </div>
                     
-                    <div style="
-                        background: #f9fafb;
-                        border-radius: 20px;
-                        padding: 20px;
-                        margin-bottom: 25px;
-                    ">
-                        <h4 style="margin: 0 0 15px 0; color: #374151; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
-                            <i class="fas fa-info-circle" style="color: ${eixoColor};"></i>
-                            Informações da Turma
-                        </h4>
-                        
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                            <div>
-                                <div style="font-size: 0.8rem; color: #6b7280;">Código</div>
-                                <div style="font-family: monospace; font-weight: 600; color: #1f2937; background: white; padding: 8px 12px; border-radius: 10px; border: 1px solid #e5e7eb; margin-top: 4px;">
-                                    ${turma.codigo || 'N/A'}
-                                </div>
+                    ${turma.descricao ? `
+                        <div style="margin-top: 16px;">
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 6px; font-weight: 600; text-transform: uppercase;">
+                                <i class="fas fa-align-left" style="color: ${eixoColor}; margin-right: 4px;"></i>
+                                Descrição
                             </div>
-                            <div>
-                                <div style="font-size: 0.8rem; color: #6b7280;">Status</div>
-                                <div style="margin-top: 4px;">
-                                    <span style="
-                                        display: inline-block;
-                                        padding: 8px 16px;
-                                        border-radius: 30px;
-                                        font-size: 0.8rem;
-                                        font-weight: 600;
-                                        background: ${turma.ativa !== false ? '#d1fae5' : '#fee2e2'};
-                                        color: ${turma.ativa !== false ? '#065f46' : '#991b1b'};
-                                    ">
-                                        <i class="fas fa-${turma.ativa !== false ? 'check-circle' : 'times-circle'}"></i>
-                                        ${turma.ativa !== false ? 'Ativa' : 'Inativa'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.8rem; color: #6b7280;">Data de Criação</div>
-                                <div style="font-weight: 500; color: #1f2937; background: white; padding: 8px 12px; border-radius: 10px; border: 1px solid #e5e7eb; margin-top: 4px;">
-                                    <i class="far fa-calendar-alt" style="color: ${eixoColor}; margin-right: 5px;"></i>
-                                    ${dataCriacao}
-                                </div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.8rem; color: #6b7280;">Professor</div>
-                                <div style="font-weight: 500; color: #1f2937; background: white; padding: 8px 12px; border-radius: 10px; border: 1px solid #e5e7eb; margin-top: 4px;">
-                                    <i class="fas fa-chalkboard-teacher" style="color: ${eixoColor}; margin-right: 5px;"></i>
-                                    ${professorNome}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        ${turma.descricao ? `
-                        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                            <div style="font-size: 0.8rem; color: #6b7280; margin-bottom: 8px;">Descrição</div>
-                            <div style="
-                                background: white;
-                                padding: 15px;
-                                border-radius: 12px;
-                                border: 1px solid #e5e7eb;
-                                color: #4b5563;
-                                font-size: 0.9rem;
-                                line-height: 1.5;
-                            ">
-                                <i class="fas fa-quote-left" style="color: ${eixoColor}; opacity: 0.5; margin-right: 5px;"></i>
+                            <div style="background: white; padding: 14px; border-radius: 12px; border: 1px solid #e5e7eb; color: #4b5563; font-size: 14px; line-height: 1.6;">
                                 ${turma.descricao}
                             </div>
                         </div>
-                        ` : ''}
-                    </div>
-                    
-                    <div style="
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 20px;
-                        margin-bottom: 25px;
-                    ">
-                        <div>
-                            <h4 style="margin: 0 0 15px 0; color: #374151; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                    ` : ''}
+                </div>
+                
+                <!-- ALUNOS E PROVAS -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                    <div>
+                        <h4 style="margin: 0 0 15px 0; color: #374151; font-size: 1rem; display: flex; align-items: center; justify-content: space-between;">
+                            <span style="display: flex; align-items: center; gap: 8px;">
                                 <i class="fas fa-users" style="color: ${eixoColor};"></i>
-                                Alunos Matriculados
-                                <span style="
-                                    background: ${eixoBg};
-                                    color: ${eixoColor};
-                                    padding: 2px 8px;
-                                    border-radius: 30px;
-                                    font-size: 0.75rem;
-                                    font-weight: 600;
-                                    margin-left: 5px;
-                                ">${turma.alunos?.length || 0}</span>
-                            </h4>
-                            <div style="max-height: 300px; overflow-y: auto; padding-right: 5px;">
-                                ${alunosHTML}
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <h4 style="margin: 0 0 15px 0; color: #374151; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-file-alt" style="color: ${eixoColor};"></i>
-                                Provas da Turma
-                                <span style="
-                                    background: ${eixoBg};
-                                    color: ${eixoColor};
-                                    padding: 2px 8px;
-                                    border-radius: 30px;
-                                    font-size: 0.75rem;
-                                    font-weight: 600;
-                                    margin-left: 5px;
-                                ">${turma.provas?.length || 0}</span>
-                            </h4>
-                            <div style="max-height: 300px; overflow-y: auto; padding-right: 5px;">
-                                ${provasHTML}
-                            </div>
+                                Alunos
+                            </span>
+                            <span style="background: ${eixoBg}; color: ${eixoColor}; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700;">
+                                ${totalAlunos}
+                            </span>
+                        </h4>
+                        <div style="max-height: 300px; overflow-y: auto; padding-right: 4px;">
+                            ${alunosHTML}
                         </div>
                     </div>
                     
-                    <div style="
-                        display: flex;
-                        gap: 15px;
-                        justify-content: flex-end;
-                        padding-top: 20px;
-                        border-top: 2px solid #f3f4f6;
-                    ">
-                        <button onclick="criarProvaParaTurma('${turmaId}')" style="
-                            padding: 12px 28px;
-                            background: linear-gradient(135deg, #10b981, #059669);
-                            color: white;
-                            border: none;
-                            border-radius: 40px;
-                            font-weight: 600;
-                            font-size: 0.95rem;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            transition: all 0.2s;
-                            box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
-                        ">
-                            <i class="fas fa-plus-circle"></i> Nova Prova
-                        </button>
-                        <button onclick="fecharModal('modalDetalhesTurma')" style="
-                            padding: 12px 28px;
-                            background: white;
-                            color: #4b5563;
-                            border: 2px solid #e5e7eb;
-                            border-radius: 40px;
-                            font-weight: 600;
-                            font-size: 0.95rem;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            transition: all 0.2s;
-                        ">
-                            <i class="fas fa-times"></i> Fechar
-                        </button>
+                    <div>
+                        <h4 style="margin: 0 0 15px 0; color: #374151; font-size: 1rem; display: flex; align-items: center; justify-content: space-between;">
+                            <span style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-file-alt" style="color: ${eixoColor};"></i>
+                                Provas
+                            </span>
+                            <span style="background: ${eixoBg}; color: ${eixoColor}; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700;">
+                                ${totalProvas}
+                            </span>
+                        </h4>
+                        <div style="max-height: 300px; overflow-y: auto; padding-right: 4px;">
+                            ${provasHTML}
+                        </div>
                     </div>
                 </div>
-            `;
-            
-            modal.querySelector('.modal-content').innerHTML = modalHTML;
-            
-        } else {
-            throw new Error(data.error || 'Erro ao carregar turma');
-        }
+                
+                <!-- AÇÕES -->
+                <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 20px; border-top: 2px solid #f3f4f6; flex-wrap: wrap;">
+                    <button onclick="editarTurma('${turmaId}')" style="
+                        padding: 14px 28px;
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        color: white; border: none; border-radius: 40px;
+                        font-weight: 600; font-size: 0.95rem; cursor: pointer;
+                        display: flex; align-items: center; gap: 10px;
+                        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+                    ">
+                        <i class="fas fa-edit"></i> Editar Turma
+                    </button>
+                    
+                    <button onclick="criarProvaParaTurma('${turmaId}')" style="
+                        padding: 14px 28px;
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        color: white; border: none; border-radius: 40px;
+                        font-weight: 600; font-size: 0.95rem; cursor: pointer;
+                        display: flex; align-items: center; gap: 10px;
+                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                    ">
+                        <i class="fas fa-plus-circle"></i> Nova Prova
+                    </button>
+                    
+                    <button onclick="document.getElementById('modalDetalhesTurma').style.display='none'" style="
+                        padding: 14px 28px;
+                        background: white; color: #4b5563;
+                        border: 2px solid #e5e7eb; border-radius: 40px;
+                        font-weight: 600; font-size: 0.95rem; cursor: pointer;
+                        display: flex; align-items: center; gap: 10px;
+                    ">
+                        <i class="fas fa-times"></i> Fechar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        console.log('✅ Modal renderizado!');
+        console.log(`   Card Acessibilidade: ${alunosComAcessibilidade}`);
         
     } catch (error) {
-        console.error('❌ Erro:', error);
+        console.error('❌ Erro em verTurma:', error);
         
         const modal = document.getElementById('modalDetalhesTurma');
         if (modal) {
-            modal.querySelector('.modal-content').innerHTML = `
-                <div style="padding: 30px; text-align: center;">
-                    <i class="fas fa-exclamation-circle" style="font-size: 3rem; color: #ef4444; margin-bottom: 15px;"></i>
-                    <h3 style="color: #7f1d1d;">Erro ao carregar detalhes</h3>
-                    <p style="color: #6b7280;">${error.message}</p>
-                    <button onclick="fecharModal('modalDetalhesTurma')" style="
-                        margin-top: 20px;
-                        padding: 10px 20px;
-                        background: #4f46e5;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        cursor: pointer;
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 24px; max-width: 500px; width: 100%; padding: 40px; text-align: center;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #ef4444; margin-bottom: 20px;"></i>
+                    <h3 style="color: #7f1d1d; margin: 0 0 10px 0;">Erro ao carregar detalhes</h3>
+                    <p style="color: #6b7280; margin: 0 0 25px 0;">${error.message}</p>
+                    <button onclick="document.getElementById('modalDetalhesTurma').style.display='none'" style="
+                        padding: 12px 30px; background: #4f46e5; color: white;
+                        border: none; border-radius: 30px; font-weight: 600; cursor: pointer;
                     ">
                         <i class="fas fa-times"></i> Fechar
                     </button>
                 </div>
             `;
+        }
+    }
+};
+
+// ============================================
+// EDITAR TURMA (PROFESSOR)
+// ============================================
+window.editarTurma = function(turmaId) {
+    console.log('✏️ Editando turma ID:', turmaId);
+    
+    // Buscar turma nos dados locais
+    const turma = turmasProfessor.find(t => 
+        t.id === turmaId || 
+        t._id === turmaId || 
+        String(t.id) === String(turmaId)
+    );
+    
+    if (!turma) {
+        console.error('❌ Turma não encontrada!');
+        mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '❌ Turma não encontrada', 'error');
+        return;
+    }
+    
+    // Fechar modal de detalhes se estiver aberto
+    fecharModal('modalDetalhesTurma');
+    
+    // Criar modal de edição
+    let modal = document.getElementById('modalEditarTurma');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'modalEditarTurma';
+        document.body.appendChild(modal);
+    }
+    
+    // Valores atuais
+    const nomeAtual = turma.nome || '';
+    const disciplinaAtual = turma.disciplina || '';
+    const codigoAtual = turma.codigo || '';
+    const descricaoAtual = turma.descricao || '';
+    const ativaAtual = turma.ativa !== false;
+    const eixoAtual = turma.eixo || '';
+    
+    // Gerar opções de eixos
+    let opcoesEixos = '<option value="">Selecione um eixo...</option>';
+    if (eixosProfessorCache && eixosProfessorCache.length > 0) {
+        eixosProfessorCache.forEach(eixo => {
+            const selected = eixoAtual === eixo.nome ? 'selected' : '';
+            opcoesEixos += `<option value="${eixo.nome}" ${selected}>${eixo.label || eixo.nome}</option>`;
+        });
+    } else {
+        // Fallback
+        const eixosFallback = [
+            { nome: 'natureza', label: '🔬 Natureza e Matemática' },
+            { nome: 'humanas', label: '🏛️ Humanas' },
+            { nome: 'linguagens', label: '🎭 Linguagens' },
+            { nome: 'desenvolvimento', label: '💻 Desenvolvimento de Sistemas' },
+            { nome: 'redes', label: '🌐 Redes de Computadores' },
+            { nome: 'gestao', label: '📊 Gestão e Negócios' },
+            { nome: 'producao', label: '🎬 Produção Cultural e Design' },
+            { nome: 'turismo', label: '✈️ Turismo, Hospitalidade e Lazer' },
+            { nome: 'ambiente', label: '🌱 Ambiente e Saúde' }
+        ];
+        
+        eixosFallback.forEach(eixo => {
+            const selected = eixoAtual === eixo.nome ? 'selected' : '';
+            opcoesEixos += `<option value="${eixo.nome}" ${selected}>${eixo.label}</option>`;
+        });
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="
+            background: white;
+            border-radius: 24px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: modalSlideIn 0.3s ease-out;
+        ">
+            <!-- HEADER -->
+            <div style="
+                background: linear-gradient(135deg, #f59e0b, #d97706);
+                padding: 25px;
+                border-radius: 24px 24px 0 0;
+                color: white;
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="
+                            width: 50px;
+                            height: 50px;
+                            background: rgba(255,255,255,0.2);
+                            border-radius: 15px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 24px;
+                        ">
+                            <i class="fas fa-edit"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.3rem; font-weight: 700;">Editar Turma</h2>
+                            <p style="margin: 4px 0 0 0; opacity: 0.9; font-size: 0.85rem;">
+                                ${turma.nome || 'Turma'}
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="fecharModal('modalEditarTurma')" style="
+                        background: rgba(255,255,255,0.2);
+                        border: none;
+                        font-size: 1.5rem;
+                        cursor: pointer;
+                        color: white;
+                        width: 40px;
+                        height: 40px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 12px;
+                        transition: all 0.2s;
+                    " onmouseover="this.style.background='rgba(255,255,255,0.3)'" 
+                       onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            
+            <!-- FORMULÁRIO -->
+            <form id="formEditarTurma" style="padding: 25px;" onsubmit="event.preventDefault(); salvarEdicaoTurma('${turmaId}')">
+                
+                <!-- NOME -->
+                <div style="margin-bottom: 20px;">
+                    <label style="
+                        display: block;
+                        margin-bottom: 8px;
+                        font-weight: 600;
+                        color: #374151;
+                        font-size: 0.9rem;
+                    ">
+                        <i class="fas fa-tag" style="color: #f59e0b; margin-right: 6px;"></i>
+                        Nome da Turma <span style="color: #ef4444;">*</span>
+                    </label>
+                    <input type="text" id="editTurmaNome" value="${nomeAtual}" required
+                        style="
+                            width: 100%;
+                            padding: 14px 16px;
+                            border: 2px solid #e5e7eb;
+                            border-radius: 12px;
+                            font-size: 15px;
+                            transition: all 0.3s;
+                            box-sizing: border-box;
+                        "
+                        onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 4px rgba(245,158,11,0.1)'"
+                        onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
+                        placeholder="Ex: Turma A - 2024">
+                </div>
+                
+                <!-- DISCIPLINA E EIXO -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="
+                            display: block;
+                            margin-bottom: 8px;
+                            font-weight: 600;
+                            color: #374151;
+                            font-size: 0.9rem;
+                        ">
+                            <i class="fas fa-book" style="color: #f59e0b; margin-right: 6px;"></i>
+                            Disciplina <span style="color: #ef4444;">*</span>
+                        </label>
+                        <input type="text" id="editTurmaDisciplina" value="${disciplinaAtual}" required
+                            style="
+                                width: 100%;
+                                padding: 14px 16px;
+                                border: 2px solid #e5e7eb;
+                                border-radius: 12px;
+                                font-size: 15px;
+                                transition: all 0.3s;
+                                box-sizing: border-box;
+                            "
+                            onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 4px rgba(245,158,11,0.1)'"
+                            onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
+                            placeholder="Ex: Matemática">
+                    </div>
+                    
+                    <div>
+                        <label style="
+                            display: block;
+                            margin-bottom: 8px;
+                            font-weight: 600;
+                            color: #374151;
+                            font-size: 0.9rem;
+                        ">
+                            <i class="fas fa-sitemap" style="color: #f59e0b; margin-right: 6px;"></i>
+                            Eixo <span style="color: #ef4444;">*</span>
+                        </label>
+                        <select id="editTurmaEixo" required
+                            style="
+                                width: 100%;
+                                padding: 14px 16px;
+                                border: 2px solid #e5e7eb;
+                                border-radius: 12px;
+                                font-size: 15px;
+                                transition: all 0.3s;
+                                box-sizing: border-box;
+                                background: white;
+                                cursor: pointer;
+                            "
+                            onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 4px rgba(245,158,11,0.1)'"
+                            onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
+                            ${opcoesEixos}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- CÓDIGO -->
+                <div style="margin-bottom: 20px;">
+                    <label style="
+                        display: block;
+                        margin-bottom: 8px;
+                        font-weight: 600;
+                        color: #374151;
+                        font-size: 0.9rem;
+                    ">
+                        <i class="fas fa-hashtag" style="color: #f59e0b; margin-right: 6px;"></i>
+                        Código da Turma
+                    </label>
+                    <input type="text" id="editTurmaCodigo" value="${codigoAtual}"
+                        style="
+                            width: 100%;
+                            padding: 14px 16px;
+                            border: 2px solid #e5e7eb;
+                            border-radius: 12px;
+                            font-size: 15px;
+                            transition: all 0.3s;
+                            box-sizing: border-box;
+                            font-family: monospace;
+                        "
+                        onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 4px rgba(245,158,11,0.1)'"
+                        onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
+                        placeholder="Ex: 101">
+                </div>
+                
+                <!-- DESCRIÇÃO -->
+                <div style="margin-bottom: 20px;">
+                    <label style="
+                        display: block;
+                        margin-bottom: 8px;
+                        font-weight: 600;
+                        color: #374151;
+                        font-size: 0.9rem;
+                    ">
+                        <i class="fas fa-align-left" style="color: #f59e0b; margin-right: 6px;"></i>
+                        Descrição
+                    </label>
+                    <textarea id="editTurmaDescricao" rows="3"
+                        style="
+                            width: 100%;
+                            padding: 14px 16px;
+                            border: 2px solid #e5e7eb;
+                            border-radius: 12px;
+                            font-size: 15px;
+                            transition: all 0.3s;
+                            box-sizing: border-box;
+                            resize: vertical;
+                            font-family: inherit;
+                        "
+                        onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 4px rgba(245,158,11,0.1)'"
+                        onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
+                        placeholder="Descrição da turma...">${descricaoAtual}</textarea>
+                </div>
+                
+                <!-- STATUS -->
+                <div style="
+                    background: #f9fafb;
+                    border-radius: 16px;
+                    padding: 18px;
+                    margin-bottom: 25px;
+                    border: 1px solid #e5e7eb;
+                ">
+                    <label style="
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        cursor: pointer;
+                    ">
+                        <input type="checkbox" id="editTurmaAtiva" ${ativaAtual ? 'checked' : ''}
+                            style="
+                                width: 22px;
+                                height: 22px;
+                                cursor: pointer;
+                                accent-color: #10b981;
+                            ">
+                        <div>
+                            <div style="font-weight: 600; color: #1f2937; font-size: 0.95rem;">
+                                Turma Ativa
+                            </div>
+                            <div style="font-size: 0.8rem; color: #6b7280; margin-top: 2px;">
+                                Turmas inativas não aparecem em novas provas
+                            </div>
+                        </div>
+                    </label>
+                </div>
+                
+                <!-- BOTÕES -->
+                <div style="display: flex; gap: 12px;">
+                    <button type="submit" style="
+                        flex: 1;
+                        padding: 16px;
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        font-weight: 600;
+                        font-size: 15px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 10px;
+                        transition: all 0.3s;
+                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(16, 185, 129, 0.4)'" 
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16, 185, 129, 0.3)'">
+                        <i class="fas fa-save"></i>
+                        Salvar Alterações
+                    </button>
+                    
+                    <button type="button" onclick="fecharModal('modalEditarTurma')" style="
+                        flex: 1;
+                        padding: 16px;
+                        background: #6b7280;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        font-weight: 600;
+                        font-size: 15px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 10px;
+                        transition: all 0.3s;
+                    " onmouseover="this.style.background='#4b5563'" 
+                       onmouseout="this.style.background='#6b7280'">
+                        <i class="fas fa-times"></i>
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    // Adicionar animação CSS se não existir
+    if (!document.getElementById('modalAnimationStyle')) {
+        const style = document.createElement('style');
+        style.id = 'modalAnimationStyle';
+        style.textContent = `
+            @keyframes modalSlideIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(-20px) scale(0.98);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    modal.style.display = 'flex';
+};
+
+// ============================================
+// SALVAR EDIÇÃO DA TURMA
+// ============================================
+window.salvarEdicaoTurma = async function(turmaId) {
+    console.log('💾 Salvando edição da turma:', turmaId);
+    
+    try {
+        // Coletar dados do formulário
+        const nome = document.getElementById('editTurmaNome')?.value?.trim();
+        const disciplina = document.getElementById('editTurmaDisciplina')?.value?.trim();
+        const eixo = document.getElementById('editTurmaEixo')?.value;
+        const codigo = document.getElementById('editTurmaCodigo')?.value?.trim();
+        const descricao = document.getElementById('editTurmaDescricao')?.value?.trim();
+        const ativa = document.getElementById('editTurmaAtiva')?.checked !== false;
+        
+        // Validações
+        if (!nome) {
+            mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '⚠️ Nome da turma é obrigatório', 'info');
+            document.getElementById('editTurmaNome')?.focus();
+            return;
+        }
+        
+        if (!disciplina) {
+            mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '⚠️ Disciplina é obrigatória', 'info');
+            document.getElementById('editTurmaDisciplina')?.focus();
+            return;
+        }
+        
+        if (!eixo) {
+            mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '⚠️ Selecione um eixo', 'info');
+            document.getElementById('editTurmaEixo')?.focus();
+            return;
+        }
+        
+        // Botão de salvar com loading
+        const btnSubmit = document.querySelector('#formEditarTurma button[type="submit"]');
+        const originalText = btnSubmit.innerHTML;
+        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+        btnSubmit.disabled = true;
+        
+        // Montar dados
+        const dados = {
+            nome,
+            disciplina,
+            eixo,
+            ativa
+        };
+        
+        if (codigo) dados.codigo = codigo;
+        if (descricao) dados.descricao = descricao;
+        
+        console.log('📤 Enviando dados:', dados);
+        
+        const token = localStorage.getItem('auth_token');
+        
+        const response = await fetch(`/api/turmas/${turmaId}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '✅ Turma atualizada com sucesso!', 'success');
+            
+            fecharModal('modalEditarTurma');
+            
+            // Limpar cache de turmas para forçar recarregamento
+            limparCacheTurmasProfessor();
+            
+            // Recarregar lista de turmas
+            await carregarTurmasProfessor();
+            
         } else {
-            mostrarAlertaGeral(`Erro: ${error.message}`);
+            throw new Error(data.error || 'Erro ao salvar turma');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar turma:', error);
+        mostrarAlerta('mostrarAlertaGeralMinhasTurmas', '❌ ' + error.message, 'error');
+        
+    } finally {
+        const btnSubmit = document.querySelector('#formEditarTurma button[type="submit"]');
+        if (btnSubmit) {
+            btnSubmit.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+            btnSubmit.disabled = false;
         }
     }
 };
@@ -6230,6 +6622,9 @@ function atualizarSelectTurmas() {
     console.log(`✅ Select de turmas populado: ${turmasProfessor.length} turma(s) em ${ordemEixos.length} eixo(s)`);
 }
 
+// ============================================
+// ATUALIZAR LISTA DE TURMAS
+// ============================================
 function atualizarListaTurmas() {
     const listaTurmas = document.getElementById('listaTurmas');
     const heroTotalAlunos = document.getElementById('heroTotalAlunos');
@@ -6238,7 +6633,8 @@ function atualizarListaTurmas() {
     
     if (!listaTurmas) return;
     
-    if (turmasProfessor.length === 0) {
+    // ========== ESTADO VAZIO ==========
+    if (!turmasProfessor || turmasProfessor.length === 0) {
         listaTurmas.innerHTML = `
             <div style="
                 background: white;
@@ -6296,40 +6692,63 @@ function atualizarListaTurmas() {
         return;
     }
     
-    const totalAlunos = turmasProfessor.reduce((sum, turma) => sum + (turma.totalAlunos || 0), 0);
+    // ========== ESTATÍSTICAS DO HERO ==========
+    // 🔥 USA DIRETAMENTE OS CAMPOS DO BACKEND (sem recalcular)
+    const totalAlunos = turmasProfessor.reduce((sum, turma) => 
+        sum + (turma.totalAlunos || 0), 0);
+    
     const turmasAtivas = turmasProfessor.filter(t => t.ativa !== false).length;
+    
+    // 🔥 O BACKEND JÁ ENVIA ESSE CAMPO CALCULADO!
+    const totalAlunosComAcessibilidade = turmasProfessor.reduce((sum, turma) => 
+        sum + (turma.alunosComAcessibilidade || 0), 0);
+    
+    console.log('📊 Estatísticas (todas do backend):', {
+        totalTurmas: turmasProfessor.length,
+        turmasAtivas,
+        totalAlunos,
+        totalAlunosComAcessibilidade
+    });
     
     if (heroTotalAlunos) heroTotalAlunos.textContent = totalAlunos;
     if (heroTurmasAtivas) heroTurmasAtivas.textContent = turmasAtivas;
     if (heroTotalTurmas) heroTotalTurmas.textContent = turmasProfessor.length;
     
+    // ========== RENDERIZAR CARDS ==========
     listaTurmas.innerHTML = `
         <div class="turmas-grid">
-            ${turmasProfessor.map((turma, index) => {
-                let eixoColor = '#8b5cf6';
-                let eixoBg = '#f3e8ff';
-                let eixoText = 'Geral';
-                let eixoIcon = 'globe';
+            ${turmasProfessor.map((turma) => {
+                // 🔥 TODOS esses valores vêm do BACKEND
+                const eixoCor = turma.eixo?.cor || '#667eea';
+                const eixoLabel = turma.eixo?.label || turma.eixo?.nome || turma.eixo || 'Geral';
+                const eixoIcone = turma.eixo?.icone || 'fa-graduation-cap';
+                const eixoBg = `${eixoCor}20`;
                 
-                if (turma.eixo === 'natureza') {
-                    eixoColor = '#10b981';
-                    eixoBg = '#d1fae5';
-                    eixoText = 'Natureza';
-                    eixoIcon = 'leaf';
-                } else if (turma.eixo === 'humanas') {
-                    eixoColor = '#8b5cf6';
-                    eixoBg = '#ede9fe';
-                    eixoText = 'Humanas';
-                    eixoIcon = 'scroll';
-                } else if (turma.eixo === 'linguagens') {
-                    eixoColor = '#f59e0b';
-                    eixoBg = '#fef3c7';
-                    eixoText = 'Linguagens';
-                    eixoIcon = 'language';
+                const totalAlunosCard = turma.totalAlunos || 0;
+                const totalProvasCard = turma.totalProvas || 0;
+                const alunosComAcessibilidadeCard = turma.alunosComAcessibilidade || 0;
+                const ativa = turma.ativa !== false;
+                
+                const dataCriacao = turma.dataCriacao 
+                    ? new Date(turma.dataCriacao).toLocaleDateString('pt-BR') 
+                    : 'Data não disponível';
+                
+                // Professor (vem como objeto ou string do backend)
+                let professorNome = 'Não atribuído';
+                if (turma.professor) {
+                    professorNome = typeof turma.professor === 'object' 
+                        ? (turma.professor.nome || 'Não atribuído')
+                        : turma.professor;
+                } else if (turma.professorId) {
+                    professorNome = typeof turma.professorId === 'object'
+                        ? (turma.professorId.nome || 'Não atribuído')
+                        : turma.professorId;
                 }
                 
-                const status = turma.ativa !== false ? 'ativa' : 'inativa';
-                const dataCriacao = turma.dataCriacao ? new Date(turma.dataCriacao).toLocaleDateString('pt-BR') : 'Data não disponível';
+                // Fallback para eixo sem objeto (turma.eixo = "desenvolvimento")
+                let eixoNomeFinal = typeof turma.eixo === 'object' 
+                    ? turma.eixo.nome 
+                    : turma.eixo;
                 
                 return `
                     <div class="turma-card" style="
@@ -6337,7 +6756,7 @@ function atualizarListaTurmas() {
                         border-radius: 12px;
                         overflow: hidden;
                         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-                        border-left: 4px solid ${eixoColor};
+                        border-left: 4px solid ${eixoCor};
                         transition: all 0.3s;
                         width: 100%;
                         box-sizing: border-box;
@@ -6346,37 +6765,37 @@ function atualizarListaTurmas() {
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 15px;">
                                 <div style="flex: 1;">
                                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
-                                        <span class="badge-eixo" style="
+                                        <span style="
                                             background: ${eixoBg};
-                                            color: ${eixoColor};
+                                            color: ${eixoCor};
                                             padding: 4px 12px;
                                             border-radius: 30px;
                                             font-size: 0.75rem;
                                             font-weight: 600;
-                                            border: 1px solid ${eixoColor}30;
+                                            border: 1px solid ${eixoCor}30;
                                         ">
-                                            <i class="fas fa-${eixoIcon}"></i> ${eixoText}
+                                            <i class="fas ${eixoIcone}"></i> ${eixoLabel}
                                         </span>
                                         <span style="
                                             padding: 4px 12px;
                                             border-radius: 30px;
                                             font-size: 0.75rem;
                                             font-weight: 600;
-                                            background: ${status === 'ativa' ? '#d1fae5' : '#fee2e2'};
-                                            color: ${status === 'ativa' ? '#065f46' : '#991b1b'};
+                                            background: ${ativa ? '#d1fae5' : '#fee2e2'};
+                                            color: ${ativa ? '#065f46' : '#991b1b'};
                                             display: inline-flex;
                                             align-items: center;
                                             gap: 4px;
                                         ">
-                                            <i class="fas fa-${status === 'ativa' ? 'check-circle' : 'times-circle'}"></i>
-                                            ${status === 'ativa' ? 'Ativa' : 'Inativa'}
+                                            <i class="fas fa-${ativa ? 'check-circle' : 'times-circle'}"></i>
+                                            ${ativa ? 'Ativa' : 'Inativa'}
                                         </span>
                                     </div>
                                     <h3 style="margin: 0; font-size: 1.2rem; font-weight: 600; color: #1f2937; word-break: break-word;">
                                         ${turma.nome}
                                     </h3>
                                     <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9rem; word-break: break-word;">
-                                        ${turma.disciplina}
+                                        ${turma.disciplina || 'Sem disciplina'}
                                     </p>
                                 </div>
                                 <div style="
@@ -6385,7 +6804,7 @@ function atualizarListaTurmas() {
                                     border-radius: 6px;
                                     font-family: 'Monaco', monospace;
                                     font-weight: 600;
-                                    color: ${eixoColor};
+                                    color: ${eixoCor};
                                     font-size: 0.85rem;
                                     flex-shrink: 0;
                                 ">
@@ -6399,7 +6818,7 @@ function atualizarListaTurmas() {
                                     padding: 12px;
                                     background: #f9fafb;
                                     border-radius: 8px;
-                                    border-left: 3px solid ${eixoColor};
+                                    border-left: 3px solid ${eixoCor};
                                 ">
                                     <p style="margin: 0; color: #4b5563; font-size: 0.9rem; line-height: 1.5;">
                                         ${turma.descricao}
@@ -6416,17 +6835,24 @@ function atualizarListaTurmas() {
                                 flex-wrap: wrap;
                             ">
                                 <div style="display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-users" style="color: ${eixoColor};"></i>
-                                    <span><strong>${turma.totalAlunos || 0}</strong> alunos</span>
+                                    <i class="fas fa-users" style="color: ${eixoCor};"></i>
+                                    <span><strong>${totalAlunosCard}</strong> alunos</span>
                                 </div>
                                 
                                 <div style="display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-file-alt" style="color: ${eixoColor};"></i>
-                                    <span><strong>${turma.totalProvas || 0}</strong> provas</span>
+                                    <i class="fas fa-file-alt" style="color: ${eixoCor};"></i>
+                                    <span><strong>${totalProvasCard}</strong> provas</span>
                                 </div>
                                 
+                                ${alunosComAcessibilidadeCard > 0 ? `
+                                    <div style="display: flex; align-items: center; gap: 5px;">
+                                        <i class="fas fa-wheelchair" style="color: #3b82f6;"></i>
+                                        <span><strong>${alunosComAcessibilidadeCard}</strong> acess.</span>
+                                    </div>
+                                ` : ''}
+                                
                                 <div style="display: flex; align-items: center; gap: 5px;">
-                                    <i class="fas fa-calendar" style="color: ${eixoColor};"></i>
+                                    <i class="fas fa-calendar" style="color: ${eixoCor};"></i>
                                     <span>${dataCriacao}</span>
                                 </div>
                             </div>
@@ -6443,8 +6869,8 @@ function atualizarListaTurmas() {
                                 flex: 1;
                                 padding: 10px;
                                 background: white;
-                                color: ${eixoColor};
-                                border: 1px solid ${eixoColor}30;
+                                color: ${eixoCor};
+                                border: 1px solid ${eixoCor}30;
                                 border-radius: 8px;
                                 cursor: pointer;
                                 font-weight: 600;
@@ -6455,9 +6881,29 @@ function atualizarListaTurmas() {
                                 gap: 5px;
                                 transition: all 0.2s;
                             "
-                            onmouseover="this.style.background='${eixoColor}10'; this.style.borderColor='${eixoColor}'"
-                            onmouseout="this.style.background='white'; this.style.borderColor='${eixoColor}30'">
+                            onmouseover="this.style.background='${eixoCor}10'; this.style.borderColor='${eixoCor}'"
+                            onmouseout="this.style.background='white'; this.style.borderColor='${eixoCor}30'">
                                 <i class="fas fa-eye"></i> Detalhes
+                            </button>
+                            
+                            <button onclick="editarTurma('${turma.id}')" style="
+                                padding: 10px 15px;
+                                background: #fef3c7;
+                                color: #92400e;
+                                border: none;
+                                border-radius: 8px;
+                                cursor: pointer;
+                                font-weight: 600;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 5px;
+                                transition: all 0.2s;
+                            "
+                            onmouseover="this.style.background='#fde68a'; this.style.color='#78350f'"
+                            onmouseout="this.style.background='#fef3c7'; this.style.color='#92400e'"
+                            title="Editar turma">
+                                <i class="fas fa-edit"></i>
                             </button>
                             
                             <button onclick="solicitarExclusaoTurma('${turma.id}', '${turma.nome.replace(/'/g, "\\'")}')" style="
@@ -6474,7 +6920,8 @@ function atualizarListaTurmas() {
                                 transition: all 0.2s;
                             "
                             onmouseover="this.style.background='#fecaca'; this.style.color='#b91c1c'"
-                            onmouseout="this.style.background='#fee2e2'; this.style.color='#dc2626'">
+                            onmouseout="this.style.background='#fee2e2'; this.style.color='#dc2626'"
+                            title="Excluir turma">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -6483,6 +6930,9 @@ function atualizarListaTurmas() {
             }).join('')}
         </div>
     `;
+    
+    console.log(`✅ ${turmasProfessor.length} turmas renderizadas`);
+    console.log(`   Total de alunos com acessibilidade: ${totalAlunosComAcessibilidade}`);
 }
 
 // ============================================
