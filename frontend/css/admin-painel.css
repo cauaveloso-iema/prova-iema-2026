@@ -6808,3 +6808,579 @@ body {
     background: #cffafe;
     color: #0891b2;
 }
+
+@media (max-width: 768px) {
+    /* 1. Libera o scroll lateral e garante que a área principal não vaze */
+    #contentArea {
+        padding: 10px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+    }
+
+    /* 2. Mantém o layout principal alinhado, mas SEM mexer no Header */
+    .dashboard-layout,
+    .dashboard-main {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+    }
+
+    /* 3. O Card Roxo (Boa tarde) - Largura 100%, centralizado por padrão */
+    .welcome-card, 
+    .dashboard-welcome,
+    [class*="welcome"] {
+        width: 100% !important;
+        margin: 0 auto 15px auto !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 4. O Grid de Perfis - Força exatamente 2 colunas */
+    .perfis-grid,
+    .dashboard-stats-row,
+    .stats-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important; /* 2 colunas exatas */
+        gap: 10px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+    }
+
+    /* 5. Os Cards de Perfil - O Segredo para não vazar */
+    .perfil-item, 
+    .dash-card {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 12px 10px !important;
+        min-width: 0 !important; /* PERMITE ENCOLHER O CARD */
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    /* 6. O Texto de dentro (Alunos, Professores...) */
+    .perfil-info {
+        min-width: 0 !important; /* PERMITE O TEXTO SER CORTADO SE FOR GRANDE */
+        flex: 1;
+        margin-left: 8px !important;
+    }
+
+    .perfil-label {
+        font-size: 11px !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis; /* Adiciona "..." se o nome for muito grande */
+    }
+
+    .perfil-value {
+        font-size: 18px !important;
+    }
+
+    /* 7. Título do card de usuários */
+    .dash-card-full {
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+}
+
+@media (max-width: 768px) {
+    /* --- HEADER AZUL E FILTROS --- */
+    .usuarios-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        padding: 20px !important;
+        gap: 15px !important;
+    }
+    .header-text h1 { font-size: 22px !important; }
+    .header-actions { width: 100% !important; display: flex !important; flex-wrap: wrap !important; gap: 8px !important; }
+    .btn-header span { display: none !important; }
+    .btn-header { flex: 1 !important; justify-content: center !important; padding: 12px !important; }
+    
+    .filters-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+    .filter-actions { flex-direction: row !important; width: 100% !important; }
+    .filter-actions .btn-filter { flex: 1 !important; }
+
+    /* --- CARDS DE ESTATÍSTICAS LADO A LADO (IGUAL DASHBOARD) --- */
+    .perfis-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    
+    .perfis-grid .stat-card {
+        width: 100% !important;
+        min-width: 0 !important;
+        padding: 15px 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center !important;
+    }
+    
+    .perfis-grid .stat-card .stat-icon {
+        width: 45px !important;
+        height: 45px !important;
+        font-size: 20px !important;
+        margin-bottom: 10px !important;
+        border-radius: 12px !important;
+    }
+    
+    .perfis-grid .stat-card .stat-label {
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        color: #4b5563 !important;
+    }
+    
+    .perfis-grid .stat-card .stat-value {
+        font-size: 24px !important;
+        margin: 4px 0 !important;
+        color: #1f2937 !important;
+    }
+    
+    .perfis-grid .stat-card .stat-detail {
+        font-size: 10px !important;
+        color: #9ca3af !important;
+    }
+
+    /* --- TABELA DE USUÁRIOS VIRANDO CARDS (2 COLUNAS) --- */
+    .table-responsive { overflow-x: visible !important; border: none !important; background: transparent !important; }
+    .data-table { display: block !important; width: 100% !important; }
+    .data-table thead { display: none !important; }
+    
+    .data-table tbody { 
+        display: grid !important; 
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important; 
+        padding: 10px 0 !important; 
+        width: 100% !important;
+    }
+    
+    .data-table tr {
+        display: flex !important;
+        flex-direction: column !important;
+        background: white !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+        min-width: 0 !important;
+        height: 100% !important;
+    }
+
+    /* Oculta colunas que não cabem no card */
+    .data-table td.col-matricula, 
+    .data-table td.col-cpf, 
+    .data-table td.col-telefone, 
+    .data-table td.col-data {
+        display: none !important;
+    }
+
+    .data-table td {
+        display: block !important;
+        padding: 0 !important;
+        border: none !important;
+        font-size: 12px !important;
+        color: #4b5563 !important;
+        min-width: 0 !important;
+        margin-bottom: 8px !important;
+        word-wrap: break-word !important;
+        white-space: normal !important;
+    }
+
+    /* Nome e Email */
+    .data-table td.col-nome {
+        font-size: 14px !important;
+        font-weight: 700 !important;
+        color: #111827 !important;
+        padding-bottom: 8px !important;
+        border-bottom: 1px solid #f3f4f6 !important;
+        margin-bottom: 8px !important;
+        word-break: break-word !important;
+    }
+
+    .data-table td.col-email {
+        color: #6b7280 !important;
+        font-size: 11px !important;
+        margin-bottom: 8px !important;
+        word-break: break-all !important;
+    }
+
+    /* Botões de ação (3 em cima, 3 embaixo) */
+    .data-table td.col-acoes {
+        margin-top: auto !important; 
+        padding-top: 10px !important;
+        border-top: 1px solid #f3f4f6 !important;
+        margin-bottom: 0 !important;
+    }
+
+    .action-buttons {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important; /* 3 colunas */
+        gap: 6px !important;
+    }
+    
+    .action-buttons .btn-icon {
+        width: 100% !important;
+        height: 34px !important;
+        background: #f3f4f6 !important;
+        border-radius: 8px !important;
+        color: #4b5563 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 13px !important;
+    }
+    
+    .action-buttons .btn-icon.danger {
+        background: #fee2e2 !important;
+        color: #dc2626 !important;
+    }
+}
+
+/* ============================================================================
+   CORREÇÃO MOBILE - MÓDULO DE MONITORAMENTO
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* 1. O Header Principal de Monitoramento */
+    .monitoring-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        padding: 15px !important;
+        gap: 12px !important;
+        border-radius: 12px !important;
+    }
+
+    .header-actions {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important; /* Botões em 2 colunas */
+        gap: 8px !important;
+    }
+
+    .header-actions .btn-monitoring {
+        width: 100% !important;
+        justify-content: center !important;
+        font-size: 11px !important;
+        padding: 8px 5px !important;
+        margin: 0 !important;
+    }
+
+    /* O botão do Hostname (texto longo) ocupa a linha toda */
+    .header-actions span {
+        grid-column: 1 / -1;
+        text-align: center;
+        font-size: 11px !important;
+        padding: 6px !important;
+    }
+
+    /* 2. As Abas (Console, Anomalias, etc) */
+    .monitoring-tabs {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+        padding: 6px !important;
+    }
+
+    .tab-btn {
+        justify-content: center !important;
+        font-size: 11px !important;
+        padding: 8px 5px !important;
+    }
+
+    /* 3. Controles do Console (Auto Scroll, Filtro) */
+    .console-header {
+        padding: 8px !important;
+    }
+
+    .console-controls {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+
+    .console-title {
+        font-size: 11px !important;
+        justify-content: center;
+    }
+
+    .console-actions {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 8px !important;
+    }
+    
+    .console-actions .auto-scroll {
+        font-size: 11px !important;
+        background: rgba(255,255,255,0.1) !important;
+        padding: 5px 10px !important;
+        border-radius: 6px !important;
+    }
+    
+    .log-level-select {
+        width: 100% !important;
+    }
+
+    /* 4. A "Tela Preta" do Console (Logs) */
+    .console-output {
+        padding: 10px !important;
+        font-size: 11px !important;
+    }
+
+    .console-line {
+        flex-direction: column !important; /* Força a hora e o texto a ficarem um embaixo do outro */
+        gap: 2px !important;
+        padding: 6px 0 !important;
+        border-bottom: 1px solid #333 !important;
+    }
+
+    .console-timestamp {
+        font-size: 9px !important;
+        min-width: unset !important;
+    }
+
+    .console-level {
+        font-size: 9px !important;
+        min-width: unset !important;
+        display: inline-block !important;
+        margin-right: 5px !important;
+    }
+
+    .console-message {
+        font-size: 11px !important;
+        word-break: break-word !important; /* OBRIGA O TEXTO A QUEBRAR */
+        white-space: normal !important;
+    }
+
+    /* 5. Rodapé do Console (Input de comando) */
+    .console-footer {
+        flex-direction: column !important;
+        padding: 10px !important;
+        gap: 10px !important;
+    }
+    
+    .console-stats {
+        width: 100% !important;
+        justify-content: space-between !important;
+        font-size: 10px !important;
+    }
+
+    .console-command {
+        width: 100% !important;
+        padding: 8px !important;
+    }
+
+    .console-command input {
+        width: 100% !important;
+        font-size: 12px !important;
+    }
+
+    /* 6. Cards de Status (Servidor, MongoDB, CPU...) */
+    .system-status-grid {
+        grid-template-columns: 1fr !important; /* 1 card por linha para não esmagar */
+        gap: 10px !important;
+    }
+
+    .status-card {
+        padding: 15px !important;
+    }
+}
+
+/* ============================================================================
+   CORREÇÃO MOBILE - MÓDULO BANCO DE DADOS (VERSÃO COMPLETA)
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* 1. O Header Azul do Banco de Dados */
+    .bd-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        padding: 20px !important;
+        gap: 15px !important;
+        border-radius: 16px !important;
+    }
+
+    .bd-header-left {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+        width: 100% !important;
+    }
+
+    .bd-header-icon {
+        width: 50px !important;
+        height: 50px !important;
+        font-size: 24px !important;
+        border-radius: 14px !important;
+    }
+
+    .bd-header-text h1 {
+        font-size: 20px !important;
+        line-height: 1.2 !important;
+        word-break: break-word !important;
+    }
+
+    .bd-header-text p {
+        font-size: 12px !important;
+        margin-top: 5px !important;
+        white-space: normal !important;
+        line-height: 1.4 !important;
+    }
+
+    /* 2. Botões do Header (Módulos, Atualizar) */
+    .bd-header-actions {
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+    }
+
+    .bd-header-actions .bd-btn {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 10px 5px !important;
+        font-size: 12px !important;
+    }
+
+    /* 3. Cards de Resumo (Coleções, Total, Tamanho) */
+    .bd-resumo {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    .bd-resumo-card {
+        padding: 15px !important;
+    }
+
+    .bd-resumo-value {
+        font-size: 20px !important;
+    }
+
+    /* 4. Layout do Banco (Sidebar de Módulos e Área Principal) */
+    .bd-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 15px !important;
+        width: 100% !important;
+        overflow-x: hidden !important; /* Evita vazamento geral */
+    }
+
+    .bd-sidebar-modulos {
+        position: static !important;
+        max-height: 400px !important;
+        margin-bottom: 0 !important;
+        width: 100% !important;
+        overflow-x: hidden !important; /* Evita vazamento no card de módulos */
+    }
+
+    .bd-main-content {
+        width: 100% !important;
+        overflow-x: hidden !important;
+    }
+
+    /* 5. CORREÇÃO DO VAZAMENTO DOS BOTÕES LARANJAS (Lista de Módulos) */
+    .bd-modulo-grupo {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important; 
+        margin-bottom: 10px !important;
+    }
+
+    .bd-modulo-titulo {
+        padding: 12px 15px !important;
+        font-size: 13px !important;
+    }
+
+    .bd-modulo-colecoes {
+        padding: 8px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .bd-colecao-wrapper {
+        width: 100% !important;
+        display: flex !important;
+        align-items: stretch !important;
+        gap: 4px !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Ajusta o botão da coleção para não empurrar o lápis pra fora */
+    .bd-colecao-item {
+        flex: 1 !important;
+        min-width: 0 !important; /* Permite encolher */
+        padding: 10px !important;
+        font-size: 12px !important;
+    }
+
+    .bd-colecao-item span {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important; /* Corta o nome com "..." */
+    }
+
+    .bd-colecao-count {
+        flex-shrink: 0 !important;
+        margin-left: 4px !important;
+    }
+
+    /* O botão do lápis laranja */
+    .bd-btn-edit-meta {
+        width: 34px !important;
+        min-width: 34px !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* 6. Cabeçalho da Coleção (quando clica em um módulo) */
+    .bd-colecao-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        padding: 15px !important;
+        gap: 15px !important;
+    }
+
+    .bd-colecao-header-left {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 10px !important;
+    }
+
+    .bd-colecao-header-left h2 {
+        font-size: 18px !important;
+    }
+
+    .bd-colecao-header-actions {
+        width: 100% !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
+    .bd-colecao-header-actions .bd-btn {
+        flex: 1 !important;
+        justify-content: center !important;
+        font-size: 11px !important;
+        padding: 8px !important;
+        white-space: nowrap !important;
+    }
+
+    /* 7. Barra de Filtros (Buscar, De, Até) */
+    .bd-filtros-colecao {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 15px !important;
+        gap: 10px !important;
+    }
+
+    .bd-filtro-item {
+        min-width: 100% !important;
+    }
+
+    .bd-filtro-item:first-child {
+        flex: 1 !important;
+    }
+}
+

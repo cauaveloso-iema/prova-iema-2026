@@ -1,9 +1,14 @@
 // ============================================================================
 // ROTAS DE GERENCIAMENTO DO BANCO DE DADOS (ADMIN)
 // ============================================================================
-// Descrição: Permite ao admin visualizar, filtrar e excluir dados de todas
-//            as coleções do banco de dados organizadas por módulo
-// Recursos: Auto-detecção de coleções novas + metadados editáveis
+// 100% DINÂMICO — Nada é hardcoded. Tudo vem do MongoDB.
+//
+// COLEÇÕES USADAS:
+//   - modulometas     → define os módulos (agrupadores de coleções)
+//   - colecaometas    → define apelido/ícone/cor/módulo de cada coleção
+//
+// SEED: na primeira execução, popula as duas coleções acima com os dados
+//       iniciais. Depois disso, NUNCA mais é tocado pelo código.
 // ============================================================================
 
 const express = require('express');
@@ -36,180 +41,142 @@ const authenticateAdmin = (req, res, next) => {
 router.use(authenticateAdmin);
 
 // ============================================================================
-// MODELO: Metadados de coleções customizadas
-// Armazena apelidos/ícones/módulos de coleções novas
+// MODELOS DO MONGOOSE
 // ============================================================================
-let ColecaoMeta = null;
+
+// --- Modelo: Metadados dos MÓDULOS ---
+let ModuloMeta;
+try {
+    ModuloMeta = mongoose.model('ModuloMeta');
+} catch (e) {
+    const schemaModulo = new mongoose.Schema({
+        key:      { type: String, required: true, unique: true, trim: true },
+        label:    { type: String, required: true },
+        icone:    { type: String, default: 'fa-folder' },
+        cor:      { type: String, default: '#94a3b8' },
+        ordem:    { type: Number, default: 999 },
+        ativo:    { type: Boolean, default: true },
+        descricao:{ type: String, default: '' },
+        padrao:   { type: Boolean, default: false }  // marca quais são seed
+    }, { timestamps: true });
+    ModuloMeta = mongoose.model('ModuloMeta', schemaModulo);
+}
+
+// --- Modelo: Metadados das COLEÇÕES ---
+let ColecaoMeta;
 try {
     ColecaoMeta = mongoose.model('ColecaoMeta');
 } catch (e) {
-    const schema = new mongoose.Schema({
-        colecao: { type: String, required: true, unique: true },
-        label: { type: String, default: '' },
-        icone: { type: String, default: 'fa-cube' },
+    const schemaColecao = new mongoose.Schema({
+        colecao:   { type: String, required: true, unique: true, trim: true },
+        label:     { type: String, default: '' },
+        icone:     { type: String, default: 'fa-cube' },
         moduloKey: { type: String, default: 'outros' },
-        cor: { type: String, default: '#94a3b8' },
+        cor:       { type: String, default: '#94a3b8' },
         descricao: { type: String, default: '' },
-        criadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        createdAt: { type: Date, default: Date.now },
-        updatedAt: { type: Date, default: Date.now }
+        ordem:     { type: Number, default: 999 },
+        padrao:    { type: Boolean, default: false },
+        criadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
     }, { timestamps: true });
-    ColecaoMeta = mongoose.model('ColecaoMeta', schema);
+    ColecaoMeta = mongoose.model('ColecaoMeta', schemaColecao);
 }
 
 // ============================================================================
-// MAPA DE COLEÇÕES POR MÓDULO - BASEADO NO BANCO REAL (provas_online)
+// SEED INICIAL — roda UMA ÚNICA VEZ (quando o banco está vazio)
 // ============================================================================
-const MODULOS_MAPA = {
-    usuarios: {
-        label: 'Usuários do Sistema',
-        icone: 'fa-users',
-        cor: '#3b82f6',
-        colecoes: [
-            { nome: 'users', label: 'Usuários', icone: 'fa-user', descricao: 'Todos os usuários do sistema' },
-            { nome: 'matriculaautorizadas', label: 'Matrículas Autorizadas', icone: 'fa-id-card', descricao: 'Matrículas liberadas para cadastro' }
-        ]
-    },
-    academico: {
-        label: 'Acadêmico',
-        icone: 'fa-graduation-cap',
-        cor: '#8b5cf6',
-        colecoes: [
-            { nome: 'provas', label: 'Provas', icone: 'fa-file-alt', descricao: 'Provas criadas pelos professores' },
-            { nome: 'turmas', label: 'Turmas', icone: 'fa-school', descricao: 'Turmas do sistema' },
-            { nome: 'resultados', label: 'Resultados', icone: 'fa-chart-line', descricao: 'Resultados das provas dos alunos' },
-            { nome: 'provarealizadas', label: 'Provas Realizadas', icone: 'fa-check-circle', descricao: 'Registros de provas finalizadas' },
-            { nome: 'cursos', label: 'Cursos', icone: 'fa-book', descricao: 'Cursos cadastrados' },
-            { nome: 'eixos', label: 'Eixos', icone: 'fa-sitemap', descricao: 'Eixos tecnológicos' }
-        ]
-    },
-    gestao_geral: {
-        label: 'Gestão Geral',
-        icone: 'fa-user-tie',
-        cor: '#1e3c72',
-        colecoes: [
-            { nome: 'autorizacoes', label: 'Autorizações', icone: 'fa-map-marked-alt', descricao: 'Autorizações de saída/visita' },
-            { nome: 'rodiziorefeicaos', label: 'Rodízios de Refeição', icone: 'fa-calendar-alt', descricao: 'Configurações de rodízio por turma' },
-            { nome: 'atrasos', label: 'Atrasos', icone: 'fa-clock', descricao: 'Registros de atrasos de alunos' }
-        ]
-    },
-    coordenacao_patio: {
-        label: 'Coordenação de Pátio',
-        icone: 'fa-utensils',
-        cor: '#f59e0b',
-        colecoes: [
-            { nome: 'localizacoes', label: 'Localizações/Refeições', icone: 'fa-map-marker-alt', descricao: 'Registros de refeições e localizações' }
-        ]
-    },
-    cozinha: {
-        label: 'Cozinha',
-        icone: 'fa-kitchen-set',
-        cor: '#d97706',
-        colecoes: [
-            { nome: 'refeicaos', label: 'Refeições Registradas', icone: 'fa-utensils', descricao: 'Controle de refeições servidas' },
-            { nome: 'feedbackrefeicoes', label: 'Feedbacks das Refeições', icone: 'fa-comments', descricao: 'Avaliações dos alunos sobre a comida' }
-        ]
-    },
-    enfermaria: {
-        label: 'Enfermaria',
-        icone: 'fa-hospital-user',
-        cor: '#ec4899',
-        colecoes: [
-            { nome: 'atendimentoenfermarias', label: 'Atendimentos da Enfermaria', icone: 'fa-notes-medical', descricao: 'Atendimentos realizados na enfermaria' }
-        ]
-    },
-    supervisao: {
-        label: 'Supervisão',
-        icone: 'fa-user-shield',
-        cor: '#1e3a8a',
-        colecoes: [
-            { nome: 'atendimentossupervisaos', label: 'Atendimentos de Supervisão', icone: 'fa-user-shield', descricao: 'Ocorrências e atendimentos da supervisão' }
-        ]
-    },
-    psicologia: {
-        label: 'Psicologia',
-        icone: 'fa-brain',
-        cor: '#14b8a6',
-        colecoes: [
-            { nome: 'atendimentopsicologicos', label: 'Atendimentos Psicológicos', icone: 'fa-brain', descricao: 'Registros de atendimento psicológico' }
-        ]
-    },
-    assistente_social: {
-        label: 'Assistente Social',
-        icone: 'fa-hands-helping',
-        cor: '#8b5cf6',
-        colecoes: [
-            { nome: 'atendimentoassistentesociais', label: 'Atendimentos Assist. Social', icone: 'fa-hands-helping', descricao: 'Atendimentos do assistente social' }
-        ]
-    },
-    setor_pedagogico: {
-        label: 'Setor Pedagógico',
-        icone: 'fa-chalkboard-user',
-        cor: '#a855f7',
-        colecoes: [
-            { nome: 'acompanhamentocompartilhado', label: 'Acompanhamentos', icone: 'fa-hands-holding-child', descricao: 'Acompanhamentos de alunos' }
-        ]
-    },
-    protagonismo: {
-        label: 'Protagonismo',
-        icone: 'fa-star',
-        cor: '#f97316',
-        colecoes: [
-            { nome: 'clubes', label: 'Clubes', icone: 'fa-users-rectangle', descricao: 'Clubes estudantis' },
-            { nome: 'inscricaoclubes', label: 'Inscrições em Clubes', icone: 'fa-file-signature', descricao: 'Inscrições dos alunos nos clubes' },
-            { nome: 'tutors', label: 'Tutores', icone: 'fa-chalkboard-user', descricao: 'Tutores cadastrados' },
-            { nome: 'candidatos', label: 'Candidatos', icone: 'fa-user-tie', descricao: 'Candidatos a líder/vice-líder' },
-            { nome: 'votos', label: 'Votos', icone: 'fa-check-to-slot', descricao: 'Votos da eleição' },
-            { nome: 'configuracaoprotagonismo', label: 'Configurações do Protagonismo', icone: 'fa-cog', descricao: 'Configurações do módulo Protagonismo' }
-        ]
-    },
-    substituicoes: {
-        label: 'Substituições de Professores',
-        icone: 'fa-people-arrows',
-        cor: '#0891b2',
-        colecoes: [
-            { nome: 'substituicoes_professores', label: 'Substituições', icone: 'fa-people-arrows', descricao: 'Registros de substituição de professores' }
-        ]
-    },
-    comunicacao: {
-        label: 'Comunicação e Eventos',
-        icone: 'fa-bell',
-        cor: '#ef4444',
-        colecoes: [
-            { nome: 'notificacaos', label: 'Notificações', icone: 'fa-bell', descricao: 'Notificações do sistema' },
-            { nome: 'eventos', label: 'Eventos', icone: 'fa-calendar', descricao: 'Eventos do calendário acadêmico' }
-        ]
-    },
-    seguranca: {
-        label: 'Segurança e Identificação',
-        icone: 'fa-shield-alt',
-        cor: '#dc2626',
-        colecoes: [
-            { nome: 'faceids', label: 'Face IDs', icone: 'fa-id-card', descricao: 'Cadastros de reconhecimento facial' },
-            { nome: 'permissaomodulos', label: 'Permissões de Módulos', icone: 'fa-user-lock', descricao: 'Permissões especiais por email' }
-        ]
-    },
-    push: {
-        label: 'Notificações Push',
-        icone: 'fa-mobile-alt',
-        cor: '#8b5cf6',
-        colecoes: [
-            { nome: 'pushsettings', label: 'Configurações Push', icone: 'fa-cog', descricao: 'Configurações globais de push' },
-            { nome: 'pushsubscriptions', label: 'Inscrições Push', icone: 'fa-mobile-alt', descricao: 'Dispositivos inscritos em push' }
-        ]
-    },
-    sistema: {
-        label: 'Sistema',
-        icone: 'fa-server',
-        cor: '#6b7280',
-        colecoes: [
-            { nome: 'configs', label: 'Configurações', icone: 'fa-cog', descricao: 'Configurações gerais do sistema' }
-        ]
+const SEED_MODULOS = [
+    { key: 'usuarios',           label: 'Usuários do Sistema',           icone: 'fa-users',             cor: '#3b82f6', ordem: 1 },
+    { key: 'academico',          label: 'Acadêmico',                     icone: 'fa-graduation-cap',    cor: '#8b5cf6', ordem: 2 },
+    { key: 'gestao_geral',       label: 'Gestão Geral',                  icone: 'fa-user-tie',          cor: '#1e3c72', ordem: 3 },
+    { key: 'coordenacao_patio',  label: 'Coordenação de Pátio',          icone: 'fa-utensils',          cor: '#f59e0b', ordem: 4 },
+    { key: 'cozinha',            label: 'Cozinha',                       icone: 'fa-kitchen-set',       cor: '#d97706', ordem: 5 },
+    { key: 'enfermaria',         label: 'Enfermaria',                    icone: 'fa-hospital-user',     cor: '#ec4899', ordem: 6 },
+    { key: 'supervisao',         label: 'Supervisão',                    icone: 'fa-user-shield',       cor: '#1e3a8a', ordem: 7 },
+    { key: 'psicologia',         label: 'Psicologia',                    icone: 'fa-brain',             cor: '#14b8a6', ordem: 8 },
+    { key: 'assistente_social',  label: 'Assistente Social',             icone: 'fa-hands-helping',     cor: '#8b5cf6', ordem: 9 },
+    { key: 'setor_pedagogico',   label: 'Setor Pedagógico',              icone: 'fa-chalkboard-user',   cor: '#a855f7', ordem: 10 },
+    { key: 'protagonismo',       label: 'Protagonismo',                  icone: 'fa-star',              cor: '#f97316', ordem: 11 },
+    { key: 'substituicoes',      label: 'Substituições de Professores',  icone: 'fa-people-arrows',     cor: '#0891b2', ordem: 12 },
+    { key: 'comunicacao',        label: 'Comunicação e Eventos',         icone: 'fa-bell',              cor: '#ef4444', ordem: 13 },
+    { key: 'seguranca',          label: 'Segurança e Identificação',     icone: 'fa-shield-alt',        cor: '#dc2626', ordem: 14 },
+    { key: 'push',               label: 'Notificações Push',             icone: 'fa-mobile-alt',        cor: '#8b5cf6', ordem: 15 },
+    { key: 'sistema',            label: 'Sistema',                       icone: 'fa-server',            cor: '#6b7280', ordem: 16 }
+];
+
+const SEED_COLECOES = [
+    // usuarios
+    { colecao: 'users',                     label: 'Usuários',                       icone: 'fa-user',                 moduloKey: 'usuarios',          descricao: 'Todos os usuários do sistema' },
+    { colecao: 'matriculaautorizadas',      label: 'Matrículas Autorizadas',         icone: 'fa-id-card',              moduloKey: 'usuarios',          descricao: 'Matrículas liberadas para cadastro' },
+    // academico
+    { colecao: 'provas',                    label: 'Provas',                         icone: 'fa-file-alt',             moduloKey: 'academico',         descricao: 'Provas criadas pelos professores' },
+    { colecao: 'turmas',                    label: 'Turmas',                         icone: 'fa-school',               moduloKey: 'academico',         descricao: 'Turmas do sistema' },
+    { colecao: 'resultados',                label: 'Resultados',                     icone: 'fa-chart-line',           moduloKey: 'academico',         descricao: 'Resultados das provas dos alunos' },
+    { colecao: 'provarealizadas',           label: 'Provas Realizadas',              icone: 'fa-check-circle',         moduloKey: 'academico',         descricao: 'Registros de provas finalizadas' },
+    { colecao: 'cursos',                    label: 'Cursos',                         icone: 'fa-book',                 moduloKey: 'academico',         descricao: 'Cursos cadastrados' },
+    { colecao: 'eixos',                     label: 'Eixos',                          icone: 'fa-sitemap',              moduloKey: 'academico',         descricao: 'Eixos tecnológicos' },
+    // gestao_geral
+    { colecao: 'autorizacoes',              label: 'Autorizações',                   icone: 'fa-map-marked-alt',       moduloKey: 'gestao_geral',      descricao: 'Autorizações de saída/visita' },
+    { colecao: 'rodiziorefeicaos',          label: 'Rodízios de Refeição',           icone: 'fa-calendar-alt',         moduloKey: 'gestao_geral',      descricao: 'Configurações de rodízio por turma' },
+    { colecao: 'atrasos',                   label: 'Atrasos',                        icone: 'fa-clock',                moduloKey: 'gestao_geral',      descricao: 'Registros de atrasos de alunos' },
+    // coordenacao_patio
+    { colecao: 'localizacoes',              label: 'Localizações/Refeições',         icone: 'fa-map-marker-alt',       moduloKey: 'coordenacao_patio', descricao: 'Registros de refeições e localizações' },
+    // cozinha
+    { colecao: 'refeicaos',                 label: 'Refeições Registradas',          icone: 'fa-utensils',             moduloKey: 'cozinha',           descricao: 'Controle de refeições servidas' },
+    { colecao: 'feedbackrefeicoes',         label: 'Feedbacks das Refeições',        icone: 'fa-comments',             moduloKey: 'cozinha',           descricao: 'Avaliações dos alunos sobre a comida' },
+    // enfermaria
+    { colecao: 'atendimentoenfermarias',    label: 'Atendimentos da Enfermaria',     icone: 'fa-notes-medical',        moduloKey: 'enfermaria',        descricao: 'Atendimentos realizados na enfermaria' },
+    // supervisao
+    { colecao: 'atendimentossupervisaos',   label: 'Atendimentos de Supervisão',     icone: 'fa-user-shield',          moduloKey: 'supervisao',        descricao: 'Ocorrências e atendimentos da supervisão' },
+    // psicologia
+    { colecao: 'atendimentopsicologicos',   label: 'Atendimentos Psicológicos',      icone: 'fa-brain',                moduloKey: 'psicologia',        descricao: 'Registros de atendimento psicológico' },
+    // assistente_social
+    { colecao: 'atendimentoassistentesociais', label: 'Atendimentos Assist. Social', icone: 'fa-hands-helping',        moduloKey: 'assistente_social', descricao: 'Atendimentos do assistente social' },
+    // setor_pedagogico
+    { colecao: 'acompanhamentocompartilhado',  label: 'Acompanhamentos',             icone: 'fa-hands-holding-child',  moduloKey: 'setor_pedagogico',  descricao: 'Acompanhamentos de alunos' },
+    // protagonismo
+    { colecao: 'clubes',                    label: 'Clubes',                         icone: 'fa-users-rectangle',      moduloKey: 'protagonismo',      descricao: 'Clubes estudantis' },
+    { colecao: 'inscricaoclubes',           label: 'Inscrições em Clubes',           icone: 'fa-file-signature',       moduloKey: 'protagonismo',      descricao: 'Inscrições dos alunos nos clubes' },
+    { colecao: 'tutors',                    label: 'Tutores',                        icone: 'fa-chalkboard-user',      moduloKey: 'protagonismo',      descricao: 'Tutores cadastrados' },
+    { colecao: 'candidatos',                label: 'Candidatos',                     icone: 'fa-user-tie',             moduloKey: 'protagonismo',      descricao: 'Candidatos a líder/vice-líder' },
+    { colecao: 'votos',                     label: 'Votos',                          icone: 'fa-check-to-slot',        moduloKey: 'protagonismo',      descricao: 'Votos da eleição' },
+    { colecao: 'configuracaoprotagonismo',  label: 'Configurações do Protagonismo',  icone: 'fa-cog',                  moduloKey: 'protagonismo',      descricao: 'Configurações do módulo Protagonismo' },
+    // substituicoes
+    { colecao: 'substituicoes_professores', label: 'Substituições',                  icone: 'fa-people-arrows',        moduloKey: 'substituicoes',     descricao: 'Registros de substituição de professores' },
+    // comunicacao
+    { colecao: 'notificacaos',              label: 'Notificações',                   icone: 'fa-bell',                 moduloKey: 'comunicacao',       descricao: 'Notificações do sistema' },
+    { colecao: 'eventos',                   label: 'Eventos',                        icone: 'fa-calendar',             moduloKey: 'comunicacao',       descricao: 'Eventos do calendário acadêmico' },
+    // seguranca
+    { colecao: 'faceids',                   label: 'Face IDs',                       icone: 'fa-id-card',              moduloKey: 'seguranca',         descricao: 'Cadastros de reconhecimento facial' },
+    { colecao: 'permissaomodulos',          label: 'Permissões de Módulos',          icone: 'fa-user-lock',            moduloKey: 'seguranca',         descricao: 'Permissões especiais por email' },
+    // push
+    { colecao: 'pushsettings',              label: 'Configurações Push',             icone: 'fa-cog',                  moduloKey: 'push',              descricao: 'Configurações globais de push' },
+    { colecao: 'pushsubscriptions',         label: 'Inscrições Push',                icone: 'fa-mobile-alt',           moduloKey: 'push',              descricao: 'Dispositivos inscritos em push' },
+    // sistema
+    { colecao: 'configs',                   label: 'Configurações',                  icone: 'fa-cog',                  moduloKey: 'sistema',           descricao: 'Configurações gerais do sistema' }
+];
+
+async function seedSeNecessario() {
+    try {
+        const total = await ModuloMeta.countDocuments();
+        if (total > 0) return; // já populado
+
+        console.log('🌱 [BancoDados] Populando módulos iniciais...');
+        await ModuloMeta.insertMany(SEED_MODULOS.map(m => ({ ...m, padrao: true, ativo: true })));
+
+        console.log('🌱 [BancoDados] Populando metadados de coleções iniciais...');
+        await ColecaoMeta.insertMany(SEED_COLECOES.map(c => ({ ...c, padrao: true })));
+
+        console.log(`✅ [BancoDados] Seed completo: ${SEED_MODULOS.length} módulos + ${SEED_COLECOES.length} coleções`);
+    } catch (error) {
+        console.error('❌ [BancoDados] Erro no seed:', error.message);
     }
-};
+}
+
+// roda em background, não bloqueia
+setTimeout(seedSeNecessario, 2000);
 
 // ============================================================================
-// FUNÇÃO: Formatar nome de coleção automaticamente
+// HELPERS
 // ============================================================================
 function formatarLabelAutomatico(nome) {
     return nome
@@ -222,18 +189,6 @@ function formatarLabelAutomatico(nome) {
 }
 
 // ============================================================================
-// FUNÇÃO: Obter meta de uma coleção
-// ============================================================================
-async function getMetaColecao(nomeCol) {
-    if (!ColecaoMeta) return null;
-    try {
-        return await ColecaoMeta.findOne({ colecao: nomeCol }).lean();
-    } catch (e) {
-        return null;
-    }
-}
-
-// ============================================================================
 // HEALTH CHECK
 // ============================================================================
 router.get('/health', async (req, res) => {
@@ -243,8 +198,9 @@ router.get('/health', async (req, res) => {
         res.json({
             success: true,
             service: 'BancoDados',
-            totalColecoes: collections.length,
-            colecoes: collections.map(c => c.name).sort()
+            totalColecoesNoBanco: collections.length,
+            totalModulos: await ModuloMeta.countDocuments(),
+            totalMetasColecoes: await ColecaoMeta.countDocuments()
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -252,101 +208,120 @@ router.get('/health', async (req, res) => {
 });
 
 // ============================================================================
-// LISTAR MÓDULOS AGRUPADOS (COM DETECÇÃO AUTOMÁTICA)
+// LISTAR MÓDULOS — 100% DO BANCO
 // ============================================================================
 router.get('/modulos', async (req, res) => {
     try {
         const db = mongoose.connection.db;
+
+        // 1) coleções reais no MongoDB
         const collectionsReais = await db.listCollections().toArray();
         const nomesReais = collectionsReais
             .filter(c => !c.name.startsWith('system.'))
             .map(c => c.name);
 
-        const modulos = [];
-        const colecoesMapeadas = new Set();
+        // 2) módulos do banco
+        const modulosDB = await ModuloMeta.find({ ativo: true })
+            .sort({ ordem: 1, label: 1 })
+            .lean();
 
-        // 1. Processar módulos do mapa
-        for (const [key, mod] of Object.entries(MODULOS_MAPA)) {
-            const colecoesExistentes = [];
-            let totalRegistros = 0;
+        // 3) metas de coleções do banco
+        const metasColecoes = await ColecaoMeta.find().lean();
+        const metasMap = new Map(metasColecoes.map(m => [m.colecao, m]));
 
-            for (const col of mod.colecoes) {
-                if (nomesReais.includes(col.nome)) {
-                    try {
-                        const count = await db.collection(col.nome).countDocuments();
-                        colecoesExistentes.push({ ...col, totalRegistros: count });
-                        totalRegistros += count;
-                        colecoesMapeadas.add(col.nome);
-                    } catch (e) {
-                        colecoesExistentes.push({ ...col, totalRegistros: 0 });
-                        colecoesMapeadas.add(col.nome);
-                    }
-                }
-            }
-
-            modulos.push({
-                key,
+        // 4) montar estrutura base
+        const modulosPorKey = new Map();
+        modulosDB.forEach(mod => {
+            modulosPorKey.set(mod.key, {
+                key: mod.key,
                 label: mod.label,
                 icone: mod.icone,
                 cor: mod.cor,
-                colecoes: colecoesExistentes,
-                totalColecoes: colecoesExistentes.length,
-                totalRegistros
+                ordem: mod.ordem,
+                colecoes: [],
+                totalColecoes: 0,
+                totalRegistros: 0
             });
-        }
-
-        // 2. Detectar coleções NÃO MAPEADAS
-        const colecoesNaoMapeadas = [];
-        for (const nomeCol of nomesReais) {
-            if (!colecoesMapeadas.has(nomeCol)) {
-                try {
-                    const count = await db.collection(nomeCol).countDocuments();
-                    const meta = await getMetaColecao(nomeCol);
-
-                    colecoesNaoMapeadas.push({
-                        nome: nomeCol,
-                        label: meta?.label || formatarLabelAutomatico(nomeCol),
-                        icone: meta?.icone || 'fa-cube',
-                        descricao: meta?.descricao || 'Coleção detectada automaticamente',
-                        totalRegistros: count,
-                        moduloKeyCustom: meta?.moduloKey || 'outros',
-                        corCustom: meta?.cor || '#94a3b8',
-                        temMeta: !!meta,
-                        ehCustomizada: true
-                    });
-                } catch (e) {}
-            }
-        }
-
-        // 3. Agrupar por moduloKey customizado
-        const gruposCustom = {};
-        for (const col of colecoesNaoMapeadas) {
-            const key = col.moduloKeyCustom || 'outros';
-            if (!gruposCustom[key]) {
-                gruposCustom[key] = [];
-            }
-            gruposCustom[key].push(col);
-        }
-
-        // 4. Adicionar módulos customizados
-        for (const [key, cols] of Object.entries(gruposCustom)) {
-            const totalRegistros = cols.reduce((acc, c) => acc + c.totalRegistros, 0);
-            modulos.push({
-                key: key === 'outros' ? 'outros' : `custom_${key}`,
-                label: key === 'outros' ? 'Outros (Não Mapeados)' : `📁 ${key}`,
-                icone: 'fa-cubes',
-                cor: '#94a3b8',
-                colecoes: cols.sort((a, b) => a.nome.localeCompare(b.nome)),
-                totalColecoes: cols.length,
-                totalRegistros,
-                ehCustomizado: true
-            });
-        }
-
-        res.json({
-            success: true,
-            modulos: modulos.filter(m => m.colecoes.length > 0)
         });
+
+        // 5) classificar cada coleção do MongoDB
+        const colecoesSemModulo = [];
+
+        for (const nomeCol of nomesReais) {
+            // ignora coleções internas do próprio sistema de admin
+            if (['modulometas', 'colecaometas'].includes(nomeCol.toLowerCase())) continue;
+
+            const meta = metasMap.get(nomeCol);
+            let count = 0;
+            try { count = await db.collection(nomeCol).countDocuments(); } catch (e) {}
+
+            const moduloDestino = meta?.moduloKey && modulosPorKey.has(meta.moduloKey)
+                ? meta.moduloKey
+                : null;
+
+            if (moduloDestino) {
+                const mod = modulosPorKey.get(moduloDestino);
+                mod.colecoes.push({
+                    nome: nomeCol,
+                    label: meta.label || formatarLabelAutomatico(nomeCol),
+                    icone: meta.icone || 'fa-cube',
+                    descricao: meta.descricao || '',
+                    cor: meta.cor || mod.cor,
+                    totalRegistros: count,
+                    temMeta: true,
+                    ehCustomizada: false
+                });
+                mod.totalRegistros += count;
+                mod.totalColecoes++;
+            } else {
+                // sem módulo definido → vai pra "outros"
+                colecoesSemModulo.push({
+                    nome: nomeCol,
+                    label: meta?.label || formatarLabelAutomatico(nomeCol),
+                    icone: meta?.icone || 'fa-cube',
+                    descricao: meta?.descricao || 'Coleção detectada automaticamente no banco',
+                    cor: meta?.cor || '#94a3b8',
+                    totalRegistros: count,
+                    temMeta: !!meta,
+                    ehCustomizada: true
+                });
+            }
+        }
+
+        // 6) adicionar "Outros" se houver coleções órfãs
+        if (colecoesSemModulo.length > 0) {
+            let outros = modulosPorKey.get('outros');
+            if (!outros) {
+                outros = {
+                    key: 'outros',
+                    label: 'Outros (Detectados automaticamente)',
+                    icone: 'fa-cubes',
+                    cor: '#94a3b8',
+                    ordem: 9999,
+                    colecoes: [],
+                    totalColecoes: 0,
+                    totalRegistros: 0,
+                    ehCustomizado: true
+                };
+                modulosPorKey.set('outros', outros);
+            }
+            colecoesSemModulo.sort((a, b) => a.nome.localeCompare(b.nome));
+            outros.colecoes.push(...colecoesSemModulo);
+            outros.totalColecoes += colecoesSemModulo.length;
+            outros.totalRegistros += colecoesSemModulo.reduce((a, c) => a + c.totalRegistros, 0);
+        }
+
+        // 7) ordenar coleções dentro de cada módulo
+        modulosPorKey.forEach(mod => {
+            mod.colecoes.sort((a, b) => a.label.localeCompare(b.label));
+        });
+
+        const modulos = Array.from(modulosPorKey.values())
+            .filter(m => m.colecoes.length > 0)
+            .sort((a, b) => (a.ordem || 9999) - (b.ordem || 9999));
+
+        res.json({ success: true, modulos, origem: 'banco' });
+
     } catch (error) {
         console.error('❌ Erro ao listar módulos:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -354,7 +329,79 @@ router.get('/modulos', async (req, res) => {
 });
 
 // ============================================================================
-// METADADOS - LISTAR
+// LISTAR ÍCONES E MÓDULOS — 100% DO BANCO
+// ============================================================================
+router.get('/icones', async (req, res) => {
+    try {
+        const modulosDB = await ModuloMeta.find({ ativo: true })
+            .sort({ ordem: 1 })
+            .lean();
+
+        const colecoesDB = await ColecaoMeta.find({
+            icone: { $exists: true, $ne: '' }
+        }).lean();
+
+        // Consolidar ícones únicos
+        const iconesMap = new Map();
+
+        modulosDB.forEach(m => {
+            if (m.icone && !iconesMap.has(m.icone)) {
+                iconesMap.set(m.icone, {
+                    icone: m.icone,
+                    origem: 'modulo',
+                    moduloLabel: m.label
+                });
+            }
+        });
+
+        colecoesDB.forEach(c => {
+            if (c.icone && !iconesMap.has(c.icone)) {
+                iconesMap.set(c.icone, {
+                    icone: c.icone,
+                    origem: 'colecao',
+                    moduloKey: c.moduloKey
+                });
+            }
+        });
+
+        const modulosDisponiveis = modulosDB.map(m => ({
+            key: m.key,
+            label: m.label,
+            icone: m.icone,
+            cor: m.cor,
+            origem: 'banco'
+        }));
+
+        // Garantir "outros"
+        if (!modulosDisponiveis.find(m => m.key === 'outros')) {
+            modulosDisponiveis.push({
+                key: 'outros',
+                label: '📁 Outros (Não Mapeados)',
+                icone: 'fa-cubes',
+                cor: '#94a3b8',
+                origem: 'sistema'
+            });
+        }
+
+        res.json({
+            success: true,
+            icones: Array.from(iconesMap.values()).sort((a, b) =>
+                a.icone.localeCompare(b.icone)
+            ),
+            modulos: modulosDisponiveis,
+            totalIcones: iconesMap.size,
+            totalModulos: modulosDisponiveis.length,
+            origem: 'banco'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao listar ícones:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// METADADOS DE COLEÇÃO
 // ============================================================================
 router.get('/meta', async (req, res) => {
     try {
@@ -365,9 +412,6 @@ router.get('/meta', async (req, res) => {
     }
 });
 
-// ============================================================================
-// METADADOS - SALVAR / ATUALIZAR
-// ============================================================================
 router.put('/meta/:colecao', async (req, res) => {
     try {
         const { colecao } = req.params;
@@ -382,29 +426,93 @@ router.put('/meta/:colecao', async (req, res) => {
                 moduloKey: moduloKey || 'outros',
                 cor: cor || '#94a3b8',
                 descricao: descricao || '',
-                criadoPor: req.userId,
-                updatedAt: new Date()
+                criadoPor: req.userId
             },
             { upsert: true, new: true }
         );
 
-        console.log(`✅ [BancoDados] Metadados salvos para ${colecao}`);
-
         res.json({ success: true, meta });
     } catch (error) {
-        console.error('❌ Erro ao salvar metadados:', error);
+        console.error('❌ Erro ao salvar meta:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ============================================================================
-// METADADOS - EXCLUIR
-// ============================================================================
 router.delete('/meta/:colecao', async (req, res) => {
     try {
         const { colecao } = req.params;
         await ColecaoMeta.deleteOne({ colecao });
         res.json({ success: true, message: 'Metadados removidos' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// CRUD DE MÓDULOS (para criar/editar módulos pelo admin)
+// ============================================================================
+router.get('/admin/modulos', async (req, res) => {
+    try {
+        const modulos = await ModuloMeta.find().sort({ ordem: 1 }).lean();
+        res.json({ success: true, modulos });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.post('/admin/modulos', async (req, res) => {
+    try {
+        const { key, label, icone, cor, ordem } = req.body;
+        if (!key || !label) {
+            return res.status(400).json({ success: false, error: 'key e label obrigatórios' });
+        }
+        const keyLimpa = key.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        const existe = await ModuloMeta.findOne({ key: keyLimpa });
+        if (existe) {
+            return res.status(400).json({ success: false, error: 'Módulo já existe' });
+        }
+        const modulo = await ModuloMeta.create({
+            key: keyLimpa,
+            label,
+            icone: icone || 'fa-folder',
+            cor: cor || '#94a3b8',
+            ordem: ordem || 999,
+            ativo: true
+        });
+        res.json({ success: true, modulo });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.put('/admin/modulos/:key', async (req, res) => {
+    try {
+        const { key } = req.params;
+        const { label, icone, cor, ordem, ativo } = req.body;
+        const modulo = await ModuloMeta.findOneAndUpdate(
+            { key },
+            { label, icone, cor, ordem, ativo },
+            { new: true }
+        );
+        if (!modulo) return res.status(404).json({ success: false, error: 'Módulo não encontrado' });
+        res.json({ success: true, modulo });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.delete('/admin/modulos/:key', async (req, res) => {
+    try {
+        const { key } = req.params;
+        const vinculadas = await ColecaoMeta.countDocuments({ moduloKey: key });
+        if (vinculadas > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `Este módulo tem ${vinculadas} coleção(ões) vinculada(s). Mova-as antes.`
+            });
+        }
+        await ModuloMeta.deleteOne({ key });
+        res.json({ success: true, message: 'Módulo excluído' });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -433,11 +541,7 @@ router.get('/colecoes', async (req, res) => {
 
         estatisticas.sort((a, b) => a.nome.localeCompare(b.nome));
 
-        res.json({
-            success: true,
-            total: estatisticas.length,
-            colecoes: estatisticas
-        });
+        res.json({ success: true, total: estatisticas.length, colecoes: estatisticas });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -533,13 +637,7 @@ router.delete('/colecao/:nome/registro/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Registro não encontrado' });
         }
 
-        console.log(`🗑️ Registro ${id} excluído de ${nome} por ${req.userId}`);
-
-        res.json({
-            success: true,
-            message: 'Registro excluído com sucesso',
-            detalhes: { colecao: nome, id }
-        });
+        res.json({ success: true, message: 'Registro excluído', detalhes: { colecao: nome, id } });
     } catch (error) {
         console.error('❌ Erro ao excluir registro:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -547,7 +645,7 @@ router.delete('/colecao/:nome/registro/:id', async (req, res) => {
 });
 
 // ============================================================================
-// EXCLUIR EM MASSA
+// EXCLUSÃO EM MASSA
 // ============================================================================
 router.post('/colecao/:nome/excluir-massa', async (req, res) => {
     try {
@@ -560,8 +658,8 @@ router.post('/colecao/:nome/excluir-massa', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Coleção não encontrada' });
         }
 
-        const colecoesProtegidas = ['users', 'configs'];
-        if (colecoesProtegidas.includes(nome) && confirmacao !== 'CONFIRMO_EXCLUSAO_CRITICA') {
+        const protegidas = ['users', 'configs'];
+        if (protegidas.includes(nome) && confirmacao !== 'CONFIRMO_EXCLUSAO_CRITICA') {
             return res.status(400).json({
                 success: false,
                 error: `A coleção "${nome}" requer confirmação especial`,
@@ -573,12 +671,10 @@ router.post('/colecao/:nome/excluir-massa', async (req, res) => {
 
         if (ids.length > 0) {
             filtro._id = { $in: ids.map(id => new mongoose.Types.ObjectId(id)) };
-        } else {
-            if (dataInicio || dataFim) {
-                filtro.createdAt = {};
-                if (dataInicio) filtro.createdAt.$gte = new Date(dataInicio);
-                if (dataFim) filtro.createdAt.$lte = new Date(dataFim + 'T23:59:59');
-            }
+        } else if (dataInicio || dataFim) {
+            filtro.createdAt = {};
+            if (dataInicio) filtro.createdAt.$gte = new Date(dataInicio);
+            if (dataFim) filtro.createdAt.$lte = new Date(dataFim + 'T23:59:59');
         }
 
         const totalAntes = await db.collection(nome).countDocuments(filtro);
@@ -593,8 +689,6 @@ router.post('/colecao/:nome/excluir-massa', async (req, res) => {
         }
 
         const resultado = await db.collection(nome).deleteMany(filtro);
-
-        console.log(`🗑️ ${resultado.deletedCount} registros excluídos de ${nome}`);
 
         res.json({
             success: true,
@@ -621,11 +715,11 @@ router.post('/colecao/:nome/limpar', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Coleção não encontrada' });
         }
 
-        const colecoesProtegidas = ['users', 'configs', 'permissaomodulos'];
-        if (colecoesProtegidas.includes(nome)) {
+        const protegidas = ['users', 'configs', 'permissaomodulos'];
+        if (protegidas.includes(nome)) {
             return res.status(403).json({
                 success: false,
-                error: `A coleção "${nome}" é protegida e não pode ser limpa completamente`
+                error: `A coleção "${nome}" é protegida e não pode ser limpa`
             });
         }
 
@@ -639,8 +733,6 @@ router.post('/colecao/:nome/limpar', async (req, res) => {
 
         const totalAntes = await db.collection(nome).countDocuments();
         const resultado = await db.collection(nome).deleteMany({});
-
-        console.log(`🗑️ LIMPEZA TOTAL: ${resultado.deletedCount} registros removidos de ${nome}`);
 
         res.json({
             success: true,

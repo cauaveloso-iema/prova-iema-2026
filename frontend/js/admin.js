@@ -33,12 +33,23 @@ class AdminPanel {
         this.anexosAdmin = [];
         this.arquivosParaUploadAdmin = [];
         this.arquivosOriginaisBackupAdmin = [];
+        this.carregarCssIframes();
         
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
         } else {
             this.init();
         }
+    }
+
+    carregarCssIframes() {
+        if (document.getElementById('css-iframes-admin')) return;
+        const link = document.createElement('link');
+        link.id = 'css-iframes-admin';
+        link.rel = 'stylesheet';
+        link.href = '/css/iframes-admin.css';   // ← caminho relativo ao express.static
+        document.head.appendChild(link);
+        console.log('📥 CSS de iframes carregado: /css/iframes-admin.css');
     }
 
     async init() {
@@ -227,6 +238,261 @@ class AdminPanel {
             }
         } catch (error) {
             console.error('❌ Erro ao carregar dados reais:', error);
+        }
+    }
+
+    // ============================================================================
+    // MÓDULOS EM IFRAME — HELPER UNIFICADO (RESPONSIVO)
+    // ============================================================================
+
+    getIframeConfig(moduloKey) {
+        const configs = {
+            'enfermaria': {
+                titulo: 'Painel da Enfermaria',
+                subtitulo: 'Acesso total - Gerencie os atendimentos',
+                icone: 'fas fa-hospital-user',
+                gradiente: 'gradient-cyan',
+                src: '/enfermaria.html?modo=admin_view',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarEnfermaria', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirEnfermariaNovaAba', tipo: 'white' }
+                ]
+            },
+            'psicologia': {
+                titulo: 'Painel de Psicologia',
+                subtitulo: 'Acesso total - Escutas, crises e acompanhamentos',
+                icone: 'fas fa-brain',
+                gradiente: 'gradient-teal',
+                src: '/psicologia.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarPsicologia', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirPsicologiaNovaAba', tipo: 'white' }
+                ]
+            },
+            'supervisao': {
+                titulo: 'Painel de Supervisão',
+                subtitulo: 'Acesso total - Ocorrências e relatórios',
+                icone: 'fas fa-user-shield',
+                gradiente: 'gradient-sky',
+                src: '/supervisao.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarSupervisao', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirSupervisaoNovaAba', tipo: 'white' }
+                ]
+            },
+            'gestao-geral': {
+                titulo: 'Painel de Gestão Geral',
+                subtitulo: 'Acesso total - Rodízios e atrasos',
+                icone: 'fas fa-user-tie',
+                gradiente: 'gradient-navy',
+                src: '/gestao-geral.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarGestaoGeral', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirGestaoGeralNovaAba', tipo: 'white' }
+                ]
+            },
+            'assistente-social': {
+                titulo: 'Painel do Assistente Social',
+                subtitulo: 'Acesso total - Evasão e vulnerabilidades',
+                icone: 'fas fa-hands-helping',
+                gradiente: 'gradient-purple',
+                src: '/assistente-social.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarAssistenteSocial', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirAssistenteSocialNovaAba', tipo: 'white' }
+                ]
+            },
+            'setor-pedagogico': {
+                titulo: 'Painel do Setor Pedagógico',
+                subtitulo: 'Acesso total - AEE e adaptações',
+                icone: 'fas fa-chalkboard-user',
+                gradiente: 'gradient-purple',
+                src: '/setor-pedagogico.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarSetorPedagogico', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirSetorPedagogicoNovaAba', tipo: 'white' }
+                ]
+            },
+            'protagonismo': {
+                titulo: 'Painel de Protagonismo',
+                subtitulo: 'Acesso total - Clubes, tutoria e eleições',
+                icone: 'fas fa-star',
+                gradiente: 'gradient-orange',
+                src: '/protagonismo.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarProtagonismo', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirProtagonismoNovaAba', tipo: 'white' },
+                    { label: 'Página Pública', icone: 'fas fa-external-link-alt', metodo: 'abrirProtagonismoPublico', tipo: 'danger' }
+                ]
+            },
+            'biblioteca': {
+                titulo: 'Painel de Biblioteca',
+                subtitulo: 'Acesso total - Registros e frequência',
+                icone: 'fas fa-book-reader',
+                gradiente: 'gradient-sky',
+                src: '/biblioteca.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarBiblioteca', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirBibliotecaNovaAba', tipo: 'white' },
+                    { label: 'Página Pública', icone: 'fas fa-external-link-alt', metodo: 'abrirBibliotecaPublico', tipo: 'danger' }
+                ]
+            },
+            'secretaria': {
+                titulo: 'Painel da Secretaria',
+                subtitulo: 'Acesso total - Justificativas de falta',
+                icone: 'fas fa-graduation-cap',
+                gradiente: 'gradient-emerald',
+                src: '/secretaria.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarSecretaria', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirSecretariaNovaAba', tipo: 'white' }
+                ]
+            },
+            'recepcao': {
+                titulo: 'Painel da Recepção',
+                subtitulo: 'Acesso total - Autorizações por QR Code',
+                icone: 'fas fa-concierge-bell',
+                gradiente: 'gradient-cyan',
+                src: '/recepcao.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarRecepcao', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirRecepcaoNovaAba', tipo: 'white' }
+                ]
+            },
+            'gestao-professores': {
+                titulo: 'Gestão de Professores',
+                subtitulo: 'Componentes curriculares e aulas',
+                icone: 'fas fa-chalkboard-teacher',
+                gradiente: 'gradient-indigo',
+                src: '/setor-pedagogico.html?modulo=gestao-professores',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarGestaoProfessores', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirGestaoProfessoresNovaAba', tipo: 'white' }
+                ]
+            },
+            'admin-simples': {
+                titulo: 'Admin Simples',
+                subtitulo: 'Painel simplificado',
+                icone: 'fas fa-user-cog',
+                gradiente: 'gradient-indigo',
+                src: '/admin-simples.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarAdminSimples', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirAdminSimplesNovaAba', tipo: 'white' }
+                ]
+            }
+        };
+        return configs[moduloKey] || null;
+    }
+
+    renderIframeModule(moduloKey) {
+        const cfg = this.getIframeConfig(moduloKey);
+        if (!cfg) {
+            return `<div style="padding: 40px; text-align: center; color: #dc2626;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 32px;"></i>
+                <p>Módulo "${moduloKey}" não configurado</p>
+            </div>`;
+        }
+
+        const iframeId = `iframe-${moduloKey}-frame`;
+        const drawerId = `drawer-${moduloKey}`;
+
+        const actionsDesktop = cfg.actions.map(a => `
+            <button class="iframe-module-btn btn-${a.tipo}" onclick="admin.${a.metodo}()">
+                <i class="${a.icone}"></i>
+                <span>${a.label}</span>
+            </button>
+        `).join('');
+
+        const actionsMobile = cfg.actions.map(a => `
+            <button class="iframe-module-drawer-item ${a.tipo === 'danger' ? 'danger' : a.tipo === 'primary' ? 'primary' : ''}" 
+                onclick="admin.${a.metodo}(); admin.fecharDrawerIframe('${moduloKey}');">
+                <i class="${a.icone}"></i>
+                <span>${a.label}</span>
+            </button>
+        `).join('');
+
+        return `
+            <div class="iframe-module-wrapper" data-module="${moduloKey}">
+                <div class="iframe-module-header ${cfg.gradiente}">
+                    <div class="iframe-module-header-left">
+                        <div class="iframe-module-header-icon">
+                            <i class="${cfg.icone}"></i>
+                        </div>
+                        <div class="iframe-module-header-text">
+                            <h2>${cfg.titulo}</h2>
+                            <p>${cfg.subtitulo}</p>
+                        </div>
+                    </div>
+                    <div class="iframe-module-header-actions">
+                        ${actionsDesktop}
+                    </div>
+                    <button class="iframe-module-menu-btn" 
+                        onclick="admin.abrirDrawerIframe('${moduloKey}')" 
+                        aria-label="Mais opções">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                </div>
+                <div class="iframe-module-container">
+                    <iframe 
+                        id="${iframeId}"
+                        class="iframe-module-frame"
+                        src="${cfg.src}"
+                        title="${cfg.titulo}"
+                        allow="camera; microphone; geolocation"
+                    ></iframe>
+                </div>
+                <div class="iframe-module-drawer" id="${drawerId}" onclick="if(event.target === this) admin.fecharDrawerIframe('${moduloKey}')">
+                    <div class="iframe-module-drawer-sheet">
+                        <div class="iframe-module-drawer-handle"></div>
+                        <h3 class="iframe-module-drawer-title">${cfg.titulo}</h3>
+                        <p class="iframe-module-drawer-subtitle">Escolha uma ação</p>
+                        <div class="iframe-module-drawer-list">
+                            ${actionsMobile}
+                            <button class="iframe-module-drawer-item" onclick="admin.fecharDrawerIframe('${moduloKey}')">
+                                <i class="fas fa-times"></i>
+                                <span>Fechar</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    abrirDrawerIframe(moduloKey) {
+        const drawer = document.getElementById(`drawer-${moduloKey}`);
+        if (drawer) {
+            drawer.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    fecharDrawerIframe(moduloKey) {
+        const drawer = document.getElementById(`drawer-${moduloKey}`);
+        if (drawer) {
+            drawer.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
+
+    recarregarIframe(moduloKey) {
+        const iframe = document.getElementById(`iframe-${moduloKey}-frame`);
+        if (iframe) {
+            iframe.src = iframe.src;
+            if (typeof this.showToast === 'function') {
+                this.showToast('🔄 Recarregando...', 'info');
+            }
+        }
+    }
+
+    abrirIframeNovaAba(moduloKey) {
+        const cfg = this.getIframeConfig(moduloKey);
+        if (cfg && cfg.src) {
+            window.open(cfg.src, '_blank');
+            if (typeof this.showToast === 'function') {
+                this.showToast('✅ Aberto em nova aba', 'success');
+            }
         }
     }
 
@@ -494,7 +760,7 @@ class AdminPanel {
         if (!contentArea) return;
 
         if (typeof this.verificarVinculoPlayerId === 'function') {
-        setTimeout(() => this.verificarVinculoPlayerId(), 500);
+            setTimeout(() => this.verificarVinculoPlayerId(), 500);
         }
 
         contentArea.innerHTML = `
@@ -505,6 +771,9 @@ class AdminPanel {
         `;
 
         switch(section) {
+            // ==================================================================
+            // SEÇÕES INTERNAS (rotas normais do admin)
+            // ==================================================================
             case 'dashboard':
                 await this.loadDashboard();
                 break;
@@ -535,6 +804,9 @@ class AdminPanel {
             case 'cursos':
                 await this.loadCursos();
                 break;
+            case 'eixos':
+                await this.loadEixos();
+                break;
             case 'onesignal':
                 await this.loadOneSignal();
                 break;
@@ -547,10 +819,62 @@ class AdminPanel {
             case 'permissoes-especiais':
                 await this.loadPermissoesEspeciais();
                 break;
+            case 'backups':
+                await this.loadBackups();
+                break;
+            case 'monitoramento':
+                await this.loadMonitoramento();
+                break;
+            case 'configuracoes':
+                await this.loadConfiguracoes();
+                break;
+
+            // ==================================================================
+            // MÓDULOS EM IFRAME (todos via helper unificado)
+            // ==================================================================
+            case 'enfermaria-monitoramento':
+                await this.loadEnfermaria();
+                break;
+            case 'gestao-geral':
+                await this.loadGestaoGeral();
+                break;
+            case 'setor-pedagogico':
+                await this.loadSetorPedagogico();
+                break;
+            case 'supervisao':
+                await this.loadSupervisao();
+                break;
+            case 'psicologia':
+                await this.loadPsicologia();
+                break;
+            case 'assistente-social':
+                await this.loadAssistenteSocial();
+                break;
+            case 'protagonismo':
+                await this.loadProtagonismo();
+                break;
+            case 'biblioteca':
+                await this.loadBiblioteca();
+                break;
+            case 'secretaria':
+                await this.loadSecretaria();
+                break;
+            case 'recepcao':
+                await this.loadRecepcao();
+                break;
+            case 'gestao-professores':
+                await this.loadGestaoProfessores();
+                break;
+            case 'admin-simples':
+                await this.loadAdminSimples();
+                break;
+
+            // ==================================================================
+            // CASO ESPECIAL: cozinha-monitoramento (não é iframe, é módulo JS)
+            // ==================================================================
             case 'cozinha-monitoramento':
                 console.log('🍽️ Carregando módulo Cozinha Monitoramento...');
-                
-                // Verificar se o módulo foi carregado
+
                 if (typeof monitoramentoTempoReal === 'undefined' || monitoramentoTempoReal === null) {
                     console.warn('⚠️ monitoramentoTempoReal não encontrado, tentando criar...');
                     if (typeof MonitoramentoTempoReal !== 'undefined') {
@@ -570,164 +894,13 @@ class AdminPanel {
                         return;
                     }
                 }
-                
+
                 await monitoramentoTempoReal.carregar();
                 break;
 
-            case 'admin-simples':
-                await this.loadAdminSimples();
-                break;
-                
-                case 'enfermaria-monitoramento':                    
-                    contentArea.innerHTML = `
-                        <div class="enfermaria-wrapper" style="
-                            height: calc(100vh - 80px);
-                            display: flex;
-                            flex-direction: column;
-                            background: #f8fafc;
-                        ">
-                            <div style="
-                                padding: 16px 24px;
-                                background: linear-gradient(135deg, #0891b2, #06b6d4);
-                                color: white;
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
-                                border-radius: 12px 12px 0 0;
-                                margin: 16px 16px 0 16px;
-                            ">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <div style="
-                                        width: 44px; height: 44px;
-                                        background: rgba(255,255,255,0.2);
-                                        border-radius: 12px;
-                                        display: flex;
-                                        align-items: center;
-                                        justify-content: center;
-                                        font-size: 22px;
-                                    ">
-                                        <i class="fas fa-hospital-user"></i>
-                                    </div>
-                                    <div>
-                                        <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel da Enfermaria</h2>
-                                        <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                            <i class="fas fa-info-circle"></i> 
-                                            Acesso total como Super Admin - Gerencie os atendimentos da enfermaria
-                                        </p>
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <button 
-                                        onclick="admin.recarregarEnfermaria()" 
-                                        style="
-                                            background: rgba(255,255,255,0.2);
-                                            border: 1px solid rgba(255,255,255,0.3);
-                                            color: white;
-                                            padding: 10px 18px;
-                                            border-radius: 30px;
-                                            font-size: 13px;
-                                            font-weight: 600;
-                                            cursor: pointer;
-                                            display: flex;
-                                            align-items: center;
-                                            gap: 8px;
-                                            transition: all 0.2s;
-                                        "
-                                        onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                                        onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                                        title="Recarregar o painel da enfermaria"
-                                    >
-                                        <i class="fas fa-sync-alt"></i> Recarregar
-                                    </button>
-                                    <button 
-                                        onclick="admin.abrirEnfermariaNovaAba()" 
-                                        style="
-                                            background: white;
-                                            border: none;
-                                            color: #0891b2;
-                                            padding: 10px 18px;
-                                            border-radius: 30px;
-                                            font-size: 13px;
-                                            font-weight: 600;
-                                            cursor: pointer;
-                                            display: flex;
-                                            align-items: center;
-                                            gap: 8px;
-                                            transition: all 0.2s;
-                                        "
-                                        onmouseover="this.style.transform='translateY(-2px)'"
-                                        onmouseout="this.style.transform='translateY(0)'"
-                                        title="Abrir em nova aba"
-                                    >
-                                        <i class="fas fa-external-link-alt"></i> Nova Aba
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div style="
-                                flex: 1;
-                                margin: 0 16px 16px 16px;
-                                border-radius: 0 0 12px 12px;
-                                overflow: hidden;
-                                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                                background: white;
-                            ">
-                                <iframe 
-                                    id="enfermariaIframe"
-                                    src="/enfermaria.html?modo=admin_view" 
-                                    style="
-                                        width: 100%;
-                                        height: 100%;
-                                        border: none;
-                                        display: block;
-                                    "
-                                    title="Painel da Enfermaria"
-                                    allow="camera; microphone; geolocation"
-                                ></iframe>
-                            </div>
-                        </div>
-                    `;
-                    break;
-            case 'gestao-geral':
-                await this.loadGestaoGeral();
-                break;
-            case 'setor-pedagogico': 
-                await this.loadSetorPedagogico();
-                break;
-            case 'supervisao':
-                await this.loadSupervisao();
-                break;
-            case 'psicologia':
-                await this.loadPsicologia();
-                break;
-            case 'assistente-social':
-                await this.loadAssistenteSocial();
-                break;
-            case 'protagonismo':
-                await this.loadProtagonismo();
-                break;
-            case 'biblioteca':                     
-                await this.loadBiblioteca();       
-                break;
-            case 'secretaria':
-                await this.loadSecretaria();       
-                break;
-            case 'recepcao':
-                await this.loadRecepcao();
-                break;
-            case 'eixos':
-                await this.loadEixos();
-                break;
-            case 'backups':
-                await this.loadBackups();
-                break;
-            case 'monitoramento':
-                await this.loadMonitoramento();
-                break;
-            case 'configuracoes':
-                await this.loadConfiguracoes();
-                break;
+            // ==================================================================
+            // FALLBACK
+            // ==================================================================
             default:
                 contentArea.innerHTML = `<div class="alert alert-warning">Seção "${section}" em desenvolvimento</div>`;
         }
@@ -3045,7 +3218,7 @@ class AdminPanel {
         }).join('');
     }
 
-    // ============ LOAD DASHBOARD (COM TODOS OS PERFIS VISÍVEIS) ============
+    // ============ LOAD DASHBOARD ============
     async loadDashboard() {
         const contentArea = document.getElementById('contentArea');
         
@@ -3080,7 +3253,7 @@ class AdminPanel {
                 minute: '2-digit' 
             });
 
-            // 🔥 MONTAR LISTA DE TODOS OS PERFIS (com ícones e cores)
+            // MONTAR LISTA DE TODOS OS PERFIS
             const todosPerfis = [
                 { id: 'total-alunos', label: 'Alunos', valor: stats.totalAlunos, icone: '👨‍🎓', cor: '#10b981' },
                 { id: 'total-professores', label: 'Professores', valor: stats.totalProfessores, icone: '👨‍🏫', cor: '#f59e0b' },
@@ -3101,14 +3274,24 @@ class AdminPanel {
 
             contentArea.innerHTML = `
                 <!-- HEADER DE SAUDAÇÃO -->
-                <div class="dashboard-welcome">
-                    <div class="welcome-left">
-                        <h1>${saudacao}, ${primeiroNome}! 👋</h1>
-                        <p>Aqui está um resumo do EducaPleno.</p>
+                <div class="dashboard-welcome" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 25px 20px; border-radius: 24px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(124, 58, 237, 0.3);">
+                    
+                    <div class="welcome-left" style="margin-bottom: 15px;">
+                        <h1 style="font-size: 24px; font-weight: 700; margin: 0 0 8px 0; line-height: 1.2;">${saudacao}, ${primeiroNome}! 👋</h1>
+                        <p style="font-size: 14px; opacity: 0.9; margin: 0;">Aqui está um resumo do EducaPleno.</p>
                     </div>
-                    <div class="welcome-right">
-                        <div class="welcome-date">${dataFormatada}</div>
-                        <div class="welcome-time">${horaFormatada}</div>
+                    
+                    <!-- PÍLULA DA DATA E HORA (FORÇADO) -->
+                    <div class="welcome-right" style="display: inline-flex; align-items: center; justify-content: center; gap: 15px; background: rgba(255, 255, 255, 0.15); padding: 10px 22px; border-radius: 50px; width: fit-content; margin: 0 auto; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
+                        
+                        <div class="welcome-date" style="font-size: 12px; color: rgba(255, 255, 255, 0.9); font-weight: 500; text-transform: capitalize; line-height: 1.3; text-align: left;">
+                            ${dataFormatada}
+                        </div>
+                        
+                        <div class="welcome-time" style="font-size: 24px; font-weight: 900; color: #ffffff; line-height: 1; letter-spacing: 1px;">
+                            ${horaFormatada}
+                        </div>
+                        
                     </div>
                 </div>
 
@@ -3118,7 +3301,7 @@ class AdminPanel {
                     <!-- COLUNA PRINCIPAL -->
                     <div class="dashboard-main">
                         
-                        <!-- ===== CARD DE USUÁRIOS COM TODOS OS PERFIS ===== -->
+                        <!-- CARD DE USUÁRIOS COM TODOS OS PERFIS -->
                         <div class="dash-card-full">
                             <div class="dash-card-full-header">
                                 <div class="dash-card-full-title">
@@ -3136,7 +3319,7 @@ class AdminPanel {
                                 </div>
                             </div>
                             
-                            <!-- GRID DE PERFIS (TODOS VISÍVEIS) -->
+                            <!-- GRID DE PERFIS -->
                             <div class="perfis-grid">
                                 ${todosPerfis.map(perfil => `
                                     <div class="perfil-item" style="border-left-color: ${perfil.cor};">
@@ -3150,14 +3333,9 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <!-- ===== CARDS EM LINHA (ONLINE + HISTÓRICO + TURMAS + PROVAS + QUESTÕES) ===== -->
+                        <!-- CARDS EM LINHA -->
                         <div class="dashboard-stats-row">
-                            
-                            <!-- CARD: USUÁRIOS ONLINE -->
-                            <div class="dash-card dash-card-online" 
-                                onclick="admin.abrirModalUsuariosOnline()" 
-                                style="cursor: pointer;" 
-                                title="Clique para ver quem está online">
+                            <div class="dash-card dash-card-online" onclick="admin.abrirModalUsuariosOnline()" style="cursor: pointer;" title="Clique para ver quem está online">
                                 <div class="dash-card-icon online-pulse">
                                     <i class="fas fa-signal"></i>
                                 </div>
@@ -3174,11 +3352,7 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <!-- 🔥 NOVO CARD: HISTÓRICO DE CONEXÕES -->
-                            <div class="dash-card dash-card-historico" 
-                                onclick="admin.abrirModalHistoricoConexoes()" 
-                                style="cursor: pointer;" 
-                                title="Clique para ver o histórico de conexões">
+                            <div class="dash-card dash-card-historico" onclick="admin.abrirModalHistoricoConexoes()" style="cursor: pointer;" title="Clique para ver o histórico de conexões">
                                 <div class="dash-card-icon history-pulse">
                                     <i class="fas fa-history"></i>
                                 </div>
@@ -3195,7 +3369,6 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <!-- CARD: TURMAS -->
                             <div class="dash-card dash-card-turmas">
                                 <div class="dash-card-icon green">
                                     <i class="fas fa-school"></i>
@@ -3210,7 +3383,6 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <!-- CARD: PROVAS -->
                             <div class="dash-card dash-card-provas">
                                 <div class="dash-card-icon orange">
                                     <i class="fas fa-file-alt"></i>
@@ -3225,7 +3397,6 @@ class AdminPanel {
                                 </div>
                             </div>
 
-                            <!-- CARD: QUESTÕES -->
                             <div class="dash-card dash-card-questoes">
                                 <div class="dash-card-icon cyan">
                                     <i class="fas fa-question-circle"></i>
@@ -3239,6 +3410,7 @@ class AdminPanel {
                                 </div>
                             </div>
                         </div>
+
                         <!-- GRÁFICOS -->
                         <div class="dashboard-charts-row">
                             <div class="dash-chart-card">
@@ -3280,11 +3452,6 @@ class AdminPanel {
                                             <button class="btn-create-first-prova" onclick="admin.switchSection('nova-prova')">
                                                 <i class="fas fa-plus"></i> Criar Prova
                                             </button>
-                                            <div class="dash-chart-legend">
-                                                <span><span class="legend-dot" style="background:#10b981;"></span> Ativas</span>
-                                                <span><span class="legend-dot" style="background:#f59e0b;"></span> Rascunho</span>
-                                                <span><span class="legend-dot" style="background:#6b7280;"></span> Finalizadas</span>
-                                            </div>
                                         </div>
                                     ` : `
                                         <canvas id="grafico-provas"></canvas>
@@ -3312,8 +3479,7 @@ class AdminPanel {
 
                     <!-- COLUNA LATERAL -->
                     <div class="dashboard-sidebar">
-                        
-                        <!-- CARD: SEGURANÇA DA CONTA -->
+                        <!-- SEGURANÇA DA CONTA -->
                         <div class="dash-sidebar-card">
                             <div class="dash-sidebar-header">
                                 <div class="dash-sidebar-title">
@@ -3343,24 +3509,10 @@ class AdminPanel {
                                 </div>
                                 <div class="security-item">
                                     <div class="security-item-left">
-                                        <i class="fas fa-map-marker-alt" style="color:#6b7280;"></i>
-                                        <span>Sessão atual</span>
-                                    </div>
-                                    <span class="security-status neutral">São Luís - MA</span>
-                                </div>
-                                <div class="security-item">
-                                    <div class="security-item-left">
                                         <i class="fas fa-clock" style="color:#6b7280;"></i>
                                         <span>Último acesso</span>
                                     </div>
                                     <span class="security-status neutral">${horaFormatada}</span>
-                                </div>
-                                <div class="security-item">
-                                    <div class="security-item-left">
-                                        <i class="fas fa-mobile-alt" style="color:#f59e0b;"></i>
-                                        <span>Outras sessões</span>
-                                    </div>
-                                    <span class="security-status neutral">2 ativas</span>
                                 </div>
                             </div>
                             <div class="dash-sidebar-footer">
@@ -3370,7 +3522,7 @@ class AdminPanel {
                             </div>
                         </div>
 
-                        <!-- CARD: AÇÕES RÁPIDAS -->
+                        <!-- AÇÕES RÁPIDAS -->
                         <div class="dash-sidebar-card">
                             <div class="dash-sidebar-header">
                                 <div class="dash-sidebar-title">
@@ -5124,14 +5276,11 @@ class AdminPanel {
         }
     }
 
-    // ============ RENDERIZAR USUÁRIOS (VERSÃO COM TODOS OS PERFIS) ============
     renderUsuariosProfissional({ role, search, page, limit, status, turma, usuarios, pagination, total, todasTurmas, estatisticas }) {
-        // 🔥 Usar a lista completa de turmas
         const turmasUnicas = todasTurmas && todasTurmas.length > 0 
             ? todasTurmas 
             : [...new Set(usuarios.filter(u => u.turma && u.turma !== '').map(u => u.turma))].sort();
         
-        // 🔥 Contagem por perfil (fallback se não vier nas estatísticas)
         const contagem = estatisticas.contagemPorRole || {
             aluno: usuarios.filter(u => u.role === 'aluno').length,
             professor: usuarios.filter(u => u.role === 'professor').length,
@@ -5152,7 +5301,7 @@ class AdminPanel {
         
         return `
             <div class="usuarios-container">
-                <!-- HEADER PROFISSIONAL (AZUL ROYAL) -->
+                <!-- HEADER PROFISSIONAL -->
                 <div class="usuarios-header">
                     <div class="header-left">
                         <div class="header-icon">
@@ -5191,9 +5340,8 @@ class AdminPanel {
                     </div>
                 </div>
 
-                <!-- 🔥 CARDS DE ESTATÍSTICAS - APENAS PRINCIPAIS (6 CARDS) -->
-                <div class="stats-grid">
-                    <!-- Total -->
+                <!-- CARDS DE ESTATÍSTICAS (AQUI ESTÁ A MUDANÇA PARA perfis-grid) -->
+                <div class="perfis-grid">
                     <div class="stat-card primary" onclick="admin.filtrarUsuariosPorRole('todos')">
                         <div class="stat-icon"><i class="fas fa-users"></i></div>
                         <div class="stat-content">
@@ -5203,11 +5351,8 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <!-- Alunos -->
-                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('aluno')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
-                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #10b981, #059669);">
-                            <i class="fas fa-user-graduate"></i>
-                        </div>
+                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('aluno')">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);"><i class="fas fa-user-graduate"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Alunos</span>
                             <span class="stat-value">${contagem.aluno || 0}</span>
@@ -5215,11 +5360,8 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <!-- Professores -->
-                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('professor')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
-                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #f59e0b, #d97706);">
-                            <i class="fas fa-chalkboard-teacher"></i>
-                        </div>
+                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('professor')">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);"><i class="fas fa-chalkboard-teacher"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Professores</span>
                             <span class="stat-value">${contagem.professor || 0}</span>
@@ -5227,11 +5369,8 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <!-- Admins -->
-                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('admin')" style="background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 20px; cursor: pointer; border: 1px solid rgba(0,0,0,0.04);">
-                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: linear-gradient(135deg, #1e3a8a, #1e40af);">
-                            <i class="fas fa-user-tie"></i>
-                        </div>
+                    <div class="stat-card" onclick="admin.filtrarUsuariosPorRole('admin')">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #1e3a8a, #1e40af);"><i class="fas fa-user-tie"></i></div>
                         <div class="stat-content">
                             <span class="stat-label">Admins</span>
                             <span class="stat-value">${contagem.admin || 0}</span>
@@ -5239,7 +5378,6 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <!-- Ativos -->
                     <div class="stat-card success" onclick="admin.filtrarUsuariosPorRole('ativo')">
                         <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
                         <div class="stat-content">
@@ -5249,20 +5387,17 @@ class AdminPanel {
                         </div>
                     </div>
 
-                    <!-- 🔥 BOTÃO "VER TODOS OS PERFIS" -->
-                    <div class="stat-card" onclick="admin.abrirModalTodosPerfis()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(99,102,241,0.3); display: flex; align-items: center; gap: 20px; cursor: pointer; border: none; color: white;">
-                        <div class="stat-icon" style="width: 60px; height: 60px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; background: rgba(255,255,255,0.2);">
-                            <i class="fas fa-layer-group"></i>
-                        </div>
+                    <div class="stat-card" onclick="admin.abrirModalTodosPerfis()" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none;">
+                        <div class="stat-icon" style="background: rgba(255,255,255,0.2);"><i class="fas fa-layer-group"></i></div>
                         <div class="stat-content">
                             <span class="stat-label" style="color: rgba(255,255,255,0.9);">Todos os Perfis</span>
                             <span class="stat-value" style="color: white;">14</span>
-                            <span class="stat-detail" style="color: rgba(255,255,255,0.85);">Clique para ver todos →</span>
+                            <span class="stat-detail" style="color: rgba(255,255,255,0.85);">Clique para ver →</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- BARRA DE FILTROS -->
+                <!-- FILTROS -->
                 <div class="filters-card">
                     <div class="filters-header">
                         <div class="filters-title">
@@ -5273,24 +5408,15 @@ class AdminPanel {
                     </div>
                     
                     <div class="filters-grid">
-                        <!-- Busca -->
                         <div class="filter-group">
                             <label><i class="fas fa-search"></i> Buscar</label>
                             <div class="input-wrapper">
-                                <input type="text" id="searchUsuarios" 
-                                    placeholder="Nome, email, CPF ou matrícula..." 
-                                    value="${search || ''}"
-                                    autocomplete="off">
+                                <input type="text" id="searchUsuarios" placeholder="Nome, email, CPF ou matrícula..." value="${search || ''}" autocomplete="off">
                                 <i class="fas fa-search input-icon"></i>
-                                ${search ? `
-                                    <button class="input-clear" onclick="document.getElementById('searchUsuarios').value=''; admin.aplicarFiltrosUsuarios()">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                ` : ''}
+                                ${search ? `<button class="input-clear" onclick="document.getElementById('searchUsuarios').value=''; admin.aplicarFiltrosUsuarios()"><i class="fas fa-times"></i></button>` : ''}
                             </div>
                         </div>
                         
-                        <!-- Perfil -->
                         <div class="filter-group">
                             <label><i class="fas fa-user-tag"></i> Perfil</label>
                             <select id="filterRole" class="filter-select">
@@ -5314,7 +5440,6 @@ class AdminPanel {
                             </select>
                         </div>
                         
-                        <!-- Status -->
                         <div class="filter-group">
                             <label><i class="fas fa-circle"></i> Status</label>
                             <select id="filterStatus" class="filter-select">
@@ -5324,7 +5449,6 @@ class AdminPanel {
                             </select>
                         </div>
                         
-                        <!-- Turma -->
                         <div class="filter-group">
                             <label>
                                 <i class="fas fa-school"></i> Turma
@@ -5336,7 +5460,6 @@ class AdminPanel {
                             </select>
                         </div>
                         
-                        <!-- Botões -->
                         <div class="filter-actions">
                             <button class="btn-filter" onclick="admin.aplicarFiltrosUsuarios()">
                                 <i class="fas fa-filter"></i> Filtrar
@@ -5384,277 +5507,6 @@ class AdminPanel {
                     ${pagination && pagination.pages > 1 ? this.gerarPaginacaoProfissional(pagination, 'usuarios') : ''}
                 </div>
             </div>
-
-            <style>
-                .usuarios-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
-                
-                .usuarios-header {
-                    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-                    border-radius: 20px;
-                    padding: 30px;
-                    margin-bottom: 30px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 20px;
-                    box-shadow: 0 10px 30px rgba(30, 58, 138, 0.3);
-                    position: relative;
-                    overflow: hidden;
-                }
-                
-                .usuarios-header::before {
-                    content: '';
-                    position: absolute;
-                    top: -50px;
-                    right: -50px;
-                    width: 200px;
-                    height: 200px;
-                    background: rgba(255,255,255,0.1);
-                    border-radius: 50%;
-                }
-                
-                .header-left { display: flex; align-items: center; gap: 20px; position: relative; z-index: 2; }
-                .header-icon {
-                    width: 70px; height: 70px;
-                    background: rgba(255,255,255,0.15);
-                    border-radius: 20px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 32px;
-                    color: white;
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255,255,255,0.2);
-                }
-                .header-text h1 { color: white; font-size: 28px; font-weight: 600; margin: 0 0 5px; }
-                .header-text p { color: rgba(255,255,255,0.9); font-size: 14px; margin: 0; }
-                
-                .btn-header {
-                    padding: 12px 24px;
-                    border-radius: 40px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.3s;
-                    border: none;
-                    position: relative;
-                    z-index: 2;
-                }
-                .btn-header.btn-primary {
-                    background: white;
-                    color: #1e3a8a;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-                }
-                .btn-header.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.15); }
-                .btn-header.btn-refresh {
-                    background: rgba(255,255,255,0.15);
-                    color: white;
-                    border: 1px solid rgba(255,255,255,0.3);
-                    backdrop-filter: blur(5px);
-                    padding: 12px;
-                }
-                .btn-header.btn-refresh:hover { background: rgba(255,255,255,0.25); transform: rotate(180deg); }
-                
-                /* 🔥 STATS GRID COMPACTO - TODOS OS PERFIS */
-                .stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                    gap: 15px;
-                    margin-bottom: 30px;
-                }
-                
-                .stat-card {
-                    background: white;
-                    border-radius: 14px;
-                    padding: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                    display: flex;
-                    align-items: center;
-                    gap: 14px;
-                    transition: all 0.3s;
-                    border: 1px solid rgba(0,0,0,0.04);
-                    cursor: pointer;
-                }
-                .stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 16px rgba(0,0,0,0.08); }
-                
-                .stat-icon {
-                    width: 48px; height: 48px;
-                    border-radius: 12px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 20px;
-                    color: white;
-                    flex-shrink: 0;
-                }
-                
-                /* Cores específicas dos cards base */
-                .stat-card.primary .stat-icon { background: linear-gradient(135deg, #1e3a8a, #1e40af); }
-                .stat-card.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
-                .stat-card.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
-                .stat-card.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-                .stat-card.danger .stat-icon { background: linear-gradient(135deg, #ef4444, #dc2626); }
-                
-                .stat-content { flex: 1; min-width: 0; }
-                .stat-label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 3px; font-weight: 500; }
-                .stat-value { display: block; font-size: 22px; font-weight: 700; color: #1f2937; line-height: 1.1; }
-                .stat-detail { font-size: 10px; color: #9ca3af; display: block; margin-top: 2px; }
-                
-                .filters-card {
-                    background: white;
-                    border-radius: 16px;
-                    padding: 20px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                    border: 1px solid rgba(0,0,0,0.05);
-                }
-                .filters-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    padding-bottom: 15px;
-                    border-bottom: 2px solid #f0f0f0;
-                }
-                .filters-title { display: flex; align-items: center; gap: 10px; }
-                .filters-title i { font-size: 18px; color: #1e3a8a; background: #e0e7ff; padding: 8px; border-radius: 10px; }
-                .filters-title h3 { margin: 0; font-size: 16px; color: #374151; }
-                .filters-badge { background: #1e3a8a; color: white; padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
-                
-                .filters-grid {
-                    display: grid;
-                    grid-template-columns: 2fr 1fr 1fr 1fr auto;
-                    gap: 15px;
-                }
-                .filter-group { display: flex; flex-direction: column; gap: 5px; }
-                .filter-group label { font-size: 12px; font-weight: 600; color: #4b5563; display: flex; align-items: center; gap: 5px; }
-                
-                .input-wrapper { position: relative; }
-                .input-wrapper input {
-                    width: 100%;
-                    padding: 10px 35px 10px 40px;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 12px;
-                    font-size: 14px;
-                    transition: all 0.3s;
-                }
-                .input-wrapper input:focus {
-                    outline: none;
-                    border-color: #1e3a8a;
-                    box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1);
-                }
-                .input-icon {
-                    position: absolute;
-                    left: 15px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    color: #9ca3af;
-                    font-size: 14px;
-                }
-                .input-clear {
-                    position: absolute;
-                    right: 10px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    background: none;
-                    border: none;
-                    color: #9ca3af;
-                    cursor: pointer;
-                    width: 24px;
-                    height: 24px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .input-clear:hover { background: #f3f4f6; color: #4b5563; }
-                
-                .filter-select {
-                    width: 100%;
-                    padding: 10px 15px;
-                    border: 2px solid #e5e7eb;
-                    border-radius: 12px;
-                    font-size: 14px;
-                    background: white;
-                    cursor: pointer;
-                }
-                
-                .filter-actions { display: flex; gap: 10px; align-items: flex-end; }
-                .btn-filter {
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 12px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    transition: all 0.3s;
-                    white-space: nowrap;
-                }
-                .btn-filter { background: #1e3a8a; color: white; }
-                .btn-filter:hover { background: #1e40af; transform: translateY(-2px); }
-                .btn-filter.btn-clear { background: #6b7280; }
-                .btn-filter.btn-clear:hover { background: #4b5563; }
-                
-                .table-professional {
-                    background: white;
-                    border-radius: 16px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                    overflow: hidden;
-                    border: 1px solid rgba(0,0,0,0.05);
-                }
-                .table-header {
-                    padding: 16px 20px;
-                    background: #f9fafb;
-                    border-bottom: 1px solid #e5e7eb;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                .table-title { display: flex; align-items: center; gap: 10px; }
-                .table-title i { color: #1e3a8a; font-size: 16px; }
-                .table-title h3 { margin: 0; font-size: 15px; color: #374151; }
-                .table-info { font-size: 13px; color: #6b7280; font-weight: 500; }
-                
-                .data-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                .data-table th {
-                    padding: 15px 20px;
-                    text-align: left;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #4b5563;
-                    background: #f9fafb;
-                    border-bottom: 2px solid #e5e7eb;
-                }
-                .data-table td {
-                    padding: 15px 20px;
-                    border-bottom: 1px solid #e5e7eb;
-                    font-size: 14px;
-                    color: #1f2937;
-                }
-                .data-table tr:hover td { background: #f9fafb; }
-                
-                @media (max-width: 1200px) {
-                    .stats-grid { grid-template-columns: repeat(3, 1fr); }
-                    .filters-grid { grid-template-columns: 1fr 1fr; }
-                }
-                @media (max-width: 768px) {
-                    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-                    .usuarios-header { flex-direction: column; align-items: flex-start; }
-                    .header-actions { width: 100%; display: flex; gap: 10px; flex-wrap: wrap; }
-                    .btn-header { flex: 1; }
-                    .filters-grid { grid-template-columns: 1fr; }
-                }
-            </style>
         `;
     }
 
@@ -10674,167 +10526,52 @@ class AdminPanel {
         `;
     }
 
-    // ============ GERAR LINHAS DA TABELA DE USUÁRIOS (VERSÃO CORRIGIDA) ============
     gerarLinhasUsuarios(usuarios) {
         if (!usuarios || usuarios.length === 0) {
-            return `
-                <tr>
-                    <td colspan="10" style="text-align: center; padding: 40px;">
-                        <i class="fas fa-users-slash" style="font-size: 2rem; color: #dee2e6; margin-bottom: 10px; display: block;"></i>
-                        Nenhum usuário encontrado
-                    </td>
-                </tr>
-            `;
+            return `<tr><td colspan="10" style="text-align: center; padding: 40px;">Nenhum usuário encontrado</td></tr>`;
         }
 
         return usuarios.map(user => {
-            // ============================================
-            // BADGE DO PERFIL - COM TODOS OS PERFIS
-            // ============================================
-            let roleBadge = '';
-            if (user.role === 'aluno') {
-                roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
-            } else if (user.role === 'professor') {
-                roleBadge = '<span class="role-badge professor"><i class="fas fa-chalkboard-teacher"></i> Professor</span>';
-            } else if (user.role === 'admin') {
-                roleBadge = '<span class="role-badge admin"><i class="fas fa-user-shield"></i> Admin</span>';
-            } else if (user.role === 'super_admin') {
-                roleBadge = '<span class="role-badge super_admin"><i class="fas fa-crown"></i> Super Admin</span>';
-            } else if (user.role === 'setor_pedagogico') {
-                roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Setor Pedagógico</span>';
-            } else if (user.role === 'coordenacao_patio') {
-                roleBadge = '<span class="role-badge coordenacao_patio"><i class="fas fa-utensils"></i> Coordenação de Pátio</span>';
-            } else if (user.role === 'cozinha') {
-                roleBadge = '<span class="role-badge cozinha"><i class="fas fa-kitchen-set"></i> Cozinha</span>';
-            } else if (user.role === 'enfermaria') {
-                roleBadge = '<span class="role-badge enfermaria"><i class="fas fa-hospital-user"></i> Enfermaria</span>';
-            } else if (user.role === 'gestao_geral') {
-                roleBadge = '<span class="role-badge gestao_geral"><i class="fas fa-chart-line"></i> Gestão Geral</span>';
-            } else if (user.role === 'supervisao') {
-                roleBadge = '<span class="role-badge supervisao"><i class="fas fa-shield-alt"></i> Supervisão</span>';
-            } else if (user.role === 'psicologia') {
-                roleBadge = '<span class="role-badge psicologia"><i class="fas fa-brain"></i> Psicologia</span>';
-            } else if (user.role === 'assistente-social') {
-                roleBadge = '<span class="role-badge assistente-social"><i class="fas fa-hands-helping"></i> Assistente Social</span>';
-            } else if (user.role === 'protagonismo') {
-                roleBadge = '<span class="role-badge protagonismo"><i class="fas fa-star"></i> Protagonismo</span>';
-            } else if (user.role === 'biblioteca') {
-                roleBadge = '<span class="role-badge biblioteca"><i class="fas fa-book-reader"></i> Biblioteca</span>'
-            } else if (user.role === 'secretaria') {
-                roleBadge = '<span class="role-badge secretaria"><i class="fas fa-graduation-cap"></i> Secretaria</span>'
-            } else if (user.role === 'recepcao') {
-                roleBadge = '<span class="role-badge recepcao"><i class="fas fa-concierge-bell"></i> Recepção</span>';
-            } else {
-                roleBadge = `<span class="role-badge">${user.role || 'Desconhecido'}</span>`;
-            }
+            // Badges de Perfil
+            let roleBadge = `<span class="role-badge">${user.role}</span>`;
+            if (user.role === 'aluno') roleBadge = '<span class="role-badge aluno"><i class="fas fa-user-graduate"></i> Aluno</span>';
+            if (user.role === 'professor') roleBadge = '<span class="role-badge professor"><i class="fas fa-chalkboard-teacher"></i> Professor</span>';
+            if (user.role === 'admin' || user.role === 'super_admin') roleBadge = '<span class="role-badge admin"><i class="fas fa-user-shield"></i> Admin</span>';
+            if (user.role === 'setor_pedagogico') roleBadge = '<span class="role-badge setor_pedagogico"><i class="fas fa-chalkboard-user"></i> Pedagógico</span>';
+            if (user.role === 'coordenacao_patio') roleBadge = '<span class="role-badge coordenacao_patio"><i class="fas fa-utensils"></i> Pátio</span>';
             
-            // Status badge
             const statusBadge = user.ativo 
                 ? '<span class="status-badge active"><i class="fas fa-check-circle"></i> Ativo</span>'
                 : '<span class="status-badge inactive"><i class="fas fa-ban"></i> Inativo</span>';
-            
-            // Acessibilidade badge
-            const acessibilidadeBadge = user.precisaAcessibilidade 
-                ? '<span class="badge-acessibilidade" title="Necessita acessibilidade"><i class="fas fa-wheelchair"></i></span>' 
-                : '';
-            
-            // Perfil alimentar badge (para alunos)
-            let perfilAlimentarBadge = '';
-            if (user.role === 'aluno' && user.perfilAlimentar) {
-                if (user.perfilAlimentar === 'sempre') {
-                    perfilAlimentarBadge = '<span class="badge-alimentar sempre" title="Participa sempre"><i class="fas fa-utensils"></i> Sempre</span>';
-                } else if (user.perfilAlimentar === 'as_vezes') {
-                    perfilAlimentarBadge = '<span class="badge-alimentar as_vezes" title="Participa às vezes"><i class="fas fa-clock"></i> Às vezes</span>';
-                } else if (user.perfilAlimentar === 'nunca') {
-                    perfilAlimentarBadge = '<span class="badge-alimentar nunca" title="Não participa"><i class="fas fa-ban"></i> Nunca</span>';
-                }
-            }
-            
-            // Formatar CPF
-            let cpfFormatado = '-';
-            if (user.cpf) {
-                const cpfLimpo = user.cpf.replace(/\D/g, '');
-                if (cpfLimpo.length === 11) {
-                    cpfFormatado = cpfLimpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-                } else {
-                    cpfFormatado = user.cpf;
-                }
-            }
-            
-            // Formatar Telefone
-            let telefoneFormatado = '-';
-            if (user.telefone) {
-                const telefoneLimpo = user.telefone.replace(/\D/g, '');
-                if (telefoneLimpo.length === 11) {
-                    telefoneFormatado = telefoneLimpo.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-                } else if (telefoneLimpo.length === 10) {
-                    telefoneFormatado = telefoneLimpo.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-                } else {
-                    telefoneFormatado = user.telefone;
-                }
-            }
-            
-            // Matrícula
-            let matriculaExibir = '-';
-            if (user.matricula) {
-                matriculaExibir = user.matricula;
-            }
-            
-            // Data de cadastro formatada
-            let dataCadastro = '-';
-            if (user.createdAt) {
-                try {
-                    const data = new Date(user.createdAt);
-                    if (!isNaN(data.getTime())) {
-                        dataCadastro = data.toLocaleDateString('pt-BR');
-                    }
-                } catch(e) {
-                    dataCadastro = '-';
-                }
-            }
-            
-            // ============================================
-            // INFORMAÇÕES EXTRAS (por perfil)
-            // ============================================
-            let extraInfo = '';
-            
-            if (user.role === 'aluno' && user.turma) {
-                extraInfo = `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${user.turma}</div>`;
-            }
-            
-            // 🔥 EIXO DINÂMICO para professores
-            if (user.role === 'professor' && user.eixo) {
-                extraInfo += `<div style="font-size: 11px; color: #f59e0b; margin-top: 4px;"><i class="fas fa-sitemap"></i> ${user.eixo}</div>`;
-            }
-            
+                
+            let cpfFormatado = user.cpf ? user.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '-';
+            let dataCadastro = user.createdAt ? new Date(user.createdAt).toLocaleDateString('pt-BR') : '-';
+
             return `
                 <tr data-user-id="${user._id}">
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
-                        <strong>${user.nome || 'N/A'}</strong> ${acessibilidadeBadge}
-                        ${perfilAlimentarBadge}
-                        ${extraInfo}
+                    <td class="col-nome">
+                        <strong>${user.nome || 'N/A'}</strong>
+                        ${user.role === 'aluno' && user.turma ? `<div style="font-size: 11px; color: #6b7280; margin-top: 4px;">Turma: ${user.turma}</div>` : ''}
                     </td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; color: #6c757d;">${user.email || '-'}</td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${roleBadge}</td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; font-family: monospace;">${matriculaExibir}</td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${cpfFormatado}</td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${telefoneFormatado}</td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">${statusBadge}</td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle; font-weight: 500;">${dataCadastro}</td>
-                    <td style="padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 13px; vertical-align: middle;">
-                        <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
-                            <button class="btn-icon" onclick="admin.visualizarPerfilUsuario('${user._id}')" title="Visualizar Perfil Completo">
+                    <td class="col-email">${user.email || '-'}</td>
+                    <td class="col-role">${roleBadge}</td>
+                    <td class="col-matricula">${user.matricula || '-'}</td>
+                    <td class="col-cpf">${cpfFormatado}</td>
+                    <td class="col-telefone">${user.telefone || '-'}</td>
+                    <td class="col-status">${statusBadge}</td>
+                    <td class="col-data">${dataCadastro}</td>
+                    <td class="col-acoes">
+                        <div class="action-buttons">
+                            <button class="btn-icon" onclick="admin.visualizarPerfilUsuario('${user._id}')" title="Visualizar Perfil">
                                 <i class="fas fa-eye"></i>
                             </button>
                             <button class="btn-icon" onclick="admin.editarUsuario('${user._id}')" title="Editar">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn-icon" onclick="admin.visualizarQRCodeUsuario('${user._id}')" title="Ver QR Code do usuário">
-                                <i class="fas fa-qrcode" style="color: #8b5cf6;"></i>
+                            <button class="btn-icon" onclick="admin.visualizarQRCodeUsuario('${user._id}')" title="Ver QR Code">
+                                <i class="fas fa-qrcode"></i>
                             </button>
-                            <button class="btn-icon ${user.ativo ? 'warning' : 'success'}" 
-                                    onclick="admin.toggleStatusUsuario('${user._id}', ${user.ativo})" 
-                                    title="${user.ativo ? 'Inativar usuário' : 'Ativar usuário'}">
+                            <button class="btn-icon ${user.ativo ? 'warning' : 'success'}" onclick="admin.toggleStatusUsuario('${user._id}', ${user.ativo})" title="Status">
                                 <i class="fas ${user.ativo ? 'fa-pause-circle' : 'fa-play-circle'}"></i>
                             </button>
                             <button class="btn-icon" onclick="admin.resetarSenha('${user._id}')" title="Resetar Senha">
@@ -43271,1849 +43008,166 @@ class AdminPanel {
     }
     }
 
-    // SUPERVISAO
+    //ENFERMARIA
 
-    async loadSupervisao() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel de Supervisão.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Renderizar o iframe com a página de supervisão
-        contentArea.innerHTML = `
-            <div class="supervisao-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header da Supervisão -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #0ea5e9, #0284c7);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-user-shield"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Supervisão</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Gerencie atendimentos, ocorrências e relatórios
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarSupervisao()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel de supervisão"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirSupervisaoNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #0284c7;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe da Supervisão -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="supervisaoIframe"
-                        src="/supervisao.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel de Supervisão"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel de Supervisão carregado em iframe.');
-    }
-
-    // PSICOLOGIA
-
-    async loadPsicologia() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel de Psicologia.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Renderizar o iframe com a página de psicologia
-        contentArea.innerHTML = `
-            <div class="psicologia-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header da Psicologia -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #14b8a6, #0d9488);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-brain"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Psicologia</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Gerencie escutas, crises, atividades e acompanhamentos
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarPsicologia()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel de psicologia"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirPsicologiaNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #0d9488;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe da Psicologia -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="psicologiaIframe"
-                        src="/psicologia.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel de Psicologia"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel de Psicologia carregado em iframe.');
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA PSICOLOGIA
-    // ============================================
-    recarregarPsicologia() {
-        const iframe = document.getElementById('psicologiaIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel de psicologia...', 'info');
-            }
-            console.log('🔄 Iframe de psicologia recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR PSICOLOGIA EM NOVA ABA
-    // ============================================
-    abrirPsicologiaNovaAba() {
-        window.open('/psicologia.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Psicologia aberta em nova aba', 'success');
-        }
-    }
-
-    // ============================================
-    // MÓDULO: ADMIN SIMPLES (via iframe)
-    // ============================================
-    async loadAdminSimples() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Admin Simples.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        contentArea.innerHTML = `
-            <div class="admin-simples-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header do Admin Simples -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #6366f1, #4f46e5);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-user-cog"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Admin Simples</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Painel simplificado para gerenciamento rápido
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarAdminSimples()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o Admin Simples"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirAdminSimplesNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #4f46e5;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe do Admin Simples -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="adminSimplesIframe"
-                        src="/admin-simples.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Admin Simples"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Admin Simples carregado em iframe.');
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO ADMIN SIMPLES
-    // ============================================
-    recarregarAdminSimples() {
-        const iframe = document.getElementById('adminSimplesIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando Admin Simples...', 'info');
-            }
-            console.log('🔄 Iframe do Admin Simples recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR ADMIN SIMPLES EM NOVA ABA
-    // ============================================
-    abrirAdminSimplesNovaAba() {
-        window.open('/admin-simples.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Admin Simples aberto em nova aba', 'success');
-        }
+    async loadEnfermaria() {
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('enfermaria');
     }
 
     // ============================================
     // MÉTODO AUXILIAR: RECARREGAR IFRAME DA ENFERMARIA
     // ============================================
-    recarregarEnfermaria() {
-        const iframe = document.getElementById('enfermariaIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel da enfermaria...', 'info');
-            }
-            console.log('🔄 Iframe da enfermaria recarregado');
-        }
-    }
+    recarregarEnfermaria() { this.recarregarIframe('enfermaria'); }
+    abrirEnfermariaNovaAba() { this.abrirIframeNovaAba('enfermaria'); }
 
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR ENFERMARIA EM NOVA ABA
-    // ============================================
-    abrirEnfermariaNovaAba() {
-        window.open('/enfermaria.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Enfermaria aberta em nova aba', 'success');
-        }
-    }
+    // SUPERVISAO
 
-    // ASSISTENTE SOCIAL
-
-    async loadAssistenteSocial() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel do Assistente Social.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Renderizar o iframe com a página de assistente social
-        contentArea.innerHTML = `
-            <div class="assistente-social-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header do Assistente Social -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-hands-helping"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel do Assistente Social</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Gerencie evasão, disciplina, vulnerabilidades e encaminhamentos
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarAssistenteSocial()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel do assistente social"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirAssistenteSocialNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #7c3aed;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe do Assistente Social -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="assistenteSocialIframe"
-                        src="/assistente-social.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel do Assistente Social"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel do Assistente Social carregado em iframe.');
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO ASSISTENTE SOCIAL
-    // ============================================
-    recarregarAssistenteSocial() {
-        const iframe = document.getElementById('assistenteSocialIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel do assistente social...', 'info');
-            }
-            console.log('🔄 Iframe do assistente social recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR ASSISTENTE SOCIAL EM NOVA ABA
-    // ============================================
-    abrirAssistenteSocialNovaAba() {
-        window.open('/assistente-social.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Assistente Social aberto em nova aba', 'success');
-        }
-    }
-
-    // GESTAO GERAL
-
-    async loadGestaoGeral() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel de Gestão Geral.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Renderizar o iframe com a página de gestão geral
-        contentArea.innerHTML = `
-            <div class="gestao-geral-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header da Gestão Geral -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #1e3c72, #2a5298);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(30, 60, 114, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-user-tie"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Gestão Geral</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Gerencie rodízios de refeições e atrasos
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarGestaoGeral()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel de gestão geral"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirGestaoGeralNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #1e3c72;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe da Gestão Geral -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="gestaoGeralIframe"
-                        src="/gestao-geral.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel de Gestão Geral"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel de Gestão Geral carregado em iframe.');
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA GESTÃO GERAL
-    // ============================================
-    recarregarGestaoGeral() {
-        const iframe = document.getElementById('gestaoGeralIframe');
-        if (iframe) {
-            // Forçar recarregamento completo
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel de gestão geral...', 'info');
-            }
-            console.log('🔄 Iframe de gestão geral recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR GESTÃO GERAL EM NOVA ABA
-    // ============================================
-    abrirGestaoGeralNovaAba() {
-        window.open('/gestao-geral.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Gestão Geral aberta em nova aba', 'success');
-        }
+    async loadSupervisao() {
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('supervisao');
     }
 
     // ============================================
     // MÉTODO AUXILIAR: RECARREGAR IFRAME DA SUPERVISÃO
     // ============================================
-    recarregarSupervisao() {
-        const iframe = document.getElementById('supervisaoIframe');
-        if (iframe) {
-            // Forçar recarregamento completo
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel de supervisão...', 'info');
-            }
-            console.log('🔄 Iframe de supervisão recarregado');
-        }
+    recarregarSupervisao() { this.recarregarIframe('supervisao'); }
+    abrirSupervisaoNovaAba() { this.abrirIframeNovaAba('supervisao'); }
+
+    // PSICOLOGIA
+
+    async loadPsicologia() {
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('psicologia');
+    }
+
+     // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA PSICOLOGIA
+    // ============================================
+
+    recarregarPsicologia() { this.recarregarIframe('psicologia'); }
+    abrirPsicologiaNovaAba() { this.abrirIframeNovaAba('psicologia'); }
+
+    // ============================================
+    // MÓDULO: ADMIN SIMPLES (via iframe)
+    // ============================================
+    async loadAdminSimples() {
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('admin-simples');
     }
 
     // ============================================
-    // MÉTODO AUXILIAR: ABRIR SUPERVISÃO EM NOVA ABA
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO ADMIN SIMPLES
     // ============================================
-    abrirSupervisaoNovaAba() {
-        window.open('/supervisao.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Supervisão aberta em nova aba', 'success');
-        }
+    recarregarAdminSimples() { this.recarregarIframe('admin-simples'); }
+    abrirAdminSimplesNovaAba() { this.abrirIframeNovaAba('admin-simples'); }
+
+    // ASSISTENTE SOCIAL
+
+    async loadAssistenteSocial() {
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('assistente-social');
     }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO ASSISTENTE SOCIAL
+    // ============================================
+    recarregarAssistenteSocial() { this.recarregarIframe('assistente-social'); }
+    abrirAssistenteSocialNovaAba() { this.abrirIframeNovaAba('assistente-social'); }
+
+    // GESTAO GERAL
+
+    async loadGestaoGeral() {
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('gestao-geral');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA GESTÃO GERAL
+    // ============================================
+    recarregarGestaoGeral() { this.recarregarIframe('gestao-geral'); }
+    abrirGestaoGeralNovaAba() { this.abrirIframeNovaAba('gestao-geral'); }
+
 
     // PROTAGONISMO
 
     async loadProtagonismo() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel de Protagonismo.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Renderizar o iframe com a página de protagonismo
-        contentArea.innerHTML = `
-            <div class="protagonismo-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header do Protagonismo -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #f97316, #ea580c);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-star"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Protagonismo</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Gerencie clubes, tutoria, candidatos e eleições
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarProtagonismo()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel de protagonismo"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirProtagonismoNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #ea580c;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                        <button 
-                            onclick="admin.abrirProtagonismoPublico()" 
-                            style="
-                                background: #ef4444;
-                                border: none;
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir página pública (alunos)"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Página Pública
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe do Protagonismo -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="protagonismoIframe"
-                        src="/protagonismo.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel de Protagonismo"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('protagonismo');
+    }
 
-        console.log('✅ Painel de Protagonismo carregado em iframe.');
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME PROTAGONISMO
+    // ============================================
+
+    recarregarProtagonismo() { this.recarregarIframe('protagonismo'); }
+    abrirProtagonismoNovaAba() { this.abrirIframeNovaAba('protagonismo'); }
+    abrirProtagonismoPublico() {
+        window.open('/protagonismo-publico.html', '_blank');
+        this.showToast('📱 Página pública aberta em nova aba', 'success');
     }
 
     // ============================================
     // MÓDULO: BIBLIOTECA
     // ============================================
     async loadBiblioteca() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel de Biblioteca.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Renderizar o iframe com a página da biblioteca
-        contentArea.innerHTML = `
-            <div class="biblioteca-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header da Biblioteca -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #0ea5e9, #0284c7);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-book-reader"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel de Biblioteca</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Gerencie registros, frequência e atividades da Biblioteca
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarBiblioteca()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel da biblioteca"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirBibliotecaNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #0284c7;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                        <button 
-                            onclick="admin.abrirBibliotecaPublico()" 
-                            style="
-                                background: #10b981;
-                                border: none;
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir página pública (alunos)"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Página Pública
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe da Biblioteca -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="bibliotecaIframe"
-                        src="/biblioteca.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel de Biblioteca"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel de Biblioteca carregado em iframe.');
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('biblioteca');
     }
 
     // ============================================
     // MÉTODO AUXILIAR: RECARREGAR IFRAME DA BIBLIOTECA
     // ============================================
-    recarregarBiblioteca() {
-        const iframe = document.getElementById('bibliotecaIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel da biblioteca...', 'info');
-            }
-            console.log('🔄 Iframe da biblioteca recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR BIBLIOTECA EM NOVA ABA
-    // ============================================
-    abrirBibliotecaNovaAba() {
-        window.open('/biblioteca.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Biblioteca aberta em nova aba', 'success');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR PÁGINA PÚBLICA DA BIBLIOTECA
-    // ============================================
+    recarregarBiblioteca() { this.recarregarIframe('biblioteca'); }
+    abrirBibliotecaNovaAba() { this.abrirIframeNovaAba('biblioteca'); }
     abrirBibliotecaPublico() {
         window.open('/biblioteca-publico.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('📱 Página pública aberta em nova aba (para alunos)', 'success');
-        }
+        this.showToast('📱 Página pública aberta em nova aba', 'success');
     }
 
     // ============================================
     // MÓDULO: SECRETARIA
     // ============================================
     async loadSecretaria() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel da Secretaria.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        contentArea.innerHTML = `
-            <div class="secretaria-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-graduation-cap"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel da Secretaria</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Consulte justificativas de falta dos alunos
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarSecretaria()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel da secretaria"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirSecretariaNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #059669;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="secretariaIframe"
-                        src="/secretaria.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel da Secretaria"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel da Secretaria carregado em iframe.');
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('secretaria');
     }
 
-    recarregarSecretaria() {
-        const iframe = document.getElementById('secretariaIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel da secretaria...', 'info');
-            }
-            console.log('🔄 Iframe da secretaria recarregado');
-        }
-    }
-
-    abrirSecretariaNovaAba() {
-        window.open('/secretaria.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Secretaria aberta em nova aba', 'success');
-        }
-    }
+     // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA SECRETARIA
+    // ============================================
+    recarregarSecretaria() { this.recarregarIframe('secretaria'); }
+    abrirSecretariaNovaAba() { this.abrirIframeNovaAba('secretaria'); }
 
     // ============================================
     // MÓDULO: RECEPÇÃO
     // ============================================
     async loadRecepcao() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel da Recepção.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        contentArea.innerHTML = `
-            <div class="recepcao-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header da Recepção -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #0891b2, #06b6d4);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-concierge-bell"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel da Recepção</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Verifique autorizações de alunos por QR Code ou busca manual
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarRecepcao()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel da recepção"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirRecepcaoNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #0891b2;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe da Recepção -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="recepcaoIframe"
-                        src="/recepcao.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel da Recepção"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel da Recepção carregado em iframe.');
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('recepcao');
     }
 
     // ============================================
     // MÉTODO AUXILIAR: RECARREGAR IFRAME DA RECEPÇÃO
     // ============================================
-    recarregarRecepcao() {
-        const iframe = document.getElementById('recepcaoIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel da recepção...', 'info');
-            }
-            console.log('🔄 Iframe da recepção recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR RECEPÇÃO EM NOVA ABA
-    // ============================================
-    abrirRecepcaoNovaAba() {
-        window.open('/recepcao.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Recepção aberta em nova aba', 'success');
-        }
-    }
+    recarregarRecepcao() { this.recarregarIframe('recepcao'); }
+    abrirRecepcaoNovaAba() { this.abrirIframeNovaAba('recepcao'); }
 
     // ============================================================================
     // 🔥 MÓDULO: GESTÃO DE PROFESSORES (via iframe do Setor Pedagógico)
     // ============================================================================
     async loadGestaoProfessores() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar a Gestão de Professores.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        contentArea.innerHTML = `
-            <div class="gestao-professores-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header da Gestão de Professores -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-chalkboard-teacher"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Gestão de Professores</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Gerencie componentes curriculares, turmas e aulas registradas dos professores
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarGestaoProfessores()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel de gestão de professores"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirGestaoProfessoresNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #6366f1;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe da Gestão de Professores -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="gestaoProfessoresIframe"
-                        src="/setor-pedagogico.html?modulo=gestao-professores" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Gestão de Professores"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel de Gestão de Professores carregado em iframe.');
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('gestao-professores');
     }
 
     // ============================================
     // MÉTODO AUXILIAR: RECARREGAR IFRAME DA GESTÃO DE PROFESSORES
     // ============================================
-    recarregarGestaoProfessores() {
-        const iframe = document.getElementById('gestaoProfessoresIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel de gestão de professores...', 'info');
-            }
-            console.log('🔄 Iframe de gestão de professores recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR GESTÃO DE PROFESSORES EM NOVA ABA
-    // ============================================
-    abrirGestaoProfessoresNovaAba() {
-        window.open('/setor-pedagogico.html?modulo=gestao-professores', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Gestão de Professores aberta em nova aba', 'success');
-        }
-    }
+    recarregarGestaoProfessores() { this.recarregarIframe('gestao-professores'); }
+    abrirGestaoProfessoresNovaAba() { this.abrirIframeNovaAba('gestao-professores'); }
 
     // ============================================
     // MÉTODO: CARREGAR PAINEL DO SETOR PEDAGÓGICO
     // ============================================
     async loadSetorPedagogico() {
-        const contentArea = document.getElementById('contentArea');
-        
-        // Verificar se o usuário é admin ou super_admin
-        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-        const isAuthorized = ['admin', 'super_admin'].includes(userData.role);
-        
-        if (!isAuthorized) {
-            contentArea.innerHTML = `
-                <div class="alert alert-danger m-4">
-                    <i class="fas fa-lock"></i>
-                    <strong>Acesso Negado</strong>
-                    <p>Apenas administradores podem acessar o Painel do Setor Pedagógico.</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Renderizar o iframe com a página do setor pedagógico
-        contentArea.innerHTML = `
-            <div class="setor-pedagogico-wrapper" style="
-                height: calc(100vh - 80px);
-                display: flex;
-                flex-direction: column;
-                background: #f8fafc;
-            ">
-                <!-- Header do Setor Pedagógico -->
-                <div style="
-                    padding: 16px 24px;
-                    background: linear-gradient(135deg, #a855f7, #7c3aed);
-                    color: white;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
-                    border-radius: 12px 12px 0 0;
-                    margin: 16px 16px 0 16px;
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="
-                            width: 44px; height: 44px;
-                            background: rgba(255,255,255,0.2);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 22px;
-                        ">
-                            <i class="fas fa-chalkboard-user"></i>
-                        </div>
-                        <div>
-                            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Painel do Setor Pedagógico</h2>
-                            <p style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9;">
-                                <i class="fas fa-info-circle"></i> 
-                                Acesso total como Super Admin - Gerencie alunos AEE, relatórios e adaptações
-                            </p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button 
-                            onclick="admin.recarregarSetorPedagogico()" 
-                            style="
-                                background: rgba(255,255,255,0.2);
-                                border: 1px solid rgba(255,255,255,0.3);
-                                color: white;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.background='rgba(255,255,255,0.3)'"
-                            onmouseout="this.style.background='rgba(255,255,255,0.2)'"
-                            title="Recarregar o painel do setor pedagógico"
-                        >
-                            <i class="fas fa-sync-alt"></i> Recarregar
-                        </button>
-                        <button 
-                            onclick="admin.abrirSetorPedagogicoNovaAba()" 
-                            style="
-                                background: white;
-                                border: none;
-                                color: #7c3aed;
-                                padding: 10px 18px;
-                                border-radius: 30px;
-                                font-size: 13px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.2s;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'"
-                            onmouseout="this.style.transform='translateY(0)'"
-                            title="Abrir em nova aba"
-                        >
-                            <i class="fas fa-external-link-alt"></i> Nova Aba
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Iframe do Setor Pedagógico -->
-                <div style="
-                    flex: 1;
-                    margin: 0 16px 16px 16px;
-                    border-radius: 0 0 12px 12px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    background: white;
-                ">
-                    <iframe 
-                        id="setorPedagogicoIframe"
-                        src="/setor-pedagogico.html" 
-                        style="
-                            width: 100%;
-                            height: 100%;
-                            border: none;
-                            display: block;
-                        "
-                        title="Painel do Setor Pedagógico"
-                        allow="camera; microphone; geolocation"
-                    ></iframe>
-                </div>
-            </div>
-        `;
-
-        console.log('✅ Painel do Setor Pedagógico carregado em iframe.');
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('setor-pedagogico');
     }
 
     // ============================================
     // MÉTODO AUXILIAR: RECARREGAR IFRAME DO SETOR PEDAGÓGICO
     // ============================================
-    recarregarSetorPedagogico() {
-        const iframe = document.getElementById('setorPedagogicoIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel do setor pedagógico...', 'info');
-            }
-            console.log('🔄 Iframe do setor pedagógico recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR SETOR PEDAGÓGICO EM NOVA ABA
-    // ============================================
-    abrirSetorPedagogicoNovaAba() {
-        window.open('/setor-pedagogico.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Setor Pedagógico aberto em nova aba', 'success');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: RECARREGAR IFRAME DO PROTAGONISMO
-    // ============================================
-    recarregarProtagonismo() {
-        const iframe = document.getElementById('protagonismoIframe');
-        if (iframe) {
-            iframe.src = iframe.src;
-            if (typeof this.showToast === 'function') {
-                this.showToast('🔄 Recarregando painel de protagonismo...', 'info');
-            }
-            console.log('🔄 Iframe de protagonismo recarregado');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR PROTAGONISMO EM NOVA ABA
-    // ============================================
-    abrirProtagonismoNovaAba() {
-        window.open('/protagonismo.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('✅ Protagonismo aberto em nova aba', 'success');
-        }
-    }
-
-    // ============================================
-    // MÉTODO AUXILIAR: ABRIR PÁGINA PÚBLICA
-    // ============================================
-    abrirProtagonismoPublico() {
-        window.open('/protagonismo-publico.html', '_blank');
-        if (typeof this.showToast === 'function') {
-            this.showToast('📱 Página pública aberta em nova aba (para alunos)', 'success');
-        }
-    }
+    recarregarSetorPedagogico() { this.recarregarIframe('setor-pedagogico'); }
+    abrirSetorPedagogicoNovaAba() { this.abrirIframeNovaAba('setor-pedagogico'); }
 
 
     // ============ CARREGAR PERMISSÕES ESPECIAIS ============
