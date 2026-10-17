@@ -3274,24 +3274,14 @@ class AdminPanel {
 
             contentArea.innerHTML = `
                 <!-- HEADER DE SAUDAÇÃO -->
-                <div class="dashboard-welcome" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 25px 20px; border-radius: 24px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(124, 58, 237, 0.3);">
-                    
-                    <div class="welcome-left" style="margin-bottom: 15px;">
-                        <h1 style="font-size: 24px; font-weight: 700; margin: 0 0 8px 0; line-height: 1.2;">${saudacao}, ${primeiroNome}! 👋</h1>
-                        <p style="font-size: 14px; opacity: 0.9; margin: 0;">Aqui está um resumo do EducaPleno.</p>
+                <div class="dashboard-welcome">
+                    <div class="welcome-left">
+                        <h1>${saudacao}, ${primeiroNome}! 👋</h1>
+                        <p>Aqui está um resumo do EducaPleno.</p>
                     </div>
-                    
-                    <!-- PÍLULA DA DATA E HORA (FORÇADO) -->
-                    <div class="welcome-right" style="display: inline-flex; align-items: center; justify-content: center; gap: 15px; background: rgba(255, 255, 255, 0.15); padding: 10px 22px; border-radius: 50px; width: fit-content; margin: 0 auto; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
-                        
-                        <div class="welcome-date" style="font-size: 12px; color: rgba(255, 255, 255, 0.9); font-weight: 500; text-transform: capitalize; line-height: 1.3; text-align: left;">
-                            ${dataFormatada}
-                        </div>
-                        
-                        <div class="welcome-time" style="font-size: 24px; font-weight: 900; color: #ffffff; line-height: 1; letter-spacing: 1px;">
-                            ${horaFormatada}
-                        </div>
-                        
+                    <div class="welcome-right">
+                        <div class="welcome-date">${dataFormatada}</div>
+                        <div class="welcome-time"><strong>${horaFormatada}</strong></div>
                     </div>
                 </div>
 
@@ -3345,9 +3335,6 @@ class AdminPanel {
                                     <div class="dash-card-details">
                                         <span><i class="fas fa-circle" style="font-size:6px;"></i> Ativos agora</span>
                                         <span><i class="fas fa-mobile-alt"></i> <strong id="usuarios-online-app">${stats.usuariosOnlineApp || 0}</strong> no app</span>
-                                        <span style="margin-top: 4px; display: block; font-size: 10px; opacity: 0.85;">
-                                            <i class="fas fa-hand-pointer"></i> Clique para ver
-                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -3362,9 +3349,6 @@ class AdminPanel {
                                     <div class="dash-card-details">
                                         <span><i class="fas fa-calendar-day"></i> conexões hoje</span>
                                         <span><i class="fas fa-chart-line"></i> <strong>${stats.mediaConexoesDiarias || 0}</strong> média/dia</span>
-                                        <span style="margin-top: 4px; display: block; font-size: 10px; opacity: 0.85;">
-                                            <i class="fas fa-hand-pointer"></i> Clique para ver
-                                        </span>
                                     </div>
                                 </div>
                             </div>
