@@ -7392,7 +7392,7 @@ body {
         justify-content: space-between !important;
         width: 100% !important;
         background: rgba(255, 255, 255, 0.15) !important;
-        padding: 12px 20px !important; /* Aumentei o padding para caber a letra grande */
+        padding: 12px 20px !important;
         border-radius: 50px !important;
         margin-top: 10px !important;
     }
@@ -7403,30 +7403,26 @@ body {
         color: rgba(255, 255, 255, 0.9) !important;
         text-transform: capitalize;
         line-height: 1.3;
-        width: 60%; /* Deixa a data ocupar um espaço fixo */
+        width: 60%;
     }
 
-    /* 3. A HORA (Onde a mágica acontece) */
+    /* 3. O Contêiner da Hora */
     .welcome-time {
-        font-size: 28px !important; /* Aumenta o contêiner */
+        font-size: 28px !important;
         font-weight: 900 !important;
         color: #ffffff !important;
         line-height: 1 !important;
         text-align: right;
         width: 40%;
     }
-    
-    /* Força o negrito da tag <strong> a ficar gigante também */
+
+    /* 4. A HORA GIGANTE (mirando direto na tag strong) */
     .welcome-time strong {
-        font-size: 32px !important; /* O TAMANHO REAL DA HORA */
+        font-size: 34px !important;
         font-weight: 900 !important;
         color: #ffffff !important;
         display: block;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Dá um destaque na letra */
-    }
-
-    /* 4. Os números dos outros cards continuam normais */
-    .perfil-value, .dash-card-value, .dash-card-full-value span {
-        /* Deixa como estava, sem aumentar o "7" */
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        letter-spacing: -1px; /* Aproxima um pouquinho os números para ficar mais bonito */
     }
 }
