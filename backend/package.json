@@ -14,6 +14,7 @@
     "node": "20.x"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^9.0.3",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",
     "axios": "^1.20.0",
