@@ -142,22 +142,9 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
     const expectedChallenge = getChallenge(req.userId, 'register');
     if (!expectedChallenge) return res.status(400).json({ success: false, error: 'Challenge expirado' });
 
-    // Prepara o objeto EXATAMENTE como o SimpleWebAuthn espera
-    const response = {
-      id: Buffer.from(credential.id, 'base64url').toString('base64url'), 
-      rawId: toBuffer(credential.rawId || credential.id),
-      type: credential.type,
-      response: {
-        clientDataJSON: toBuffer(credential.response.clientDataJSON),
-        attestationObject: toBuffer(credential.response.attestationObject),
-        transports: credential.response.transports || []
-      },
-      clientExtensionResults: credential.clientExtensionResults || {},
-      authenticatorAttachment: credential.authenticatorAttachment || 'platform'
-    };
-
+    // Na v10+, a resposta deve ser passada diretamente, sem conversões manuais
     const verification = await verifyRegistrationResponse({
-      response,
+      response: credential,
       expectedChallenge,
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
@@ -170,15 +157,12 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
       return res.status(400).json({ success: false, error: 'Verificação falhou' });
     }
 
-    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
+    // A v10+ retorna o objeto credential agregado
+    const { credential: newCredential } = verification.registrationInfo;
     
-    // Converte o ID retornado para string Base64URL limpa nativamente
-    const credencialIdStr = Buffer.from(credentialID).toString('base64url');
-    const publicKeyBuffer = Buffer.from(credentialPublicKey);
-
-    if (!credencialIdStr || credencialIdStr.length < 10) {
-      return res.status(400).json({ success: false, error: 'ID da credencial inválido' });
-    }
+    // O ID já vem como string Base64URL na v10+
+    const credencialIdStr = newCredential.id;
+    const publicKeyBuffer = Buffer.from(newCredential.publicKey);
 
     const jaExiste = await WebAuthnCredential.findOne({ credentialId: credencialIdStr });
     if (jaExiste) return res.status(409).json({ success: false, error: 'Credencial já registrada' });
@@ -187,8 +171,8 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
       userId: req.userId,
       credentialId: credencialIdStr,
       publicKey: publicKeyBuffer,
-      counter: counter || 0,
-      transports: credential.response.transports || [],
+      counter: newCredential.counter || 0,
+      transports: newCredential.transports || [],
       deviceLabel: deviceLabel || null,
       userAgent: req.headers['user-agent'] || null,
       ipAddress: req.ip || null
