@@ -144,7 +144,7 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
 
     // Prepara o objeto EXATAMENTE como o SimpleWebAuthn espera
     const response = {
-      id: credential.id,
+      id: Buffer.from(credential.id, 'base64url').toString('base64url'), 
       rawId: toBuffer(credential.rawId || credential.id),
       type: credential.type,
       response: {
