@@ -432,6 +432,13 @@ const UserSchema = new mongoose.Schema({
     type: String,
     select: false
   },
+
+  // 🔥 NOVO: Código SMS atual (separado do twoFactorTempSecret para
+  //    não sobrescrever o secret TOTP quando o usuário ativa os dois)
+  twoFactorSecretSms: {
+    type: String,
+    select: false
+  },
   
   lastOtpRequest: {
     type: Date,
@@ -451,6 +458,25 @@ const UserSchema = new mongoose.Schema({
   dataCadastro: {
     type: Date,
     default: Date.now
+  },
+
+  // ========== CONSENTIMENTO LGPD ==========
+  lgpdConsent: {
+    type: Boolean,
+    default: false,
+    description: 'Indica se o usuário aceitou a Política de Privacidade (LGPD)'
+  },
+
+  lgpdConsentAt: {
+    type: Date,
+    default: null,
+    description: 'Data/hora em que o consentimento LGPD foi registrado'
+  },
+
+  lgpdConsentIp: {
+    type: String,
+    default: null,
+    description: 'Endereço IP do usuário no momento do consentimento LGPD (auditoria)'
   }
 }, {
   timestamps: true
@@ -503,7 +529,8 @@ UserSchema.pre('save', async function(next) {
     'instagram',
     'linkedin',
     'website',
-    'ultimoLoginDispositivo'
+    'ultimoLoginDispositivo',
+    'lgpdConsentIp'
   ];
   
   camposOpcionais.forEach(campo => {
@@ -634,5 +661,7 @@ UserSchema.index({ precisaAcessibilidade: 1 });
 UserSchema.index({ eixo: 1 });
 UserSchema.index({ lastActive: -1 });
 UserSchema.index({ lastLogin: -1 });
+UserSchema.index({ lgpdConsent: 1 });
+UserSchema.index({ lgpdConsentAt: -1 });
 
 module.exports = mongoose.model('User', UserSchema);

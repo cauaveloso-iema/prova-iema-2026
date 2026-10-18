@@ -34,6 +34,7 @@ const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 // Logger
 let logger;
@@ -42,6 +43,50 @@ try {
 } catch (err) {
   logger = console;
 }
+
+// ============================================================================
+// RATE LIMIT (opcional — cai em no-op se não instalado)
+// ============================================================================
+let rateLimit = null;
+try {
+  rateLimit = require('express-rate-limit');
+} catch (err) {
+  console.warn('⚠️ [login] express-rate-limit não instalado — rate limit desativado');
+}
+
+function criarRateLimiter(options) {
+  if (typeof rateLimit !== 'function') {
+    return (req, res, next) => next(); // no-op
+  }
+  return rateLimit({
+    standardHeaders: true,
+    legacyHeaders: false,
+    ...options
+  });
+}
+
+// ── Login: 20 FALHAS por IP a cada 15 min (sucessos NÃO contam) ──
+// Em desenvolvimento, sem limite, para não travar testes.
+const limiterLogin = criarRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 9999 : 20,
+  skipSuccessfulRequests: true,
+  message: { success: false, error: 'Muitas tentativas. Tente novamente em alguns minutos.' }
+});
+
+// ── Reset de senha: 10 solicitações por IP a cada 1 hora ──
+const limiterReset = criarRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 9999 : 10,
+  message: { success: false, error: 'Muitas solicitações. Tente novamente mais tarde.' }
+});
+
+// ── Reenvio 2FA: 5 por IP a cada 10 min ──
+const limiterResend = criarRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 9999 : 5,
+  message: { success: false, error: 'Muitos reenvios. Aguarde alguns minutos.' }
+});
 
 // ============================================================================
 // IMPORTAÇÃO DE MODELOS
@@ -91,6 +136,78 @@ const resetCodes = new Map();
 // ============================================================================
 // HELPERS
 // ============================================================================
+
+/**
+ * Comparação segura (timing-safe) para strings.
+ * Evita ataques de timing em códigos sensíveis (OTP, backup, reset).
+ */
+function safeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    // Compara contra si mesmo para consumir tempo similar
+    crypto.timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  try {
+    return crypto.timingSafeEqual(bufA, bufB);
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Hash SHA-256 de backup code (armazenamento seguro).
+ * Formato: sha256:<hex> — mantém compatibilidade ao detectar legado em claro.
+ */
+function hashBackupCode(code) {
+  return 'sha256:' + crypto.createHash('sha256').update(String(code)).digest('hex');
+}
+
+function isHashedBackupCode(code) {
+  return typeof code === 'string' && code.startsWith('sha256:');
+}
+
+/**
+ * Verifica um código de backup contra a lista do usuário.
+ * Aceita códigos legados (em claro) — migra para hash ao detectar match.
+ * Retorna { valid, newList } — newList sem o código usado.
+ */
+function verificarBackupCode(inputCode, listaCodes) {
+  if (!Array.isArray(listaCodes) || listaCodes.length === 0) {
+    return { valid: false, newList: listaCodes || [] };
+  }
+
+  const novos = [];
+  let valid = false;
+  const inputHash = hashBackupCode(inputCode);
+
+  for (const stored of listaCodes) {
+    if (valid) {
+      // mantém todos os demais
+      novos.push(stored);
+      continue;
+    }
+
+    if (isHashedBackupCode(stored)) {
+      if (safeCompare(stored, inputHash)) {
+        valid = true; // usado → não adiciona
+      } else {
+        novos.push(stored);
+      }
+    } else {
+      // legado em claro
+      if (safeCompare(stored, inputCode)) {
+        valid = true; // usado → não adiciona
+      } else {
+        novos.push(stored);
+      }
+    }
+  }
+
+  return { valid, newList: novos };
+}
 
 function sanitizarJwtExpiracao(valor) {
   const padrao = '24h';
@@ -173,6 +290,21 @@ function gerarBackupCode() {
   return code;
 }
 
+/**
+ * Gera N códigos de backup em claro (para exibir UMA vez ao usuário)
+ * e retorna a lista hasheada (para persistir).
+ */
+function gerarBackupCodes() {
+  const plain = [];
+  const hashed = [];
+  for (let i = 0; i < 10; i++) {
+    const c = gerarBackupCode();
+    plain.push(c);
+    hashed.push(hashBackupCode(c));
+  }
+  return { plain, hashed };
+}
+
 function parseJwtExpiration(expiration) {
   if (typeof expiration === 'number') return expiration;
   const match = expiration.match(/^(\d+)([hH])$/);
@@ -249,7 +381,9 @@ async function enviarSmsTwilio(telefone, mensagem) {
   }
 }
 
-// Middleware de autenticação local
+// ============================================================================
+// MIDDLEWARE DE AUTENTICAÇÃO LOCAL
+// ============================================================================
 const authenticateTokenLocal = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -311,7 +445,8 @@ router.get('/health', (req, res) => {
     models: {
       Config: !!Config,
       Notificacao: !!Notificacao,
-      EmailService: !!EmailService
+      EmailService: !!EmailService,
+      RateLimit: !!rateLimit
     }
   });
 });
@@ -319,7 +454,7 @@ router.get('/health', (req, res) => {
 // ============================================================================
 // POST /api/auth/login - LOGIN NORMAL (com 2FA)
 // ============================================================================
-router.post('/auth/login', async (req, res) => {
+router.post('/auth/login', limiterLogin, async (req, res) => {
   try {
     const { email, password, cpf, twoFactorCode, token: tempToken } = req.body;
 
@@ -334,7 +469,7 @@ router.post('/auth/login', async (req, res) => {
           logger.info(`✅ Token temporário válido para usuário: ${decoded.id}`);
 
           const user = await User.findById(decoded.id)
-            .select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +twoFactorTempSecret +nome +email +role +telefone +forcePasswordChange +tokenVersion');
+            .select('+twoFactorSecret +twoFactorEnabled +twoFactorBackupCodes +twoFactorTempSecret +twoFactorSecretSms +nome +email +role +telefone +forcePasswordChange +tokenVersion');
 
           if (!user) {
             return res.status(401).json({ success: false, error: 'Usuário não encontrado' });
@@ -347,11 +482,14 @@ router.post('/auth/login', async (req, res) => {
           let isValid = false;
           let motivo = '';
 
-          // 1. Código SMS temporário
-          if (user.twoFactorTempSecret && user.twoFactorTempSecret === twoFactorCode) {
+          // 1. Código SMS temporário (campo novo twoFactorSecretSms tem prioridade;
+          //    twoFactorTempSecret mantido para compatibilidade com usuários existentes)
+          const smsCodigo = user.twoFactorSecretSms || user.twoFactorTempSecret;
+          if (smsCodigo && safeCompare(smsCodigo, twoFactorCode)) {
             isValid = true;
             motivo = 'SMS';
             user.twoFactorTempSecret = null;
+            user.twoFactorSecretSms = null;
             await user.save();
             logger.info('✅ Código SMS válido');
           }
@@ -359,7 +497,9 @@ router.post('/auth/login', async (req, res) => {
           // 2. TOTP (QR Code)
           if (!isValid && (user.twoFactorSecret || user.twoFactorTempSecret)) {
             try {
-              if (user.twoFactorTempSecret) {
+              // Tenta TOTP contra o secret temporário (quando ativando)
+              if (user.twoFactorTempSecret && user.twoFactorTempSecret.length > 6) {
+                // Só tenta TOTP se o temp secret parece base32 (não código SMS de 6 dígitos)
                 const verified = speakeasy.totp.verify({
                   secret: user.twoFactorTempSecret,
                   encoding: 'base32',
@@ -373,14 +513,14 @@ router.post('/auth/login', async (req, res) => {
                   logger.info('✅ Código TOTP temporário válido');
 
                   if (!user.twoFactorEnabled) {
-                    const backupCodes = [];
-                    for (let i = 0; i < 10; i++) backupCodes.push(gerarBackupCode());
+                    const { plain, hashed } = gerarBackupCodes();
 
                     user.twoFactorEnabled = true;
                     user.twoFactorSecret = user.twoFactorTempSecret;
-                    user.twoFactorBackupCodes = backupCodes;
+                    user.twoFactorBackupCodes = hashed;
                     user.twoFactorTempSecret = null;
                     await user.save();
+                    user.__plainBackupCodes = plain; // usado para exibir uma vez
                     logger.info('✅ 2FA ativado com sucesso via QR Code');
                   } else {
                     user.twoFactorTempSecret = null;
@@ -408,17 +548,21 @@ router.post('/auth/login', async (req, res) => {
             }
           }
 
-          // 3. Código de backup
-          if (!isValid && user.twoFactorBackupCodes && user.twoFactorBackupCodes.includes(twoFactorCode)) {
-            isValid = true;
-            motivo = 'backup';
-            user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(c => c !== twoFactorCode);
-            await user.save();
-            logger.info('✅ Código de backup válido');
+          // 3. Código de backup (hash ou legado em claro)
+          if (!isValid && user.twoFactorBackupCodes && user.twoFactorBackupCodes.length > 0) {
+            const { valid, newList } = verificarBackupCode(twoFactorCode, user.twoFactorBackupCodes);
+            if (valid) {
+              isValid = true;
+              motivo = 'backup';
+              // Migra lista para hash automaticamente
+              user.twoFactorBackupCodes = newList.map(c => isHashedBackupCode(c) ? c : hashBackupCode(c));
+              await user.save();
+              logger.info('✅ Código de backup válido');
+            }
           }
 
-          // 4. Código secreto permanente
-          if (!isValid && user.twoFactorSecret && user.twoFactorSecret === twoFactorCode) {
+          // 4. Código secreto permanente (compatibilidade legada — dois sentidos)
+          if (!isValid && user.twoFactorSecret && safeCompare(user.twoFactorSecret, twoFactorCode)) {
             isValid = true;
             motivo = 'secreto';
             logger.info('✅ Código secreto válido');
@@ -455,7 +599,7 @@ router.post('/auth/login', async (req, res) => {
 
           logger.info(`✅ 2FA verificado via ${motivo} para ${user.email}`);
 
-          return res.json({
+          const payload = {
             success: true,
             token: authToken,
             user: {
@@ -467,7 +611,16 @@ router.post('/auth/login', async (req, res) => {
               telefone: user.telefone
             },
             redirectTo
-          });
+          };
+
+          if (user.__plainBackupCodes) {
+            payload.backupCodes = user.__plainBackupCodes;
+            payload.total = user.__plainBackupCodes.length;
+            payload.firstTime = true;
+            delete user.__plainBackupCodes;
+          }
+
+          return res.json(payload);
         }
       } catch (err) {
         logger.error('❌ Erro ao verificar token temporário:', err.message);
@@ -502,12 +655,12 @@ router.post('/auth/login', async (req, res) => {
 
     if (email) {
       user = await User.findOne({ email: email.toLowerCase() })
-        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome +tokenVersion');
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +twoFactorSecretSms +telefone +nome +tokenVersion');
       campoBusca = 'email';
     } else if (cpf) {
       const cpfNumeros = cpf.replace(/\D/g, '');
       user = await User.findOne({ cpf: cpfNumeros })
-        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +telefone +nome +tokenVersion');
+        .select('+password +forcePasswordChange +passwordChangedAt +ativo +loginAttempts +lockUntil +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +twoFactorTempSecret +twoFactorSecretSms +telefone +nome +tokenVersion');
       campoBusca = 'CPF';
     } else {
       return res.status(400).json({ success: false, error: 'Email ou CPF é obrigatório' });
@@ -582,9 +735,8 @@ router.post('/auth/login', async (req, res) => {
 
       if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
         logger.info('🆕 Usuário sem códigos de backup - gerando 10 agora...');
-        const backupCodes = [];
-        for (let i = 0; i < 10; i++) backupCodes.push(gerarBackupCode());
-        user.twoFactorBackupCodes = backupCodes;
+        const { hashed } = gerarBackupCodes();
+        user.twoFactorBackupCodes = hashed;
         user.twoFactorBackupCodesShown = false;
         await user.save();
         logger.info('✅ 10 códigos de backup gerados');
@@ -662,10 +814,7 @@ router.post('/auth/login', async (req, res) => {
 });
 
 // ============================================================================
-// POST /api/auth/logout
-// ============================================================================
-// ============================================================================
-// POST /api/auth/logout — Marca usuário como OFFLINE e registra logout explícito
+// POST /api/auth/logout — Marca usuário OFFLINE e INVALIDA o token
 // ============================================================================
 router.post('/auth/logout', async (req, res) => {
   try {
@@ -676,18 +825,18 @@ router.post('/auth/logout', async (req, res) => {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        if (decoded.id) {
+        if (decoded.id && !decoded.temp) {
           const agora = new Date();
-          
-          // 🔥 REGISTRAR LOGOUT EXPLÍCITO
-          // - ultimoLogout: marca a hora exata do logout (usado para calcular duração)
-          // - lastActive: mantém como referência (não zerar, senão perde o histórico)
+
+          // 🔥 REGISTRAR LOGOUT EXPLÍCITO + INVALIDAR TOKEN via tokenVersion
+          // (incrementar tokenVersion invalida todos os tokens emitidos antes)
           await User.findByIdAndUpdate(decoded.id, {
             ultimoLogout: agora,
-            lastActive: agora
+            lastActive: agora,
+            $inc: { tokenVersion: 1 }
           });
-          
-          logger.info(`🚪 Logout explícito registrado para usuário ${decoded.id} às ${agora.toISOString()}`);
+
+          logger.info(`🚪 Logout registrado e token invalidado para usuário ${decoded.id} às ${agora.toISOString()}`);
         }
       } catch (jwtError) {
         logger.info('⚠️ Logout com token inválido (ignorando)');
@@ -714,7 +863,7 @@ router.post('/auth/logout', async (req, res) => {
 // ============================================================================
 router.post('/auth/2fa/enable', authenticateTokenLocal, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('+twoFactorSecret +twoFactorEnabled +twoFactorTempSecret +telefone +nome');
+    const user = await User.findById(req.userId).select('+twoFactorSecret +twoFactorEnabled +twoFactorTempSecret +twoFactorSecretSms +telefone +nome');
 
     if (user.twoFactorEnabled) {
       return res.status(400).json({ success: false, error: '2FA já está ativado para esta conta' });
@@ -726,7 +875,8 @@ router.post('/auth/2fa/enable', authenticateTokenLocal, async (req, res) => {
 
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.twoFactorTempSecret = codigo;
+    // 🔥 Usa campo dedicado twoFactorSecretSms (não sobrescreve TOTP)
+    user.twoFactorSecretSms = codigo;
     user.lastOtpRequest = new Date();
     user.otpRequestCount = (user.otpRequestCount || 0) + 1;
     await user.save();
@@ -773,7 +923,7 @@ router.post('/auth/2fa/verify', authenticateTokenLocal, async (req, res) => {
     }
 
     const user = await User.findById(req.userId).select(
-      '+twoFactorTempSecret +lastOtpRequest +otpRequestCount +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +telefone +nome'
+      '+twoFactorTempSecret +twoFactorSecretSms +lastOtpRequest +otpRequestCount +twoFactorEnabled +twoFactorSecret +twoFactorBackupCodes +telefone +nome'
     );
 
     if (!user) {
@@ -784,7 +934,10 @@ router.post('/auth/2fa/verify', authenticateTokenLocal, async (req, res) => {
       return res.status(400).json({ success: false, error: '2FA já está ativado para esta conta' });
     }
 
-    if (!user.twoFactorTempSecret) {
+    // 🔥 Aceita tanto o novo (twoFactorSecretSms) quanto o legado (twoFactorTempSecret)
+    const codigoAtivo = user.twoFactorSecretSms || user.twoFactorTempSecret;
+
+    if (!codigoAtivo) {
       return res.status(400).json({ success: false, error: 'Nenhum código ativo. Solicite um novo código.' });
     }
 
@@ -793,24 +946,26 @@ router.post('/auth/2fa/verify', authenticateTokenLocal, async (req, res) => {
 
     if (diffMinutos > 5) {
       user.twoFactorTempSecret = null;
+      user.twoFactorSecretSms = null;
       user.lastOtpRequest = null;
       await user.save();
       return res.status(400).json({ success: false, error: 'Código expirado. Solicite um novo código.' });
     }
 
-    if (user.twoFactorTempSecret !== codigo) {
+    if (!safeCompare(codigoAtivo, codigo)) {
       user.otpRequestCount = (user.otpRequestCount || 0) + 1;
       await user.save();
       return res.status(400).json({ success: false, error: 'Código inválido. Tente novamente.' });
     }
 
-    const backupCodes = [];
-    for (let i = 0; i < 10; i++) backupCodes.push(gerarBackupCode());
+    // 🔥 Gera backup codes e armazena hasheado
+    const { plain: backupCodesPlain, hashed: backupCodesHashed } = gerarBackupCodes();
 
     user.twoFactorEnabled = true;
-    user.twoFactorSecret = codigo;
-    user.twoFactorBackupCodes = backupCodes;
+    // ✅ NÃO sobrescreve twoFactorSecret (TOTP). SMS é canal separado.
+    user.twoFactorBackupCodes = backupCodesHashed;
     user.twoFactorTempSecret = null;
+    user.twoFactorSecretSms = null;
     user.telefoneVerificado = true;
     user.dataAtivacao2FA = new Date();
 
@@ -818,10 +973,11 @@ router.post('/auth/2fa/verify', authenticateTokenLocal, async (req, res) => {
 
     logger.info(`✅ 2FA ativado para usuário ${user.email}`);
 
+    // Retorna códigos em CLARO apenas neste momento (nunca mais)
     res.json({
       success: true,
       message: '✅ Autenticação de dois fatores ativada com sucesso!',
-      backupCodes,
+      backupCodes: backupCodesPlain,
       total: 10,
       firstTime: true,
       telefone: user.telefone
@@ -836,14 +992,14 @@ router.post('/auth/2fa/verify', authenticateTokenLocal, async (req, res) => {
 // ============================================================================
 // POST /api/auth/2fa/resend - Reenviar código SMS
 // ============================================================================
-router.post('/auth/2fa/resend', authenticateTokenLocal, async (req, res) => {
+router.post('/auth/2fa/resend', limiterResend, authenticateTokenLocal, async (req, res) => {
   try {
     const { userId } = req.body;
     const usuarioId = userId || req.userId;
 
     logger.info(`📱 Reenviando código 2FA para usuário ${usuarioId}`);
 
-    const user = await User.findById(usuarioId).select('+twoFactorTempSecret +telefone +nome +role');
+    const user = await User.findById(usuarioId).select('+twoFactorTempSecret +twoFactorSecretSms +telefone +nome +role');
 
     if (!user) {
       return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
@@ -871,7 +1027,8 @@ router.post('/auth/2fa/resend', authenticateTokenLocal, async (req, res) => {
 
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
 
-    user.twoFactorTempSecret = codigo;
+    // 🔥 Usa campo dedicado twoFactorSecretSms
+    user.twoFactorSecretSms = codigo;
     user.lastOtpRequest = new Date();
     user.otpRequestCount = (user.otpRequestCount || 0) + 1;
     await user.save();
@@ -978,12 +1135,11 @@ router.post('/auth/2fa/verify-totp', authenticateTokenLocal, async (req, res) =>
     }
 
     if (!user.twoFactorEnabled) {
-      const backupCodes = [];
-      for (let i = 0; i < 10; i++) backupCodes.push(gerarBackupCode());
+      const { plain: backupCodesPlain, hashed: backupCodesHashed } = gerarBackupCodes();
 
       user.twoFactorEnabled = true;
       user.twoFactorSecret = user.twoFactorTempSecret;
-      user.twoFactorBackupCodes = backupCodes;
+      user.twoFactorBackupCodes = backupCodesHashed;
       user.twoFactorTempSecret = null;
       user.dataAtivacao2FA = new Date();
 
@@ -992,7 +1148,7 @@ router.post('/auth/2fa/verify-totp', authenticateTokenLocal, async (req, res) =>
       return res.json({
         success: true,
         message: '✅ 2FA ativado com sucesso!',
-        backupCodes,
+        backupCodes: backupCodesPlain,
         firstTime: true
       });
     }
@@ -1095,6 +1251,11 @@ router.get('/auth/2fa/status', authenticateTokenLocal, async (req, res) => {
 // ============================================================================
 // GET /api/auth/2fa/backup-codes
 // ============================================================================
+// ⚠️ IMPORTANTE: os códigos armazenados são HASHES (sha256:...).
+// Só é possível exibir a versão em claro quando o usuário acabou de ativar o 2FA
+// (o endpoint /2fa/verify retorna os códigos em claro naquele momento).
+// Se o usuário solicitar novamente, NÃO é possível reconstruir os originais —
+// nesse caso, o admin precisa regenerar.
 router.get('/auth/2fa/backup-codes', authenticateTokenLocal, async (req, res) => {
   try {
     logger.info('🔍 Buscando códigos de backup para:', req.userId, 'temp:', req.tokenTemp);
@@ -1107,7 +1268,7 @@ router.get('/auth/2fa/backup-codes', authenticateTokenLocal, async (req, res) =>
       return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
     }
 
-    // CASO 1: Token TEMPORÁRIO (2FA) → sempre retornar
+    // CASO 1: Token TEMPORÁRIO (2FA)
     if (req.tokenTemp === true) {
       if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
         return res.status(400).json({
@@ -1121,12 +1282,14 @@ router.get('/auth/2fa/backup-codes', authenticateTokenLocal, async (req, res) =>
         user.twoFactorBackupCodesShown = true;
         await user.save();
 
+        // ✅ SEGURANÇA: os códigos em claro só existem na resposta do /2fa/verify.
+        // Aqui devolvemos apenas a contagem, mantendo UX (o usuário vê a contagem).
         return res.json({
           success: true,
-          backupCodes: user.twoFactorBackupCodes,
-          firstTime: true,
+          backupCodes: [],
+          primeiraExibicaoBloqueada: true,
           total: user.twoFactorBackupCodes.length,
-          message: '🔐 Primeira ativação! Guarde estes códigos!'
+          message: '🔐 Por segurança, os códigos são exibidos apenas no momento da ativação. Se precisar de novos, solicite ao administrador.'
         });
       }
 
@@ -1152,25 +1315,14 @@ router.get('/auth/2fa/backup-codes', authenticateTokenLocal, async (req, res) =>
       });
     }
 
-    if (user.twoFactorBackupCodesShown === true) {
-      return res.json({
-        success: true,
-        backupCodes: [],
-        alreadyShown: true,
-        total: user.twoFactorBackupCodes.length,
-        message: 'Códigos já foram exibidos anteriormente'
-      });
-    }
-
-    user.twoFactorBackupCodesShown = true;
-    await user.save();
-
+    // ✅ SEGURANÇA: nunca devolve os códigos em claro (estão hasheados).
+    // Mantém a resposta com a contagem — mesmo comportamento visível ao usuário.
     return res.json({
       success: true,
-      backupCodes: user.twoFactorBackupCodes,
-      firstTime: true,
+      backupCodes: [],
       total: user.twoFactorBackupCodes.length,
-      message: '🔐 Primeira ativação! Guarde estes códigos!'
+      primeiraExibicaoBloqueada: true,
+      message: '🔐 Por segurança, os códigos são exibidos apenas no momento da ativação. Se precisar de novos, solicite ao administrador.'
     });
 
   } catch (error) {
@@ -1277,7 +1429,7 @@ router.post('/backup/solicitar', authenticateTokenLocal, async (req, res) => {
 // ============================================================================
 // POST /api/auth/reset-password/request
 // ============================================================================
-router.post('/auth/reset-password/request', async (req, res) => {
+router.post('/auth/reset-password/request', limiterReset, async (req, res) => {
   try {
     const { identifier } = req.body;
 
@@ -1433,7 +1585,7 @@ router.post('/auth/reset-password/verify', async (req, res) => {
       });
     }
 
-    if (resetData.code !== code) {
+    if (!safeCompare(resetData.code, code)) {
       resetData.attempts += 1;
       resetCodes.set(user._id.toString(), resetData);
       const attemptsLeft = resetData.maxAttempts - resetData.attempts;
@@ -1574,7 +1726,7 @@ router.post('/auth/reset-password/confirm', async (req, res) => {
 // LOGIN SOCIAL - Google / Microsoft
 // POST /api/login-social/:provider
 // ============================================================================
-router.post('/login-social/:provider', async (req, res) => {
+router.post('/login-social/:provider', limiterLogin, async (req, res) => {
   try {
     const { provider } = req.params;
     const { idToken, accessToken } = req.body;
@@ -1636,27 +1788,100 @@ router.post('/login-social/:provider', async (req, res) => {
     // ============================================================
     // VALIDAR MICROSOFT
     // ============================================================
+    // ✅ Validação de assinatura real via JWKS quando MICROSOFT_CLIENT_ID
+    //    estiver configurado. Se não estiver, mantém o comportamento
+    //    anterior (apenas decode) para não quebrar ambientes sem a env.
     if (provider === 'microsoft') {
-      try {
-        const jwtDecode = require('jwt-decode');
-        const decoded = jwtDecode(idToken);
+      const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
+      const MICROSOFT_TENANT_ID = process.env.MICROSOFT_TENANT_ID || 'common';
 
-        email = decoded.email || decoded.preferred_username || decoded.upn;
-        nome = decoded.name || (email ? email.split('@')[0] : null);
-        picture = null;
+      if (MICROSOFT_CLIENT_ID) {
+        try {
+          let jwksClient;
+          try {
+            jwksClient = require('jwks-rsa');
+          } catch (e) {
+            throw new Error('jwks-rsa não instalado — não foi possível validar assinatura Microsoft');
+          }
 
-        if (!email) {
-          return res.status(400).json({
+          const client = jwksClient({
+            jwksUri: `https://login.microsoftonline.com/${MICROSOFT_TENANT_ID}/discovery/v2.0/keys`,
+            cache: true,
+            cacheMaxAge: 24 * 60 * 60 * 1000,
+            rateLimit: true,
+            jwksRequestsPerMinute: 10
+          });
+
+          const decoded = await new Promise((resolve, reject) => {
+            jwt.verify(
+              idToken,
+              (header, callback) => {
+                client.getSigningKey(header.kid, (err, key) => {
+                  if (err) return callback(err);
+                  callback(null, key.getPublicKey());
+                });
+              },
+              {
+                algorithms: ['RS256'],
+                audience: MICROSOFT_CLIENT_ID,
+                issuer: [
+                  'https://login.microsoftonline.com/common/v2.0',
+                  `https://login.microsoftonline.com/${MICROSOFT_TENANT_ID}/v2.0`,
+                  `https://sts.windows.net/${MICROSOFT_TENANT_ID}/`
+                ]
+              },
+              (err, payload) => {
+                if (err) return reject(err);
+                resolve(payload);
+              }
+            );
+          });
+
+          email = decoded.email || decoded.preferred_username || decoded.upn;
+          nome = decoded.name || (email ? email.split('@')[0] : null);
+          picture = null;
+
+          if (!email) {
+            return res.status(400).json({
+              success: false,
+              error: 'Email não retornado pelo Microsoft'
+            });
+          }
+
+          logger.info(`✅ Token Microsoft validado (assinatura) para ${email}`);
+        } catch (err) {
+          console.error('❌ Erro ao validar token Microsoft:', err.message);
+          return res.status(401).json({
             success: false,
-            error: 'Email não retornado pelo Microsoft'
+            error: 'Token Microsoft inválido ou expirado'
           });
         }
-      } catch (err) {
-        console.error('❌ Erro ao decodificar token Microsoft:', err.message);
-        return res.status(401).json({
-          success: false,
-          error: 'Token Microsoft inválido'
-        });
+      } else {
+        // ⚠️ Fallback: env não configurada — mantém comportamento anterior
+        console.warn('⚠️ MICROSOFT_CLIENT_ID ausente — validação de assinatura Microsoft desativada (modo legado)');
+        try {
+          const jwtDecode = require('jwt-decode');
+          const decoded = typeof jwtDecode === 'function' && !jwtDecode.default
+            ? jwtDecode(idToken)
+            : (jwtDecode.default ? jwtDecode.default(idToken) : jwtDecode(idToken));
+
+          email = decoded.email || decoded.preferred_username || decoded.upn;
+          nome = decoded.name || (email ? email.split('@')[0] : null);
+          picture = null;
+
+          if (!email) {
+            return res.status(400).json({
+              success: false,
+              error: 'Email não retornado pelo Microsoft'
+            });
+          }
+        } catch (err) {
+          console.error('❌ Erro ao decodificar token Microsoft:', err.message);
+          return res.status(401).json({
+            success: false,
+            error: 'Token Microsoft inválido'
+          });
+        }
       }
     }
 
@@ -1735,9 +1960,8 @@ router.post('/login-social/:provider', async (req, res) => {
 
     if (exige2FA) {
       if (!user.twoFactorBackupCodes || user.twoFactorBackupCodes.length === 0) {
-        const backupCodes = [];
-        for (let i = 0; i < 10; i++) backupCodes.push(gerarBackupCode());
-        user.twoFactorBackupCodes = backupCodes;
+        const { hashed } = gerarBackupCodes();
+        user.twoFactorBackupCodes = hashed;
         user.twoFactorBackupCodesShown = false;
         await user.save();
         console.log(`   ✅ 10 códigos de backup gerados para ${user.email}`);
@@ -1843,6 +2067,10 @@ function cleanupExpiredCodes() {
 }
 
 // Executar limpeza a cada 30 minutos
-setInterval(cleanupExpiredCodes, 30 * 60 * 1000);
+// .unref() evita travar o processo (ex: em testes)
+const cleanupTimer = setInterval(cleanupExpiredCodes, 30 * 60 * 1000);
+if (cleanupTimer && typeof cleanupTimer.unref === 'function') {
+  cleanupTimer.unref();
+}
 
 module.exports = router;

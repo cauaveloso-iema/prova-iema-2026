@@ -2,7 +2,7 @@
 // SERVIDOR EDUCAPLENO 2026
 // ============================================================================
 // Descrição: Backend principal do EducaPleno (rotas NÃO migradas)
-// Versão:    1.2 (correção de ordem de middlewares e rotas públicas)
+// Versão:    1.3 (LGPD: CPF removido de /auth/me e /perfil/me)
 //
 // ⚠️ Todas as rotas migradas estão em routes/*.js
 //    Este arquivo contém APENAS as rotas remanescentes.
@@ -439,7 +439,6 @@ const authenticateToken = (req, res, next) => {
       });
     }
 
-    // Token temporário de 2FA
     if (decoded.temp === true && decoded.purpose === '2fa') {
       req.userId = decoded.id;
       req.userRole = decoded.role;
@@ -448,7 +447,6 @@ const authenticateToken = (req, res, next) => {
       return next();
     }
 
-    // Token normal: verificar tokenVersion
     try {
       const user = await User.findById(decoded.id).select('tokenVersion');
 
@@ -482,7 +480,6 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// ---------- Verificar Super Admin ----------
 const isSuperAdmin = (req, res, next) => {
   if (req.userRole !== 'admin' && req.userRole !== 'super_admin') {
     return res.status(403).json({
@@ -493,7 +490,6 @@ const isSuperAdmin = (req, res, next) => {
   next();
 };
 
-// ---------- Verificar permissões de Setor Pedagógico ----------
 const verificarPermissaoSetorPedagogico = (req, res, next) => {
   const allowedRoles = ['setor_pedagogico', 'admin', 'super_admin'];
 
@@ -512,9 +508,6 @@ const verificarPermissaoSetorPedagogico = (req, res, next) => {
 // FUNÇÕES AUXILIARES
 // ============================================================================
 
-/**
- * Gera código de backup de 8 caracteres (A-Z, 0-9)
- */
 function generateBackupCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -524,9 +517,6 @@ function generateBackupCode() {
   return code;
 }
 
-/**
- * Sanitiza valor de expiração JWT
- */
 function sanitizarJwtExpiracao(valor) {
   const padrao = '24h';
 
@@ -555,9 +545,6 @@ function sanitizarJwtExpiracao(valor) {
   return padrao;
 }
 
-/**
- * Converte expiração JWT para segundos
- */
 function parseJwtExpiration(expiration) {
   if (typeof expiration === 'number') return expiration;
   const match = expiration.match(/^(\d+)([hH])$/);
@@ -567,9 +554,6 @@ function parseJwtExpiration(expiration) {
   return 24 * 60 * 60;
 }
 
-/**
- * Processa anexos para uso com IA
- */
 async function processarAnexosParaIA(anexos) {
   try {
     if (!anexos || anexos.length === 0) {
@@ -591,27 +575,11 @@ async function processarAnexosParaIA(anexos) {
           : anexo.conteudo;
 
         contextoFormatado += `- **Conteúdo:**\n${conteudoLimitado}\n\n`;
-
-        const conteudoLower = conteudoLimitado.toLowerCase();
-
-        if (conteudoLower.includes('questão') || conteudoLower.includes('prova') ||
-            conteudoLower.includes('exercício') || conteudoLower.includes('enem')) {
-          contextoFormatado += `⚠️ **DETECTADO:** Este anexo parece conter questões/exercícios.\n\n`;
-        }
-
-        if (conteudoLower.includes('lucro') || conteudoLower.includes('custo') ||
-            conteudoLower.includes('receita') || conteudoLower.includes('venda')) {
-          contextoFormatado += `💰 **DETECTADO:** Este anexo envolve problemas financeiros.\n\n`;
-        }
       } else if (anexo.tipo === 'pdf' || anexo.tipo === 'outro') {
         contextoFormatado += `- **Arquivo:** ${anexo.nomeArquivo}\n`;
         contextoFormatado += `- **URL:** ${anexo.url || 'N/A'}\n\n`;
       } else if (anexo.tipo === 'link') {
         contextoFormatado += `- **Link:** ${anexo.url || anexo.conteudo}\n\n`;
-        try {
-          const urlObj = new URL(anexo.url);
-          contextoFormatado += `- **Domínio:** ${urlObj.hostname}\n\n`;
-        } catch (e) { /* ignora */ }
       } else if (anexo.tipo === 'imagem') {
         contextoFormatado += `- **Imagem:** ${anexo.nomeArquivo}\n\n`;
       }
@@ -632,9 +600,6 @@ async function processarAnexosParaIA(anexos) {
   }
 }
 
-/**
- * Testa quais modelos Groq estão disponíveis
- */
 async function testarModelosDisponiveis(groqInstance) {
   if (!groqInstance) {
     logger.error('❌ Groq não inicializado');
@@ -709,7 +674,6 @@ logger.info('✅ Middlewares e funções auxiliares configurados');
 // ============================================================================
 // CONEXÃO COM MONGODB
 // ============================================================================
-
 mongoose.set('bufferTimeoutMS', 60000);
 
 const connectToDatabase = async () => {
@@ -910,10 +874,6 @@ logger.info('✅ Módulo de conexão MongoDB configurado');
 // ============================================================================
 // ROTAS PÚBLICAS (DEVEM VIR ANTES DE TUDO QUE EXIGE AUTH!)
 // ============================================================================
-// ⚠️ IMPORTANTE: Rotas públicas DEVEM ser registradas antes de qualquer
-//    router que aplique authenticateToken globalmente (ex: adaptar-documento).
-// ============================================================================
-
 logger.info('📌 Registrando rotas públicas (health, cursos, eixos)...');
 
 // ---------- Health checks ----------
@@ -1000,7 +960,6 @@ app.get('/api/database-info', async (req, res) => {
   }
 });
 
-// ---------- Status do sistema (público) ----------
 app.get('/api/sistema/status', async (req, res) => {
   try {
     const [configManutencao, configMensagem] = await Promise.all([
@@ -1020,18 +979,15 @@ app.get('/api/sistema/status', async (req, res) => {
   }
 });
 
-// ---------- Turmas (público: /api/cursos e /api/eixos) ----------
-// ⚠️ Registrado AQUI (antes de tudo) para evitar bloqueio por auth global
 try {
   const turmasRouter = require('./routes/turmas');
   app.use('/api/turmas', turmasRouter);
-  app.use('/api', turmasRouter.publicoRouter);   // /api/cursos, /api/eixos
+  app.use('/api', turmasRouter.publicoRouter);
   logger.info('✅ Rotas públicas de turmas/cursos/eixos registradas');
 } catch (error) {
   logger.error('❌ Erro ao registrar turmasRouter:', error.message);
 }
 
-// ---------- Login (auth) - registrar CEDO para não ser bloqueado ----------
 try {
   app.use('/api', require('./routes/login'));
   logger.info('✅ Rotas de login registradas');
@@ -1040,17 +996,12 @@ try {
 }
 
 // ============================================================================
-// ROUTERS MIGRADOS (registrados DEPOIS das rotas públicas)
+// ROUTERS MIGRADOS
 // ============================================================================
-// ⚠️ A ordem importa! Routers mais específicos ANTES dos genéricos.
-
 logger.info('📌 Registrando routers autenticados...');
 
-// ---------- Monitoramento ----------
 app.use('/api/admin/monitoramento', require('./routes/monitoramento'));
 
-// ---------- Adaptar Documento ----------
-// ⚠️ Este router pode ter auth global — por isso vem DEPOIS das rotas públicas
 try {
   app.use('/api', require('./adaptar-documento'));
   logger.info('✅ adaptar-documento registrado');
@@ -1058,128 +1009,69 @@ try {
   logger.error('❌ Erro ao registrar adaptar-documento:', error.message);
 }
 
-// ---------- Push (Web Push API) ----------
 app.use('/api/push', require('./routes/push-routes'));
-
-// ---------- Admin Config ----------
 app.use('/api/admin', require('./routes/admin-config'));
-
-// ---------- Calendário ----------
 app.use('/api/calendario', require('./routes/calendario-routes'));
-
-// ---------- Coordenação de Pátio ----------
 app.use('/api/coordenacao-patio', require('./routes/coordenacaoPatio'));
-
-// ---------- Cozinha ----------
 app.use('/api/cozinha', require('./routes/cozinha'));
-
-// ---------- Monitoramento Cozinha ----------
 app.use('/api/monitoramento-cozinha', require('./routes/monitoramento-cozinha'));
-
-// ---------- Feedback Cozinha ----------
 app.use('/api/feedback-cozinha', require('./routes/feedback-cozinha'));
-
-// ---------- Gestão Geral ----------
 app.use('/api/gestao-geral', require('./routes/gestaoGeral'));
-
-// ---------- Enfermaria ----------
 app.use('/api/enfermaria', require('./routes/enfermaria'));
-
-// ---------- Rodízio Refeição ----------
 app.use('/api/rodizio', require('./routes/rodizioRefeicao'));
-
-// ---------- Supervisão ----------
 app.use('/api/supervisao', require('./routes/supervisao'));
-
-// ---------- Psicologia ----------
 app.use('/api/psicologia', require('./routes/psicologia'));
-
-// ---------- Assistente Social ----------
 app.use('/api/assistente-social', require('./routes/assistente-social'));
-
-// ---------- Protagonismo ----------
 app.use('/api/protagonismo', require('./routes/protagonismo'));
 app.use('/api/protagonismo-publico', require('./routes/protagonismo-publico'));
-
-// ---------- Visitas ----------
 app.use('/api/setor-pedagogico/visitas', require('./routes/visitas'));
 app.use('/api/visitas-publico', require('./routes/visitas-publico'));
-
-// ---------- Autorização ----------
 app.use('/api/gestao-geral/autorizacao', require('./routes/autorizacao-routes'));
-
-// ---------- Permissões de Módulos ----------
 app.use('/api/admin/permissoes-modulos', require('./routes/permissao-modulos-routes'));
-
-// ---------- Acompanhamento ----------
 app.use('/api/acompanhamento', require('./routes/acompanhamento'));
 app.use('/api/acompanhamento-compartilhado', require('./routes/acompanhamento-compartilhado'));
-
-// ---------- Substituição de Professor ----------
 app.use('/api/substituicao-professor', require('./routes/substituicao-professor-routes'));
-
-// ---------- Gestao de Professor ----------
 app.use('/api/gestao-professores', require('./routes/gestao-professores-routes'));
 
-// ---------- AEE ----------
 const aeeRoutes = require('./routes/aee-routes');
 app.use('/api/aee', aeeRoutes);
 
-// ---------- Atraso de Professor ----------
 const atrasoProfessorRoutes = require('./routes/atraso-professor-routes');
 app.use('/api/atraso-professor', atrasoProfessorRoutes);
 
-// ---------- LGPD ----------
 app.use('/api/lgpd', require('./routes/lgpd'));
-
-// ---------- Admin Banco de Dados ----------
 app.use('/api/admin/banco-dados', require('./routes/admin-banco-dados'));
-
-// ---------- Aluno ----------
 app.use('/api/aluno', require('./routes/aluno'));
-
-// ---------- Professor ----------
 app.use('/api/professor', require('./routes/professor'));
-
-// ---------- Biblioteca ----------
 app.use('/api/biblioteca', require('./routes/biblioteca'));
 app.use('/api/biblioteca-publica', require('./routes/biblioteca-publica'));
-
-// ---------- Secretaria ----------
 app.use('/api/secretaria', require('./routes/secretaria'));
 
-// ---------- Recepcao ----------
 const recepcaoRoutes = require('./routes/recepcao-routes');
 app.use('/api/recepcao', recepcaoRoutes);
 
-// ---------- Sessões de Assinatura ----------
 app.use('/api/sessoes-assinatura', require('./routes/sessao-assinatura-routes'));
-
-// ---------- Provas ----------
 app.use('/api/provas', require('./routes/provas'));
-
-// ---------- Notificações ----------
 app.use('/api/notificacoes', require('./routes/notificacoes'));
 
-// ---------- OneSignal (não-admin) ----------
 const oneSignalRoutes = require('./routes/onesignal');
 app.use('/api/onesignal', oneSignalRoutes);
 app.use('/api/usuario', oneSignalRoutes);
 
-// ---------- Chatbot ----------
 app.use('/api/chatbot', require('./routes/chatbot'));
-
-// ---------- Setor Pedagógico ----------
 app.use('/api/setor-pedagogico', require('./routes/setor-pedagogico'));
+// Cadastro (LGPD + aluno/professor + social) — DEVE vir ANTES do face-id
+app.use('/api/auth', require('./routes/auth'));
 
-// ---------- Face ID (não-admin) ----------
+// Face ID (cadastrar-face, verificar-face, validar-camera, etc.)
 app.use('/api/auth', require('./routes/face-id'));
 
-// ---------- OMR ----------
+// WebAuthn (biometria FIDO2) — registro e login biométrico
+app.use('/api', require('./routes/webauthn'));
+
 const omrRoutes = require('./routes/omr');
 app.use('/api', omrRoutes);
 
-// ---------- Admin (TODAS as rotas admin - deve vir por último) ----------
 app.use('/api/admin', require('./routes/admin'));
 
 logger.info('✅ Todos os routers migrados foram registrados');
@@ -1187,7 +1079,6 @@ logger.info('✅ Todos os routers migrados foram registrados');
 // ============================================================================
 // MIDDLEWARE DE RASTREAMENTO DE ATIVIDADE
 // ============================================================================
-// ⚠️ Registrado DEPOIS das rotas públicas para não interferir nelas
 const rastrearAtividade = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -1201,9 +1092,7 @@ const rastrearAtividade = (req, res, next) => {
           lastActive: new Date()
         }).catch(() => {});
       }
-    } catch (err) {
-      // Token inválido — apenas ignora
-    }
+    } catch (err) { /* ignora */ }
   }
 
   next();
@@ -1357,12 +1246,10 @@ app.use(async (req, res, next) => {
 logger.info('✅ Middlewares especiais configurados');
 
 // ============================================================================
-// ROTAS REMANESCENTES (NÃO MIGRADAS) - AUTENTICADAS
+// ROTAS REMANESCENTES - AUTENTICADAS
 // ============================================================================
 
-// ============================================================================
-// ROTA: CONFIG DE ENVIO DE PROVAS
-// ============================================================================
+// ---------- /api/config/envio-provas ----------
 app.get('/api/config/envio-provas', authenticateToken, async (req, res) => {
   try {
     const config = await Config.findOne({ chave: 'provas.habilitarEnvioProva' });
@@ -1383,7 +1270,7 @@ app.get('/api/config/envio-provas', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// ROTA: DADOS DO USUÁRIO LOGADO (/api/auth/me)
+// 🔒 LGPD: /api/auth/me — SEM CPF (minimização de dados)
 // ============================================================================
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
@@ -1403,7 +1290,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         id: user._id,
         nome: user.nome,
         email: user.email,
-        cpf: user.cpf,
+        // 🔒 LGPD: NÃO retorna CPF aqui (minimização de dados)
         role: user.role,
         eixo: user.eixo,
         matricula: user.matricula,
@@ -1430,8 +1317,43 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// ROTA: ATUALIZAR DADOS DO USUÁRIO (/api/users/me)
+// 🔒 LGPD: /api/auth/me/dados-sensiveis — rota dedicada para CPF do próprio usuário
+// (rejeita token temporário de 2FA; só retorna CPF do próprio req.userId)
 // ============================================================================
+app.get('/api/auth/me/dados-sensiveis', authenticateToken, async (req, res) => {
+  try {
+    if (req.tokenTemp === true) {
+      return res.status(403).json({
+        success: false,
+        error: 'Complete a verificação 2FA primeiro.',
+        codigo: 'NEED_2FA',
+        precisa2FA: true
+      });
+    }
+
+    const user = await User.findById(req.userId).select('cpf');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'Usuário não encontrado'
+      });
+    }
+
+    res.json({
+      success: true,
+      cpf: user.cpf || null
+    });
+  } catch (error) {
+    logger.error('Erro ao buscar dados sensíveis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno'
+    });
+  }
+});
+
+// ---------- /api/users/me ----------
 app.put('/api/users/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.userId;
@@ -1489,9 +1411,7 @@ app.put('/api/users/me', authenticateToken, async (req, res) => {
   }
 });
 
-// ============================================================================
-// ROTA: TROCAR SENHA (quando forçado)
-// ============================================================================
+// ---------- /api/auth/trocar-senha ----------
 app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
   try {
     const { senhaAtual, novaSenha } = req.body;
@@ -1591,13 +1511,12 @@ app.post('/api/auth/trocar-senha', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// ROTAS DE PERFIL DO USUÁRIO
+// 🔒 LGPD: /api/perfil/me — SEM CPF
 // ============================================================================
-
 app.get('/api/perfil/me', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId)
-      .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
+      .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret -twoFactorSecretSms');
 
     if (!user) {
       return res.status(404).json({
@@ -1616,7 +1535,7 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
       id: user._id,
       nome: user.nome,
       email: user.email,
-      cpf: user.cpf,
+      // 🔒 LGPD: NÃO retorna CPF aqui (usar /api/auth/me/dados-sensiveis)
       telefone: user.telefone,
       role: user.role,
       ativo: user.ativo,
@@ -1766,7 +1685,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
       userId,
       dadosAtualizar,
       { new: true, runValidators: true }
-    ).select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret');
+    ).select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret -twoFactorSecretSms -cpf');
 
     if (!user) {
       return res.status(404).json({
@@ -2155,7 +2074,7 @@ app.delete('/api/upload/limpar-imagens', authenticateToken, async (req, res) => 
 });
 
 // ============================================================================
-// ROTA: QR CODE DO USUÁRIO LOGADO (/api/usuario/qrcode)
+// ROTA: QR CODE DO USUÁRIO LOGADO
 // ============================================================================
 app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
   try {
@@ -2246,7 +2165,7 @@ app.get('/api/usuario/qrcode', authenticateToken, async (req, res) => {
 });
 
 // ============================================================================
-// ROTA PÚBLICA: IDENTIFICAR USUÁRIO PELO QR CODE
+// ROTA PÚBLICA: IDENTIFICAR USUÁRIO PELO QR CODE (sem CPF)
 // ============================================================================
 app.get('/api/identificar-usuario/:id', async (req, res) => {
   try {

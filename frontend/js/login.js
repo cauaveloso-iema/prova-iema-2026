@@ -10,22 +10,10 @@
 // ============================================================
 const IS_LOCALHOST = window.location.hostname === 'localhost' ||
                      window.location.hostname === '127.0.0.1';
-const IS_RENDER = window.location.hostname.includes('render.com') ||
-                  window.location.hostname.includes('sistema-avaliativo');
 
-let API_BASE_URL;
-
-if (IS_LOCALHOST) {
-    API_BASE_URL = 'http://localhost:3000/api';
-    console.log('🔧 Modo: DESENVOLVIMENTO LOCAL');
-} else if (IS_RENDER) {
-    API_BASE_URL = window.location.origin + '/api';
-    console.log('🚀 Modo: PRODUÇÃO (Render)');
-} else {
-    API_BASE_URL = '/api';
-    console.log('⚙️ Modo: FALLBACK');
-}
-console.log('🌐 API URL:', API_BASE_URL);
+// ✅ Simplificado: sempre /api relativo, exceto localhost
+const API_BASE_URL = IS_LOCALHOST ? 'http://localhost:3000/api' : '/api';
+console.log('🌐 API URL:', API_BASE_URL, IS_LOCALHOST ? '(dev)' : '(prod)');
 
 // ============================================================
 // 🔥 CONFIGURAÇÃO DO LOGIN SOCIAL
@@ -120,22 +108,30 @@ function mostrarAlerta(mensagem, tipo = 'error') {
     alerta.style.display = 'block';
     alerta.scrollIntoView({ behavior: 'smooth', block: 'center' });
     clearTimeout(window.alertTimeout);
-    window.alertTimeout = setTimeout(() => {
-        alerta.style.display = 'none';
-    }, 6000);
+
+    // Alertas críticos (erro de bloqueio, 2FA, código expirado) NÃO fecham sozinhos
+    const criticos = ['bloquead', 'muitas tentativas', '2fa', 'código', 'expirad', 'inativ'];
+    const msgLower = String(mensagem || '').toLowerCase();
+    const ehCritico = criticos.some(k => msgLower.includes(k)) || tipo === 'error';
+
+    if (!ehCritico) {
+        window.alertTimeout = setTimeout(() => {
+            alerta.style.display = 'none';
+        }, 6000);
+    }
 }
 
 // ============================================================
-// 🔥 FUNÇÕES "LEMBRAR DE MIM"
+// 🔥 FUNÇÕES "LEMBRAR DE MIM" (SEM SALVAR SENHA)
 // ============================================================
-function salvarLembrar(identificador, senha) {
+function salvarLembrar(identificador) {
     try {
         localStorage.setItem('remembered_identifier', identificador);
-        const senhaCodificada = btoa(senha);
-        localStorage.setItem('remembered_password', senhaCodificada);
         localStorage.setItem('remember_me', 'true');
         localStorage.setItem('remember_me_timestamp', Date.now().toString());
-        console.log('✅ "Lembrar de mim" salvo');
+        // 🔒 SEGURANÇA: nunca salvamos a senha no cliente
+        localStorage.removeItem('remembered_password');
+        console.log('✅ "Lembrar de mim" salvo (apenas identificador)');
         return true;
     } catch (e) {
         console.error('❌ Erro ao salvar "Lembrar de mim":', e);
@@ -143,22 +139,22 @@ function salvarLembrar(identificador, senha) {
     }
 }
 
-// ============================================================
-// 🔥 FUNÇÕES "LEMBRAR DE MIM"
-// ============================================================
 function carregarLembrar() {
     try {
+        // Remove legado (senha em claro) se ainda existir
+        if (localStorage.getItem('remembered_password')) {
+            console.warn('⚠️ Removendo senha antiga do localStorage (segurança)');
+            localStorage.removeItem('remembered_password');
+        }
+
         const rememberMe = localStorage.getItem('remember_me');
         const identifier = localStorage.getItem('remembered_identifier');
-        const senhaCodificada = localStorage.getItem('remembered_password');
         const timestamp = localStorage.getItem('remember_me_timestamp');
 
-        // Se o checkbox não estava marcado, não faz nada
         if (rememberMe !== 'true' || !identifier) {
             return false;
         }
 
-        // ✅ Verificar expiração (30 dias)
         if (timestamp) {
             const diasPassados = (Date.now() - parseInt(timestamp)) / (1000 * 60 * 60 * 24);
             if (diasPassados > 30) {
@@ -168,48 +164,27 @@ function carregarLembrar() {
             }
         }
 
-        // ✅ Sempre preenche o identificador (email ou CPF)
-        document.getElementById('loginIdentifier').value = identifier;
+        const elIdent = document.getElementById('loginIdentifier');
+        if (elIdent) elIdent.value = identifier;
 
-        // ✅ Só marca o checkbox SE tiver senha salva E ela for decodificada com sucesso
-        if (senhaCodificada) {
-            try {
-                const senha = atob(senhaCodificada);
+        const elCheck = document.getElementById('rememberMe');
+        if (elCheck) elCheck.checked = true;
 
-                // Validação: se a senha decodificada estiver vazia, não faz sentido marcar
-                if (senha && senha.length > 0) {
-                    document.getElementById('loginPassword').value = senha;
-                    document.getElementById('rememberMe').checked = true;
-                    console.log('✅ "Lembrar de mim" restaurado (com senha)');
-                } else {
-                    // Senha vazia/corrompida → não marca o checkbox
-                    console.warn('⚠️ Senha salva está vazia — não marcando "Lembrar de mim"');
-                    document.getElementById('rememberMe').checked = false;
-                    localStorage.removeItem('remembered_password');
-                }
-            } catch (e) {
-                console.error('❌ Erro ao decodificar senha salva:', e);
-                // Se falhou ao decodificar, NÃO marca o checkbox
-                document.getElementById('rememberMe').checked = false;
-                // Remove a senha corrompida para não tentar de novo
-                localStorage.removeItem('remembered_password');
-            }
-        } else {
-            // ✅ Tem identificador salvo, mas NÃO tem senha → NÃO marca o checkbox
-            console.log('ℹ️ Identificador restaurado, mas sem senha salva — checkbox desmarcado');
-            document.getElementById('rememberMe').checked = false;
-        }
+        // Foca no campo de senha (usuário só digita a senha)
+        setTimeout(() => {
+            const elSenha = document.getElementById('loginPassword');
+            if (elSenha) elSenha.focus();
+        }, 100);
 
-        // ✅ Atualiza a visibilidade do botão de mostrar/ocultar senha
         if (typeof window.atualizarVisibilidadeBotaoSenha === 'function') {
             window.atualizarVisibilidadeBotaoSenha();
         }
 
+        console.log('✅ Identificador restaurado (senha não é mais salva)');
         return true;
 
     } catch (e) {
         console.error('❌ Erro ao carregar "Lembrar de mim":', e);
-        // Em caso de erro, garante que o checkbox fica desmarcado
         const checkbox = document.getElementById('rememberMe');
         if (checkbox) checkbox.checked = false;
         return false;
@@ -219,7 +194,7 @@ function carregarLembrar() {
 function limparLembrar() {
     try {
         localStorage.removeItem('remembered_identifier');
-        localStorage.removeItem('remembered_password');
+        localStorage.removeItem('remembered_password'); // limpa legado
         localStorage.removeItem('remember_me');
         localStorage.removeItem('remember_me_timestamp');
         localStorage.removeItem('sdp_remember_identifier');
@@ -339,7 +314,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
         // ---------- 2FA ----------
         if (dados.requiresTwoFactor) {
             if (rememberMe) {
-                salvarLembrar(identificador, senha);
+                salvarLembrar(identificador);
             } else {
                 limparLembrar();
             }
@@ -359,7 +334,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
         // ---------- LOGIN COM SUCESSO ----------
         if (dados.success) {
             if (rememberMe) {
-                salvarLembrar(identificador, senha);
+                salvarLembrar(identificador);
             } else {
                 limparLembrar();
             }

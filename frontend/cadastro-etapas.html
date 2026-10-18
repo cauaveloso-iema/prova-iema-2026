@@ -74,6 +74,70 @@
             border-color: var(--gray-200);
             box-shadow: none;
         }
+
+        /* ============================================================
+           CHECKBOX DE CONSENTIMENTO LGPD
+           ============================================================ */
+        .lgpd-consent {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px 18px;
+            margin: 20px 0 4px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .lgpd-consent:focus-within {
+            border-color: #667eea;
+            background: #f5f7ff;
+        }
+        .lgpd-consent.erro {
+            border-color: #dc2626;
+            background: #fef2f2;
+        }
+        .lgpd-consent input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-top: 2px;
+            flex-shrink: 0;
+            accent-color: #667eea;
+            cursor: pointer;
+        }
+        .lgpd-consent label {
+            font-size: 13.5px;
+            line-height: 1.6;
+            color: #374151;
+            cursor: pointer;
+            margin: 0;
+            font-weight: 400;
+        }
+        .lgpd-consent label a {
+            color: #667eea;
+            font-weight: 600;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+        .lgpd-consent label a:hover {
+            border-bottom-color: #667eea;
+        }
+        .lgpd-consent .lgpd-icon {
+            color: #667eea;
+            font-size: 16px;
+            margin-right: 2px;
+        }
+        .lgpd-erro-msg {
+            display: none;
+            color: #dc2626;
+            font-size: 12.5px;
+            margin-top: 6px;
+            padding-left: 32px;
+        }
+        .lgpd-erro-msg.visible {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -369,6 +433,26 @@
                 </ul>
             </div>
 
+            <!-- ============================================================
+                 🔥 CHECKBOX DE CONSENTIMENTO LGPD
+                 ============================================================ -->
+            <div class="lgpd-consent" id="lgpdConsentBox">
+                <input type="checkbox" id="lgpdConsent" required>
+                <label for="lgpdConsent">
+                    <i class="fas fa-shield-alt lgpd-icon"></i>
+                    Li e aceito a 
+                    <a href="/politica-privacidade.html" target="_blank" rel="noopener">
+                        Política de Privacidade
+                    </a>
+                    e consinto com o tratamento dos meus dados pessoais para a finalidade descrita, 
+                    conforme a <strong>LGPD (Lei 13.709/2018)</strong>.
+                </label>
+            </div>
+            <div class="lgpd-erro-msg" id="lgpdErroMsg">
+                <i class="fas fa-exclamation-circle"></i>
+                Você precisa aceitar a Política de Privacidade para criar a conta.
+            </div>
+
             <div class="step-buttons">
                 <button class="btn-prev" onclick="prevStep()">
                     <i class="fas fa-arrow-left"></i> Voltar
@@ -507,9 +591,22 @@
             if (totalStepsLabel) totalStepsLabel.textContent = '3';
             if (headerSteps) headerSteps.textContent = '3 etapas';
 
-            // 3. Remover o step 4 (senha)
+            // 3. Remover o step 4 (senha) — MAS manter o checkbox LGPD!
+            //    O checkbox será movido para o Step 3
             const step4 = document.querySelector('.step-content[data-step="4"]');
-            if (step4) step4.remove();
+            const lgpdConsentBox = document.getElementById('lgpdConsentBox');
+            const lgpdErroMsg = document.getElementById('lgpdErroMsg');
+            const step3 = document.querySelector('.step-content[data-step="3"]');
+            const step3Buttons = step3 ? step3.querySelector('.step-buttons') : null;
+
+            if (step4 && lgpdConsentBox && step3 && step3Buttons) {
+                // Move o checkbox LGPD para o Step 3, antes dos botões
+                step3.insertBefore(lgpdConsentBox, step3Buttons);
+                if (lgpdErroMsg) step3.insertBefore(lgpdErroMsg, step3Buttons);
+                step4.remove();
+            } else if (step4) {
+                step4.remove();
+            }
 
             // 4. Remover o 4º dot e a última linha do indicador
             const dots = document.querySelectorAll('.step-dot');
@@ -546,7 +643,7 @@
                 btnNext3.setAttribute('onclick', 'enviarCadastro()');
             }
 
-            console.log('✅ Modo social aplicado (3 etapas, sem senha)');
+            console.log('✅ Modo social aplicado (3 etapas, sem senha, checkbox LGPD preservado)');
         }
 
         // ============================================================
@@ -718,14 +815,37 @@
                     }
                 }
 
-                // Se for social e estamos no step 3 (último), envia direto
+                // 🔥 NOVO: validar checkbox LGPD no step 3 (modo social)
                 if (socialSignup.isSocial) {
+                    if (!validarConsentimentoLGPD()) return false;
                     enviarCadastro();
                     return false;
                 }
                 return true;
             }
 
+            return true;
+        }
+
+        // ============================================================
+        // 🔥 VALIDAR CONSENTIMENTO LGPD
+        // ============================================================
+        function validarConsentimentoLGPD() {
+            const checkbox = document.getElementById('lgpdConsent');
+            const caixa = document.getElementById('lgpdConsentBox');
+            const erroMsg = document.getElementById('lgpdErroMsg');
+
+            if (!checkbox || !checkbox.checked) {
+                if (caixa) {
+                    caixa.classList.add('erro');
+                    caixa.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                if (erroMsg) erroMsg.classList.add('visible');
+                return false;
+            }
+
+            if (caixa) caixa.classList.remove('erro');
+            if (erroMsg) erroMsg.classList.remove('visible');
             return true;
         }
 
@@ -989,9 +1109,15 @@
         }
 
         // ============================================================
-        // 🔥 ENVIAR CADASTRO (AJUSTADO PARA SUPORTAR SOCIAL)
+        // 🔥 ENVIAR CADASTRO (AJUSTADO PARA SUPORTAR SOCIAL + LGPD)
         // ============================================================
         async function enviarCadastro() {
+            // 🔥 NOVO: validar consentimento LGPD antes de qualquer coisa
+            if (!validarConsentimentoLGPD()) {
+                mostrarAlerta('Você precisa aceitar a Política de Privacidade para criar a conta.');
+                return;
+            }
+
             const role = selectedRole;
             const nome = document.getElementById('registerNome').value.trim();
             const cpf = document.getElementById('registerCPF').value;
@@ -1047,7 +1173,10 @@
                 cpf: cpf.replace(/\D/g, ''),
                 telefone: telefone.replace(/\D/g, ''),
                 email: email,
-                role: role
+                role: role,
+                // 🔥 NOVO: registro do consentimento LGPD
+                lgpdConsent: true,
+                lgpdConsentAt: new Date().toISOString()
             };
 
             // Só manda senha se não for social
@@ -1198,7 +1327,7 @@
             // 🔥 3. Configura role inicial (ALUNO)
             selecionarRole('aluno');
 
-            // 🔥 4. Aplica modo social (remove etapa 4, preenche email/nome)
+            // 🔥 4. Aplica modo social (remove etapa 4, preenche email/nome, move LGPD)
             aplicarModoSocial();
 
             // 🔥 5. Configura data mínima para inputs date
@@ -1206,6 +1335,19 @@
             document.querySelectorAll('input[type="date"]').forEach(input => {
                 input.min = hoje;
             });
+
+            // 🔥 6. Listener para limpar erro do LGPD ao marcar
+            const lgpdCheckbox = document.getElementById('lgpdConsent');
+            if (lgpdCheckbox) {
+                lgpdCheckbox.addEventListener('change', function() {
+                    const caixa = document.getElementById('lgpdConsentBox');
+                    const erroMsg = document.getElementById('lgpdErroMsg');
+                    if (this.checked) {
+                        if (caixa) caixa.classList.remove('erro');
+                        if (erroMsg) erroMsg.classList.remove('visible');
+                    }
+                });
+            }
         });
     </script>
 

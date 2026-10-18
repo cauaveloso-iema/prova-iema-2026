@@ -14,6 +14,9 @@
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
+    <!-- 🔒 LGPD: helper de armazenamento seguro (deve vir ANTES de outros JS) -->
+    <script src="js/user-storage.js"></script>
+
     <!-- VLibras Oficial -->
     <script src="js/vlibras-oficial.js"></script>
 
@@ -28,13 +31,13 @@
 
     <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
-    <script src="js/dialog-helper.js"></script> 
+    <script src="js/dialog-helper.js"></script>
 
     <!-- ===== MOBILE OPTIMIZATION ===== -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="js/toggle-buttons.js"></script>
-    
+
     <meta charset="UTF-8">
     <title>Editar Perfil | EducaPleno</title>
     <link rel="stylesheet" href="css/styles.css">
@@ -55,13 +58,12 @@
                 <a href="javascript:history.back()" class="btn-voltar">
                     <i class="fas fa-arrow-left"></i> Voltar
                 </a>
-                
+
                 <div class="foto-perfil-container" id="fotoContainer">
                     <div id="fotoPlaceholder" class="foto-perfil-placeholder">
                         <i class="fas fa-user-graduate"></i>
                     </div>
                     <img id="fotoPerfilImg" class="foto-perfil" style="display: none;" alt="Foto de perfil">
-                    <!-- 🔥 ALTERAÇÃO AQUI: onclick chama a função de ponte -->
                     <button class="btn-edit-foto" id="btnEditFoto" onclick="solicitarFotoAoSite()">
                         <i class="fas fa-camera"></i>
                     </button>
@@ -72,11 +74,11 @@
                 <h1 id="perfilNome">Carregando...</h1>
                 <div class="role-badge" id="perfilRole">Carregando...</div>
             </div>
-            
+
             <!-- Corpo -->
             <div class="perfil-body">
                 <div id="alertMessage" class="alert"></div>
-                
+
                 <form id="formPerfil">
                     <!-- Seção 1: Informações Pessoais -->
                     <div class="form-section">
@@ -89,31 +91,31 @@
                                 <label class="form-label">
                                     <i class="fas fa-user"></i> Nome Completo
                                 </label>
-                                <input type="text" id="nome" name="nome" class="form-control" required>
+                                <input type="text" id="nome" name="nome" class="form-control" required autocomplete="name">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-envelope"></i> Email
                                 </label>
-                                <input type="email" id="email" class="form-control" disabled>
+                                <input type="email" id="email" class="form-control" disabled autocomplete="email">
                                 <small style="color: #6b7280; font-size: 0.7rem;">O email não pode ser alterado</small>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-phone"></i> Telefone
                                 </label>
-                                <input type="tel" id="telefone" name="telefone" class="form-control" placeholder="(00) 00000-0000">
+                                <input type="tel" id="telefone" name="telefone" class="form-control" placeholder="(00) 00000-0000" autocomplete="tel">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-calendar"></i> Data de Nascimento
                                 </label>
-                                <input type="date" id="dataNascimento" name="dataNascimento" class="form-control">
+                                <input type="date" id="dataNascimento" name="dataNascimento" class="form-control" autocomplete="bday">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-venus-mars"></i> Gênero
@@ -125,17 +127,18 @@
                                     <option value="outro">Outro</option>
                                 </select>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-id-card"></i> CPF
                                 </label>
-                                <input type="text" id="cpf" class="form-control" disabled>
+                                <!-- 🔒 LGPD: autocomplete off para não permitir autofill -->
+                                <input type="text" id="cpf" class="form-control" disabled autocomplete="off">
                                 <small style="color: #6b7280; font-size: 0.7rem;">O CPF não pode ser alterado</small>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Seção 2: Biografia -->
                     <div class="form-section">
                         <div class="form-section-title">
@@ -147,7 +150,7 @@
                             <small style="color: #6b7280; font-size: 0.7rem;">Máximo 500 caracteres</small>
                         </div>
                     </div>
-                    
+
                     <!-- Seção 3: Endereço -->
                     <div class="form-section">
                         <div class="form-section-title">
@@ -159,34 +162,34 @@
                                 <label class="form-label">
                                     <i class="fas fa-home"></i> Endereço
                                 </label>
-                                <input type="text" id="endereco" name="endereco" class="form-control" placeholder="Rua, número, complemento">
+                                <input type="text" id="endereco" name="endereco" class="form-control" placeholder="Rua, número, complemento" autocomplete="street-address">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-city"></i> Cidade
                                 </label>
-                                <input type="text" id="cidade" name="cidade" class="form-control">
+                                <input type="text" id="cidade" name="cidade" class="form-control" autocomplete="address-level2">
                             </div>
-                            
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label class="form-label">
                                         <i class="fas fa-map-pin"></i> Estado
                                     </label>
-                                    <input type="text" id="estado" name="estado" class="form-control" maxlength="2" placeholder="UF">
+                                    <input type="text" id="estado" name="estado" class="form-control" maxlength="2" placeholder="UF" autocomplete="address-level1">
                                 </div>
-                                
+
                                 <div class="form-group">
                                     <label class="form-label">
                                         <i class="fas fa-mail-bulk"></i> CEP
                                     </label>
-                                    <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000">
+                                    <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" autocomplete="postal-code">
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Seção 4: Redes Sociais -->
                     <div class="form-section">
                         <div class="form-section-title">
@@ -200,14 +203,14 @@
                                 </label>
                                 <input type="text" id="instagram" name="instagram" class="form-control" placeholder="@seuusuario">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fab fa-linkedin"></i> LinkedIn
                                 </label>
                                 <input type="text" id="linkedin" name="linkedin" class="form-control" placeholder="linkedin.com/in/seuusuario">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-globe"></i> Website
@@ -216,7 +219,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Seção 5: Interesses (Tags) -->
                     <div class="form-section">
                         <div class="form-section-title">
@@ -237,11 +240,11 @@
                             <input type="hidden" id="interesses" name="interesses">
                         </div>
                     </div>
-                    
-                    <!-- 🔥 Seção 6: Dados Específicos do Perfil (dinâmico conforme role) -->
+
+                    <!-- Seção 6: Dados Específicos do Perfil (dinâmico) -->
                     <div id="dadosEspecificos"></div>
-                    
-                    <!-- 🔥 Seção 7: Preferências Alimentares (SOMENTE PARA ALUNOS - COM ESPAÇAMENTO) -->
+
+                    <!-- Seção 7: Preferências Alimentares (ALUNO) -->
                     <div id="preferenciasAlimentares" style="display: none;">
                         <div class="preferencias-alimentares-section">
                             <div class="form-section-title">
@@ -284,16 +287,14 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Botão Salvar -->
                     <button type="submit" class="btn-salvar" id="btnSalvar">
                         <i class="fas fa-save"></i> Salvar Alterações
                     </button>
                 </form>
-                
-                <!-- ═══════════════════════════════════════════════════════════ -->
-                <!-- 🔥 SEÇÃO DO QR CODE - ADICIONADA AQUI 🔥                     -->
-                <!-- ═══════════════════════════════════════════════════════════ -->
+
+                <!-- QR CODE SECTION -->
                 <div class="form-section" id="qrCodeSection" style="display: none;">
                     <div class="form-section-title">
                         <i class="fas fa-qrcode"></i>
@@ -315,23 +316,20 @@
                         </button>
                     </div>
                 </div>
-                <!-- ═══════════════════════════════════════════════════════════ -->
-                <!-- FIM DA SEÇÃO DO QR CODE                                      -->
-                <!-- ═══════════════════════════════════════════════════════════ -->
-                
+
             </div>
         </div>
     </div>
-    
+
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
             <i class="fas fa-spinner fa-spin"></i>
             <p style="margin-top: 1rem;">Salvando alterações...</p>
         </div>
     </div>
-    
+
     <input type="file" id="inputFoto" accept="image/*" style="display: none;" onchange="uploadFotoPerfil(this.files[0])">
-    
+
     <!-- CARTÃO PARA IMPRESSÃO (OCULTO) -->
     <div id="cartaoParaImpressao" style="position: fixed; top: -9999px; left: -9999px; width: 400px; background: white; border-radius: 16px; font-family: 'Segoe UI', sans-serif; z-index: -1;">
         <div style="padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px;">
@@ -348,7 +346,7 @@
             </div>
         </div>
     </div>
-    
+
     <script>
         // ============================================
         // VARIÁVEIS GLOBAIS
@@ -358,38 +356,36 @@
         let interessesList = [];
         let leitorAtivo = false;
         let synth = window.speechSynthesis;
-        let qrCodeImageData = ''; // Armazenar a imagem do QR Code
+        let qrCodeImageData = '';
+        let cpfCarregado = false; // 🔒 LGPD: só carrega CPF sob demanda
 
         // ============================================
-        // 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
+        // 🛡️ PROTEÇÃO CONTRA alert() NATIVO
         // ============================================
         (function protegerContraAlertNativo() {
             let __emProgresso = false;
-            
+
             window.alert = function(mensagem) {
                 if (__emProgresso) {
                     console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
                     return;
                 }
                 __emProgresso = true;
-                
+
                 try {
                     const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
                                     (typeof window.AppInventor !== 'undefined');
-                    
-                    // Usa o mostrarAlerta() do próprio arquivo (já existe)
+
                     if (typeof window.mostrarAlerta === 'function') {
                         window.mostrarAlerta(String(mensagem), 'info');
                         return;
                     }
-                    
-                    // Desktop: só log
+
                     if (!isWebView) {
                         console.log('%c[ALERT] ' + mensagem, 'background:#667eea;color:white;padding:4px 8px;border-radius:4px;');
                         return;
                     }
-                    
-                    // WebView sem mostrarAlerta: modal simples
+
                     const modal = document.createElement('div');
                     modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
                         background:rgba(0,0,0,0.6);display:flex;align-items:center;
@@ -411,46 +407,75 @@
                     __emProgresso = false;
                 }
             };
-            
+
             console.log('🛡️ [Proteção] window.alert sobrescrito (editar-perfil)');
         })();
-        
+
         // ============================================
         // 🌉 PONTE DE COMUNICAÇÃO COM O KODULAR
         // ============================================
-        
-        // Função que o site chama para pedir a foto ao aplicativo
         function solicitarFotoAoSite() {
-            // Verifica se está rodando dentro do Kodular
             if (window.AppInventor && window.AppInventor.setWebViewString) {
                 console.log("📤 Solicitando foto ao aplicativo...");
                 window.AppInventor.setWebViewString("ABRIR_GALERIA");
             } else {
-                // Se estiver no navegador, usa o input padrão
                 console.log("🌐 Navegador detectado. Abrindo seletor padrão.");
                 document.getElementById('inputFoto').click();
             }
         }
 
-        // Função que o APLICATIVO chama quando o usuário escolhe a foto
         function receberFotoDoApp(base64Image) {
             if (!base64Image) {
                 console.log("❌ Nenhuma imagem recebida do aplicativo.");
                 return;
             }
-            
+
             console.log("📸 Foto recebida do aplicativo via Base64.");
-            
-            // Converte a string Base64 em um Blob/File
+
             fetch(base64Image)
                 .then(res => res.blob())
                 .then(blob => {
-                    // Cria um objeto File simulando um upload normal
                     const file = new File([blob], "foto_perfil.jpg", { type: "image/jpeg" });
-                    // Chama sua função de upload existente
                     uploadFotoPerfil(file);
                 })
                 .catch(err => console.error("Erro ao processar imagem do app:", err));
+        }
+
+        // ============================================
+        // 🔒 LGPD: CARREGAR CPF SOB DEMANDA (rota dedicada)
+        // ============================================
+        async function carregarCpfUsuario() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+
+                const response = await fetch('/api/auth/me/dados-sensiveis', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    document.getElementById('cpf').value = '—';
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.cpf) {
+                    // Formatar CPF: 61350707384 → 613.507.073-84
+                    const cpfStr = String(data.cpf).replace(/\D/g, '');
+                    const formatado = cpfStr.length === 11
+                        ? cpfStr.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+                        : cpfStr;
+                    document.getElementById('cpf').value = formatado;
+                    cpfCarregado = true;
+                    console.log('🔒 CPF carregado via rota dedicada (não salvo em localStorage)');
+                } else {
+                    document.getElementById('cpf').value = '—';
+                }
+            } catch (e) {
+                console.warn('Erro ao carregar CPF:', e);
+                document.getElementById('cpf').value = '—';
+            }
         }
 
         // ============================================
@@ -459,43 +484,36 @@
         async function carregarPerfil() {
             try {
                 const token = localStorage.getItem('auth_token');
-                
+
                 if (!token) {
                     window.location.href = 'login.html';
                     return;
                 }
-                
+
                 const response = await fetch('/api/perfil/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     userData = data.perfil;
                     userRole = userData.role;
-                    
+
                     console.log('🎯 Role detectado:', userRole);
                     console.log('📦 Dados do usuário:', userData);
-                    
-                    // Preencher formulário
+
                     preencherFormulario(userData);
-                    
-                    // Carregar foto de perfil
                     carregarFotoPerfil(userData.fotoPerfil);
-                    
-                    // Carregar campos específicos conforme role
                     carregarCamposEspecificos(userData);
-                    
-                    // Mostrar seção de preferências alimentares apenas para alunos
+
                     if (userRole === 'aluno') {
                         document.getElementById('preferenciasAlimentares').style.display = 'block';
                         carregarPreferenciasAlimentares(userData);
                     }
-                    
-                    // Atualizar título e badge
+
                     document.getElementById('perfilNome').textContent = userData.nome;
-                    
+
                     let roleText = '';
                     let roleIcon = '';
                     if (userData.role === 'aluno') {
@@ -520,19 +538,18 @@
                         roleText = '🍽️ Cozinha';
                         roleIcon = 'fa-kitchen-set';
                     }
-                    
+
                     document.getElementById('perfilRole').textContent = roleText;
-                    
-                    // Atualizar ícone do placeholder
+
                     const placeholderIcon = document.querySelector('#fotoPlaceholder i');
                     if (placeholderIcon) {
                         placeholderIcon.className = `fas ${roleIcon}`;
                     }
-                    
+
                 } else {
                     mostrarAlerta('Erro ao carregar perfil: ' + (data.error || 'Erro desconhecido'), 'error');
                 }
-                
+
             } catch (error) {
                 console.error('Erro ao carregar perfil:', error);
                 mostrarAlerta('Erro ao carregar perfil. Tente novamente.', 'error');
@@ -543,33 +560,31 @@
             console.log("📸 Foto atualizada! Recarregando perfil...");
             carregarPerfil();
         }
-                
+
         // ============================================
         // CARREGAR PREFERÊNCIAS ALIMENTARES
         // ============================================
         function carregarPreferenciasAlimentares(data) {
             const perfilAlimentar = data.perfilAlimentar || 'nao_informado';
             const refeicoesQueParticipa = data.refeicoesQueParticipa || [];
-            
+
             const select = document.getElementById('perfilAlimentar');
             if (select) {
                 select.value = perfilAlimentar;
                 toggleRefeicoesDiv(perfilAlimentar);
             }
-            
-            // Marcar checkboxes
+
             if (refeicoesQueParticipa.includes('manha')) document.getElementById('refeicaoManha').checked = true;
             if (refeicoesQueParticipa.includes('almoco')) document.getElementById('refeicaoAlmoco').checked = true;
             if (refeicoesQueParticipa.includes('tarde')) document.getElementById('refeicaoTarde').checked = true;
-            
-            // Event listener para mostrar/esconder checkboxes
+
             if (select) {
                 select.addEventListener('change', function() {
                     toggleRefeicoesDiv(this.value);
                 });
             }
         }
-        
+
         function toggleRefeicoesDiv(perfilAlimentar) {
             const div = document.getElementById('refeicoesQueParticipaDiv');
             if (perfilAlimentar === 'sempre' || perfilAlimentar === 'as_vezes') {
@@ -578,15 +593,16 @@
                 div.style.display = 'none';
             }
         }
-        
+
         // ============================================
         // PREENCHER FORMULÁRIO COM DADOS DO BANCO
+        // 🔒 LGPD: CPF NÃO é preenchido aqui — vem da rota dedicada
         // ============================================
         function preencherFormulario(data) {
             document.getElementById('nome').value = data.nome || '';
             document.getElementById('email').value = data.email || '';
             document.getElementById('telefone').value = data.telefone || '';
-            document.getElementById('cpf').value = data.cpf || '';
+            // 🔒 CPF NÃO é mais preenchido aqui (vem de /auth/me/dados-sensiveis)
             document.getElementById('dataNascimento').value = data.dataNascimento || '';
             document.getElementById('genero').value = data.genero || '';
             document.getElementById('bio').value = data.bio || '';
@@ -597,24 +613,23 @@
             document.getElementById('instagram').value = data.instagram || '';
             document.getElementById('linkedin').value = data.linkedin || '';
             document.getElementById('website').value = data.website || '';
-            
-            // Interesses
+
             if (data.interesses && data.interesses.length > 0) {
                 interessesList = [...data.interesses];
                 atualizarListaInteresses();
             }
         }
-        
+
         // ============================================
-        // CARREGAR CAMPOS ESPECÍFICOS POR ROLE (CORRIGIDO)
+        // CARREGAR CAMPOS ESPECÍFICOS POR ROLE
         // ============================================
         function carregarCamposEspecificos(data) {
             const container = document.getElementById('dadosEspecificos');
-            
+
             if (!container) return;
-            
+
             console.log('🎯 Carregando campos para role:', userRole);
-            
+
             if (userRole === 'aluno') {
                 container.innerHTML = `
                     <div class="form-section">
@@ -657,7 +672,7 @@
                         </div>
                     </div>
                 `;
-            } 
+            }
             else if (userRole === 'professor') {
                 container.innerHTML = `
                     <div class="form-section">
@@ -696,7 +711,7 @@
                         </div>
                     </div>
                 `;
-            } 
+            }
             else if (userRole === 'admin' || userRole === 'super_admin') {
                 container.innerHTML = `
                     <div class="form-section">
@@ -718,14 +733,14 @@
                 `;
             }
         }
-        
+
         // ============================================
         // GERENCIAR INTERESSES
         // ============================================
         function adicionarInteresse() {
             const input = document.getElementById('novoInteresse');
             const interesse = input.value.trim();
-            
+
             if (interesse && !interessesList.includes(interesse)) {
                 interessesList.push(interesse);
                 atualizarListaInteresses();
@@ -735,17 +750,17 @@
                 mostrarAlerta('Este interesse já foi adicionado!', 'info');
             }
         }
-        
+
         function removerInteresse(interesse) {
             interessesList = interessesList.filter(i => i !== interesse);
             atualizarListaInteresses();
             if (leitorAtivo) falar('Interesse ' + interesse + ' removido');
         }
-        
+
         function atualizarListaInteresses() {
             const container = document.getElementById('interessesContainer');
             const hiddenInput = document.getElementById('interesses');
-            
+
             container.innerHTML = '';
             interessesList.forEach(interesse => {
                 const tag = document.createElement('span');
@@ -753,10 +768,10 @@
                 tag.innerHTML = `${interesse} <button type="button" onclick="removerInteresse('${interesse.replace(/'/g, "\\'")}')">×</button>`;
                 container.appendChild(tag);
             });
-            
+
             hiddenInput.value = JSON.stringify(interessesList);
         }
-        
+
         // ============================================
         // FOTO DE PERFIL
         // ============================================
@@ -764,16 +779,14 @@
             const img = document.getElementById('fotoPerfilImg');
             const placeholder = document.getElementById('fotoPlaceholder');
             const btnRemove = document.getElementById('btnRemoveFoto');
-            
-            // Aceita tanto Base64 (data:image/...) quanto URL (/uploads/...)
+
             if (foto && (foto.startsWith('data:image') || foto.startsWith('/') || foto.startsWith('http'))) {
-                // Se for uma URL relativa, adiciona o domínio
                 if (foto.startsWith('/')) {
                     img.src = window.location.origin + foto;
                 } else {
                     img.src = foto;
                 }
-                
+
                 img.style.display = 'block';
                 placeholder.style.display = 'none';
                 btnRemove.style.display = 'flex';
@@ -785,37 +798,36 @@
                 console.log('📸 Nenhuma foto de perfil cadastrada');
             }
         }
-        
+
         async function uploadFotoPerfil(file) {
             if (!file) return;
-            
-            // ✅ VERIFICAÇÃO DO LIMITE DE 5MB
+
             if (file.size > 5 * 1024 * 1024) {
                 mostrarAlerta('A imagem deve ter no máximo 5MB', 'error');
                 return;
             }
-            
+
             const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
             if (!tiposPermitidos.includes(file.type)) {
                 mostrarAlerta('Tipo de imagem não suportado. Use JPEG, PNG, GIF ou WebP.', 'error');
                 return;
             }
-            
+
             const formData = new FormData();
             formData.append('foto', file);
-            
+
             try {
                 mostrarAlerta('Enviando foto...', 'info');
-                
+
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch('/api/perfil/upload-foto', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     carregarFotoPerfil(data.fotoPerfil);
                     mostrarAlerta('Foto de perfil atualizada!', 'success');
@@ -823,28 +835,28 @@
                 } else {
                     throw new Error(data.error || 'Erro ao enviar foto');
                 }
-                
+
             } catch (error) {
                 console.error('Erro no upload:', error);
                 mostrarAlerta(error.message, 'error');
             }
         }
-        
+
         async function removerFotoPerfil() {
             const confirmar = await confirm('Tem certeza que deseja remover sua foto de perfil?');
             if (!confirmar) return;
-            
+
             try {
                 mostrarAlerta('Removendo foto...', 'info');
-                
+
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch('/api/perfil/remover-foto', {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     carregarFotoPerfil(null);
                     mostrarAlerta('Foto de perfil removida!', 'success');
@@ -852,45 +864,46 @@
                 } else {
                     throw new Error(data.error || 'Erro ao remover foto');
                 }
-                
+
             } catch (error) {
                 console.error('Erro ao remover foto:', error);
                 mostrarAlerta(error.message, 'error');
             }
         }
-        
+
         // ============================================
-        // FUNÇÕES DO LEITOR DE TELA (SIMPLES)
+        // LEITOR DE TELA
         // ============================================
         function falar(texto) {
             if (!leitorAtivo) return;
-            
+
             if (synth.speaking) {
                 synth.cancel();
             }
-            
+
             const utterance = new SpeechSynthesisUtterance(texto);
             utterance.lang = 'pt-BR';
             utterance.rate = 0.9;
             utterance.pitch = 1;
-            
+
             synth.speak(utterance);
         }
-        
+
         // ============================================
-        // SALVAR PERFIL (CORRIGIDO PARA TODOS OS ROLES E PREFERÊNCIAS ALIMENTARES)
+        // SALVAR PERFIL
+        // 🔒 LGPD: usa salvarUserDataSeguro (não salva CPF)
         // ============================================
         async function salvarPerfil(event) {
             event.preventDefault();
-            
+
             const btn = document.getElementById('btnSalvar');
             const loading = document.getElementById('loadingOverlay');
-            
+
             btn.disabled = true;
             loading.style.display = 'flex';
-            
+
             if (leitorAtivo) falar('Salvando alterações do perfil');
-            
+
             try {
                 const dados = {
                     nome: document.getElementById('nome').value,
@@ -907,41 +920,39 @@
                     website: document.getElementById('website').value,
                     interesses: interessesList
                 };
-                
-                // 🔥 ADICIONAR PREFERÊNCIAS ALIMENTARES (se for aluno)
+
                 if (userRole === 'aluno') {
                     dados.perfilAlimentar = document.getElementById('perfilAlimentar')?.value || 'nao_informado';
-                    
+
                     const refeicoesQueParticipa = [];
                     if (document.getElementById('refeicaoManha')?.checked) refeicoesQueParticipa.push('manha');
                     if (document.getElementById('refeicaoAlmoco')?.checked) refeicoesQueParticipa.push('almoco');
                     if (document.getElementById('refeicaoTarde')?.checked) refeicoesQueParticipa.push('tarde');
                     dados.refeicoesQueParticipa = refeicoesQueParticipa;
-                    
+
                     console.log('🍽️ Salvando preferências alimentares:', {
                         perfilAlimentar: dados.perfilAlimentar,
                         refeicoesQueParticipa: dados.refeicoesQueParticipa
                     });
                 }
-                
-                // 🔥 ADICIONAR CAMPOS ESPECÍFICOS POR ROLE
+
                 if (userRole === 'aluno') {
                     dados.curso = document.getElementById('curso')?.value;
                     dados.turma = document.getElementById('turma')?.value;
                     dados.periodo = document.getElementById('periodo')?.value;
                     console.log('📚 Salvando dados de ALUNO:', { curso: dados.curso, turma: dados.turma, periodo: dados.periodo });
-                } 
+                }
                 else if (userRole === 'professor') {
                     dados.eixo = document.getElementById('eixo')?.value;
                     dados.departamento = document.getElementById('departamento')?.value;
                     dados.titulacao = document.getElementById('titulacao')?.value;
                     console.log('👨‍🏫 Salvando dados de PROFESSOR:', { eixo: dados.eixo, departamento: dados.departamento });
-                } 
+                }
                 else if (userRole === 'admin' || userRole === 'super_admin') {
                     dados.departamento = document.getElementById('departamento')?.value;
                     console.log('👨‍💼 Salvando dados de ADMIN:', { departamento: dados.departamento });
                 }
-                
+
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch('/api/perfil/me', {
                     method: 'PUT',
@@ -951,17 +962,20 @@
                     },
                     body: JSON.stringify(dados)
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     mostrarAlerta('Perfil atualizado com sucesso!', 'success');
                     document.getElementById('perfilNome').textContent = dados.nome;
-                    
-                    const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+
+                    // 🔒 LGPD: usa o helper seguro (não salva CPF/senha)
+                    const userDataStorage = window.lerUserDataSeguro
+                        ? window.lerUserDataSeguro() || {}
+                        : JSON.parse(localStorage.getItem('user_data') || '{}');
+
                     userDataStorage.nome = dados.nome;
-                    
-                    // Atualizar dados específicos no localStorage
+
                     if (userRole === 'aluno') {
                         userDataStorage.curso = dados.curso;
                         userDataStorage.turma = dados.turma;
@@ -975,32 +989,39 @@
                     } else if (userRole === 'admin' || userRole === 'super_admin') {
                         userDataStorage.departamento = dados.departamento;
                     }
-                    
-                    localStorage.setItem('user_data', JSON.stringify(userDataStorage));
-                    
+
+                    // 🔒 Salva com filtro de campos sensíveis
+                    if (window.salvarUserDataSeguro) {
+                        window.salvarUserDataSeguro(userDataStorage);
+                    } else {
+                        // fallback: filtro manual
+                        delete userDataStorage.cpf;
+                        delete userDataStorage.password;
+                        delete userDataStorage.twoFactorSecret;
+                        delete userDataStorage.twoFactorBackupCodes;
+                        localStorage.setItem('user_data', JSON.stringify(userDataStorage));
+                    }
+
                     if (leitorAtivo) falar('Perfil atualizado com sucesso');
-                    
-                    // 🔥 VERIFICA SE ESTÁ NO APLICATIVO KODULAR
-                    const isWebView = (typeof window.AppInventor !== 'undefined') || 
+
+                    const isWebView = (typeof window.AppInventor !== 'undefined') ||
                                     /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent);
-                    
+
                     if (isWebView && window.AppInventor && window.AppInventor.setWebViewString) {
-                        // No aplicativo: avisa o Kodular para fechar a tela
                         console.log('📱 Salvamento concluído. Avisando o aplicativo...');
                         setTimeout(() => {
                             window.AppInventor.setWebViewString("SALVAMENTO_CONCLUIDO");
                         }, 1500);
                     } else {
-                        // No navegador: comportamento normal
                         setTimeout(() => {
                             window.location.href = 'javascript:history.back()';
                         }, 2000);
                     }
-                    
+
                 } else {
                     throw new Error(data.error || 'Erro ao salvar perfil');
                 }
-                
+
             } catch (error) {
                 console.error('Erro ao salvar:', error);
                 mostrarAlerta(error.message, 'error');
@@ -1010,7 +1031,7 @@
                 loading.style.display = 'none';
             }
         }
-        
+
         // ============================================
         // MOSTRAR ALERTA
         // ============================================
@@ -1024,40 +1045,41 @@
                 </div>
             `;
             alertDiv.style.display = 'block';
-            
+
             setTimeout(() => {
                 alertDiv.style.display = 'none';
             }, 3000);
         }
-        
+
         // ============================================
-        // CARREGAR QR CODE DO USUÁRIO (QUALQUER PERFIL)
+        // CARREGAR QR CODE DO USUÁRIO
         // ============================================
         async function carregarQRCodeUsuario() {
             try {
                 const token = localStorage.getItem('auth_token');
-                const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
-                
+                const userDataStorage = window.lerUserDataSeguro
+                    ? window.lerUserDataSeguro() || {}
+                    : JSON.parse(localStorage.getItem('user_data') || '{}');
+
                 console.log(`📱 Carregando QR Code para ${userDataStorage.role}: ${userDataStorage.nome}`);
-                
+
                 const response = await fetch('/api/usuario/qrcode', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success && data.qrCode) {
                     const container = document.getElementById('qrCodeContainer');
                     const section = document.getElementById('qrCodeSection');
                     const info = document.getElementById('qrCodeInfo');
-                    
-                    // Armazenar a imagem do QR Code para usar no cartão
+
                     qrCodeImageData = data.qrCode;
-                    
+
                     if (container && section) {
                         container.innerHTML = `
-                            <img src="${data.qrCode}" 
-                                 alt="QR Code do Usuário" 
+                            <img src="${data.qrCode}"
+                                 alt="QR Code do Usuário"
                                  style="width: 180px; height: 180px; margin: 0 auto; border: 2px solid #e5e7eb; border-radius: 16px; padding: 10px; background: white;">
                             <div style="margin-top: 10px;">
                                 <p style="font-size: 0.8rem; color: #10b981;">
@@ -1071,25 +1093,25 @@
                                 </p>
                             </div>
                         `;
-                        
+
                         if (info) {
                             info.innerHTML = `Escaneie este QR Code para acessar sua área personalizada: <strong>${data.usuario.tituloDestino}</strong>`;
                         }
-                        
+
                         section.style.display = 'block';
                         console.log(`✅ QR Code carregado para ${userDataStorage.role}`);
                     }
                 } else {
                     console.log('⚠️ QR Code não encontrado:', data.error);
                 }
-                
+
             } catch (error) {
                 console.error('❌ Erro ao carregar QR Code:', error);
             }
         }
-        
+
         // ============================================
-        // BAIXAR QR CODE COMO IMAGEM (APENAS QR CODE)
+        // BAIXAR QR CODE
         // ============================================
         function baixarQRCode() {
             const img = document.querySelector('#qrCodeContainer img');
@@ -1097,16 +1119,18 @@
                 alert('QR Code não disponível');
                 return;
             }
-            
-            const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+
+            const userDataStorage = window.lerUserDataSeguro
+                ? window.lerUserDataSeguro() || {}
+                : JSON.parse(localStorage.getItem('user_data') || '{}');
+
             const nomeArquivo = `qrcode-${userDataStorage.role}-${Date.now()}.png`;
-            
+
             const link = document.createElement('a');
             link.download = nomeArquivo;
             link.href = img.src;
             link.click();
-            
-            // Feedback visual
+
             const btn = event.currentTarget;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check"></i> Baixado!';
@@ -1114,45 +1138,41 @@
                 btn.innerHTML = originalText;
             }, 2000);
         }
-        
+
         // ============================================
-        // 🔥 NOVA FUNÇÃO: BAIXAR CARTÃO COMPLETO PARA IMPRESSÃO
+        // BAIXAR CARTÃO COMPLETO
         // ============================================
         async function baixarCartaoCompleto() {
             try {
-                // Verificar se temos o QR Code
                 if (!qrCodeImageData) {
                     mostrarAlerta('QR Code não disponível. Aguarde o carregamento.', 'error');
                     return;
                 }
-                
+
                 mostrarAlerta('Gerando cartão para impressão...', 'info');
-                
-                // Obter dados atualizados do usuário
-                const userDataStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
+
+                const userDataStorage = window.lerUserDataSeguro
+                    ? window.lerUserDataSeguro() || {}
+                    : JSON.parse(localStorage.getItem('user_data') || '{}');
                 const token = localStorage.getItem('auth_token');
-                
-                // Buscar dados completos do perfil para ter todas as informações
+
                 const response = await fetch('/api/perfil/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await response.json();
                 const perfil = data.perfil || userDataStorage;
-                
-                // Preparar o cartão
+
                 const cartao = document.getElementById('cartaoParaImpressao');
                 const cartaoQR = document.getElementById('cartaoQRCode');
                 const cartaoInfo = document.getElementById('cartaoInfo');
                 const dataEmissao = document.getElementById('cartaoDataEmissao');
-                
-                // Inserir QR Code no cartão
+
                 cartaoQR.innerHTML = `
-                    <img src="${qrCodeImageData}" 
-                         alt="QR Code" 
+                    <img src="${qrCodeImageData}"
+                         alt="QR Code"
                          style="width: 160px; height: 160px; border: 2px solid #e5e7eb; border-radius: 12px; padding: 8px; background: white;">
                 `;
-                
-                // Obter matrícula e outros dados específicos
+
                 let matricula = perfil.matricula || 'Não informada';
                 let curso = '';
                 let turma = '';
@@ -1160,13 +1180,13 @@
                 let eixo = '';
                 let departamento = '';
                 let titulacao = '';
-                
+
                 if (userRole === 'aluno') {
                     curso = perfil.curso || document.getElementById('curso')?.value || 'Não informado';
                     turma = perfil.turma || document.getElementById('turma')?.value || 'Não informada';
                     periodo = perfil.periodo || document.getElementById('periodo')?.value || 'Não informado';
                     const periodoTexto = periodo === '1' ? '1º Período' : periodo === '2' ? '2º Período' : periodo === '3' ? '3º Período' : periodo === '4' ? '4º Período' : periodo;
-                    
+
                     cartaoInfo.innerHTML = `
                         <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
                             <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
@@ -1199,7 +1219,7 @@
                     eixo = perfil.eixo || document.getElementById('eixo')?.value || 'Não informado';
                     departamento = perfil.departamento || document.getElementById('departamento')?.value || 'Não informado';
                     titulacao = perfil.titulacao || document.getElementById('titulacao')?.value || 'Não informada';
-                    
+
                     const eixoTexto = eixo === 'natureza' ? '🔬 Natureza e Matemática' :
                                     eixo === 'humanas' ? '🏛️ Humanas' :
                                     eixo === 'linguagens' ? '🎭 Linguagens' :
@@ -1208,7 +1228,7 @@
                                     eixo === 'producao' ? '🎬 Produção Cultural e Design' :
                                     eixo === 'turismo' ? '✈️ Turismo, Hospitalidade e Lazer' :
                                     eixo === 'ambiente' ? '🌱 Ambiente e Saúde' : eixo;
-                    
+
                     cartaoInfo.innerHTML = `
                         <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
                             <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
@@ -1247,57 +1267,51 @@
                         </div>
                     `;
                 }
-                
-                // Data de emissão
+
                 const hoje = new Date();
                 dataEmissao.textContent = hoje.toLocaleDateString('pt-BR') + ' às ' + hoje.toLocaleTimeString('pt-BR');
-                
-                // Mostrar cartão temporariamente para capturar
+
                 cartao.style.top = '0';
                 cartao.style.left = '0';
                 cartao.style.position = 'fixed';
                 cartao.style.zIndex = '9999';
-                
-                // Aguardar renderização
+
                 await new Promise(resolve => setTimeout(resolve, 100));
-                
-                // Converter para imagem usando html2canvas
+
                 const canvas = await html2canvas(cartao, {
                     scale: 2,
                     backgroundColor: '#ffffff',
                     logging: false,
                     useCORS: true
                 });
-                
-                // Esconder cartão novamente
+
                 cartao.style.top = '-9999px';
                 cartao.style.left = '-9999px';
-                
-                // Baixar a imagem
+
                 const link = document.createElement('a');
                 const nomeArquivo = `cartao-${userRole}-${perfil.nome?.replace(/\s/g, '_') || 'usuario'}-${Date.now()}.png`;
                 link.download = nomeArquivo;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
-                
+
                 mostrarAlerta('Cartão gerado com sucesso! Verifique seus downloads.', 'success');
-                
+
             } catch (error) {
                 console.error('Erro ao gerar cartão:', error);
                 mostrarAlerta('Erro ao gerar cartão. Tente novamente.', 'error');
             }
         }
-        
+
         // ============================================
         // INICIALIZAÇÃO
         // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             carregarPerfil();
-            
+            carregarCpfUsuario(); // 🔒 CPF vem de rota dedicada, não de /perfil/me
+
             const form = document.getElementById('formPerfil');
             form.addEventListener('submit', salvarPerfil);
-            
-            // Formatação de telefone
+
             const telefoneInput = document.getElementById('telefone');
             telefoneInput.addEventListener('input', (e) => {
                 let value = e.target.value.replace(/\D/g, '');
@@ -1308,8 +1322,7 @@
                 }
                 e.target.value = value;
             });
-            
-            // Formatação de CEP
+
             const cepInput = document.getElementById('cep');
             cepInput.addEventListener('input', (e) => {
                 let value = e.target.value.replace(/\D/g, '');
@@ -1318,8 +1331,7 @@
                 }
                 e.target.value = value;
             });
-            
-            // Enter para adicionar interesse
+
             const interesseInput = document.getElementById('novoInteresse');
             interesseInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
@@ -1327,8 +1339,7 @@
                     adicionarInteresse();
                 }
             });
-            
-            // Carregar QR Code após 1 segundo
+
             setTimeout(() => {
                 carregarQRCodeUsuario();
             }, 1000);
@@ -1344,14 +1355,14 @@
                 console.log('📐 Desktop detectado - escalonamento desativado');
                 return;
             }
-            
+
             console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-            
+
             function calcularEscalaMobile() {
                 const width = window.innerWidth;
                 const baseWidth = 768;
                 let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-                
+
                 if (width <= 320) escala = 0.55;
                 else if (width <= 360) escala = 0.6;
                 else if (width <= 400) escala = 0.65;
@@ -1359,10 +1370,10 @@
                 else if (width <= 600) escala = 0.85;
                 else if (width <= 700) escala = 0.95;
                 else escala = 1;
-                
+
                 return escala;
             }
-            
+
             function aplicarEscalaMobile() {
                 if (window.innerWidth > 768) return;
                 const escala = calcularEscalaMobile();
@@ -1370,9 +1381,9 @@
                 document.documentElement.style.setProperty('--current-width', window.innerWidth);
                 console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
             }
-            
+
             aplicarEscalaMobile();
-            
+
             let timeout;
             window.addEventListener('resize', function() {
                 clearTimeout(timeout);
@@ -1385,7 +1396,7 @@
                     }
                 }, 100);
             });
-            
+
             window.addEventListener('orientationchange', function() {
                 setTimeout(() => {
                     if (window.innerWidth <= 768) {
@@ -1393,7 +1404,7 @@
                     }
                 }, 200);
             });
-            
+
             console.log('✅ Sistema de escalonamento mobile ativo!');
         })();
     </script>
