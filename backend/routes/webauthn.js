@@ -51,12 +51,10 @@ function getChallenge(userId, type) {
 
 function deleteChallenge(userId) { challengeCache.delete(String(userId)); }
 
-// Converte string Base64URL para Buffer/ArrayBuffer
+// Converte string Base64URL para Buffer/ArrayBuffer (seguro para SimpleWebAuthn v9)
 function toBuffer(str) {
   if (typeof str !== 'string') return str;
-  const pad = str.length % 4;
-  const padded = str.replace(/-/g, '+').replace(/_/g, '/') + (pad ? '='.repeat(4 - pad) : '');
-  return Buffer.from(padded, 'base64');
+  return Buffer.from(str, 'base64url');
 }
 
 // Middleware de Auth (aceita token normal e token temporário 2FA)
@@ -174,9 +172,13 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
 
     const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
     
-    // Converte o ID retornado para string Base64URL (seguro para o banco)
+    // Converte o ID retornado para string Base64URL limpa nativamente
     const credencialIdStr = Buffer.from(credentialID).toString('base64url');
     const publicKeyBuffer = Buffer.from(credentialPublicKey);
+
+    if (!credencialIdStr || credencialIdStr.length < 10) {
+      return res.status(400).json({ success: false, error: 'ID da credencial inválido' });
+    }
 
     const jaExiste = await WebAuthnCredential.findOne({ credentialId: credencialIdStr });
     if (jaExiste) return res.status(409).json({ success: false, error: 'Credencial já registrada' });
@@ -287,7 +289,7 @@ router.post('/auth/webauthn/authenticate-verify', authenticateToken, async (req,
     await user.save();
 
     let Config = null; try { Config = mongoose.model('Config'); } catch (_) {}
-    const jwtExpiracao = '24h'; // Ou pegue da Config se quiser
+    const jwtExpiracao = '24h';
 
     const authToken = jwt.sign(
       { id: user._id, role: user.role, nome: user.nome, twoFactorEnabled: user.twoFactorEnabled, tokenVersion: user.tokenVersion || 0 },
