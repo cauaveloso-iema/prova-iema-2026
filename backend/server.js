@@ -122,6 +122,8 @@ const QRCode = require('qrcode');
 // MIDDLEWARES GLOBAIS
 // ============================================================================
 
+app.set('trust proxy', 1);
+
 // Body parsers (limites altos)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
