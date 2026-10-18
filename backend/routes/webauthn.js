@@ -51,7 +51,7 @@ function getChallenge(userId, type) {
 
 function deleteChallenge(userId) { challengeCache.delete(String(userId)); }
 
-// Converte string Base64URL para Buffer/ArrayBuffer (seguro para SimpleWebAuthn v9)
+// Converte string Base64URL para Buffer/ArrayBuffer (seguro para SimpleWebAuthn v9+)
 function toBuffer(str) {
   if (typeof str !== 'string') return str;
   return Buffer.from(str, 'base64url');
@@ -159,8 +159,8 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
 
     // A v10+ retorna o objeto credential agregado
     const { credential: newCredential } = verification.registrationInfo;
-    
-    // O ID já vem como string Base64URL na v10+
+
+    // Na v10+, credential.id já vem como string Base64URL; publicKey vem como Uint8Array
     const credencialIdStr = newCredential.id;
     const publicKeyBuffer = Buffer.from(newCredential.publicKey);
 
@@ -272,7 +272,6 @@ router.post('/auth/webauthn/authenticate-verify', authenticateToken, async (req,
     user.lastActive = new Date(); user.lastLogin = new Date(); user.ultimoLogout = null;
     await user.save();
 
-    let Config = null; try { Config = mongoose.model('Config'); } catch (_) {}
     const jwtExpiracao = '24h';
 
     const authToken = jwt.sign(

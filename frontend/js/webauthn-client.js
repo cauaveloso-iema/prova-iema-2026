@@ -27,7 +27,9 @@
 
   function bufferToBase64url(buffer) {
     if (!buffer) return '';
-    const bytes = ArrayBuffer.isView(buffer) ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) : new Uint8Array(buffer);
+    const bytes = ArrayBuffer.isView(buffer)
+      ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+      : new Uint8Array(buffer);
     let binary = '';
     for (let i = 0; i < bytes.length; i++) {
       binary += String.fromCharCode(bytes[i]);
@@ -96,10 +98,13 @@
     const credential = await navigator.credentials.create({ publicKey });
     if (!credential) throw new Error('Registro cancelado');
 
+    // ⚠️ CORREÇÃO: o id DEVE ser a versão Base64URL do rawId
+    const credentialIdB64 = bufferToBase64url(credential.rawId);
+
     const payload = {
       credential: {
-        id: credential.id,
-        rawId: bufferToBase64url(credential.rawId),
+        id: credentialIdB64,          // <-- id em Base64URL
+        rawId: credentialIdB64,       // <-- rawId idem (mesmo valor)
         type: credential.type,
         response: {
           clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
@@ -152,16 +157,21 @@
     const assertion = await navigator.credentials.get({ publicKey });
     if (!assertion) throw new Error('Autenticação cancelada');
 
+    // ⚠️ CORREÇÃO: mesma coisa aqui — id = rawId em Base64URL
+    const assertionIdB64 = bufferToBase64url(assertion.rawId);
+
     const payload = {
       credential: {
-        id: assertion.id,
-        rawId: bufferToBase64url(assertion.rawId),
+        id: assertionIdB64,
+        rawId: assertionIdB64,
         type: assertion.type,
         response: {
           clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
           authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
           signature: bufferToBase64url(assertion.response.signature),
-          userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+          userHandle: assertion.response.userHandle
+            ? bufferToBase64url(assertion.response.userHandle)
+            : null
         },
         clientExtensionResults: assertion.getClientExtensionResults ? assertion.getClientExtensionResults() : {},
         authenticatorAttachment: assertion.authenticatorAttachment || 'platform'
