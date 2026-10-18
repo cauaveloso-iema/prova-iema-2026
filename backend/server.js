@@ -60,7 +60,7 @@ const PORT = process.env.PORT || 10000;
 const server = http.createServer(app);
 
 // ============================================================================
-// LOGGER SERVICE (primeiro serviço a iniciar)
+// LOGGER SERVICE (Inicia o WebSocket embutido)
 // ============================================================================
 const loggerService = new LoggerService(server);
 
@@ -1002,6 +1002,7 @@ try {
 // ============================================================================
 logger.info('📌 Registrando routers autenticados...');
 
+// ── Rotas de Monitoramento ──
 app.use('/api/admin/monitoramento', require('./routes/monitoramento'));
 
 try {
@@ -1011,48 +1012,64 @@ try {
   logger.error('❌ Erro ao registrar adaptar-documento:', error.message);
 }
 
+// ── Rotas de Push, Admin Config e Calendário ──
 app.use('/api/push', require('./routes/push-routes'));
 app.use('/api/admin', require('./routes/admin-config'));
 app.use('/api/calendario', require('./routes/calendario-routes'));
+
+// ── Rotas de Coordenação e Cozinha ──
 app.use('/api/coordenacao-patio', require('./routes/coordenacaoPatio'));
 app.use('/api/cozinha', require('./routes/cozinha'));
 app.use('/api/monitoramento-cozinha', require('./routes/monitoramento-cozinha'));
 app.use('/api/feedback-cozinha', require('./routes/feedback-cozinha'));
+
+// ── Rotas de Gestão Geral, Enfermaria, Rodízio ──
 app.use('/api/gestao-geral', require('./routes/gestaoGeral'));
 app.use('/api/enfermaria', require('./routes/enfermaria'));
 app.use('/api/rodizio', require('./routes/rodizioRefeicao'));
+
+// ── Rotas de Supervisão, Psicologia, Assistência Social, Protagonismo ──
 app.use('/api/supervisao', require('./routes/supervisao'));
 app.use('/api/psicologia', require('./routes/psicologia'));
 app.use('/api/assistente-social', require('./routes/assistente-social'));
 app.use('/api/protagonismo', require('./routes/protagonismo'));
 app.use('/api/protagonismo-publico', require('./routes/protagonismo-publico'));
+
+// ── Rotas de Visitas e Autorizações ──
 app.use('/api/setor-pedagogico/visitas', require('./routes/visitas'));
 app.use('/api/visitas-publico', require('./routes/visitas-publico'));
 app.use('/api/gestao-geral/autorizacao', require('./routes/autorizacao-routes'));
 app.use('/api/admin/permissoes-modulos', require('./routes/permissao-modulos-routes'));
+
+// ── Rotas de Acompanhamento e Substituição ──
 app.use('/api/acompanhamento', require('./routes/acompanhamento'));
 app.use('/api/acompanhamento-compartilhado', require('./routes/acompanhamento-compartilhado'));
 app.use('/api/substituicao-professor', require('./routes/substituicao-professor-routes'));
 app.use('/api/gestao-professores', require('./routes/gestao-professores-routes'));
 
+// ── Rotas AEE e Atraso de Professor ──
 const aeeRoutes = require('./routes/aee-routes');
 app.use('/api/aee', aeeRoutes);
-
 const atrasoProfessorRoutes = require('./routes/atraso-professor-routes');
 app.use('/api/atraso-professor', atrasoProfessorRoutes);
 
+// ── Rotas LGPD e Administração do Banco de Dados ──
 app.use('/api/lgpd', require('./routes/lgpd'));
 app.use('/api/admin/banco-dados', require('./routes/admin-banco-dados'));
+
+// ── Rotas de Aluno, Professor, Biblioteca e Secretaria ──
 app.use('/api/aluno', require('./routes/aluno'));
 app.use('/api/professor', require('./routes/professor'));
 app.use('/api/biblioteca', require('./routes/biblioteca'));
 app.use('/api/biblioteca-publica', require('./routes/biblioteca-publica'));
 app.use('/api/secretaria', require('./routes/secretaria'));
 
+// ── Rotas de Recepção e Sessões de Assinatura ──
 const recepcaoRoutes = require('./routes/recepcao-routes');
 app.use('/api/recepcao', recepcaoRoutes);
-
 app.use('/api/sessoes-assinatura', require('./routes/sessao-assinatura-routes'));
+
+// ── Rotas de Provas, Notificações e OneSignal ──
 app.use('/api/provas', require('./routes/provas'));
 app.use('/api/notificacoes', require('./routes/notificacoes'));
 
@@ -1060,20 +1077,20 @@ const oneSignalRoutes = require('./routes/onesignal');
 app.use('/api/onesignal', oneSignalRoutes);
 app.use('/api/usuario', oneSignalRoutes);
 
+// ── Rotas de Chatbot e Setor Pedagógico ──
 app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/setor-pedagogico', require('./routes/setor-pedagogico'));
-// Cadastro (LGPD + aluno/professor + social) — DEVE vir ANTES do face-id
+
+// ── Rotas de Cadastro, Auth, Face ID e WebAuthn ──
 app.use('/api/auth', require('./routes/auth'));
-
-// Face ID (cadastrar-face, verificar-face, validar-camera, etc.)
 app.use('/api/auth', require('./routes/face-id'));
-
-// WebAuthn (biometria FIDO2) — registro e login biométrico
 app.use('/api', require('./routes/webauthn'));
 
+// ── Rotas OMR (Correção de Cartão Resposta) ──
 const omrRoutes = require('./routes/omr');
 app.use('/api', omrRoutes);
 
+// ── Rotas Administrativas Finais ──
 app.use('/api/admin', require('./routes/admin'));
 
 logger.info('✅ Todos os routers migrados foram registrados');
@@ -2718,24 +2735,26 @@ app.get('*', (req, res) => {
 });
 
 // ============================================================================
-// INICIAR SERVIDOR
+// INICIAR SERVIDOR (Apenas após conectar ao banco)
 // ============================================================================
-server.listen(PORT, '0.0.0.0', () => {
-  logger.info('='.repeat(50));
-  logger.info(`🚀 EDUCAPLENO ONLINE - PRODUÇÃO`);
-  logger.info(`📡 Servidor rodando na porta: ${PORT}`);
-  logger.info(`🌐 URL: https://prova-iema-2026.onrender.com`);
-  logger.info(`💻 Local: http://localhost:3000/login.html`);
-  logger.info(`🗄️  Banco: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
-  logger.info(`🔐 Autenticação: ${process.env.JWT_SECRET ? '✅ Configurada' : '⚠️  Configurar JWT_SECRET'}`);
-  logger.info('🔐 ===== CONFORMIDADE LGPD =====');
-  logger.info(`   • Criptografia: ${process.env.ENCRYPTION_KEY ? '✅' : '❌'} (AES-256-GCM)`);
-  logger.info(`   • Retenção: ${process.env.RETENCAO_VISITAS_ANOS || 2} anos`);
-  logger.info(`   • DPO: ${process.env.DPO_EMAIL || 'não configurado'}`);
-  logger.info(`   • Cron jobs: ✅`);
-  logger.info('=================================');
-  logger.info(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
-  logger.info('='.repeat(50));
+databaseConnectionPromise.then(() => {
+  server.listen(PORT, '0.0.0.0', () => {
+    logger.info('='.repeat(50));
+    logger.info(`🚀 EDUCAPLENO ONLINE - PRODUÇÃO`);
+    logger.info(`📡 Servidor rodando na porta: ${PORT}`);
+    logger.info(`🌐 URL: https://prova-iema-2026.onrender.com`);
+    logger.info(`💻 Local: http://localhost:3000/login.html`);
+    logger.info(`🗄️  Banco: ${mongoose.connection.readyState === 1 ? '✅ Conectado' : '❌ Desconectado'}`);
+    logger.info(`🔐 Autenticação: ${process.env.JWT_SECRET ? '✅ Configurada' : '⚠️  Configurar JWT_SECRET'}`);
+    logger.info('🔐 ===== CONFORMIDADE LGPD =====');
+    logger.info(`   • Criptografia: ${process.env.ENCRYPTION_KEY ? '✅' : '❌'} (AES-256-GCM)`);
+    logger.info(`   • Retenção: ${process.env.RETENCAO_VISITAS_ANOS || 2} anos`);
+    logger.info(`   • DPO: ${process.env.DPO_EMAIL || 'não configurado'}`);
+    logger.info(`   • Cron jobs: ✅`);
+    logger.info('=================================');
+    logger.info(`👥 Modelos carregados: User, Prova, Resultado, ProvaRealizada, Turma`);
+    logger.info('='.repeat(50));
+  });
 });
 
 // ============================================================================

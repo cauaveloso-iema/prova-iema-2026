@@ -1,30 +1,22 @@
 // ============================================================================
 // routes/webauthn.js — Biometria WebAuthn (FIDO2)
 // ============================================================================
-// Descrição: Registro e autenticação por biometria (Touch ID, Face ID,
-//            Windows Hello, Android fingerprint, PIN do dispositivo).
-// ============================================================================
 
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 let logger;
-try {
-  logger = require('../utils/logger');
-} catch (err) {
-  logger = console;
-}
+try { logger = require('../utils/logger'); } catch { logger = console; }
 
-// ============================================================================
-// CARREGAR @simplewebauthn/server
-// ============================================================================
+// Carrega SimpleWebAuthn
 let swaServer;
 try {
   swaServer = require('@simplewebauthn/server');
 } catch (err) {
-  logger.error('❌ @simplewebauthn/server não instalado. Execute: npm install @simplewebauthn/server');
+  logger.error('❌ @simplewebauthn/server não instalado.');
   throw err;
 }
 
@@ -35,211 +27,83 @@ const {
   verifyAuthenticationResponse
 } = swaServer;
 
-// ============================================================================
-// MODELOS
-// ============================================================================
 const User = require('../models/User');
 const WebAuthnCredential = require('../models/WebAuthnCredential');
 
-// ============================================================================
-// CONSTANTES
-// ============================================================================
 const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'EducaPleno';
-const RP_ID = process.env.WEBAUTHN_RP_ID || (
-  process.env.NODE_ENV === 'production'
-    ? 'educapleno.com'
-    : 'localhost'
-);
-const ORIGIN = process.env.WEBAUTHN_ORIGIN || (
-  process.env.NODE_ENV === 'production'
-    ? 'https://educapleno.com'
-    : 'http://localhost:3000'
-);
+const RP_ID = process.env.WEBAUTHN_RP_ID || (process.env.NODE_ENV === 'production' ? 'educapleno.com' : 'localhost');
+const ORIGIN = process.env.WEBAUTHN_ORIGIN || (process.env.NODE_ENV === 'production' ? 'https://educapleno.com' : 'http://localhost:3000');
+const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
-const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutos
-
-// ============================================================================
-// CACHE DE CHALLENGES
-// ============================================================================
 const challengeCache = new Map();
 
 function setChallenge(userId, challenge, type) {
-  challengeCache.set(String(userId), {
-    challenge,
-    type,
-    expiresAt: Date.now() + CHALLENGE_TTL_MS
-  });
-
-  if (challengeCache.size > 500) {
-    const now = Date.now();
-    for (const [k, v] of challengeCache.entries()) {
-      if (v.expiresAt < now) challengeCache.delete(k);
-    }
-  }
+  challengeCache.set(String(userId), { challenge, type, expiresAt: Date.now() + CHALLENGE_TTL_MS });
 }
 
 function getChallenge(userId, type) {
   const entry = challengeCache.get(String(userId));
   if (!entry) return null;
-  if (entry.expiresAt < Date.now()) {
-    challengeCache.delete(String(userId));
-    return null;
-  }
+  if (entry.expiresAt < Date.now()) { challengeCache.delete(String(userId)); return null; }
   if (entry.type !== type) return null;
   return entry.challenge;
 }
 
-function deleteChallenge(userId) {
-  challengeCache.delete(String(userId));
+function deleteChallenge(userId) { challengeCache.delete(String(userId)); }
+
+// Converte string Base64URL para Buffer/ArrayBuffer
+function toBuffer(str) {
+  if (typeof str !== 'string') return str;
+  const pad = str.length % 4;
+  const padded = str.replace(/-/g, '+').replace(/_/g, '/') + (pad ? '='.repeat(4 - pad) : '');
+  return Buffer.from(padded, 'base64');
 }
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-function base64urlToUint8Array(base64url) {
-  if (!base64url) return new Uint8Array(0);
-  if (base64url instanceof Uint8Array) return base64url;
-  
-  const pad = base64url.length % 4;
-  const padded = base64url.replace(/-/g, '+').replace(/_/g, '/') + (pad ? '='.repeat(4 - pad) : '');
-  return new Uint8Array(Buffer.from(padded, 'base64'));
-}
-
-function uint8ArrayToBase64url(u8) {
-  if (typeof u8 === 'string') return u8; // fallback
-  return Buffer.from(u8).toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
-function obterDestinoPorPerfil(role) {
-  const redirectMap = {
-    'super_admin': '/admin.html',
-    'admin': '/admin-simples.html',
-    'professor': '/index.html',
-    'setor_pedagogico': '/setor-pedagogico.html',
-    'coordenacao_patio': '/coordenacao-patio.html',
-    'cozinha': '/cozinha-dashboard.html',
-    'gestao_geral': '/gestao-geral.html',
-    'enfermaria': '/enfermaria.html',
-    'supervisao': '/supervisao.html',
-    'biblioteca': '/biblioteca.html',
-    'psicologia': '/psicologia.html',
-    'assistente-social': '/assistente-social.html',
-    'protagonismo': '/protagonismo.html',
-    'secretaria': '/secretaria.html',
-    'recepcao': '/recepcao.html',
-    'aluno': '/aluno.html'
-  };
-  return redirectMap[role] || '/login.html';
-}
-
-async function obterJwtExpiracao(Config) {
-  const padrao = process.env.JWT_EXPIRES_IN || '24h';
-  if (!Config) return padrao;
-  try {
-    const cfg = await Config.findOne({ chave: 'seguranca.jwtExpiracao' });
-    if (cfg && cfg.valor) {
-      const v = cfg.valor;
-      if (typeof v === 'number' && v > 0 && v <= 8760) return `${v}h`;
-      if (typeof v === 'string' && /^\d+(\.\d+)?(ms|s|m|h|d|w|y)$/i.test(v.trim())) return v.trim();
-    }
-  } catch (err) {
-    logger.warn('⚠️ Erro ao buscar JWT expiração:', err.message);
-  }
-  return padrao;
-}
-
-function parseJwtExpiration(expiration) {
-  if (typeof expiration === 'number') return expiration;
-  const match = String(expiration).match(/^(\d+)([hH])$/);
-  if (match) return parseInt(match[1]) * 60 * 60;
-  return 24 * 60 * 60;
-}
-
-// ============================================================================
-// MIDDLEWARE DE AUTH
-// ============================================================================
+// Middleware de Auth (aceita token normal e token temporário 2FA)
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ success: false, error: 'Token não fornecido' });
-  }
+  if (!token) return res.status(401).json({ success: false, error: 'Token não fornecido' });
 
   jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ success: false, error: 'Token inválido ou expirado' });
-    }
+    if (err) return res.status(403).json({ success: false, error: 'Token inválido' });
 
     if (decoded.temp === true && decoded.purpose === '2fa') {
-      req.userId = decoded.id;
-      req.userRole = decoded.role;
-      req.userNome = decoded.nome;
-      req.tokenTemp = true;
-      return next();
+      req.userId = decoded.id; req.userRole = decoded.role; req.userNome = decoded.nome;
+      req.tokenTemp = true; return next();
     }
 
     try {
       const user = await User.findById(decoded.id).select('tokenVersion');
-      if (!user) {
-        return res.status(401).json({ success: false, error: 'Usuário não encontrado' });
-      }
+      if (!user) return res.status(401).json({ success: false, error: 'Usuário não encontrado' });
       if ((user.tokenVersion || 0) !== (decoded.tokenVersion || 0)) {
-        return res.status(401).json({
-          success: false,
-          error: 'Sessão encerrada. Faça login novamente.',
-          motivo: 'reset_global',
-          precisaLogin: true
-        });
+        return res.status(401).json({ success: false, error: 'Sessão encerrada' });
       }
-    } catch (dbErr) {
-      logger.error('❌ Erro ao verificar tokenVersion:', dbErr);
-    }
+    } catch (dbErr) {}
 
-    req.userId = decoded.id;
-    req.userRole = decoded.role;
-    req.userNome = decoded.nome;
-    req.tokenTemp = false;
-    next();
+    req.userId = decoded.id; req.userRole = decoded.role; req.userNome = decoded.nome;
+    req.tokenTemp = false; next();
   });
 };
 
 // ============================================================================
-// HEALTH CHECK
+// ROTAS
 // ============================================================================
+
 router.get('/auth/webauthn/health', (req, res) => {
-  res.json({
-    success: true,
-    service: 'WebAuthn',
-    rpID: RP_ID,
-    origin: ORIGIN,
-    challengesEmCache: challengeCache.size
-  });
+  res.json({ success: true, rpID: RP_ID, origin: ORIGIN });
 });
 
-// ============================================================================
-// POST /api/auth/webauthn/register-options
-// ============================================================================
+// 1. Gerar opções de registro
 router.post('/auth/webauthn/register-options', authenticateToken, async (req, res) => {
   try {
-    if (req.tokenTemp === true) {
-      return res.status(403).json({
-        success: false,
-        error: 'Complete o 2FA antes de registrar biometria.',
-        codigo: 'NEED_FULL_LOGIN'
-      });
-    }
+    if (req.tokenTemp) return res.status(403).json({ success: false, error: 'Faça login completo primeiro' });
 
     const user = await User.findById(req.userId).select('nome email');
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
-    }
+    if (!user) return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
 
-    const existentes = await WebAuthnCredential.find({ userId: user._id })
-      .select('credentialId transports');
+    const existentes = await WebAuthnCredential.find({ userId: user._id }).select('credentialId transports');
 
     const options = await generateRegistrationOptions({
       rpName: RP_NAME,
@@ -249,7 +113,7 @@ router.post('/auth/webauthn/register-options', authenticateToken, async (req, re
       userDisplayName: user.nome || user.email,
       attestationType: 'none',
       excludeCredentials: existentes.map(c => ({
-        id: base64urlToUint8Array(c.credentialId),
+        id: toBuffer(c.credentialId),
         type: 'public-key',
         transports: c.transports || []
       })),
@@ -262,48 +126,32 @@ router.post('/auth/webauthn/register-options', authenticateToken, async (req, re
     });
 
     setChallenge(req.userId, options.challenge, 'register');
-    logger.info(`🔐 WebAuthn register-options gerado para ${user.email}`);
-
     res.json({ success: true, options });
   } catch (error) {
     logger.error('❌ Erro em register-options:', error);
-    res.status(500).json({ success: false, error: 'Erro ao gerar opções: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================================================
-// POST /api/auth/webauthn/register-verify
-// ============================================================================
+// 2. Verificar e salvar registro
 router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res) => {
   try {
-    if (req.tokenTemp === true) {
-      return res.status(403).json({
-        success: false,
-        error: 'Complete o 2FA antes de registrar biometria.'
-      });
-    }
+    if (req.tokenTemp) return res.status(403).json({ success: false, error: 'Faça login completo primeiro' });
 
     const { credential, deviceLabel } = req.body;
-
-    if (!credential || !credential.id || !credential.response) {
-      return res.status(400).json({ success: false, error: 'Credencial inválida' });
-    }
+    if (!credential || !credential.id) return res.status(400).json({ success: false, error: 'Credencial inválida' });
 
     const expectedChallenge = getChallenge(req.userId, 'register');
-    if (!expectedChallenge) {
-      return res.status(400).json({
-        success: false,
-        error: 'Challenge expirado ou inválido. Tente novamente.'
-      });
-    }
+    if (!expectedChallenge) return res.status(400).json({ success: false, error: 'Challenge expirado' });
 
+    // Prepara o objeto EXATAMENTE como o SimpleWebAuthn espera
     const response = {
       id: credential.id,
-      rawId: base64urlToUint8Array(credential.rawId || credential.id),
+      rawId: toBuffer(credential.rawId || credential.id),
       type: credential.type,
       response: {
-        clientDataJSON: base64urlToUint8Array(credential.response.clientDataJSON),
-        attestationObject: base64urlToUint8Array(credential.response.attestationObject),
+        clientDataJSON: toBuffer(credential.response.clientDataJSON),
+        attestationObject: toBuffer(credential.response.attestationObject),
         transports: credential.response.transports || []
       },
       clientExtensionResults: credential.clientExtensionResults || {},
@@ -321,28 +169,17 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
     deleteChallenge(req.userId);
 
     if (!verification.verified || !verification.registrationInfo) {
-      logger.warn(`⚠️ Registro WebAuthn não verificado para userId ${req.userId}`);
-      return res.status(400).json({
-        success: false,
-        error: 'Verificação de registro falhou'
-      });
+      return res.status(400).json({ success: false, error: 'Verificação falhou' });
     }
 
-    // 🔥 CORREÇÃO: Tratando credentialID e credentialPublicKey (SimpleWebAuthn v9+)
     const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
     
-    const credencialIdStr = uint8ArrayToBase64url(credentialID);
-    const publicKeyBuffer = credentialPublicKey instanceof Uint8Array 
-      ? Buffer.from(credentialPublicKey) 
-      : Buffer.from(credentialPublicKey, 'base64url');
+    // Converte o ID retornado para string Base64URL (seguro para o banco)
+    const credencialIdStr = Buffer.from(credentialID).toString('base64url');
+    const publicKeyBuffer = Buffer.from(credentialPublicKey);
 
     const jaExiste = await WebAuthnCredential.findOne({ credentialId: credencialIdStr });
-    if (jaExiste) {
-      return res.status(409).json({
-        success: false,
-        error: 'Esta credencial já está registrada'
-      });
-    }
+    if (jaExiste) return res.status(409).json({ success: false, error: 'Credencial já registrada' });
 
     const nova = await WebAuthnCredential.create({
       userId: req.userId,
@@ -355,48 +192,34 @@ router.post('/auth/webauthn/register-verify', authenticateToken, async (req, res
       ipAddress: req.ip || null
     });
 
-    logger.info(`✅ Credencial WebAuthn registrada para userId ${req.userId}`);
+    logger.info(`✅ Credencial WebAuthn registrada: ${credencialIdStr.substring(0, 10)}...`);
 
     res.json({
       success: true,
       message: '✅ Biometria ativada com sucesso!',
-      credential: {
-        id: nova.credentialId,
-        deviceLabel: nova.deviceLabel,
-        createdAt: nova.createdAt
-      }
+      credential: { id: nova.credentialId, deviceLabel: nova.deviceLabel, createdAt: nova.createdAt }
     });
   } catch (error) {
     logger.error('❌ Erro em register-verify:', error);
-    res.status(500).json({ success: false, error: 'Erro ao verificar registro: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================================================
-// POST /api/auth/webauthn/authenticate-options
-// ============================================================================
+// 3. Gerar opções de autenticação
 router.post('/auth/webauthn/authenticate-options', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('email');
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
-    }
+    if (!user) return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
 
-    const credenciais = await WebAuthnCredential.find({ userId: user._id })
-      .select('credentialId transports');
-
+    const credenciais = await WebAuthnCredential.find({ userId: user._id }).select('credentialId transports');
     if (credenciais.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Nenhuma biometria registrada neste dispositivo/conta',
-        codigo: 'NO_CREDENTIALS'
-      });
+      return res.status(404).json({ success: false, error: 'Nenhuma biometria registrada', codigo: 'NO_CREDENTIALS' });
     }
 
     const options = await generateAuthenticationOptions({
       rpID: RP_ID,
       allowCredentials: credenciais.map(c => ({
-        id: base64urlToUint8Array(c.credentialId),
+        id: toBuffer(c.credentialId),
         type: 'public-key',
         transports: c.transports || []
       })),
@@ -404,57 +227,34 @@ router.post('/auth/webauthn/authenticate-options', authenticateToken, async (req
     });
 
     setChallenge(req.userId, options.challenge, 'authenticate');
-    logger.info(`🔐 WebAuthn authenticate-options para ${user.email}`);
-
     res.json({ success: true, options });
   } catch (error) {
     logger.error('❌ Erro em authenticate-options:', error);
-    res.status(500).json({ success: false, error: 'Erro ao gerar opções: ' + error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// ============================================================================
-// POST /api/auth/webauthn/authenticate-verify
-// ============================================================================
+// 4. Verificar autenticação
 router.post('/auth/webauthn/authenticate-verify', authenticateToken, async (req, res) => {
   try {
     const { credential } = req.body;
-
-    if (!credential || !credential.id || !credential.response) {
-      return res.status(400).json({ success: false, error: 'Credencial inválida' });
-    }
+    if (!credential || !credential.id) return res.status(400).json({ success: false, error: 'Credencial inválida' });
 
     const expectedChallenge = getChallenge(req.userId, 'authenticate');
-    if (!expectedChallenge) {
-      return res.status(400).json({
-        success: false,
-        error: 'Challenge expirado. Tente novamente.'
-      });
-    }
+    if (!expectedChallenge) return res.status(400).json({ success: false, error: 'Challenge expirado' });
 
-    const credencialDb = await WebAuthnCredential.findOne({
-      credentialId: credential.id,
-      userId: req.userId
-    });
-
-    if (!credencialDb) {
-      return res.status(404).json({
-        success: false,
-        error: 'Credencial não encontrada para este usuário'
-      });
-    }
+    const credencialDb = await WebAuthnCredential.findOne({ credentialId: credential.id, userId: req.userId });
+    if (!credencialDb) return res.status(404).json({ success: false, error: 'Credencial não encontrada' });
 
     const response = {
       id: credential.id,
-      rawId: base64urlToUint8Array(credential.rawId || credential.id),
+      rawId: toBuffer(credential.rawId || credential.id),
       type: credential.type,
       response: {
-        clientDataJSON: base64urlToUint8Array(credential.response.clientDataJSON),
-        authenticatorData: base64urlToUint8Array(credential.response.authenticatorData),
-        signature: base64urlToUint8Array(credential.response.signature),
-        userHandle: credential.response.userHandle
-          ? base64urlToUint8Array(credential.response.userHandle)
-          : null
+        clientDataJSON: toBuffer(credential.response.clientDataJSON),
+        authenticatorData: toBuffer(credential.response.authenticatorData),
+        signature: toBuffer(credential.response.signature),
+        userHandle: credential.response.userHandle ? toBuffer(credential.response.userHandle) : null
       },
       clientExtensionResults: credential.clientExtensionResults || {},
       authenticatorAttachment: credential.authenticatorAttachment || 'platform'
@@ -466,7 +266,7 @@ router.post('/auth/webauthn/authenticate-verify', authenticateToken, async (req,
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
       authenticator: {
-        credentialID: base64urlToUint8Array(credencialDb.credentialId),
+        credentialID: toBuffer(credencialDb.credentialId),
         credentialPublicKey: new Uint8Array(credencialDb.publicKey),
         counter: credencialDb.counter || 0
       },
@@ -474,136 +274,43 @@ router.post('/auth/webauthn/authenticate-verify', authenticateToken, async (req,
     });
 
     deleteChallenge(req.userId);
-
-    if (!verification.verified) {
-      logger.warn(`⚠️ Verificação biométrica falhou para userId ${req.userId}`);
-      return res.status(401).json({
-        success: false,
-        error: 'Verificação biométrica falhou'
-      });
-    }
+    if (!verification.verified) return res.status(401).json({ success: false, error: 'Verificação biométrica falhou' });
 
     credencialDb.counter = verification.authenticationInfo.newCounter;
     credencialDb.lastUsedAt = new Date();
     await credencialDb.save();
 
-    const user = await User.findById(req.userId)
-      .select('+twoFactorEnabled +forcePasswordChange +nome +email +role +telefone +tokenVersion');
+    const user = await User.findById(req.userId).select('+twoFactorEnabled +forcePasswordChange +nome +email +role +telefone +tokenVersion');
+    if (!user) return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
 
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
-    }
-
-    user.lastActive = new Date();
-    user.lastLogin = new Date();
-    user.ultimoLogout = null;
+    user.lastActive = new Date(); user.lastLogin = new Date(); user.ultimoLogout = null;
     await user.save();
 
-    let Config = null;
-    try { Config = mongoose.model('Config'); } catch (_) {}
-
-    const jwtExpiracao = await obterJwtExpiracao(Config);
+    let Config = null; try { Config = mongoose.model('Config'); } catch (_) {}
+    const jwtExpiracao = '24h'; // Ou pegue da Config se quiser
 
     const authToken = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-        nome: user.nome,
-        twoFactorEnabled: user.twoFactorEnabled,
-        tokenVersion: user.tokenVersion || 0
-      },
+      { id: user._id, role: user.role, nome: user.nome, twoFactorEnabled: user.twoFactorEnabled, tokenVersion: user.tokenVersion || 0 },
       process.env.JWT_SECRET,
       { expiresIn: jwtExpiracao }
     );
 
-    const redirectTo = user.forcePasswordChange
-      ? '/trocar-senha.html'
-      : obterDestinoPorPerfil(user.role);
+    const redirectMap = {
+      'super_admin': '/admin.html', 'admin': '/admin-simples.html', 'professor': '/index.html',
+      'aluno': '/aluno.html', 'setor_pedagogico': '/setor-pedagogico.html'
+    };
+    const redirectTo = user.forcePasswordChange ? '/trocar-senha.html' : (redirectMap[user.role] || '/login.html');
 
-    res.cookie('auth_token', authToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: parseJwtExpiration(jwtExpiracao) * 1000
-    });
-
-    logger.info(`✅ Login biométrico OK para ${user.email}`);
+    res.cookie('auth_token', authToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
 
     res.json({
       success: true,
       token: authToken,
-      user: {
-        id: user._id,
-        nome: user.nome,
-        email: user.email,
-        role: user.role,
-        twoFactorEnabled: user.twoFactorEnabled,
-        telefone: user.telefone
-      },
+      user: { id: user._id, nome: user.nome, email: user.email, role: user.role },
       redirectTo
     });
   } catch (error) {
     logger.error('❌ Erro em authenticate-verify:', error);
-    res.status(500).json({ success: false, error: 'Erro ao verificar biometria: ' + error.message });
-  }
-});
-
-// ============================================================================
-// GET /api/auth/webauthn/credentials
-// ============================================================================
-router.get('/auth/webauthn/credentials', authenticateToken, async (req, res) => {
-  try {
-    if (req.tokenTemp === true) {
-      return res.status(403).json({ success: false, error: 'Complete o 2FA primeiro' });
-    }
-
-    const credenciais = await WebAuthnCredential.find({ userId: req.userId })
-      .select('credentialId deviceLabel transports createdAt lastUsedAt userAgent')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json({
-      success: true,
-      total: credenciais.length,
-      credentials: credenciais.map(c => ({
-        id: c.credentialId,
-        deviceLabel: c.deviceLabel,
-        transports: c.transports,
-        createdAt: c.createdAt,
-        lastUsedAt: c.lastUsedAt,
-        userAgent: c.userAgent
-      }))
-    });
-  } catch (error) {
-    logger.error('❌ Erro ao listar credenciais:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================================================
-// DELETE /api/auth/webauthn/credentials/:id
-// ============================================================================
-router.delete('/auth/webauthn/credentials/:id', authenticateToken, async (req, res) => {
-  try {
-    if (req.tokenTemp === true) {
-      return res.status(403).json({ success: false, error: 'Complete o 2FA primeiro' });
-    }
-
-    const { id } = req.params;
-    const resultado = await WebAuthnCredential.deleteOne({
-      credentialId: id,
-      userId: req.userId
-    });
-
-    if (resultado.deletedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Credencial não encontrada' });
-    }
-
-    logger.info(`🗑️ Credencial WebAuthn removida: ${id} (userId ${req.userId})`);
-
-    res.json({ success: true, message: 'Credencial removida' });
-  } catch (error) {
-    logger.error('❌ Erro ao remover credencial:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
