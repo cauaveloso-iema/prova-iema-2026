@@ -46,6 +46,55 @@
         .filtros-ativos-container { min-height: 28px; margin-top: 4px; }
         .filtro-loading { font-size: 12px; color: #64748b; margin-top: 6px; display: block; padding: 6px 10px; background: #f1f5f9; border-radius: 6px; }
         .filtro-erro { font-size: 12px; color: #dc2626; }
+
+        /* 🆕 MELHORIA: card de última atualização */
+        .update-info {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #64748b;
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 999px;
+            margin-left: 8px;
+        }
+        .update-info .pulse {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #10b981;
+            animation: pulseUpdate 2s infinite;
+        }
+        @keyframes pulseUpdate {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+        .update-info.stale .pulse { background: #f59e0b; }
+
+        /* 🆕 MELHORIA: loading state nos cards */
+        .stat-card.loading, .card.loading {
+            opacity: 0.55;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        .stat-card.loading .stat-number,
+        .stat-card.loading .stat-label {
+            color: transparent;
+        }
+        .stat-card.loading .stat-number::after {
+            content: '...';
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            color: #94a3b8;
+            font-weight: 700;
+            animation: pulseLoading 1.2s infinite;
+        }
+        @keyframes pulseLoading {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -130,16 +179,20 @@
                     <span id="dataAtual"></span>
                     <span class="datetime-sep"><i class="fas fa-clock me-1"></i><span id="horaAtual"></span></span>
                     <span class="datetime-sep" id="refeicaoAtualBadge"></span>
+                    <span class="update-info" id="updateInfo" title="Última atualização">
+                        <span class="pulse"></span>
+                        <span id="updateInfoTxt">Carregando...</span>
+                    </span>
                 </div>
-                <button class="btn-refresh" onclick="carregarDashboard()">
+                <button class="btn-refresh" id="btnAtualizarDashboard" onclick="carregarDashboard(true)">
                     <i class="fas fa-sync-alt"></i> Atualizar
                 </button>
             </div>
         </div>
 
-        <div class="row g-3 g-md-4 mb-4">
+        <div class="row g-3 g-md-4 mb-4" id="cardsPrincipais">
             <div class="col-6 col-md-3">
-                <div class="stat-card">
+                <div class="stat-card" data-statcard>
                     <i class="fas fa-users fa-2x text-primary mb-2"></i>
                     <div class="stat-number" id="totalPessoas">-</div>
                     <div class="stat-label">Total de Pessoas</div>
@@ -147,7 +200,7 @@
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="stat-card">
+                <div class="stat-card" data-statcard>
                     <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                     <div class="stat-number" id="pessoasQueComeram">-</div>
                     <div class="stat-label">Comeram no período</div>
@@ -155,7 +208,7 @@
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="stat-card">
+                <div class="stat-card" data-statcard>
                     <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
                     <div class="stat-number" id="taxaAdesao">-</div>
                     <div class="stat-label">Taxa de Adesão</div>
@@ -163,7 +216,7 @@
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="stat-card">
+                <div class="stat-card" data-statcard>
                     <i class="fas fa-utensils fa-2x text-danger mb-2"></i>
                     <div class="stat-number" id="refeicaoHoje">-</div>
                     <div class="stat-label">Refeições no período</div>
@@ -276,6 +329,10 @@
             </div>
             <div class="card-body">
                 <canvas id="turmasChart" class="canvas-turmas"></canvas>
+                <div id="turmasChartVazio" class="text-center text-muted py-4" style="display: none;">
+                    <i class="fas fa-chart-bar fa-2x mb-2" style="opacity: 0.3;"></i>
+                    <p class="mb-0">Nenhuma refeição no período selecionado.</p>
+                </div>
             </div>
         </div>
 
@@ -305,7 +362,7 @@
                                 <option value="todos">Todos os cursos</option>
                             </select>
                         </div>
-                        <div class="col-12 col-md-2">
+                        <div class="col-6 col-md-2">
                             <label class="form-label" for="filtroPeriodoAnalise">
                                 <i class="fas fa-calendar-day"></i> Período
                             </label>
@@ -318,7 +375,13 @@
                                 <option value="todos">Todo o período</option>
                             </select>
                         </div>
-                        <div class="col-12 col-md-2">
+                        <div class="col-6 col-md-2">
+                            <label class="form-label" for="filtroDataAnalise">
+                                <i class="fas fa-calendar-alt"></i> Data específica
+                            </label>
+                            <input type="date" id="filtroDataAnalise" class="form-control">
+                        </div>
+                        <div class="col-6 col-md-1">
                             <label class="form-label" for="filtroRefeicaoAnalise">
                                 <i class="fas fa-utensils"></i> Refeição
                             </label>
@@ -329,13 +392,13 @@
                                 <option value="tarde">🌙 Tarde</option>
                             </select>
                         </div>
-                        <div class="col-12 col-md-2">
-                            <div style="display: flex; gap: 8px;">
+                        <div class="col-6 col-md-1">
+                            <div style="display: flex; gap: 4px;">
                                 <button class="btn-limpar-filtro" onclick="limparFiltrosAnalise()" title="Limpar filtros">
-                                    <i class="fas fa-eraser"></i> Limpar
+                                    <i class="fas fa-eraser"></i>
                                 </button>
                                 <button class="btn-aplicar-filtro" onclick="aplicarFiltrosAnalise()" title="Aplicar filtros">
-                                    <i class="fas fa-search"></i> Aplicar
+                                    <i class="fas fa-search"></i>
                                 </button>
                             </div>
                         </div>
@@ -671,23 +734,32 @@
 
         window.FiltrosBanco = FiltrosBanco;
 
-        window.aplicarFiltrosAnalise = function() {
+        // 🆕 Lê filtros atuais (inclui data específica)
+        window.lerFiltrosDaUI = function() {
             const turma    = document.getElementById('filtroTurmaAnalise')?.value    || 'todas';
             const curso    = document.getElementById('filtroCursoAnalise')?.value    || 'todos';
             const periodo  = document.getElementById('filtroPeriodoAnalise')?.value  || 'hoje';
+            const data     = document.getElementById('filtroDataAnalise')?.value     || '';
             const refeicao = document.getElementById('filtroRefeicaoAnalise')?.value || 'todas';
+            return { turma, curso, periodo, data, refeicao };
+        };
 
-            const filtros = { turma, curso, periodo, refeicao };
-            try { localStorage.setItem('cozinha_filtros_analise', JSON.stringify(filtros)); } catch (e) {}
+        window.aplicarFiltrosAnalise = function() {
+            const filtros = window.lerFiltrosDaUI();
+
+            // Se data específica foi preenchida, ela sobrescreve o período
+            const periodoEfetivo = filtros.data ? null : filtros.periodo;
+
+            const paraSalvar = { ...filtros, periodo: periodoEfetivo };
+            try { localStorage.setItem('cozinha_filtros_analise', JSON.stringify(paraSalvar)); } catch (e) {}
 
             renderBadgesFiltrosAnalise(filtros);
 
             if (typeof window.carregarAnaliseTurmas === 'function') {
                 window.carregarAnaliseTurmas(filtros);
             }
-            // Recarrega os cards do dashboard respeitando o período
             if (typeof window.carregarDashboard === 'function') {
-                window.carregarDashboard();
+                window.carregarDashboard(false);
             }
         };
 
@@ -696,6 +768,7 @@
             set('filtroTurmaAnalise', 'todas');
             set('filtroCursoAnalise', 'todos');
             set('filtroPeriodoAnalise', 'hoje');
+            set('filtroDataAnalise', '');
             set('filtroRefeicaoAnalise', 'todas');
             try { localStorage.removeItem('cozinha_filtros_analise'); } catch (e) {}
             renderBadgesFiltrosAnalise(null);
@@ -703,7 +776,7 @@
                 window.carregarAnaliseTurmas(null);
             }
             if (typeof window.carregarDashboard === 'function') {
-                window.carregarDashboard();
+                window.carregarDashboard(false);
             }
         };
 
@@ -712,16 +785,20 @@
             if (!cont) return;
             cont.innerHTML = '';
             if (!filtros) return;
-            const labels = { turma: 'Turma', curso: 'Curso', periodo: 'Período', refeicao: 'Refeição' };
-            const naoVazios = { turma: 'todas', curso: 'todos', periodo: 'hoje', refeicao: 'todas' };
+            const labels = { turma: 'Turma', curso: 'Curso', periodo: 'Período', data: 'Data', refeicao: 'Refeição' };
+            const naoVazios = { turma: 'todas', curso: 'todos', periodo: 'hoje', data: '', refeicao: 'todas' };
             Object.keys(filtros).forEach(k => {
                 const v = filtros[k];
                 if (!v || v === naoVazios[k]) return;
                 const badge = document.createElement('span');
                 badge.className = 'filtro-badge-ativo';
+                let labelValor = v;
+                if (k === 'data' && v) {
+                    try { labelValor = new Date(v + 'T00:00:00').toLocaleDateString('pt-BR'); } catch {}
+                }
                 badge.innerHTML = `
                     <i class="fas fa-tag"></i>
-                    ${labels[k]}: <strong>${v}</strong>
+                    ${labels[k]}: <strong>${labelValor}</strong>
                     <i class="fas fa-times" title="Remover" onclick="removerFiltroAnalise('${k}')"></i>
                 `;
                 cont.appendChild(badge);
@@ -733,6 +810,7 @@
                 turma:    { id: 'filtroTurmaAnalise',    v: 'todas' },
                 curso:    { id: 'filtroCursoAnalise',    v: 'todos' },
                 periodo:  { id: 'filtroPeriodoAnalise',  v: 'hoje' },
+                data:     { id: 'filtroDataAnalise',     v: '' },
                 refeicao: { id: 'filtroRefeicaoAnalise', v: 'todas' }
             };
             const cfg = map[chave];
@@ -747,10 +825,11 @@
                 const raw = localStorage.getItem('cozinha_filtros_analise');
                 if (!raw) return;
                 const f = JSON.parse(raw);
-                const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+                const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
                 set('filtroTurmaAnalise', f.turma);
                 set('filtroCursoAnalise', f.curso);
-                set('filtroPeriodoAnalise', f.periodo);
+                set('filtroPeriodoAnalise', f.periodo || 'hoje');
+                set('filtroDataAnalise', f.data || '');
                 set('filtroRefeicaoAnalise', f.refeicao);
                 renderBadgesFiltrosAnalise(f);
             } catch (e) {}
@@ -769,7 +848,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             await FiltrosBanco.carregar();
             restaurarFiltrosAnalise();
-            ['filtroTurmaAnalise', 'filtroCursoAnalise', 'filtroPeriodoAnalise', 'filtroRefeicaoAnalise']
+            ['filtroTurmaAnalise', 'filtroCursoAnalise', 'filtroPeriodoAnalise', 'filtroDataAnalise', 'filtroRefeicaoAnalise']
                 .forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.addEventListener('change', window.aplicarFiltrosAnalise);

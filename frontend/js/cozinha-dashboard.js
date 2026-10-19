@@ -13,6 +13,8 @@ let feedbacksFiltrados = [];
 let analiseTurmasCompleta = [];
 let analiseTurmasFiltrada = [];
 
+let _ultimaAtualizacao = null;
+
 // ============================================
 // 🔎 LEITURA DE FILTROS DA ANÁLISE
 // ============================================
@@ -26,6 +28,7 @@ function lerFiltrosAnalise() {
             turma:    f.turma    || 'todas',
             curso:    f.curso    || 'todos',
             periodo:  f.periodo  || 'hoje',
+            data:     f.data     || '',
             refeicao: f.refeicao || 'todas'
         };
     } catch (e) {
@@ -122,6 +125,33 @@ function escapeHTML(str) {
 }
 
 // ============================================
+// 🆕 HELPERS DE LOADING E UPDATE INFO
+// ============================================
+function setCardsLoading(loading) {
+    document.querySelectorAll('[data-statcard]').forEach(el => {
+        el.classList.toggle('loading', !!loading);
+    });
+}
+
+function atualizarUpdateInfo() {
+    const el = document.getElementById('updateInfoTxt');
+    const wrap = document.getElementById('updateInfo');
+    if (!el || !wrap) return;
+
+    if (!_ultimaAtualizacao) { el.textContent = '—'; return; }
+
+    const diff = Math.floor((Date.now() - _ultimaAtualizacao) / 1000);
+    let txt;
+    if (diff < 30) txt = 'Agora';
+    else if (diff < 60) txt = `Há ${diff}s`;
+    else if (diff < 3600) txt = `Há ${Math.floor(diff / 60)}min`;
+    else txt = `Há ${Math.floor(diff / 3600)}h`;
+
+    el.textContent = txt;
+    wrap.classList.toggle('stale', diff > 120);
+}
+
+// ============================================
 // 🚀 INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -140,11 +170,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await carregarFotoPerfil();
-    await carregarDashboard();
+    await carregarDashboard(false);
 
     atualizarRelogio();
     setInterval(atualizarRelogio, 1000);
-    setInterval(carregarDashboard, 30000);
+    setInterval(atualizarUpdateInfo, 10000);
+
+    // 🆕 Auto-refresh respeita o filtro
+    setInterval(() => {
+        const f = lerFiltrosAnalise();
+        const periodo = f?.periodo || 'hoje';
+        if (!f?.data && (periodo === 'hoje' || periodo === 'ontem')) {
+            carregarDashboard(false);
+        }
+    }, 30000);
 
     const filtroTurmaEl = document.getElementById('filtroTurmaTexto') || document.getElementById('filtroTurma');
     if (filtroTurmaEl) filtroTurmaEl.addEventListener('input', filtrarTabela);
@@ -180,20 +219,24 @@ function atualizarRelogio() {
 // ============================================
 // 📅 HELPER DE PERÍODO PARA O DASHBOARD
 // ============================================
-function periodoParaQuery(periodo) {
-    if (!periodo || periodo === 'hoje') return {};
-    if (periodo === 'todos') return { todos: 'true' };
-    return { periodo };
+function periodoParaQuery(filtros) {
+    if (!filtros) return { periodo: 'hoje' };
+    if (filtros.data) return { data: filtros.data };
+    if (filtros.periodo === 'todos') return { todos: 'true' };
+    return { periodo: filtros.periodo || 'hoje' };
 }
 
 // ============================================
 // 📊 DASHBOARD
 // ============================================
-async function carregarDashboard() {
+async function carregarDashboard(manual = false) {
+    const btn = document.getElementById('btnAtualizarDashboard');
+    if (btn) { btn.disabled = true; }
+    setCardsLoading(true);
+
     try {
         const filtros = lerFiltrosAnalise();
-        const periodoAtual = filtros?.periodo || 'hoje';
-        const qs = new URLSearchParams(periodoParaQuery(periodoAtual)).toString();
+        const qs = new URLSearchParams(periodoParaQuery(filtros)).toString();
         const url = '/api/cozinha/dashboard' + (qs ? `?${qs}` : '');
 
         const response = await fetch(url, {
@@ -203,6 +246,8 @@ async function carregarDashboard() {
 
         if (data.success) {
             dashboardData = data;
+            _ultimaAtualizacao = Date.now();
+            atualizarUpdateInfo();
 
             const setTxt = (id, v) => {
                 const el = document.getElementById(id);
@@ -311,6 +356,8 @@ async function carregarDashboard() {
             }
 
             await carregarFeedbacks();
+
+            if (manual) mostrarToastCozinha('✅ Dashboard atualizado!', 'success', 1800);
         }
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
@@ -318,6 +365,10 @@ async function carregarDashboard() {
         if (container) {
             container.innerHTML = '<div class="mostrarToastCozinha mostrarToastCozinha-danger">Erro ao carregar dados. Tente novamente.</div>';
         }
+        if (manual) mostrarToastCozinha('❌ Erro ao atualizar. Tente novamente.', 'error');
+    } finally {
+        setCardsLoading(false);
+        if (btn) { btn.disabled = false; }
     }
 }
 
@@ -333,7 +384,9 @@ async function carregarAnaliseTurmas(filtros) {
             if (filtros.turma && filtros.turma !== 'todas')       qs.append('turma', filtros.turma);
             if (filtros.curso && filtros.curso !== 'todos')       qs.append('curso', filtros.curso);
             if (filtros.refeicao && filtros.refeicao !== 'todas') qs.append('refeicao', filtros.refeicao);
-            if (filtros.periodo && filtros.periodo !== 'hoje') {
+            if (filtros.data) {
+                qs.append('data', filtros.data);
+            } else if (filtros.periodo && filtros.periodo !== 'hoje') {
                 if (filtros.periodo === 'todos') qs.append('todos', 'true');
                 else qs.append('periodo', filtros.periodo);
             }
@@ -410,18 +463,21 @@ function atualizarGraficoPerfil(perfis) {
 
 function atualizarGraficoTurmas(turmas) {
     const canvas = document.getElementById('turmasChart');
+    const vazio = document.getElementById('turmasChartVazio');
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (chartTurmas) chartTurmas.destroy();
 
     if (!turmas || turmas.length === 0) {
-        chartTurmas = new Chart(ctx, {
-            type: 'bar',
-            data: { labels: [], datasets: [] },
-            options: { responsive: true, maintainAspectRatio: true }
-        });
+        if (chartTurmas) { chartTurmas.destroy(); chartTurmas = null; }
+        canvas.style.display = 'none';
+        if (vazio) vazio.style.display = '';
         return;
     }
+
+    canvas.style.display = '';
+    if (vazio) vazio.style.display = 'none';
+
+    const ctx = canvas.getContext('2d');
+    if (chartTurmas) chartTurmas.destroy();
 
     chartTurmas = new Chart(ctx, {
         type: 'bar',
@@ -1024,8 +1080,7 @@ async function abrirModalFaltantes() {
 
     try {
         const filtros = lerFiltrosAnalise();
-        const periodo = filtros?.periodo || 'hoje';
-        const qs = new URLSearchParams(periodoParaQuery(periodo)).toString();
+        const qs = new URLSearchParams(periodoParaQuery(filtros)).toString();
         const url = `/api/cozinha/faltantes${qs ? '?' + qs : ''}`;
 
         const response = await fetch(url, {
