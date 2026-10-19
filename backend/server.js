@@ -1020,7 +1020,13 @@ app.use('/api/calendario', require('./routes/calendario-routes'));
 // ── Rotas de Coordenação e Cozinha ──
 app.use('/api/coordenacao-patio', require('./routes/coordenacaoPatio'));
 app.use('/api/cozinha', require('./routes/cozinha'));
+
+// CORRIGIDO: prefixo deve ser cozinha-monitoramento (frontend chama assim)
+app.use('/api/cozinha-monitoramento', require('./routes/monitoramento-cozinha'));
+
+// (opcional) mantém o antigo funcionando também
 app.use('/api/monitoramento-cozinha', require('./routes/monitoramento-cozinha'));
+
 app.use('/api/feedback-cozinha', require('./routes/feedback-cozinha'));
 
 // ── Rotas de Gestão Geral, Enfermaria, Rodízio ──

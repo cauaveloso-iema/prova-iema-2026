@@ -4,24 +4,34 @@ const FeedbackRefeicaoSchema = new mongoose.Schema({
   alunoId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
   alunoNome: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   alunoTurma: {
     type: String,
-    default: ''
+    default: '',
+    trim: true
+  },
+  alunoCurso: {
+    type: String,
+    default: '',
+    trim: true
   },
   tipoRefeicao: {
     type: String,
     enum: ['manha', 'almoco', 'tarde'],
-    required: true
+    required: true,
+    index: true
   },
   data: {
     type: String,
-    default: () => new Date().toISOString().split('T')[0]
+    default: () => new Date().toISOString().split('T')[0],
+    index: true
   },
   nota: {
     type: Number,
@@ -32,7 +42,8 @@ const FeedbackRefeicaoSchema = new mongoose.Schema({
   comentario: {
     type: String,
     maxlength: 500,
-    default: ''
+    default: '',
+    trim: true
   },
   gostou: {
     type: String,
@@ -42,7 +53,8 @@ const FeedbackRefeicaoSchema = new mongoose.Schema({
   sugestao: {
     type: String,
     maxlength: 300,
-    default: ''
+    default: '',
+    trim: true
   },
   anonimo: {
     type: Boolean,
@@ -50,8 +62,13 @@ const FeedbackRefeicaoSchema = new mongoose.Schema({
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: true
   }
 });
+
+FeedbackRefeicaoSchema.index({ data: -1, tipoRefeicao: 1 });
+FeedbackRefeicaoSchema.index({ alunoId: 1, createdAt: -1 });
+FeedbackRefeicaoSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('FeedbackRefeicao', FeedbackRefeicaoSchema);

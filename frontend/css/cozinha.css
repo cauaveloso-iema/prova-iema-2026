@@ -579,3 +579,506 @@ hr { margin: 8px 0; }
         font-size: 12px !important;
     }
 }
+
+/* ============================================================================
+   COZINHA - ESTILOS RESPONSIVOS MOBILE (COMPLETO)
+   Este arquivo deve ser importado APÓS o cozinha.css
+   ============================================================================ */
+
+/* ============================================ */
+/* HEADER FLEX E COMPONENTES BASE               */
+/* ============================================ */
+.header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.header-datetime {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.datetime-sep {
+    margin-left: 12px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-refresh-success {
+    background: #10b981 !important;
+    color: white !important;
+}
+
+.btn-refresh-success:hover {
+    background: #059669 !important;
+}
+
+.notificacoes-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.btn-header-action {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.btn-header-action:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+.btn-header-close {
+    background: none;
+    border: none;
+    color: #d1d5db;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.btn-header-close:hover {
+    background: rgba(255,255,255,0.15);
+}
+
+.btn-app {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border-radius: 30px;
+    padding: 8px 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-right: 15px;
+    transition: all 0.3s;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.btn-app:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    color: white;
+}
+
+.canvas-perfil {
+    max-height: 200px;
+}
+
+.canvas-turmas {
+    max-height: 400px;
+}
+
+.input-filtro-turma {
+    width: 200px;
+}
+
+/* Scroll wrapper para tabelas */
+.table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.turma-table {
+    min-width: 600px;
+}
+
+/* Cards de rating */
+.rating-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rating-row .progress-bar-custom {
+    flex: 1;
+}
+
+.rating-count {
+    min-width: 30px;
+    text-align: right;
+    font-weight: 600;
+}
+
+.opinioes-summary {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.filtros-actions-group {
+    display: flex;
+    gap: 8px;
+}
+
+.lista-faltantes {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.modal-qrcode-content {
+    max-width: 350px;
+    text-align: center;
+}
+
+/* Tabela de feedbacks */
+.tabela-feedbacks-wrapper {
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tabela-feedbacks {
+    min-width: 640px;
+}
+
+.tabela-feedbacks td {
+    vertical-align: middle;
+}
+
+/* ============================================================================
+   📱 RESPONSIVIDADE MOBILE (max 768px)
+   ============================================================================ */
+@media (max-width: 768px) {
+    body {
+        padding: 10px !important;
+    }
+
+    .container {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+    }
+
+    /* Navbar empilhada */
+    .navbar-custom {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+        padding: 15px !important;
+    }
+
+    .logo-area h2 {
+        font-size: 1.1rem !important;
+    }
+
+    .logo-area p {
+        font-size: 0.75rem !important;
+    }
+
+    .user-area {
+        width: 100% !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        flex-wrap: wrap;
+    }
+
+    .user-info {
+        flex: 1 !important;
+        min-width: 0 !important;
+        text-align: left !important;
+    }
+
+    .user-name {
+        font-size: 0.85rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .user-role {
+        font-size: 0.7rem !important;
+    }
+
+    .btn-app {
+        padding: 6px 12px !important;
+        font-size: 0.75rem !important;
+        margin-right: 5px !important;
+    }
+
+    /* Header flex mobile */
+    .header-flex {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .header-datetime {
+        width: 100% !important;
+        font-size: 0.8rem !important;
+    }
+
+    .datetime-sep {
+        margin-left: 0 !important;
+    }
+
+    .header-actions {
+        width: 100% !important;
+    }
+
+    .header-actions .btn-refresh {
+        flex: 1 !important;
+    }
+
+    /* Cards de estatísticas */
+    .stat-card {
+        padding: 12px 8px !important;
+    }
+
+    .stat-card .stat-number {
+        font-size: 1.5rem !important;
+    }
+
+    .stat-card .stat-label {
+        font-size: 0.7rem !important;
+    }
+
+    .stat-card small {
+        font-size: 0.65rem !important;
+    }
+
+    /* Cards de refeição */
+    .card-body h3 {
+        font-size: 1.5rem !important;
+    }
+
+    .card-body p {
+        font-size: 0.8rem !important;
+    }
+
+    .card-body small {
+        font-size: 0.7rem !important;
+    }
+
+    /* Previsão */
+    .previsao-card h3 {
+        font-size: 1.2rem !important;
+    }
+
+    .previsao-card {
+        padding: 10px !important;
+    }
+
+    /* Tabelas */
+    .table-responsive,
+    .table-scroll-wrapper,
+    .tabela-feedbacks-wrapper {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    /* Filtros de feedback - empilhar */
+    .filtros-feedback .col-md-3,
+    .filtros-feedback .col-md-2 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+
+    .filtros-feedback .form-label {
+        font-size: 0.75rem !important;
+    }
+
+    .filtros-feedback .form-select,
+    .filtros-feedback .form-control {
+        font-size: 16px !important; /* Evita zoom no iOS */
+        min-height: 42px;
+    }
+
+    .filtros-actions-group {
+        width: 100% !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .filtros-actions-group .btn-limpar-filtros,
+    .filtros-actions-group .btn-filtrar {
+        width: 100% !important;
+        padding: 10px !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* Header de seções */
+    .card-header {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .card-header .btn-refresh {
+        padding: 6px 12px !important;
+        font-size: 0.75rem !important;
+    }
+
+    /* Modal */
+    .modal-content-custom {
+        margin: 10px !important;
+        max-height: 90vh !important;
+        width: calc(100vw - 20px) !important;
+        padding: 16px !important;
+    }
+
+    /* Dropdown */
+    .dropdown-item {
+        padding: 12px 16px !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* Cards de feedback - 2 colunas */
+    .row.g-3 > .col-md-3 {
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+    }
+
+    /* Gráficos */
+    #perfilChart,
+    .canvas-perfil {
+        max-height: 220px !important;
+    }
+
+    #turmasChart,
+    .canvas-turmas {
+        max-height: 280px !important;
+    }
+
+    /* Input filtro turma */
+    .input-filtro-turma {
+        width: 100% !important;
+    }
+
+    /* Filtros ativos */
+    .filtros-ativos {
+        width: 100% !important;
+        margin-bottom: 10px !important;
+    }
+
+    /* Tabela de feedback */
+    #listaFeedbacks {
+        font-size: 0.75rem !important;
+    }
+
+    .tabela-feedbacks {
+        min-width: 640px;
+    }
+
+    /* Botões grandes para toque */
+    .btn-refresh {
+        min-height: 40px;
+    }
+}
+
+/* ============================================================================
+   📱 TELAS MUITO PEQUENAS (max 380px)
+   ============================================================================ */
+@media (max-width: 380px) {
+    .user-area {
+        flex-wrap: wrap !important;
+    }
+
+    .btn-app span {
+        display: none !important;
+    }
+
+    .stat-card .stat-number {
+        font-size: 1.3rem !important;
+    }
+
+    .card-body h3 {
+        font-size: 1.3rem !important;
+    }
+}
+
+/* ============================================================================
+   📱 REMOVE HOVER EM DISPOSITIVOS TOUCH
+   ============================================================================ */
+@media (hover: none) {
+    .stat-card:hover,
+    .card:hover,
+    .btn-app:hover,
+    .user-avatar:hover {
+        transform: none !important;
+    }
+}
+
+/* ============================================================================
+   🔔 FIX DROPDOWN NOTIFICAÇÕES NO MOBILE
+   (Já está no cozinha.css, mas reforçando para segurança)
+   ============================================================================ */
+@media (max-width: 768px) {
+    .notificacoes-container {
+        position: static !important;
+    }
+
+    .notificacoes-dropdown {
+        position: fixed !important;
+        top: 70px !important;
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: calc(100vh - 90px) !important;
+        margin-top: 0 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.3) !important;
+        z-index: 10000 !important;
+    }
+
+    #notificacoesLista {
+        max-height: calc(100vh - 200px) !important;
+    }
+}
+
+@media (max-width: 400px) {
+    .notificacoes-dropdown {
+        top: 65px !important;
+        left: 8px !important;
+        right: 8px !important;
+        max-height: calc(100vh - 80px) !important;
+    }
+}
+
+/* ============================================================================
+   🖨️ IMPRESSÃO
+   ============================================================================ */
+@media print {
+    .navbar-custom,
+    .user-area,
+    .notificacoes-container,
+    .dropdown-menu-custom,
+    .btn-refresh,
+    .btn-filtrar,
+    .btn-limpar-filtros,
+    .filtros-feedback {
+        display: none !important;
+    }
+
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+        page-break-inside: avoid;
+    }
+
+    body {
+        background: white !important;
+        padding: 0 !important;
+    }
+}

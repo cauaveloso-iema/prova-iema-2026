@@ -1,108 +1,95 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
-
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <title>Cozinha - Monitoramento Inteligente de Refeições</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
     <script src="js/draggable.js"></script>
     <script src="js/chatbot-frontend.js"></script>
     <script src="js/push-client.js"></script>
-    <script src="js/dialog-helper.js"></script> 
+    <script src="js/dialog-helper.js"></script>
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/cozinha.css">
+    <link rel="stylesheet" href="css/cozinha-mobile.css" onerror="this.remove()">
 
+    <style>
+        .filtros-box-inline { background: #f8fafc; border-radius: 12px; padding: 14px; margin-bottom: 16px; border: 1px solid #eef2f7; }
+        .filtros-box-inline .form-label { font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px; }
+        .filtros-box-inline .form-select, .filtros-box-inline .form-control { font-size: 13px; border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff; }
+        .filtros-box-inline .form-select:focus, .filtros-box-inline .form-control:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+        .btn-aplicar-filtro { background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
+        .btn-aplicar-filtro:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(30, 60, 114, 0.25); }
+        .btn-limpar-filtro { background: #ffffff; color: #64748b; border: 1px solid #e2e8f0; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
+        .btn-limpar-filtro:hover { background: #f1f5f9; color: #334155; }
+        .filtro-badge-ativo { display: inline-flex; align-items: center; gap: 6px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-right: 6px; margin-top: 6px; }
+        .filtro-badge-ativo i.fa-times { cursor: pointer; font-size: 10px; opacity: 0.7; }
+        .filtro-badge-ativo i.fa-times:hover { opacity: 1; }
+        .filtros-ativos-container { min-height: 28px; margin-top: 4px; }
+        .filtro-loading { font-size: 12px; color: #64748b; margin-top: 6px; display: block; padding: 6px 10px; background: #f1f5f9; border-radius: 6px; }
+        .filtro-erro { font-size: 12px; color: #dc2626; }
+    </style>
 </head>
 <body>
     <div class="container">
-        <!-- Barra de Navegação -->
         <div class="navbar-custom">
             <div class="logo-area">
                 <h2><i class="fas fa-utensils"></i> Cozinha Inteligente</h2>
                 <p>Monitoramento e Previsão de Refeições</p>
             </div>
             <div class="user-area">
-
-                <!-- 🔔 SINO DE NOTIFICAÇÕES -->
                 <div class="notificacoes-container">
                     <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações">
                         <i class="fas fa-bell"></i>
                         <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
-
                     <div class="notificacoes-dropdown" id="notificacoesDropdown">
                         <div class="notificacoes-header">
-                            <h3>
-                                <i class="fas fa-bell"></i>
-                                Notificações
-                            </h3>
-                            <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                            <h3><i class="fas fa-bell"></i> Notificações</h3>
+                            <div class="notificacoes-header-actions">
+                                <button onclick="marcarTodasLidas()" class="btn-header-action" title="Marcar todas como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                <button onclick="limparMinhasNotificacoes(event)" class="btn-header-action" title="Excluir todas">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="fecharNotificacoes()" class="btn-header-close">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
-
-                        <div id="notificacoesLista" style="max-height: 500px; overflow-y: auto;">
-                            <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <div id="notificacoesLista">
+                            <div class="notificacoes-vazio">
+                                <i class="fas fa-spinner fa-spin"></i>
                                 <p>Carregando...</p>
                             </div>
                         </div>
-
                         <div class="notificacao-footer">
-                            <a href="/notificacoes.html">
-                                <i class="fas fa-eye"></i> Ver todas as notificações
-                            </a>
+                            <a href="/notificacoes.html"><i class="fas fa-eye"></i> Ver todas as notificações</a>
                         </div>
                     </div>
                 </div>
-                <!-- FIM DO SINO -->
 
-                <!-- LINK DO APP -->
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="btn-app" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 30px;
-                    padding: 8px 16px;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    text-decoration: none;
-                    color: white;
-                    font-size: 0.85rem;
-                    font-weight: 600;
-                    margin-right: 15px;
-                    transition: all 0.3s;
-                    border: 1px solid rgba(255,255,255,0.2);
-                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.4)'"
-                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
-                    <i class="fas fa-download"></i> App
+                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="btn-app">
+                    <i class="fas fa-download"></i> <span>App</span>
                 </a>
                 <div class="user-info">
                     <div class="user-name" id="userName">Carregando...</div>
@@ -113,8 +100,7 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Dropdown Menu -->
+
         <div class="dropdown-menu-custom" id="dropdownMenu">
             <div class="dropdown-item" onclick="window.location.href='editar-perfil.html'">
                 <i class="fas fa-user-edit"></i> Editar Perfil
@@ -136,25 +122,23 @@
                 <i class="fas fa-sign-out-alt"></i> Sair do Sistema
             </div>
         </div>
-        
-        <!-- Data e Hora + Botão Atualizar -->
+
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-                <div>
+            <div class="card-header header-flex">
+                <div class="header-datetime">
                     <i class="fas fa-calendar-alt me-2"></i>
                     <span id="dataAtual"></span>
-                    <span class="ms-3"><i class="fas fa-clock me-1"></i><span id="horaAtual"></span></span>
-                    <span class="ms-3" id="refeicaoAtualBadge"></span>
+                    <span class="datetime-sep"><i class="fas fa-clock me-1"></i><span id="horaAtual"></span></span>
+                    <span class="datetime-sep" id="refeicaoAtualBadge"></span>
                 </div>
                 <button class="btn-refresh" onclick="carregarDashboard()">
                     <i class="fas fa-sync-alt"></i> Atualizar
                 </button>
             </div>
         </div>
-        
-        <!-- Cards de Estatísticas Principais -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-3">
+
+        <div class="row g-3 g-md-4 mb-4">
+            <div class="col-6 col-md-3">
                 <div class="stat-card">
                     <i class="fas fa-users fa-2x text-primary mb-2"></i>
                     <div class="stat-number" id="totalPessoas">-</div>
@@ -162,7 +146,7 @@
                     <small id="detalhePerfis" class="text-muted"></small>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="stat-card">
                     <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                     <div class="stat-number" id="pessoasQueComeram">-</div>
@@ -170,7 +154,7 @@
                     <small id="percentualGeral" class="text-muted"></small>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="stat-card">
                     <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
                     <div class="stat-number" id="taxaAdesao">-</div>
@@ -178,7 +162,7 @@
                     <small>quem disse vs quem veio</small>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-6 col-md-3">
                 <div class="stat-card">
                     <i class="fas fa-utensils fa-2x text-danger mb-2"></i>
                     <div class="stat-number" id="refeicaoHoje">-</div>
@@ -186,10 +170,9 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Contagem por Refeição -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-4">
+
+        <div class="row g-3 g-md-4 mb-4">
+            <div class="col-6 col-md-4">
                 <div class="card">
                     <div class="card-body text-center">
                         <i class="fas fa-sun fa-3x text-warning mb-2"></i>
@@ -200,7 +183,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-6 col-md-4">
                 <div class="card">
                     <div class="card-body text-center">
                         <i class="fas fa-utensils fa-3x text-danger mb-2"></i>
@@ -211,7 +194,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-12 col-md-4">
                 <div class="card">
                     <div class="card-body text-center">
                         <i class="fas fa-moon fa-3x text-info mb-2"></i>
@@ -223,31 +206,30 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Previsão de Comida e Sugestão -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-6">
+
+        <div class="row g-3 g-md-4 mb-4">
+            <div class="col-12 col-md-6">
                 <div class="card">
                     <div class="card-header">
                         <i class="fas fa-chart-simple me-2"></i> Previsão de Comida (kg)
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-4 text-center">
+                        <div class="row g-2">
+                            <div class="col-6 col-md-4 text-center">
                                 <div class="previsao-card">
                                     <small>🌅 Manhã</small>
                                     <h3 id="kgManha" class="mb-0">-</h3>
                                     <small>kg</small>
                                 </div>
                             </div>
-                            <div class="col-4 text-center">
+                            <div class="col-6 col-md-4 text-center">
                                 <div class="previsao-card">
                                     <small>🍽️ Almoço</small>
                                     <h3 id="kgAlmoco" class="mb-0">-</h3>
                                     <small>kg</small>
                                 </div>
                             </div>
-                            <div class="col-4 text-center">
+                            <div class="col-12 col-md-4 text-center">
                                 <div class="previsao-card">
                                     <small>🌙 Tarde</small>
                                     <h3 id="kgTarde" class="mb-0">-</h3>
@@ -261,13 +243,13 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-12 col-md-6">
                 <div class="card">
                     <div class="card-header">
                         <i class="fas fa-chart-pie me-2"></i> Perfil Alimentar dos Usuários
                     </div>
                     <div class="card-body">
-                        <canvas id="perfilChart" style="max-height: 200px;"></canvas>
+                        <canvas id="perfilChart" class="canvas-perfil"></canvas>
                         <div class="row text-center mt-3">
                             <div class="col-3"><span class="badge bg-success">Sempre</span><br><span id="perfilSempre">0</span></div>
                             <div class="col-3"><span class="badge bg-warning">Às vezes</span><br><span id="perfilAsVezes">0</span></div>
@@ -278,8 +260,7 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Insights Inteligentes -->
+
         <div class="card mb-4">
             <div class="card-header">
                 <i class="fas fa-brain me-2"></i> Insights e Recomendações
@@ -288,80 +269,147 @@
                 <div class="text-center py-3"><div class="loading-spinner"></div> Carregando insights...</div>
             </div>
         </div>
-        
-        <!-- Gráfico de Barras por Turma -->
+
         <div class="card mb-4">
             <div class="card-header">
                 <i class="fas fa-chart-bar me-2"></i> Refeições por Turma
             </div>
             <div class="card-body">
-                <canvas id="turmasChart" style="max-height: 400px;"></canvas>
-            </div>
-        </div>
-        
-        <!-- Tabela de Análise por Turma -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-                <span><i class="fas fa-table me-2"></i> Análise Detalhada por Turma</span>
-                <div>
-                    <input type="text" id="filtroTurma" class="form-control form-control-sm" placeholder="Filtrar turma..." style="width: 200px;">
-                </div>
-            </div>
-            <div class="card-body" style="overflow-x: auto;">
-                <table class="table table-hover turma-table">
-                    <thead>
-                        <tr>
-                            <th>Turma</th>
-                            <th class="text-center">Total</th>
-                            <th class="text-center">Dizem que comem</th>
-                            <th class="text-center">Comeram hoje</th>
-                            <th class="text-center">Taxa Adesão</th>
-                            <th class="text-center">Faltantes</th>
-                            <th class="text-center">Situação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaTurmas">
-                        <tr><td colspan="7" class="text-center"><div class="loading-spinner"></div> Carregando...</td></tr>
-                    </tbody>
-                </table>
+                <canvas id="turmasChart" class="canvas-turmas"></canvas>
             </div>
         </div>
 
-        <!-- SEÇÃO: FEEDBACK DOS ALUNOS -->
         <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-                <span><i class="fas fa-star me-2"></i> Avaliações dos Alunos</span>
+            <div class="card-header header-flex">
+                <span><i class="fas fa-table me-2"></i> Análise Detalhada por Turma</span>
                 <div>
+                    <input type="text" id="filtroTurmaTexto" class="form-control form-control-sm input-filtro-turma" placeholder="Buscar turma...">
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="filtros-box-inline">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-3">
+                            <label class="form-label" for="filtroTurmaAnalise">
+                                <i class="fas fa-users"></i> Turma
+                            </label>
+                            <select id="filtroTurmaAnalise" class="form-select">
+                                <option value="todas">Todas as turmas</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label" for="filtroCursoAnalise">
+                                <i class="fas fa-graduation-cap"></i> Curso
+                            </label>
+                            <select id="filtroCursoAnalise" class="form-select">
+                                <option value="todos">Todos os cursos</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label" for="filtroPeriodoAnalise">
+                                <i class="fas fa-calendar-day"></i> Período
+                            </label>
+                            <select id="filtroPeriodoAnalise" class="form-select">
+                                <option value="hoje">Hoje</option>
+                                <option value="ontem">Ontem</option>
+                                <option value="semana">Últimos 7 dias</option>
+                                <option value="mes">Últimos 30 dias</option>
+                                <option value="todos">Todo o período</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <label class="form-label" for="filtroRefeicaoAnalise">
+                                <i class="fas fa-utensils"></i> Refeição
+                            </label>
+                            <select id="filtroRefeicaoAnalise" class="form-select">
+                                <option value="todas">Todas</option>
+                                <option value="manha">🌅 Manhã</option>
+                                <option value="almoco">🍽️ Almoço</option>
+                                <option value="tarde">🌙 Tarde</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2">
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn-limpar-filtro" onclick="limparFiltrosAnalise()" title="Limpar filtros">
+                                    <i class="fas fa-eraser"></i> Limpar
+                                </button>
+                                <button class="btn-aplicar-filtro" onclick="aplicarFiltrosAnalise()" title="Aplicar filtros">
+                                    <i class="fas fa-search"></i> Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="filtrosAtivosAnalise" class="filtros-ativos-container"></div>
+                    <div id="filtrosStatusAnalise" class="filtro-loading">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando turmas/cursos do banco...
+                    </div>
+                </div>
+
+                <div class="table-scroll-wrapper">
+                    <table class="table table-hover turma-table">
+                        <thead>
+                            <tr>
+                                <th>Turma</th>
+                                <th class="text-center">Total</th>
+                                <th class="text-center">Dizem que comem</th>
+                                <th class="text-center">Comeram hoje</th>
+                                <th class="text-center">Taxa Adesão</th>
+                                <th class="text-center">Faltantes</th>
+                                <th class="text-center">Situação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaTurmas">
+                            <tr><td colspan="7" class="text-center"><div class="loading-spinner"></div> Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header header-flex">
+                <span><i class="fas fa-star me-2"></i> Avaliações dos Alunos</span>
+                <div class="header-actions">
                     <button class="btn-refresh me-2" onclick="carregarFeedbacks()">
                         <i class="fas fa-sync-alt"></i> Atualizar
                     </button>
-                    <button class="btn-refresh" onclick="mostrarQRCodeFeedback()" style="background: #10b981;">
+                    <button class="btn-refresh btn-refresh-success" onclick="mostrarQRCodeFeedback()">
                         <i class="fas fa-qrcode"></i> QR Code para Alunos
                     </button>
                 </div>
             </div>
             <div class="card-body">
-                
-                <!-- FILTROS AVANÇADOS -->
                 <div class="filtros-feedback">
                     <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label"><i class="fas fa-filter"></i> Por Refeição</label>
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="fas fa-filter"></i> Refeição</label>
                             <select id="filtroRefeicaoFeedback" class="form-select" onchange="aplicarFiltrosFeedback()">
-                                <option value="todas">Todas as refeições</option>
-                                <option value="manha">🌅 Lanche da Manhã</option>
+                                <option value="todas">Todas</option>
+                                <option value="manha">🌅 Manhã</option>
                                 <option value="almoco">🍽️ Almoço</option>
-                                <option value="tarde">🌙 Lanche da Tarde</option>
+                                <option value="tarde">🌙 Tarde</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="fas fa-users"></i> Turma</label>
+                            <select id="filtroTurmaFeedback" class="form-select" onchange="aplicarFiltrosFeedback()">
+                                <option value="todas">Todas as turmas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label"><i class="fas fa-graduation-cap"></i> Curso</label>
+                            <select id="filtroCursoFeedback" class="form-select" onchange="aplicarFiltrosFeedback()">
+                                <option value="todos">Todos os cursos</option>
                             </select>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label"><i class="fas fa-star"></i> Nota Mínima</label>
                             <select id="filtroNotaMin" class="form-select" onchange="aplicarFiltrosFeedback()">
-                                <option value="1">1 estrela ou mais</option>
-                                <option value="2">2 estrelas ou mais</option>
-                                <option value="3">3 estrelas ou mais</option>
-                                <option value="4">4 estrelas ou mais</option>
-                                <option value="5">5 estrelas</option>
+                                <option value="1">1★+</option>
+                                <option value="2">2★+</option>
+                                <option value="3">3★+</option>
+                                <option value="4">4★+</option>
+                                <option value="5">5★</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -381,15 +429,15 @@
                                 <option value="sim">🔒 Anônimos</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <label class="form-label"><i class="fas fa-search"></i> Buscar</label>
-                            <input type="text" id="filtroBuscaFeedback" class="form-control" placeholder="Nome, turma ou comentário..." onkeyup="aplicarFiltrosFeedbackDebounce()">
+                            <input type="text" id="filtroBuscaFeedback" class="form-control" placeholder="Nome, turma, curso ou comentário..." onkeyup="aplicarFiltrosFeedbackDebounce()">
                         </div>
                     </div>
                     <div class="row mt-3">
-                        <div class="col-12 d-flex justify-content-between align-items-center">
+                        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div class="filtros-ativos" id="filtrosAtivosContainer"></div>
-                            <div>
+                            <div class="filtros-actions-group">
                                 <button class="btn-limpar-filtros me-2" onclick="limparFiltrosFeedback()">
                                     <i class="fas fa-eraser"></i> Limpar filtros
                                 </button>
@@ -401,50 +449,68 @@
                     </div>
                 </div>
 
-                <!-- Resumo das Avaliações -->
-                <div class="row mb-4">
-                    <div class="col-md-3">
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-3">
                         <div class="stat-card text-center p-3">
                             <div class="stat-number" id="totalFeedbacks">-</div>
                             <div class="stat-label">Total de Avaliações</div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <div class="stat-card text-center p-3">
                             <div class="stat-number" id="mediaNotas">-</div>
                             <div class="stat-label">Média de Notas</div>
                             <div id="estrelasMedia" class="mt-1"></div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <div class="stat-card text-center p-3">
                             <div class="stat-number" id="gostaram">-</div>
                             <div class="stat-label">Aprovação</div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-6 col-md-3">
                         <div class="stat-card text-center p-3">
                             <div class="stat-number" id="feedbacksFiltrados">-</div>
                             <div class="stat-label">Resultados da busca</div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Gráfico de Distribuição das Notas -->
-                <div class="row mb-4">
+
+                <div class="row g-4 mb-4">
                     <div class="col-md-6">
                         <h6 class="mb-3"><i class="fas fa-chart-bar"></i> Distribuição das Notas</h6>
                         <div id="distribuicaoNotas">
-                            <div class="mb-2"><span class="badge bg-danger">★ 1</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar1" class="progress-fill" style="width: 0%; background: #ef4444;"></div></div> <span id="count1">0</span></div>
-                            <div class="mb-2"><span class="badge bg-warning">★ 2</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar2" class="progress-fill" style="width: 0%; background: #f59e0b;"></div></div> <span id="count2">0</span></div>
-                            <div class="mb-2"><span class="badge bg-info">★ 3</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar3" class="progress-fill" style="width: 0%; background: #3b82f6;"></div></div> <span id="count3">0</span></div>
-                            <div class="mb-2"><span class="badge bg-success">★ 4</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar4" class="progress-fill" style="width: 0%; background: #10b981;"></div></div> <span id="count4">0</span></div>
-                            <div class="mb-2"><span class="badge bg-success">★ 5</span> <div class="progress-bar-custom d-inline-block" style="width: 150px;"><div id="bar5" class="progress-fill" style="width: 0%; background: #10b981;"></div></div> <span id="count5">0</span></div>
+                            <div class="mb-2 rating-row">
+                                <span class="badge bg-danger">★ 1</span>
+                                <div class="progress-bar-custom"><div id="bar1" class="progress-fill"></div></div>
+                                <span id="count1" class="rating-count">0</span>
+                            </div>
+                            <div class="mb-2 rating-row">
+                                <span class="badge bg-warning">★ 2</span>
+                                <div class="progress-bar-custom"><div id="bar2" class="progress-fill"></div></div>
+                                <span id="count2" class="rating-count">0</span>
+                            </div>
+                            <div class="mb-2 rating-row">
+                                <span class="badge bg-info">★ 3</span>
+                                <div class="progress-bar-custom"><div id="bar3" class="progress-fill"></div></div>
+                                <span id="count3" class="rating-count">0</span>
+                            </div>
+                            <div class="mb-2 rating-row">
+                                <span class="badge bg-success">★ 4</span>
+                                <div class="progress-bar-custom"><div id="bar4" class="progress-fill"></div></div>
+                                <span id="count4" class="rating-count">0</span>
+                            </div>
+                            <div class="mb-2 rating-row">
+                                <span class="badge bg-success">★ 5</span>
+                                <div class="progress-bar-custom"><div id="bar5" class="progress-fill"></div></div>
+                                <span id="count5" class="rating-count">0</span>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <h6 class="mb-3"><i class="fas fa-smile"></i> Resumo das Opiniões</h6>
-                        <div class="p-3 bg-light rounded">
+                        <div class="opinioes-summary">
                             <div><i class="fas fa-smile-wink text-success"></i> Adoraram: <strong id="gostaramSim">0</strong></div>
                             <div><i class="fas fa-meh text-warning"></i> Mais ou menos: <strong id="gostaramMaisMenos">0</strong></div>
                             <div><i class="fas fa-frown text-danger"></i> Não gostaram: <strong id="gostaramNao">0</strong></div>
@@ -453,18 +519,18 @@
                         </div>
                     </div>
                 </div>
-                
-                <!-- Lista de Feedbacks Recentes com Filtros -->
+
                 <h6 class="mb-3">
-                    <i class="fas fa-list"></i> Avaliações 
+                    <i class="fas fa-list"></i> Avaliações
                     <span id="feedbacksCount" class="badge bg-secondary">0</span>
                 </h6>
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="table table-sm table-hover">
+                <div class="table-responsive tabela-feedbacks-wrapper">
+                    <table class="table table-sm table-hover tabela-feedbacks">
                         <thead class="sticky-top bg-white">
                             <tr>
                                 <th>Aluno</th>
                                 <th>Turma</th>
+                                <th>Curso</th>
                                 <th>Refeição</th>
                                 <th>Nota</th>
                                 <th>Comentário</th>
@@ -472,29 +538,27 @@
                             </tr>
                         </thead>
                         <tbody id="listaFeedbacks">
-                            <tr><td colspan="6" class="text-center">Carregando...</td></tr>
+                            <tr><td colspan="7" class="text-center">Carregando...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- Modal de Faltantes -->
+
     <div id="modalFaltantes" class="modal-custom">
         <div class="modal-content-custom">
             <h4><i class="fas fa-users-slash"></i> Pessoas que não comeram hoje</h4>
             <p id="modalInfo" class="text-muted"></p>
-            <div id="listaFaltantes" style="max-height: 400px; overflow-y: auto;">
+            <div id="listaFaltantes" class="lista-faltantes">
                 <div class="loading-spinner"></div> Carregando...
             </div>
             <button class="btn btn-primary mt-3 w-100" onclick="fecharModalFaltantes()">Fechar</button>
         </div>
     </div>
-    
-    <!-- Modal QR Code -->
+
     <div id="modalQRCode" class="modal-custom">
-        <div class="modal-content-custom" style="max-width: 350px; text-align: center;">
+        <div class="modal-content-custom modal-qrcode-content">
             <h4><i class="fas fa-qrcode"></i> QR Code para Alunos</h4>
             <div id="qrCodeImage" class="my-3"></div>
             <p class="text-muted small">Escaneie o QR Code para avaliar a refeição</p>
@@ -502,44 +566,236 @@
             <button class="btn btn-primary w-100" onclick="fecharModalQRCode()">Fechar</button>
         </div>
     </div>
-    
-    <!-- ============================================ -->
-    <!-- 🍽️ SCRIPT PRINCIPAL DO DASHBOARD COZINHA   -->
-    <!-- ============================================ -->
+
     <script src="js/cozinha-dashboard.js"></script>
-    
-    <!-- ============================================ -->
-    <!-- 📱 ESCALA MOBILE (INLINE - PEQUENO)         -->
-    <!-- ============================================ -->
+
+    <script>
+    (function() {
+        'use strict';
+
+        const FiltrosBanco = {
+            turmas: [], cursos: [], carregado: false, ultimaFonte: null,
+
+            getToken() {
+                return localStorage.getItem('auth_token') || localStorage.getItem('token') || null;
+            },
+
+            async tentarFetch(url) {
+                const token = this.getToken();
+                if (!token) throw new Error('Sem token');
+                const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const ct = resp.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) throw new Error(`Não-JSON (${ct})`);
+                return resp.json();
+            },
+
+            async carregar() {
+                const statusEl = document.getElementById('filtrosStatusAnalise');
+                const logDebug = (msg, tipo = 'info') => {
+                    if (!statusEl) return;
+                    if (tipo === 'loading') statusEl.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${msg}`;
+                    else if (tipo === 'error') statusEl.innerHTML = `<i class="fas fa-exclamation-triangle text-danger"></i> ${msg}`;
+                    else if (tipo === 'success') statusEl.innerHTML = `<i class="fas fa-check-circle text-success"></i> ${msg}`;
+                    else if (tipo === 'warn') statusEl.innerHTML = `<i class="fas fa-info-circle text-warning"></i> ${msg}`;
+                };
+
+                logDebug('Carregando turmas/cursos...', 'loading');
+
+                try {
+                    const data = await this.tentarFetch('/api/cozinha/turmas-cursos');
+                    if (data && data.success) {
+                        this.turmas = Array.isArray(data.turmas) ? data.turmas : [];
+                        this.cursos = Array.isArray(data.cursos) ? data.cursos : [];
+                        this.ultimaFonte = 'endpoint-dedicado';
+                        this.finalizarComSucesso(logDebug);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[FiltrosBanco] endpoint-dedicado falhou:', e.message);
+                }
+
+                try {
+                    const data = await this.tentarFetch('/api/cozinha/dashboard');
+                    if (data && data.success) {
+                        const tSet = new Set(), cSet = new Set();
+                        (data.analisePorTurma || []).forEach(t => {
+                            if (t.turma) tSet.add(String(t.turma).trim());
+                            (t.cursos || []).forEach(c => { if (c) cSet.add(String(c).trim()); });
+                        });
+                        if (tSet.size > 0) {
+                            this.turmas = Array.from(tSet).sort((a, b) =>
+                                a.localeCompare(b, 'pt-BR', { numeric: true }));
+                            this.cursos = Array.from(cSet).sort((a, b) =>
+                                a.localeCompare(b, 'pt-BR'));
+                            this.ultimaFonte = 'dashboard-derivado';
+                            this.finalizarComSucesso(logDebug);
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[FiltrosBanco] dashboard falhou:', e.message);
+                }
+
+                logDebug('Não foi possível carregar turmas/cursos.', 'error');
+                this.popularSelects();
+            },
+
+            finalizarComSucesso(logDebug) {
+                this.popularSelects();
+                this.carregado = true;
+                logDebug(`✓ ${this.turmas.length} turma(s) e ${this.cursos.length} curso(s) — fonte: ${this.ultimaFonte}`, 'success');
+            },
+
+            popularSelects() {
+                const populate = (id, lista, vazioLabel, vazioValor) => {
+                    const sel = document.getElementById(id);
+                    if (!sel) return;
+                    const atual = sel.value || vazioValor;
+                    sel.innerHTML = `<option value="${vazioValor}">${vazioLabel}</option>`;
+                    lista.forEach(v => {
+                        const opt = document.createElement('option');
+                        opt.value = v;
+                        opt.textContent = v;
+                        sel.appendChild(opt);
+                    });
+                    if (lista.includes(atual)) sel.value = atual;
+                };
+                populate('filtroTurmaAnalise', this.turmas, 'Todas as turmas', 'todas');
+                populate('filtroCursoAnalise', this.cursos, 'Todos os cursos', 'todos');
+                populate('filtroTurmaFeedback', this.turmas, 'Todas as turmas', 'todas');
+                populate('filtroCursoFeedback', this.cursos, 'Todos os cursos', 'todos');
+            }
+        };
+
+        window.FiltrosBanco = FiltrosBanco;
+
+        window.aplicarFiltrosAnalise = function() {
+            const turma    = document.getElementById('filtroTurmaAnalise')?.value    || 'todas';
+            const curso    = document.getElementById('filtroCursoAnalise')?.value    || 'todos';
+            const periodo  = document.getElementById('filtroPeriodoAnalise')?.value  || 'hoje';
+            const refeicao = document.getElementById('filtroRefeicaoAnalise')?.value || 'todas';
+
+            const filtros = { turma, curso, periodo, refeicao };
+            try { localStorage.setItem('cozinha_filtros_analise', JSON.stringify(filtros)); } catch (e) {}
+
+            renderBadgesFiltrosAnalise(filtros);
+
+            if (typeof window.carregarAnaliseTurmas === 'function') {
+                window.carregarAnaliseTurmas(filtros);
+            }
+        };
+
+        window.limparFiltrosAnalise = function() {
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            set('filtroTurmaAnalise', 'todas');
+            set('filtroCursoAnalise', 'todos');
+            set('filtroPeriodoAnalise', 'hoje');
+            set('filtroRefeicaoAnalise', 'todas');
+            try { localStorage.removeItem('cozinha_filtros_analise'); } catch (e) {}
+            renderBadgesFiltrosAnalise(null);
+            if (typeof window.carregarAnaliseTurmas === 'function') {
+                window.carregarAnaliseTurmas(null);
+            }
+        };
+
+        function renderBadgesFiltrosAnalise(filtros) {
+            const cont = document.getElementById('filtrosAtivosAnalise');
+            if (!cont) return;
+            cont.innerHTML = '';
+            if (!filtros) return;
+            const labels = { turma: 'Turma', curso: 'Curso', periodo: 'Período', refeicao: 'Refeição' };
+            const naoVazios = { turma: 'todas', curso: 'todos', periodo: 'hoje', refeicao: 'todas' };
+            Object.keys(filtros).forEach(k => {
+                const v = filtros[k];
+                if (!v || v === naoVazios[k]) return;
+                const badge = document.createElement('span');
+                badge.className = 'filtro-badge-ativo';
+                badge.innerHTML = `
+                    <i class="fas fa-tag"></i>
+                    ${labels[k]}: <strong>${v}</strong>
+                    <i class="fas fa-times" title="Remover" onclick="removerFiltroAnalise('${k}')"></i>
+                `;
+                cont.appendChild(badge);
+            });
+        }
+
+        window.removerFiltroAnalise = function(chave) {
+            const map = {
+                turma:    { id: 'filtroTurmaAnalise',    v: 'todas' },
+                curso:    { id: 'filtroCursoAnalise',    v: 'todos' },
+                periodo:  { id: 'filtroPeriodoAnalise',  v: 'hoje' },
+                refeicao: { id: 'filtroRefeicaoAnalise', v: 'todas' }
+            };
+            const cfg = map[chave];
+            if (!cfg) return;
+            const el = document.getElementById(cfg.id);
+            if (el) el.value = cfg.v;
+            window.aplicarFiltrosAnalise();
+        };
+
+        function restaurarFiltrosAnalise() {
+            try {
+                const raw = localStorage.getItem('cozinha_filtros_analise');
+                if (!raw) return;
+                const f = JSON.parse(raw);
+                const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+                set('filtroTurmaAnalise', f.turma);
+                set('filtroCursoAnalise', f.curso);
+                set('filtroPeriodoAnalise', f.periodo);
+                set('filtroRefeicaoAnalise', f.refeicao);
+                renderBadgesFiltrosAnalise(f);
+            } catch (e) {}
+        }
+
+        let debounceTimer = null;
+        window.aplicarFiltrosFeedbackDebounce = function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                if (typeof window.aplicarFiltrosFeedback === 'function') {
+                    window.aplicarFiltrosFeedback();
+                }
+            }, 350);
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await FiltrosBanco.carregar();
+            restaurarFiltrosAnalise();
+            ['filtroTurmaAnalise', 'filtroCursoAnalise', 'filtroPeriodoAnalise', 'filtroRefeicaoAnalise']
+                .forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('change', window.aplicarFiltrosAnalise);
+                });
+            if (typeof window.carregarAnaliseTurmas === 'function') {
+                const ativos = localStorage.getItem('cozinha_filtros_analise');
+                window.carregarAnaliseTurmas(ativos ? JSON.parse(ativos) : null);
+            }
+        });
+    })();
+    </script>
+
     <script>
         (function() {
             if (window.innerWidth > 768) return;
-            
-            function calcularEscalaMobile() {
-                const width = window.innerWidth;
-                if (width <= 320) return 0.55;
-                if (width <= 360) return 0.6;
-                if (width <= 400) return 0.65;
-                if (width <= 500) return 0.75;
-                if (width <= 600) return 0.85;
-                if (width <= 700) return 0.95;
+            function calc() {
+                const w = window.innerWidth;
+                if (w <= 320) return 0.55;
+                if (w <= 360) return 0.6;
+                if (w <= 400) return 0.65;
+                if (w <= 500) return 0.75;
+                if (w <= 600) return 0.85;
+                if (w <= 700) return 0.95;
                 return 1;
             }
-            
-            const escala = calcularEscalaMobile();
-            document.documentElement.style.setProperty('--scale-ratio', escala);
+            document.documentElement.style.setProperty('--scale-ratio', calc());
         })();
     </script>
-    
-    <!-- ============================================ -->
-    <!-- 🔧 SERVICE WORKER                            -->
-    <!-- ============================================ -->
+
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('✅ Service Worker ativo'))
-                    .catch(err => console.log('❌ Erro:', err));
+                    .catch(err => console.warn('SW:', err));
             });
         }
     </script>

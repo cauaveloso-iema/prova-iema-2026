@@ -1,6 +1,5 @@
 // ============================================
 // 🍽️ COZINHA - DASHBOARD INTELIGENTE
-// Frontend JS separado do HTML
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -11,36 +10,45 @@ let chartTurmas = null;
 let todosFeedbacks = [];
 let feedbacksFiltrados = [];
 
+let analiseTurmasCompleta = [];
+let analiseTurmasFiltrada = [];
+
+// ============================================
+// 🔎 LEITURA DE FILTROS DA ANÁLISE
+// ============================================
+function lerFiltrosAnalise() {
+    try {
+        const raw = localStorage.getItem('cozinha_filtros_analise');
+        if (!raw) return null;
+        const f = JSON.parse(raw);
+        if (typeof f !== 'object' || f === null) return null;
+        return {
+            turma:    f.turma    || 'todas',
+            curso:    f.curso    || 'todos',
+            periodo:  f.periodo  || 'hoje',
+            refeicao: f.refeicao || 'todas'
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
 // ============================================
 // 🛡️ PROTEÇÃO CONTRA alert() NATIVO (Kodular)
 // ============================================
 (function protegerContraAlertNativo() {
     let __emProgresso = false;
-    
     window.mostrarToastCozinha = function(mensagem) {
-        if (__emProgresso) {
-            console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
-            return;
-        }
+        if (__emProgresso) return;
         __emProgresso = true;
-        
         try {
             const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
                             (typeof window.AppInventor !== 'undefined');
-            
-            // Se tem a função global, usa ela
             if (typeof window.mostrarToastCozinha === 'function') {
                 window.mostrarToastCozinha(String(mensagem), 'info');
                 return;
             }
-            
-            // Desktop: log no console
-            if (!isWebView) {
-                console.log('%c[ALERT] ' + mensagem, 'background:#0d6efd;color:white;padding:4px 8px;border-radius:4px;');
-                return;
-            }
-            
-            // WebView sem toast: modal simples
+            if (!isWebView) return;
             const modal = document.createElement('div');
             modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
                 background:rgba(0,0,0,0.6);display:flex;align-items:center;
@@ -58,82 +66,54 @@ let feedbacksFiltrados = [];
                 </div>
             `;
             document.body.appendChild(modal);
-        } finally {
-            __emProgresso = false;
-        }
+        } finally { __emProgresso = false; }
     };
-    
-    console.log('🛡️ [Proteção] window.mostrarToastCozinha sobrescrito (cozinha)');
 })();
 
 // ============================================
-// 🍞 TOAST CUSTOMIZADO (não trava no Kodular)
+// 🍞 TOAST CUSTOMIZADO
 // ============================================
 function mostrarToastCozinha(mensagem, tipo = 'info', duracao = 3500) {
-    // Remove toast anterior se existir
     const anterior = document.getElementById('toastCozinha');
     if (anterior) anterior.remove();
-    
+
     const cores = {
         success: { bg: '#10b981', icone: 'fa-check-circle' },
         error:   { bg: '#ef4444', icone: 'fa-exclamation-circle' },
         warning: { bg: '#f59e0b', icone: 'fa-exclamation-triangle' },
         info:    { bg: '#0d6efd', icone: 'fa-info-circle' }
     };
-    
     const cor = cores[tipo] || cores.info;
-    
+
     const toast = document.createElement('div');
     toast.id = 'toastCozinha';
     toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        left: 50%;
+        position: fixed; top: 20px; left: 50%;
         transform: translateX(-50%) translateY(-100px);
-        background: ${cor.bg};
-        color: white;
-        padding: 14px 22px;
-        border-radius: 10px;
-        box-shadow: 0 6px 24px rgba(0,0,0,0.2);
-        z-index: 99999;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-family: -apple-system, sans-serif;
-        font-size: 14px;
-        font-weight: 500;
-        max-width: 90%;
-        transition: transform 0.3s ease;
+        background: ${cor.bg}; color: white; padding: 14px 22px;
+        border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+        z-index: 99999; display: flex; align-items: center; gap: 10px;
+        font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 500;
+        max-width: 90%; transition: transform 0.3s ease;
     `;
-    
     const icone = document.createElement('i');
     icone.className = `fas ${cor.icone}`;
     icone.style.fontSize = '18px';
-    
     const span = document.createElement('span');
     span.textContent = mensagem;
-    
     toast.appendChild(icone);
     toast.appendChild(span);
     document.body.appendChild(toast);
-    
-    // Animação de entrada
-    setTimeout(() => {
-        toast.style.transform = 'translateX(-50%) translateY(0)';
-    }, 50);
-    
-    // Animação de saída
+    setTimeout(() => { toast.style.transform = 'translateX(-50%) translateY(0)'; }, 50);
     setTimeout(() => {
         toast.style.transform = 'translateX(-50%) translateY(-100px)';
         setTimeout(() => toast.remove(), 300);
     }, duracao);
 }
-
-// Expõe globalmente
 window.mostrarToastCozinha = mostrarToastCozinha;
 
 // ============================================
-// 🔐 UTILITÁRIO ESCAPE HTML
+// 🔐 ESCAPE HTML
 // ============================================
 function escapeHTML(str) {
     if (typeof str !== 'string') return '';
@@ -146,27 +126,28 @@ function escapeHTML(str) {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (!token) { window.location.href = '/login.html'; return; }
-    
+
     const userStorage = JSON.parse(localStorage.getItem('user_data') || '{}');
     userData = userStorage;
-    
+
     document.getElementById('userName').textContent = userStorage.nome || 'Usuário';
     document.getElementById('userRole').textContent = 'Cozinha';
-    
+
     if (!['cozinha', 'super_admin', 'admin'].includes(userStorage.role)) {
         mostrarToastCozinha('Acesso negado. Perfil não autorizado.');
         window.location.href = '/login.html';
         return;
     }
-    
+
     await carregarFotoPerfil();
     await carregarDashboard();
-    
+
     atualizarRelogio();
     setInterval(atualizarRelogio, 1000);
     setInterval(carregarDashboard, 30000);
-    
-    document.getElementById('filtroTurma').addEventListener('input', filtrarTabela);
+
+    const filtroTurmaEl = document.getElementById('filtroTurmaTexto') || document.getElementById('filtroTurma');
+    if (filtroTurmaEl) filtroTurmaEl.addEventListener('input', filtrarTabela);
 });
 
 // ============================================
@@ -178,13 +159,11 @@ async function carregarFotoPerfil() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        if (data.success && data.perfil.fotoPerfil) {
+        if (data.success && data.perfil && data.perfil.fotoPerfil) {
             const avatar = document.getElementById('userAvatar');
-            avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
+            if (avatar) avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
         }
-    } catch (error) {
-        console.error('Erro ao carregar foto:', error);
-    }
+    } catch (error) { console.error('Erro ao carregar foto:', error); }
 }
 
 // ============================================
@@ -192,12 +171,14 @@ async function carregarFotoPerfil() {
 // ============================================
 function atualizarRelogio() {
     const agora = new Date();
-    document.getElementById('dataAtual').textContent = agora.toLocaleDateString('pt-BR');
-    document.getElementById('horaAtual').textContent = agora.toLocaleTimeString('pt-BR');
+    const elData = document.getElementById('dataAtual');
+    const elHora = document.getElementById('horaAtual');
+    if (elData) elData.textContent = agora.toLocaleDateString('pt-BR');
+    if (elHora) elHora.textContent = agora.toLocaleTimeString('pt-BR');
 }
 
 // ============================================
-// 📊 DASHBOARD PRINCIPAL
+// 📊 DASHBOARD
 // ============================================
 async function carregarDashboard() {
     try {
@@ -205,92 +186,189 @@ async function carregarDashboard() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (data.success) {
             dashboardData = data;
-            
-            document.getElementById('totalPessoas').textContent = data.perfis?.total || 0;
-            document.getElementById('detalhePerfis').innerHTML = `👍 ${data.perfis?.sempre || 0} | ⚠️ ${data.perfis?.as_vezes || 0} | ❌ ${data.perfis?.nunca || 0}`;
-            document.getElementById('pessoasQueComeram').textContent = data.registrosReais?.pessoasUnicas || 0;
-            document.getElementById('percentualGeral').innerHTML = `${data.analiseAdesao?.taxaAdesao || 0}% do esperado`;
-            document.getElementById('taxaAdesao').textContent = `${data.analiseAdesao?.taxaAdesao || 0}%`;
-            document.getElementById('refeicaoHoje').textContent = data.registrosReais?.total || 0;
-            
-            document.getElementById('contManha').textContent = data.registrosReais?.manha || 0;
-            document.getElementById('contAlmoco').textContent = data.registrosReais?.almoco || 0;
-            document.getElementById('contTarde').textContent = data.registrosReais?.tarde || 0;
-            
-            document.getElementById('prevManha').textContent = data.previsao?.manha?.pessoas || 0;
-            document.getElementById('prevAlmoco').textContent = data.previsao?.almoco?.pessoas || 0;
-            document.getElementById('prevTarde').textContent = data.previsao?.tarde?.pessoas || 0;
-            
-            document.getElementById('kgManha').textContent = data.previsao?.manha?.kg || 0;
-            document.getElementById('kgAlmoco').textContent = data.previsao?.almoco?.kg || 0;
-            document.getElementById('kgTarde').textContent = data.previsao?.tarde?.kg || 0;
-            
+
+            const setTxt = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = v;
+            };
+            const setHTML = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = v;
+            };
+
+            setTxt('totalPessoas',    data.perfis?.total || 0);
+            setHTML('detalhePerfis',
+                `👍 ${data.perfis?.sempre || 0} | ⚠️ ${data.perfis?.as_vezes || 0} | ❌ ${data.perfis?.nunca || 0}`);
+            setTxt('pessoasQueComeram', data.registrosReais?.pessoasUnicas || 0);
+            setHTML('percentualGeral',
+                `${data.analiseAdesao?.taxaAdesao || 0}% do esperado`);
+            setTxt('taxaAdesao',       `${data.analiseAdesao?.taxaAdesao || 0}%`);
+            setTxt('refeicaoHoje',     data.registrosReais?.total || 0);
+
+            setTxt('contManha', data.registrosReais?.manha || 0);
+            setTxt('contAlmoco', data.registrosReais?.almoco || 0);
+            setTxt('contTarde', data.registrosReais?.tarde || 0);
+
+            setTxt('prevManha', data.previsao?.manha?.pessoas || 0);
+            setTxt('prevAlmoco', data.previsao?.almoco?.pessoas || 0);
+            setTxt('prevTarde', data.previsao?.tarde?.pessoas || 0);
+
+            setTxt('kgManha', data.previsao?.manha?.kg || 0);
+            setTxt('kgAlmoco', data.previsao?.almoco?.kg || 0);
+            setTxt('kgTarde', data.previsao?.tarde?.kg || 0);
+
             if (data.sugestaoAtual) {
                 const sugestaoDiv = document.getElementById('sugestaoPreparo');
-                let mostrarToastCozinhaClass = 'mostrarToastCozinha-info';
-                if (data.sugestaoAtual.mensagem.includes('⚠️')) mostrarToastCozinhaClass = 'mostrarToastCozinha-warning';
-                else if (data.sugestaoAtual.mensagem.includes('✅')) mostrarToastCozinhaClass = 'mostrarToastCozinha-success';
-                else if (data.sugestaoAtual.mensagem.includes('URGENTE')) mostrarToastCozinhaClass = 'mostrarToastCozinha-danger';
-                
-                sugestaoDiv.className = `mostrarToastCozinha ${mostrarToastCozinhaClass} mt-3 mb-0`;
-                sugestaoDiv.innerHTML = `<i class="fas fa-lightbulb me-2"></i> ${data.sugestaoAtual.mensagem}<br><small>${data.sugestaoAtual.acao}</small>`;
+                if (sugestaoDiv) {
+                    let cls = 'mostrarToastCozinha-info';
+                    const msg = String(data.sugestaoAtual.mensagem || '');
+                    if (msg.includes('⚠️')) cls = 'mostrarToastCozinha-warning';
+                    else if (msg.includes('✅')) cls = 'mostrarToastCozinha-success';
+                    else if (msg.includes('URGENTE')) cls = 'mostrarToastCozinha-danger';
+                    sugestaoDiv.className = `mostrarToastCozinha ${cls} mt-3 mb-0`;
+                    sugestaoDiv.innerHTML = `<i class="fas fa-lightbulb me-2"></i> ${data.sugestaoAtual.mensagem}<br><small>${data.sugestaoAtual.acao || ''}</small>`;
+                }
             }
-            
+
             const refeicaoBadge = document.getElementById('refeicaoAtualBadge');
-            if (data.refeicaoAtual === 'manha') refeicaoBadge.innerHTML = '<span class="badge bg-warning">🌅 Lanche da Manhã</span>';
-            else if (data.refeicaoAtual === 'almoco') refeicaoBadge.innerHTML = '<span class="badge bg-danger">🍽️ Almoço</span>';
-            else if (data.refeicaoAtual === 'tarde') refeicaoBadge.innerHTML = '<span class="badge bg-info">🌙 Lanche da Tarde</span>';
-            else refeicaoBadge.innerHTML = '<span class="badge bg-secondary">⏰ Fora do horário</span>';
-            
+            if (refeicaoBadge) {
+                if (data.refeicaoAtual === 'manha') refeicaoBadge.innerHTML = '<span class="badge bg-warning">🌅 Lanche da Manhã</span>';
+                else if (data.refeicaoAtual === 'almoco') refeicaoBadge.innerHTML = '<span class="badge bg-danger">🍽️ Almoço</span>';
+                else if (data.refeicaoAtual === 'tarde') refeicaoBadge.innerHTML = '<span class="badge bg-info">🌙 Lanche da Tarde</span>';
+                else refeicaoBadge.innerHTML = '<span class="badge bg-secondary">⏰ Fora do horário</span>';
+            }
+
             if (data.perfis) {
-                document.getElementById('perfilSempre').textContent = data.perfis.sempre || 0;
-                document.getElementById('perfilAsVezes').textContent = data.perfis.as_vezes || 0;
-                document.getElementById('perfilNunca').textContent = data.perfis.nunca || 0;
-                document.getElementById('perfilNaoInformado').textContent = data.perfis.nao_informado || 0;
+                setTxt('perfilSempre',       data.perfis.sempre || 0);
+                setTxt('perfilAsVezes',      data.perfis.as_vezes || 0);
+                setTxt('perfilNunca',        data.perfis.nunca || 0);
+                setTxt('perfilNaoInformado', data.perfis.nao_informado || 0);
                 atualizarGraficoPerfil(data.perfis);
             }
-            
+
             if (data.insights && data.insights.length > 0) {
                 const container = document.getElementById('insightsContainer');
-                container.innerHTML = data.insights.map(insight => `
-                    <div class="insight-card ${insight.tipo}">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <strong><i class="fas ${insight.tipo === 'danger' ? 'fa-exclamation-triangle' : insight.tipo === 'warning' ? 'fa-clock' : insight.tipo === 'success' ? 'fa-check-circle' : 'fa-info-circle'} me-2"></i> ${insight.titulo}</strong>
-                                <p class="mb-1 mt-1">${insight.mensagem}</p>
-                                <small class="text-muted"><i class="fas fa-lightbulb"></i> Sugestão: ${insight.acao}</small>
+                if (container) {
+                    container.innerHTML = data.insights.map(insight => `
+                        <div class="insight-card ${insight.tipo}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong><i class="fas ${
+                                        insight.tipo === 'danger' ? 'fa-exclamation-triangle' :
+                                        insight.tipo === 'warning' ? 'fa-clock' :
+                                        insight.tipo === 'success' ? 'fa-check-circle' :
+                                        'fa-info-circle'
+                                    } me-2"></i> ${escapeHTML(insight.titulo || '')}</strong>
+                                    <p class="mb-1 mt-1">${escapeHTML(insight.mensagem || '')}</p>
+                                    <small class="text-muted"><i class="fas fa-lightbulb"></i> Sugestão: ${escapeHTML(insight.acao || '')}</small>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `).join('');
+                    `).join('');
+                }
             } else {
-                document.getElementById('insightsContainer').innerHTML = '<div class="text-center text-muted py-3">Nenhum insight no momento</div>';
+                const container = document.getElementById('insightsContainer');
+                if (container) {
+                    container.innerHTML = '<div class="text-center text-muted py-3">Nenhum insight no momento</div>';
+                }
             }
-            
+
             if (data.analisePorTurma && data.analisePorTurma.length > 0) {
+                analiseTurmasCompleta = data.analisePorTurma;
                 window.turmasData = data.analisePorTurma;
-                atualizarTabelaTurmas(data.analisePorTurma);
-                atualizarGraficoTurmas(data.analisePorTurma);
+                const filtros = lerFiltrosAnalise();
+                if (filtros) {
+                    await carregarAnaliseTurmas(filtros);
+                } else {
+                    analiseTurmasFiltrada = data.analisePorTurma;
+                    atualizarTabelaTurmas(data.analisePorTurma);
+                    atualizarGraficoTurmas(data.analisePorTurma);
+                }
+            } else {
+                const tbody = document.getElementById('tabelaTurmas');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum dado de turma disponível</td></tr>';
             }
-            
+
             await carregarFeedbacks();
         }
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
-        document.getElementById('insightsContainer').innerHTML = '<div class="mostrarToastCozinha mostrarToastCozinha-danger">Erro ao carregar dados. Tente novamente.</div>';
+        const container = document.getElementById('insightsContainer');
+        if (container) {
+            container.innerHTML = '<div class="mostrarToastCozinha mostrarToastCozinha-danger">Erro ao carregar dados. Tente novamente.</div>';
+        }
     }
+}
+
+// ============================================
+// 🎯 FILTROS DA ANÁLISE DETALHADA POR TURMA
+// ============================================
+async function carregarAnaliseTurmas(filtros) {
+    if (!filtros) filtros = lerFiltrosAnalise();
+
+    try {
+        const qs = new URLSearchParams();
+        if (filtros) {
+            if (filtros.turma && filtros.turma !== 'todas')       qs.append('turma', filtros.turma);
+            if (filtros.curso && filtros.curso !== 'todos')       qs.append('curso', filtros.curso);
+            if (filtros.periodo && filtros.periodo !== 'hoje')    qs.append('periodo', filtros.periodo);
+            if (filtros.refeicao && filtros.refeicao !== 'todas') qs.append('refeicao', filtros.refeicao);
+        }
+        const url = '/api/cozinha/analise-turmas' + (qs.toString() ? `?${qs}` : '');
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && Array.isArray(data.analisePorTurma)) {
+                analiseTurmasFiltrada = data.analisePorTurma;
+                atualizarTabelaTurmas(analiseTurmasFiltrada);
+                atualizarGraficoTurmas(analiseTurmasFiltrada);
+                return;
+            }
+        }
+    } catch (err) {
+        console.warn('[carregarAnaliseTurmas] falha no endpoint:', err.message);
+    }
+
+    aplicarFiltrosLocaisAnalise(filtros);
+}
+
+function aplicarFiltrosLocaisAnalise(filtros) {
+    let dados = Array.isArray(analiseTurmasCompleta) ? [...analiseTurmasCompleta] : [];
+
+    if (filtros) {
+        if (filtros.turma && filtros.turma !== 'todas') {
+            dados = dados.filter(t => t.turma === filtros.turma);
+        }
+        if (filtros.curso && filtros.curso !== 'todos') {
+            dados = dados.filter(t => {
+                if (Array.isArray(t.cursos) && t.cursos.includes(filtros.curso)) return true;
+                if (t.curso === filtros.curso) return true;
+                return false;
+            });
+        }
+    }
+
+    analiseTurmasFiltrada = dados;
+    atualizarTabelaTurmas(dados);
+    atualizarGraficoTurmas(dados);
 }
 
 // ============================================
 // 📈 GRÁFICOS
 // ============================================
 function atualizarGraficoPerfil(perfis) {
-    const ctx = document.getElementById('perfilChart').getContext('2d');
+    const canvas = document.getElementById('perfilChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (chartPerfil) chartPerfil.destroy();
-    
+
     chartPerfil = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -310,20 +388,27 @@ function atualizarGraficoPerfil(perfis) {
 }
 
 function atualizarGraficoTurmas(turmas) {
-    const ctx = document.getElementById('turmasChart').getContext('2d');
+    const canvas = document.getElementById('turmasChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (chartTurmas) chartTurmas.destroy();
-    
-    const labels = turmas.map(t => t.turma);
-    const dizemQueComem = turmas.map(t => t.dizemQueComem);
-    const comeramHoje = turmas.map(t => t.comeramHoje);
-    
+
+    if (!turmas || turmas.length === 0) {
+        chartTurmas = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: [], datasets: [] },
+            options: { responsive: true, maintainAspectRatio: true }
+        });
+        return;
+    }
+
     chartTurmas = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: turmas.map(t => t.turma),
             datasets: [
-                { label: 'Dizem que comem', data: dizemQueComem, backgroundColor: '#f59e0b', borderRadius: 8 },
-                { label: 'Comeram hoje', data: comeramHoje, backgroundColor: '#10b981', borderRadius: 8 }
+                { label: 'Dizem que comem', data: turmas.map(t => t.dizemQueComem || 0), backgroundColor: '#f59e0b', borderRadius: 8 },
+                { label: 'Comeram hoje', data: turmas.map(t => t.comeramHoje || 0), backgroundColor: '#10b981', borderRadius: 8 }
             ]
         },
         options: {
@@ -340,40 +425,35 @@ function atualizarGraficoTurmas(turmas) {
 // ============================================
 function atualizarTabelaTurmas(turmas) {
     const tbody = document.getElementById('tabelaTurmas');
+    if (!tbody) return;
+
     if (!turmas || turmas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma turma cadastrada</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma turma encontrada com os filtros aplicados</td></tr>';
         return;
     }
-    
+
     tbody.innerHTML = turmas.map(t => {
         let situacao = '';
         let situacaoClass = '';
-        if (t.taxaAdesao >= 70) {
-            situacao = '✅ Boa adesão';
-            situacaoClass = 'text-success';
-        } else if (t.taxaAdesao >= 40) {
-            situacao = '⚠️ Adesão média';
-            situacaoClass = 'text-warning';
-        } else {
-            situacao = '❌ Baixa adesão';
-            situacaoClass = 'text-danger';
-        }
-        
-        let barColor = t.taxaAdesao >= 70 ? 'high' : (t.taxaAdesao >= 40 ? 'medium' : 'low');
-        
+        if (t.taxaAdesao >= 70) { situacao = '✅ Boa adesão'; situacaoClass = 'text-success'; }
+        else if (t.taxaAdesao >= 40) { situacao = '⚠️ Adesão média'; situacaoClass = 'text-warning'; }
+        else { situacao = '❌ Baixa adesão'; situacaoClass = 'text-danger'; }
+
+        const barColor = t.taxaAdesao >= 70 ? 'high' : (t.taxaAdesao >= 40 ? 'medium' : 'low');
+
         return `
-            <tr data-turma="${t.turma}">
-                <td><strong>${t.turma}</strong></td>
-                <td class="text-center">${t.totalAlunos}</td>
-                <td class="text-center">${t.dizemQueComem}</td>
-                <td class="text-center"><span class="badge bg-success">${t.comeramHoje}</span></td>
+            <tr data-turma="${escapeHTML(t.turma || '')}">
+                <td><strong>${escapeHTML(t.turma || '')}</strong></td>
+                <td class="text-center">${t.totalAlunos || 0}</td>
+                <td class="text-center">${t.dizemQueComem || 0}</td>
+                <td class="text-center"><span class="badge bg-success">${t.comeramHoje || 0}</span></td>
                 <td class="text-center" style="min-width: 100px;">
                     <div class="progress-bar-custom">
-                        <div class="progress-fill ${barColor}" style="width: ${t.taxaAdesao}%"></div>
+                        <div class="progress-fill ${barColor}" style="width: ${t.taxaAdesao || 0}%"></div>
                     </div>
-                    <small>${t.taxaAdesao}%</small>
+                    <small>${t.taxaAdesao || 0}%</small>
                 </td>
-                <td class="text-center">${t.faltantes}</td>
+                <td class="text-center">${t.faltantes || 0}</td>
                 <td class="text-center ${situacaoClass}">${situacao}</td>
             </tr>
         `;
@@ -381,21 +461,19 @@ function atualizarTabelaTurmas(turmas) {
 }
 
 function filtrarTabela() {
-    const filtro = document.getElementById('filtroTurma').value.toLowerCase();
+    const el = document.getElementById('filtroTurmaTexto') || document.getElementById('filtroTurma');
+    if (!el) return;
+    const filtro = el.value.toLowerCase();
     const linhas = document.querySelectorAll('#tabelaTurmas tr');
-    
     linhas.forEach(linha => {
         const turma = linha.getAttribute('data-turma');
-        if (turma && turma.toLowerCase().includes(filtro)) {
-            linha.style.display = '';
-        } else if (linha.getAttribute('data-turma')) {
-            linha.style.display = 'none';
-        }
+        if (turma && turma.toLowerCase().includes(filtro)) linha.style.display = '';
+        else if (turma) linha.style.display = 'none';
     });
 }
 
 // ============================================
-// ⭐ FEEDBACKS - COM FILTROS
+// ⭐ FEEDBACKS
 // ============================================
 let timeoutBusca;
 
@@ -405,59 +483,84 @@ function aplicarFiltrosFeedbackDebounce() {
 }
 
 function aplicarFiltrosFeedback() {
-    const refeicao = document.getElementById('filtroRefeicaoFeedback').value;
-    const notaMin = parseInt(document.getElementById('filtroNotaMin').value);
-    const gostou = document.getElementById('filtroGostou').value;
-    const anonimo = document.getElementById('filtroAnonimo').value;
-    const busca = document.getElementById('filtroBuscaFeedback').value.toLowerCase();
-    
+    const elRefeicao = document.getElementById('filtroRefeicaoFeedback');
+    const elTurma    = document.getElementById('filtroTurmaFeedback');
+    const elCurso    = document.getElementById('filtroCursoFeedback');
+    const elNota     = document.getElementById('filtroNotaMin');
+    const elGostou   = document.getElementById('filtroGostou');
+    const elAnonimo  = document.getElementById('filtroAnonimo');
+    const elBusca    = document.getElementById('filtroBuscaFeedback');
+
+    const refeicao = elRefeicao ? elRefeicao.value : 'todas';
+    const turma    = elTurma    ? elTurma.value    : 'todas';
+    const curso    = elCurso    ? elCurso.value    : 'todos';
+    const notaMin  = elNota     ? parseInt(elNota.value) || 1 : 1;
+    const gostou   = elGostou   ? elGostou.value   : 'todos';
+    const anonimo  = elAnonimo  ? elAnonimo.value  : 'todos';
+    const busca    = (elBusca   ? elBusca.value    : '').toLowerCase();
+
     feedbacksFiltrados = todosFeedbacks.filter(f => {
         if (refeicao !== 'todas' && f.tipoRefeicao !== refeicao) return false;
+        if (turma    !== 'todas' && f.alunoTurma  !== turma)      return false;
+        if (curso    !== 'todos' && f.alunoCurso  !== curso)      return false;
         if (f.nota < notaMin) return false;
         if (gostou !== 'todos' && f.gostou !== gostou) return false;
         if (anonimo !== 'todos') {
             const isAnonimo = anonimo === 'sim';
-            if (f.anonimo !== isAnonimo) return false;
+            if (!!f.anonimo !== isAnonimo) return false;
         }
         if (busca) {
-            const nomeMatch = f.alunoNome?.toLowerCase().includes(busca);
-            const turmaMatch = f.alunoTurma?.toLowerCase().includes(busca);
-            const comentarioMatch = f.comentario?.toLowerCase().includes(busca);
-            if (!nomeMatch && !turmaMatch && !comentarioMatch) return false;
+            const nomeMatch       = (f.alunoNome   || '').toLowerCase().includes(busca);
+            const turmaMatch      = (f.alunoTurma  || '').toLowerCase().includes(busca);
+            const cursoMatch      = (f.alunoCurso  || '').toLowerCase().includes(busca);
+            const comentarioMatch = (f.comentario  || '').toLowerCase().includes(busca);
+            if (!nomeMatch && !turmaMatch && !cursoMatch && !comentarioMatch) return false;
         }
         return true;
     });
-    
+
     atualizarListaFeedbacks();
     atualizarFiltrosAtivos();
-    
-    document.getElementById('feedbacksFiltrados').textContent = feedbacksFiltrados.length;
+
+    const elFiltrados = document.getElementById('feedbacksFiltrados');
+    if (elFiltrados) elFiltrados.textContent = feedbacksFiltrados.length;
 }
 
 function atualizarListaFeedbacks() {
     const tbody = document.getElementById('listaFeedbacks');
-    
+    if (!tbody) return;
+
     if (feedbacksFiltrados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum feedback encontrado com os filtros aplicados</td></tr>';
-        document.getElementById('feedbacksCount').textContent = '0';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum feedback encontrado com os filtros aplicados</td></tr>';
+        const elCount = document.getElementById('feedbacksCount');
+        if (elCount) elCount.textContent = '0';
         return;
     }
-    
-    document.getElementById('feedbacksCount').textContent = feedbacksFiltrados.length;
-    
+
+    const elCount = document.getElementById('feedbacksCount');
+    if (elCount) elCount.textContent = feedbacksFiltrados.length;
+
     tbody.innerHTML = feedbacksFiltrados.map(f => {
         let notaClass = '';
         if (f.nota >= 4) notaClass = 'alta';
         else if (f.nota >= 2.5) notaClass = 'media';
         else notaClass = 'baixa';
-        
+
         return `
             <tr>
-                <td>${f.alunoNome}${f.anonimo ? ' <i class="fas fa-user-secret text-muted" title="Anônimo"></i>' : ''}</td>
-                <td>${f.alunoTurma || '-'}</td>
-                <td><span class="badge ${f.tipoRefeicao === 'manha' ? 'badge-manha' : f.tipoRefeicao === 'almoco' ? 'badge-almoco' : 'badge-tarde'}">${f.tipoRefeicao === 'manha' ? '🌅 Manhã' : f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'}</span></td>
-                <td><span class="nota-badge ${notaClass}">${'★'.repeat(f.nota)}${'☆'.repeat(5-f.nota)}</span></td>
-                <td><small>${f.comentario ? (f.comentario.length > 60 ? f.comentario.substring(0,60) + '...' : f.comentario) : '-'}</small></td>
+                <td>${escapeHTML(f.alunoNome || '')}${f.anonimo ? ' <i class="fas fa-user-secret text-muted" title="Anônimo"></i>' : ''}</td>
+                <td>${escapeHTML(f.alunoTurma || '-')}</td>
+                <td>${escapeHTML(f.alunoCurso || '-')}</td>
+                <td><span class="badge ${f.tipoRefeicao === 'manha' ? 'badge-manha' : f.tipoRefeicao === 'almoco' ? 'badge-almoco' : 'badge-tarde'}">${
+                    f.tipoRefeicao === 'manha' ? '🌅 Manhã' :
+                    f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'
+                }</span></td>
+                <td><span class="nota-badge ${notaClass}">${'★'.repeat(f.nota)}${'☆'.repeat(5 - f.nota)}</span></td>
+                <td><small>${f.comentario
+                    ? (f.comentario.length > 60
+                        ? escapeHTML(f.comentario.substring(0, 60)) + '...'
+                        : escapeHTML(f.comentario))
+                    : '-'}</small></td>
                 <td><small>${new Date(f.createdAt).toLocaleString()}</small></td>
             </tr>
         `;
@@ -466,60 +569,80 @@ function atualizarListaFeedbacks() {
 
 function atualizarFiltrosAtivos() {
     const container = document.getElementById('filtrosAtivosContainer');
-    const refeicao = document.getElementById('filtroRefeicaoFeedback').value;
-    const notaMin = document.getElementById('filtroNotaMin').value;
-    const gostou = document.getElementById('filtroGostou').value;
-    const anonimo = document.getElementById('filtroAnonimo').value;
-    const busca = document.getElementById('filtroBuscaFeedback').value;
-    
+    if (!container) return;
+
+    const elRefeicao = document.getElementById('filtroRefeicaoFeedback');
+    const elTurma    = document.getElementById('filtroTurmaFeedback');
+    const elCurso    = document.getElementById('filtroCursoFeedback');
+    const elNota     = document.getElementById('filtroNotaMin');
+    const elGostou   = document.getElementById('filtroGostou');
+    const elAnonimo  = document.getElementById('filtroAnonimo');
+    const elBusca    = document.getElementById('filtroBuscaFeedback');
+
+    const refeicao = elRefeicao ? elRefeicao.value : 'todas';
+    const turma    = elTurma    ? elTurma.value    : 'todas';
+    const curso    = elCurso    ? elCurso.value    : 'todos';
+    const notaMin  = elNota     ? elNota.value     : '1';
+    const gostou   = elGostou   ? elGostou.value   : 'todos';
+    const anonimo  = elAnonimo  ? elAnonimo.value  : 'todos';
+    const busca    = elBusca    ? elBusca.value    : '';
+
     let ativos = [];
-    
+
     if (refeicao !== 'todas') {
         const nomes = { manha: '🌅 Manhã', almoco: '🍽️ Almoço', tarde: '🌙 Tarde' };
-        ativos.push({ label: `Refeição: ${nomes[refeicao]}`, tipo: 'refeicao' });
+        ativos.push({ label: `Refeição: ${nomes[refeicao] || refeicao}`, tipo: 'refeicao' });
     }
-    if (notaMin !== '1') {
-        ativos.push({ label: `Nota ≥ ${notaMin}`, tipo: 'nota' });
-    }
+    if (turma !== 'todas') ativos.push({ label: `Turma: ${turma}`, tipo: 'turma' });
+    if (curso !== 'todos') ativos.push({ label: `Curso: ${curso}`, tipo: 'curso' });
+    if (notaMin !== '1')   ativos.push({ label: `Nota ≥ ${notaMin}`, tipo: 'nota' });
     if (gostou !== 'todos') {
         const nomes = { sim: '👍 Adoraram', mais_ou_menos: '😐 Mais ou menos', nao: '👎 Não gostaram' };
-        ativos.push({ label: `Opinião: ${nomes[gostou]}`, tipo: 'gostou' });
+        ativos.push({ label: `Opinião: ${nomes[gostou] || gostou}`, tipo: 'gostou' });
     }
-    if (anonimo !== 'todos') {
-        ativos.push({ label: anonimo === 'sim' ? '🔒 Anônimos' : '✅ Identificados', tipo: 'anonimo' });
-    }
-    if (busca) {
-        ativos.push({ label: `Busca: "${busca}"`, tipo: 'busca' });
-    }
-    
+    if (anonimo !== 'todos') ativos.push({ label: anonimo === 'sim' ? '🔒 Anônimos' : '✅ Identificados', tipo: 'anonimo' });
+    if (busca) ativos.push({ label: `Busca: "${busca}"`, tipo: 'busca' });
+
     if (ativos.length === 0) {
         container.innerHTML = '<span class="text-muted small">Nenhum filtro ativo</span>';
         return;
     }
-    
+
     container.innerHTML = ativos.map(a => `
         <span class="filtro-tag">
-            ${a.label}
+            ${escapeHTML(a.label)}
             <i class="fas fa-times" onclick="removerFiltro('${a.tipo}')"></i>
         </span>
     `).join('');
 }
 
 function removerFiltro(tipo) {
-    if (tipo === 'refeicao') document.getElementById('filtroRefeicaoFeedback').value = 'todas';
-    if (tipo === 'nota') document.getElementById('filtroNotaMin').value = '1';
-    if (tipo === 'gostou') document.getElementById('filtroGostou').value = 'todos';
-    if (tipo === 'anonimo') document.getElementById('filtroAnonimo').value = 'todos';
-    if (tipo === 'busca') document.getElementById('filtroBuscaFeedback').value = '';
+    const setVal = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.value = v;
+    };
+    if (tipo === 'refeicao') setVal('filtroRefeicaoFeedback', 'todas');
+    if (tipo === 'turma')    setVal('filtroTurmaFeedback',    'todas');
+    if (tipo === 'curso')    setVal('filtroCursoFeedback',    'todos');
+    if (tipo === 'nota')     setVal('filtroNotaMin',          '1');
+    if (tipo === 'gostou')   setVal('filtroGostou',           'todos');
+    if (tipo === 'anonimo')  setVal('filtroAnonimo',          'todos');
+    if (tipo === 'busca')    setVal('filtroBuscaFeedback',    '');
     aplicarFiltrosFeedback();
 }
 
 function limparFiltrosFeedback() {
-    document.getElementById('filtroRefeicaoFeedback').value = 'todas';
-    document.getElementById('filtroNotaMin').value = '1';
-    document.getElementById('filtroGostou').value = 'todos';
-    document.getElementById('filtroAnonimo').value = 'todos';
-    document.getElementById('filtroBuscaFeedback').value = '';
+    const setVal = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.value = v;
+    };
+    setVal('filtroRefeicaoFeedback', 'todas');
+    setVal('filtroTurmaFeedback',    'todas');
+    setVal('filtroCursoFeedback',    'todos');
+    setVal('filtroNotaMin',          '1');
+    setVal('filtroGostou',           'todos');
+    setVal('filtroAnonimo',          'todos');
+    setVal('filtroBuscaFeedback',    '');
     aplicarFiltrosFeedback();
 }
 
@@ -529,79 +652,96 @@ async function carregarFeedbacks() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (data.success) {
             todosFeedbacks = data.ultimosFeedbacks || [];
             feedbacksFiltrados = [...todosFeedbacks];
-            
-            const stats = data.estatisticas;
-            document.getElementById('totalFeedbacks').textContent = stats.total || 0;
-            document.getElementById('mediaNotas').textContent = stats.mediaNotas || 0;
-            document.getElementById('feedbacksFiltrados').textContent = stats.total || 0;
-            
+
+            const stats = data.estatisticas || {};
+
+            const setTxt = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = v;
+            };
+            const setHTML = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = v;
+            };
+
+            setTxt('totalFeedbacks',     stats.total || 0);
+            setTxt('mediaNotas',         stats.mediaNotas || 0);
+            setTxt('feedbacksFiltrados', stats.total || 0);
+
             const media = parseFloat(stats.mediaNotas) || 0;
-            document.getElementById('estrelasMedia').innerHTML = gerarEstrelas(media);
-            
-            const maxNota = Math.max(...Object.values(stats.distribuicaoNotas), 1);
+            setHTML('estrelasMedia', gerarEstrelas(media));
+
+            const dist = stats.distribuicaoNotas || {};
+            const maxNota = Math.max(...Object.values(dist), 1);
             for (let i = 1; i <= 5; i++) {
-                const count = stats.distribuicaoNotas[i] || 0;
+                const count = dist[i] || 0;
                 const percent = (count / maxNota) * 100;
-                document.getElementById(`bar${i}`).style.width = `${percent}%`;
-                document.getElementById(`count${i}`).textContent = count;
+                const bar = document.getElementById(`bar${i}`);
+                if (bar) bar.style.width = `${percent}%`;
+                const cnt = document.getElementById(`count${i}`);
+                if (cnt) cnt.textContent = count;
             }
-            
-            document.getElementById('gostaramSim').textContent = stats.gostouStats?.sim || 0;
-            document.getElementById('gostaramMaisMenos').textContent = stats.gostouStats?.mais_ou_menos || 0;
-            document.getElementById('gostaramNao').textContent = stats.gostouStats?.nao || 0;
-            
+
+            setTxt('gostaramSim',       stats.gostouStats?.sim || 0);
+            setTxt('gostaramMaisMenos', stats.gostouStats?.mais_ou_menos || 0);
+            setTxt('gostaramNao',       stats.gostouStats?.nao || 0);
+
             const totalGostou = (stats.gostouStats?.sim || 0) + (stats.gostouStats?.mais_ou_menos || 0);
             const aprovacao = stats.total > 0 ? Math.round((totalGostou / stats.total) * 100) : 0;
-            document.getElementById('gostaram').textContent = `${aprovacao}%`;
-            document.getElementById('mediaDetalhada').textContent = stats.mediaNotas || 0;
-            
+            setTxt('gostaram',      `${aprovacao}%`);
+            setTxt('mediaDetalhada', stats.mediaNotas || 0);
+
             atualizarListaFeedbacks();
         }
     } catch (error) {
         console.error('Erro ao carregar feedbacks:', error);
-        document.getElementById('listaFeedbacks').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Erro ao carregar feedbacks</td></tr>';
+        const tbody = document.getElementById('listaFeedbacks');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar feedbacks</td></tr>';
     }
 }
 
 function gerarEstrelas(nota) {
-    const estrelasCheias = Math.floor(nota);
-    const meiaEstrela = nota % 1 >= 0.5;
+    const cheias = Math.floor(nota);
+    const meia = nota % 1 >= 0.5;
     let html = '';
-    for (let i = 0; i < estrelasCheias; i++) html += '<i class="fas fa-star text-warning"></i>';
-    if (meiaEstrela) html += '<i class="fas fa-star-half-alt text-warning"></i>';
-    for (let i = html.length / 2; i < 5; i++) html += '<i class="far fa-star text-warning"></i>';
+    for (let i = 0; i < cheias; i++) html += '<i class="fas fa-star text-warning"></i>';
+    if (meia) html += '<i class="fas fa-star-half-alt text-warning"></i>';
+    for (let i = cheias + (meia ? 1 : 0); i < 5; i++) html += '<i class="far fa-star text-warning"></i>';
     return html;
 }
 
 // ============================================
-// 📱 QR CODE E OUTRAS FUNÇÕES
+// 📱 QR CODE
 // ============================================
 function mostrarQRCodeFeedback() {
     const url = `${window.location.origin}/feedback-cozinha.html`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
-    
-    document.getElementById('qrCodeImage').innerHTML = `<img src="${qrUrl}" alt="QR Code" style="width: 200px;">`;
-    document.getElementById('linkFeedback').textContent = url;
-    document.getElementById('modalQRCode').classList.add('show');
+    const img = document.getElementById('qrCodeImage');
+    if (img) img.innerHTML = `<img src="${qrUrl}" alt="QR Code" style="width: 200px;">`;
+    const linkEl = document.getElementById('linkFeedback');
+    if (linkEl) linkEl.textContent = url;
+    const modal = document.getElementById('modalQRCode');
+    if (modal) modal.classList.add('show');
 }
 
 function fecharModalQRCode() {
-    document.getElementById('modalQRCode').classList.remove('show');
+    const modal = document.getElementById('modalQRCode');
+    if (modal) modal.classList.remove('show');
 }
 
 function toggleDropdown() {
     const menu = document.getElementById('dropdownMenu');
-    menu.classList.toggle('show');
+    if (menu) menu.classList.toggle('show');
 }
 
 document.addEventListener('click', function(event) {
     const menu = document.getElementById('dropdownMenu');
     const avatar = document.getElementById('userAvatar');
-    if (menu && !menu.contains(event.target) && !avatar.contains(event.target)) {
+    if (menu && avatar && !menu.contains(event.target) && !avatar.contains(event.target)) {
         menu.classList.remove('show');
     }
 });
@@ -616,10 +756,10 @@ async function logout() {
 }
 
 // ============================================
-// 📄 EXPORTAR PDF (padrão unificado)
+// 📄 PDF
 // ============================================
 function gerarRelatorioPDF() {
-    if (!dashboardData || !dashboardData.analisePorTurma || dashboardData.analisePorTurma.length === 0) {
+    if (!dashboardData || !analiseTurmasFiltrada || analiseTurmasFiltrada.length === 0) {
         if (typeof mostrarNotificacaoInterna === 'function') {
             mostrarNotificacaoInterna('⚠️ Nenhum dado carregado. Aguarde o dashboard carregar.', 'warning');
         } else {
@@ -627,18 +767,16 @@ function gerarRelatorioPDF() {
         }
         return;
     }
-    
-    const html = gerarHTMLRelatorioCozinha(dashboardData);
-    
+
+    const dadosParaRelatorio = { ...dashboardData, analisePorTurma: analiseTurmasFiltrada };
+    const html = gerarHTMLRelatorioCozinha(dadosParaRelatorio);
+
     const win = window.open('', '_blank');
     win.document.write(html);
     win.document.close();
     win.onload = () => setTimeout(() => win.print(), 500);
 }
 
-// ============================================
-// 🎨 GERAR HTML DO RELATÓRIO (PADRONIZADO - MODELO PSICOLOGIA)
-// ============================================
 function gerarHTMLRelatorioCozinha(data) {
     const logo = '/uploads/logo-iema.png';
     const carimbo = '/icons/assinatura_cozinha.ico';
@@ -646,101 +784,41 @@ function gerarHTMLRelatorioCozinha(data) {
     const dataRef = new Date().toLocaleDateString('pt-BR', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
-    
-    // ========== ESTATÍSTICAS ==========
+
     const statsHTML = `
         <div class="stats">
-            <div class="stat">
-                <div class="stat-value">${data.perfis?.total || 0}</div>
-                <div class="stat-label">Total de Pessoas</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">${data.registrosReais?.pessoasUnicas || 0}</div>
-                <div class="stat-label">Comeram Hoje</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">${data.analiseAdesao?.taxaAdesao || 0}%</div>
-                <div class="stat-label">Taxa de Adesão</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">${data.registrosReais?.total || 0}</div>
-                <div class="stat-label">Refeições Servidas</div>
-            </div>
+            <div class="stat"><div class="stat-value">${data.perfis?.total || 0}</div><div class="stat-label">Total de Pessoas</div></div>
+            <div class="stat"><div class="stat-value">${data.registrosReais?.pessoasUnicas || 0}</div><div class="stat-label">Comeram Hoje</div></div>
+            <div class="stat"><div class="stat-value">${data.analiseAdesao?.taxaAdesao || 0}%</div><div class="stat-label">Taxa de Adesão</div></div>
+            <div class="stat"><div class="stat-value">${data.registrosReais?.total || 0}</div><div class="stat-label">Refeições Servidas</div></div>
         </div>
     `;
-    
-    // ========== CONTAGEM POR REFEIÇÃO ==========
+
     const refeicoesHTML = `
         <div class="section-title">🍽️ Contagem por Refeição</div>
         <table>
-            <thead>
-                <tr>
-                    <th>Refeição</th>
-                    <th style="width:120px;text-align:center;">Previsto</th>
-                    <th style="width:120px;text-align:center;">Servido</th>
-                    <th style="width:120px;text-align:center;">Previsão (kg)</th>
-                </tr>
-            </thead>
+            <thead><tr><th>Refeição</th><th style="width:120px;text-align:center;">Previsto</th><th style="width:120px;text-align:center;">Servido</th><th style="width:120px;text-align:center;">Previsão (kg)</th></tr></thead>
             <tbody>
-                <tr>
-                    <td><strong>🌅 Lanche da Manhã</strong></td>
-                    <td style="text-align:center;">${data.previsao?.manha?.pessoas || 0}</td>
-                    <td style="text-align:center;">${data.registrosReais?.manha || 0}</td>
-                    <td style="text-align:center;">${data.previsao?.manha?.kg || 0} kg</td>
-                </tr>
-                <tr>
-                    <td><strong>🍽️ Almoço</strong></td>
-                    <td style="text-align:center;">${data.previsao?.almoco?.pessoas || 0}</td>
-                    <td style="text-align:center;">${data.registrosReais?.almoco || 0}</td>
-                    <td style="text-align:center;">${data.previsao?.almoco?.kg || 0} kg</td>
-                </tr>
-                <tr>
-                    <td><strong>🌙 Lanche da Tarde</strong></td>
-                    <td style="text-align:center;">${data.previsao?.tarde?.pessoas || 0}</td>
-                    <td style="text-align:center;">${data.registrosReais?.tarde || 0}</td>
-                    <td style="text-align:center;">${data.previsao?.tarde?.kg || 0} kg</td>
-                </tr>
+                <tr><td><strong>🌅 Lanche da Manhã</strong></td><td style="text-align:center;">${data.previsao?.manha?.pessoas || 0}</td><td style="text-align:center;">${data.registrosReais?.manha || 0}</td><td style="text-align:center;">${data.previsao?.manha?.kg || 0} kg</td></tr>
+                <tr><td><strong>🍽️ Almoço</strong></td><td style="text-align:center;">${data.previsao?.almoco?.pessoas || 0}</td><td style="text-align:center;">${data.registrosReais?.almoco || 0}</td><td style="text-align:center;">${data.previsao?.almoco?.kg || 0} kg</td></tr>
+                <tr><td><strong>🌙 Lanche da Tarde</strong></td><td style="text-align:center;">${data.previsao?.tarde?.pessoas || 0}</td><td style="text-align:center;">${data.registrosReais?.tarde || 0}</td><td style="text-align:center;">${data.previsao?.tarde?.kg || 0} kg</td></tr>
             </tbody>
         </table>
     `;
-    
-    // ========== PERFIL ALIMENTAR ==========
+
     const perfisHTML = `
         <div class="section-title">📊 Perfil Alimentar dos Usuários</div>
         <table>
-            <thead>
-                <tr>
-                    <th>Perfil</th>
-                    <th style="width:120px;text-align:center;">Quantidade</th>
-                    <th style="width:120px;text-align:center;">%</th>
-                </tr>
-            </thead>
+            <thead><tr><th>Perfil</th><th style="width:120px;text-align:center;">Quantidade</th><th style="width:120px;text-align:center;">%</th></tr></thead>
             <tbody>
-                <tr>
-                    <td><strong>👍 Sempre come</strong></td>
-                    <td style="text-align:center;">${data.perfis?.sempre || 0}</td>
-                    <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.sempre || 0) / data.perfis.total) * 100) : 0}%</td>
-                </tr>
-                <tr>
-                    <td><strong>⚠️ Às vezes come</strong></td>
-                    <td style="text-align:center;">${data.perfis?.as_vezes || 0}</td>
-                    <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.as_vezes || 0) / data.perfis.total) * 100) : 0}%</td>
-                </tr>
-                <tr>
-                    <td><strong>❌ Nunca come</strong></td>
-                    <td style="text-align:center;">${data.perfis?.nunca || 0}</td>
-                    <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.nunca || 0) / data.perfis.total) * 100) : 0}%</td>
-                </tr>
-                <tr>
-                    <td><strong>❔ Não informado</strong></td>
-                    <td style="text-align:center;">${data.perfis?.nao_informado || 0}</td>
-                    <td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.nao_informado || 0) / data.perfis.total) * 100) : 0}%</td>
-                </tr>
+                <tr><td><strong>👍 Sempre come</strong></td><td style="text-align:center;">${data.perfis?.sempre || 0}</td><td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.sempre || 0) / data.perfis.total) * 100) : 0}%</td></tr>
+                <tr><td><strong>⚠️ Às vezes come</strong></td><td style="text-align:center;">${data.perfis?.as_vezes || 0}</td><td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.as_vezes || 0) / data.perfis.total) * 100) : 0}%</td></tr>
+                <tr><td><strong>❌ Nunca come</strong></td><td style="text-align:center;">${data.perfis?.nunca || 0}</td><td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.nunca || 0) / data.perfis.total) * 100) : 0}%</td></tr>
+                <tr><td><strong>❔ Não informado</strong></td><td style="text-align:center;">${data.perfis?.nao_informado || 0}</td><td style="text-align:center;">${data.perfis?.total > 0 ? Math.round(((data.perfis.nao_informado || 0) / data.perfis.total) * 100) : 0}%</td></tr>
             </tbody>
         </table>
     `;
-    
-    // ========== ANÁLISE POR TURMA ==========
+
     let turmasHTML = '';
     if (data.analisePorTurma && data.analisePorTurma.length > 0) {
         turmasHTML = `
@@ -778,8 +856,7 @@ function gerarHTMLRelatorioCozinha(data) {
             </table>
         `;
     }
-    
-    // ========== INSIGHTS ==========
+
     let insightsHTML = '';
     if (data.insights && data.insights.length > 0) {
         insightsHTML = `
@@ -795,8 +872,7 @@ function gerarHTMLRelatorioCozinha(data) {
             </div>
         `;
     }
-    
-    // ========== HTML FINAL (MESMO MODELO DO PSICOLOGIA) ==========
+
     return `<!DOCTYPE html>
     <html lang="pt-BR">
     <head>
@@ -806,113 +882,55 @@ function gerarHTMLRelatorioCozinha(data) {
             @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
-            
             .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
             .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
             .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
             .header p { font-size: 8pt; margin: 1px 0 0; }
-            
-            .titulo {
-                text-align: center; font-size: 11pt; font-weight: bold;
-                background: #e0f2fe; padding: 4px 8px; border: 1.5px solid #000;
-                margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px;
-            }
+            .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #e0f2fe; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
             .subtitulo { text-align: center; font-size: 9pt; margin: 0 0 6px; font-style: italic; }
-            
-            .stats {
-                display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px;
-                background: #eff6ff; border-radius: 5px; border: 1px solid #bfdbfe;
-            }
+            .stats { display: flex; gap: 8px; margin: 6px 0 8px; padding: 6px 8px; background: #eff6ff; border-radius: 5px; border: 1px solid #bfdbfe; }
             .stat { text-align: center; flex: 1; border-right: 1px solid #bfdbfe; }
             .stat:last-child { border-right: none; }
             .stat-value { font-size: 13pt; font-weight: bold; color: #0d6efd; line-height: 1; }
             .stat-label { font-size: 7.5pt; color: #666; margin-top: 2px; }
-            
-            .section-title {
-                font-size: 9pt; font-weight: bold; background: #e8e8e8;
-                padding: 2px 6px; border-left: 3px solid #0d6efd; margin: 6px 0 3px;
-            }
-            
+            .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #0d6efd; margin: 6px 0 3px; }
             table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 6px; }
             th { background: #0d6efd; color: white; padding: 4px 5px; text-align: left; border: 1px solid #0b5ed7; font-size: 8pt; }
             td { padding: 3px 5px; border: 1px solid #ddd; vertical-align: top; }
             tr:nth-child(even) { background: #f9fafb; }
-            
             .insights-block { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 5px; padding: 6px 8px; }
             .insight-item { padding: 4px 0; border-bottom: 1px solid #e5e7eb; }
             .insight-item:last-child { border-bottom: none; }
             .insight-item strong { display: block; margin-bottom: 2px; color: #0d6efd; }
             .insight-item p { font-size: 8.5pt; margin-bottom: 2px; }
-            
-            /* 🖋️ Assinatura com carimbo colado na linha (padrão psicologia) */
             .assinaturas { display: flex; justify-content: center; margin-top: 25px; gap: 30px; }
             .assinatura { flex: 0 0 60%; text-align: center; }
-            
-            .assinatura-container-relatorio {
-                position: relative;
-                min-height: 18mm;
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                padding-bottom: 0;
-            }
-            
-            .assinatura-container-relatorio::after {
-                content: '';
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                border-bottom: 1px solid #000;
-            }
-            
-            .carimbo-overlay {
-                position: absolute;
-                bottom: 1mm;
-                left: 50%;
-                transform: translateX(-50%);
-                max-height: 15mm;
-                max-width: 55mm;
-                object-fit: contain;
-                opacity: 0.95;
-                pointer-events: none;
-                z-index: 1;
-            }
-            
+            .assinatura-container-relatorio { position: relative; min-height: 18mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0; }
+            .assinatura-container-relatorio::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px solid #000; }
+            .carimbo-overlay { position: absolute; bottom: 1mm; left: 50%; transform: translateX(-50%); max-height: 15mm; max-width: 55mm; object-fit: contain; opacity: 0.95; pointer-events: none; z-index: 1; }
             .assinatura-linha { padding-top: 3px; font-size: 8pt; margin-top: 2px; }
-            
             .footer { text-align: center; margin-top: 8px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
             .footer p { margin: 1px 0; }
             .registro-info { font-size: 7.5pt; color: #666; margin-top: 6px; text-align: center; }
-            
-            .btn-print {
-                display: block; margin: 10px auto; padding: 8px 20px;
-                background: #0d6efd; color: white; border: none; border-radius: 6px;
-                font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif;
-            }
+            .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #0d6efd; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
             .btn-print:hover { background: #0b5ed7; }
-            
             @media print { .no-print { display: none !important; } body { padding: 0; } }
         </style>
     </head>
     <body>
         <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir</button>
-        
         <div class="header">
             <img src="${logo}" alt="IEMA" onerror="this.style.display='none'">
             <h1>IEMA Pleno: São Luís - Centro</h1>
             <p>Sistema de Monitoramento — Cozinha Inteligente</p>
         </div>
-        
         <div class="titulo">🍽️ Relatório de Monitoramento de Refeições</div>
         <div class="subtitulo">${dataRef}</div>
-        
         ${statsHTML}
         ${refeicoesHTML}
         ${perfisHTML}
         ${turmasHTML}
         ${insightsHTML}
-        
         <div class="assinaturas">
             <div class="assinatura">
                 <div class="assinatura-container-relatorio">
@@ -921,11 +939,7 @@ function gerarHTMLRelatorioCozinha(data) {
                 <div class="assinatura-linha">Responsável pela Cozinha</div>
             </div>
         </div>
-        
-        <div class="registro-info">
-            Relatório gerado em <strong>${dataGeracao}</strong>
-        </div>
-        
+        <div class="registro-info">Relatório gerado em <strong>${dataGeracao}</strong></div>
         <div class="footer">
             <p>Documento gerado automaticamente pelo EducaPleno</p>
             <p>Setor: Cozinha Inteligente</p>
@@ -935,10 +949,14 @@ function gerarHTMLRelatorioCozinha(data) {
 }
 
 // ============================================
-// 📥 EXPORTAR CSV
+// 📥 CSV
 // ============================================
 function exportarCSV() {
-    if (!dashboardData.analisePorTurma || dashboardData.analisePorTurma.length === 0) {
+    const dados = analiseTurmasFiltrada && analiseTurmasFiltrada.length > 0
+        ? analiseTurmasFiltrada
+        : (dashboardData.analisePorTurma || []);
+
+    if (!dados || dados.length === 0) {
         if (typeof mostrarNotificacaoInterna === 'function') {
             mostrarNotificacaoInterna('⚠️ Nenhum dado para exportar', 'warning');
         } else {
@@ -946,12 +964,12 @@ function exportarCSV() {
         }
         return;
     }
-    
+
     let csv = "Turma,Total Alunos,Dizem que Comem,Comeram Hoje,Taxa Adesão,Faltantes\n";
-    dashboardData.analisePorTurma.forEach(t => {
-        csv += `"${(t.turma || '').replace(/"/g, '""')}",${t.totalAlunos},${t.dizemQueComem},${t.comeramHoje},${t.taxaAdesao},${t.faltantes}\n`;
+    dados.forEach(t => {
+        csv += `"${(t.turma || '').replace(/"/g, '""')}",${t.totalAlunos || 0},${t.dizemQueComem || 0},${t.comeramHoje || 0},${t.taxaAdesao || 0},${t.faltantes || 0}\n`;
     });
-    
+
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -960,7 +978,7 @@ function exportarCSV() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-    
+
     if (typeof mostrarNotificacaoInterna === 'function') {
         mostrarNotificacaoInterna('✅ CSV exportado com sucesso!', 'success');
     } else {
@@ -975,31 +993,32 @@ async function abrirModalFaltantes() {
     const modal = document.getElementById('modalFaltantes');
     const listaDiv = document.getElementById('listaFaltantes');
     const infoSpan = document.getElementById('modalInfo');
-    
+    if (!modal || !listaDiv) return;
+
     modal.classList.add('show');
     listaDiv.innerHTML = '<div class="loading-spinner"></div> Carregando...';
-    
+
     try {
         const hoje = new Date().toISOString().split('T')[0];
         const response = await fetch(`/api/cozinha/faltantes?data=${hoje}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
-        if (data.success && data.faltantes.length > 0) {
-            infoSpan.innerHTML = `${data.totalFaltantes} pessoas que disseram que comeriam mas não vieram hoje.`;
+
+        if (data.success && data.faltantes && data.faltantes.length > 0) {
+            if (infoSpan) infoSpan.innerHTML = `${data.totalFaltantes} pessoas que disseram que comeriam mas não vieram hoje.`;
             listaDiv.innerHTML = data.faltantes.map(f => `
                 <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
                     <div>
-                        <strong>${f.nome}</strong>
+                        <strong>${escapeHTML(f.nome || '')}</strong>
                         <br>
-                        <small class="text-muted">${f.turma} • Perfil: ${f.perfil === 'sempre' ? 'Sempre' : 'Às vezes'}</small>
+                        <small class="text-muted">${escapeHTML(f.turma || '')} • Perfil: ${f.perfil === 'sempre' ? 'Sempre' : 'Às vezes'}</small>
                     </div>
                     <span class="badge bg-secondary">não comeu</span>
                 </div>
             `).join('');
         } else {
-            infoSpan.innerHTML = 'Nenhum faltante hoje! Todos que disseram que comeriam vieram. 🎉';
+            if (infoSpan) infoSpan.innerHTML = 'Nenhum faltante hoje! Todos que disseram que comeriam vieram. 🎉';
             listaDiv.innerHTML = '<div class="text-center text-success py-3"><i class="fas fa-check-circle fa-2x"></i><br>Todos compareceram!</div>';
         }
     } catch (error) {
@@ -1010,7 +1029,7 @@ async function abrirModalFaltantes() {
 
 function fecharModalFaltantes() {
     const modal = document.getElementById('modalFaltantes');
-    modal.classList.remove('show');
+    if (modal) modal.classList.remove('show');
 }
 
 // ============================================
@@ -1033,20 +1052,17 @@ function fecharModalFaltantes() {
 
     function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
         if (!isWebViewNotif()) { mostrarToastCozinha(mensagem); return; }
-        
         const modal = document.createElement('div');
         modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
             z-index: 999999; padding: 20px; box-sizing: border-box;`;
         const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
         const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#0d6efd' };
-        
         modal.innerHTML = `
             <div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%;
                         box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
                 <div style="font-size: 48px; margin-bottom: 15px;">${icones[tipo] || 'ℹ️'}</div>
-                <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">
-                    ${mensagem}</p>
+                <p style="margin: 0 0 20px; color: #374151; font-size: 15px; line-height: 1.5; white-space: pre-line;">${mensagem}</p>
                 <button onclick="this.closest('div').parentElement.remove()"
                         style="width: 100%; padding: 12px; background: ${cores[tipo] || cores.info};
                                color: white; border: none; border-radius: 10px; font-size: 14px;
@@ -1059,7 +1075,6 @@ function fecharModalFaltantes() {
         return new Promise((resolve) => {
             const old = document.getElementById('confirmInternoModalNotif');
             if (old) old.remove();
-            
             const modalHtml = `
                 <div class="modal fade" id="confirmInternoModalNotif" tabindex="-1" data-bs-backdrop="static">
                     <div class="modal-dialog modal-dialog-centered">
@@ -1069,24 +1084,20 @@ function fecharModalFaltantes() {
                             </div>
                             <div class="modal-body" style="white-space: pre-line; font-size: 15px;">${escapeHTMLNotif(mensagem)}</div>
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" id="btnCancelarConfirmInternoNotif">
-                                    <i class="fas fa-times"></i> Cancelar</button>
-                                <button type="button" class="btn btn-danger" id="btnConfirmarConfirmInternoNotif">
-                                    <i class="fas fa-check"></i> Confirmar</button>
+                                <button type="button" class="btn btn-secondary" id="btnCancelarConfirmInternoNotif"><i class="fas fa-times"></i> Cancelar</button>
+                                <button type="button" class="btn btn-danger" id="btnConfirmarConfirmInternoNotif"><i class="fas fa-check"></i> Confirmar</button>
                             </div>
                         </div>
                     </div>
                 </div>`;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
-            
             const modalEl = document.getElementById('confirmInternoModalNotif');
             const modal = new bootstrap.Modal(modalEl);
             modal.show();
-            
-            const finalizar = (resultado) => {
+            const finalizar = (r) => {
                 modal.hide();
                 setTimeout(() => modalEl.remove(), 300);
-                resolve(resultado);
+                resolve(r);
             };
             document.getElementById('btnConfirmarConfirmInternoNotif').addEventListener('click', () => finalizar(true));
             document.getElementById('btnCancelarConfirmInternoNotif').addEventListener('click', () => finalizar(false));
@@ -1095,11 +1106,9 @@ function fecharModalFaltantes() {
 
     function iniciarSistemaNotificacoes() {
         if (!document.getElementById('notificacoesBtn')) return;
-        
         carregarTudo();
         if (notificacoesInterval) clearInterval(notificacoesInterval);
         notificacoesInterval = setInterval(carregarTudo, 30000);
-        
         document.addEventListener('click', function(event) {
             const dropdown = document.getElementById('notificacoesDropdown');
             const btn = document.getElementById('notificacoesBtn');
@@ -1119,32 +1128,21 @@ function fecharModalFaltantes() {
         try {
             const token = localStorage.getItem('auth_token');
             if (!token) return;
-            
             const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await response.json();
-            if (data.success) {
-                __notificacoesCache = data.notificacoes || [];
-            }
-        } catch (error) {
-            console.error('Erro ao carregar notificações:', error);
-        }
+            if (data.success) __notificacoesCache = data.notificacoes || [];
+        } catch (error) { console.error('Erro ao carregar notificações:', error); }
     }
 
     function renderizarSino() {
         const lista = document.getElementById('notificacoesLista');
         if (!lista) return;
-        
         if (__notificacoesCache.length === 0) {
-            lista.innerHTML = `
-                <div class="notificacoes-vazio">
-                    <i class="fas fa-bell-slash"></i>
-                    <p>Nenhuma notificação</p>
-                </div>`;
+            lista.innerHTML = `<div class="notificacoes-vazio"><i class="fas fa-bell-slash"></i><p>Nenhuma notificação</p></div>`;
             return;
         }
-        
         let html = `
             <div class="notificacoes-secao">
                 <div class="notificacoes-secao-titulo">
@@ -1152,7 +1150,6 @@ function fecharModalFaltantes() {
                     <span>Notificações</span>
                     <span class="badge-count">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
                 </div>`;
-        
         __notificacoesCache.forEach(notif => {
             const data = new Date(notif.createdAt);
             const agora = new Date();
@@ -1160,23 +1157,18 @@ function fecharModalFaltantes() {
             const diffMin = Math.floor(diffMs / 60000);
             const diffHr = Math.floor(diffMs / 3600000);
             const diffDia = Math.floor(diffMs / 86400000);
-            
             let tempoTexto;
             if (diffMin < 1) tempoTexto = 'agora mesmo';
             else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
             else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
             else tempoTexto = `há ${diffDia} d`;
-            
             const classeLida = notif.lida ? '' : 'nao-lida';
-            
             html += `
                 <div class="notificacao-item ${classeLida}"
                      data-notif-id="${notif._id}"
                      data-notif-link="${escapeHTMLNotif(notif.link || '#')}"
                      style="cursor: pointer;">
-                    <div class="notificacao-icone" style="background: ${notif.cor || '#0d6efd'};">
-                        ${notif.icone || '📋'}
-                    </div>
+                    <div class="notificacao-icone" style="background: ${notif.cor || '#0d6efd'};">${notif.icone || '📋'}</div>
                     <div class="notificacao-conteudo">
                         <div class="notificacao-titulo">${escapeHTMLNotif(notif.titulo || '')}</div>
                         <div class="notificacao-mensagem">${escapeHTMLNotif(notif.mensagem || '')}</div>
@@ -1184,10 +1176,8 @@ function fecharModalFaltantes() {
                     </div>
                 </div>`;
         });
-        
         html += `</div>`;
         lista.innerHTML = html;
-        
         lista.querySelectorAll('.notificacao-item').forEach(item => {
             item.addEventListener('click', () => {
                 const id = item.getAttribute('data-notif-id');
@@ -1201,9 +1191,7 @@ function fecharModalFaltantes() {
         const badge = document.getElementById('notificacoesBadge');
         const btn = document.getElementById('notificacoesBtn');
         if (!badge || !btn) return;
-        
         const total = __notificacoesCache.filter(n => !n.lida).length;
-        
         if (total > 0) {
             badge.textContent = total > 99 ? '99+' : total;
             badge.style.display = 'inline-flex';
@@ -1219,9 +1207,7 @@ function fecharModalFaltantes() {
         const dropdown = document.getElementById('notificacoesDropdown');
         if (!dropdown) return;
         dropdown.classList.toggle('show');
-        if (dropdown.classList.contains('show')) {
-            carregarTudo();
-        }
+        if (dropdown.classList.contains('show')) carregarTudo();
     }
 
     function fecharNotificacoes() {
@@ -1238,9 +1224,7 @@ function fecharModalFaltantes() {
             fecharNotificacoes();
             if (link && link !== '#') window.location.href = link;
             carregarTudo();
-        } catch (error) {
-            console.error('Erro ao abrir notificação:', error);
-        }
+        } catch (error) { console.error('Erro ao abrir notificação:', error); }
     }
 
     async function marcarTodasLidas() {
@@ -1255,9 +1239,7 @@ function fecharModalFaltantes() {
                 await carregarTudo();
                 mostrarNotificacaoInterna('Notificações marcadas como lidas!', 'success');
             }
-        } catch (error) {
-            console.error('Erro ao marcar todas como lidas:', error);
-        }
+        } catch (error) { console.error('Erro ao marcar todas como lidas:', error); }
     }
 
     async function limparMinhasNotificacoes(event) {
@@ -1265,16 +1247,11 @@ function fecharModalFaltantes() {
             const token = localStorage.getItem('auth_token');
             const confirmacao = await confirmarInternoNotif('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
             if (!confirmacao) return;
-            
             const response = await fetch('/api/notificacoes/limpar-minhas', {
                 method: 'DELETE',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
             });
             const data = await response.json();
-            
             if (data.success) {
                 __notificacoesCache = [];
                 await carregarTudo();
@@ -1291,7 +1268,6 @@ function fecharModalFaltantes() {
     document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => iniciarSistemaNotificacoes(), 500);
     });
-
     window.addEventListener('beforeunload', () => {
         if (notificacoesInterval) clearInterval(notificacoesInterval);
     });
@@ -1311,6 +1287,7 @@ function fecharModalFaltantes() {
 window.toggleDropdown = toggleDropdown;
 window.logout = logout;
 window.carregarDashboard = carregarDashboard;
+window.carregarAnaliseTurmas = carregarAnaliseTurmas;
 window.gerarRelatorioPDF = gerarRelatorioPDF;
 window.exportarCSV = exportarCSV;
 window.abrirModalFaltantes = abrirModalFaltantes;
