@@ -1,7 +1,7 @@
 // ============================================================================
 // ADMIN COZINHA - MONITORAMENTO EM TEMPO REAL
-// Versão completa com edição/impressão de feedbacks e registros
-// + PAGINAÇÃO (10 itens por página) nos Registros e Feedbacks
+// Versão completa com filtros por período (hoje/ontem/semana/mês/ano/todos),
+// paginação de registros e feedbacks, edição/impressão/exclusão.
 // ============================================================================
 
 class MonitoramentoTempoReal {
@@ -14,38 +14,37 @@ class MonitoramentoTempoReal {
     this.feedbacksFiltrados = [];
     this.paginaCarregada = false;
     this.todasTurmasBanco = [];
-    
+
     this.ultimosRegistrosOriginais = [];
     this.refeicoesPorTurmaOriginais = [];
-    
+
     this.filtroRegistroData = 'hoje';
     this.filtroRegistroTurma = 'todas';
     this.filtroRegistroRefeicao = 'todas';
-    
+
     this.filtroTurmasData = 'hoje';
     this.filtroTurmasTurma = 'todas';
     this.filtroTurmasTurno = 'todas';
-    
-    // ============ PAGINAÇÃO: REGISTROS ============
+
+    // Paginação: Registros
     this.paginaRegistros = 1;
     this.itensPorPaginaRegistros = 10;
     this.registrosFiltrados = [];
-    
-    // ============ PAGINAÇÃO: FEEDBACKS ============
+
+    // Paginação: Feedbacks
     this.paginaFeedbacks = 1;
     this.itensPorPaginaFeedbacks = 10;
-    
+
     this.carregando = false;
     this.cacheDados = new Map();
   }
-  
+
   async carregar() {
-    console.log('📊 Carregando Monitoramento...');
     this.paginaCarregada = true;
     this.carregarFiltrosSalvos();
     this.renderizarEsqueleto();
     await this.buscarTodasTurmasDoBanco();
-    await this.carregarDadosCompleto();
+    await this.carregarDadosCompleto(false);
     await this.carregarFeedbacksCompleto();
     this.iniciarEventosSSE();
     this.iniciarAtualizacaoAutomatica();
@@ -69,7 +68,7 @@ class MonitoramentoTempoReal {
       }
     } catch (error) {}
   }
-  
+
   renderizarEsqueleto() {
     const container = document.getElementById('contentArea');
     if (!container) return;
@@ -102,7 +101,7 @@ class MonitoramentoTempoReal {
       }));
     } catch (e) {}
   }
-  
+
   carregarFiltrosSalvos() {
     const salvos = localStorage.getItem('monitoramento_filtros');
     if (!salvos) return;
@@ -116,7 +115,7 @@ class MonitoramentoTempoReal {
       this.filtroTurmasTurno = f.turmasTurno || 'todas';
     } catch (e) {}
   }
-  
+
   aplicarFiltrosSalvosNosSelects() {
     const aplicar = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     aplicar('filtroRegistroData', this.filtroRegistroData);
@@ -126,28 +125,53 @@ class MonitoramentoTempoReal {
     aplicar('filtroTurmasRefeicaoTurma', this.filtroTurmasTurma);
     aplicar('filtroTurmasRefeicaoTurno', this.filtroTurmasTurno);
   }
-  
-  getDataPorPeriodo(periodo) {
+
+  // ============================================================
+  // 🆕 CONVERSÃO DE PERÍODO → FILTRO DE API
+  // ============================================================
+  getFiltroPeriodo(periodo) {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    switch(periodo) {
-      case 'ontem': { const d = new Date(hoje); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; }
-      case 'semana': { const d = new Date(hoje); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; }
-      case 'mes': { const d = new Date(hoje); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]; }
-      default: return null;
+    const iso = (d) => d.toISOString().split('T')[0];
+
+    switch (periodo) {
+      case 'hoje':
+        return { data: iso(hoje) };
+      case 'ontem': {
+        const d = new Date(hoje); d.setDate(d.getDate() - 1);
+        return { data: iso(d) };
+      }
+      case 'semana': {
+        const d = new Date(hoje); d.setDate(d.getDate() - 7);
+        return { dataInicio: iso(d), dataFim: iso(hoje) };
+      }
+      case 'mes': {
+        const d = new Date(hoje); d.setMonth(d.getMonth() - 1);
+        return { dataInicio: iso(d), dataFim: iso(hoje) };
+      }
+      case 'ano': {
+        const d = new Date(hoje); d.setFullYear(d.getFullYear() - 1);
+        return { dataInicio: iso(d), dataFim: iso(hoje) };
+      }
+      case 'todos':
+        return { todos: 'true' };
+      default:
+        return { data: iso(hoje) };
     }
   }
-  
+
   escapeHtml(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
   }
+
   escapeJs(text) {
     if (!text) return '';
     return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
   }
+
   gerarEstrelasMini(nota) {
     const cheias = Math.floor(nota);
     let html = '';
@@ -155,34 +179,39 @@ class MonitoramentoTempoReal {
     for (let i = cheias; i < 5; i++) html += '<i class="far fa-star text-warning"></i>';
     return html;
   }
+
   showToastMessage(msg, tipo = 'info') {
     if (typeof admin !== 'undefined' && admin.showToast) { admin.showToast(msg, tipo); return; }
     alert(msg);
   }
-  
-  async carregarDadosCompleto(dataParam = null, usarCache = true) {
+
+  // ============================================================
+  // 🆕 CARREGAMENTO — usa intervalo/todos conforme período
+  // ============================================================
+  async carregarDadosCompleto(usarCache = true) {
     if (this.carregando) return;
     this.carregando = true;
     try {
       const token = localStorage.getItem('auth_token');
-      let dataParaBuscar = dataParam;
-      if (!dataParaBuscar && this.filtroRegistroData !== 'hoje' && this.filtroRegistroData !== 'todos') {
-        dataParaBuscar = this.getDataPorPeriodo(this.filtroRegistroData);
-      }
-      const cacheKey = dataParaBuscar || (this.filtroRegistroData === 'todos' ? 'todos' : 'hoje');
+      const filtro = this.getFiltroPeriodo(this.filtroRegistroData);
+
+      const cacheKey = JSON.stringify(filtro);
       if (usarCache && this.cacheDados.has(cacheKey)) {
         this.dados = this.cacheDados.get(cacheKey);
         this.processarDadosAposCarregamento();
         return;
       }
-      let url = '/api/cozinha-monitoramento/dashboard';
-      if (dataParaBuscar && this.filtroRegistroData !== 'todos') url += `?data=${dataParaBuscar}`;
+
+      const qs = new URLSearchParams(filtro).toString();
+      const url = '/api/cozinha-monitoramento/dashboard' + (qs ? `?${qs}` : '');
+
       const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
+
       if (data.success) {
         this.cacheDados.set(cacheKey, data);
-        if (this.cacheDados.size > 5) this.cacheDados.delete(this.cacheDados.keys().next().value);
+        if (this.cacheDados.size > 8) this.cacheDados.delete(this.cacheDados.keys().next().value);
         this.dados = data;
         this.processarDadosAposCarregamento();
       } else {
@@ -194,7 +223,7 @@ class MonitoramentoTempoReal {
       this.carregando = false;
     }
   }
-  
+
   processarDadosAposCarregamento() {
     if (!this.dados) return;
     this.ultimosRegistrosOriginais = [...(this.dados.cozinha?.ultimosRegistros || [])];
@@ -209,7 +238,7 @@ class MonitoramentoTempoReal {
       this.filtrarRefeicoesTurmasAtuais(this.filtroTurmasTurma, this.filtroTurmasTurno);
     }, 100);
   }
-  
+
   popularFiltrosTurmas() {
     const turmasComRegistros = new Set([
       ...this.ultimosRegistrosOriginais.map(r => r.alunoTurma).filter(Boolean),
@@ -230,29 +259,27 @@ class MonitoramentoTempoReal {
     atualizarSelect('filtroTurmasRefeicaoTurma');
     atualizarSelect('filtroRodizioTurma');
   }
-  
+
   async aplicarFiltrosRegistros() {
     const novaData = document.getElementById('filtroRegistroData')?.value || 'hoje';
     const novaTurma = document.getElementById('filtroRegistroTurma')?.value || 'todas';
     const novoTipo = document.getElementById('filtroRegistroTipo')?.value || 'todas';
     const mudouData = novaData !== this.filtroRegistroData;
+
     this.filtroRegistroData = novaData;
     this.filtroRegistroTurma = novaTurma;
     this.filtroRegistroRefeicao = novoTipo;
-    // reset de página ao mudar filtro
     this.paginaRegistros = 1;
     this.salvarFiltros();
-    try {
-      if (mudouData && novaData !== 'todos') {
-        const dataParaBuscar = novaData !== 'hoje' ? this.getDataPorPeriodo(novaData) : null;
-        await this.carregarDadosCompleto(dataParaBuscar, true);
-      }
-      this.filtrarRegistrosAtuais(novaTurma, novoTipo);
-    } catch (error) {}
+
+    if (mudouData) {
+      await this.carregarDadosCompleto(false);
+    }
+    this.filtrarRegistrosAtuais(novaTurma, novoTipo);
   }
-  
+
   // ============================================================
-  // 🆕 FILTRAR REGISTROS (com paginação)
+  // FILTRAR REGISTROS (com paginação)
   // ============================================================
   filtrarRegistrosAtuais(turma, tipo) {
     const registros = this.ultimosRegistrosOriginais;
@@ -265,7 +292,6 @@ class MonitoramentoTempoReal {
       return;
     }
 
-    // 1) Aplica filtros
     this.registrosFiltrados = registros.filter(r => {
       if (turma !== 'todas' && r.alunoTurma !== turma) return false;
       if (tipo !== 'todas' && r.tipoRefeicao !== tipo) return false;
@@ -277,19 +303,18 @@ class MonitoramentoTempoReal {
       return;
     }
 
-    // 2) Garante que a página atual é válida
     const totalPaginas = Math.max(1, Math.ceil(this.registrosFiltrados.length / this.itensPorPaginaRegistros));
     if (this.paginaRegistros > totalPaginas) this.paginaRegistros = totalPaginas;
     if (this.paginaRegistros < 1) this.paginaRegistros = 1;
 
-    // 3) Fatiamento
     const inicio = (this.paginaRegistros - 1) * this.itensPorPaginaRegistros;
     const fim = inicio + this.itensPorPaginaRegistros;
     const pagina = this.registrosFiltrados.slice(inicio, fim);
 
-    // 4) Renderiza itens
     const itensHTML = pagina.map(r => {
       const tipoTexto = r.tipoRefeicao === 'manha' ? '🌅 Manhã' : r.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde';
+      const horario = r.horario ? new Date(r.horario).toLocaleTimeString('pt-BR') : '-';
+      const dataTxt = r.data ? new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR') : '';
       return `
         <div class="mon-registro-item">
           <div class="mon-registro-info">
@@ -297,7 +322,8 @@ class MonitoramentoTempoReal {
             <div class="mon-registro-turma">${this.escapeHtml(r.alunoTurma)}</div>
             <div class="mon-registro-detalhes">
               <span class="mon-badge ${r.tipoRefeicao}">${tipoTexto}</span>
-              <span class="mon-registro-horario"><i class="far fa-clock"></i> ${new Date(r.horario).toLocaleTimeString()}</span>
+              <span class="mon-registro-horario"><i class="far fa-clock"></i> ${horario}</span>
+              ${dataTxt ? `<span class="mon-registro-horario"><i class="far fa-calendar"></i> ${dataTxt}</span>` : ''}
             </div>
           </div>
           <div class="mon-action-buttons">
@@ -310,7 +336,6 @@ class MonitoramentoTempoReal {
       `;
     }).join('');
 
-    // 5) Paginador
     const paginadorHTML = this.renderizarPaginador(
       this.paginaRegistros,
       totalPaginas,
@@ -322,7 +347,7 @@ class MonitoramentoTempoReal {
   }
 
   // ============================================================
-  // 🆕 PAGINADOR GENÉRICO (reutilizável)
+  // PAGINADOR GENÉRICO
   // ============================================================
   renderizarPaginador(paginaAtual, totalPaginas, totalItens, funcaoIrPara) {
     if (totalPaginas <= 1) {
@@ -379,45 +404,43 @@ class MonitoramentoTempoReal {
     `;
   }
 
-  // ============================================================
-  // 🆕 NAVEGAÇÃO DE PÁGINA — REGISTROS
-  // ============================================================
   irParaPaginaRegistros(p) {
     const totalPaginas = Math.max(1, Math.ceil(this.registrosFiltrados.length / this.itensPorPaginaRegistros));
     if (p < 1 || p > totalPaginas) return;
     this.paginaRegistros = p;
     this.filtrarRegistrosAtuais(this.filtroRegistroTurma, this.filtroRegistroRefeicao);
   }
-  
+
   limparFiltrosRegistros() {
     this.filtroRegistroData = 'hoje';
     this.filtroRegistroTurma = 'todas';
     this.filtroRegistroRefeicao = 'todas';
     this.paginaRegistros = 1;
     this.salvarFiltros();
-    ['filtroRegistroTurma', 'filtroRegistroTipo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = id === 'filtroRegistroTipo' ? 'todas' : 'todas'; });
-    const dataEl = document.getElementById('filtroRegistroData'); if (dataEl) dataEl.value = 'hoje';
-    this.carregarDadosCompleto(null, false);
+    const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    setV('filtroRegistroData', 'hoje');
+    setV('filtroRegistroTurma', 'todas');
+    setV('filtroRegistroTipo', 'todas');
+    this.carregarDadosCompleto(false);
   }
-  
+
   async aplicarFiltrosRefeicoesTurmas() {
     const novaData = document.getElementById('filtroTurmasRefeicaoData')?.value || 'hoje';
     const novaTurma = document.getElementById('filtroTurmasRefeicaoTurma')?.value || 'todas';
     const novoTurno = document.getElementById('filtroTurmasRefeicaoTurno')?.value || 'todas';
     const mudouData = novaData !== this.filtroTurmasData;
+
     this.filtroTurmasData = novaData;
     this.filtroTurmasTurma = novaTurma;
     this.filtroTurmasTurno = novoTurno;
     this.salvarFiltros();
-    try {
-      if (mudouData && novaData !== 'todos') {
-        const dataParaBuscar = novaData !== 'hoje' ? this.getDataPorPeriodo(novaData) : null;
-        await this.carregarDadosCompleto(dataParaBuscar, true);
-      }
-      this.filtrarRefeicoesTurmasAtuais(novaTurma, novoTurno);
-    } catch (error) {}
+
+    if (mudouData) {
+      await this.carregarDadosCompleto(false);
+    }
+    this.filtrarRefeicoesTurmasAtuais(novaTurma, novoTurno);
   }
-  
+
   filtrarRefeicoesTurmasAtuais(turma, turno) {
     const tbody = document.querySelector('#tabelaRefeicoesTurmas tbody');
     if (!tbody) return;
@@ -452,19 +475,19 @@ class MonitoramentoTempoReal {
       </tr>
     `).join('');
   }
-  
+
   limparFiltrosRefeicoesTurmas() {
     this.filtroTurmasData = 'hoje';
     this.filtroTurmasTurma = 'todas';
     this.filtroTurmasTurno = 'todas';
     this.salvarFiltros();
-    ['filtroTurmasRefeicaoTurma', 'filtroTurmasRefeicaoTurno', 'filtroTurmasRefeicaoData'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = id === 'filtroTurmasRefeicaoData' ? 'hoje' : 'todas';
-    });
-    this.carregarDadosCompleto(null, false);
+    const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    setV('filtroTurmasRefeicaoData', 'hoje');
+    setV('filtroTurmasRefeicaoTurma', 'todas');
+    setV('filtroTurmasRefeicaoTurno', 'todas');
+    this.carregarDadosCompleto(false);
   }
-  
+
   aplicarFiltrosRodizio() {
     const turma = document.getElementById('filtroRodizioTurma')?.value || 'todas';
     const tipo = document.getElementById('filtroRodizioTipo')?.value || 'todos';
@@ -477,7 +500,7 @@ class MonitoramentoTempoReal {
       linha.style.display = mostrar ? '' : 'none';
     });
   }
-  
+
   limparFiltrosRodizio() {
     const t = document.getElementById('filtroRodizioTurma'); if (t) t.value = 'todas';
     const tp = document.getElementById('filtroRodizioTipo'); if (tp) tp.value = 'todos';
@@ -490,13 +513,14 @@ class MonitoramentoTempoReal {
     const gostou = document.getElementById('filtroGostou')?.value || 'todos';
     const anonimo = document.getElementById('filtroAnonimo')?.value || 'todos';
     const busca = (document.getElementById('filtroBuscaFeedback')?.value || '').toLowerCase();
+
     this.feedbacksFiltrados = this.todosFeedbacks.filter(f => {
       if (refeicao !== 'todas' && f.tipoRefeicao !== refeicao) return false;
       if (f.nota < notaMin) return false;
       if (gostou !== 'todos' && f.gostou !== gostou) return false;
       if (anonimo !== 'todos') {
         const isA = anonimo === 'sim';
-        if (f.anonimo !== isA) return false;
+        if (!!f.anonimo !== isA) return false;
       }
       if (busca) {
         const n = (f.alunoNome || '').toLowerCase().includes(busca);
@@ -506,13 +530,13 @@ class MonitoramentoTempoReal {
       }
       return true;
     });
-    // reset de página ao filtrar feedbacks
+
     this.paginaFeedbacks = 1;
     this.atualizarListaFeedbacks();
     const el = document.getElementById('feedbacksFiltrados');
     if (el) el.textContent = this.feedbacksFiltrados.length;
   }
-  
+
   limparFiltrosFeedback() {
     ['filtroRefeicaoFeedback'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'todas'; });
     ['filtroNotaMin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '1'; });
@@ -520,7 +544,7 @@ class MonitoramentoTempoReal {
     const b = document.getElementById('filtroBuscaFeedback'); if (b) b.value = '';
     this.aplicarFiltrosFeedback();
   }
-  
+
   configurarEventosFiltros() {
     const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.onchange = fn; };
     bind('filtroRegistroTipo', () => this.aplicarFiltrosRegistros());
@@ -538,7 +562,7 @@ class MonitoramentoTempoReal {
     const b = document.getElementById('filtroBuscaFeedback');
     if (b) b.oninput = () => this.aplicarFiltrosFeedback();
   }
-  
+
   async carregarFeedbacksCompleto() {
     try {
       const token = localStorage.getItem('auth_token');
@@ -558,7 +582,7 @@ class MonitoramentoTempoReal {
       this.atualizarFeedbacksNoDOM({ estatisticas: {} });
     }
   }
-  
+
   atualizarFeedbacksNoDOM(data) {
     const stats = data.estatisticas || {};
     const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -567,8 +591,10 @@ class MonitoramentoTempoReal {
     setText('mediaNotas', stats.mediaNotas || 0);
     setText('feedbacksFiltrados', this.feedbacksFiltrados.length || 0);
     setText('feedbacksCount', this.todosFeedbacks.length);
+
     const est = document.getElementById('estrelasMedia');
     if (est) est.innerHTML = this.gerarEstrelasMini(parseFloat(stats.mediaNotas) || 0);
+
     const maxN = Math.max(...Object.values(stats.distribuicaoNotas || {}), 1);
     for (let i = 1; i <= 5; i++) {
       const c = (stats.distribuicaoNotas || {})[i] || 0;
@@ -578,18 +604,21 @@ class MonitoramentoTempoReal {
       if (bar) bar.style.width = `${p}%`;
       if (cnt) cnt.textContent = c;
     }
+
     setText('gostaramSim', stats.gostouStats?.sim || 0);
     setText('gostaramMaisMenos', stats.gostouStats?.mais_ou_menos || 0);
     setText('gostaramNao', stats.gostouStats?.nao || 0);
     setText('mediaDetalhada', `${stats.mediaNotas || 0}/5`);
+
     const totG = (stats.gostouStats?.sim || 0) + (stats.gostouStats?.mais_ou_menos || 0);
     const aprov = stats.total > 0 ? Math.round((totG / stats.total) * 100) : 0;
     setText('gostaram', `${aprov}%`);
+
     this.atualizarListaFeedbacks();
   }
-  
+
   // ============================================================
-  // 🆕 LISTA DE FEEDBACKS (com paginação)
+  // LISTA DE FEEDBACKS (com paginação)
   // ============================================================
   atualizarListaFeedbacks() {
     const tbody = document.getElementById('listaFeedbacksAdmin');
@@ -610,14 +639,15 @@ class MonitoramentoTempoReal {
 
     const linhasHTML = pagina.map(f => {
       const tipoTexto = f.tipoRefeicao === 'manha' ? '🌅 Manhã' : f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde';
+      const notaNum = parseInt(f.nota) || 0;
       return `
         <tr>
           <td>${this.escapeHtml(f.alunoNome)}${f.anonimo ? ' <i class="fas fa-user-secret text-muted"></i>' : ''}</td>
           <td>${this.escapeHtml(f.alunoTurma || '-')}</td>
           <td><span class="mon-badge ${f.tipoRefeicao}">${tipoTexto}</span></td>
-          <td><span style="color: #f59e0b;">${'★'.repeat(f.nota)}${'☆'.repeat(5 - f.nota)}</span></td>
+          <td><span style="color: #f59e0b;">${'★'.repeat(notaNum)}${'☆'.repeat(5 - notaNum)}</span></td>
           <td><small>${f.comentario ? (f.comentario.length > 40 ? this.escapeHtml(f.comentario.substring(0, 40)) + '...' : this.escapeHtml(f.comentario)) : '-'}</small></td>
-          <td><small>${new Date(f.createdAt).toLocaleString()}</small></td>
+          <td><small>${new Date(f.createdAt).toLocaleString('pt-BR')}</small></td>
           <td>
             <div class="mon-action-buttons">
               <button onclick="monitoramentoTempoReal.verDetalhesFeedback('${f._id}')" title="Ver"><i class="fas fa-eye"></i></button>
@@ -630,7 +660,6 @@ class MonitoramentoTempoReal {
       `;
     }).join('');
 
-    // Linha de paginação (ocupa todas as colunas)
     const paginadorHTML = this.renderizarPaginador(
       this.paginaFeedbacks,
       totalPaginas,
@@ -647,26 +676,22 @@ class MonitoramentoTempoReal {
     `;
   }
 
-  // ============================================================
-  // 🆕 NAVEGAÇÃO DE PÁGINA — FEEDBACKS
-  // ============================================================
   irParaPaginaFeedbacks(p) {
     const totalPaginas = Math.max(1, Math.ceil(this.feedbacksFiltrados.length / this.itensPorPaginaFeedbacks));
     if (p < 1 || p > totalPaginas) return;
     this.paginaFeedbacks = p;
     this.atualizarListaFeedbacks();
-    // rolar até a tabela para melhor UX
     const tbl = document.getElementById('tabelaFeedbacks');
     if (tbl && tbl.scrollIntoView) {
       tbl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
-  
+
   atualizarTimestamp(t) {
     const el = document.getElementById('ultimaAtualizacao');
     if (el) el.textContent = new Date(t).toLocaleTimeString('pt-BR');
   }
-  
+
   iniciarEventosSSE() {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
@@ -676,7 +701,7 @@ class MonitoramentoTempoReal {
         const data = JSON.parse(event.data);
         if (data.type === 'nova-refeicao') {
           this.carregarFeedbacksCompleto();
-          this.carregarDadosCompleto();
+          this.carregarDadosCompleto(false);
         }
         if (data.type === 'heartbeat') {
           const el = document.getElementById('statusConexao');
@@ -690,24 +715,29 @@ class MonitoramentoTempoReal {
       setTimeout(() => this.reconectarEventos(), 5000);
     };
   }
+
   reconectarEventos() {
     if (this.eventSource) this.eventSource.close();
     this.iniciarEventosSSE();
   }
+
   iniciarAtualizacaoAutomatica() {
     if (this.atualizacaoTimer) clearInterval(this.atualizacaoTimer);
-    this.atualizacaoTimer = setInterval(() => this.carregarDadosCompleto(), 60000);
+    this.atualizacaoTimer = setInterval(() => {
+      // Só atualiza automaticamente se o filtro for "hoje" (dados antigos não mudam)
+      if (this.filtroRegistroData === 'hoje') {
+        this.carregarDadosCompleto(false);
+      }
+    }, 60000);
   }
-  
+
   async atualizarForcado() {
-    const dataAtual = this.filtroRegistroData !== 'hoje' && this.filtroRegistroData !== 'todos' ?
-      this.getDataPorPeriodo(this.filtroRegistroData) :
-      (this.filtroRegistroData === 'todos' ? 'todos' : 'hoje');
-    this.cacheDados.delete(dataAtual);
-    await this.carregarDadosCompleto(null, false);
+    this.cacheDados.clear();
+    await this.carregarDadosCompleto(false);
+    await this.carregarFeedbacksCompleto();
     this.showToastMessage('✅ Dados atualizados!', 'success');
   }
-  
+
   async verificarEstatisticasRegistros() {
     try {
       const token = localStorage.getItem('auth_token');
@@ -717,7 +747,7 @@ class MonitoramentoTempoReal {
       return d.success ? d.estatisticas : null;
     } catch (e) { return null; }
   }
-  
+
   async executarLimpezaRegistros(meses = 1) {
     let c = false;
     if (typeof admin !== 'undefined' && admin.confirmar) {
@@ -737,11 +767,12 @@ class MonitoramentoTempoReal {
       const d = await r.json();
       if (d.success) {
         this.showToastMessage(`✅ ${d.deletados} removidos!`, 'success');
-        await this.carregarDadosCompleto(null, false);
+        this.cacheDados.clear();
+        await this.carregarDadosCompleto(false);
       } else throw new Error(d.error);
     } catch (e) { this.showToastMessage('❌ ' + e.message, 'error'); }
   }
-  
+
   async abrirModalLimpezaRegistros() {
     const mb = document.getElementById('modalBody');
     if (!mb) return;
@@ -780,13 +811,13 @@ class MonitoramentoTempoReal {
       `;
     }
   }
-  
+
   async confirmarLimpezaRegistros() {
     const p = document.getElementById('periodoLimpeza')?.value || 1;
     if (typeof admin !== 'undefined' && admin.closeModal) admin.closeModal();
     await this.executarLimpezaRegistros(parseInt(p));
   }
-  
+
   renderizarErro(msg) {
     const c = document.getElementById('contentArea');
     if (!c) return;
@@ -799,7 +830,11 @@ class MonitoramentoTempoReal {
       </div>
     `;
   }
-    renderizar(data) {
+
+  // ============================================================
+  // RENDER PRINCIPAL
+  // ============================================================
+  renderizar(data) {
     const container = document.getElementById('contentArea');
     if (!container) return;
     const cozinha = data.cozinha || {};
@@ -808,7 +843,14 @@ class MonitoramentoTempoReal {
     const perfis = cozinha.perfisAlimentares || { sempre: 0, as_vezes: 0, nunca: 0 };
     const previsao = cozinha.previsaoComida || { manha: 0, almoco: 0, tarde: 0, total: 0 };
     const adesao = cozinha.totalPessoas ? ((contagem.pessoasUnicas / cozinha.totalPessoas) * 100).toFixed(0) : 0;
-    
+
+    // Label amigável do período atual
+    const labelsPeriodo = {
+      hoje: 'Hoje', ontem: 'Ontem', semana: 'Últimos 7 dias',
+      mes: 'Últimos 30 dias', ano: 'Último ano', todos: 'Todo o período'
+    };
+    const periodoAtualLabel = labelsPeriodo[this.filtroRegistroData] || 'Hoje';
+
     container.innerHTML = `
       <div class="monitoramento-dashboard">
         <div class="mon-dash-header">
@@ -845,7 +887,7 @@ class MonitoramentoTempoReal {
           </div>
           <div class="mon-metric-card">
             <div class="mon-metric-icon green"><i class="fas fa-utensils"></i></div>
-            <div class="mon-metric-info"><div class="mon-metric-value">${contagem.total}</div><div class="mon-metric-label">Refeições Hoje</div><div class="mon-metric-detail">${contagem.pessoasUnicas} únicas</div></div>
+            <div class="mon-metric-info"><div class="mon-metric-value">${contagem.total}</div><div class="mon-metric-label">Refeições (${this.escapeHtml(periodoAtualLabel)})</div><div class="mon-metric-detail">${contagem.pessoasUnicas} únicas</div></div>
           </div>
           <div class="mon-metric-card">
             <div class="mon-metric-icon orange"><i class="fas fa-chart-pie"></i></div>
@@ -899,7 +941,16 @@ class MonitoramentoTempoReal {
             <div class="mon-filtros-box">
               <div class="mon-filtro-group"><label>Turma</label><select id="filtroTurmasRefeicaoTurma"><option value="todas">Todas</option></select></div>
               <div class="mon-filtro-group"><label>Turno</label><select id="filtroTurmasRefeicaoTurno"><option value="todas">Todos</option><option value="manha">Manhã</option><option value="almoco">Almoço</option><option value="tarde">Tarde</option></select></div>
-              <div class="mon-filtro-group"><label>Período</label><select id="filtroTurmasRefeicaoData"><option value="hoje">Hoje</option><option value="ontem">Ontem</option><option value="semana">Semana</option><option value="mes">Mês</option></select></div>
+              <div class="mon-filtro-group"><label>Período</label>
+                <select id="filtroTurmasRefeicaoData">
+                  <option value="hoje">Hoje</option>
+                  <option value="ontem">Ontem</option>
+                  <option value="semana">Últimos 7 dias</option>
+                  <option value="mes">Últimos 30 dias</option>
+                  <option value="ano">Último ano</option>
+                  <option value="todos">Todo o período</option>
+                </select>
+              </div>
               <button onclick="monitoramentoTempoReal.limparFiltrosRefeicoesTurmas()" class="mon-btn-clear"><i class="fas fa-eraser"></i> Limpar</button>
             </div>
             <div class="mon-table-responsive">
@@ -919,7 +970,16 @@ class MonitoramentoTempoReal {
             <div class="mon-filtros-box">
               <div class="mon-filtro-group"><label>Turma</label><select id="filtroRegistroTurma"><option value="todas">Todas</option></select></div>
               <div class="mon-filtro-group"><label>Refeição</label><select id="filtroRegistroTipo"><option value="todas">Todas</option><option value="manha">Manhã</option><option value="almoco">Almoço</option><option value="tarde">Tarde</option></select></div>
-              <div class="mon-filtro-group"><label>Período</label><select id="filtroRegistroData"><option value="hoje">Hoje</option><option value="ontem">Ontem</option><option value="semana">Semana</option><option value="mes">Mês</option></select></div>
+              <div class="mon-filtro-group"><label>Período</label>
+                <select id="filtroRegistroData">
+                  <option value="hoje">Hoje</option>
+                  <option value="ontem">Ontem</option>
+                  <option value="semana">Últimos 7 dias</option>
+                  <option value="mes">Últimos 30 dias</option>
+                  <option value="ano">Último ano</option>
+                  <option value="todos">Todo o período</option>
+                </select>
+              </div>
               <button onclick="monitoramentoTempoReal.limparFiltrosRegistros()" class="mon-btn-clear"><i class="fas fa-eraser"></i> Limpar</button>
             </div>
             <div class="mon-registros-list"></div>
@@ -974,11 +1034,11 @@ class MonitoramentoTempoReal {
             </div>
 
             <div class="mon-filtros-box">
-              <div class="mon-filtro-group"><label>Refeição</label><select id="filtroRefeicaoFeedback" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()"><option value="todas">Todas</option><option value="manha">Manhã</option><option value="almoco">Almoço</option><option value="tarde">Tarde</option></select></div>
-              <div class="mon-filtro-group"><label>Nota Mín.</label><select id="filtroNotaMin" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()"><option value="1">1★+</option><option value="2">2★+</option><option value="3">3★+</option><option value="4">4★+</option><option value="5">5★</option></select></div>
-              <div class="mon-filtro-group"><label>Opinião</label><select id="filtroGostou" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()"><option value="todos">Todos</option><option value="sim">👍 Adoraram</option><option value="mais_ou_menos">😐 Mais ou menos</option><option value="nao">👎 Não gostaram</option></select></div>
-              <div class="mon-filtro-group"><label>Anonimato</label><select id="filtroAnonimo" onchange="monitoramentoTempoReal.aplicarFiltrosFeedback()"><option value="todos">Todos</option><option value="nao">✅ Identificados</option><option value="sim">🔒 Anônimos</option></select></div>
-              <div class="mon-filtro-group" style="flex: 2;"><label>Buscar</label><input type="text" id="filtroBuscaFeedback" placeholder="Nome, turma..." oninput="monitoramentoTempoReal.aplicarFiltrosFeedback()"></div>
+              <div class="mon-filtro-group"><label>Refeição</label><select id="filtroRefeicaoFeedback"><option value="todas">Todas</option><option value="manha">Manhã</option><option value="almoco">Almoço</option><option value="tarde">Tarde</option></select></div>
+              <div class="mon-filtro-group"><label>Nota Mín.</label><select id="filtroNotaMin"><option value="1">1★+</option><option value="2">2★+</option><option value="3">3★+</option><option value="4">4★+</option><option value="5">5★</option></select></div>
+              <div class="mon-filtro-group"><label>Opinião</label><select id="filtroGostou"><option value="todos">Todos</option><option value="sim">👍 Adoraram</option><option value="mais_ou_menos">😐 Mais ou menos</option><option value="nao">👎 Não gostaram</option></select></div>
+              <div class="mon-filtro-group"><label>Anonimato</label><select id="filtroAnonimo"><option value="todos">Todos</option><option value="nao">✅ Identificados</option><option value="sim">🔒 Anônimos</option></select></div>
+              <div class="mon-filtro-group" style="flex: 2;"><label>Buscar</label><input type="text" id="filtroBuscaFeedback" placeholder="Nome, turma..."></div>
               <button onclick="monitoramentoTempoReal.limparFiltrosFeedback()" class="mon-btn-clear"><i class="fas fa-eraser"></i> Limpar</button>
             </div>
 
@@ -1020,7 +1080,7 @@ class MonitoramentoTempoReal {
     `;
     this.inicializarGraficos(data);
   }
-  
+
   inicializarGraficos(data) {
     const canvas = document.getElementById('graficoPerfilAlimentar');
     if (!canvas) return;
@@ -1037,10 +1097,10 @@ class MonitoramentoTempoReal {
       options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
     });
   }
-  
-  // ============================================
-  // 👁️ AÇÕES DO FEEDBACK
-  // ============================================
+
+  // ============================================================
+  // AÇÕES DO FEEDBACK
+  // ============================================================
   async verDetalhesFeedback(id) {
     try {
       const token = localStorage.getItem('auth_token');
@@ -1049,6 +1109,7 @@ class MonitoramentoTempoReal {
       if (!d.success) throw new Error(d.error);
       const f = d.feedback;
       const tipoTxt = f.tipoRefeicao === 'manha' ? '🌅 Manhã' : f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde';
+      const notaNum = parseInt(f.nota) || 0;
       const mb = document.getElementById('modalBody');
       mb.innerHTML = `
         <div style="padding: 20px;">
@@ -1062,7 +1123,7 @@ class MonitoramentoTempoReal {
           <div style="background: #f8fafc; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
               <div><div style="font-size: 12px; color: #64748b;">Refeição</div><div style="font-weight: 600;">${tipoTxt}</div></div>
-              <div><div style="font-size: 12px; color: #64748b;">Nota</div><div style="font-weight: 600; color: #f59e0b;">${'★'.repeat(f.nota)}${'☆'.repeat(5 - f.nota)}</div></div>
+              <div><div style="font-size: 12px; color: #64748b;">Nota</div><div style="font-weight: 600; color: #f59e0b;">${'★'.repeat(notaNum)}${'☆'.repeat(5 - notaNum)}</div></div>
               <div><div style="font-size: 12px; color: #64748b;">Gostou?</div><div style="font-weight: 600;">${f.gostou === 'sim' ? '👍 Sim' : f.gostou === 'mais_ou_menos' ? '😐 Mais ou menos' : f.gostou === 'nao' ? '👎 Não' : '-'}</div></div>
               <div><div style="font-size: 12px; color: #64748b;">Data</div><div>${new Date(f.createdAt).toLocaleString('pt-BR')}</div></div>
             </div>
@@ -1080,7 +1141,7 @@ class MonitoramentoTempoReal {
       admin.openModal();
     } catch (e) { this.showToastMessage('❌ ' + e.message, 'error'); }
   }
-  
+
   async editarFeedback(id) {
     try {
       const token = localStorage.getItem('auth_token');
@@ -1115,10 +1176,10 @@ class MonitoramentoTempoReal {
             </select>
           </div>
           <div style="margin-bottom: 15px;"><label style="display: block; font-weight: 600; margin-bottom: 5px;">Comentário</label>
-            <textarea id="editFeedbackComentario" rows="3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">${f.comentario || ''}</textarea>
+            <textarea id="editFeedbackComentario" rows="3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">${this.escapeHtml(f.comentario || '')}</textarea>
           </div>
           <div style="margin-bottom: 15px;"><label style="display: block; font-weight: 600; margin-bottom: 5px;">Sugestão</label>
-            <textarea id="editFeedbackSugestao" rows="2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">${f.sugestao || ''}</textarea>
+            <textarea id="editFeedbackSugestao" rows="2" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">${this.escapeHtml(f.sugestao || '')}</textarea>
           </div>
         </div>
       `;
@@ -1130,7 +1191,7 @@ class MonitoramentoTempoReal {
       admin.openModal();
     } catch (e) { this.showToastMessage('❌ ' + e.message, 'error'); }
   }
-  
+
   async salvarEdicaoFeedback(id) {
     try {
       const dados = {
@@ -1157,11 +1218,11 @@ class MonitoramentoTempoReal {
       await this.carregarFeedbacksCompleto();
     } catch (e) { this.showToastMessage('❌ ' + e.message, 'error'); }
   }
-  
+
   async excluirFeedback(id, nome) {
     let c = false;
     if (typeof admin !== 'undefined' && admin.confirmar) {
-      c = await admin.confirmar('🗑️ Excluir Feedback', `Excluir feedback de <strong>${nome}</strong>?`);
+      c = await admin.confirmar('🗑️ Excluir Feedback', `Excluir feedback de <strong>${this.escapeHtml(nome)}</strong>?`);
     } else {
       c = await confirm(`Excluir feedback de ${nome}?`);
     }
@@ -1175,7 +1236,7 @@ class MonitoramentoTempoReal {
       await this.carregarFeedbacksCompleto();
     } catch (e) { this.showToastMessage('❌ ' + e.message, 'error'); }
   }
-  
+
   async imprimirFeedback(id) {
     try {
       const token = localStorage.getItem('auth_token');
@@ -1184,9 +1245,10 @@ class MonitoramentoTempoReal {
       if (!d.success) throw new Error(d.error);
       const f = d.feedback;
       const tipoTxt = f.tipoRefeicao === 'manha' ? 'Lanche da Manhã' : f.tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
+      const notaNum = parseInt(f.nota) || 0;
       const w = window.open('', '_blank');
       w.document.write(`
-        <!DOCTYPE html><html><head><title>Feedback - ${f.alunoNome}</title>
+        <!DOCTYPE html><html><head><title>Feedback - ${this.escapeHtml(f.alunoNome)}</title>
         <style>
           body { font-family: Arial; padding: 40px; max-width: 600px; margin: 0 auto; }
           h1 { text-align: center; color: #1e3c72; }
@@ -1207,7 +1269,7 @@ class MonitoramentoTempoReal {
           ${f.alunoCurso ? `<div class="info-item"><div class="label">Curso</div><div class="value">${this.escapeHtml(f.alunoCurso)}</div></div>` : ''}
           ${f.alunoTurma ? `<div class="info-item"><div class="label">Turma</div><div class="value">${this.escapeHtml(f.alunoTurma)}</div></div>` : ''}
           <div class="info-item"><div class="label">Refeição</div><div class="value">${tipoTxt}</div></div>
-          <div class="info-item"><div class="label">Nota</div><div class="value stars">${'★'.repeat(f.nota)}${'☆'.repeat(5 - f.nota)} (${f.nota}/5)</div></div>
+          <div class="info-item"><div class="label">Nota</div><div class="value stars">${'★'.repeat(notaNum)}${'☆'.repeat(5 - notaNum)} (${notaNum}/5)</div></div>
           <div class="info-item"><div class="label">Gostou?</div><div class="value">${f.gostou === 'sim' ? '👍 Sim' : f.gostou === 'mais_ou_menos' ? '😐 Mais ou menos' : f.gostou === 'nao' ? '👎 Não' : 'Não informado'}</div></div>
           <div class="info-item"><div class="label">Data</div><div class="value">${new Date(f.createdAt).toLocaleString('pt-BR')}</div></div>
         </div>
@@ -1220,10 +1282,10 @@ class MonitoramentoTempoReal {
       setTimeout(() => w.print(), 500);
     } catch (e) { this.showToastMessage('❌ ' + e.message, 'error'); }
   }
-  
-  // ============================================
-  // 🖨️ IMPRIMIR REGISTRO DE REFEIÇÃO
-  // ============================================
+
+  // ============================================================
+  // IMPRIMIR REGISTRO
+  // ============================================================
   async imprimirRegistroRefeicao(id) {
     try {
       const token = localStorage.getItem('auth_token');
@@ -1234,7 +1296,7 @@ class MonitoramentoTempoReal {
       const tipoTxt = reg.tipoRefeicao === 'manha' ? 'Lanche da Manhã' : reg.tipoRefeicao === 'almoco' ? 'Almoço' : 'Lanche da Tarde';
       const w = window.open('', '_blank');
       w.document.write(`
-        <!DOCTYPE html><html><head><title>Registro - ${reg.alunoNome}</title>
+        <!DOCTYPE html><html><head><title>Registro - ${this.escapeHtml(reg.alunoNome)}</title>
         <style>
           body { font-family: Arial; padding: 40px; max-width: 600px; margin: 0 auto; }
           h1 { text-align: center; color: #1e3c72; }
@@ -1261,7 +1323,7 @@ class MonitoramentoTempoReal {
       setTimeout(() => w.print(), 500);
     } catch (e) { this.showToastMessage('❌ ' + e.message, 'error'); }
   }
-  
+
   parar() {
     if (this.eventSource) this.eventSource.close();
     if (this.atualizacaoTimer) clearInterval(this.atualizacaoTimer);
