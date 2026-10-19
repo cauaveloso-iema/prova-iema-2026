@@ -126,7 +126,7 @@ class PushClient {
 
     async registerServiceWorker() {
         try {
-            this.swRegistration = await navigator.serviceWorker.register('/service-worker.js');
+            this.swRegistration = await navigator.serviceWorker.register('/sw.js');
             console.log('✅ Service Worker registrado');
         } catch (error) {
             console.error('❌ Erro ao registrar Service Worker:', error);

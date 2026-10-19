@@ -87,7 +87,7 @@
 // ============================================
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+    navigator.serviceWorker.register('/sw.js')
       .then(registration => {
         console.log('✅ Service Worker registrado:', registration.scope);
       })
@@ -5157,17 +5157,6 @@ window.testarNotificacao = function() {
     console.log('✅ Sistema de escalonamento mobile ativo!');
     
 })();
-
-// ============================================
-// SERVICE WORKER E CONEXÃO
-// ============================================
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ Service Worker ativo'))
-            .catch(err => console.log('❌ Erro:', err));
-    });
-}
 
 window.addEventListener('online', () => console.log('🌐 Online'));
 window.addEventListener('offline', () => console.log('📴 Offline'));
