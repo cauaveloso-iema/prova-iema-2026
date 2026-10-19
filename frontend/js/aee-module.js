@@ -174,6 +174,133 @@ window.AeeModule = {
         }, 3500);
     },
 
+    // ============================================
+    // 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+    // ============================================
+    gerarBaixarCSV(opts) {
+        const {
+            titulo = 'Relatório',
+            subtitulo = '',
+            setor = 'Setor Pedagógico — AEE',
+            colunas = [],
+            registros = [],
+            filtros = [],
+            nomeArquivo = 'relatorio',
+            observacoes = '',
+            metricas = null
+        } = opts || {};
+
+        if (!Array.isArray(colunas) || colunas.length === 0) {
+            this.mostrarToast('⚠️ Nenhuma coluna definida para exportação', 'warning');
+            return false;
+        }
+        if (!Array.isArray(registros) || registros.length === 0) {
+            this.mostrarToast('⚠️ Nenhum registro para exportar', 'warning');
+            return false;
+        }
+
+        const agora = new Date();
+        const dataGeracao = agora.toLocaleString('pt-BR');
+        const dataArquivo = agora.toISOString().split('T')[0];
+
+        const esc = (v) => {
+            if (v === null || v === undefined) return '""';
+            let s = String(v)
+                .replace(/\r\n|\r|\n/g, ' ')
+                .replace(/"/g, '""')
+                .trim();
+            return `"${s}"`;
+        };
+
+        const linhaUnica = (texto) => {
+            const t = String(texto ?? '').replace(/"/g, '""');
+            return `"${t}"` + ';'.repeat(Math.max(0, colunas.length - 1));
+        };
+
+        const linhaCabecalho = colunas.map(c => esc(c.label)).join(';');
+        const linhasDados = registros.map(reg => {
+            return colunas.map(col => {
+                let v;
+                try {
+                    v = col.format ? col.format(reg) : reg[col.key];
+                } catch (e) {
+                    console.warn(`Erro coluna ${col.key}:`, e);
+                    v = '';
+                }
+                return esc(v);
+            }).join(';');
+        });
+
+        const L = [];
+
+        L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
+        L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
+        L.push(linhaUnica(`Setor: ${setor}`));
+        L.push(linhaUnica(''));
+
+        L.push(linhaUnica(titulo.toUpperCase()));
+        if (subtitulo) L.push(linhaUnica(subtitulo));
+        L.push(linhaUnica(''));
+
+        L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
+        L.push(linhaUnica(`Total de registros: ${registros.length}`));
+
+        if (metricas && typeof metricas === 'object') {
+            Object.entries(metricas).forEach(([label, valor]) => {
+                if (valor !== null && valor !== undefined && valor !== '') {
+                    L.push(linhaUnica(`${label}: ${valor}`));
+                }
+            });
+        }
+
+        if (filtros.length > 0) {
+            L.push(linhaUnica('Filtros aplicados:'));
+            filtros.forEach(f => {
+                if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
+            });
+        }
+
+        if (observacoes) L.push(linhaUnica(`Observações: ${observacoes}`));
+
+        L.push(linhaUnica(''));
+        L.push(linhaUnica('─'.repeat(40)));
+        L.push(linhaUnica(''));
+
+        L.push(linhaCabecalho);
+        L.push(...linhasDados);
+
+        L.push(linhaUnica(''));
+        L.push(linhaUnica('─'.repeat(40)));
+        L.push(linhaUnica(''));
+
+        L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
+        L.push(linhaUnica(`Setor responsável: ${setor}`));
+        L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
+        L.push(linhaUnica('Este relatório é de uso interno e confidencial.'));
+
+        const csv = '\uFEFF' + L.join('\r\n');
+
+        try {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = `${nomeArquivo}_${dataArquivo}.csv`;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }, 100);
+            return true;
+        } catch (e) {
+            console.error('Erro ao gerar CSV:', e);
+            this.mostrarToast('❌ Erro ao gerar CSV', 'error');
+            return false;
+        }
+    },
+
     getLabelCondicao(condicao) {
         if (!condicao) return this.CONDICOES_LABELS['nao_especificada'];
         return this.CONDICOES_LABELS[condicao] || 'Condição Especial';
@@ -1365,32 +1492,92 @@ window.AeeModule = {
 
     exportarNotasCSV() {
         if (!this.notas || this.notas.length === 0) {
-            this.mostrarToast('Nenhuma nota para exportar', 'warning');
+            this.mostrarToast('⚠️ Nenhuma nota para exportar', 'warning');
             return;
         }
 
-        let csv = 'Aluno,Matrícula,Turma,Curso,Prova,Tipo,Nota,Data,Status\n';
-        this.notas.forEach(n => {
-            csv += [
-                `"${(n.alunoNome || '').replace(/"/g, '""')}"`,
-                `"${(n.alunoMatricula || '').replace(/"/g, '""')}"`,
-                `"${(n.alunoTurma || '').replace(/"/g, '""')}"`,
-                `"${(n.alunoCurso || '').replace(/"/g, '""')}"`,
-                `"${(n.provaTitulo || '').replace(/"/g, '""')}"`,
-                `"${n.adaptada ? 'Adaptada' : 'Normal'}"`,
-                n.notaLiberada && n.nota !== null ? n.nota.toFixed(1) : '',
-                this.formatarData(n.data),
-                n.status
-            ].join(',') + '\n';
+        const registros = this.notas;
+
+        // ---------- Colunas ----------
+        const colunas = [
+            { label: 'Aluno', format: (n) => n.alunoNome || '' },
+            { label: 'Matrícula', format: (n) => n.alunoMatricula || '' },
+            { label: 'Turma', format: (n) => n.alunoTurma || '' },
+            { label: 'Curso', format: (n) => n.alunoCurso || '' },
+            { label: 'Prova', format: (n) => n.provaTitulo || '' },
+            {
+                label: 'Tipo de Prova',
+                format: (n) => n.adaptada ? 'Adaptada' : 'Normal'
+            },
+            {
+                label: 'Nota',
+                format: (n) => (n.notaLiberada && n.nota !== null && n.nota !== undefined)
+                    ? Number(n.nota).toFixed(1)
+                    : '—'
+            },
+            {
+                label: 'Data',
+                format: (n) => this.formatarData(n.data)
+            },
+            {
+                label: 'Status',
+                format: (n) => {
+                    const map = {
+                        'aprovado': 'Aprovado',
+                        'reprovado': 'Reprovado',
+                        'cancelada': 'Cancelada',
+                        'pendente': 'Pendente'
+                    };
+                    return map[n.status] || n.status || '';
+                }
+            },
+            {
+                label: 'Nota Liberada',
+                format: (n) => n.notaLiberada ? 'Sim' : 'Não'
+            }
+        ];
+
+        // ---------- Filtros aplicados ----------
+        const filtros = [];
+        if (this.filtrosNotas.busca) filtros.push({ label: 'Busca', valor: this.filtrosNotas.busca });
+        if (this.filtrosNotas.turma && this.filtrosNotas.turma !== 'todas') filtros.push({ label: 'Turma', valor: this.filtrosNotas.turma });
+        if (this.filtrosNotas.curso && this.filtrosNotas.curso !== 'todos') filtros.push({ label: 'Curso', valor: this.filtrosNotas.curso });
+        if (this.filtrosNotas.periodo && this.filtrosNotas.periodo !== 'todos') filtros.push({ label: 'Período', valor: `${this.filtrosNotas.periodo}º` });
+        if (this.filtrosNotas.status && this.filtrosNotas.status !== 'todos') filtros.push({ label: 'Status', valor: this.filtrosNotas.status });
+        if (this.filtrosNotas.ordenacao) filtros.push({ label: 'Ordenação', valor: this.filtrosNotas.ordenacao });
+
+        // ---------- Métricas ----------
+        const aprovados = registros.filter(n => n.status === 'aprovado').length;
+        const reprovados = registros.filter(n => n.status === 'reprovado').length;
+        const pendentes = registros.filter(n => n.status === 'pendente').length;
+        const liberadas = registros.filter(n => n.notaLiberada).length;
+        const comNota = registros.filter(n => n.notaLiberada && n.nota !== null);
+        const media = comNota.length > 0
+            ? (comNota.reduce((acc, n) => acc + Number(n.nota), 0) / comNota.length).toFixed(2)
+            : '—';
+
+        const ok = this.gerarBaixarCSV({
+            titulo: 'Histórico de Notas — AEE',
+            subtitulo: `${registros.length} nota(s) no relatório`,
+            setor: 'Setor Pedagógico — AEE',
+            colunas,
+            registros,
+            filtros,
+            metricas: {
+                'Total de notas': registros.length,
+                'Aprovados': aprovados,
+                'Reprovados': reprovados,
+                'Pendentes': pendentes,
+                'Notas liberadas': liberadas,
+                'Média geral': media
+            },
+            nomeArquivo: 'aee-historico-notas',
+            observacoes: `${registros.length} nota(s) listada(s)`
         });
 
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `aee_notas_${new Date().toISOString().slice(0, 10)}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-        this.mostrarToast('✅ CSV exportado!', 'success');
+        if (ok) {
+            this.mostrarToast(`✅ CSV exportado (${registros.length} nota(s))!`, 'success');
+        }
     },
 
     // ============================================
@@ -3692,85 +3879,185 @@ window.AeeModule = {
 
     exportarCSV() {
         if (!this.relatorioAtual) {
-            this.mostrarToast('Gere um relatório primeiro', 'warning');
+            this.mostrarToast('⚠️ Gere um relatório primeiro', 'warning');
             return;
         }
 
-        let csv = '';
-        const dataHoje = new Date().toISOString().slice(0, 10);
+        const data = this.relatorioAtual;
+        const tipo = this.relatorioTipo;
 
-        // Por aluno
-        if (this.relatorioTipo === 'aluno' && this.relatorioAtual.aluno) {
-            const a = this.relatorioAtual.aluno;
-            csv = 'Nome,Matrícula,Email,Turma,Curso,Condição,Status,Data Solicitação\n';
-            csv += [
-                `"${(a.nome || '').replace(/"/g, '""')}"`,
-                `"${(a.matricula || '').replace(/"/g, '""')}"`,
-                `"${(a.email || '').replace(/"/g, '""')}"`,
-                `"${(a.turma || '').replace(/"/g, '""')}"`,
-                `"${(a.curso || '').replace(/"/g, '""')}"`,
-                `"${(a.condicao?.label || '').replace(/"/g, '""')}"`,
-                `"${a.status}"`,
-                `"${this.formatarData(a.dataSolicitacao)}"`
-            ].join(',') + '\n';
+        // ============================================
+        // TÍTULO / SUBTÍTULO
+        // ============================================
+        let titulo = 'Relatório AEE';
+        let subtitulo = '';
 
-            if (this.relatorioAtual.provasRealizadas && this.relatorioAtual.provasRealizadas.length > 0) {
-                csv += '\n\nProva,Tipo,Nota,Data\n';
-                this.relatorioAtual.provasRealizadas.forEach(p => {
-                    csv += [
-                        `"${(p.provaTitulo || '').replace(/"/g, '""')}"`,
-                        `"${p.adaptada ? 'Adaptada' : 'Normal'}"`,
-                        p.nota !== null && p.nota !== undefined ? Number(p.nota).toFixed(1) : '',
-                        `"${this.formatarData(p.data)}"`
-                    ].join(',') + '\n';
+        if (tipo === 'aluno' && data.aluno) {
+            titulo = 'Relatório Individual AEE';
+            subtitulo = `${data.aluno.nome} — ${data.aluno.turma || 'Sem turma'}`;
+        } else if (tipo === 'turma' && data.alunos) {
+            titulo = 'Relatório AEE por Turma';
+            subtitulo = `Turma: ${data.turma} — ${data.alunos.length} aluno(s)`;
+        } else if (tipo === 'geral' && data.relatorio) {
+            titulo = 'Relatório Geral AEE';
+            subtitulo = `${data.relatorio.totalAlunos} aluno(s) AEE`;
+        }
+
+        // ============================================
+        // FILTROS APLICADOS
+        // ============================================
+        const filtros = [];
+        const condicao = this.safeGet('aeeRelatorioCondicao')?.value;
+        const status = this.safeGet('aeeRelatorioStatus')?.value;
+        const curso = this.safeGet('aeeRelatorioCurso')?.value;
+        const periodo = this.safeGet('aeeRelatorioPeriodo')?.value;
+
+        if (condicao && condicao !== 'todos') filtros.push({ label: 'Condição', valor: condicao });
+        if (status) filtros.push({ label: 'Status', valor: status === 'aprovada' ? 'Aprovada' : 'Pendente' });
+        if (curso && curso !== 'todos') filtros.push({ label: 'Curso', valor: curso });
+        if (periodo && periodo !== 'todos') filtros.push({ label: 'Período', valor: `${periodo}º` });
+
+        // ============================================
+        // TIPO: ALUNO
+        // ============================================
+        if (tipo === 'aluno' && data.aluno) {
+            const a = data.aluno;
+
+            const colunas = [
+                { label: 'Nome', format: () => a.nome || '' },
+                { label: 'Matrícula', format: () => a.matricula || '' },
+                { label: 'Email', format: () => a.email || '' },
+                { label: 'Turma', format: () => a.turma || '' },
+                { label: 'Curso', format: () => a.curso || '' },
+                { label: 'Condição', format: () => a.condicao?.label || '' },
+                { label: 'Detalhes', format: () => a.condicao?.detalhes || '' },
+                {
+                    label: 'Status AEE',
+                    format: () => a.status === 'aprovada' ? 'Aprovada' : 'Pendente'
+                },
+                {
+                    label: 'Data da Solicitação',
+                    format: () => this.formatarData(a.dataSolicitacao)
+                }
+            ];
+
+            const ok = this.gerarBaixarCSV({
+                titulo,
+                subtitulo,
+                setor: 'Setor Pedagógico — AEE',
+                colunas,
+                registros: [a],
+                filtros,
+                metricas: {
+                    'Total de provas realizadas': (data.provasRealizadas || []).length
+                },
+                nomeArquivo: `aee-aluno-${(a.nome || 'sem-nome').replace(/\s+/g, '-').toLowerCase()}`,
+                observacoes: 'Relatório individual do aluno'
+            });
+
+            if (ok) this.mostrarToast('✅ CSV exportado!', 'success');
+            return;
+        }
+
+        // ============================================
+        // TIPO: TURMA
+        // ============================================
+        if (tipo === 'turma' && data.alunos) {
+            const colunas = [
+                { label: 'Turma', format: () => data.turma || '' },
+                { label: 'Aluno', format: (a) => a.nome || '' },
+                { label: 'Matrícula', format: (a) => a.matricula || '' },
+                { label: 'Curso', format: (a) => a.curso || '' },
+                { label: 'Condição', format: (a) => a.condicao || '' },
+                {
+                    label: 'Status AEE',
+                    format: (a) => a.status === 'aprovada' ? 'Aprovada' : 'Pendente'
+                }
+            ];
+
+            const ok = this.gerarBaixarCSV({
+                titulo,
+                subtitulo,
+                setor: 'Setor Pedagógico — AEE',
+                colunas,
+                registros: data.alunos,
+                filtros,
+                metricas: {
+                    'Total de alunos': data.alunos.length,
+                    'Aprovados': data.alunos.filter(a => a.status === 'aprovada').length,
+                    'Pendentes': data.alunos.filter(a => a.status !== 'aprovada').length
+                },
+                nomeArquivo: `aee-turma-${(data.turma || 'sem-turma').replace(/\s+/g, '-').toLowerCase()}`,
+                observacoes: `${data.alunos.length} aluno(s) da turma ${data.turma}`
+            });
+
+            if (ok) this.mostrarToast(`✅ CSV exportado (${data.alunos.length} aluno(s))!`, 'success');
+            return;
+        }
+
+        // ============================================
+        // TIPO: GERAL
+        // ============================================
+        if (tipo === 'geral' && data.relatorio) {
+            const rel = data.relatorio;
+
+            // Achata os alunos por turma em linhas
+            const linhas = [];
+            rel.porTurma.forEach(t => {
+                t.alunos.forEach(a => {
+                    linhas.push({
+                        turma: t.turma,
+                        nome: a.nome,
+                        matricula: a.matricula,
+                        curso: a.curso,
+                        condicao: a.condicao,
+                        detalhes: a.detalhes,
+                        status: a.status
+                    });
                 });
-            }
-
-            this.downloadCSV(csv, `aee_aluno_${a.nome.replace(/\s/g, '_')}_${dataHoje}.csv`);
-            return;
-        }
-
-        // Por turma
-        if (this.relatorioTipo === 'turma' && this.relatorioAtual.alunos) {
-            csv = 'Turma,Nome,Matrícula,Curso,Condição,Status\n';
-            this.relatorioAtual.alunos.forEach(a => {
-                csv += [
-                    `"${(this.relatorioAtual.turma || '').replace(/"/g, '""')}"`,
-                    `"${(a.nome || '').replace(/"/g, '""')}"`,
-                    `"${(a.matricula || '').replace(/"/g, '""')}"`,
-                    `"${(a.curso || '').replace(/"/g, '""')}"`,
-                    `"${(a.condicao || '').replace(/"/g, '""')}"`,
-                    `"${a.status}"`
-                ].join(',') + '\n';
             });
 
-            this.downloadCSV(csv, `aee_turma_${this.relatorioAtual.turma.replace(/\s/g, '_')}_${dataHoje}.csv`);
-            return;
-        }
+            const colunas = [
+                { label: 'Turma', format: (l) => l.turma || '' },
+                { label: 'Aluno', format: (l) => l.nome || '' },
+                { label: 'Matrícula', format: (l) => l.matricula || '' },
+                { label: 'Curso', format: (l) => l.curso || '' },
+                { label: 'Condição', format: (l) => l.condicao || '' },
+                { label: 'Detalhes', format: (l) => l.detalhes || '' },
+                {
+                    label: 'Status AEE',
+                    format: (l) => l.status === 'aprovada' ? 'Aprovada' : 'Pendente'
+                }
+            ];
 
-        // Geral
-        const rel = this.relatorioAtual.relatorio;
-        if (!rel) {
-            this.mostrarToast('Nenhum dado para exportar', 'warning');
-            return;
-        }
-
-        csv = 'Turma,Nome,Matrícula,Curso,Condição,Detalhes,Status\n';
-        rel.porTurma.forEach(t => {
-            t.alunos.forEach(a => {
-                csv += [
-                    `"${(t.turma || '').replace(/"/g, '""')}"`,
-                    `"${(a.nome || '').replace(/"/g, '""')}"`,
-                    `"${(a.matricula || '').replace(/"/g, '""')}"`,
-                    `"${(a.curso || '').replace(/"/g, '""')}"`,
-                    `"${(a.condicao || '').replace(/"/g, '""')}"`,
-                    `"${(a.detalhes || '').replace(/"/g, '""')}"`,
-                    `"${a.status}"`
-                ].join(',') + '\n';
+            // Distribuição por condição (métricas extra)
+            const metricas = {
+                'Total de alunos': rel.totalAlunos,
+                'Aprovados': rel.totalAprovados,
+                'Pendentes': rel.totalPendentes,
+                'Turmas envolvidas': rel.porTurma.length
+            };
+            (rel.porCondicao || []).forEach(c => {
+                metricas[`Condição — ${c.condicao}`] = c.total;
             });
-        });
 
-        this.downloadCSV(csv, `aee_relatorio_geral_${dataHoje}.csv`);
+            const ok = this.gerarBaixarCSV({
+                titulo,
+                subtitulo,
+                setor: 'Setor Pedagógico — AEE',
+                colunas,
+                registros: linhas,
+                filtros,
+                metricas,
+                nomeArquivo: 'aee-relatorio-geral',
+                observacoes: `${linhas.length} aluno(s) listado(s)`
+            });
+
+            if (ok) this.mostrarToast(`✅ CSV exportado (${linhas.length} aluno(s))!`, 'success');
+            return;
+        }
+
+        this.mostrarToast('⚠️ Nenhum dado disponível para exportar', 'warning');
     },
 
     downloadCSV(csv, filename) {

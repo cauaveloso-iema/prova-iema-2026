@@ -81,6 +81,162 @@ function gerarAvatarSVG(nome) {
 }
 
 // ============================================
+// 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+// ============================================
+/**
+ * Gera CSV profissional com cabeçalho institucional, metadados, tabela e rodapé.
+ *
+ * @param {Object} opts
+ * @param {string}   opts.titulo        - Título do relatório
+ * @param {string}  [opts.subtitulo]    - Subtítulo (ex: "Turma: 3º Ano A")
+ * @param {string}  [opts.setor]        - Setor (default: "Enfermaria")
+ * @param {Array}    opts.colunas       - [{ label, key, format? }]
+ * @param {Array}    opts.registros     - Dados
+ * @param {Array<{label, valor}>} [opts.filtros] - Filtros aplicados
+ * @param {string}   opts.nomeArquivo   - Nome do arquivo (sem extensão)
+ * @param {string}  [opts.observacoes]  - Observações extras
+ * @param {Object}  [opts.metricas]     - { label: valor } extras (opcional)
+ */
+function gerarBaixarCSV(opts) {
+    const {
+        titulo = 'Relatório',
+        subtitulo = '',
+        setor = 'Enfermaria',
+        colunas = [],
+        registros = [],
+        filtros = [],
+        nomeArquivo = 'relatorio',
+        observacoes = '',
+        metricas = null
+    } = opts || {};
+
+    if (!Array.isArray(colunas) || colunas.length === 0) {
+        mostrarToast('⚠️ Nenhuma coluna definida para exportação');
+        return false;
+    }
+    if (!Array.isArray(registros) || registros.length === 0) {
+        mostrarToast('⚠️ Nenhum registro para exportar');
+        return false;
+    }
+
+    const agora = new Date();
+    const dataGeracao = agora.toLocaleString('pt-BR');
+    const dataArquivo = agora.toISOString().split('T')[0];
+
+    // Escapa valor para célula CSV
+    const esc = (v) => {
+        if (v === null || v === undefined) return '""';
+        let s = String(v)
+            .replace(/\r\n|\r|\n/g, ' ')
+            .replace(/"/g, '""')
+            .trim();
+        return `"${s}"`;
+    };
+
+    // Linha com 1 célula (visualmente mesclada)
+    const linhaUnica = (texto) => {
+        const t = String(texto ?? '').replace(/"/g, '""');
+        return `"${t}"` + ';'.repeat(Math.max(0, colunas.length - 1));
+    };
+
+    const linhaCabecalho = colunas.map(c => esc(c.label)).join(';');
+    const linhasDados = registros.map(reg => {
+        return colunas.map(col => {
+            let v;
+            try {
+                v = col.format ? col.format(reg) : reg[col.key];
+            } catch (e) {
+                console.warn(`Erro coluna ${col.key}:`, e);
+                v = '';
+            }
+            return esc(v);
+        }).join(';');
+    });
+
+    // ============================================
+    // MONTAGEM DO CSV
+    // ============================================
+    const L = [];
+
+    // 🏛️ Cabeçalho institucional
+    L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
+    L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
+    L.push(linhaUnica(`Setor: ${setor}`));
+    L.push(linhaUnica(''));
+
+    // 📋 Título
+    L.push(linhaUnica(titulo.toUpperCase()));
+    if (subtitulo) L.push(linhaUnica(subtitulo));
+    L.push(linhaUnica(''));
+
+    // 📊 Metadados
+    L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
+    L.push(linhaUnica(`Total de registros: ${registros.length}`));
+
+    if (metricas && typeof metricas === 'object') {
+        Object.entries(metricas).forEach(([label, valor]) => {
+            if (valor !== null && valor !== undefined && valor !== '') {
+                L.push(linhaUnica(`${label}: ${valor}`));
+            }
+        });
+    }
+
+    if (filtros.length > 0) {
+        L.push(linhaUnica('Filtros aplicados:'));
+        filtros.forEach(f => {
+            if (f && f.valor) {
+                L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
+            }
+        });
+    }
+
+    if (observacoes) {
+        L.push(linhaUnica(`Observações: ${observacoes}`));
+    }
+
+    L.push(linhaUnica(''));
+    L.push(linhaUnica('─'.repeat(40)));
+    L.push(linhaUnica(''));
+
+    // 📋 Tabela
+    L.push(linhaCabecalho);
+    L.push(...linhasDados);
+
+    L.push(linhaUnica(''));
+    L.push(linhaUnica('─'.repeat(40)));
+    L.push(linhaUnica(''));
+
+    // 🖋️ Rodapé
+    L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
+    L.push(linhaUnica(`Setor responsável: ${setor}`));
+    L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
+    L.push(linhaUnica('Este relatório é de uso interno e confidencial.'));
+
+    const csv = '\uFEFF' + L.join('\r\n');
+
+    // Download
+    try {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `${nomeArquivo}_${dataArquivo}.csv`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        return true;
+    } catch (e) {
+        console.error('Erro ao gerar CSV:', e);
+        mostrarToast('❌ Erro ao gerar CSV');
+        return false;
+    }
+}
+
+// ============================================
 // INICIALIZAÇÃO
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2758,26 +2914,198 @@ function exibirRelatorio(data, tipo) {
 }
 
 function exportarCSV() {
-    if (!relatorioData) { mostrarToast('Nenhum relatório carregado'); return; }
-    
-    let csvContent = "Data,Aluno,Turma,Queixa,Desfecho\n";
-    
-    if (relatorioData.atendimentos) {
-        relatorioData.atendimentos.forEach(a => {
-            csvContent += `${new Date(a.dataEntrada).toLocaleString('pt-BR')},"${relatorioData.aluno?.nome || a.alunoNome || ''}","${relatorioData.aluno?.turma || a.alunoTurma || ''}","${(a.queixa || '').replace(/"/g, '""')}","${(a.desfechoTexto || '').replace(/"/g, '""')}"\n`;
-        });
-    } else if (relatorioData.ultimosAtendimentos) {
-        relatorioData.ultimosAtendimentos.forEach(a => {
-            csvContent += `${new Date(a.dataEntrada).toLocaleString('pt-BR')},"${a.alunoNome}","${a.alunoTurma}","${(a.queixa || '').replace(/"/g, '""')}",${a.status}\n`;
-        });
+    if (!relatorioData) {
+        mostrarToast('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'warning');
+        return;
     }
-    
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `relatorio_enfermaria_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+
+    const tipo = relatorioData.aluno ? 'aluno' : (relatorioData.turma ? 'turma' : 'geral');
+
+    // ============================================
+    // COLUNAS + TÍTULO + REGISTROS
+    // ============================================
+    let titulo = 'Relatório de Atendimentos';
+    let subtitulo = '';
+    let registros = [];
+    let colunas = [];
+
+    if (tipo === 'geral') {
+        titulo = 'Relatório Geral de Atendimentos';
+        subtitulo = 'Visão consolidada da enfermaria';
+        registros = relatorioData.ultimosAtendimentos || [];
+
+        colunas = [
+            {
+                label: 'Data de Entrada',
+                format: (a) => a.dataEntrada
+                    ? new Date(a.dataEntrada).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Data de Saída',
+                format: (a) => a.dataSaida
+                    ? new Date(a.dataSaida).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Aluno',
+                format: (a) => a.alunoNome || ''
+            },
+            {
+                label: 'Matrícula',
+                format: (a) => a.alunoMatricula || ''
+            },
+            {
+                label: 'Turma',
+                format: (a) => a.alunoTurma || ''
+            },
+            {
+                label: 'Queixa',
+                format: (a) => a.queixa || ''
+            },
+            {
+                label: 'Desfecho',
+                format: (a) => a.desfechoTexto || (a.status === 'finalizado' ? 'Finalizado' : 'Em atendimento')
+            },
+            {
+                label: 'Status',
+                format: (a) => a.status === 'finalizado' ? 'Finalizado' : 'Em Atendimento'
+            },
+            {
+                label: 'Registrado por',
+                format: (a) => a.registradoPorNome || a.registradoPor || ''
+            }
+        ];
+    } else if (tipo === 'turma') {
+        titulo = 'Relatório de Atendimentos por Turma';
+        subtitulo = `Turma: ${relatorioData.turma || ''}`;
+        registros = relatorioData.atendimentos
+            || relatorioData.ultimosAtendimentos
+            || [];
+
+        colunas = [
+            {
+                label: 'Data de Entrada',
+                format: (a) => a.dataEntrada
+                    ? new Date(a.dataEntrada).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Data de Saída',
+                format: (a) => a.dataSaida
+                    ? new Date(a.dataSaida).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Aluno',
+                format: (a) => a.alunoNome || ''
+            },
+            {
+                label: 'Matrícula',
+                format: (a) => a.alunoMatricula || ''
+            },
+            {
+                label: 'Queixa',
+                format: (a) => a.queixa || ''
+            },
+            {
+                label: 'Observações',
+                format: (a) => a.observacoesEntrada || a.observacoes || ''
+            },
+            {
+                label: 'Desfecho',
+                format: (a) => a.desfechoTexto || (a.status === 'finalizado' ? 'Finalizado' : 'Em atendimento')
+            },
+            {
+                label: 'Registrado por',
+                format: (a) => a.registradoPorNome || a.registradoPor || ''
+            }
+        ];
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual — Enfermaria';
+        subtitulo = `${relatorioData.aluno?.nome || ''} — ${relatorioData.aluno?.turma || ''}`;
+        registros = relatorioData.atendimentos || [];
+
+        colunas = [
+            {
+                label: 'Data de Entrada',
+                format: (a) => a.dataEntrada
+                    ? new Date(a.dataEntrada).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Data de Saída',
+                format: (a) => a.dataSaida
+                    ? new Date(a.dataSaida).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Queixa',
+                format: (a) => a.queixa || ''
+            },
+            {
+                label: 'Observações',
+                format: (a) => a.observacoesEntrada || a.observacoes || ''
+            },
+            {
+                label: 'Desfecho',
+                format: (a) => a.desfechoTexto || (a.status === 'finalizado' ? 'Finalizado' : 'Em atendimento')
+            },
+            {
+                label: 'Registrado por',
+                format: (a) => a.registradoPor || a.registradoPorNome || ''
+            }
+        ];
+    }
+
+    if (registros.length === 0) {
+        mostrarToast('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'warning');
+        return;
+    }
+
+    // ============================================
+    // FILTROS APLICADOS
+    // ============================================
+    const filtros = [];
+    const dataIni = safeGet('dataInicio')?.value;
+    const dataFimEl = safeGet('dataFim')?.value;
+    if (dataIni) filtros.push({ label: 'Data inicial', valor: dataIni });
+    if (dataFimEl) filtros.push({ label: 'Data final', valor: dataFimEl });
+    if (relatorioData.turma) filtros.push({ label: 'Turma', valor: relatorioData.turma });
+    if (relatorioData.aluno?.nome) filtros.push({ label: 'Aluno', valor: relatorioData.aluno.nome });
+
+    // ============================================
+    // MÉTRICAS (rodapé)
+    // ============================================
+    const metricas = {};
+    if (tipo === 'geral') {
+        metricas['Total de atendimentos'] = relatorioData.totalAtendimentos || 0;
+        metricas['Turmas com registro'] = (relatorioData.porTurma || []).length;
+    } else if (tipo === 'turma') {
+        metricas['Total de atendimentos'] = relatorioData.estatisticas?.totalAtendimentos || 0;
+        metricas['Alunos atendidos'] = relatorioData.estatisticas?.totalAlunosAtendidos || 0;
+    } else if (tipo === 'aluno') {
+        metricas['Total de atendimentos'] = relatorioData.estatisticas?.totalAtendimentos || 0;
+    }
+
+    // ============================================
+    // GERA E BAIXA
+    // ============================================
+    const ok = gerarBaixarCSV({
+        titulo,
+        subtitulo,
+        setor: 'Enfermaria',
+        colunas,
+        registros,
+        filtros,
+        metricas,
+        nomeArquivo: `relatorio-enfermaria-${tipo}`,
+        observacoes: `${registros.length} atendimento(s) listado(s)`
+    });
+
+    if (ok) {
+        mostrarToast(`✅ Relatório exportado (${registros.length} registro(s))!`);
+    }
 }
 
 // ============================================

@@ -61,6 +61,160 @@ function gerarAvatarSVG(nome) {
   return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 }
 
+// ============================================
+// 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+// ============================================
+/**
+ * Gera CSV profissional com cabeçalho institucional, metadados, tabela e rodapé.
+ *
+ * @param {Object} opts
+ * @param {string}   opts.titulo        - Título do relatório
+ * @param {string}  [opts.subtitulo]    - Subtítulo (ex: "Turma: 3º Ano A")
+ * @param {string}  [opts.setor]        - Setor (default: "Biblioteca")
+ * @param {Array}    opts.colunas       - [{ label, key, format? }]
+ * @param {Array}    opts.registros     - Dados
+ * @param {Array<{label, valor}>} [opts.filtros] - Filtros aplicados
+ * @param {string}   opts.nomeArquivo   - Nome do arquivo (sem extensão)
+ * @param {string}  [opts.observacoes]  - Observações extras
+ * @param {Object}  [opts.metricas]     - { label: valor } extras (opcional)
+ */
+function gerarBaixarCSV(opts) {
+    const {
+        titulo = 'Relatório',
+        subtitulo = '',
+        setor = 'Biblioteca',
+        colunas = [],
+        registros = [],
+        filtros = [],
+        nomeArquivo = 'relatorio',
+        observacoes = '',
+        metricas = null
+    } = opts || {};
+
+    if (!Array.isArray(colunas) || colunas.length === 0) {
+        mostrarToast('⚠️ Nenhuma coluna definida para exportação', 'warning');
+        return false;
+    }
+    if (!Array.isArray(registros) || registros.length === 0) {
+        mostrarToast('⚠️ Nenhum registro para exportar', 'warning');
+        return false;
+    }
+
+    const agora = new Date();
+    const dataGeracao = agora.toLocaleString('pt-BR');
+    const dataArquivo = agora.toISOString().split('T')[0];
+
+    // Escapa valor para célula CSV
+    const esc = (v) => {
+        if (v === null || v === undefined) return '""';
+        let s = String(v)
+            .replace(/\r\n|\r|\n/g, ' ')   // remove quebras internas
+            .replace(/"/g, '""')            // escapa aspas
+            .trim();
+        return `"${s}"`;
+    };
+
+    // Linha mesclada (1 célula visível + separadores até completar colunas)
+    const linhaUnica = (texto) => {
+        const t = String(texto ?? '').replace(/"/g, '""');
+        return `"${t}"` + ';'.repeat(Math.max(0, colunas.length - 1));
+    };
+
+    const linhaCabecalho = colunas.map(c => esc(c.label)).join(';');
+    const linhasDados = registros.map(reg => {
+        return colunas.map(col => {
+            let v;
+            try {
+                v = col.format ? col.format(reg) : reg[col.key];
+            } catch (e) {
+                console.warn(`Erro coluna ${col.key}:`, e);
+                v = '';
+            }
+            return esc(v);
+        }).join(';');
+    });
+
+    // ============================================
+    // MONTAGEM
+    // ============================================
+    const L = [];
+
+    // 🏛️ Cabeçalho institucional
+    L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
+    L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
+    L.push(linhaUnica(`Setor: ${setor}`));
+    L.push(linhaUnica(''));
+
+    // 📋 Título
+    L.push(linhaUnica(titulo.toUpperCase()));
+    if (subtitulo) L.push(linhaUnica(subtitulo));
+    L.push(linhaUnica(''));
+
+    // 📊 Metadados
+    L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
+    L.push(linhaUnica(`Total de registros: ${registros.length}`));
+
+    if (metricas && typeof metricas === 'object') {
+        Object.entries(metricas).forEach(([label, valor]) => {
+            if (valor !== null && valor !== undefined && valor !== '') {
+                L.push(linhaUnica(`${label}: ${valor}`));
+            }
+        });
+    }
+
+    if (filtros.length > 0) {
+        L.push(linhaUnica('Filtros aplicados:'));
+        filtros.forEach(f => {
+            if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
+        });
+    }
+
+    if (observacoes) {
+        L.push(linhaUnica(`Observações: ${observacoes}`));
+    }
+
+    L.push(linhaUnica(''));
+    L.push(linhaUnica('─'.repeat(40)));
+    L.push(linhaUnica(''));
+
+    // 📋 Tabela
+    L.push(linhaCabecalho);
+    L.push(...linhasDados);
+
+    L.push(linhaUnica(''));
+    L.push(linhaUnica('─'.repeat(40)));
+    L.push(linhaUnica(''));
+
+    // 🖋️ Rodapé
+    L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
+    L.push(linhaUnica(`Setor responsável: ${setor}`));
+    L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
+    L.push(linhaUnica('Este relatório é de uso interno e confidencial.'));
+
+    const csv = '\uFEFF' + L.join('\r\n');
+
+    // Download
+    try {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `${nomeArquivo}_${dataArquivo}.csv`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        return true;
+    } catch (e) {
+        console.error('Erro ao gerar CSV:', e);
+        mostrarToast('❌ Erro ao gerar CSV', 'error');
+        return false;
+    }
+}
+
 /**
  * 🕐 FORMATA DURAÇÃO EM MINUTOS PARA FORMATO LEGÍVEL
  * Ex: 45 → "45min"
@@ -1289,22 +1443,234 @@ function exibirRelatorio(d, tipo) {
 }
 
 function exportarCSV() {
-  if (!relatorioData) { mostrarToast('Gere um relatório primeiro', 'warning'); return; }
-  let csv = "Data,Aluno,Turma,Motivo,Duração\n";
-  
-  const atendimentos = relatorioData.atendimentos || relatorioData.ultimosAtendimentos || [];
-  atendimentos.forEach(a => {
-    const data = a.dataEntrada || a.entrada?.dataHora;
-    csv += `${data ? new Date(data).toLocaleString('pt-BR') : ''},"${a.alunoNome||''}","${a.alunoTurma||''}","${a.motivo||a.motivoLabel||''}","${formatarDuracao(a.duracao||a.duracaoMinutos||0)}"\n`;
-  });
-  
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `biblioteca_${new Date().toISOString().split('T')[0]}.csv`;
-  link.click();
-}
+    if (!relatorioData) {
+        mostrarToast('⚠️ Gere um relatório primeiro', 'warning');
+        return;
+    }
 
+    const d = relatorioData;
+    const tipo = d.aluno ? 'aluno' : (d.turma ? 'turma' : 'geral');
+
+    // ============================================
+    // COLUNAS + TÍTULO + REGISTROS
+    // ============================================
+    let titulo = 'Relatório de Atendimentos';
+    let subtitulo = '';
+    let registros = [];
+    let colunas = [];
+
+    if (tipo === 'geral') {
+        titulo = 'Relatório Geral de Atendimentos';
+        subtitulo = 'Visão consolidada da biblioteca';
+        registros = d.ultimosAtendimentos || [];
+
+        colunas = [
+            {
+                label: 'Data/Hora Entrada',
+                format: (a) => a.dataEntrada
+                    ? new Date(a.dataEntrada).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Data/Hora Saída',
+                format: (a) => a.dataHoraSaida
+                    ? new Date(a.dataHoraSaida).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Aluno',
+                format: (a) => a.alunoNome || ''
+            },
+            {
+                label: 'Matrícula',
+                format: (a) => a.alunoMatricula || ''
+            },
+            {
+                label: 'Turma',
+                format: (a) => a.alunoTurma || ''
+            },
+            {
+                label: 'Curso',
+                format: (a) => a.alunoCurso || ''
+            },
+            {
+                label: 'Motivo',
+                format: (a) => a.motivoLabel || a.motivo || ''
+            },
+            {
+                label: 'Detalhe do Motivo',
+                format: (a) => a.motivoOutros || ''
+            },
+            {
+                label: 'Atividades',
+                format: (a) => Array.isArray(a.atividadesLabels)
+                    ? a.atividadesLabels.join(', ')
+                    : (Array.isArray(a.atividades) ? a.atividades.join(', ') : '')
+            },
+            {
+                label: 'Duração',
+                format: (a) => formatarDuracao(a.duracao || a.duracaoMinutos || 0)
+            },
+            {
+                label: 'Status',
+                format: (a) => a.status === 'em_visita'
+                    ? 'Em Visita'
+                    : 'Finalizado'
+            },
+            {
+                label: 'Registrado por',
+                format: (a) => a.registradoPorNome || a.registradoPor || ''
+            }
+        ];
+    } else if (tipo === 'turma') {
+        titulo = 'Relatório de Atendimentos por Turma';
+        subtitulo = `Turma: ${d.turma || ''}`;
+        registros = d.ultimosAtendimentos
+            || d.atendimentos
+            || [];
+
+        colunas = [
+            {
+                label: 'Data/Hora Entrada',
+                format: (a) => a.dataEntrada
+                    ? new Date(a.dataEntrada).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Data/Hora Saída',
+                format: (a) => a.dataHoraSaida
+                    ? new Date(a.dataHoraSaida).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Aluno',
+                format: (a) => a.alunoNome || ''
+            },
+            {
+                label: 'Matrícula',
+                format: (a) => a.alunoMatricula || ''
+            },
+            {
+                label: 'Motivo',
+                format: (a) => a.motivoLabel || a.motivo || ''
+            },
+            {
+                label: 'Atividades',
+                format: (a) => Array.isArray(a.atividadesLabels)
+                    ? a.atividadesLabels.join(', ')
+                    : (Array.isArray(a.atividades) ? a.atividades.join(', ') : '')
+            },
+            {
+                label: 'Duração',
+                format: (a) => formatarDuracao(a.duracao || a.duracaoMinutos || 0)
+            },
+            {
+                label: 'Status',
+                format: (a) => a.status === 'em_visita'
+                    ? 'Em Visita'
+                    : 'Finalizado'
+            }
+        ];
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual — Biblioteca';
+        subtitulo = `${d.aluno?.nome || ''} — ${d.aluno?.turma || ''}`;
+        registros = d.atendimentos || [];
+
+        colunas = [
+            {
+                label: 'Data/Hora Entrada',
+                format: (a) => a.dataEntrada
+                    ? new Date(a.dataEntrada).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Data/Hora Saída',
+                format: (a) => a.dataSaida
+                    ? new Date(a.dataSaida).toLocaleString('pt-BR')
+                    : ''
+            },
+            {
+                label: 'Motivo',
+                format: (a) => a.motivoLabel || a.motivo || ''
+            },
+            {
+                label: 'Atividades',
+                format: (a) => Array.isArray(a.atividadesLabels)
+                    ? a.atividadesLabels.join(', ')
+                    : (Array.isArray(a.atividades) ? a.atividades.join(', ') : '')
+            },
+            {
+                label: 'Livros Consultados',
+                format: (a) => Array.isArray(a.saida?.livrosConsultados)
+                    ? a.saida.livrosConsultados.join(', ')
+                    : ''
+            },
+            {
+                label: 'Computadores Usados',
+                format: (a) => a.saida?.computadoresUsados || ''
+            },
+            {
+                label: 'Satisfação',
+                format: (a) => a.saida?.satisfacao || ''
+            },
+            {
+                label: 'Duração',
+                format: (a) => formatarDuracao(a.duracao || 0)
+            }
+        ];
+    }
+
+    if (registros.length === 0) {
+        mostrarToast('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'warning');
+        return;
+    }
+
+    // ============================================
+    // FILTROS APLICADOS
+    // ============================================
+    const filtros = [];
+    const dataIni = safeGet('dataInicio')?.value;
+    const dataFimEl = safeGet('dataFim')?.value;
+    if (dataIni) filtros.push({ label: 'Data inicial', valor: dataIni });
+    if (dataFimEl) filtros.push({ label: 'Data final', valor: dataFimEl });
+    if (d.turma) filtros.push({ label: 'Turma', valor: d.turma });
+    if (d.aluno?.nome) filtros.push({ label: 'Aluno', valor: d.aluno.nome });
+
+    // ============================================
+    // MÉTRICAS
+    // ============================================
+    const metricas = {};
+    if (tipo === 'geral') {
+        metricas['Total de atendimentos'] = d.totalAtendimentos || 0;
+        metricas['Turmas com registro'] = (d.porTurma || []).length;
+        metricas['Motivos diferentes'] = (d.porMotivo || []).length;
+    } else if (tipo === 'turma') {
+        metricas['Total de atendimentos'] = d.estatisticas?.totalAtendimentos || 0;
+        metricas['Alunos atendidos'] = d.estatisticas?.totalAlunosAtendidos || 0;
+    } else if (tipo === 'aluno') {
+        metricas['Total de atendimentos'] = d.estatisticas?.totalAtendimentos || 0;
+        metricas['Motivos diferentes'] = (d.porMotivo || []).length;
+    }
+
+    // ============================================
+    // GERA E BAIXA
+    // ============================================
+    const ok = gerarBaixarCSV({
+        titulo,
+        subtitulo,
+        setor: 'Biblioteca',
+        colunas,
+        registros,
+        filtros,
+        metricas,
+        nomeArquivo: `relatorio-biblioteca-${tipo}`,
+        observacoes: `${registros.length} atendimento(s) listado(s)`
+    });
+
+    if (ok) {
+        mostrarToast(`✅ Relatório exportado (${registros.length} registro(s))!`, 'success');
+    }
+}
 // ============ EXPORTAR PDF (PADRONIZADO + CARIMBO) ============
 function exportarPDF() {
     if (!relatorioData) { 

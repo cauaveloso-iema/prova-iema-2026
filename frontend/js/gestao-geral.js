@@ -244,10 +244,159 @@ function getDataLocalISO(dateObj) {
         String(d.getDate()).padStart(2, '0');
 }
 
+
+
 function gerarAvatarSVG(nome) {
     const inicial = (nome || '?').charAt(0).toUpperCase();
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e3c72"/><stop offset="100%" stop-color="#2a5298"/></linearGradient></defs><circle cx="50" cy="50" r="50" fill="url(#g)"/><text x="50" y="50" font-family="Arial,sans-serif" font-size="45" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">${inicial}</text></svg>`;
     return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
+// ============================================
+// 📄 GERADOR DE CSV PROFISSIONAL (RELATÓRIO)
+// ============================================
+/**
+ * Gera CSV profissional com cabeçalho, metadados e rodapé.
+ *
+ * @param {Object} opts
+ * @param {string} opts.titulo        - Título do relatório (ex: "Relatório de Atrasos")
+ * @param {string} [opts.subtitulo]   - Subtítulo (ex: "Turma: 3º Ano A")
+ * @param {string} [opts.setor]       - Setor responsável (ex: "Gestão Geral")
+ * @param {Array}  opts.colunas       - [{ label, key, format? }]
+ * @param {Array}  opts.registros     - Dados
+ * @param {Array<{label:string, valor:string}>} [opts.filtros] - Filtros aplicados
+ * @param {string} opts.nomeArquivo   - Nome do arquivo (sem extensão)
+ * @param {string} [opts.observacoes] - Observações extras no rodapé
+ */
+function gerarBaixarCSV(opts) {
+    const {
+        titulo = 'Relatório',
+        subtitulo = '',
+        setor = 'Gestão Geral',
+        colunas = [],
+        registros = [],
+        filtros = [],
+        nomeArquivo = 'relatorio',
+        observacoes = ''
+    } = opts || {};
+
+    if (!Array.isArray(colunas) || colunas.length === 0) {
+        notificar('⚠️ Nenhuma coluna definida', 'warning');
+        return false;
+    }
+    if (!Array.isArray(registros) || registros.length === 0) {
+        notificar('⚠️ Nenhum registro para exportar', 'warning');
+        return false;
+    }
+
+    // ---------- Helpers ----------
+    const agora = new Date();
+    const dataGeracao = agora.toLocaleString('pt-BR');
+    const dataArquivo = getDataLocalISO(agora);
+
+    // Escapa valor para célula CSV
+    const esc = (v) => {
+        if (v === null || v === undefined) return '""';
+        let s = String(v)
+            .replace(/\r\n|\r|\n/g, ' ')   // remove quebras internas
+            .replace(/"/g, '""')           // escapa aspas
+            .trim();
+        return `"${s}"`;
+    };
+
+    // Linha com apenas 1 célula (mesclada visualmente)
+    const linhaUnica = (texto) => `"${String(texto).replace(/"/g, '""')}"` +
+        ';'.repeat(Math.max(0, colunas.length - 1));
+
+    // Linha de cabeçalho da tabela
+    const linhaCabecalho = colunas.map(c => esc(c.label)).join(';');
+
+    // Linhas de dados
+    const linhasDados = registros.map(reg => {
+        return colunas.map(col => {
+            let v;
+            try {
+                v = col.format ? col.format(reg) : reg[col.key];
+            } catch (e) {
+                console.warn(`Erro coluna ${col.key}:`, e);
+                v = '';
+            }
+            return esc(v);
+        }).join(';');
+    });
+
+    // ---------- Montagem do CSV ----------
+    const L = []; // linhas
+    const totalCols = colunas.length;
+    const separador = ';'.repeat(totalCols - 1);
+
+    // 🏛️ CABEÇALHO INSTITUCIONAL
+    L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
+    L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
+    L.push(linhaUnica(`Setor: ${setor}`));
+    L.push(linhaUnica('')); // linha em branco
+
+    // 📋 TÍTULO
+    L.push(linhaUnica(titulo.toUpperCase()));
+    if (subtitulo) L.push(linhaUnica(subtitulo));
+    L.push(linhaUnica('')); // linha em branco
+
+    // 📊 METADADOS
+    L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
+    L.push(linhaUnica(`Total de registros: ${registros.length}`));
+
+    if (filtros.length > 0) {
+        L.push(linhaUnica('Filtros aplicados:'));
+        filtros.forEach(f => {
+            if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
+        });
+    }
+
+    if (observacoes) {
+        L.push(linhaUnica(`Observações: ${observacoes}`));
+    }
+
+    L.push(linhaUnica('')); // linha em branco
+    L.push(linhaUnica('─'.repeat(40))); // divisor visual
+    L.push(linhaUnica('')); // linha em branco
+
+    // 📋 TABELA
+    L.push(linhaCabecalho);
+    L.push(...linhasDados);
+
+    L.push(linhaUnica('')); // linha em branco
+    L.push(linhaUnica('─'.repeat(40)));
+    L.push(linhaUnica('')); // linha em branco
+
+    // 🖋️ RODAPÉ
+    L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
+    L.push(linhaUnica(`Setor responsável: ${setor}`));
+    L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
+    L.push(linhaUnica('Este relatório é de uso interno e confidencial.'));
+
+    // ---------- CSV FINAL ----------
+    const csv = '\uFEFF' + L.join('\r\n');
+
+    // ---------- Download ----------
+    try {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `${nomeArquivo}_${dataArquivo}.csv`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        return true;
+    } catch (e) {
+        console.error('Erro ao gerar CSV:', e);
+        notificar('❌ Erro ao gerar CSV', 'error');
+        return false;
+    }
 }
 
 // 🆕 FORMATAÇÃO DE CPF E TELEFONE
@@ -2318,27 +2467,110 @@ function exibirRelatorio(data, tipo) {
 }
 
 function exportarCSV() {
-    if (!relatorioData) { notificar('Nenhum relatório carregado'); return; }
-    const dados = relatorioData.atrasos || [];
-    if (dados.length === 0) { notificar('Nenhum dado'); return; }
-    
-    let csv = "Data,Aluno,Turma,Motivo,Descrição\n";
-    dados.forEach(a => {
-        csv += [
-            a.dataHora ? new Date(a.dataHora).toLocaleString('pt-BR') : '',
-            `"${(a.alunoNome || relatorioData.aluno?.nome || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoTurma || relatorioData.aluno?.turma || relatorioData.turma || '').replace(/"/g, '""')}"`,
-            `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
-            `"${(a.descricao || '').replace(/"/g, '""')}"`
-        ].join(',') + '\n';
+    if (!relatorioData) {
+        notificar('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'warning');
+        return;
+    }
+
+    const registros = relatorioData.atrasos || relatorioData.registros || [];
+    if (registros.length === 0) {
+        notificar('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'warning');
+        return;
+    }
+
+    // ---------- Título / subtítulo ----------
+    const tipo = relatorioData.aluno ? 'aluno' : (relatorioData.turma ? 'turma' : 'geral');
+    let titulo = 'Relatório de Atrasos';
+    let subtitulo = '';
+
+    if (tipo === 'turma') {
+        titulo = 'Relatório de Atrasos por Turma';
+        subtitulo = `Turma: ${relatorioData.turma || ''}`;
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual de Atrasos';
+        subtitulo = `${relatorioData.aluno?.nome || ''} — ${relatorioData.aluno?.turma || ''}`;
+    } else {
+        titulo = 'Relatório Geral de Atrasos';
+        subtitulo = 'Visão consolidada de todos os registros';
+    }
+
+    // ---------- Filtros aplicados ----------
+    const filtros = [];
+    const dataIni = safeGet('dataInicio')?.value;
+    const dataFimEl = safeGet('dataFim')?.value;
+    if (dataIni) filtros.push({ label: 'Data inicial', valor: dataIni });
+    if (dataFimEl) filtros.push({ label: 'Data final', valor: dataFimEl });
+    if (relatorioData.turma) filtros.push({ label: 'Turma', valor: relatorioData.turma });
+    if (relatorioData.aluno?.nome) filtros.push({ label: 'Aluno', valor: relatorioData.aluno.nome });
+
+    // ---------- Colunas ----------
+    const colunas = [
+        {
+            label: 'Data/Hora do Atraso',
+            format: (a) => a.dataHora
+                ? new Date(a.dataHora).toLocaleString('pt-BR')
+                : ''
+        },
+        {
+            label: 'Data de Cadastro',
+            format: (a) => a.createdAt
+                ? new Date(a.createdAt).toLocaleString('pt-BR')
+                : ''
+        },
+        {
+            label: 'Aluno',
+            format: (a) => a.alunoNome || relatorioData.aluno?.nome || ''
+        },
+        {
+            label: 'Matrícula',
+            format: (a) => a.alunoMatricula || relatorioData.aluno?.matricula || ''
+        },
+        {
+            label: 'Turma',
+            format: (a) => a.alunoTurma || relatorioData.aluno?.turma || relatorioData.turma || ''
+        },
+        {
+            label: 'Curso',
+            format: (a) => a.alunoCurso || relatorioData.aluno?.curso || ''
+        },
+        {
+            label: 'Motivo',
+            format: (a) => a.motivoLabel || a.motivo || ''
+        },
+        {
+            label: 'Descrição',
+            format: (a) => a.descricao || ''
+        },
+        {
+            label: 'Observações',
+            format: (a) => a.observacoes || ''
+        },
+        {
+            label: 'Registrado por',
+            format: (a) => a.registradoPor || ''
+        },
+        {
+            label: 'Assinatura',
+            format: (a) => a.temAssinatura
+                ? `Sim${a.assinadaPorNome ? ` (${a.assinadaPorNome})` : ''}`
+                : 'Não'
+        }
+    ];
+
+    const ok = gerarBaixarCSV({
+        titulo,
+        subtitulo,
+        setor: 'Gestão Geral',
+        colunas,
+        registros,
+        filtros,
+        nomeArquivo: `relatorio-atrasos-${tipo}`,
+        observacoes: `${registros.length} atraso(s) listado(s)`
     });
-    
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `gestao-geral-atrasos_${getDataLocalISO()}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+
+    if (ok) {
+        notificar(`✅ Relatório exportado (${registros.length} registro(s))!`, 'success');
+    }
 }
 
 // ============================================================================
@@ -4845,68 +5077,142 @@ function exibirRelatorioModulo(modulo, data, tipo) {
 function exportarCSVModulo(modulo) {
     const data = relatoriosModulo[modulo];
     const cfg = getCfg(modulo);
-    
+
     if (!data) {
-        notificar('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.');
+        notificar('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'warning');
         return;
     }
 
     const registros = data.registros || data.autorizacoes || data.atendimentos || [];
-    
     if (registros.length === 0) {
-        notificar('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.');
+        notificar('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'warning');
         return;
     }
 
+    const P = getPrefixo(modulo);
     const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
     const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
-    
-    let csv = "Data do Registro,Data de Cadastro,";
-    if (mostrarPeriodoFalta) csv += "Período da Falta,";
-    if (mostrarTipoProva) csv += "Tipo de Prova Perdida,";
-    csv += "Aluno,Matrícula,Turma,Motivo,Observações,Responsável\n";
+    const mostrarHorarios = cfg.tipo === 'autorizacao';
 
-    registros.forEach(a => {
-        let dataCadastro = '';
-        if (a.createdAt) {
-            try {
-                dataCadastro = new Date(a.createdAt).toLocaleString('pt-BR');
-            } catch (e) {
-                dataCadastro = '';
-            }
+    // ---------- Título / subtítulo ----------
+    const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
+    let titulo = `Relatório de ${cfg.nomeAmigavel}`;
+    let subtitulo = '';
+
+    if (tipo === 'turma') {
+        titulo = `Relatório de ${cfg.nomeAmigavel} por Turma`;
+        subtitulo = `Turma: ${data.turma || ''}`;
+    } else if (tipo === 'aluno') {
+        titulo = `Relatório Individual — ${cfg.nomeAmigavel}`;
+        subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
+    } else {
+        titulo = `Relatório Geral de ${cfg.nomeAmigavel}`;
+        subtitulo = 'Visão consolidada de todos os registros';
+    }
+
+    // ---------- Filtros aplicados ----------
+    const filtros = [];
+    const di = safeGet(`${P}DataInicio`)?.value;
+    const df = safeGet(`${P}DataFim`)?.value;
+    const tipoProvaFiltro = safeGet(`${P}FiltroTipoProva`)?.value;
+
+    if (di) filtros.push({ label: 'Data inicial', valor: di });
+    if (df) filtros.push({ label: 'Data final', valor: df });
+    if (data.turma) filtros.push({ label: 'Turma', valor: data.turma });
+    if (data.aluno?.nome) filtros.push({ label: 'Aluno', valor: data.aluno.nome });
+    if (tipoProvaFiltro && tipoProvaFiltro !== 'todos') {
+        filtros.push({ label: 'Tipo de Prova', valor: tipoProvaFiltro });
+    }
+
+    // ---------- Colunas ----------
+    const colunas = [
+        {
+            label: 'Data do Registro',
+            format: (a) => a.dataFormatada
+                || (a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '')
+        },
+        {
+            label: 'Data de Cadastro',
+            format: (a) => a.createdAt
+                ? new Date(a.createdAt).toLocaleString('pt-BR')
+                : ''
         }
-        
-        let linha = [
-            a.dataFormatada || '',
-            `"${dataCadastro}"`
-        ];
-        
-        if (mostrarPeriodoFalta) {
-            linha.push(`"${(a.periodoFaltaFormatado || '').replace(/"/g, '""')}"`);
-        }
-        
-        if (mostrarTipoProva) {
-            linha.push(`"${(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '').replace(/"/g, '""')}"`);
-        }
-        
-        linha.push(
-            `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoTurma || data.turma || '').replace(/"/g, '""')}"`,
-            `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
-            `"${(a.observacoes || '').replace(/"/g, '""')}"`,
-            `"${(a.responsavelNome || '').replace(/"/g, '""')}"`
+    ];
+
+    if (mostrarPeriodoFalta) {
+        colunas.push({
+            label: 'Período da Falta',
+            format: (a) => a.periodoFaltaFormatado || ''
+        });
+    }
+
+    if (mostrarTipoProva) {
+        colunas.push({
+            label: 'Tipo de Prova Perdida',
+            format: (a) => a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || ''
+        });
+    }
+
+    colunas.push(
+        { label: 'Aluno', format: (a) => a.alunoNome || '' },
+        { label: 'Matrícula', format: (a) => a.alunoMatricula || '' },
+        { label: 'Turma', format: (a) => a.alunoTurma || data.turma || '' }
+    );
+
+    if (mostrarHorarios) {
+        colunas.push(
+            { label: 'Horário Entrada', format: (a) => a.horarioEntrada || '' },
+            { label: 'Horário Saída', format: (a) => a.horarioSaida || '' }
         );
-        
-        csv += linha.join(',') + '\n';
+    } else {
+        colunas.push({
+            label: 'Horário',
+            format: (a) => a.horarioEntrada || a.horario || ''
+        });
+    }
+
+    colunas.push(
+        { label: 'Motivo', format: (a) => a.motivoLabel || '' },
+        {
+            label: 'Detalhe do Motivo',
+            format: (a) => {
+                if (a.motivo === 'necessita_ausentar_retornar'
+                    && a.horarioAusencia && a.horarioRetorno) {
+                    return `Ausência: ${a.horarioAusencia} | Retorno: ${a.horarioRetorno}`;
+                }
+                return a.motivoOutros || '';
+            }
+        },
+        { label: 'Responsável', format: (a) => a.responsavelNome || '' },
+        { label: 'CPF', format: (a) => a.responsavelCPF || '' },
+        { label: 'Telefone', format: (a) => a.responsavelTelefone || '' },
+        { label: 'Observações', format: (a) => a.observacoes || '' },
+        {
+            label: 'Registrado por',
+            format: (a) => a.registradoPorNome || a.registradoPor || ''
+        },
+        {
+            label: 'Assinatura',
+            format: (a) => a.temAssinatura
+                ? `Sim${a.assinadaPorNome ? ` (${a.assinadaPorNome})` : ''}`
+                : 'Não'
+        }
+    );
+
+    const ok = gerarBaixarCSV({
+        titulo,
+        subtitulo,
+        setor: 'Gestão Geral',
+        colunas,
+        registros,
+        filtros,
+        nomeArquivo: `relatorio-${cfg.tipo}-${tipo}`,
+        observacoes: `${registros.length} registro(s) de ${cfg.nomeAmigavel.toLowerCase()}`
     });
 
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${cfg.tipo}-${getDataLocalISO()}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    if (ok) {
+        notificar(`✅ Relatório exportado (${registros.length} registro(s))!`, 'success');
+    }
 }
 
 function aplicarFiltrosLista(modulo) {

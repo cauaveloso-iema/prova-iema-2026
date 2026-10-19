@@ -98,6 +98,160 @@ function gerarAvatarSVG(nome) {
     return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 }
 
+// ============================================
+// 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+// ============================================
+/**
+ * Gera CSV profissional com cabeçalho institucional, metadados, tabela e rodapé.
+ *
+ * @param {Object} opts
+ * @param {string}   opts.titulo        - Título do relatório
+ * @param {string}  [opts.subtitulo]    - Subtítulo (ex: "Turma: 3º Ano A")
+ * @param {string}  [opts.setor]        - Setor (default: "Secretaria")
+ * @param {Array}    opts.colunas       - [{ label, key, format? }]
+ * @param {Array}    opts.registros     - Dados
+ * @param {Array<{label, valor}>} [opts.filtros] - Filtros aplicados
+ * @param {string}   opts.nomeArquivo   - Nome do arquivo (sem extensão)
+ * @param {string}  [opts.observacoes]  - Observações extras
+ * @param {Object}  [opts.metricas]     - { label: valor } extras (opcional)
+ */
+function gerarBaixarCSV(opts) {
+    const {
+        titulo = 'Relatório',
+        subtitulo = '',
+        setor = 'Secretaria',
+        colunas = [],
+        registros = [],
+        filtros = [],
+        nomeArquivo = 'relatorio',
+        observacoes = '',
+        metricas = null
+    } = opts || {};
+
+    if (!Array.isArray(colunas) || colunas.length === 0) {
+        notificar('⚠️ Nenhuma coluna definida para exportação', 'warning');
+        return false;
+    }
+    if (!Array.isArray(registros) || registros.length === 0) {
+        notificar('⚠️ Nenhum registro para exportar', 'warning');
+        return false;
+    }
+
+    const agora = new Date();
+    const dataGeracao = agora.toLocaleString('pt-BR');
+    const dataArquivo = getDataLocalISO(agora);
+
+    // Escapa valor para célula CSV
+    const esc = (v) => {
+        if (v === null || v === undefined) return '""';
+        let s = String(v)
+            .replace(/\r\n|\r|\n/g, ' ')   // remove quebras internas
+            .replace(/"/g, '""')            // escapa aspas
+            .trim();
+        return `"${s}"`;
+    };
+
+    // Linha mesclada (1 célula visível + separadores até completar colunas)
+    const linhaUnica = (texto) => {
+        const t = String(texto ?? '').replace(/"/g, '""');
+        return `"${t}"` + ';'.repeat(Math.max(0, colunas.length - 1));
+    };
+
+    const linhaCabecalho = colunas.map(c => esc(c.label)).join(';');
+    const linhasDados = registros.map(reg => {
+        return colunas.map(col => {
+            let v;
+            try {
+                v = col.format ? col.format(reg) : reg[col.key];
+            } catch (e) {
+                console.warn(`Erro coluna ${col.key}:`, e);
+                v = '';
+            }
+            return esc(v);
+        }).join(';');
+    });
+
+    // ============================================
+    // MONTAGEM
+    // ============================================
+    const L = [];
+
+    // 🏛️ Cabeçalho institucional
+    L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
+    L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
+    L.push(linhaUnica(`Setor: ${setor}`));
+    L.push(linhaUnica(''));
+
+    // 📋 Título
+    L.push(linhaUnica(titulo.toUpperCase()));
+    if (subtitulo) L.push(linhaUnica(subtitulo));
+    L.push(linhaUnica(''));
+
+    // 📊 Metadados
+    L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
+    L.push(linhaUnica(`Total de registros: ${registros.length}`));
+
+    if (metricas && typeof metricas === 'object') {
+        Object.entries(metricas).forEach(([label, valor]) => {
+            if (valor !== null && valor !== undefined && valor !== '') {
+                L.push(linhaUnica(`${label}: ${valor}`));
+            }
+        });
+    }
+
+    if (filtros.length > 0) {
+        L.push(linhaUnica('Filtros aplicados:'));
+        filtros.forEach(f => {
+            if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
+        });
+    }
+
+    if (observacoes) {
+        L.push(linhaUnica(`Observações: ${observacoes}`));
+    }
+
+    L.push(linhaUnica(''));
+    L.push(linhaUnica('─'.repeat(40)));
+    L.push(linhaUnica(''));
+
+    // 📋 Tabela
+    L.push(linhaCabecalho);
+    L.push(...linhasDados);
+
+    L.push(linhaUnica(''));
+    L.push(linhaUnica('─'.repeat(40)));
+    L.push(linhaUnica(''));
+
+    // 🖋️ Rodapé
+    L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
+    L.push(linhaUnica(`Setor responsável: ${setor}`));
+    L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
+    L.push(linhaUnica('Este relatório é de uso interno e confidencial.'));
+
+    const csv = '\uFEFF' + L.join('\r\n');
+
+    // Download
+    try {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `${nomeArquivo}_${dataArquivo}.csv`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        return true;
+    } catch (e) {
+        console.error('Erro ao gerar CSV:', e);
+        notificar('❌ Erro ao gerar CSV', 'error');
+        return false;
+    }
+}
+
 function extrairAlunoId(decodedText) {
     if (!decodedText || typeof decodedText !== 'string') return null;
     if (decodedText.match(/^[a-f0-9]{24}$/i)) return decodedText;
@@ -1320,32 +1474,99 @@ async function buscarPorData() {
 }
 
 function exportarCSVData() {
-    if (!resultadosPorData || resultadosPorData.length === 0) { notificar('Nenhum dado para exportar', 'warning'); return; }
-    let csv = "Data Registro,Período da Falta,Tipo de Prova,Aluno,Matrícula,Turma,Curso,Motivo,Observações,Responsável,Visto\n";
-    resultadosPorData.forEach(a => {
-        const periodoFalta = getPeriodoFaltaFormatado(a) || '';
-        const tipoProva = getTipoProvaFormatado(a) || '';
-        csv += [
-            a.dataFormatada || '',
-            `"${periodoFalta.replace(/"/g, '""')}"`,
-            `"${tipoProva.replace(/"/g, '""')}"`,
-            `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoTurma || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoCurso || '').replace(/"/g, '""')}"`,
-            `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
-            `"${(a.observacoes || '').replace(/"/g, '""')}"`,
-            `"${(a.responsavelNome || '').replace(/"/g, '""')}"`,
-            `"${a.vistoSecretaria ? 'Sim' : 'Não'}"`
-        ].join(',') + '\n';
+    if (!resultadosPorData || resultadosPorData.length === 0) {
+        notificar('⚠️ Nenhum dado para exportar', 'warning');
+        return;
+    }
+
+    const dataInicio = safeGet('filtroDataInicio')?.value || '';
+    const dataFim = safeGet('filtroDataFim')?.value || dataInicio;
+    const turma = safeGet('filtroDataTurma')?.value || '';
+    const curso = safeGet('filtroDataCurso')?.value || '';
+    const nome = safeGet('filtroDataNome')?.value?.trim() || '';
+    const motivoSel = safeGet('filtroDataMotivo')?.value || '';
+
+    const colunas = [
+        {
+            label: 'Data do Registro',
+            format: (a) => a.dataFormatada
+                || (a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '')
+        },
+        {
+            label: 'Período da Falta',
+            format: (a) => getPeriodoFaltaFormatado(a) || ''
+        },
+        {
+            label: 'Tipo de Prova Perdida',
+            format: (a) => getTipoProvaFormatado(a) || ''
+        },
+        {
+            label: 'Aluno',
+            format: (a) => a.alunoNome || ''
+        },
+        {
+            label: 'Matrícula',
+            format: (a) => a.alunoMatricula || ''
+        },
+        {
+            label: 'Turma',
+            format: (a) => a.alunoTurma || ''
+        },
+        {
+            label: 'Curso',
+            format: (a) => a.alunoCurso || ''
+        },
+        {
+            label: 'Motivo',
+            format: (a) => a.motivoLabel || ''
+        },
+        {
+            label: 'Observações',
+            format: (a) => a.observacoes || ''
+        },
+        {
+            label: 'Responsável',
+            format: (a) => a.responsavelNome || ''
+        },
+        {
+            label: 'CPF Responsável',
+            format: (a) => a.responsavelCPF || ''
+        },
+        {
+            label: 'Registrado por',
+            format: (a) => a.registradoPorNome || a.registradoPor || ''
+        },
+        {
+            label: 'Visto Secretaria',
+            format: (a) => a.vistoSecretaria ? 'Sim' : 'Não'
+        }
+    ];
+
+    const filtros = [];
+    if (dataInicio) filtros.push({ label: 'Data início', valor: dataInicio });
+    if (dataFim && dataFim !== dataInicio) filtros.push({ label: 'Data fim', valor: dataFim });
+    if (turma) filtros.push({ label: 'Turma', valor: turma });
+    if (curso) filtros.push({ label: 'Curso', valor: curso });
+    if (nome) filtros.push({ label: 'Nome', valor: nome });
+    if (motivoSel) filtros.push({ label: 'Motivo', valor: getMotivoLabel(motivoSel) || motivoSel });
+
+    const ok = gerarBaixarCSV({
+        titulo: 'Justificativas por Data',
+        subtitulo: 'Consulta por período',
+        setor: 'Secretaria',
+        colunas,
+        registros: resultadosPorData,
+        filtros,
+        metricas: {
+            'Total de justificativas': resultadosPorData.length
+        },
+        nomeArquivo: 'justificativas-por-data',
+        observacoes: `${resultadosPorData.length} justificativa(s) no período`
     });
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `justificativas-data_${getDataLocalISO()}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    notificar('✅ CSV exportado!', 'success');
+
+    if (ok) {
+        notificar('✅ CSV exportado com sucesso!', 'success');
+    }
 }
 
 function exportarPDFData() {
@@ -1628,33 +1849,131 @@ function exibirRelatorio(data, tipo) {
 }
 
 function exportarCSV() {
-    if (!relatorioAtual) { notificar('⚠️ Gere um relatório primeiro', 'warning'); return; }
+    if (!relatorioAtual) {
+        notificar('⚠️ Nenhum relatório carregado.\n\nClique em BUSCAR primeiro.', 'warning');
+        return;
+    }
+
     const registros = relatorioAtual.registros || [];
-    if (registros.length === 0) { notificar('⚠️ Nenhum registro para exportar', 'warning'); return; }
-    let csv = "Data,Período da Falta,Tipo de Prova,Aluno,Matrícula,Turma,Motivo,Observações,Responsável,Visto\n";
-    registros.forEach(a => {
-        const periodoFalta = getPeriodoFaltaFormatado(a) || '';
-        const tipoProva = getTipoProvaFormatado(a) || '';
-        csv += [
-            a.dataFormatada || '',
-            `"${periodoFalta.replace(/"/g, '""')}"`,
-            `"${tipoProva.replace(/"/g, '""')}"`,
-            `"${(a.alunoNome || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoMatricula || '').replace(/"/g, '""')}"`,
-            `"${(a.alunoTurma || '').replace(/"/g, '""')}"`,
-            `"${(a.motivoLabel || '').replace(/"/g, '""')}"`,
-            `"${(a.observacoes || '').replace(/"/g, '""')}"`,
-            `"${(a.responsavelNome || '').replace(/"/g, '""')}"`,
-            `"${a.vistoSecretaria ? 'Sim' : 'Não'}"`
-        ].join(',') + '\n';
+    if (registros.length === 0) {
+        notificar('⚠️ Nenhum registro para exportar.\n\nVerifique os filtros de data.', 'warning');
+        return;
+    }
+
+    const tipo = tipoRelatorioAtual || 'geral';
+
+    // ---------- Título ----------
+    let titulo = 'Relatório de Justificativas';
+    let subtitulo = '';
+
+    if (tipo === 'geral') {
+        titulo = 'Relatório Geral de Justificativas';
+        subtitulo = 'Visão consolidada de justificativas de falta';
+    } else if (tipo === 'turma') {
+        titulo = 'Relatório de Justificativas por Turma';
+        subtitulo = `Turma: ${relatorioAtual.turma || ''}`;
+    } else if (tipo === 'aluno') {
+        titulo = 'Relatório Individual — Justificativas';
+        subtitulo = `${relatorioAtual.aluno?.nome || ''} — ${relatorioAtual.aluno?.turma || ''}`;
+    }
+
+    // ---------- Colunas ----------
+    const colunas = [
+        {
+            label: 'Data do Registro',
+            format: (a) => a.dataFormatada
+                || (a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '')
+        },
+        {
+            label: 'Período da Falta',
+            format: (a) => getPeriodoFaltaFormatado(a) || ''
+        },
+        {
+            label: 'Tipo de Prova Perdida',
+            format: (a) => getTipoProvaFormatado(a) || ''
+        },
+        {
+            label: 'Aluno',
+            format: (a) => a.alunoNome || relatorioAtual.aluno?.nome || ''
+        },
+        {
+            label: 'Matrícula',
+            format: (a) => a.alunoMatricula || relatorioAtual.aluno?.matricula || ''
+        },
+        {
+            label: 'Turma',
+            format: (a) => a.alunoTurma || relatorioAtual.aluno?.turma || relatorioAtual.turma || ''
+        },
+        {
+            label: 'Curso',
+            format: (a) => a.alunoCurso || relatorioAtual.aluno?.curso || ''
+        },
+        {
+            label: 'Motivo',
+            format: (a) => a.motivoLabel || getMotivoLabel(a.motivo) || ''
+        },
+        {
+            label: 'Observações',
+            format: (a) => a.observacoes || ''
+        },
+        {
+            label: 'Responsável',
+            format: (a) => a.responsavelNome || ''
+        },
+        {
+            label: 'CPF Responsável',
+            format: (a) => a.responsavelCPF || ''
+        },
+        {
+            label: 'Telefone Responsável',
+            format: (a) => a.responsavelTelefone || ''
+        },
+        {
+            label: 'Registrado por',
+            format: (a) => a.registradoPorNome || a.registradoPor || ''
+        },
+        {
+            label: 'Visto Secretaria',
+            format: (a) => a.vistoSecretaria ? `Sim${a.vistoSecretariaPorNome ? ` (${a.vistoSecretariaPorNome})` : ''}` : 'Não'
+        }
+    ];
+
+    // ---------- Filtros aplicados ----------
+    const filtros = [];
+    const di = safeGet('dataInicio')?.value;
+    const df = safeGet('dataFim')?.value;
+    if (di) filtros.push({ label: 'Data inicial', valor: di });
+    if (df) filtros.push({ label: 'Data final', valor: df });
+    if (relatorioAtual.turma) filtros.push({ label: 'Turma', valor: relatorioAtual.turma });
+    if (relatorioAtual.aluno?.nome) filtros.push({ label: 'Aluno', valor: relatorioAtual.aluno.nome });
+
+    // ---------- Métricas ----------
+    const metricas = {};
+    if (tipo === 'geral') {
+        metricas['Total de justificativas'] = relatorioAtual.totalRegistros || 0;
+        metricas['Turmas com registro'] = (relatorioAtual.porTurma || []).length;
+    } else if (tipo === 'turma') {
+        metricas['Total de justificativas'] = relatorioAtual.estatisticas?.totalRegistros || 0;
+        metricas['Alunos com justificativa'] = relatorioAtual.estatisticas?.totalAlunos || 0;
+    } else if (tipo === 'aluno') {
+        metricas['Total de justificativas'] = relatorioAtual.estatisticas?.totalRegistros || 0;
+    }
+
+    const ok = gerarBaixarCSV({
+        titulo,
+        subtitulo,
+        setor: 'Secretaria',
+        colunas,
+        registros,
+        filtros,
+        metricas,
+        nomeArquivo: `relatorio-justificativas-${tipo}`,
+        observacoes: `${registros.length} justificativa(s) listada(s)`
     });
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `justificativas-secretaria_${getDataLocalISO()}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    notificar('✅ CSV exportado com sucesso!', 'success');
+
+    if (ok) {
+        notificar(`✅ Relatório exportado (${registros.length} registro(s))!`, 'success');
+    }
 }
 
 function exportarPDF() {

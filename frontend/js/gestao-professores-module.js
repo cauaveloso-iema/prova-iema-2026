@@ -114,6 +114,152 @@ window.GestaoProfessoresModule = {
     },
 
     // ============================================
+    // 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+    // ============================================
+    /**
+     * Gera CSV profissional com cabeçalho institucional, metadados, tabela e rodapé.
+     *
+     * @param {Object} opts
+     * @param {string}   opts.titulo        - Título do relatório
+     * @param {string}  [opts.subtitulo]    - Subtítulo
+     * @param {string}  [opts.setor]        - Setor (default: "Setor Pedagógico")
+     * @param {Array}    opts.colunas       - [{ label, key, format? }]
+     * @param {Array}    opts.registros     - Dados
+     * @param {Array<{label, valor}>} [opts.filtros] - Filtros aplicados
+     * @param {string}   opts.nomeArquivo   - Nome do arquivo (sem extensão)
+     * @param {string}  [opts.observacoes]  - Observações extras
+     * @param {Object}  [opts.metricas]     - { label: valor } extras
+     */
+    gerarBaixarCSV(opts) {
+        const {
+            titulo = 'Relatório',
+            subtitulo = '',
+            setor = 'Setor Pedagógico',
+            colunas = [],
+            registros = [],
+            filtros = [],
+            nomeArquivo = 'relatorio',
+            observacoes = '',
+            metricas = null
+        } = opts || {};
+
+        if (!Array.isArray(colunas) || colunas.length === 0) {
+            this.mostrarToast('⚠️ Nenhuma coluna definida para exportação', 'warning');
+            return false;
+        }
+        if (!Array.isArray(registros) || registros.length === 0) {
+            this.mostrarToast('⚠️ Nenhum registro para exportar', 'warning');
+            return false;
+        }
+
+        const agora = new Date();
+        const dataGeracao = agora.toLocaleString('pt-BR');
+        const dataArquivo = this.getDataLocalISO(agora);
+
+        const esc = (v) => {
+            if (v === null || v === undefined) return '""';
+            let s = String(v)
+                .replace(/\r\n|\r|\n/g, ' ')
+                .replace(/"/g, '""')
+                .trim();
+            return `"${s}"`;
+        };
+
+        const linhaUnica = (texto) => {
+            const t = String(texto ?? '').replace(/"/g, '""');
+            return `"${t}"` + ';'.repeat(Math.max(0, colunas.length - 1));
+        };
+
+        const linhaCabecalho = colunas.map(c => esc(c.label)).join(';');
+        const linhasDados = registros.map(reg => {
+            return colunas.map(col => {
+                let v;
+                try {
+                    v = col.format ? col.format(reg) : reg[col.key];
+                } catch (e) {
+                    console.warn(`Erro coluna ${col.key}:`, e);
+                    v = '';
+                }
+                return esc(v);
+            }).join(';');
+        });
+
+        const L = [];
+
+        // 🏛️ Cabeçalho institucional
+        L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
+        L.push(linhaUnica('Sistema de Gestão — EducaPleno'));
+        L.push(linhaUnica(`Setor: ${setor}`));
+        L.push(linhaUnica(''));
+
+        // 📋 Título
+        L.push(linhaUnica(titulo.toUpperCase()));
+        if (subtitulo) L.push(linhaUnica(subtitulo));
+        L.push(linhaUnica(''));
+
+        // 📊 Metadados
+        L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
+        L.push(linhaUnica(`Total de registros: ${registros.length}`));
+
+        if (metricas && typeof metricas === 'object') {
+            Object.entries(metricas).forEach(([label, valor]) => {
+                if (valor !== null && valor !== undefined && valor !== '') {
+                    L.push(linhaUnica(`${label}: ${valor}`));
+                }
+            });
+        }
+
+        if (filtros.length > 0) {
+            L.push(linhaUnica('Filtros aplicados:'));
+            filtros.forEach(f => {
+                if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
+            });
+        }
+
+        if (observacoes) L.push(linhaUnica(`Observações: ${observacoes}`));
+
+        L.push(linhaUnica(''));
+        L.push(linhaUnica('─'.repeat(40)));
+        L.push(linhaUnica(''));
+
+        // 📋 Tabela
+        L.push(linhaCabecalho);
+        L.push(...linhasDados);
+
+        L.push(linhaUnica(''));
+        L.push(linhaUnica('─'.repeat(40)));
+        L.push(linhaUnica(''));
+
+        // 🖋️ Rodapé
+        L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
+        L.push(linhaUnica(`Setor responsável: ${setor}`));
+        L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
+        L.push(linhaUnica('Este relatório é de uso interno e confidencial.'));
+
+        const csv = '\uFEFF' + L.join('\r\n');
+
+        try {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = `${nomeArquivo}_${dataArquivo}.csv`;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }, 100);
+            return true;
+        } catch (e) {
+            console.error('Erro ao gerar CSV:', e);
+            this.mostrarToast('❌ Erro ao gerar CSV', 'error');
+            return false;
+        }
+    },
+
+    // ============================================
     // CARREGAR DADOS INICIAIS
     // ============================================
     async carregarProfessores() {
@@ -2313,108 +2459,240 @@ window.GestaoProfessoresModule = {
     // ============================================
     exportarCSV() {
         const data = this.relatorioAtual;
-        if (!data) { this.mostrarToast('Gere um relatório primeiro', 'warning'); return; }
-        
+        if (!data) {
+            this.mostrarToast('⚠️ Gere um relatório primeiro', 'warning');
+            return;
+        }
+
         const tipo = data.tipo || 'geral';
-        let csv = '';
-        
-        if (tipo === 'professor') {
-            csv = 'Professor,Matrícula,Email,Eixo,Registros,Componentes,Aulas,Turmas,Componentes_Únicos,Períodos\n';
-            (data.professores || []).forEach(p => {
-                csv += [
-                    `"${(p.professorNome || '').replace(/"/g, '""')}"`,
-                    `"${(p.professorMatricula || '').replace(/"/g, '""')}"`,
-                    `"${(p.professorEmail || '').replace(/"/g, '""')}"`,
-                    `"${(p.professorEixo || '').replace(/"/g, '""')}"`,
-                    p.totalRegistros,
-                    p.totalComponentes,
-                    p.totalAulas,
-                    `"${p.turmas.join(', ')}"`,
-                    `"${p.componentes.join(', ')}"`,
-                    `"${p.periodos.map(pe => this.getPeriodoLabel(pe)).join(', ')}"`
-                ].join(',') + '\n';
-            });
+
+        // ============================================
+        // TÍTULO + SUBTÍTULO (por tipo)
+        // ============================================
+        const titulos = {
+            'geral': 'Relatório Geral de Gestão de Professores',
+            'professor': 'Relatório de Gestão por Professor',
+            'turma': 'Relatório de Gestão por Turma',
+            'eixo': 'Relatório de Gestão por Eixo'
+        };
+        const titulo = titulos[tipo] || 'Relatório de Gestão de Professores';
+
+        // ============================================
+        // FILTROS APLICADOS
+        // ============================================
+        const filtros = [];
+        if (data.filtros?.eixo) filtros.push({ label: 'Eixo', valor: data.filtros.eixo });
+        if (data.filtros?.turma) filtros.push({ label: 'Turma', valor: data.filtros.turma });
+        if (data.filtros?.periodo) filtros.push({ label: 'Período', valor: this.getPeriodoLabel(data.filtros.periodo) });
+        if (data.filtros?.professorId) {
+            const prof = this.professores.find(p => String(p.id) === String(data.filtros.professorId));
+            filtros.push({ label: 'Professor', valor: prof?.nome || data.filtros.professorId });
         }
-        else if (tipo === 'turma') {
-            csv = 'Turma,Curso,Registros,Componentes,Aulas,Professores,Componentes_Únicos,Períodos\n';
-            (data.turmas || []).forEach(t => {
-                csv += [
-                    `"${(t.turma || '').replace(/"/g, '""')}"`,
-                    `"${(t.curso || '').replace(/"/g, '""')}"`,
-                    t.totalRegistros,
-                    t.totalComponentes,
-                    t.totalAulas,
-                    `"${t.professores.join(', ')}"`,
-                    `"${t.componentes.join(', ')}"`,
-                    `"${t.periodos.map(pe => this.getPeriodoLabel(pe)).join(', ')}"`
-                ].join(',') + '\n';
-            });
-        }
-        else if (tipo === 'eixo') {
-            csv = 'Eixo,Professores,Turmas,Componentes,Aulas,Componente,Nome_Componente,Registros_Componente,Aulas_Componente\n';
-            (data.eixos || []).forEach(e => {
-                if (e.componentes && e.componentes.length > 0) {
-                    e.componentes.forEach(c => {
-                        csv += [
-                            `"${(e.eixo || '').replace(/"/g, '""')}"`,
-                            e.totalProfessores,
-                            e.totalTurmas,
-                            e.totalComponentesUnicos,
-                            e.totalAulas,
-                            `"${(c.nome || '').replace(/"/g, '""')}"`,
-                            `"${(c.nome || '').replace(/"/g, '""')}"`,
-                            c.count,
-                            c.aulas
-                        ].join(',') + '\n';
-                    });
-                } else {
-                    csv += [
-                        `"${(e.eixo || '').replace(/"/g, '""')}"`,
-                        e.totalProfessores,
-                        e.totalTurmas,
-                        e.totalComponentesUnicos,
-                        e.totalAulas,
-                        '', '', '', ''
-                    ].join(',') + '\n';
-                }
-            });
-        }
-        else {
-            // Geral — CSV detalhado com todas as colunas dos componentes
-            csv = 'Data Coleta,Professor,Matrícula,Eixo,Componente,Turma,Curso,Período,Aulas Registradas,CH Anual,CH Semanal,Observações\n';
-            (data.registros || []).forEach(r => {
+        if (data.filtros?.dataInicio) filtros.push({ label: 'Data inicial', valor: data.filtros.dataInicio });
+        if (data.filtros?.dataFim) filtros.push({ label: 'Data final', valor: data.filtros.dataFim });
+
+        // ============================================
+        // MÉTRICAS (comuns)
+        // ============================================
+        const metricas = {
+            'Total de registros': data.totalRegistros || data.total || 0,
+            'Total de componentes': data.totalComponentes || 0,
+            'Total de aulas': data.totalAulas || 0
+        };
+
+        // ============================================
+        // COLUNAS POR TIPO
+        // ============================================
+        let colunas = [];
+        let registros = [];
+        let subtitulo = '';
+
+        // ------------------------------------------------
+        // TIPO: GERAL
+        // ------------------------------------------------
+        if (tipo === 'geral') {
+            registros = data.registros || [];
+            subtitulo = 'Visão consolidada de todas as gestões';
+
+            // Achata cada registro em linhas por componente
+            const linhasAchatadas = [];
+            registros.forEach(r => {
                 if (!r.componentes || r.componentes.length === 0) {
-                    csv += `"${r.dataColetaFormatada}","${r.professorNome}","${r.professorMatricula || ''}","${r.professorEixo || ''}","","","","","","","",""\n`;
+                    linhasAchatadas.push({
+                        dataColeta: r.dataColetaFormatada,
+                        professorNome: r.professorNome,
+                        professorMatricula: r.professorMatricula || '',
+                        professorEixo: r.professorEixo || '',
+                        professorEmail: r.professorEmail || '',
+                        componenteNome: '',
+                        componenteEixo: '',
+                        componenteTurma: '',
+                        componenteCurso: '',
+                        componentePeriodo: '',
+                        aulas: 0,
+                        chAnual: 0,
+                        chSemanal: 0,
+                        observacoes: r.observacoesGerais || ''
+                    });
                 } else {
                     r.componentes.forEach(c => {
                         const norm = this.normalizarAulas(c.aulasRegistradas);
-                        const periodoLabel = this.getPeriodoLabel(c.periodo || norm.periodoLegado);
-                        csv += [
-                            `"${r.dataColetaFormatada}"`,
-                            `"${(r.professorNome || '').replace(/"/g, '""')}"`,
-                            `"${(r.professorMatricula || '').replace(/"/g, '""')}"`,
-                            `"${(r.professorEixo || '').replace(/"/g, '""')}"`,
-                            `"${(c.nome || '').replace(/"/g, '""')}"`,
-                            `"${(c.turma || '').replace(/"/g, '""')}"`,
-                            `"${(c.curso || '').replace(/"/g, '""')}"`,
-                            `"${periodoLabel}"`,
-                            norm.aulas,
-                            c.cargaHorariaAnual || 0,
-                            c.cargaHorariaSemanal || 0,
-                            `"${(c.observacoes || '').replace(/"/g, '""')}"`
-                        ].join(',') + '\n';
+                        const periodoId = c.periodo || norm.periodoLegado;
+                        linhasAchatadas.push({
+                            dataColeta: r.dataColetaFormatada,
+                            professorNome: r.professorNome,
+                            professorMatricula: r.professorMatricula || '',
+                            professorEixo: r.professorEixo || '',
+                            professorEmail: r.professorEmail || '',
+                            componenteNome: c.nome || '',
+                            componenteEixo: c.eixo || '',
+                            componenteTurma: c.turma || '',
+                            componenteCurso: c.curso || '',
+                            componentePeriodo: this.getPeriodoLabel(periodoId),
+                            aulas: norm.aulas,
+                            chAnual: c.cargaHorariaAnual || 0,
+                            chSemanal: c.cargaHorariaSemanal || 0,
+                            observacoes: c.observacoes || ''
+                        });
                     });
                 }
             });
+            registros = linhasAchatadas;
+
+            colunas = [
+                { label: 'Data da Coleta', format: (l) => l.dataColeta },
+                { label: 'Professor', format: (l) => l.professorNome },
+                { label: 'Matrícula', format: (l) => l.professorMatricula },
+                { label: 'Email', format: (l) => l.professorEmail },
+                { label: 'Eixo do Professor', format: (l) => l.professorEixo },
+                { label: 'Componente Curricular', format: (l) => l.componenteNome },
+                { label: 'Eixo do Componente', format: (l) => l.componenteEixo },
+                { label: 'Turma', format: (l) => l.componenteTurma },
+                { label: 'Curso', format: (l) => l.componenteCurso },
+                { label: 'Período', format: (l) => l.componentePeriodo },
+                { label: 'Aulas Registradas', format: (l) => l.aulas },
+                { label: 'CH Anual', format: (l) => l.chAnual },
+                { label: 'CH Semanal', format: (l) => l.chSemanal },
+                { label: 'Observações', format: (l) => l.observacoes }
+            ];
         }
-        
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `gestao-professores-${tipo}_${this.getDataLocalISO()}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-        this.mostrarToast('✅ CSV exportado!', 'success');
+
+        // ------------------------------------------------
+        // TIPO: PROFESSOR
+        // ------------------------------------------------
+        else if (tipo === 'professor') {
+            registros = data.professores || [];
+            subtitulo = `${registros.length} professor(es) no relatório`;
+
+            colunas = [
+                { label: 'Professor', format: (p) => p.professorNome },
+                { label: 'Matrícula', format: (p) => p.professorMatricula || '' },
+                { label: 'Email', format: (p) => p.professorEmail || '' },
+                { label: 'Eixo', format: (p) => p.professorEixo || '' },
+                { label: 'Total de Registros', format: (p) => p.totalRegistros },
+                { label: 'Total de Componentes', format: (p) => p.totalComponentes },
+                { label: 'Total de Aulas', format: (p) => p.totalAulas },
+                { label: 'Total de Turmas', format: (p) => p.totalTurmas },
+                {
+                    label: 'Turmas',
+                    format: (p) => Array.isArray(p.turmas) ? p.turmas.join(' | ') : ''
+                },
+                {
+                    label: 'Componentes Únicos',
+                    format: (p) => p.totalComponentesUnicos
+                },
+                {
+                    label: 'Componentes',
+                    format: (p) => Array.isArray(p.componentes) ? p.componentes.join(' | ') : ''
+                },
+                {
+                    label: 'Períodos',
+                    format: (p) => Array.isArray(p.periodos)
+                        ? p.periodos.map(id => this.getPeriodoLabel(id)).join(' | ')
+                        : ''
+                }
+            ];
+        }
+
+        // ------------------------------------------------
+        // TIPO: TURMA
+        // ------------------------------------------------
+        else if (tipo === 'turma') {
+            registros = data.turmas || [];
+            subtitulo = `${registros.length} turma(s) no relatório`;
+
+            colunas = [
+                { label: 'Turma', format: (t) => t.turma },
+                { label: 'Curso', format: (t) => t.curso || '' },
+                { label: 'Total de Registros', format: (t) => t.totalRegistros },
+                { label: 'Total de Componentes', format: (t) => t.totalComponentes },
+                { label: 'Total de Aulas', format: (t) => t.totalAulas },
+                { label: 'Total de Professores', format: (t) => t.totalProfessores },
+                {
+                    label: 'Professores',
+                    format: (t) => Array.isArray(t.professores) ? t.professores.join(' | ') : ''
+                },
+                {
+                    label: 'Componentes',
+                    format: (t) => Array.isArray(t.componentes) ? t.componentes.join(' | ') : ''
+                },
+                {
+                    label: 'Períodos',
+                    format: (t) => Array.isArray(t.periodos)
+                        ? t.periodos.map(id => this.getPeriodoLabel(id)).join(' | ')
+                        : ''
+                }
+            ];
+        }
+
+        // ------------------------------------------------
+        // TIPO: EIXO
+        // ------------------------------------------------
+        else if (tipo === 'eixo') {
+            registros = data.eixos || [];
+            subtitulo = `${registros.length} eixo(s) no relatório`;
+
+            colunas = [
+                { label: 'Eixo', format: (e) => e.eixo },
+                { label: 'Total de Professores', format: (e) => e.totalProfessores },
+                { label: 'Total de Turmas', format: (e) => e.totalTurmas },
+                { label: 'Total de Componentes Únicos', format: (e) => e.totalComponentesUnicos },
+                { label: 'Total de Aulas', format: (e) => e.totalAulas },
+                {
+                    label: 'Professores',
+                    format: (e) => Array.isArray(e.professores) ? e.professores.join(' | ') : ''
+                },
+                {
+                    label: 'Turmas',
+                    format: (e) => Array.isArray(e.turmas) ? e.turmas.join(' | ') : ''
+                },
+                {
+                    label: 'Componentes (detalhe)',
+                    format: (e) => Array.isArray(e.componentes)
+                        ? e.componentes.map(c => `${c.nome} (${c.count} reg. / ${c.aulas} aulas)`).join(' | ')
+                        : ''
+                }
+            ];
+        }
+
+        // ============================================
+        // GERA E BAIXA
+        // ============================================
+        const ok = this.gerarBaixarCSV({
+            titulo,
+            subtitulo,
+            setor: 'Setor Pedagógico',
+            colunas,
+            registros,
+            filtros,
+            metricas,
+            nomeArquivo: `gestao-professores-${tipo}`,
+            observacoes: `${registros.length} registro(s) listado(s) no formato ${tipo}`
+        });
+
+        if (ok) {
+            this.mostrarToast(`✅ CSV exportado (${registros.length} registro(s))!`, 'success');
+        }
     },
     
     // ============================================
@@ -2862,6 +3140,8 @@ window.GestaoProfessoresModule = {
         if (tipo === 'turma' && campos.turma) campos.turma.style.display = 'block';
         if (tipo === 'professor' && campos.professor) campos.professor.style.display = 'block';
     }
+
+    
 };
 
 window.GestaoProfessoresModule = window.GestaoProfessoresModule;

@@ -109,6 +109,138 @@ window.SubstituicaoProfessoresModule = {
             });
         }
     },
+
+    // ============================================
+    // 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
+    // ============================================
+    gerarBaixarCSV(opts) {
+        const {
+            titulo = 'Relatório',
+            subtitulo = '',
+            setor = 'Setor Pedagógico',
+            colunas = [],
+            registros = [],
+            filtros = [],
+            nomeArquivo = 'relatorio',
+            observacoes = '',
+            metricas = null
+        } = opts || {};
+
+        if (!Array.isArray(colunas) || colunas.length === 0) {
+            this.mostrarToast('⚠️ Nenhuma coluna definida para exportação', 'warning');
+            return false;
+        }
+        if (!Array.isArray(registros) || registros.length === 0) {
+            this.mostrarToast('⚠️ Nenhum registro para exportar', 'warning');
+            return false;
+        }
+
+        const agora = new Date();
+        const dataGeracao = agora.toLocaleString('pt-BR');
+        const dataArquivo = agora.toISOString().split('T')[0];
+
+        const esc = (v) => {
+            if (v === null || v === undefined) return '""';
+            let s = String(v)
+                .replace(/\r\n|\r|\n/g, ' ')
+                .replace(/"/g, '""')
+                .trim();
+            return `"${s}"`;
+        };
+
+        const linhaUnica = (texto) => {
+            const t = String(texto ?? '').replace(/"/g, '""');
+            return `"${t}"` + ';'.repeat(Math.max(0, colunas.length - 1));
+        };
+
+        const linhaCabecalho = colunas.map(c => esc(c.label)).join(';');
+        const linhasDados = registros.map(reg => {
+            return colunas.map(col => {
+                let v;
+                try {
+                    v = col.format ? col.format(reg) : reg[col.key];
+                } catch (e) {
+                    console.warn(`Erro coluna ${col.key}:`, e);
+                    v = '';
+                }
+                return esc(v);
+            }).join(';');
+        });
+
+        const L = [];
+
+        // 🏛️ Cabeçalho institucional
+        L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
+        L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
+        L.push(linhaUnica(`Setor: ${setor}`));
+        L.push(linhaUnica(''));
+
+        // 📋 Título
+        L.push(linhaUnica(titulo.toUpperCase()));
+        if (subtitulo) L.push(linhaUnica(subtitulo));
+        L.push(linhaUnica(''));
+
+        // 📊 Metadados
+        L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
+        L.push(linhaUnica(`Total de registros: ${registros.length}`));
+
+        if (metricas && typeof metricas === 'object') {
+            Object.entries(metricas).forEach(([label, valor]) => {
+                if (valor !== null && valor !== undefined && valor !== '') {
+                    L.push(linhaUnica(`${label}: ${valor}`));
+                }
+            });
+        }
+
+        if (filtros.length > 0) {
+            L.push(linhaUnica('Filtros aplicados:'));
+            filtros.forEach(f => {
+                if (f && f.valor) L.push(linhaUnica(`  • ${f.label}: ${f.valor}`));
+            });
+        }
+
+        if (observacoes) L.push(linhaUnica(`Observações: ${observacoes}`));
+
+        L.push(linhaUnica(''));
+        L.push(linhaUnica('─'.repeat(40)));
+        L.push(linhaUnica(''));
+
+        // 📋 Tabela
+        L.push(linhaCabecalho);
+        L.push(...linhasDados);
+
+        L.push(linhaUnica(''));
+        L.push(linhaUnica('─'.repeat(40)));
+        L.push(linhaUnica(''));
+
+        // 🖋️ Rodapé
+        L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
+        L.push(linhaUnica(`Setor responsável: ${setor}`));
+        L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
+        L.push(linhaUnica('Este relatório é de uso interno e confidencial.'));
+
+        const csv = '\uFEFF' + L.join('\r\n');
+
+        try {
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = `${nomeArquivo}_${dataArquivo}.csv`;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }, 100);
+            return true;
+        } catch (e) {
+            console.error('Erro ao gerar CSV:', e);
+            this.mostrarToast('❌ Erro ao gerar CSV', 'error');
+            return false;
+        }
+    },
     
     // ============================================
     // CARREGAR PROFESSORES
@@ -1204,33 +1336,110 @@ window.SubstituicaoProfessoresModule = {
     },
     
     exportarCSV() {
-        if (!this.relatorioAtual || this.relatorioAtual.substituicoes.length === 0) {
-            this.mostrarToast('Gere um relatório primeiro', 'warning');
+        if (!this.relatorioAtual || !this.relatorioAtual.substituicoes || this.relatorioAtual.substituicoes.length === 0) {
+            this.mostrarToast('⚠️ Gere um relatório primeiro', 'warning');
             return;
         }
-        
-        let csv = 'Data,Horário,Professor Ausente,Professor Substituto,Turma,Motivo,Observações\n';
-        
-        this.relatorioAtual.substituicoes.forEach(s => {
-            csv += [
-                `"${s.dataFormatada}"`,
-                `${s.horario}º`,
-                `"${(s.professorAusenteNome || '').replace(/"/g, '""')}"`,
-                `"${(s.professorSubstitutoNome || '').replace(/"/g, '""')}"`,
-                `"${(s.turma || '').replace(/"/g, '""')}"`,
-                `"${(s.motivoLabel || '').replace(/"/g, '""')}"`,
-                `"${(s.observacoes || '').replace(/"/g, '""')}"`
-            ].join(',') + '\n';
+
+        const registros = this.relatorioAtual.substituicoes;
+        const d = this.relatorioAtual;
+
+        // ============================================
+        // TÍTULO + SUBTÍTULO
+        // ============================================
+        const titulo = 'Relatório de Substituições de Professores';
+        const subtitulo = `${registros.length} substituição(ões)`;
+
+        // ============================================
+        // COLUNAS
+        // ============================================
+        const colunas = [
+            {
+                label: 'Data',
+                format: (s) => s.dataFormatada
+                    || (s.data ? new Date(s.data + 'T12:00:00').toLocaleDateString('pt-BR') : '')
+            },
+            { label: 'Dia da Semana', format: (s) => s.diaSemana || '' },
+            {
+                label: 'Horário',
+                format: (s) => s.horario ? `${s.horario}º Horário` : ''
+            },
+            { label: 'Professor Ausente', format: (s) => s.professorAusenteNome || '' },
+            { label: 'Email Ausente', format: (s) => s.professorAusenteEmail || '' },
+            { label: 'Eixo Ausente', format: (s) => s.professorAusenteEixo || '' },
+            { label: 'Professor Substituto', format: (s) => s.professorSubstitutoNome || '' },
+            { label: 'Email Substituto', format: (s) => s.professorSubstitutoEmail || '' },
+            { label: 'Eixo Substituto', format: (s) => s.professorSubstitutoEixo || '' },
+            { label: 'Turma', format: (s) => s.turma || '' },
+            {
+                label: 'Motivo',
+                format: (s) => s.motivoLabel || this.MOTIVOS_LABELS[s.motivo] || s.motivo || ''
+            },
+            { label: 'Detalhes do Motivo', format: (s) => s.motivoDetalhes || '' },
+            { label: 'Observações', format: (s) => s.observacoes || '' },
+            { label: 'Registrado por', format: (s) => s.registradoPorNome || '' },
+            {
+                label: 'Data de Registro',
+                format: (s) => s.registradoEm
+                    ? new Date(s.registradoEm).toLocaleString('pt-BR')
+                    : ''
+            }
+        ];
+
+        // ============================================
+        // FILTROS APLICADOS
+        // ============================================
+        const filtros = [];
+        const mes = this.safeGet('relatorioMesSubstituicao')?.value;
+        const dataInicio = this.safeGet('relatorioDataInicioSubstituicao')?.value;
+        const dataFim = this.safeGet('relatorioDataFimSubstituicao')?.value;
+        const turma = this.safeGet('relatorioTurmaSubstituicao')?.value;
+        const motivo = this.safeGet('relatorioMotivoSubstituicao')?.value;
+
+        if (mes) filtros.push({ label: 'Mês', valor: mes });
+        if (dataInicio) filtros.push({ label: 'Data inicial', valor: dataInicio });
+        if (dataFim) filtros.push({ label: 'Data final', valor: dataFim });
+        if (turma) filtros.push({ label: 'Turma', valor: turma });
+        if (motivo) {
+            filtros.push({
+                label: 'Motivo',
+                valor: this.MOTIVOS_LABELS[motivo] || motivo
+            });
+        }
+
+        // ============================================
+        // MÉTRICAS
+        // ============================================
+        const totalProfessoresAusentes = new Set(
+            registros.map(s => s.professorAusenteId || s.professorAusenteNome).filter(Boolean)
+        ).size;
+        const totalProfessoresSubstitutos = new Set(
+            registros.map(s => s.professorSubstitutoId || s.professorSubstitutoNome).filter(Boolean)
+        ).size;
+        const totalTurmas = new Set(
+            registros.map(s => s.turma).filter(Boolean)
+        ).size;
+
+        const ok = this.gerarBaixarCSV({
+            titulo,
+            subtitulo,
+            setor: 'Setor Pedagógico',
+            colunas,
+            registros,
+            filtros,
+            metricas: {
+                'Total de substituições': registros.length,
+                'Professores ausentes': totalProfessoresAusentes,
+                'Professores substitutos': totalProfessoresSubstitutos,
+                'Turmas envolvidas': totalTurmas
+            },
+            nomeArquivo: 'relatorio-substituicoes',
+            observacoes: `${registros.length} substituição(ões) listada(s)`
         });
-        
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `substituicoes_${new Date().toISOString().split('T')[0]}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-        
-        this.mostrarToast('✅ CSV exportado!', 'success');
+
+        if (ok) {
+            this.mostrarToast(`✅ CSV exportado (${registros.length} substituição(ões))!`, 'success');
+        }
     },
     
     imprimirRelatorio() {
