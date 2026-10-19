@@ -1597,6 +1597,30 @@
                                         </div>
                                     </div>
 
+                                    <!-- 🆕 PERÍODO DA PROVA -->
+                                    <div class="mb-3" id="campoSegundaChamadaPeriodo">
+                                        <label class="form-label">Período da Prova <span class="text-danger">*</span></label>
+                                        <div class="tipos-tarefa-grid">
+                                            <div class="tipo-card" data-periodo="1º Período" onclick="selecionarPeriodoProva('1º Período')">
+                                                <i class="fas fa-1"></i>
+                                                <span>1º Período</span>
+                                            </div>
+                                            <div class="tipo-card" data-periodo="2º Período" onclick="selecionarPeriodoProva('2º Período')">
+                                                <i class="fas fa-2"></i>
+                                                <span>2º Período</span>
+                                            </div>
+                                            <div class="tipo-card" data-periodo="3º Período" onclick="selecionarPeriodoProva('3º Período')">
+                                                <i class="fas fa-3"></i>
+                                                <span>3º Período</span>
+                                            </div>
+                                            <div class="tipo-card" data-periodo="4º Período" onclick="selecionarPeriodoProva('4º Período')">
+                                                <i class="fas fa-4"></i>
+                                                <span>4º Período</span>
+                                            </div>
+                                        </div>
+                                        <input type="hidden" id="segundaChamadaPeriodoProva">
+                                    </div>
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Horário (opcional)</label>
@@ -1816,6 +1840,16 @@
                                                 <option value="Outros">Outros</option>
                                             </select>
                                         </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label">Período da Prova</label>
+                                            <select id="SegundaChamadaFiltroPeriodoProva" class="form-select">
+                                                <option value="todos">Todos os períodos</option>
+                                                <option value="1º Período">1º Período</option>
+                                                <option value="2º Período">2º Período</option>
+                                                <option value="3º Período">3º Período</option>
+                                                <option value="4º Período">4º Período</option>
+                                            </select>
+                                        </div>
                                         <div class="col-md-2">
                                             <label class="form-label">&nbsp;</label>
                                             <button class="btn btn-primary w-100" onclick="carregarRelatorioModulo('segundaChamada')">
@@ -1875,6 +1909,16 @@
                                             <option value="AV4">AV4</option>
                                             <option value="Recuperação">Recuperação</option>
                                             <option value="Outros">Outros</option>
+                                        </select>
+                                    </div>
+                                    <!-- 🆕 Filtro Período -->
+                                    <div class="col-md-2">
+                                        <select id="filtroListaSegundaChamadaPeriodoProva" class="form-select form-select-sm">
+                                            <option value="">Todos os períodos</option>
+                                            <option value="1º Período">1º Período</option>
+                                            <option value="2º Período">2º Período</option>
+                                            <option value="3º Período">3º Período</option>
+                                            <option value="4º Período">4º Período</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2">

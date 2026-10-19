@@ -13,28 +13,20 @@ function getAutorizacao() { return require('../models/Autorizacao'); }
 // 🔥 HELPERS
 // ============================================
 function inicioDoDiaBrasil(dataStr) {
-    // Meia-noite no horário de Brasília
     return new Date(dataStr + 'T00:00:00.000-03:00');
 }
 
 function fimDoDiaBrasil(dataStr) {
-    // 23:59:59.999 no horário de Brasília
     return new Date(dataStr + 'T23:59:59.999-03:00');
 }
 
-// 🔥 CONSTRÓI A CONDIÇÃO DE OVERLAP DE INTERVALOS
-// Um registro deve aparecer se o período de falta dele SOBREPÕE
-// o intervalo buscado. Fórmula:
-//   periodoFaltaInicio <= fimBusca  E  periodoFaltaFim >= inicioBusca
 function construirFiltroOverlap(inicio, fim) {
     return {
         $or: [
-            // Caso 1: tem início E fim → overlap completo
             {
                 periodoFaltaInicio: { $lte: fim },
                 periodoFaltaFim: { $gte: inicio }
             },
-            // Caso 2: tem início, fim vazio/nulo → o início deve estar no range
             {
                 periodoFaltaInicio: { $gte: inicio, $lte: fim },
                 $or: [
@@ -42,7 +34,6 @@ function construirFiltroOverlap(inicio, fim) {
                     { periodoFaltaFim: { $exists: false } }
                 ]
             },
-            // Caso 3: não tem periodoFaltaInicio → cai pra "data" (compatibilidade)
             {
                 $or: [
                     { periodoFaltaInicio: null },
@@ -54,19 +45,16 @@ function construirFiltroOverlap(inicio, fim) {
     };
 }
 
-// 🔥 Constrói o filtro de data considerando se deve usar periodoFalta ou data
 function construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta) {
     if (!dataInicio && !dataFim) return null;
     
     const inicio = dataInicio ? inicioDoDiaBrasil(dataInicio) : new Date('1970-01-01');
     const fim = dataFim ? fimDoDiaBrasil(dataFim) : new Date();
     
-    // Se for filtrar por período da falta → usa overlap
     if (filtrarPorPeriodoFalta === 'true') {
         return construirFiltroOverlap(inicio, fim);
     }
     
-    // Senão, filtra por data simples (registro)
     return {
         data: {
             $gte: inicio,
@@ -98,6 +86,12 @@ function getTipoProvaPerdidaFormatado(doc) {
     return doc.tipoProvaPerdida;
 }
 
+// 🆕 Período da prova
+function getPeriodoProvaFormatado(doc) {
+    if (!doc || !doc.periodoProva) return null;
+    return doc.periodoProva;
+}
+
 function extrairPeriodoFalta(body) {
     const { periodoFaltaInicio, periodoFaltaFim } = body;
     
@@ -123,9 +117,6 @@ function extrairPeriodoFalta(body) {
     return { dataInicio, dataFim };
 }
 
-// ============================================
-// 🆕 HELPER: Valida CPF
-// ============================================
 function validarCPF(cpf) {
     if (!cpf || typeof cpf !== 'string') return { valido: false, erro: 'CPF não informado' };
     
@@ -142,10 +133,6 @@ function validarCPF(cpf) {
     return { valido: true, cpfLimpo };
 }
 
-// 🆕 Verifica se o tipo exige CPF obrigatório
-// - Autorização: CPF OPCIONAL
-// - Justificativa: CPF OBRIGATÓRIO
-// - 2ª Chamada: CPF OBRIGATÓRIO
 function tipoExigeCPF(tipo) {
     return tipo === 'justificativa' || tipo === 'segunda_chamada';
 }
@@ -197,6 +184,8 @@ const MOTIVOS_POR_TIPO = {
 };
 
 const TIPOS_PROVA_VALIDOS = ['AV1', 'AV2', 'AV3', 'AV4', 'Recuperação', 'Outros'];
+// 🆕 Períodos válidos
+const PERIODOS_PROVA_VALIDOS = ['1º Período', '2º Período', '3º Período', '4º Período'];
 
 // ============================================
 // 1. HEALTH
@@ -279,10 +268,17 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
         ]);
 
         let porTipoProva = [];
+        let porPeriodoProva = [];   // 🆕
         if (tipo === 'segunda_chamada') {
             porTipoProva = await Autorizacao.aggregate([
                 { $match: { tipo, data: { $gte: ultimos30Dias }, tipoProvaPerdida: { $ne: null } } },
                 { $group: { _id: '$tipoProvaPerdida', count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ]);
+            // 🆕
+            porPeriodoProva = await Autorizacao.aggregate([
+                { $match: { tipo, data: { $gte: ultimos30Dias }, periodoProva: { $ne: null } } },
+                { $group: { _id: '$periodoProva', count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
             ]);
         }
@@ -340,6 +336,11 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
                 label: t._id,
                 count: t.count
             })),
+            porPeriodoProva: porPeriodoProva.map(p => ({   // 🆕
+                periodoProva: p._id,
+                label: p._id,
+                count: p.count
+            })),
             tendencias: {
                 ultimos7Dias,
                 porTurma: porTurma.map(t => ({ turma: t._id || 'Sem turma', count: t.count })),
@@ -361,11 +362,10 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
 router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
         const Autorizacao = getAutorizacao();
-        const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida } = req.query;
+        const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida, periodoProva } = req.query;
 
         let matchStage = { tipo };
         
-        // 🔥 Filtro de data (com overlap para período da falta)
         const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
         if (filtroData) {
             Object.assign(matchStage, filtroData);
@@ -373,6 +373,10 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
         
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') {
             matchStage.tipoProvaPerdida = tipoProvaPerdida;
+        }
+        // 🆕 filtro por período
+        if (periodoProva && periodoProva !== 'todos') {
+            matchStage.periodoProva = periodoProva;
         }
 
         const [total, comAssinatura, porMotivo, porTurma, registros] = await Promise.all([
@@ -401,10 +405,17 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
         ]);
 
         let porTipoProva = [];
+        let porPeriodoProva = [];   // 🆕
         if (tipo === 'segunda_chamada') {
             porTipoProva = await Autorizacao.aggregate([
                 { $match: { ...matchStage, tipoProvaPerdida: { $ne: null } } },
                 { $group: { _id: '$tipoProvaPerdida', count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ]);
+            // 🆕
+            porPeriodoProva = await Autorizacao.aggregate([
+                { $match: { ...matchStage, periodoProva: { $ne: null } } },
+                { $group: { _id: '$periodoProva', count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
             ]);
         }
@@ -423,6 +434,11 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
                 tipoProva: t._id,
                 label: t._id,
                 count: t.count
+            })),
+            porPeriodoProva: porPeriodoProva.map(p => ({   // 🆕
+                periodoProva: p._id,
+                label: p._id,
+                count: p.count
             })),
             porTurma: porTurma.map(t => ({
                 turma: t._id || 'Sem turma',
@@ -444,6 +460,8 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaOutros: a.tipoProvaPerdidaOutros,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+                periodoProva: a.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(a),    // 🆕
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
                 horarioAusencia: a.horarioAusencia,
@@ -466,17 +484,16 @@ router.get('/relatorio/geral', authenticateToken, verificarGestaoGeral, async (r
 });
 
 // ============================================
-// 6. RELATÓRIO POR TURMA (COM OVERLAP)
+// 6. RELATÓRIO POR TURMA
 // ============================================
 router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
         const Autorizacao = getAutorizacao();
         const { turma } = req.params;
-        const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida } = req.query;
+        const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida, periodoProva } = req.query;
 
         let matchStage = { tipo, alunoTurma: turma };
         
-        // 🔥 Filtro de data (com overlap para período da falta)
         const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
         if (filtroData) {
             Object.assign(matchStage, filtroData);
@@ -484,6 +501,10 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
         
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') {
             matchStage.tipoProvaPerdida = tipoProvaPerdida;
+        }
+        // 🆕
+        if (periodoProva && periodoProva !== 'todos') {
+            matchStage.periodoProva = periodoProva;
         }
 
         const [total, porAluno, porMotivo, registros] = await Promise.all([
@@ -540,6 +561,8 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaOutros: a.tipoProvaPerdidaOutros,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+                periodoProva: a.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(a),    // 🆕
                 alunoNome: a.alunoNome,
                 alunoMatricula: a.alunoMatricula,
                 motivo: a.motivo,
@@ -558,18 +581,17 @@ router.get('/relatorio/turma/:turma', authenticateToken, verificarGestaoGeral, a
 });
 
 // ============================================
-// 7. RELATÓRIO POR ALUNO (COM OVERLAP)
+// 7. RELATÓRIO POR ALUNO
 // ============================================
 router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {
         const User = getUser();
         const Autorizacao = getAutorizacao();
         const { alunoId } = req.params;
-        const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida } = req.query;
+        const { tipo = 'autorizacao', dataInicio, dataFim, filtrarPorPeriodoFalta, tipoProvaPerdida, periodoProva } = req.query;
 
         let matchStage = { tipo, alunoId };
         
-        // 🔥 Filtro de data (com overlap para período da falta)
         const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
         if (filtroData) {
             Object.assign(matchStage, filtroData);
@@ -577,6 +599,10 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
         
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') {
             matchStage.tipoProvaPerdida = tipoProvaPerdida;
+        }
+        // 🆕
+        if (periodoProva && periodoProva !== 'todos') {
+            matchStage.periodoProva = periodoProva;
         }
 
         const [aluno, total, porMotivo, registros] = await Promise.all([
@@ -623,6 +649,8 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaOutros: a.tipoProvaPerdidaOutros,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+                periodoProva: a.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(a),    // 🆕
                 motivo: a.motivo,
                 motivoLabel: Autorizacao.getMotivoLabel(a.motivo, a.tipo),
                 horarioEntrada: a.horarioEntrada,
@@ -679,7 +707,8 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
             tipo = 'autorizacao', limit = 100, page = 1, 
             motivo, turma, dataInicio, dataFim, alunoNome,
             filtrarPorPeriodoFalta,
-            tipoProvaPerdida
+            tipoProvaPerdida,
+            periodoProva       // 🆕
         } = req.query;
 
         let query = { tipo };
@@ -690,8 +719,11 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') {
             query.tipoProvaPerdida = tipoProvaPerdida;
         }
+        // 🆕
+        if (periodoProva && periodoProva !== 'todos') {
+            query.periodoProva = periodoProva;
+        }
         
-        // 🔥 Filtro de data (com overlap para período da falta)
         const filtroData = construirFiltroData(dataInicio, dataFim, filtrarPorPeriodoFalta);
         if (filtroData) {
             Object.assign(query, filtroData);
@@ -729,6 +761,8 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaOutros: a.tipoProvaPerdidaOutros,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+                periodoProva: a.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(a),    // 🆕
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
                 responsavelNome: a.responsavelNome,
@@ -786,6 +820,8 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+                periodoProva: a.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(a),    // 🆕
                 horarioEntrada: a.horarioEntrada, horarioSaida: a.horarioSaida,
                 statusAssinatura: a.statusAssinatura
             }))
@@ -813,6 +849,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             origemId = null,
             tipoProvaPerdida = null,
             tipoProvaPerdidaOutros = '',
+            periodoProva = null,           // 🆕
             precisaAssinatura = false
         } = req.body;
 
@@ -836,9 +873,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
         }
 
         // ==========================================
-        // 🔥 VALIDAÇÃO DE CPF (regra por tipo)
-        // - Autorização: CPF OPCIONAL (só valida formato se preenchido)
-        // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
+        // 🔥 VALIDAÇÃO DE CPF
         // ==========================================
         const cpfPreenchido = responsavelCPF && responsavelCPF.trim() !== '';
         const cpfObrigatorio = tipoExigeCPF(tipo);
@@ -884,7 +919,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             periodoFaltaFim = resultado.dataFim;
         }
 
-        // Validação tipo de prova (2ª chamada)
+        // Validação tipo de prova + período (2ª chamada)
         if (tipo === 'segunda_chamada') {
             if (!tipoProvaPerdida) {
                 return res.status(400).json({ 
@@ -897,6 +932,16 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             }
             if (tipoProvaPerdida === 'Outros' && (!tipoProvaPerdidaOutros || !tipoProvaPerdidaOutros.trim())) {
                 return res.status(400).json({ success: false, error: 'Especifique o tipo de prova perdida' });
+            }
+            // 🆕
+            if (!periodoProva) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Informe o período da prova (1º, 2º, 3º ou 4º Período)' 
+                });
+            }
+            if (!PERIODOS_PROVA_VALIDOS.includes(periodoProva)) {
+                return res.status(400).json({ success: false, error: 'Período da prova inválido' });
             }
         }
 
@@ -912,6 +957,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                 periodoFaltaInicio: periodoFaltaInicio,
                 periodoFaltaFim: periodoFaltaFim,
                 tipoProvaPerdida: tipoProvaPerdida,
+                periodoProva: periodoProva,          // 🆕
                 motivo: motivo,
                 ativo: true
             });
@@ -960,12 +1006,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
         const gestor = await User.findById(req.userId).select('nome');
 
-        // ==========================================
-        // ✅ DATA DO REGISTRO
-        // A 'data' representa QUANDO o registro foi lançado no sistema.
-        // A data da FALTA fica em periodoFaltaInicio / periodoFaltaFim.
-        // NÃO sobrescrever 'data' com periodoFaltaInicio!
-        // ==========================================
         let dataFinal;
         if (data) {
             if (data.length === 10) {
@@ -986,7 +1026,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             alunoCurso: aluno.curso || 'Não informado',
             alunoFoto: aluno.fotoPerfil,
             
-            // ✅ data = data do REGISTRO
             data: dataFinal,
             
             periodoFaltaInicio,
@@ -999,6 +1038,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             motivoOutros: motivo === 'outros' ? motivoOutros : undefined,
             tipoProvaPerdida: tipo === 'segunda_chamada' ? tipoProvaPerdida : null,
             tipoProvaPerdidaOutros: (tipo === 'segunda_chamada' && tipoProvaPerdida === 'Outros') ? tipoProvaPerdidaOutros.trim() : undefined,
+            periodoProva: tipo === 'segunda_chamada' ? periodoProva : null,   // 🆕
             horarioAusencia: motivo === 'necessita_ausentar_retornar' ? horarioAusencia : undefined,
             horarioRetorno: motivo === 'necessita_ausentar_retornar' ? horarioRetorno : undefined,
             observacoes: observacoes || '',
@@ -1038,6 +1078,8 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
                 tipoProvaPerdida: autorizacao.tipoProvaPerdida,
                 tipoProvaPerdidaOutros: autorizacao.tipoProvaPerdidaOutros,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(autorizacao),
+                periodoProva: autorizacao.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(autorizacao),    // 🆕
                 horarioEntrada: autorizacao.horarioEntrada,
                 horarioSaida: autorizacao.horarioSaida,
                 temAssinatura: autorizacao.temAssinatura,
@@ -1082,6 +1124,8 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaOutros: a.tipoProvaPerdidaOutros,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+                periodoProva: a.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(a),    // 🆕
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
                 responsavelNome: a.responsavelNome,
@@ -1138,7 +1182,8 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             periodoFaltaInicio,
             periodoFaltaFim,
             tipoProvaPerdida,
-            tipoProvaPerdidaOutros
+            tipoProvaPerdidaOutros,
+            periodoProva           // 🆕
         } = req.body;
 
         if (motivo) {
@@ -1149,9 +1194,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.motivo = motivo;
         }
 
-        // ==========================================
-        // ✅ DATA DO REGISTRO (sempre editável, independente do tipo)
-        // ==========================================
         if (data) {
             let dataFinal;
             if (data.length === 10) {
@@ -1165,9 +1207,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.data = dataFinal;
         }
 
-        // ==========================================
-        // ✅ PERÍODO DA FALTA (campos separados)
-        // ==========================================
         if (a.tipo === 'justificativa' || a.tipo === 'segunda_chamada') {
             if (periodoFaltaInicio !== undefined || periodoFaltaFim !== undefined) {
                 const iniStr = periodoFaltaInicio !== undefined 
@@ -1189,11 +1228,10 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 
                 a.periodoFaltaInicio = resultado.dataInicio;
                 a.periodoFaltaFim = resultado.dataFim;
-                // ✅ NÃO sobrescreve a.data aqui — a data do registro é independente
             }
         }
 
-        // Tipo de prova perdida
+        // Tipo de prova + período
         if (a.tipo === 'segunda_chamada') {
             if (tipoProvaPerdida !== undefined) {
                 if (!TIPOS_PROVA_VALIDOS.includes(tipoProvaPerdida)) {
@@ -1209,6 +1247,14 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 } else {
                     a.tipoProvaPerdidaOutros = undefined;
                 }
+            }
+
+            // 🆕 Período
+            if (periodoProva !== undefined) {
+                if (!PERIODOS_PROVA_VALIDOS.includes(periodoProva)) {
+                    return res.status(400).json({ success: false, error: 'Período da prova inválido' });
+                }
+                a.periodoProva = periodoProva;
             }
         }
 
@@ -1233,11 +1279,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
             a.horarioRetorno = hR;
         }
 
-        // ==========================================
-        // 🔥 VALIDAÇÃO DE CPF NA EDIÇÃO (regra por tipo)
-        // - Autorização: CPF OPCIONAL (só valida formato se preenchido)
-        // - Justificativa e 2ª Chamada: CPF OBRIGATÓRIO
-        // ==========================================
+        // Validação de CPF na edição
         const cpfParaValidar = responsavelCPF !== undefined ? responsavelCPF : a.responsavelCPF;
         const cpfPreenchido = cpfParaValidar && cpfParaValidar.trim() !== '';
         const cpfObrigatorio = tipoExigeCPF(a.tipo);
@@ -1262,7 +1304,6 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 a.responsavelCPF = responsavelCPF;
             }
         } else if (responsavelCPF !== undefined && !cpfObrigatorio) {
-            // Autorização: permite limpar o CPF
             a.responsavelCPF = undefined;
         }
 
@@ -1272,9 +1313,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
         if (responsavelTelefone !== undefined) a.responsavelTelefone = responsavelTelefone;
         if (observacoes !== undefined) a.observacoes = observacoes;
 
-        // ==========================================
-        // VERIFICAÇÃO DE DUPLICIDADE (2ª CHAMADA) - EDIÇÃO
-        // ==========================================
+        // Duplicidade na edição
         if (a.tipo === 'segunda_chamada') {
             const cpfResponsavelLimpo = (a.responsavelCPF || '').replace(/\D/g, '');
             
@@ -1285,6 +1324,7 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 periodoFaltaInicio: a.periodoFaltaInicio,
                 periodoFaltaFim: a.periodoFaltaFim,
                 tipoProvaPerdida: a.tipoProvaPerdida,
+                periodoProva: a.periodoProva,          // 🆕
                 motivo: a.motivo,
                 ativo: true
             });
@@ -1331,6 +1371,8 @@ router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
                 tipoProvaPerdida: a.tipoProvaPerdida,
                 tipoProvaPerdidaFormatado: getTipoProvaPerdidaFormatado(a),
+                periodoProva: a.periodoProva,                          // 🆕
+                periodoProvaFormatado: getPeriodoProvaFormatado(a),    // 🆕
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
                 observacoes: a.observacoes,
@@ -1358,7 +1400,6 @@ router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) 
         const a = await Autorizacao.findByIdAndDelete(req.params.id);
         if (!a) return res.status(404).json({ success: false, error: 'Registro não encontrado' });
         
-        // 🔥 CASCATA: se for 2ª chamada, exclui a justificativa vinculada
         let justificativasExcluidas = 0;
         if (a.tipo === 'segunda_chamada') {
             const result = await Autorizacao.deleteMany({

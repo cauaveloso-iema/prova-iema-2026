@@ -58,6 +58,13 @@ const AutorizacaoSchema = new mongoose.Schema({
     },
     tipoProvaPerdidaOutros: String,
     
+    // 🆕 PERÍODO DA PROVA (2ª Chamada)
+    periodoProva: {
+        type: String,
+        enum: ['1º Período', '2º Período', '3º Período', '4º Período', null],
+        default: null
+    },
+    
     horarioAusencia: String,
     horarioRetorno: String,
     
@@ -94,6 +101,7 @@ AutorizacaoSchema.index({ periodoFaltaInicio: -1 });
 AutorizacaoSchema.index({ periodoFaltaFim: -1 });
 AutorizacaoSchema.index({ motivo: 1 });
 AutorizacaoSchema.index({ tipoProvaPerdida: 1 });
+AutorizacaoSchema.index({ periodoProva: 1 });          // 🆕
 AutorizacaoSchema.index({ origemTipo: 1, origemId: 1 });
 AutorizacaoSchema.index({ statusAssinatura: 1, createdAt: -1 });
 AutorizacaoSchema.index({ vistoSecretaria: 1, createdAt: -1 });
@@ -143,6 +151,12 @@ AutorizacaoSchema.methods.getTipoProvaPerdidaFormatado = function() {
     return this.tipoProvaPerdida;
 };
 
+// 🆕 Período da prova
+AutorizacaoSchema.methods.getPeriodoProvaFormatado = function() {
+    if (!this.periodoProva) return null;
+    return this.periodoProva;
+};
+
 // ============================================
 // MÉTODOS ESTÁTICOS
 // ============================================
@@ -187,6 +201,12 @@ AutorizacaoSchema.statics.getTipoProvaPerdidaFormatado = function(doc) {
         return `Outros (${doc.tipoProvaPerdidaOutros})`;
     }
     return doc.tipoProvaPerdida;
+};
+
+// 🆕 Período da prova
+AutorizacaoSchema.statics.getPeriodoProvaFormatado = function(doc) {
+    if (!doc || !doc.periodoProva) return null;
+    return doc.periodoProva;
 };
 
 module.exports = mongoose.model('Autorizacao', AutorizacaoSchema);

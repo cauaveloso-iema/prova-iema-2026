@@ -2875,6 +2875,11 @@ function mostrarFormModulo(modulo) {
         
         const inputProvaOutros = safeGet('segundaChamadaTipoProvaOutros');
         if (inputProvaOutros) inputProvaOutros.value = '';
+
+        // 🆕 Período da prova
+        const inputPeriodo = safeGet('segundaChamadaPeriodoProva');
+        if (inputPeriodo) inputPeriodo.value = '';
+        document.querySelectorAll('#campoSegundaChamadaPeriodo .tipo-card').forEach(c => c.classList.remove('selected'));
     }
     
     const campoOutros = safeGet(`campo${P}Outros`);
@@ -2952,6 +2957,16 @@ function selecionarTipoProvaPerdida(tipo) {
     if (campoOutros) campoOutros.style.display = tipo === 'Outros' ? 'block' : 'none';
 }
 
+// 🆕 Período da prova
+function selecionarPeriodoProva(periodo) {
+    const input = safeGet('segundaChamadaPeriodoProva');
+    if (input) input.value = periodo;
+    
+    document.querySelectorAll('#campoSegundaChamadaPeriodo .tipo-card').forEach(c => c.classList.remove('selected'));
+    const card = document.querySelector(`#campoSegundaChamadaPeriodo .tipo-card[data-periodo="${periodo}"]`);
+    if (card) card.classList.add('selected');
+}
+
 // ============================================
 // REGISTRAR MÓDULO (COM ASSINATURA E INTEGRAÇÃO)
 // ============================================
@@ -2992,10 +3007,12 @@ async function registrarModulo(modulo) {
     
     let tipoProvaPerdida = null;
     let tipoProvaPerdidaOutros = '';
+    let periodoProva = null;   // 🆕
     
     if (cfg.tipo === 'segunda_chamada') {
         tipoProvaPerdida = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
         tipoProvaPerdidaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
+        periodoProva = safeGet('segundaChamadaPeriodoProva')?.value || '';   // 🆕
         
         if (!tipoProvaPerdida) {
             notificar('Informe o tipo de prova perdida', 'error');
@@ -3004,6 +3021,12 @@ async function registrarModulo(modulo) {
         
         if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
             notificar('Especifique o tipo de prova perdida', 'error');
+            return;
+        }
+
+        // 🆕
+        if (!periodoProva) {
+            notificar('Informe o período da prova (1º, 2º, 3º ou 4º Período)', 'error');
             return;
         }
     }
@@ -3028,7 +3051,6 @@ async function registrarModulo(modulo) {
         return; 
     }
     
-    // 🔥 CPF DO RESPONSÁVEL — REGRA POR TIPO
     const responsavelCPF = safeGet(`${I}ResponsavelCPF`)?.value || '';
     const cpfObrigatorio = (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada');
     const cpfPreenchido = responsavelCPF && responsavelCPF.trim() !== '';
@@ -3070,6 +3092,7 @@ async function registrarModulo(modulo) {
             periodoFaltaFim: periodoFaltaFim || undefined,
             tipoProvaPerdida: tipoProvaPerdida || undefined,
             tipoProvaPerdidaOutros: tipoProvaPerdidaOutros || undefined,
+            periodoProva: periodoProva || undefined,   // 🆕
             horarioEntrada: safeGet(`${I}HorarioEntrada`)?.value || '',
             horarioSaida: safeGet(`${I}HorarioSaida`)?.value || '',
             responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
@@ -3546,16 +3569,13 @@ async function carregarListaModulo(modulo, pagina = null) {
     const dataInicio = safeGet(`filtroLista${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`filtroLista${P}DataFim`)?.value || '';
     const tipoProvaPerdida = safeGet(`filtroLista${P}TipoProva`)?.value || '';
+    const periodoProvaFiltro = safeGet(`filtroLista${P}PeriodoProva`)?.value || ''; // 🆕
 
     let dataInicioFinal = dataInicio;
     let dataFimFinal = dataFim;
 
-    if (dataInicio && !dataFim) {
-        dataFimFinal = dataInicio;
-    }
-    if (dataFim && !dataInicio) {
-        dataInicioFinal = dataFim;
-    }
+    if (dataInicio && !dataFim) dataFimFinal = dataInicio;
+    if (dataFim && !dataInicio) dataInicioFinal = dataFim;
 
     const limit = pag.porPagina;
     let url = `/api/gestao-geral/autorizacao/listar?tipo=${cfg.tipo}&limit=${limit}&page=${pagina}`;
@@ -3565,6 +3585,8 @@ async function carregarListaModulo(modulo, pagina = null) {
     if (dataInicioFinal) url += `&dataInicio=${dataInicioFinal}`;
     if (dataFimFinal) url += `&dataFim=${dataFimFinal}`;
     if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
+    // 🆕
+    if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') url += `&periodoProva=${encodeURIComponent(periodoProvaFiltro)}`;
 
     if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
         url += `&filtrarPorPeriodoFalta=true`;
@@ -3577,9 +3599,7 @@ async function carregarListaModulo(modulo, pagina = null) {
         </div>`;
 
     try {
-        const r = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const r = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
 
@@ -3610,6 +3630,7 @@ async function carregarListaModulo(modulo, pagina = null) {
                             <th>Data Registro</th>
                             ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
                             ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
+                            ${mostrarTipoProva ? '<th>Período</th>' : ''}
                             <th>Aluno</th>
                             <th>Turma</th>
                             ${cabecalhoHorarios}
@@ -3628,6 +3649,9 @@ async function carregarListaModulo(modulo, pagina = null) {
                                     : ''}
                                 ${mostrarTipoProva 
                                     ? `<td><span class="badge bg-warning text-dark">${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</span></td>` 
+                                    : ''}
+                                ${mostrarTipoProva 
+                                    ? `<td><span class="badge bg-primary">${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</span></td>` 
                                     : ''}
                                 <td><strong>${escapeHTML(a.alunoNome)}</strong></td>
                                 <td>${escapeHTML(a.alunoTurma)}</td>
@@ -4021,6 +4045,16 @@ async function abrirEditarModulo(modulo, id) {
                     <input type="text" id="editModuloTipoProvaOutros" class="form-control" value="${escapeHTML(a.tipoProvaPerdidaOutros || '')}">
                 </div>
             </div>
+            <div class="mb-3">
+                <label class="form-label">Período da Prova <span class="text-danger">*</span></label>
+                <select id="editModuloPeriodoProva" class="form-select">
+                    <option value="">Selecione...</option>
+                    <option value="1º Período" ${a.periodoProva === '1º Período' ? 'selected' : ''}>1º Período</option>
+                    <option value="2º Período" ${a.periodoProva === '2º Período' ? 'selected' : ''}>2º Período</option>
+                    <option value="3º Período" ${a.periodoProva === '3º Período' ? 'selected' : ''}>3º Período</option>
+                    <option value="4º Período" ${a.periodoProva === '4º Período' ? 'selected' : ''}>4º Período</option>
+                </select>
+            </div>
         ` : '';
 
         const modalHtml = `
@@ -4190,10 +4224,12 @@ async function salvarEdicaoModulo() {
     
     let tipoProvaPerdida = null;
     let tipoProvaPerdidaOutros = '';
+    let periodoProva = null;   // 🆕
     
     if (cfg.tipo === 'segunda_chamada') {
         tipoProvaPerdida = safeGet('editModuloTipoProva')?.value || '';
         tipoProvaPerdidaOutros = safeGet('editModuloTipoProvaOutros')?.value || '';
+        periodoProva = safeGet('editModuloPeriodoProva')?.value || '';   // 🆕
         
         if (!tipoProvaPerdida) {
             notificar('Informe o tipo de prova perdida');
@@ -4202,6 +4238,12 @@ async function salvarEdicaoModulo() {
         
         if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
             notificar('Especifique o tipo de prova perdida');
+            return;
+        }
+
+        // 🆕
+        if (!periodoProva) {
+            notificar('Informe o período da prova (1º, 2º, 3º ou 4º Período)');
             return;
         }
     }
@@ -4255,6 +4297,7 @@ async function salvarEdicaoModulo() {
         if (cfg.tipo === 'segunda_chamada') {
             body.tipoProvaPerdida = tipoProvaPerdida;
             body.tipoProvaPerdidaOutros = tipoProvaPerdidaOutros;
+            body.periodoProva = periodoProva;   // 🆕
         }
 
         const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
@@ -4573,6 +4616,7 @@ async function carregarRelatorioModulo(modulo) {
     const dataInicio = safeGet(`${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`${P}DataFim`)?.value || '';
     const tipoProvaPerdida = safeGet(`${P}FiltroTipoProva`)?.value || '';
+    const periodoProvaFiltro = safeGet(`${P}FiltroPeriodoProva`)?.value || '';   // 🆕
 
     let url = '';
     if (tipo === 'geral') {
@@ -4580,6 +4624,7 @@ async function carregarRelatorioModulo(modulo) {
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
+        if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') url += `periodoProva=${encodeURIComponent(periodoProvaFiltro)}&`;
     } else if (tipo === 'turma') {
         const turma = safeGet(`${P}FiltroTurma`)?.value;
         if (!turma) { notificar('Selecione uma turma', 'warning'); return; }
@@ -4587,6 +4632,7 @@ async function carregarRelatorioModulo(modulo) {
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
+        if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') url += `periodoProva=${encodeURIComponent(periodoProvaFiltro)}&`;
     } else if (tipo === 'aluno') {
         const alunoId = safeGet(`${P}FiltroAluno`)?.value;
         if (!alunoId) { notificar('Selecione um aluno', 'warning'); return; }
@@ -4594,6 +4640,7 @@ async function carregarRelatorioModulo(modulo) {
         if (dataInicio) url += `dataInicio=${dataInicio}&`;
         if (dataFim) url += `dataFim=${dataFim}&`;
         if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}&`;
+        if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') url += `periodoProva=${encodeURIComponent(periodoProvaFiltro)}&`;
     }
 
     try {
@@ -4789,6 +4836,14 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                 </table>
             ` : ''}
             
+            ${mostrarTipoProva && (data.porPeriodoProva || []).length > 0 ? `
+                <div class="section-title">📚 Distribuição por Período da Prova</div>
+                <table>
+                    <thead><tr><th>Período</th><th style="width:120px;text-align:center;">Quantidade</th></tr></thead>
+                    <tbody>${(data.porPeriodoProva || []).map(p => `<tr><td><strong>${escapeHTML(p.periodoProva || p.label || '')}</strong></td><td style="text-align:center;">${p.count || 0}</td></tr>`).join('')}</tbody>
+                </table>
+            ` : ''}
+            
             <div class="section-title">🏫 Distribuição por Turma</div>
             <table>
                 <thead><tr><th>Turma</th><th style="width:120px;text-align:center;">Total</th><th style="width:120px;text-align:center;">Alunos</th></tr></thead>
@@ -4803,6 +4858,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                             <th>Data do Registro</th>
                             ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
                             ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
+                            ${mostrarTipoProva ? '<th>Período</th>' : ''}
                             <th>Aluno</th>
                             <th>Turma</th>
                             <th>Motivo</th>
@@ -4813,6 +4869,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                             <td>${a.dataFormatada || '-'}</td>
                             ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
                             ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
+                            ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                             <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                             <td>${escapeHTML(a.alunoTurma || '')}</td>
                             <td>${escapeHTML(a.motivoLabel || '')}</td>
@@ -4840,6 +4897,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                             <th>Data do Registro</th>
                             ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
                             ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
+                            ${mostrarTipoProva ? '<th>Período</th>' : ''}
                             <th>Aluno</th>
                             <th>Motivo</th>
                         </tr>
@@ -4849,6 +4907,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                             <td>${a.dataFormatada || '-'}</td>
                             ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
                             ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
+                            ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                             <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
                             <td>${escapeHTML(a.motivoLabel || '')}</td>
                         </tr>`).join('')}
@@ -4867,6 +4926,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         <th>Data do Registro</th>
                         ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
                         ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
+                        ${mostrarTipoProva ? '<th>Período</th>' : ''}
                         <th>Motivo</th>
                         <th>Observações</th>
                     </tr>
@@ -4876,6 +4936,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         <td>${a.dataFormatada || '-'}</td>
                         ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
                         ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
+                        ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                         <td>${escapeHTML(a.motivoLabel || '')}</td>
                         <td>${escapeHTML((a.observacoes || '').substring(0, 80))}${(a.observacoes || '').length > 80 ? '...' : ''}</td>
                     </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">Nenhum registro</td></tr>'}
@@ -4997,6 +5058,15 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             </div>
                         </div>`).join('')}</div>
                 ` : ''}
+                ${mostrarTipoProva && (data.porPeriodoProva || []).length > 0 ? `
+                    <h6 class="mt-4">Por Período da Prova</h6>
+                    <div class="row">${(data.porPeriodoProva || []).map(p => `
+                        <div class="col-md-3 mb-2">
+                            <div class="p-2" style="background:#eef2ff;border-radius:8px;">
+                                <strong>${escapeHTML(p.periodoProva || p.label)}</strong>: ${p.count}
+                            </div>
+                        </div>`).join('')}</div>
+                ` : ''}
                 <h6 class="mt-4">Por Turma</h6>
                 <div class="table-responsive">
                     <table class="table table-sm">
@@ -5055,6 +5125,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                                 <th>Data Registro</th>
                                 ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
                                 ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
+                                ${mostrarTipoProva ? '<th>Período</th>' : ''}
                                 <th>Motivo</th>
                                 <th>Observações</th>
                             </tr>
@@ -5064,6 +5135,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                                 <td>${a.dataFormatada}</td>
                                 ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
                                 ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
+                                ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                                 <td>${escapeHTML(a.motivoLabel)}</td>
                                 <td>${escapeHTML((a.observacoes || '').substring(0, 100))}</td>
                             </tr>`).join('')}
@@ -5115,6 +5187,7 @@ function exportarCSVModulo(modulo) {
     const di = safeGet(`${P}DataInicio`)?.value;
     const df = safeGet(`${P}DataFim`)?.value;
     const tipoProvaFiltro = safeGet(`${P}FiltroTipoProva`)?.value;
+    const periodoProvaFiltro = safeGet(`${P}FiltroPeriodoProva`)?.value;   // 🆕
 
     if (di) filtros.push({ label: 'Data inicial', valor: di });
     if (df) filtros.push({ label: 'Data final', valor: df });
@@ -5122,6 +5195,10 @@ function exportarCSVModulo(modulo) {
     if (data.aluno?.nome) filtros.push({ label: 'Aluno', valor: data.aluno.nome });
     if (tipoProvaFiltro && tipoProvaFiltro !== 'todos') {
         filtros.push({ label: 'Tipo de Prova', valor: tipoProvaFiltro });
+    }
+    // 🆕
+    if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') {
+        filtros.push({ label: 'Período da Prova', valor: periodoProvaFiltro });
     }
 
     // ---------- Colunas ----------
@@ -5150,6 +5227,11 @@ function exportarCSVModulo(modulo) {
         colunas.push({
             label: 'Tipo de Prova Perdida',
             format: (a) => a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || ''
+        });
+        // 🆕
+        colunas.push({
+            label: 'Período da Prova',
+            format: (a) => a.periodoProvaFormatado || a.periodoProva || ''
         });
     }
 
@@ -5352,6 +5434,19 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
         `;
     }
     
+    // 🆕 Período da Prova
+    let periodoProvaHTML = '';
+    if (mostrarTipoProva && a.periodoProva) {
+        periodoProvaHTML = `
+            <div class="section-title">📚 Período da Prova</div>
+            <div class="motivo-box" style="background: #eef2ff; border-color: #1e3c72;">
+                <p style="margin: 0; font-size: 11pt; text-align: center;">
+                    <strong>${escapeHTML(a.periodoProva)}</strong>
+                </p>
+            </div>
+        `;
+    }
+    
     const assinaturaHTML = a.assinaturaBase64 
         ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura" style="max-height:12mm;max-width:100%;object-fit:contain;position:relative;z-index:1;">`
         : '';
@@ -5449,6 +5544,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
         
         ${periodoFaltaHTML}
         ${tipoProvaHTML}
+        ${periodoProvaHTML}
         
         <div class="section-title">📌 Dados do Registro</div>
         <div class="info-grid">
@@ -5690,6 +5786,7 @@ function montarSnapshotAtendimento(modulo) {
     
     const tipoProva = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
     const tipoProvaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
+    const periodoProva = safeGet('segundaChamadaPeriodoProva')?.value || '';   // 🆕
     
     return {
         alunoId: aluno.id,
@@ -5707,6 +5804,7 @@ function montarSnapshotAtendimento(modulo) {
         tipoProvaPerdidaFormatado: cfg.tipo === 'segunda_chamada' 
             ? (tipoProva === 'Outros' && tipoProvaOutros ? `Outros (${tipoProvaOutros})` : tipoProva)
             : null,
+        periodoProva: cfg.tipo === 'segunda_chamada' ? periodoProva : null,   // 🆕
         responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
         responsavelCPF: safeGet(`${I}ResponsavelCPF`)?.value || '',
         observacoes: safeGet(`${I}Observacoes`)?.value || '',
@@ -7376,6 +7474,7 @@ window.confirmarInternoNotif = confirmarInternoNotif;
 window.exportarPDFAtrasos = exportarPDFAtrasos;
 window.exportarPDFModulo = exportarPDFModulo;
 window.getPrefixoInput = getPrefixoInput;
+window.selecionarPeriodoProva = selecionarPeriodoProva;
 
 // 🆕 Formatação de CPF e Telefone
 window.formatarCPF = formatarCPF;

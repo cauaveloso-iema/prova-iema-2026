@@ -1711,6 +1711,26 @@ class SetorPedagogico {
                                 </div>
                             </div>
 
+                            <!-- 🆕 PERÍODO DA PROVA -->
+                            <div class="mb-3" id="campoSegundaChamadaPeriodo">
+                                <label class="form-label">Período da Prova <span class="text-danger">*</span></label>
+                                <div class="tipos-tarefa-grid">
+                                    <div class="tipo-card" data-periodo="1º Período" onclick="setorPedagogico.selecionarPeriodoProva('1º Período')">
+                                        <i class="fas fa-1"></i><span>1º Período</span>
+                                    </div>
+                                    <div class="tipo-card" data-periodo="2º Período" onclick="setorPedagogico.selecionarPeriodoProva('2º Período')">
+                                        <i class="fas fa-2"></i><span>2º Período</span>
+                                    </div>
+                                    <div class="tipo-card" data-periodo="3º Período" onclick="setorPedagogico.selecionarPeriodoProva('3º Período')">
+                                        <i class="fas fa-3"></i><span>3º Período</span>
+                                    </div>
+                                    <div class="tipo-card" data-periodo="4º Período" onclick="setorPedagogico.selecionarPeriodoProva('4º Período')">
+                                        <i class="fas fa-4"></i><span>4º Período</span>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="segundaChamadaPeriodoProva">
+                            </div>
+
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Horário (opcional)</label>
@@ -1948,6 +1968,17 @@ class SetorPedagogico {
                                         <option value="Outros">Outros</option>
                                     </select>
                                 </div>
+                                <!-- 🆕 Filtro Período -->
+                                <div class="col-md-3">
+                                    <label class="form-label">Período da Prova</label>
+                                    <select id="SegundaChamadaFiltroPeriodoProva" class="form-select">
+                                        <option value="todos">Todos os períodos</option>
+                                        <option value="1º Período">1º Período</option>
+                                        <option value="2º Período">2º Período</option>
+                                        <option value="3º Período">3º Período</option>
+                                        <option value="4º Período">4º Período</option>
+                                    </select>
+                                </div>
                                 <div class="col-md-2">
                                     <label class="form-label">&nbsp;</label>
                                     <button class="btn btn-primary w-100" onclick="setorPedagogico.carregarRelatorioSegundaChamada()">
@@ -2007,6 +2038,16 @@ class SetorPedagogico {
                                     <option value="AV4">AV4</option>
                                     <option value="Recuperação">Recuperação</option>
                                     <option value="Outros">Outros</option>
+                                </select>
+                            </div>
+                            <!-- 🆕 Filtro Período da lista -->
+                            <div class="col-md-2">
+                                <select id="filtroListaSegundaChamadaPeriodoProva" class="form-select form-select-sm">
+                                    <option value="">Todos os períodos</option>
+                                    <option value="1º Período">1º Período</option>
+                                    <option value="2º Período">2º Período</option>
+                                    <option value="3º Período">3º Período</option>
+                                    <option value="4º Período">4º Período</option>
                                 </select>
                             </div>
                             <div class="col-md-1">
@@ -2092,9 +2133,11 @@ class SetorPedagogico {
             };
         }
 
+        // 🆕 Incluindo filtroListaSegundaChamadaPeriodoProva
         ['filtroListaSegundaChamadaTurma', 'filtroListaSegundaChamadaMotivo',
-         'filtroListaSegundaChamadaTipoProva',
-         'filtroListaSegundaChamadaDataInicio', 'filtroListaSegundaChamadaDataFim'].forEach(id => {
+        'filtroListaSegundaChamadaTipoProva',
+        'filtroListaSegundaChamadaPeriodoProva',
+        'filtroListaSegundaChamadaDataInicio', 'filtroListaSegundaChamadaDataFim'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.onchange = () => this.carregarListaSegundaChamada();
         });
@@ -2384,7 +2427,8 @@ class SetorPedagogico {
             'segundaChamadaPeriodoFaltaInicio',
             'segundaChamadaPeriodoFaltaFim',
             'segundaChamadaTipoProvaPerdida',
-            'segundaChamadaTipoProvaOutros'
+            'segundaChamadaTipoProvaOutros',
+            'segundaChamadaPeriodoProva'   // 🆕
         ].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
@@ -2394,6 +2438,8 @@ class SetorPedagogico {
         if (campoOutros) campoOutros.style.display = 'none';
 
         document.querySelectorAll('#campoSegundaChamadaTipoProva .tipo-card').forEach(c => c.classList.remove('selected'));
+        // 🆕
+        document.querySelectorAll('#campoSegundaChamadaPeriodo .tipo-card').forEach(c => c.classList.remove('selected'));
 
         const campoProvaOutros = document.getElementById('campoSegundaChamadaTipoProvaOutros');
         if (campoProvaOutros) campoProvaOutros.style.display = 'none';
@@ -2456,6 +2502,16 @@ class SetorPedagogico {
 
         const campoOutros = document.getElementById('campoSegundaChamadaTipoProvaOutros');
         if (campoOutros) campoOutros.style.display = tipo === 'Outros' ? 'block' : 'none';
+    }
+
+    // 🆕 Período da Prova
+    selecionarPeriodoProva(periodo) {
+        const input = document.getElementById('segundaChamadaPeriodoProva');
+        if (input) input.value = periodo;
+
+        document.querySelectorAll('#campoSegundaChamadaPeriodo .tipo-card').forEach(c => c.classList.remove('selected'));
+        const card = document.querySelector(`#campoSegundaChamadaPeriodo .tipo-card[data-periodo="${periodo}"]`);
+        if (card) card.classList.add('selected');
     }
 
     inicializarAssinaturaSegundaChamada() {
@@ -2665,6 +2721,7 @@ class SetorPedagogico {
 
         const tipoProvaPerdida = document.getElementById('segundaChamadaTipoProvaPerdida')?.value || '';
         const tipoProvaPerdidaOutros = document.getElementById('segundaChamadaTipoProvaOutros')?.value || '';
+        const periodoProva = document.getElementById('segundaChamadaPeriodoProva')?.value || '';   // 🆕
 
         if (!tipoProvaPerdida) {
             this.showToast('⚠️ Informe o tipo de prova perdida', 'error');
@@ -2672,6 +2729,12 @@ class SetorPedagogico {
         }
         if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
             this.showToast('⚠️ Especifique o tipo de prova perdida', 'error');
+            return;
+        }
+
+        // 🆕 Validação do período
+        if (!periodoProva) {
+            this.showToast('⚠️ Informe o período da prova (1º, 2º, 3º ou 4º Período)', 'error');
             return;
         }
 
@@ -2724,6 +2787,7 @@ class SetorPedagogico {
                 periodoFaltaFim: periodoFaltaFim || periodoFaltaInicio,
                 tipoProvaPerdida: tipoProvaPerdida,
                 tipoProvaPerdidaOutros: tipoProvaPerdida === 'Outros' ? tipoProvaPerdidaOutros.trim() : undefined,
+                periodoProva: periodoProva,   // 🆕
                 horarioEntrada: document.getElementById('segundaChamadaHorario')?.value || '08:00',
                 horarioSaida: document.getElementById('segundaChamadaHorario')?.value || '08:00',
                 responsavelNome: document.getElementById('segundaChamadaResponsavelNome')?.value || '',
@@ -2801,7 +2865,7 @@ class SetorPedagogico {
                     responsavelNome: document.getElementById('segundaChamadaResponsavelNome')?.value || '',
                     responsavelCPF: responsavelCPF,
                     responsavelTelefone: document.getElementById('segundaChamadaResponsavelTelefone')?.value || '',
-                    observacoes: `Gerada automaticamente a partir de 2ª Chamada (${tipoProvaPerdida}) | ${document.getElementById('segundaChamadaObservacoes')?.value || ''}`.trim(),
+                    observacoes: `Gerada automaticamente a partir de 2ª Chamada (${tipoProvaPerdida} - ${periodoProva}) | ${document.getElementById('segundaChamadaObservacoes')?.value || ''}`.trim(),
                     origemTipo: 'segunda_chamada',
                     origemId: d.autorizacao.id,
                     assinaturaBase64: assinaturaBase64
@@ -2893,6 +2957,7 @@ class SetorPedagogico {
         const turma = document.getElementById('filtroListaSegundaChamadaTurma')?.value || '';
         const motivo = document.getElementById('filtroListaSegundaChamadaMotivo')?.value || '';
         const tipoProvaPerdida = document.getElementById('filtroListaSegundaChamadaTipoProva')?.value || '';
+        const periodoProvaFiltro = document.getElementById('filtroListaSegundaChamadaPeriodoProva')?.value || ''; // 🆕
         const dataInicio = document.getElementById('filtroListaSegundaChamadaDataInicio')?.value || '';
         const dataFim = document.getElementById('filtroListaSegundaChamadaDataFim')?.value || '';
 
@@ -2908,6 +2973,10 @@ class SetorPedagogico {
         if (turma) url += `&turma=${encodeURIComponent(turma)}`;
         if (motivo) url += `&motivo=${encodeURIComponent(motivo)}`;
         if (tipoProvaPerdida) url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
+        // 🆕
+        if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') {
+            url += `&periodoProva=${encodeURIComponent(periodoProvaFiltro)}`;
+        }
         if (dataInicioFinal) url += `&dataInicio=${dataInicioFinal}`;
         if (dataFimFinal) url += `&dataFim=${dataFimFinal}`;
         url += `&filtrarPorPeriodoFalta=true`;
@@ -2958,6 +3027,7 @@ class SetorPedagogico {
                                 <th>Data Registro</th>
                                 <th>Período da Falta</th>
                                 <th>Tipo de Prova</th>
+                                <th>Período</th>
                                 <th>Aluno</th>
                                 <th>Turma</th>
                                 <th>Horário</th>
@@ -2973,6 +3043,7 @@ class SetorPedagogico {
                                     <td>${a.dataFormatada}</td>
                                     <td><strong style="color: #1e3c72;">${a.periodoFaltaFormatado || '-'}</strong></td>
                                     <td><span class="badge bg-warning text-dark">${this.escapeHtml(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</span></td>
+                                    <td><span class="badge bg-primary">${this.escapeHtml(a.periodoProvaFormatado || a.periodoProva || '-')}</span></td>
                                     <td><strong>${this.escapeHtml(a.alunoNome)}</strong></td>
                                     <td>${this.escapeHtml(a.alunoTurma)}</td>
                                     <td>${a.horarioEntrada || '-'}</td>
@@ -3017,7 +3088,7 @@ class SetorPedagogico {
                     </button>
                 </div>`;
         }
-    }
+}
 
     renderizarPaginacao2Chamada() {
         const { paginaAtual, totalPaginas, totalRegistros } = this.paginacao2Chamada;
@@ -3244,6 +3315,7 @@ class SetorPedagogico {
 
         const tipoProva = document.getElementById('segundaChamadaTipoProvaPerdida')?.value || '';
         const tipoProvaOutros = document.getElementById('segundaChamadaTipoProvaOutros')?.value || '';
+        const periodoProva = document.getElementById('segundaChamadaPeriodoProva')?.value || '';   // 🆕
 
         return {
             alunoId: aluno.id,
@@ -3261,6 +3333,7 @@ class SetorPedagogico {
             tipoProvaPerdidaFormatado: tipoProva === 'Outros' && tipoProvaOutros
                 ? `Outros (${tipoProvaOutros})`
                 : tipoProva,
+            periodoProva: periodoProva || null,   // 🆕
             responsavelNome: document.getElementById('segundaChamadaResponsavelNome')?.value || '',
             responsavelCPF: document.getElementById('segundaChamadaResponsavelCPF')?.value || '',
             observacoes: document.getElementById('segundaChamadaObservacoes')?.value || '',
@@ -3715,6 +3788,18 @@ class SetorPedagogico {
                         <div>
                             <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Falta</span>
                             <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoFaltaFormatado)}</span>
+                        </div>
+                    ` : ''}
+                    ${d.tipoProvaPerdidaFormatado ? `
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Tipo de Prova</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.tipoProvaPerdidaFormatado)}</span>
+                        </div>
+                    ` : ''}
+                    ${d.periodoProva ? `
+                        <div>
+                            <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Período da Prova</span>
+                            <span style="font-size: 14px; color: #1e293b; font-weight: 500;">${this.escapeHtml(d.periodoProva)}</span>
                         </div>
                     ` : ''}
                     ${d.responsavelNome ? `
@@ -4437,6 +4522,20 @@ class SetorPedagogico {
                     </table>
                 ` : ''}
 
+                ${(data.porPeriodoProva || []).length > 0 ? `
+                    <div class="section-title">DISTRIBUIÇÃO POR PERÍODO DA PROVA</div>
+                    <table>
+                        <thead><tr><th>Período</th><th style="width:80px;text-align:center;">Qtd</th></tr></thead>
+                        <tbody>
+                            ${(data.porPeriodoProva || []).map(p => `
+                                <tr>
+                                    <td>${this.escapeHtml(p.periodoProva || p.label || '')}</td>
+                                    <td style="text-align:center;">${p.count || 0}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
+
                 <div class="section-title">DISTRIBUIÇÃO POR TURMA</div>
                 <table>
                     <thead><tr><th>Turma</th><th style="width:70px;text-align:center;">Total</th><th style="width:70px;text-align:center;">Alunos</th></tr></thead>
@@ -4457,6 +4556,7 @@ class SetorPedagogico {
                             <th>Data Registro</th>
                             <th>Período da Falta</th>
                             <th>Tipo de Prova</th>
+                            <th>Período</th>
                             <th>Aluno</th>
                             <th>Turma</th>
                             <th>Motivo</th>
@@ -4468,10 +4568,11 @@ class SetorPedagogico {
                                 <td>${a.dataFormatada || '-'}</td>
                                 <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
                                 <td>${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</td>
+                                <td>${a.periodoProvaFormatado || a.periodoProva || '-'}</td>
                                 <td>${this.escapeHtml(a.alunoNome || '')}</td>
                                 <td>${this.escapeHtml(a.alunoTurma || '')}</td>
                                 <td>${this.escapeHtml(a.motivoLabel || '')}</td>
-                            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;">Nenhum registro</td></tr>'}
+                            </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;">Nenhum registro</td></tr>'}
                     </tbody>
                 </table>
             `;
@@ -4501,6 +4602,7 @@ class SetorPedagogico {
                                 <th>Data Registro</th>
                                 <th>Período da Falta</th>
                                 <th>Tipo de Prova</th>
+                                <th>Período</th>
                                 <th>Aluno</th>
                                 <th>Motivo</th>
                             </tr>
@@ -4511,6 +4613,7 @@ class SetorPedagogico {
                                     <td>${a.dataFormatada || '-'}</td>
                                     <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
                                     <td>${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</td>
+                                    <td>${a.periodoProvaFormatado || a.periodoProva || '-'}</td>
                                     <td>${this.escapeHtml(a.alunoNome || '')}</td>
                                     <td>${this.escapeHtml(a.motivoLabel || '')}</td>
                                 </tr>`).join('')}
@@ -4529,6 +4632,7 @@ class SetorPedagogico {
                             <th>Data Registro</th>
                             <th>Período da Falta</th>
                             <th>Tipo de Prova</th>
+                            <th>Período</th>
                             <th>Motivo</th>
                             <th>Observações</th>
                         </tr>
@@ -4539,9 +4643,10 @@ class SetorPedagogico {
                                 <td>${a.dataFormatada || '-'}</td>
                                 <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
                                 <td>${a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-'}</td>
+                                <td>${a.periodoProvaFormatado || a.periodoProva || '-'}</td>
                                 <td>${this.escapeHtml(a.motivoLabel || '')}</td>
                                 <td>${this.escapeHtml((a.observacoes || '').substring(0, 100))}</td>
-                            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;">Nenhum registro</td></tr>'}
+                            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;">Nenhum registro</td></tr>'}
                     </tbody>
                 </table>
             `;
@@ -4815,6 +4920,15 @@ class SetorPedagogico {
                                 </div>
                             </div>`).join('')}</div>
                     ` : ''}
+                    ${(data.porPeriodoProva || []).length > 0 ? `
+                        <h6 class="mt-4">Por Período da Prova</h6>
+                        <div class="row">${(data.porPeriodoProva || []).map(p => `
+                            <div class="col-md-3 mb-2">
+                                <div class="p-2" style="background:#eef2ff;border-radius:8px;">
+                                    <strong>${this.escapeHtml(p.periodoProva || p.label)}</strong>: ${p.count}
+                                </div>
+                            </div>`).join('')}</div>
+                    ` : ''}
                     <h6 class="mt-4">Por Turma</h6>
                     <div class="table-responsive">
                         <table class="table table-sm">
@@ -4858,6 +4972,7 @@ class SetorPedagogico {
                                     <th>Data Registro</th>
                                     <th>Período da Falta</th>
                                     <th>Tipo de Prova</th>
+                                    <th>Período</th>
                                     <th>Motivo</th>
                                     <th>Observações</th>
                                 </tr>
@@ -4867,6 +4982,7 @@ class SetorPedagogico {
                                     <td>${a.dataFormatada}</td>
                                     <td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>
                                     <td>${this.escapeHtml(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>
+                                    <td>${this.escapeHtml(a.periodoProvaFormatado || a.periodoProva || '-')}</td>
                                     <td>${this.escapeHtml(a.motivoLabel)}</td>
                                     <td>${this.escapeHtml((a.observacoes || '').substring(0, 100))}</td>
                                 </tr>`).join('')}
@@ -4926,6 +5042,10 @@ class SetorPedagogico {
                 label: 'Tipo de Prova Perdida',
                 format: (a) => a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || ''
             },
+            {
+                label: 'Período da Prova',   // 🆕
+                format: (a) => a.periodoProvaFormatado || a.periodoProva || ''
+            },
             { label: 'Aluno', format: (a) => a.alunoNome || '' },
             { label: 'Matrícula', format: (a) => a.alunoMatricula || '' },
             { label: 'Turma', format: (a) => a.alunoTurma || data.turma || '' },
@@ -4946,10 +5066,15 @@ class SetorPedagogico {
         const dI = document.getElementById('SegundaChamadaDataInicio')?.value;
         const dF = document.getElementById('SegundaChamadaDataFim')?.value;
         const tipoProva = document.getElementById('SegundaChamadaFiltroTipoProva')?.value;
+        const periodoProva = document.getElementById('SegundaChamadaFiltroPeriodoProva')?.value;   // 🆕
+
         if (dI) filtros.push({ label: 'Data inicial', valor: dI });
         if (dF) filtros.push({ label: 'Data final', valor: dF });
         if (tipoProva && tipoProva !== 'todos') {
             filtros.push({ label: 'Tipo de Prova', valor: tipoProva });
+        }
+        if (periodoProva && periodoProva !== 'todos') {
+            filtros.push({ label: 'Período da Prova', valor: periodoProva });
         }
         if (data.turma) filtros.push({ label: 'Turma', valor: data.turma });
         if (data.aluno?.nome) filtros.push({ label: 'Aluno', valor: data.aluno.nome });
@@ -5061,6 +5186,19 @@ class SetorPedagogico {
                 <div class="motivo-box" style="background: #fef3c7; border-color: #f59e0b;">
                     <p style="margin: 0; font-size: 11pt; text-align: center;">
                         <strong>${textoProva}</strong>
+                    </p>
+                </div>
+            `;
+        }
+
+        // 🆕 Período da Prova
+        let periodoProvaHTML = '';
+        if (a.periodoProva) {
+            periodoProvaHTML = `
+                <div class="section-title">📚 Período da Prova</div>
+                <div class="motivo-box" style="background: #eef2ff; border-color: #1e3c72;">
+                    <p style="margin: 0; font-size: 11pt; text-align: center;">
+                        <strong>${this.escapeHtml(a.periodoProva)}</strong>
                     </p>
                 </div>
             `;
@@ -5361,6 +5499,7 @@ class SetorPedagogico {
 
             ${periodoFaltaHTML}
             ${tipoProvaHTML}
+            ${periodoProvaHTML}
 
             <div class="section-title">📌 Dados do Registro</div>
             <div class="info-grid">
@@ -5547,6 +5686,18 @@ class SetorPedagogico {
                                     </div>
                                 </div>
 
+                                <!-- 🆕 PERÍODO DA PROVA -->
+                                <div class="mb-3">
+                                    <label class="form-label">Período da Prova <span class="text-danger">*</span></label>
+                                    <select id="edit2ChamadaPeriodoProva" class="form-select">
+                                        <option value="">Selecione...</option>
+                                        <option value="1º Período" ${a.periodoProva === '1º Período' ? 'selected' : ''}>1º Período</option>
+                                        <option value="2º Período" ${a.periodoProva === '2º Período' ? 'selected' : ''}>2º Período</option>
+                                        <option value="3º Período" ${a.periodoProva === '3º Período' ? 'selected' : ''}>3º Período</option>
+                                        <option value="4º Período" ${a.periodoProva === '4º Período' ? 'selected' : ''}>4º Período</option>
+                                    </select>
+                                </div>
+
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Horário</label>
@@ -5634,6 +5785,7 @@ class SetorPedagogico {
         const motivoOutros = document.getElementById('edit2ChamadaMotivoOutros')?.value || '';
         const tipoProvaPerdida = document.getElementById('edit2ChamadaTipoProva')?.value || '';
         const tipoProvaPerdidaOutros = document.getElementById('edit2ChamadaTipoProvaOutros')?.value || '';
+        const periodoProva = document.getElementById('edit2ChamadaPeriodoProva')?.value || '';   // 🆕
         const responsavelNome = document.getElementById('edit2ChamadaResponsavelNome')?.value || '';
         const responsavelCPF = document.getElementById('edit2ChamadaResponsavelCPF')?.value || '';
         const responsavelTelefone = document.getElementById('edit2ChamadaResponsavelTelefone')?.value || '';
@@ -5654,6 +5806,12 @@ class SetorPedagogico {
 
         if (tipoProvaPerdida === 'Outros' && !tipoProvaPerdidaOutros.trim()) {
             this.showToast('Especifique o tipo de prova perdida', 'warning');
+            return;
+        }
+
+        // 🆕 Validação do período
+        if (!periodoProva) {
+            this.showToast('Informe o período da prova (1º, 2º, 3º ou 4º Período)', 'warning');
             return;
         }
 
@@ -5697,6 +5855,7 @@ class SetorPedagogico {
                     motivoOutros,
                     tipoProvaPerdida,
                     tipoProvaPerdidaOutros,
+                    periodoProva,   // 🆕
                     responsavelNome,
                     responsavelCPF,
                     responsavelTelefone,
