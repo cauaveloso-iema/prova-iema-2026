@@ -8,11 +8,9 @@
   function base64urlToBuffer(base64url) {
     if (!base64url) return new ArrayBuffer(0);
     if (base64url instanceof ArrayBuffer) return base64url;
-    
     if (ArrayBuffer.isView(base64url)) {
       return base64url.buffer.slice(base64url.byteOffset, base64url.byteOffset + base64url.byteLength);
     }
-    
     if (typeof base64url === 'string') {
       const pad = base64url.length % 4;
       const padded = base64url.replace(/-/g, '+').replace(/_/g, '/') + (pad ? '='.repeat(4 - pad) : '');
@@ -21,7 +19,6 @@
       for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
       return buf.buffer;
     }
-    
     return new Uint8Array(base64url).buffer;
   }
 
@@ -34,10 +31,7 @@
     for (let i = 0; i < bytes.length; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
-    return btoa(binary)
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
   async function isPlatformAuthenticatorAvailable() {
@@ -51,6 +45,27 @@
 
   function isSupported() {
     return !!(window.PublicKeyCredential && navigator.credentials);
+  }
+
+  // Erro específico para "sem autenticador de plataforma configurado"
+  function makeNoAuthenticatorError(msg) {
+    const err = new Error(msg || 'Este dispositivo não tem leitor biométrico configurado.');
+    err.codigo = 'NO_AUTHENTICATOR';
+    return err;
+  }
+
+  // Wrapper com timeout para operações WebAuthn que podem ficar pendentes
+  function withTimeout(promise, ms, timeoutMsg) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new Error(timeoutMsg || 'Tempo esgotado aguardando o autenticador.');
+        err.codigo = 'TIMEOUT';
+        err.name = 'TimeoutError';
+        reject(err);
+      }, ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }
 
   function marcarDispositivoComBiometria(userId) {
@@ -77,8 +92,17 @@
   }
 
   async function registrarBiometria(authToken, deviceLabel) {
-    if (!isSupported()) throw new Error('Este dispositivo não suporta biometria');
-    if (!(await isPlatformAuthenticatorAvailable())) throw new Error('Este dispositivo não tem leitor biométrico');
+    if (!isSupported()) throw makeNoAuthenticatorError('Este navegador não suporta biometria.');
+
+    // ⚠️ Revalida: se não há autenticador de plataforma, lança NO_AUTHENTICATOR imediatamente.
+    //    O chamador trata esse código exibindo a mensagem e destravando o botão.
+    const temPlataforma = await isPlatformAuthenticatorAvailable();
+    if (!temPlataforma) {
+      throw makeNoAuthenticatorError(
+        'Windows Hello (ou Touch ID/Face ID) não está configurado neste dispositivo. ' +
+        'Ative o Windows Hello em Configurações → Contas → Opções de entrada, ou clique em "Pular".'
+      );
+    }
 
     const optRes = await fetch('/api/auth/webauthn/register-options', {
       method: 'POST',
@@ -95,16 +119,21 @@
       excludeCredentials: (options.excludeCredentials || []).map(c => ({ ...c, id: base64urlToBuffer(c.id) }))
     };
 
-    const credential = await navigator.credentials.create({ publicKey });
+    // Timeout de 90s: se o prompt não aparecer ou o usuário não interagir,
+    // a promise é rejeitada e o botão é destravado pelo chamador.
+    const credential = await withTimeout(
+      navigator.credentials.create({ publicKey }),
+      90000,
+      'A janela de biometria não respondeu. Verifique se o Windows Hello está configurado ou clique em "Pular".'
+    );
     if (!credential) throw new Error('Registro cancelado');
 
-    // ⚠️ CORREÇÃO: o id DEVE ser a versão Base64URL do rawId
     const credentialIdB64 = bufferToBase64url(credential.rawId);
 
     const payload = {
       credential: {
-        id: credentialIdB64,          // <-- id em Base64URL
-        rawId: credentialIdB64,       // <-- rawId idem (mesmo valor)
+        id: credentialIdB64,
+        rawId: credentialIdB64,
         type: credential.type,
         response: {
           clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
@@ -134,7 +163,14 @@
   }
 
   async function autenticarComBiometria(tempToken2FA) {
-    if (!isSupported()) throw new Error('Este dispositivo não suporta biometria');
+    if (!isSupported()) throw makeNoAuthenticatorError('Este navegador não suporta biometria.');
+
+    const temPlataforma = await isPlatformAuthenticatorAvailable();
+    if (!temPlataforma) {
+      throw makeNoAuthenticatorError(
+        'Windows Hello (ou Touch ID/Face ID) não está configurado neste dispositivo.'
+      );
+    }
 
     const optRes = await fetch('/api/auth/webauthn/authenticate-options', {
       method: 'POST',
@@ -154,10 +190,13 @@
       allowCredentials: (options.allowCredentials || []).map(c => ({ ...c, id: base64urlToBuffer(c.id) }))
     };
 
-    const assertion = await navigator.credentials.get({ publicKey });
+    const assertion = await withTimeout(
+      navigator.credentials.get({ publicKey }),
+      90000,
+      'A janela de biometria não respondeu.'
+    );
     if (!assertion) throw new Error('Autenticação cancelada');
 
-    // ⚠️ CORREÇÃO: mesma coisa aqui — id = rawId em Base64URL
     const assertionIdB64 = bufferToBase64url(assertion.rawId);
 
     const payload = {

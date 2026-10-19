@@ -528,6 +528,7 @@
                         this.showAlert(err.message || 'Falha na biometria. Use um código.', 'error');
                     }
 
+                    // ⚠️ DESTRAVA o botão para o usuário tentar de novo ou usar código
                     btn.innerHTML = originalHTML;
                     btn.disabled = false;
                 }
@@ -542,8 +543,10 @@
                 if (!window.WebAuthnClient) return;
                 if (!WebAuthnClient.isSupported()) return;
 
-                const temAutenticador = await WebAuthnClient.isPlatformAuthenticatorAvailable();
-                if (!temAutenticador) return;
+                // ⚠️ Mesmo sem autenticador de plataforma, ainda mostramos o box
+                //    para o usuário poder clicar em "Pular". A checagem real
+                //    acontece dentro de registrarBiometria (que lança NO_AUTHENTICATOR).
+                //    Assim o fluxo é o mesmo do celular: box aparece, usuário decide.
 
                 let userId = null;
                 try {
@@ -552,6 +555,7 @@
                 } catch (_) {}
 
                 if (userId && WebAuthnClient.dispositivoTemBiometriaRegistrada(userId)) {
+                    // Já tem biometria registrada neste dispositivo — pula direto
                     return;
                 }
 
@@ -563,7 +567,7 @@
                     'phoneInfo', 'timer', 'firstTimeBadge', 'biometricSection',
                     'appDownloadLink', 'resendBtn', 'backBtn'
                 ];
-                
+
                 elementsToHide.forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.classList.add('hidden');
@@ -571,13 +575,13 @@
 
                 const tabs = document.querySelector('.tabs');
                 if (tabs) tabs.classList.add('hidden');
-                
+
                 const forms = document.querySelectorAll('form');
                 forms.forEach(f => f.classList.add('hidden'));
-                
+
                 const backupSection = document.querySelector('.backup-section');
                 if (backupSection) backupSection.classList.add('hidden');
-                
+
                 const footer = document.querySelector('.footer');
                 if (footer) footer.classList.add('hidden');
 
@@ -611,7 +615,7 @@
                     const btn = e.currentTarget;
                     const pularBtn = document.getElementById('btnPularBio');
                     const orig = btn.innerHTML;
-                    
+
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ativando...';
                     btn.disabled = true;
                     if (pularBtn) pularBtn.disabled = true;
@@ -627,22 +631,35 @@
 
                         this.showAlert('✅ Biometria ativada!', 'success');
                         box.innerHTML = '<strong style="color:#166534;text-align:center;display:block;padding:10px;"><i class="fas fa-check-circle"></i> Biometria ativada com sucesso!</strong>';
-                        
+
                         setTimeout(() => this.redirecionarFinal(), 1500);
                     } catch (err) {
                         console.error('❌ Erro ao registrar biometria:', err);
-                        
-                        // 🔥 CORREÇÃO: Destravar o botão e avisar o usuário em caso de falha
+
+                        // ⚠️ NOVO: sem autenticador / timeout → mensagem clara, MAS NÃO PULA
+                        //    (o usuário escolhe "Pular" ou tenta de novo).
                         let msg = 'Erro ao ativar biometria.';
-                        if (err.name === 'NotAllowedError') {
-                            msg = 'Biometria cancelada ou não configurada no dispositivo.';
+
+                        if (err.codigo === 'NO_AUTHENTICATOR') {
+                            msg = '⚠️ Windows Hello (ou Touch ID/Face ID) não está configurado neste dispositivo. ' +
+                                  'Ative o Windows Hello em Configurações → Contas → Opções de entrada, ' +
+                                  'ou clique em "Pular e ir para o painel".';
+                        } else if (err.codigo === 'TIMEOUT' || err.name === 'TimeoutError') {
+                            msg = '⏱️ A janela de biometria não respondeu. ' +
+                                  'Verifique se o Windows Hello está configurado ou clique em "Pular e ir para o painel".';
+                        } else if (err.name === 'NotAllowedError') {
+                            msg = 'Biometria cancelada ou não configurada no dispositivo. ' +
+                                  'Clique em "Pular e ir para o painel" para continuar.';
                         } else if (err.name === 'NotSupportedError') {
-                            msg = 'Este dispositivo não possui sensor de biometria compatível.';
+                            msg = 'Este dispositivo não possui sensor de biometria compatível. ' +
+                                  'Clique em "Pular e ir para o painel" para continuar.';
                         } else if (err.message) {
                             msg = err.message;
                         }
-                        
-                        this.showAlert(msg + ' Use "Pular" para continuar.', 'error');
+
+                        this.showAlert(msg, 'error');
+
+                        // ⚠️ DESTRAVA os botões: o usuário decide (tentar de novo ou pular)
                         btn.innerHTML = orig;
                         btn.disabled = false;
                         if (pularBtn) pularBtn.disabled = false;
@@ -811,7 +828,7 @@
 
                         // 🔥 Limpa a tela e oferece biometria
                         await this.oferecerCadastroBiometria(data.token, data.user?.role);
-                        
+
                     } else {
                         throw new Error(data.error || 'Código inválido');
                     }
@@ -1192,7 +1209,7 @@
                 `;
                 const msgEl = document.getElementById('alertMessageText');
                 if (msgEl) msgEl.textContent = String(message);
-                setTimeout(() => { container.innerHTML = ''; }, 4000);
+                setTimeout(() => { container.innerHTML = ''; }, 6000);
             }
         }
 
