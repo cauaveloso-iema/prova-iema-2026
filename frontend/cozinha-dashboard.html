@@ -150,7 +150,7 @@
                 <div class="stat-card">
                     <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                     <div class="stat-number" id="pessoasQueComeram">-</div>
-                    <div class="stat-label">Comeram hoje</div>
+                    <div class="stat-label">Comeram no período</div>
                     <small id="percentualGeral" class="text-muted"></small>
                 </div>
             </div>
@@ -166,7 +166,7 @@
                 <div class="stat-card">
                     <i class="fas fa-utensils fa-2x text-danger mb-2"></i>
                     <div class="stat-number" id="refeicaoHoje">-</div>
-                    <div class="stat-label">Refeições Servidas Hoje</div>
+                    <div class="stat-label">Refeições no período</div>
                 </div>
             </div>
         </div>
@@ -314,6 +314,7 @@
                                 <option value="ontem">Ontem</option>
                                 <option value="semana">Últimos 7 dias</option>
                                 <option value="mes">Últimos 30 dias</option>
+                                <option value="ano">Último ano</option>
                                 <option value="todos">Todo o período</option>
                             </select>
                         </div>
@@ -352,7 +353,7 @@
                                 <th>Turma</th>
                                 <th class="text-center">Total</th>
                                 <th class="text-center">Dizem que comem</th>
-                                <th class="text-center">Comeram hoje</th>
+                                <th class="text-center">Comeram</th>
                                 <th class="text-center">Taxa Adesão</th>
                                 <th class="text-center">Faltantes</th>
                                 <th class="text-center">Situação</th>
@@ -548,7 +549,7 @@
 
     <div id="modalFaltantes" class="modal-custom">
         <div class="modal-content-custom">
-            <h4><i class="fas fa-users-slash"></i> Pessoas que não comeram hoje</h4>
+            <h4><i class="fas fa-users-slash"></i> Pessoas que não comeram no período</h4>
             <p id="modalInfo" class="text-muted"></p>
             <div id="listaFaltantes" class="lista-faltantes">
                 <div class="loading-spinner"></div> Carregando...
@@ -684,6 +685,10 @@
             if (typeof window.carregarAnaliseTurmas === 'function') {
                 window.carregarAnaliseTurmas(filtros);
             }
+            // Recarrega os cards do dashboard respeitando o período
+            if (typeof window.carregarDashboard === 'function') {
+                window.carregarDashboard();
+            }
         };
 
         window.limparFiltrosAnalise = function() {
@@ -696,6 +701,9 @@
             renderBadgesFiltrosAnalise(null);
             if (typeof window.carregarAnaliseTurmas === 'function') {
                 window.carregarAnaliseTurmas(null);
+            }
+            if (typeof window.carregarDashboard === 'function') {
+                window.carregarDashboard();
             }
         };
 

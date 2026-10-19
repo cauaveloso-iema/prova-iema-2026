@@ -18,8 +18,8 @@ class MonitoramentoTempoReal {
     this.ultimosRegistrosOriginais = [];
     this.refeicoesPorTurmaOriginais = [];
 
-    this.filtroRegistroData = 'hoje';
-    this.filtroRegistroTurma = 'todas';
+    this.filtroRegistroData = 'semana';
+    this.filtroTurmasData = 'semana';
     this.filtroRegistroRefeicao = 'todas';
 
     this.filtroTurmasData = 'hoje';

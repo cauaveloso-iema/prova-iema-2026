@@ -1,12 +1,12 @@
 // ============================================================================
 // COZINHA - EducaPleno
 // ============================================================================
-// Rotas incluídas:
+// Rotas:
 //   - GET    /api/cozinha/health
-//   - GET    /api/cozinha/dashboard
+//   - GET    /api/cozinha/dashboard        (aceita ?data, ?dataInicio/?dataFim, ?todos)
 //   - GET    /api/cozinha/turmas-cursos
-//   - GET    /api/cozinha/analise-turmas
-//   - GET    /api/cozinha/faltantes
+//   - GET    /api/cozinha/analise-turmas   (aceita ?data, ?dataInicio/?dataFim, ?todos, ?ano)
+//   - GET    /api/cozinha/faltantes        (aceita ?data, ?dataInicio/?dataFim, ?todos)
 //   - GET    /api/cozinha/analise-semanal
 //   - GET    /api/cozinha/registro/:id
 //   - PUT    /api/cozinha/registro/:id
@@ -55,37 +55,117 @@ const verificarCozinha = (req, res, next) => {
 // ============================================
 // HELPERS DE PERÍODO
 // ============================================
-function resolverPeriodo(periodo) {
-  const hoje = new Date();
-  switch (periodo) {
-    case 'hoje':   return { dataUnica: hoje.toISOString().split('T')[0] };
-    case 'ontem': {
-      const d = new Date(hoje); d.setDate(d.getDate() - 1);
-      return { dataUnica: d.toISOString().split('T')[0] };
-    }
-    case 'semana': {
-      const d = new Date(hoje); d.setDate(d.getDate() - 7);
-      return { dataInicio: d.toISOString().split('T')[0] };
-    }
-    case 'mes': {
-      const d = new Date(hoje); d.setMonth(d.getMonth() - 1);
-      return { dataInicio: d.toISOString().split('T')[0] };
-    }
-    case 'todos': default: return null;
-  }
+function isDataValida(s) {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-function filtroDataMongo(periodo) {
-  const p = resolverPeriodo(periodo);
-  if (!p) return {};
-  const hoje = new Date().toISOString().split('T')[0];
-  if (p.dataUnica) return { data: p.dataUnica };
-  if (p.dataInicio) return { data: { $gte: p.dataInicio, $lte: hoje } };
-  return {};
+/**
+ * Constrói o filtro de data para o Mongo + metadados amigáveis.
+ * Aceita (em ordem de prioridade):
+ *  1) ?todos=true|1                  → sem filtro
+ *  2) ?dataInicio + ?dataFim         → intervalo
+ *  3) ?data=YYYY-MM-DD               → dia único
+ *  4) ?periodo=hoje|ontem|semana|mes|ano|todos
+ *  5) (nenhum)                       → hoje
+ */
+function montarFiltroData(query) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const iso = (d) => d.toISOString().split('T')[0];
+  const hojeStr = iso(hoje);
+
+  const { data, dataInicio, dataFim, todos, periodo } = query;
+
+  // 1) TODOS
+  if (todos === 'true' || todos === '1' || periodo === 'todos') {
+    return {
+      filtro: {},
+      infoData: { tipo: 'todos', dataAtual: hojeStr, dataVisualizada: null, isHistorico: true, label: 'Todo o período' }
+    };
+  }
+
+  // 2) INTERVALO EXPLÍCITO
+  if (dataInicio || dataFim) {
+    const ini = isDataValida(dataInicio) ? dataInicio : '1900-01-01';
+    const fim = isDataValida(dataFim) ? dataFim : hojeStr;
+    return {
+      filtro: { data: { $gte: ini, $lte: fim } },
+      infoData: {
+        tipo: 'intervalo',
+        dataAtual: hojeStr,
+        dataInicio: ini,
+        dataFim: fim,
+        isHistorico: true,
+        label: `${new Date(ini + 'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(fim + 'T00:00:00').toLocaleDateString('pt-BR')}`
+      }
+    };
+  }
+
+  // 3) DIA ESPECÍFICO
+  if (data) {
+    if (!isDataValida(data)) {
+      const err = new Error('Formato de data inválido. Use YYYY-MM-DD');
+      err.status = 400;
+      throw err;
+    }
+    return {
+      filtro: { data },
+      infoData: {
+        tipo: 'dia',
+        dataAtual: hojeStr,
+        dataVisualizada: data,
+        isHistorico: data !== hojeStr,
+        label: new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')
+      }
+    };
+  }
+
+  // 4) PERÍODO NOMEADO
+  if (periodo) {
+    const p = periodo;
+    if (p === 'hoje') {
+      return {
+        filtro: { data: hojeStr },
+        infoData: { tipo: 'hoje', dataAtual: hojeStr, dataVisualizada: hojeStr, isHistorico: false, label: 'Hoje' }
+      };
+    }
+    if (p === 'ontem') {
+      const d = new Date(hoje); d.setDate(d.getDate() - 1);
+      const ds = iso(d);
+      return {
+        filtro: { data: ds },
+        infoData: { tipo: 'dia', dataAtual: hojeStr, dataVisualizada: ds, isHistorico: true, label: new Date(ds + 'T00:00:00').toLocaleDateString('pt-BR') }
+      };
+    }
+    if (p === 'semana' || p === 'mes' || p === 'ano') {
+      const d = new Date(hoje);
+      if (p === 'semana') d.setDate(d.getDate() - 7);
+      else if (p === 'mes') d.setMonth(d.getMonth() - 1);
+      else d.setFullYear(d.getFullYear() - 1);
+      const ini = iso(d);
+      return {
+        filtro: { data: { $gte: ini, $lte: hojeStr } },
+        infoData: {
+          tipo: 'intervalo',
+          dataAtual: hojeStr,
+          dataInicio: ini,
+          dataFim: hojeStr,
+          isHistorico: true,
+          label: `${new Date(ini + 'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(hojeStr + 'T00:00:00').toLocaleDateString('pt-BR')}`
+        }
+      };
+    }
+  }
+
+  // 5) PADRÃO: HOJE
+  return {
+    filtro: { data: hojeStr },
+    infoData: { tipo: 'hoje', dataAtual: hojeStr, dataVisualizada: hojeStr, isHistorico: false, label: 'Hoje' }
+  };
 }
 
 // ============================================
-// 🏥 HEALTH
+// HEALTH
 // ============================================
 router.get('/health', (req, res) => {
   res.json({
@@ -98,7 +178,7 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// 🆕 TURMAS + CURSOS
+// TURMAS + CURSOS
 // ============================================
 router.get('/turmas-cursos', authenticateToken, verificarCozinha, async (req, res) => {
   try {
@@ -124,10 +204,12 @@ router.get('/turmas-cursos', authenticateToken, verificarCozinha, async (req, re
 });
 
 // ============================================
-// 📊 DASHBOARD
+// DASHBOARD (aceita data / intervalo / todos / periodo)
 // ============================================
 router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) => {
   try {
+    const { filtro: filtroData, infoData } = montarFiltroData(req.query);
+
     const hoje = new Date().toISOString().split('T')[0];
     const horaAtual = new Date().getHours();
 
@@ -152,24 +234,26 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     perfis.total = perfis.sempre + perfis.as_vezes + perfis.nunca + perfis.nao_informado;
     perfis.que_comem = perfis.sempre + perfis.as_vezes;
 
-    const refeicoesHoje = await Refeicao.find({ data: hoje });
+    // Registros do PERÍODO selecionado
+    const refeicoesPeriodo = await Refeicao.find(filtroData);
     const registrosReais = {
-      manha: refeicoesHoje.filter(r => r.tipoRefeicao === 'manha').length,
-      almoco: refeicoesHoje.filter(r => r.tipoRefeicao === 'almoco').length,
-      tarde: refeicoesHoje.filter(r => r.tipoRefeicao === 'tarde').length,
-      total: refeicoesHoje.length,
-      pessoasUnicas: new Set(refeicoesHoje.map(r => r.alunoId.toString())).size
+      manha: refeicoesPeriodo.filter(r => r.tipoRefeicao === 'manha').length,
+      almoco: refeicoesPeriodo.filter(r => r.tipoRefeicao === 'almoco').length,
+      tarde: refeicoesPeriodo.filter(r => r.tipoRefeicao === 'tarde').length,
+      total: refeicoesPeriodo.length,
+      pessoasUnicas: new Set(refeicoesPeriodo.map(r => r.alunoId?.toString()).filter(Boolean)).size
     };
 
     const usuariosQueDisseram = await User.find({
       ativo: true, perfilAlimentar: { $in: ['sempre', 'as_vezes'] }
     }).select('_id nome perfilAlimentar');
 
-    const usuariosQueComeram = new Set(refeicoesHoje.map(r => r.alunoId.toString()));
+    const usuariosQueComeram = new Set(
+      refeicoesPeriodo.map(r => r.alunoId?.toString()).filter(Boolean)
+    );
 
     let aderentes = 0, faltantes = 0;
     const faltantesLista = [];
-
     for (const u of usuariosQueDisseram) {
       if (usuariosQueComeram.has(u._id.toString())) {
         aderentes++;
@@ -182,6 +266,7 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     const taxaAdesao = usuariosQueDisseram.length > 0
       ? (aderentes / usuariosQueDisseram.length) * 100 : 0;
 
+    // Análise por turma do PERÍODO
     const turmas = await User.distinct('turma', {
       role: 'aluno', ativo: true, turma: { $nin: [null, ''] }
     });
@@ -196,28 +281,26 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
         a.perfilAlimentar === 'sempre' || a.perfilAlimentar === 'as_vezes'
       ).length;
 
-      const comeramHoje = alunosTurma.filter(a =>
+      const comeramPeriodo = alunosTurma.filter(a =>
         usuariosQueComeram.has(a._id.toString())
       ).length;
 
-      const taxaTurma = dizemQueComem > 0 ? (comeramHoje / dizemQueComem) * 100 : 0;
-
-      const cursosTurma = Array.from(new Set(
-        alunosTurma.map(a => a.curso).filter(Boolean)
-      ));
+      const taxaTurma = dizemQueComem > 0 ? (comeramPeriodo / dizemQueComem) * 100 : 0;
+      const cursosTurma = Array.from(new Set(alunosTurma.map(a => a.curso).filter(Boolean)));
 
       analisePorTurma.push({
         turma,
         cursos: cursosTurma,
         totalAlunos: alunosTurma.length,
         dizemQueComem,
-        comeramHoje,
+        comeramHoje: comeramPeriodo,
         taxaAdesao: Math.round(taxaTurma),
-        faltantes: dizemQueComem - comeramHoje
+        faltantes: dizemQueComem - comeramPeriodo
       });
     }
     analisePorTurma.sort((a, b) => a.taxaAdesao - b.taxaAdesao);
 
+    // Média histórica (sempre baseada em "hoje - 7*i", independente do período)
     const dataAtual = new Date(hoje);
     const datasHist = [];
     for (let i = 1; i <= 4; i++) {
@@ -249,18 +332,18 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     previsao.tarde.kg = Math.ceil(previsao.tarde.pessoas * peso * 1.1);
 
     const insights = [];
-    if (taxaAdesao < 50) {
+    if (taxaAdesao < 50 && registrosReais.total > 0) {
       insights.push({
         tipo: 'warning',
         titulo: '⚠️ Baixa adesão às refeições',
-        mensagem: `Apenas ${Math.round(taxaAdesao)}% das pessoas que disseram que comem realmente vieram.`,
+        mensagem: `Apenas ${Math.round(taxaAdesao)}% das pessoas que disseram que comem realmente vieram (${infoData.label}).`,
         acao: 'Conversar com coordenação de pátio'
       });
     } else if (taxaAdesao > 80) {
       insights.push({
         tipo: 'success',
         titulo: '✅ Alta adesão às refeições',
-        mensagem: `${Math.round(taxaAdesao)}% das pessoas que disseram que comem realmente vieram.`,
+        mensagem: `${Math.round(taxaAdesao)}% das pessoas que disseram que comem realmente vieram (${infoData.label}).`,
         acao: 'Manter o padrão atual'
       });
     }
@@ -276,9 +359,17 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     if (faltantesLista.length > 10) {
       insights.push({
         tipo: 'info',
-        titulo: '👤 Pessoas que não vieram hoje',
-        mensagem: `${faltantesLista.length} pessoas que disseram que comeriam não vieram hoje.`,
+        titulo: '👤 Pessoas que não vieram no período',
+        mensagem: `${faltantesLista.length} pessoas que disseram que comeriam não vieram (${infoData.label}).`,
         acao: 'Verificar se estão presentes na escola'
+      });
+    }
+    if (infoData.isHistorico) {
+      insights.push({
+        tipo: 'info',
+        titulo: '📅 Visualizando dados históricos',
+        mensagem: `Você está visualizando dados de ${infoData.label}.`,
+        acao: 'Use os filtros para mudar o período ou voltar para hoje'
       });
     }
 
@@ -289,21 +380,32 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
     };
 
     res.json({
-      success: true, data: hoje, horaAtual, refeicaoAtual,
-      perfis, registrosReais,
+      success: true,
+      data: hoje,
+      dataFiltro: infoData.dataVisualizada || null,
+      infoData,
+      horaAtual,
+      refeicaoAtual,
+      perfis,
+      registrosReais,
       analiseAdesao: {
         totalQueDisseramQueComem: usuariosQueDisseram.length,
-        compareceram: aderentes, faltaram: faltantes,
+        compareceram: aderentes,
+        faltaram: faltantes,
         taxaAdesao: Math.round(taxaAdesao),
         faltantesLista: faltantesLista.slice(0, 10)
       },
-      analisePorTurma, previsao, mediaHistorica, tendencia, insights,
+      analisePorTurma,
+      previsao,
+      mediaHistorica,
+      tendencia,
+      insights,
       sugestaoAtual: (() => {
         if (!refeicaoAtual) return { mensagem: 'Fora do horário de refeição', acao: 'Prepare-se para o próximo horário' };
         const p = previsao[refeicaoAtual];
         const r = registrosReais[refeicaoAtual];
         if (r > 0) {
-          const pct = (r / p.pessoas) * 100;
+          const pct = (p.pessoas > 0) ? (r / p.pessoas) * 100 : 0;
           if (pct > 110) return { mensagem: `⚠️ Demanda ${Math.round(pct - 100)}% acima`, acao: 'Prepare comida extra' };
           if (pct < 70) return { mensagem: `📉 Demanda ${Math.round(100 - pct)}% abaixo`, acao: 'Reduza o preparo' };
           return { mensagem: `✅ Demanda dentro do esperado`, acao: 'Continue' };
@@ -315,34 +417,31 @@ router.get('/dashboard', authenticateToken, verificarCozinha, async (req, res) =
 
   } catch (error) {
     logger.error('❌ Erro no dashboard da cozinha:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// 🆕 ANÁLISE POR TURMA COM FILTROS + META
+// ANÁLISE POR TURMA COM FILTROS + META
 // ============================================
 router.get('/analise-turmas', authenticateToken, verificarCozinha, async (req, res) => {
   try {
-    const {
-      turma: filtroTurma,
-      curso: filtroCurso,
-      periodo = 'hoje',
-      refeicao: filtroRefeicao
-    } = req.query;
+    const { turma: filtroTurma, curso: filtroCurso, refeicao: filtroRefeicao } = req.query;
+
+    // Aceita ?periodo= ou ?data= ou ?dataInicio/?dataFim ou ?todos=
+    const { filtro: filtroData, infoData } = montarFiltroData(req.query);
 
     const filtroAluno = { role: 'aluno', ativo: true };
     if (filtroTurma && filtroTurma !== 'todas') filtroAluno.turma = filtroTurma;
     if (filtroCurso && filtroCurso !== 'todos') filtroAluno.curso = filtroCurso;
 
-    const filtroRefeicaoMongo = {};
+    const filtroRefeicaoMongo = { ...filtroData };
     if (filtroRefeicao && filtroRefeicao !== 'todas') {
       filtroRefeicaoMongo.tipoRefeicao = filtroRefeicao;
     }
-    Object.assign(filtroRefeicaoMongo, filtroDataMongo(periodo));
 
     const refeicoesFiltradas = await Refeicao.find(filtroRefeicaoMongo);
-    const alunosQueComeram = new Set(refeicoesFiltradas.map(r => r.alunoId.toString()));
+    const alunosQueComeram = new Set(refeicoesFiltradas.map(r => r.alunoId?.toString()).filter(Boolean));
 
     let listaTurmas;
     if (filtroTurma && filtroTurma !== 'todas') {
@@ -369,24 +468,21 @@ router.get('/analise-turmas', authenticateToken, verificarCozinha, async (req, r
         a.perfilAlimentar === 'sempre' || a.perfilAlimentar === 'as_vezes'
       ).length;
 
-      const comeramHoje = alunosTurma.filter(a =>
+      const comeram = alunosTurma.filter(a =>
         alunosQueComeram.has(a._id.toString())
       ).length;
 
-      const taxaTurma = dizemQueComem > 0 ? (comeramHoje / dizemQueComem) * 100 : 0;
-
-      const cursosTurma = Array.from(new Set(
-        alunosTurma.map(a => a.curso).filter(Boolean)
-      ));
+      const taxaTurma = dizemQueComem > 0 ? (comeram / dizemQueComem) * 100 : 0;
+      const cursosTurma = Array.from(new Set(alunosTurma.map(a => a.curso).filter(Boolean)));
 
       analisePorTurma.push({
         turma,
         cursos: cursosTurma,
         totalAlunos: alunosTurma.length,
         dizemQueComem,
-        comeramHoje,
+        comeramHoje: comeram,
         taxaAdesao: Math.round(taxaTurma),
-        faltantes: dizemQueComem - comeramHoje
+        faltantes: dizemQueComem - comeram
       });
     }
 
@@ -400,10 +496,15 @@ router.get('/analise-turmas', authenticateToken, verificarCozinha, async (req, r
 
     res.json({
       success: true,
+      infoData,
       filtrosAplicados: {
         turma: filtroTurma || 'todas',
         curso: filtroCurso || 'todos',
-        periodo,
+        periodo: req.query.periodo || null,
+        data: req.query.data || null,
+        dataInicio: req.query.dataInicio || null,
+        dataFim: req.query.dataFim || null,
+        todos: req.query.todos === 'true' || req.query.todos === '1',
         refeicao: filtroRefeicao || 'todas'
       },
       total: analisePorTurma.length,
@@ -412,23 +513,24 @@ router.get('/analise-turmas', authenticateToken, verificarCozinha, async (req, r
         totalAlunosNoFiltro: totalAlunos,
         totalQueDisseramComer: totalDizemQueComem,
         totalQueComeram: totalComeram,
-        taxaAdesaoGeral: taxaGeral
+        taxaAdesaoGeral: taxaGeral,
+        totalRegistrosNoPeriodo: refeicoesFiltradas.length
       }
     });
 
   } catch (error) {
     logger.error('❌ Erro em /analise-turmas:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// 📊 FALTANTES
+// FALTANTES (aceita data única, intervalo e todos)
 // ============================================
 router.get('/faltantes', authenticateToken, verificarCozinha, async (req, res) => {
   try {
-    const { data, turma } = req.query;
-    const dataConsulta = data || new Date().toISOString().split('T')[0];
+    const { turma } = req.query;
+    const { filtro: filtroData, infoData } = montarFiltroData(req.query);
 
     let query = { ativo: true, perfilAlimentar: { $in: ['sempre', 'as_vezes'] } };
     if (turma) query.turma = turma;
@@ -436,14 +538,16 @@ router.get('/faltantes', authenticateToken, verificarCozinha, async (req, res) =
     const usuariosQueDisseram = await User.find(query)
       .select('_id nome turma perfilAlimentar refeicoesQueParticipa');
 
-    const refeicoes = await Refeicao.find({ data: dataConsulta });
-    const quemComeu = new Set(refeicoes.map(r => r.alunoId.toString()));
+    const refeicoes = await Refeicao.find(filtroData);
+    const quemComeu = new Set(refeicoes.map(r => r.alunoId?.toString()).filter(Boolean));
 
     const faltantes = [];
     for (const u of usuariosQueDisseram) {
       if (!quemComeu.has(u._id.toString())) {
         faltantes.push({
-          id: u._id, nome: u.nome, turma: u.turma || 'N/A',
+          id: u._id,
+          nome: u.nome,
+          turma: u.turma || 'N/A',
           perfil: u.perfilAlimentar,
           refeicoesQueParticipa: u.refeicoesQueParticipa || []
         });
@@ -452,7 +556,7 @@ router.get('/faltantes', authenticateToken, verificarCozinha, async (req, res) =
 
     res.json({
       success: true,
-      data: dataConsulta,
+      infoData,
       turma: turma || 'Todas',
       totalQueDisseramQueComem: usuariosQueDisseram.length,
       totalQueComeram: quemComeu.size,
@@ -462,12 +566,12 @@ router.get('/faltantes', authenticateToken, verificarCozinha, async (req, res) =
 
   } catch (error) {
     logger.error('❌ Erro ao listar faltantes:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
 // ============================================
-// 📊 ANÁLISE SEMANAL
+// ANÁLISE SEMANAL
 // ============================================
 router.get('/analise-semanal', authenticateToken, verificarCozinha, async (req, res) => {
   try {
@@ -524,7 +628,7 @@ router.get('/analise-semanal', authenticateToken, verificarCozinha, async (req, 
 });
 
 // ============================================
-// 📋 REGISTRO :id — GET / PUT / DELETE
+// REGISTRO :id — GET / PUT / DELETE
 // ============================================
 router.get('/registro/:id', authenticateToken, verificarCozinha, async (req, res) => {
   try {

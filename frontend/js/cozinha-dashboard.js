@@ -178,11 +178,25 @@ function atualizarRelogio() {
 }
 
 // ============================================
+// 📅 HELPER DE PERÍODO PARA O DASHBOARD
+// ============================================
+function periodoParaQuery(periodo) {
+    if (!periodo || periodo === 'hoje') return {};
+    if (periodo === 'todos') return { todos: 'true' };
+    return { periodo };
+}
+
+// ============================================
 // 📊 DASHBOARD
 // ============================================
 async function carregarDashboard() {
     try {
-        const response = await fetch('/api/cozinha/dashboard', {
+        const filtros = lerFiltrosAnalise();
+        const periodoAtual = filtros?.periodo || 'hoje';
+        const qs = new URLSearchParams(periodoParaQuery(periodoAtual)).toString();
+        const url = '/api/cozinha/dashboard' + (qs ? `?${qs}` : '');
+
+        const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -199,14 +213,16 @@ async function carregarDashboard() {
                 if (el) el.innerHTML = v;
             };
 
-            setTxt('totalPessoas',    data.perfis?.total || 0);
+            const labelPeriodo = data.infoData?.label || 'Hoje';
+
+            setTxt('totalPessoas', data.perfis?.total || 0);
             setHTML('detalhePerfis',
                 `👍 ${data.perfis?.sempre || 0} | ⚠️ ${data.perfis?.as_vezes || 0} | ❌ ${data.perfis?.nunca || 0}`);
             setTxt('pessoasQueComeram', data.registrosReais?.pessoasUnicas || 0);
             setHTML('percentualGeral',
-                `${data.analiseAdesao?.taxaAdesao || 0}% do esperado`);
-            setTxt('taxaAdesao',       `${data.analiseAdesao?.taxaAdesao || 0}%`);
-            setTxt('refeicaoHoje',     data.registrosReais?.total || 0);
+                `${data.analiseAdesao?.taxaAdesao || 0}% — ${labelPeriodo}`);
+            setTxt('taxaAdesao', `${data.analiseAdesao?.taxaAdesao || 0}%`);
+            setTxt('refeicaoHoje', data.registrosReais?.total || 0);
 
             setTxt('contManha', data.registrosReais?.manha || 0);
             setTxt('contAlmoco', data.registrosReais?.almoco || 0);
@@ -279,7 +295,6 @@ async function carregarDashboard() {
             if (data.analisePorTurma && data.analisePorTurma.length > 0) {
                 analiseTurmasCompleta = data.analisePorTurma;
                 window.turmasData = data.analisePorTurma;
-                const filtros = lerFiltrosAnalise();
                 if (filtros) {
                     await carregarAnaliseTurmas(filtros);
                 } else {
@@ -290,6 +305,9 @@ async function carregarDashboard() {
             } else {
                 const tbody = document.getElementById('tabelaTurmas');
                 if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum dado de turma disponível</td></tr>';
+                analiseTurmasCompleta = [];
+                analiseTurmasFiltrada = [];
+                atualizarGraficoTurmas([]);
             }
 
             await carregarFeedbacks();
@@ -314,8 +332,11 @@ async function carregarAnaliseTurmas(filtros) {
         if (filtros) {
             if (filtros.turma && filtros.turma !== 'todas')       qs.append('turma', filtros.turma);
             if (filtros.curso && filtros.curso !== 'todos')       qs.append('curso', filtros.curso);
-            if (filtros.periodo && filtros.periodo !== 'hoje')    qs.append('periodo', filtros.periodo);
             if (filtros.refeicao && filtros.refeicao !== 'todas') qs.append('refeicao', filtros.refeicao);
+            if (filtros.periodo && filtros.periodo !== 'hoje') {
+                if (filtros.periodo === 'todos') qs.append('todos', 'true');
+                else qs.append('periodo', filtros.periodo);
+            }
         }
         const url = '/api/cozinha/analise-turmas' + (qs.toString() ? `?${qs}` : '');
 
@@ -408,7 +429,7 @@ function atualizarGraficoTurmas(turmas) {
             labels: turmas.map(t => t.turma),
             datasets: [
                 { label: 'Dizem que comem', data: turmas.map(t => t.dizemQueComem || 0), backgroundColor: '#f59e0b', borderRadius: 8 },
-                { label: 'Comeram hoje', data: turmas.map(t => t.comeramHoje || 0), backgroundColor: '#10b981', borderRadius: 8 }
+                { label: 'Comeram', data: turmas.map(t => t.comeramHoje || 0), backgroundColor: '#10b981', borderRadius: 8 }
             ]
         },
         options: {
@@ -546,6 +567,8 @@ function atualizarListaFeedbacks() {
         else if (f.nota >= 2.5) notaClass = 'media';
         else notaClass = 'baixa';
 
+        const notaNum = parseInt(f.nota) || 0;
+
         return `
             <tr>
                 <td>${escapeHTML(f.alunoNome || '')}${f.anonimo ? ' <i class="fas fa-user-secret text-muted" title="Anônimo"></i>' : ''}</td>
@@ -555,7 +578,7 @@ function atualizarListaFeedbacks() {
                     f.tipoRefeicao === 'manha' ? '🌅 Manhã' :
                     f.tipoRefeicao === 'almoco' ? '🍽️ Almoço' : '🌙 Tarde'
                 }</span></td>
-                <td><span class="nota-badge ${notaClass}">${'★'.repeat(f.nota)}${'☆'.repeat(5 - f.nota)}</span></td>
+                <td><span class="nota-badge ${notaClass}">${'★'.repeat(notaNum)}${'☆'.repeat(5 - notaNum)}</span></td>
                 <td><small>${f.comentario
                     ? (f.comentario.length > 60
                         ? escapeHTML(f.comentario.substring(0, 60)) + '...'
@@ -784,18 +807,19 @@ function gerarHTMLRelatorioCozinha(data) {
     const dataRef = new Date().toLocaleDateString('pt-BR', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
+    const labelPeriodo = data.infoData?.label || 'Hoje';
 
     const statsHTML = `
         <div class="stats">
             <div class="stat"><div class="stat-value">${data.perfis?.total || 0}</div><div class="stat-label">Total de Pessoas</div></div>
-            <div class="stat"><div class="stat-value">${data.registrosReais?.pessoasUnicas || 0}</div><div class="stat-label">Comeram Hoje</div></div>
+            <div class="stat"><div class="stat-value">${data.registrosReais?.pessoasUnicas || 0}</div><div class="stat-label">Comeram (${labelPeriodo})</div></div>
             <div class="stat"><div class="stat-value">${data.analiseAdesao?.taxaAdesao || 0}%</div><div class="stat-label">Taxa de Adesão</div></div>
             <div class="stat"><div class="stat-value">${data.registrosReais?.total || 0}</div><div class="stat-label">Refeições Servidas</div></div>
         </div>
     `;
 
     const refeicoesHTML = `
-        <div class="section-title">🍽️ Contagem por Refeição</div>
+        <div class="section-title">🍽️ Contagem por Refeição (${labelPeriodo})</div>
         <table>
             <thead><tr><th>Refeição</th><th style="width:120px;text-align:center;">Previsto</th><th style="width:120px;text-align:center;">Servido</th><th style="width:120px;text-align:center;">Previsão (kg)</th></tr></thead>
             <tbody>
@@ -822,14 +846,14 @@ function gerarHTMLRelatorioCozinha(data) {
     let turmasHTML = '';
     if (data.analisePorTurma && data.analisePorTurma.length > 0) {
         turmasHTML = `
-            <div class="section-title">🏫 Análise Detalhada por Turma</div>
+            <div class="section-title">🏫 Análise Detalhada por Turma (${labelPeriodo})</div>
             <table>
                 <thead>
                     <tr>
                         <th>Turma</th>
                         <th style="width:80px;text-align:center;">Total</th>
                         <th style="width:100px;text-align:center;">Dizem que Comem</th>
-                        <th style="width:100px;text-align:center;">Comeram Hoje</th>
+                        <th style="width:100px;text-align:center;">Comeram</th>
                         <th style="width:80px;text-align:center;">Adesão</th>
                         <th style="width:80px;text-align:center;">Faltantes</th>
                         <th style="width:100px;text-align:center;">Situação</th>
@@ -925,7 +949,7 @@ function gerarHTMLRelatorioCozinha(data) {
             <p>Sistema de Monitoramento — Cozinha Inteligente</p>
         </div>
         <div class="titulo">🍽️ Relatório de Monitoramento de Refeições</div>
-        <div class="subtitulo">${dataRef}</div>
+        <div class="subtitulo">${dataRef} — Período: ${labelPeriodo}</div>
         ${statsHTML}
         ${refeicoesHTML}
         ${perfisHTML}
@@ -965,7 +989,7 @@ function exportarCSV() {
         return;
     }
 
-    let csv = "Turma,Total Alunos,Dizem que Comem,Comeram Hoje,Taxa Adesão,Faltantes\n";
+    let csv = "Turma,Total Alunos,Dizem que Comem,Comeram,Taxa Adesão,Faltantes\n";
     dados.forEach(t => {
         csv += `"${(t.turma || '').replace(/"/g, '""')}",${t.totalAlunos || 0},${t.dizemQueComem || 0},${t.comeramHoje || 0},${t.taxaAdesao || 0},${t.faltantes || 0}\n`;
     });
@@ -999,14 +1023,19 @@ async function abrirModalFaltantes() {
     listaDiv.innerHTML = '<div class="loading-spinner"></div> Carregando...';
 
     try {
-        const hoje = new Date().toISOString().split('T')[0];
-        const response = await fetch(`/api/cozinha/faltantes?data=${hoje}`, {
+        const filtros = lerFiltrosAnalise();
+        const periodo = filtros?.periodo || 'hoje';
+        const qs = new URLSearchParams(periodoParaQuery(periodo)).toString();
+        const url = `/api/cozinha/faltantes${qs ? '?' + qs : ''}`;
+
+        const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
 
         if (data.success && data.faltantes && data.faltantes.length > 0) {
-            if (infoSpan) infoSpan.innerHTML = `${data.totalFaltantes} pessoas que disseram que comeriam mas não vieram hoje.`;
+            const labelPeriodo = data.infoData?.label || 'hoje';
+            if (infoSpan) infoSpan.innerHTML = `${data.totalFaltantes} pessoas que disseram que comeriam mas não vieram (${labelPeriodo}).`;
             listaDiv.innerHTML = data.faltantes.map(f => `
                 <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
                     <div>
@@ -1018,7 +1047,7 @@ async function abrirModalFaltantes() {
                 </div>
             `).join('');
         } else {
-            if (infoSpan) infoSpan.innerHTML = 'Nenhum faltante hoje! Todos que disseram que comeriam vieram. 🎉';
+            if (infoSpan) infoSpan.innerHTML = 'Nenhum faltante no período! Todos que disseram que comeriam vieram. 🎉';
             listaDiv.innerHTML = '<div class="text-center text-success py-3"><i class="fas fa-check-circle fa-2x"></i><br>Todos compareceram!</div>';
         }
     } catch (error) {
