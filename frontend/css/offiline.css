@@ -1,77 +1,196 @@
+/* ==========================================================================
+   ESTILOS DA PÁGINA OFFLINE - EDUCAPLENO
+   ========================================================================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 body {
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     text-align: center;
-    padding: 40px;
-    background: #f5f5f5;
+    padding: 20px;
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    margin: 0;
 }
+
+/* Card Principal */
 .offline-card {
     background: white;
-    border-radius: 20px;
-    padding: 40px;
-    max-width: 400px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-radius: 24px;
+    padding: 40px 30px;
+    width: 100%;
+    max-width: 440px;
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.02);
+    animation: slideUp 0.4s ease-out;
 }
+
+/* Ícone */
 .icon {
-    font-size: 80px;
+    font-size: 72px;
     color: #f59e0b;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    transition: color 0.4s ease, transform 0.4s ease;
 }
-h1 { color: #1f2937; margin-bottom: 10px; }
-p { color: #6b7280; margin-bottom: 30px; }
+
+/* Títulos e Parágrafos */
+h1 {
+    color: #1f2937;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    transition: color 0.3s;
+}
+
+p {
+    color: #6b7280;
+    font-size: 15px;
+    line-height: 1.5;
+    margin-bottom: 30px;
+}
+
+/* Container dos Botões */
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 30px;
+}
+
+/* Botões */
 .btn {
     background: #4f46e5;
     color: white;
     border: none;
-    padding: 12px 30px;
-    border-radius: 30px;
-    font-size: 16px;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
     text-decoration: none;
-    display: inline-block;
-    margin: 5px 0;
-    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    width: 100%;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
 }
-.btn:hover { background: #4338ca; }
+
+.btn:hover {
+    background: #4338ca;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn i {
+    font-size: 16px;
+}
+
+/* Botão de Sucesso (Voltar) */
 .btn-success {
     background: #10b981;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
-.btn-success:hover { background: #059669; }
+
+.btn-success:hover {
+    background: #059669;
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+}
+
+/* Dicas */
 .dicas {
-    margin-top: 30px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
     padding: 20px;
-    background: #f9fafb;
-    border-radius: 10px;
     text-align: left;
 }
-.dicas h3 { margin-top: 0; color: #374151; }
-.dicas ul { padding-left: 20px; color: #6b7280; }
-.dicas li { margin: 10px 0; }
-.status-online {
-    color: #10b981;
-    font-weight: bold;
+
+.dicas h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    color: #334155;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
+
+.dicas ul {
+    padding-left: 20px;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.dicas li {
+    margin: 8px 0;
+}
+
+/* Barra de Progresso */
 .progress-bar {
     width: 100%;
-    height: 4px;
+    height: 6px;
     background: #e5e7eb;
-    border-radius: 2px;
-    margin: 20px 0;
+    border-radius: 999px;
+    margin: 0 0 10px 0;
     overflow: hidden;
     display: none;
 }
+
 .progress-fill {
     height: 100%;
-    background: #4f46e5;
+    background: #10b981;
     width: 0%;
-    transition: width 0.3s;
+    border-radius: 999px;
+    transition: width 1s linear;
 }
+
+/* Contador */
 .countdown {
-    font-size: 14px;
-    color: #6b7280;
-    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #10b981;
+    margin-top: 5px;
+    margin-bottom: 15px;
+    height: 18px;
+}
+
+/* Animação do Card */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsividade para telas muito pequenas */
+@media (max-width: 400px) {
+    .offline-card {
+        padding: 30px 20px;
+        border-radius: 20px;
+    }
+    
+    .icon {
+        font-size: 60px;
+    }
+    
+    h1 {
+        font-size: 20px;
+    }
 }
