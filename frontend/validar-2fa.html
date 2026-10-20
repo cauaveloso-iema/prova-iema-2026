@@ -352,6 +352,21 @@
 
     <script>
         // ============================================================
+        // 🔥 DETECÇÃO DE AMBIENTE: WebView do Kodular/CustomWebView
+        // Se for WebView, desativa WebAuthn (que trava o WebView).
+        // No navegador normal, isKodularWebView = false e tudo funciona.
+        // ============================================================
+        const isKodularWebView = (function() {
+            const ua = navigator.userAgent || '';
+            // WebView do Android (Kodular/CustomWebView) contém "wv" no UA
+            // e/ou expõe window.Kodular / window.AppInventor
+            return /\bwv\b/i.test(ua)
+                || /Kodular/i.test(ua)
+                || (typeof window.Kodular !== 'undefined')
+                || (typeof window.AppInventor !== 'undefined');
+        })();
+
+        // ============================================================
         // HELPER: Escapar HTML
         // ============================================================
         function escapeHtml(str) {
@@ -441,6 +456,13 @@
             // 🔥 BIOMETRIA — Verifica se o dispositivo tem credencial
             // ============================================================
             async verificarBiometriaDisponivel() {
+                // 🚫 Se estiver no WebView do Kodular, NÃO chama WebAuthn.
+                //    Isso evita o travamento (o WebView não suporta WebAuthn).
+                if (isKodularWebView) {
+                    console.log('ℹ️ WebView detectado — biometria WebAuthn desativada para evitar travamento.');
+                    return;
+                }
+
                 if (!window.WebAuthnClient) {
                     console.log('ℹ️ WebAuthnClient não carregado');
                     return;
@@ -489,6 +511,13 @@
             }
 
             async loginComBiometria() {
+                // 🚫 Trava extra: se por algum motivo o botão aparecer no Kodular,
+                //    não executa WebAuthn (que travaria).
+                if (isKodularWebView) {
+                    this.showAlert('Use o código SMS neste aplicativo.', 'info');
+                    return;
+                }
+
                 const btn = document.getElementById('biometricBtn');
                 const btnText = document.getElementById('biometricBtnText');
                 const icon = document.getElementById('biometricIcon');
@@ -528,7 +557,6 @@
                         this.showAlert(err.message || 'Falha na biometria. Use um código.', 'error');
                     }
 
-                    // ⚠️ DESTRAVA o botão para o usuário tentar de novo ou usar código
                     btn.innerHTML = originalHTML;
                     btn.disabled = false;
                 }
@@ -540,13 +568,15 @@
             async oferecerCadastroBiometria(authToken, role) {
                 this.userRoleDestino = role;
 
+                // 🚫 No Kodular, pula a tela de cadastro WebAuthn e vai direto ao painel.
+                if (isKodularWebView) {
+                    console.log('ℹ️ WebView — cadastro de biometria WebAuthn ignorado.');
+                    this.redirecionarFinal();
+                    return;
+                }
+
                 if (!window.WebAuthnClient) return;
                 if (!WebAuthnClient.isSupported()) return;
-
-                // ⚠️ Mesmo sem autenticador de plataforma, ainda mostramos o box
-                //    para o usuário poder clicar em "Pular". A checagem real
-                //    acontece dentro de registrarBiometria (que lança NO_AUTHENTICATOR).
-                //    Assim o fluxo é o mesmo do celular: box aparece, usuário decide.
 
                 let userId = null;
                 try {
@@ -555,14 +585,12 @@
                 } catch (_) {}
 
                 if (userId && WebAuthnClient.dispositivoTemBiometriaRegistrada(userId)) {
-                    // Já tem biometria registrada neste dispositivo — pula direto
                     return;
                 }
 
                 const content = document.querySelector('.content');
                 if (!content) return;
 
-                // 🔥 LIMPAR TELA: Esconde tudo exceto o banner verde
                 const elementsToHide = [
                     'phoneInfo', 'timer', 'firstTimeBadge', 'biometricSection',
                     'appDownloadLink', 'resendBtn', 'backBtn'
@@ -636,8 +664,6 @@
                     } catch (err) {
                         console.error('❌ Erro ao registrar biometria:', err);
 
-                        // ⚠️ NOVO: sem autenticador / timeout → mensagem clara, MAS NÃO PULA
-                        //    (o usuário escolhe "Pular" ou tenta de novo).
                         let msg = 'Erro ao ativar biometria.';
 
                         if (err.codigo === 'NO_AUTHENTICATOR') {
@@ -659,7 +685,6 @@
 
                         this.showAlert(msg, 'error');
 
-                        // ⚠️ DESTRAVA os botões: o usuário decide (tentar de novo ou pular)
                         btn.innerHTML = orig;
                         btn.disabled = false;
                         if (pularBtn) pularBtn.disabled = false;
@@ -826,7 +851,7 @@
                         sessionStorage.removeItem('2fa_user_nome');
                         sessionStorage.removeItem('2fa_user_role');
 
-                        // 🔥 Limpa a tela e oferece biometria
+                        // 🔥 No navegador: oferece biometria. No Kodular: redireciona direto.
                         await this.oferecerCadastroBiometria(data.token, data.user?.role);
 
                     } else {
