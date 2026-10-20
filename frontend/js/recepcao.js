@@ -809,6 +809,7 @@ async function verDetalhesCompletos(id) {
         if (oldModal) oldModal.remove();
         
         // ===== Bloco de assinatura =====
+        // ✅ CORREÇÃO: usa o nome do RESPONSÁVEL (quem assinou), não quem registrou
         let assinaturaHTML = '';
         if (a.temAssinatura && a.assinaturaBase64) {
             assinaturaHTML = `
@@ -818,12 +819,11 @@ async function verDetalhesCompletos(id) {
                     </strong>
                     <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 15px; text-align: center;">
                         <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 120px;" alt="Assinatura">
-                        ${a.assinadaPorNome ? `
-                            <p style="margin: 10px 0 0; font-size: 13px; color: #065f46;">
-                                <i class="fas fa-user-check"></i> Assinado por: <strong>${escapeHTML(a.assinadaPorNome)}</strong>
-                                ${a.assinadaEm ? `<br><i class="fas fa-clock"></i> Em: ${new Date(a.assinadaEm).toLocaleString('pt-BR')}` : ''}
-                            </p>
-                        ` : ''}
+                        <p style="margin: 10px 0 0; font-size: 13px; color: #065f46;">
+                            <i class="fas fa-user-check"></i> Assinado por (Responsável): 
+                            <strong>${escapeHTML(a.responsavelNome || 'Não informado')}</strong>
+                            ${a.assinadaEm ? `<br><i class="fas fa-clock"></i> Em: ${new Date(a.assinadaEm).toLocaleString('pt-BR')}` : ''}
+                        </p>
                     </div>
                 </div>
             `;
