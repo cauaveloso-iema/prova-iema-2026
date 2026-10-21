@@ -14,8 +14,11 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
             'autorizacao', 
             'justificativa', 
             'segunda_chamada', 
+            'uniforme',               // 🆕 Gestão Geral - Uniforme
             'atraso',
             'atraso_aluno',
+            'atendimento',            // 🆕 Gestão Geral - Atendimento (Responsável)
+            'atendimento_aluno',      // 🆕 Gestão Geral - Atendimento (Aluno)
             'psicologia',
             'assistente_social',
             'supervisao',
@@ -55,8 +58,15 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
         periodoFaltaFormatado: String,
         tipoProvaPerdida: String,
         tipoProvaPerdidaFormatado: String,
+        periodoProva: String,                  // 🆕 já existia no fluxo, faltava no schema
         responsavelNome: String,
         responsavelCPF: String,
+        responsavelTelefone: String,           // 🆕 presente em atendimentos também
+        
+        // 🆕 UNIFORME (Gestão Geral)
+        uniformePeriodoInicio: Date,
+        uniformePeriodoFim: Date,
+        uniformePeriodoFormatado: String,
         
         // Identifica quem assina: 'responsavel', 'aluno' ou 'participante'
         tipoAssinante: String,
@@ -66,6 +76,14 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
         tipoTarefaLabel: String,
         gravidade: String,
         prioridade: String,
+        
+        // 🆕 Atendimentos (Gestão Geral)
+        tipoAtendimento: String,            
+        providencias: String,
+        providenciasLabel: String,
+        descricaoMotivo: String,
+        descricaoProvidencias: String,
+        responsavelParentesco: String,
         
         // 🆕 Participante da supervisão
         participanteNome: String,
@@ -91,5 +109,4 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
 
 SessaoAssinaturaSchema.index({ expiraEm: 1 }, { expireAfterSeconds: 0 });
 
-// ⚠️ ESSA É A LINHA CRÍTICA - PRECISA SER ASSIM
 module.exports = mongoose.model('SessaoAssinatura', SessaoAssinaturaSchema);

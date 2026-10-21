@@ -1034,6 +1034,15 @@ app.use('/api/gestao-geral', require('./routes/gestaoGeral'));
 app.use('/api/enfermaria', require('./routes/enfermaria'));
 app.use('/api/rodizio', require('./routes/rodizioRefeicao'));
 
+// ============================================
+// ROTAS: GESTÃO GERAL + ATENDIMENTOS
+// ============================================
+const gestaoGeralRoutes = require('./routes/gestaoGeral');
+const gestaoAtendimentoRoutes = require('./routes/gestao-atendimento');
+
+app.use('/api/gestao-geral', gestaoGeralRoutes);
+app.use('/api/gestao-atendimento', gestaoAtendimentoRoutes);
+
 // ── Rotas de Supervisão, Psicologia, Assistência Social, Protagonismo ──
 app.use('/api/supervisao', require('./routes/supervisao'));
 app.use('/api/psicologia', require('./routes/psicologia'));

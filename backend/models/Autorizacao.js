@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const AutorizacaoSchema = new mongoose.Schema({
     tipo: {
         type: String,
-        enum: ['autorizacao', 'justificativa', 'segunda_chamada'],
+        enum: ['autorizacao', 'justificativa', 'segunda_chamada', 'uniforme'],
         default: 'autorizacao',
         required: true
     },
@@ -22,6 +22,10 @@ const AutorizacaoSchema = new mongoose.Schema({
     
     periodoFaltaInicio: { type: Date, default: null },
     periodoFaltaFim: { type: Date, default: null },
+    
+    // 🆕 PERÍODO DA AUTORIZAÇÃO DE UNIFORME
+    uniformePeriodoInicio: { type: Date, default: null },
+    uniformePeriodoFim: { type: Date, default: null },
     
     responsavelNome: String,
     responsavelCPF: String,
@@ -76,7 +80,7 @@ const AutorizacaoSchema = new mongoose.Schema({
     
     origemTipo: {
         type: String,
-        enum: ['autorizacao', 'segunda_chamada', 'justificativa', 'manual', 'setor_pedagogico_2chamada', null],
+        enum: ['autorizacao', 'segunda_chamada', 'justificativa', 'manual', 'setor_pedagogico_2chamada', 'uniforme', null],
         default: 'manual'
     },
     origemId: { type: mongoose.Schema.Types.ObjectId, default: null },
@@ -99,9 +103,11 @@ AutorizacaoSchema.index({ alunoTurma: 1, createdAt: -1 });
 AutorizacaoSchema.index({ data: -1 });
 AutorizacaoSchema.index({ periodoFaltaInicio: -1 });
 AutorizacaoSchema.index({ periodoFaltaFim: -1 });
+AutorizacaoSchema.index({ uniformePeriodoInicio: -1 });
+AutorizacaoSchema.index({ uniformePeriodoFim: -1 });
 AutorizacaoSchema.index({ motivo: 1 });
 AutorizacaoSchema.index({ tipoProvaPerdida: 1 });
-AutorizacaoSchema.index({ periodoProva: 1 });          // 🆕
+AutorizacaoSchema.index({ periodoProva: 1 });
 AutorizacaoSchema.index({ origemTipo: 1, origemId: 1 });
 AutorizacaoSchema.index({ statusAssinatura: 1, createdAt: -1 });
 AutorizacaoSchema.index({ vistoSecretaria: 1, createdAt: -1 });
@@ -123,6 +129,13 @@ AutorizacaoSchema.pre('save', function(next) {
     }
     if (!this.periodoFaltaInicio && this.periodoFaltaFim) {
         this.periodoFaltaFim = null;
+    }
+    
+    if (this.uniformePeriodoInicio && !this.uniformePeriodoFim) {
+        this.uniformePeriodoFim = this.uniformePeriodoInicio;
+    }
+    if (!this.uniformePeriodoInicio && this.uniformePeriodoFim) {
+        this.uniformePeriodoFim = null;
     }
     
     this.updatedAt = new Date();
@@ -151,10 +164,21 @@ AutorizacaoSchema.methods.getTipoProvaPerdidaFormatado = function() {
     return this.tipoProvaPerdida;
 };
 
-// 🆕 Período da prova
 AutorizacaoSchema.methods.getPeriodoProvaFormatado = function() {
     if (!this.periodoProva) return null;
     return this.periodoProva;
+};
+
+// 🆕 Período do uniforme formatado
+AutorizacaoSchema.methods.getUniformePeriodoFormatado = function() {
+    if (!this.uniformePeriodoInicio) return null;
+    const ini = new Date(this.uniformePeriodoInicio);
+    const fim = this.uniformePeriodoFim ? new Date(this.uniformePeriodoFim) : ini;
+    const iniDia = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
+    const fimDia = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate());
+    const fmt = (d) => d.toLocaleDateString('pt-BR');
+    if (iniDia.getTime() === fimDia.getTime()) return fmt(iniDia);
+    return `${fmt(iniDia)} a ${fmt(fimDia)}`;
 };
 
 // ============================================
@@ -170,7 +194,8 @@ AutorizacaoSchema.statics.getMotivoLabel = function(motivo, tipo = 'autorizacao'
         'consultas': 'Consultas',
         'outros': 'Outros',
         'problemas_saude': 'Problemas de Saúde',
-        'viagem': 'Viagem'
+        'viagem': 'Viagem',
+        'tratamento_medico': 'Tratamento Médico'   // 🆕
     };
     return labels[motivo] || motivo;
 };
@@ -203,10 +228,21 @@ AutorizacaoSchema.statics.getTipoProvaPerdidaFormatado = function(doc) {
     return doc.tipoProvaPerdida;
 };
 
-// 🆕 Período da prova
 AutorizacaoSchema.statics.getPeriodoProvaFormatado = function(doc) {
     if (!doc || !doc.periodoProva) return null;
     return doc.periodoProva;
+};
+
+// 🆕 Período do uniforme formatado (estático)
+AutorizacaoSchema.statics.getUniformePeriodoFormatado = function(doc) {
+    if (!doc || !doc.uniformePeriodoInicio) return null;
+    const ini = new Date(doc.uniformePeriodoInicio);
+    const fim = doc.uniformePeriodoFim ? new Date(doc.uniformePeriodoFim) : ini;
+    const iniDia = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
+    const fimDia = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate());
+    const fmt = (d) => d.toLocaleDateString('pt-BR');
+    if (iniDia.getTime() === fimDia.getTime()) return fmt(iniDia);
+    return `${fmt(iniDia)} a ${fmt(fimDia)}`;
 };
 
 module.exports = mongoose.model('Autorizacao', AutorizacaoSchema);

@@ -1,12 +1,13 @@
 // ============================================
 // GESTÃO GERAL - SISTEMA COMPLETO
-// Atrasos + Autorização + Justificativa + 2ª Chamada
+// Atrasos + Autorização + Justificativa + 2ª Chamada + Uniforme
 // Com Assinatura Digital + Integração Automática
 // + Tipo de Prova Perdida + Verificação de Duplicidade
 // + CPF Obrigatório com Validação
 // + 🆕 ASSINATURA VIA QR CODE (SESSÃO)
 // + 🆕 PAGINAÇÃO (10 POR PÁGINA)
 // + 🆕 MODO ASSINATURA VIA URL (?assinatura=UUID)
+// + 🆕 SUB-ABA UNIFORME (Autorização)
 // ============================================
 
 let token = localStorage.getItem('auth_token');
@@ -54,6 +55,13 @@ const estadoSessaoAssinatura = {
         modalInstance: null
     },
     segundaChamada: {
+        sessaoId: null,
+        assinaturaCapturada: null,
+        qrCodeDataUrl: null,
+        monitoramentoInterval: null,
+        modalInstance: null
+    },
+    uniforme: {
         sessaoId: null,
         assinaturaCapturada: null,
         qrCodeDataUrl: null,
@@ -160,26 +168,36 @@ const CONFIG_MODULOS = {
         prefixoInput: 'segundaChamada',
         nomeAmigavel: '2ª Chamada', 
         containerLista: 'listaSegundaChamada' 
+    },
+    uniforme: {
+        tipo: 'uniforme',
+        prefixo: 'Uniforme',
+        prefixoInput: 'uniforme',
+        nomeAmigavel: 'Uniforme',
+        containerLista: 'listaUniformes'
     }
 };
 
 const estados = {
     autorizacao: { currentAluno: null, motivoSelecionado: null, scanner: null, scannerAtivo: false, modoAtual: 'automatico', alunosPorTurma: [] },
     justificativa: { currentAluno: null, motivoSelecionado: null, scanner: null, scannerAtivo: false, modoAtual: 'automatico', alunosPorTurma: [] },
-    segundaChamada: { currentAluno: null, motivoSelecionado: null, scanner: null, scannerAtivo: false, modoAtual: 'automatico', alunosPorTurma: [] }
+    segundaChamada: { currentAluno: null, motivoSelecionado: null, scanner: null, scannerAtivo: false, modoAtual: 'automatico', alunosPorTurma: [] },
+    uniforme: { currentAluno: null, motivoSelecionado: null, scanner: null, scannerAtivo: false, modoAtual: 'automatico', alunosPorTurma: [] }
 };
 
 const relatoriosModulo = {
     autorizacao: null,
     justificativa: null,
-    segundaChamada: null
+    segundaChamada: null,
+    uniforme: null
 };
 
 // 🆕 ESTADO DA PAGINAÇÃO POR MÓDULO (10 por página)
 const paginacaoModuloState = {
     autorizacao: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 },
     justificativa: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 },
-    segundaChamada: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 }
+    segundaChamada: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 },
+    uniforme: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 }
 };
 
 // 🆕 ESTADO DA PAGINAÇÃO - ATRASOS RECENTES (Dashboard)
@@ -188,13 +206,15 @@ const paginacaoAtrasosState = { paginaAtual: 1, porPagina: 10, totalRegistros: 0
 const dashboardChartsModulo = {
     autorizacao: { motivos: null, atrasos: null, turmas: null },
     justificativa: { motivos: null, atrasos: null, turmas: null },
-    segundaChamada: { motivos: null, atrasos: null, turmas: null }
+    segundaChamada: { motivos: null, atrasos: null, turmas: null },
+    uniforme: { motivos: null, atrasos: null, turmas: null }
 };
 
 const autocompleteModuloState = {
     autorizacao: { alunos: [], filtrados: [], indice: -1, carregado: false, carregando: false },
     justificativa: { alunos: [], filtrados: [], indice: -1, carregado: false, carregando: false },
-    segundaChamada: { alunos: [], filtrados: [], indice: -1, carregado: false, carregando: false }
+    segundaChamada: { alunos: [], filtrados: [], indice: -1, carregado: false, carregando: false },
+    uniforme: { alunos: [], filtrados: [], indice: -1, carregado: false, carregando: false }
 };
 
 const assinaturaState = {
@@ -477,14 +497,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (modoAssinatura) {
         console.log('📱 Modo assinatura detectado:', modoAssinatura);
         
-        // 🛡️ FLAG GLOBAL: bloqueia outros scripts
         window.__MODO_ASSINATURA__ = true;
         
-        // Remove token temporariamente pra evitar redirects indesejados
-        // (o responsável não precisa estar logado)
-        
         await mostrarTelaAssinatura(modoAssinatura);
-        return; // ⚠️ NÃO continua o init normal
+        return;
     }
     
     // ============================================
@@ -518,7 +534,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 1000);
 
     // ============ RODÍZIOS ============
-    // 🆕 Carrega rodízios quando a aba é ativada
     safeGet('aba-rodizios')?.addEventListener('shown.bs.tab', () => {
         console.log('🔄 Aba rodízios ativada — carregando...');
         if (typeof carregarRodizios === 'function') {
@@ -528,7 +543,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 🆕 Carrega rodízios no LOAD inicial (porque a aba já vem ativa por padrão)
     setTimeout(() => {
         if (document.getElementById('aba-rodizios')?.classList.contains('active')) {
             console.log('🔄 Aba rodízios é a inicial — carregando no load...');
@@ -536,7 +550,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 carregarRodizios();
             }
         }
-    }, 1500); // 1.5s de delay pra garantir que gestao-geral-rodizio.js já carregou
+    }, 1500);
     
     // ============ ATRASOS ============
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
@@ -611,8 +625,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     carregarListaModulo('segundaChamada', 1);
     
+    // 🆕 UNIFORME (ABA PRINCIPAL)
+    safeGet('modoAutomaticoUniformeBtn')?.addEventListener('click', () => setModoModulo('uniforme', 'automatico'));
+    safeGet('modoManualUniformeBtn')?.addEventListener('click', () => setModoModulo('uniforme', 'manual'));
+    safeGet('filtroTurmaManualUniforme')?.addEventListener('change', () => carregarAlunosTurmaModulo('uniforme'));
+    safeGet('filtroBuscaManualUniforme')?.addEventListener('input', () => filtrarAlunosManualModulo('uniforme'));
+    safeGet('aba-uniforme')?.addEventListener('shown.bs.tab', () => {
+        carregarTurmasManualModulo('uniforme');
+        carregarListaModulo('uniforme', 1);
+        setTimeout(() => {
+            if (estados.uniforme.modoAtual === 'automatico' && !estados.uniforme.scannerAtivo) {
+                iniciarScannerModulo('uniforme');
+            }
+        }, 300);
+    });
+    
     // ============ EVENTOS DOS MÓDULOS ============
-    ['autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
+    ['autorizacao', 'justificativa', 'segundaChamada', 'uniforme'].forEach(modulo => {
         configurarEventosModulo(modulo);
     });
     
@@ -623,7 +652,8 @@ window.addEventListener('beforeunload', () => {
     pararScannerModulo('autorizacao');
     pararScannerModulo('justificativa');
     pararScannerModulo('segundaChamada');
-    ['atraso', 'autorizacao', 'justificativa', 'segundaChamada'].forEach(modulo => {
+    pararScannerModulo('uniforme');
+    ['atraso', 'autorizacao', 'justificativa', 'segundaChamada', 'uniforme'].forEach(modulo => {
         pararMonitoramentoSessao(modulo);
     });
     // 🆕 Para o monitoramento do aluno
@@ -645,7 +675,6 @@ async function carregarFotoPerfil() {
         console.error('Erro ao carregar foto:', error);
     }
 }
-
 // ============================================================================
 // ====================== ASSINATURA DIGITAL (CANVAS) =========================
 // ============================================================================
@@ -1880,40 +1909,27 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
     const precisaResp = !!a.precisaAssinatura;
     const precisaAluno = !!a.precisaAssinaturaAluno;
     
-    // 🎯 Regra: só mostra a assinatura de quem FOI MARCADO
-    // Se marcou só aluno → só aluno + gestão
-    // Se marcou só responsável → só responsável + gestão
-    // Se marcou os dois → os dois + gestão
-    // Se não marcou nenhum → responsável (padrão) + gestão
-    
     const mostrarResp = precisaResp || (!precisaResp && !precisaAluno);
     const mostrarAluno = precisaAluno;
     
     console.log('🖨️ Impressão - mostrarResp:', mostrarResp, '| mostrarAluno:', mostrarAluno, 
                 '| temResp:', temResp, '| temAluno:', temAluno);
     
-    // HTML da assinatura do RESPONSÁVEL
     const assinaturaRespHTML = temResp
         ? `<img class="assinatura-img" src="${a.assinaturaBase64}" alt="Assinatura Responsável">`
         : `<span style="color:#999;font-size:8pt;padding-bottom:2px;">_________________________________</span>`;
     
-    // HTML da assinatura do ALUNO
     const assinaturaAlunoHTML = temAluno
         ? `<img class="assinatura-img" src="${a.assinaturaAlunoBase64}" alt="Assinatura Aluno">`
         : `<span style="color:#999;font-size:8pt;padding-bottom:2px;">_________________________________</span>`;
     
-    // Nome do aluno assinante
     const nomeAlunoAssinante = a.assinadaPorNomeAluno 
         ? `<div style="font-size:7pt;color:#047857;margin-top:1mm;">${escapeHTML(a.assinadaPorNomeAluno)}</div>` 
         : '';
     
-    // ============================================
-    // 🎨 MONTA O BLOCO DE ASSINATURAS
-    // ============================================
     let assinaturasHTML = '';
     
     if (mostrarResp && mostrarAluno) {
-        // Ambos → 3 colunas
         assinaturasHTML = `
             <div class="assinaturas">
                 <div class="assinatura">
@@ -1937,7 +1953,6 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
                 </div>
             </div>`;
     } else if (mostrarAluno && !mostrarResp) {
-        // Só aluno → 2 colunas
         assinaturasHTML = `
             <div class="assinaturas">
                 <div class="assinatura">
@@ -1955,7 +1970,6 @@ function gerarHTMLImpressaoAtraso(a, qrCodeUrl) {
                 </div>
             </div>`;
     } else {
-        // Só responsável (ou padrão) → 2 colunas
         assinaturasHTML = `
             <div class="assinaturas">
                 <div class="assinatura">
@@ -2478,7 +2492,6 @@ function exportarCSV() {
         return;
     }
 
-    // ---------- Título / subtítulo ----------
     const tipo = relatorioData.aluno ? 'aluno' : (relatorioData.turma ? 'turma' : 'geral');
     let titulo = 'Relatório de Atrasos';
     let subtitulo = '';
@@ -2494,7 +2507,6 @@ function exportarCSV() {
         subtitulo = 'Visão consolidada de todos os registros';
     }
 
-    // ---------- Filtros aplicados ----------
     const filtros = [];
     const dataIni = safeGet('dataInicio')?.value;
     const dataFimEl = safeGet('dataFim')?.value;
@@ -2503,7 +2515,6 @@ function exportarCSV() {
     if (relatorioData.turma) filtros.push({ label: 'Turma', valor: relatorioData.turma });
     if (relatorioData.aluno?.nome) filtros.push({ label: 'Aluno', valor: relatorioData.aluno.nome });
 
-    // ---------- Colunas ----------
     const colunas = [
         {
             label: 'Data/Hora do Atraso',
@@ -2572,9 +2583,8 @@ function exportarCSV() {
         notificar(`✅ Relatório exportado (${registros.length} registro(s))!`, 'success');
     }
 }
-
 // ============================================================================
-// ============ MÓDULOS: AUTORIZAÇÃO / JUSTIFICATIVA / 2ª CHAMADA =============
+// ============ MÓDULOS: AUTORIZAÇÃO / JUSTIFICATIVA / 2ª CHAMADA / UNIFORME ==
 // ============================================================================
 
 function getCfg(modulo) { return CONFIG_MODULOS[modulo]; }
@@ -2771,7 +2781,24 @@ async function selecionarAlunoModulo(modulo, alunoId, alunoNome, itemEl) {
             <div><strong>${escapeHTML(alunoNome)}</strong><br><small style="color: #1e3c72;">Processando...</small></div>
             <i class="fas fa-spinner fa-spin fa-2x" style="color: #1e3c72;"></i>`;
     }
-    try { await buscarAlunoModulo(modulo, alunoId); } catch (e) { console.error(e); }
+    
+    try { 
+        await buscarAlunoModulo(modulo, alunoId); 
+    } catch (e) { 
+        console.error('Erro ao selecionar aluno:', e);
+        // Restaura o card caso dê erro
+        if (itemEl) {
+            itemEl.style.background = '';
+            itemEl.style.borderColor = '';
+            itemEl.style.pointerEvents = 'auto';
+            itemEl.innerHTML = `
+                <div>
+                    <strong>${escapeHTML(alunoNome)}</strong><br>
+                    <small class="text-muted">Erro ao carregar. Tente novamente.</small>
+                </div>
+                <i class="fas fa-hand-pointer fa-2x text-primary"></i>`;
+        }
+    }
 }
 
 // ============================================
@@ -2876,10 +2903,29 @@ function mostrarFormModulo(modulo) {
         const inputProvaOutros = safeGet('segundaChamadaTipoProvaOutros');
         if (inputProvaOutros) inputProvaOutros.value = '';
 
-        // 🆕 Período da prova
         const inputPeriodo = safeGet('segundaChamadaPeriodoProva');
         if (inputPeriodo) inputPeriodo.value = '';
         document.querySelectorAll('#campoSegundaChamadaPeriodo .tipo-card').forEach(c => c.classList.remove('selected'));
+    }
+    
+    // 🆕 UNIFORME — limpa os campos específicos
+    if (modulo === 'uniforme') {
+        const uIni = safeGet('uniformePeriodoInicio');
+        const uFim = safeGet('uniformePeriodoFim');
+        const uOutros = safeGet('uniformeMotivoOutros');
+        const uData = safeGet('uniformeData');
+        const uRespNome = safeGet('uniformeResponsavelNome');
+        const uRespCPF = safeGet('uniformeResponsavelCPF');
+        const uRespTel = safeGet('uniformeResponsavelTelefone');
+        const uObs = safeGet('uniformeObservacoes');
+        
+        if (uIni) uIni.value = '';
+        if (uFim) uFim.value = '';
+        if (uOutros) uOutros.value = '';
+        if (uRespNome) uRespNome.value = '';
+        if (uRespCPF) uRespCPF.value = '';
+        if (uRespTel) uRespTel.value = '';
+        if (uObs) uObs.value = '';
     }
     
     const campoOutros = safeGet(`campo${P}Outros`);
@@ -2889,6 +2935,12 @@ function mostrarFormModulo(modulo) {
     
     const dataEl = safeGet(`${I}Data`);
     if (dataEl) dataEl.value = getDataLocalISO();
+    
+    // 🆕 Para uniforme, define a data padrão do campo específico
+    if (modulo === 'uniforme') {
+        const uData = safeGet('uniformeData');
+        if (uData && !uData.value) uData.value = getDataLocalISO();
+    }
     
     limparAssinatura(modulo);
     
@@ -2966,7 +3018,6 @@ function selecionarPeriodoProva(periodo) {
     const card = document.querySelector(`#campoSegundaChamadaPeriodo .tipo-card[data-periodo="${periodo}"]`);
     if (card) card.classList.add('selected');
 }
-
 // ============================================
 // REGISTRAR MÓDULO (COM ASSINATURA E INTEGRAÇÃO)
 // ============================================
@@ -3007,12 +3058,12 @@ async function registrarModulo(modulo) {
     
     let tipoProvaPerdida = null;
     let tipoProvaPerdidaOutros = '';
-    let periodoProva = null;   // 🆕
+    let periodoProva = null;
     
     if (cfg.tipo === 'segunda_chamada') {
         tipoProvaPerdida = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
         tipoProvaPerdidaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
-        periodoProva = safeGet('segundaChamadaPeriodoProva')?.value || '';   // 🆕
+        periodoProva = safeGet('segundaChamadaPeriodoProva')?.value || '';
         
         if (!tipoProvaPerdida) {
             notificar('Informe o tipo de prova perdida', 'error');
@@ -3024,9 +3075,30 @@ async function registrarModulo(modulo) {
             return;
         }
 
-        // 🆕
         if (!periodoProva) {
             notificar('Informe o período da prova (1º, 2º, 3º ou 4º Período)', 'error');
+            return;
+        }
+    }
+    
+    // 🆕 PERÍODO DO UNIFORME
+    let uniformePeriodoInicio = null;
+    let uniformePeriodoFim = null;
+    
+    if (cfg.tipo === 'uniforme') {
+        uniformePeriodoInicio = safeGet('uniformePeriodoInicio')?.value || '';
+        uniformePeriodoFim = safeGet('uniformePeriodoFim')?.value || '';
+        
+        if (!uniformePeriodoInicio) {
+            notificar('Informe a data de início da autorização', 'error');
+            return;
+        }
+        if (!uniformePeriodoFim) {
+            notificar('Informe a data de término da autorização', 'error');
+            return;
+        }
+        if (uniformePeriodoFim < uniformePeriodoInicio) {
+            notificar('Data final não pode ser anterior à data inicial', 'error');
             return;
         }
     }
@@ -3092,7 +3164,9 @@ async function registrarModulo(modulo) {
             periodoFaltaFim: periodoFaltaFim || undefined,
             tipoProvaPerdida: tipoProvaPerdida || undefined,
             tipoProvaPerdidaOutros: tipoProvaPerdidaOutros || undefined,
-            periodoProva: periodoProva || undefined,   // 🆕
+            periodoProva: periodoProva || undefined,
+            uniformePeriodoInicio: uniformePeriodoInicio || undefined,   // 🆕
+            uniformePeriodoFim: uniformePeriodoFim || undefined,         // 🆕
             horarioEntrada: safeGet(`${I}HorarioEntrada`)?.value || '',
             horarioSaida: safeGet(`${I}HorarioSaida`)?.value || '',
             responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
@@ -3213,7 +3287,6 @@ async function registrarModulo(modulo) {
 
 // ============================================================================
 // 🎨 CANVAS DE ASSINATURA (FUNÇÕES AUXILIARES)
-// Estas funções são usadas por mostrarTelaAssinatura() e salvarAssinaturaTela()
 // ============================================================================
 
 /**
@@ -3227,7 +3300,6 @@ function handleResizeCanvasTela() {
     if (!canvas || !wrapper) return;
     
     if (!telaTemAssinatura) {
-        // Não tem assinatura ainda — só redimensiona
         const rect = wrapper.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
         
@@ -3246,7 +3318,6 @@ function handleResizeCanvasTela() {
         ctx.strokeStyle = '#1e3c72';
         telaCtx = ctx;
     } else {
-        // Já tem assinatura — preserva desenhando em canvas temporário
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
@@ -3269,7 +3340,6 @@ function handleResizeCanvasTela() {
         ctx.strokeStyle = '#1e3c72';
         telaCtx = ctx;
         
-        // Redesenha o conteúdo antigo
         ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height, 0, 0, rect.width, rect.height);
     }
 }
@@ -3569,7 +3639,7 @@ async function carregarListaModulo(modulo, pagina = null) {
     const dataInicio = safeGet(`filtroLista${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`filtroLista${P}DataFim`)?.value || '';
     const tipoProvaPerdida = safeGet(`filtroLista${P}TipoProva`)?.value || '';
-    const periodoProvaFiltro = safeGet(`filtroLista${P}PeriodoProva`)?.value || ''; // 🆕
+    const periodoProvaFiltro = safeGet(`filtroLista${P}PeriodoProva`)?.value || '';
 
     let dataInicioFinal = dataInicio;
     let dataFimFinal = dataFim;
@@ -3585,7 +3655,6 @@ async function carregarListaModulo(modulo, pagina = null) {
     if (dataInicioFinal) url += `&dataInicio=${dataInicioFinal}`;
     if (dataFimFinal) url += `&dataFim=${dataFimFinal}`;
     if (tipoProvaPerdida && tipoProvaPerdida !== 'todos') url += `&tipoProvaPerdida=${encodeURIComponent(tipoProvaPerdida)}`;
-    // 🆕
     if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') url += `&periodoProva=${encodeURIComponent(periodoProvaFiltro)}`;
 
     if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
@@ -3621,6 +3690,8 @@ async function carregarListaModulo(modulo, pagina = null) {
         
         const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
         const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+        // 🆕 UNIFORME
+        const mostraUniforme = cfg.tipo === 'uniforme';
 
         container.innerHTML = `
             <div class="table-responsive">
@@ -3629,6 +3700,7 @@ async function carregarListaModulo(modulo, pagina = null) {
                         <tr>
                             <th>Data Registro</th>
                             ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                            ${mostraUniforme ? '<th>Período do Uniforme</th>' : ''}
                             ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                             ${mostrarTipoProva ? '<th>Período</th>' : ''}
                             <th>Aluno</th>
@@ -3646,6 +3718,9 @@ async function carregarListaModulo(modulo, pagina = null) {
                                 <td>${a.dataFormatada}</td>
                                 ${mostrarPeriodoFalta 
                                     ? `<td><strong style="color: #1e3c72;">${a.periodoFaltaFormatado || '-'}</strong></td>` 
+                                    : ''}
+                                ${mostraUniforme 
+                                    ? `<td><strong style="color: #1e3c72;">${a.uniformePeriodoFormatado || '-'}</strong></td>` 
                                     : ''}
                                 ${mostrarTipoProva 
                                     ? `<td><span class="badge bg-warning text-dark">${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</span></td>` 
@@ -3807,6 +3882,15 @@ function getMotivosPorTipo(tipo) {
             { valor: 'outros', label: 'Outros' }
         ];
     }
+    // 🆕 UNIFORME
+    if (tipo === 'uniforme') {
+        return [
+            { valor: 'problemas_saude', label: 'Problemas de Saúde' },
+            { valor: 'problemas_pessoais', label: 'Problemas Pessoais' },
+            { valor: 'tratamento_medico', label: 'Tratamento Médico' },
+            { valor: 'outros', label: 'Outros' }
+        ];
+    }
     return [
         { valor: 'problemas_pessoais', label: 'Problemas Pessoais' },
         { valor: 'problemas_saude', label: 'Problemas de Saúde' },
@@ -3817,6 +3901,9 @@ function getMotivosPorTipo(tipo) {
 
 // ============================================
 // DASHBOARD DOS MÓDULOS
+// ============================================
+// ============================================
+// DASHBOARD DOS MÓDULOS (COM SUPORTE AO UNIFORME)
 // ============================================
 async function carregarDashboardModulo(modulo) {
     const cfg = getCfg(modulo);
@@ -3840,6 +3927,19 @@ async function carregarDashboardModulo(modulo) {
         safeSetText(`${P}TotalMes`, data.metricas?.mes ?? 0);
         safeSetText(`${P}TotalGeral`, data.metricas?.total ?? 0);
 
+        // 🆕 Para UNIFORME: métricas extras
+        if (modulo === 'uniforme') {
+            const comAssinatura = data.metricas?.comAssinatura ?? 0;
+            const totalGeral = data.metricas?.total ?? 0;
+            const semAssinatura = Math.max(0, totalGeral - comAssinatura);
+            const percentual = totalGeral > 0 ? Math.round((comAssinatura / totalGeral) * 100) : 0;
+
+            safeSetText('UniformeTotalComAssinatura', comAssinatura);
+            safeSetText('UniformeTotalSemAssinatura', semAssinatura);
+            safeSetText('UniformePercentualAssinatura', `${percentual}%`);
+        }
+
+        // Gráfico de motivos
         const ctxMotivos = safeGet(`${P}ChartMotivos`);
         if (ctxMotivos && data.porMotivo) {
             if (dashboardChartsModulo[modulo].motivos) {
@@ -3858,6 +3958,7 @@ async function carregarDashboardModulo(modulo) {
             });
         }
 
+        // Gráfico de registros por dia (7 dias)
         const ctxAtrasos = safeGet(`${P}ChartAtrasos`);
         if (ctxAtrasos && data.tendencias?.ultimos7Dias) {
             if (dashboardChartsModulo[modulo].atrasos) {
@@ -3880,6 +3981,7 @@ async function carregarDashboardModulo(modulo) {
             });
         }
 
+        // Gráfico por turma
         const ctxTurmas = safeGet(`${P}ChartTurmas`);
         if (ctxTurmas && data.tendencias?.porTurma) {
             if (dashboardChartsModulo[modulo].turmas) {
@@ -3904,6 +4006,45 @@ async function carregarDashboardModulo(modulo) {
             });
         }
 
+        // 🆕 Gráfico de distribuição por período do uniforme
+        if (modulo === 'uniforme') {
+            const ctxPeriodo = safeGet('UniformeChartPeriodo');
+            if (ctxPeriodo && data.porPeriodoUniforme) {
+                if (dashboardChartsModulo[modulo].periodo) {
+                    try { dashboardChartsModulo[modulo].periodo.destroy(); } catch(e){}
+                }
+                if (data.porPeriodoUniforme.length === 0) {
+                    const parent = ctxPeriodo.parentElement;
+                    if (parent) {
+                        parent.innerHTML = `<h6 class="card-title"><i class="fas fa-calendar-alt"></i> Distribuição por Período (Mês/Ano)</h6>
+                            <p class="text-muted text-center py-4"><i class="fas fa-info-circle"></i> Nenhum período registrado</p>`;
+                    }
+                } else {
+                    dashboardChartsModulo[modulo].periodo = new Chart(ctxPeriodo.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: data.porPeriodoUniforme.map(p => p.label),
+                            datasets: [{
+                                label: 'Autorizações',
+                                data: data.porPeriodoUniforme.map(p => p.count),
+                                backgroundColor: '#3b82f6',
+                                borderRadius: 8
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        // Reincidentes
         const reinc = safeGet(`${P}AlunosReincidentes`);
         if (reinc) {
             const lista = data.tendencias?.alunosReincidentes || [];
@@ -3976,9 +4117,20 @@ async function abrirEditarModulo(modulo, id) {
         if (a.periodoFaltaFim) {
             periodoFimInput = getDataLocalISO(new Date(a.periodoFaltaFim));
         }
+
+        // 🆕 UNIFORME
+        let uniformeInicioInput = '';
+        let uniformeFimInput = '';
+        if (a.uniformePeriodoInicio) {
+            uniformeInicioInput = getDataLocalISO(new Date(a.uniformePeriodoInicio));
+        }
+        if (a.uniformePeriodoFim) {
+            uniformeFimInput = getDataLocalISO(new Date(a.uniformePeriodoFim));
+        }
         
         const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
         const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+        const mostraUniforme = cfg.tipo === 'uniforme';
         
         const cpfObrigatorio = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
         const cpfLabelHTML = cpfObrigatorio
@@ -4000,6 +4152,21 @@ async function abrirEditarModulo(modulo, id) {
                     <label class="form-label">Data do Registro</label>
                     <input type="date" id="editModuloData" class="form-control" value="${dataInput}" disabled>
                     <small class="text-muted">Data em que foi cadastrado</small>
+                </div>
+            </div>
+        ` : mostraUniforme ? `
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Início do Uniforme <span class="text-danger">*</span></label>
+                    <input type="date" id="editModuloUniformeInicio" class="form-control" value="${uniformeInicioInput}" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Término do Uniforme <span class="text-danger">*</span></label>
+                    <input type="date" id="editModuloUniformeFim" class="form-control" value="${uniformeFimInput}" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Data do Registro</label>
+                    <input type="date" id="editModuloData" class="form-control" value="${dataInput}" disabled>
                 </div>
             </div>
         ` : `
@@ -4215,6 +4382,23 @@ async function salvarEdicaoModulo() {
             notificar('Data final não pode ser anterior à data inicial');
             return;
         }
+    } else if (cfg.tipo === 'uniforme') {
+        // 🆕 UNIFORME (validação do período)
+        const uIni = safeGet('editModuloUniformeInicio')?.value || '';
+        const uFim = safeGet('editModuloUniformeFim')?.value || '';
+        
+        if (!uIni) {
+            notificar('Informe a data de início do uniforme');
+            return;
+        }
+        if (!uFim) {
+            notificar('Informe a data de término do uniforme');
+            return;
+        }
+        if (uFim < uIni) {
+            notificar('Data final não pode ser anterior à data inicial');
+            return;
+        }
     } else {
         if (!data) {
             notificar('Preencha a data');
@@ -4224,12 +4408,12 @@ async function salvarEdicaoModulo() {
     
     let tipoProvaPerdida = null;
     let tipoProvaPerdidaOutros = '';
-    let periodoProva = null;   // 🆕
+    let periodoProva = null;
     
     if (cfg.tipo === 'segunda_chamada') {
         tipoProvaPerdida = safeGet('editModuloTipoProva')?.value || '';
         tipoProvaPerdidaOutros = safeGet('editModuloTipoProvaOutros')?.value || '';
-        periodoProva = safeGet('editModuloPeriodoProva')?.value || '';   // 🆕
+        periodoProva = safeGet('editModuloPeriodoProva')?.value || '';
         
         if (!tipoProvaPerdida) {
             notificar('Informe o tipo de prova perdida');
@@ -4241,7 +4425,6 @@ async function salvarEdicaoModulo() {
             return;
         }
 
-        // 🆕
         if (!periodoProva) {
             notificar('Informe o período da prova (1º, 2º, 3º ou 4º Período)');
             return;
@@ -4294,10 +4477,16 @@ async function salvarEdicaoModulo() {
             body.periodoFaltaFim = periodoFaltaFim || periodoFaltaInicio;
         }
         
+        // 🆕 UNIFORME
+        if (cfg.tipo === 'uniforme') {
+            body.uniformePeriodoInicio = safeGet('editModuloUniformeInicio')?.value || '';
+            body.uniformePeriodoFim = safeGet('editModuloUniformeFim')?.value || '';
+        }
+        
         if (cfg.tipo === 'segunda_chamada') {
             body.tipoProvaPerdida = tipoProvaPerdida;
             body.tipoProvaPerdidaOutros = tipoProvaPerdidaOutros;
-            body.periodoProva = periodoProva;   // 🆕
+            body.periodoProva = periodoProva;
         }
 
         const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
@@ -4616,7 +4805,7 @@ async function carregarRelatorioModulo(modulo) {
     const dataInicio = safeGet(`${P}DataInicio`)?.value || '';
     const dataFim = safeGet(`${P}DataFim`)?.value || '';
     const tipoProvaPerdida = safeGet(`${P}FiltroTipoProva`)?.value || '';
-    const periodoProvaFiltro = safeGet(`${P}FiltroPeriodoProva`)?.value || '';   // 🆕
+    const periodoProvaFiltro = safeGet(`${P}FiltroPeriodoProva`)?.value || '';
 
     let url = '';
     if (tipo === 'geral') {
@@ -4668,7 +4857,9 @@ async function carregarRelatorioModulo(modulo) {
         notificar('Erro ao carregar relatório', 'error');
     }
 }
-
+// ============================================
+// 🖨️ EXPORTAR PDF - ATRASOS
+// ============================================
 function exportarPDFAtrasos() {
     if (!relatorioData) {
         notificar('⚠️ Gere um relatório primeiro', 'warning');
@@ -4780,6 +4971,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
     
     const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
     const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+    const mostraUniforme = cfg.tipo === 'uniforme';   // 🆕
     
     let titulo = `Relatório de ${cfg.nomeAmigavel} - Gestão Geral`;
     let subtitulo = '';
@@ -4857,6 +5049,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         <tr>
                             <th>Data do Registro</th>
                             ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                            ${mostraUniforme ? '<th>Período do Uniforme</th>' : ''}
                             ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                             ${mostrarTipoProva ? '<th>Período</th>' : ''}
                             <th>Aluno</th>
@@ -4868,6 +5061,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         <tr>
                             <td>${a.dataFormatada || '-'}</td>
                             ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                            ${mostraUniforme ? `<td><strong>${a.uniformePeriodoFormatado || '-'}</strong></td>` : ''}
                             ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                             ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                             <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
@@ -4896,6 +5090,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         <tr>
                             <th>Data do Registro</th>
                             ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                            ${mostraUniforme ? '<th>Período do Uniforme</th>' : ''}
                             ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                             ${mostrarTipoProva ? '<th>Período</th>' : ''}
                             <th>Aluno</th>
@@ -4906,6 +5101,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                         <tr>
                             <td>${a.dataFormatada || '-'}</td>
                             ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                            ${mostraUniforme ? `<td><strong>${a.uniformePeriodoFormatado || '-'}</strong></td>` : ''}
                             ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                             ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                             <td><strong>${escapeHTML(a.alunoNome || '')}</strong></td>
@@ -4925,6 +5121,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                     <tr>
                         <th>Data do Registro</th>
                         ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                        ${mostraUniforme ? '<th>Período do Uniforme</th>' : ''}
                         ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                         ${mostrarTipoProva ? '<th>Período</th>' : ''}
                         <th>Motivo</th>
@@ -4935,6 +5132,7 @@ function gerarHTMLRelatorioModulo(modulo, data, cfg) {
                     <tr>
                         <td>${a.dataFormatada || '-'}</td>
                         ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                        ${mostraUniforme ? `<td><strong>${a.uniformePeriodoFormatado || '-'}</strong></td>` : ''}
                         ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                         ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                         <td>${escapeHTML(a.motivoLabel || '')}</td>
@@ -5036,12 +5234,14 @@ function exibirRelatorioModulo(modulo, data, tipo) {
     
     const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
     const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+    const mostraUniforme = cfg.tipo === 'uniforme';
 
     if (tipo === 'geral') {
         container.innerHTML = `
             <div class="card"><div class="card-body">
                 <h5><i class="fas fa-chart-bar"></i> Relatório Geral</h5>
-                <p>Total: <strong>${data.totalRegistros || 0}</strong></p>
+                <p>Total: <strong>${data.totalRegistros || 0}</strong>${data.comAssinatura !== undefined ? ` | Com assinatura: <strong>${data.comAssinatura}</strong>` : ''}</p>
+                
                 <h6 class="mt-4">Por Motivo</h6>
                 <div class="row">${(data.porMotivo || []).map(m => `
                     <div class="col-md-4 mb-2">
@@ -5049,6 +5249,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             <strong>${escapeHTML(m.label)}</strong>: ${m.count}
                         </div>
                     </div>`).join('')}</div>
+                
                 ${mostrarTipoProva && (data.porTipoProva || []).length > 0 ? `
                     <h6 class="mt-4">Por Tipo de Prova Perdida</h6>
                     <div class="row">${(data.porTipoProva || []).map(t => `
@@ -5058,6 +5259,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             </div>
                         </div>`).join('')}</div>
                 ` : ''}
+                
                 ${mostrarTipoProva && (data.porPeriodoProva || []).length > 0 ? `
                     <h6 class="mt-4">Por Período da Prova</h6>
                     <div class="row">${(data.porPeriodoProva || []).map(p => `
@@ -5067,6 +5269,17 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             </div>
                         </div>`).join('')}</div>
                 ` : ''}
+                
+                ${mostraUniforme && (data.porPeriodoUniforme || []).length > 0 ? `
+                    <h6 class="mt-4">Distribuição por Período do Uniforme (Mês/Ano)</h6>
+                    <div class="row">${(data.porPeriodoUniforme || []).map(p => `
+                        <div class="col-md-3 mb-2">
+                            <div class="p-2" style="background:#eef2ff;border-radius:8px;">
+                                <strong>${escapeHTML(p.periodo || p.label)}</strong>: ${p.count}
+                            </div>
+                        </div>`).join('')}</div>
+                ` : ''}
+                
                 <h6 class="mt-4">Por Turma</h6>
                 <div class="table-responsive">
                     <table class="table table-sm">
@@ -5083,6 +5296,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                 <h5>Relatório da Turma: ${escapeHTML(data.turma || '')}</h5>
                 <p>Total: <strong>${data.estatisticas?.totalRegistros || 0}</strong></p>
                 <p>Alunos: <strong>${data.estatisticas?.totalAlunos || 0}</strong></p>
+                
                 <h6 class="mt-4">Por Aluno</h6>
                 <div class="table-responsive">
                     <table class="table table-sm">
@@ -5096,6 +5310,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                         </tbody>
                     </table>
                 </div>
+                
                 <h6 class="mt-4">Por Motivo</h6>
                 <div class="row">${(data.porMotivo || []).map(m => `
                     <div class="col-md-4 mb-2">
@@ -5110,6 +5325,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                 <h5>Relatório: ${escapeHTML(data.aluno?.nome || '')}</h5>
                 <p>Turma: ${escapeHTML(data.aluno?.turma || 'N/A')} | Matrícula: ${escapeHTML(data.aluno?.matricula || 'N/A')}</p>
                 <p>Total: <strong>${data.estatisticas?.totalRegistros || 0}</strong></p>
+                
                 <h6 class="mt-4">Por Motivo</h6>
                 <div class="row">${(data.porMotivo || []).map(m => `
                     <div class="col-md-4 mb-2">
@@ -5117,6 +5333,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             <strong>${escapeHTML(m.label)}</strong>: ${m.count}
                         </div>
                     </div>`).join('')}</div>
+                
                 <h6 class="mt-4">Histórico</h6>
                 <div class="table-responsive">
                     <table class="table table-sm">
@@ -5124,6 +5341,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             <tr>
                                 <th>Data Registro</th>
                                 ${mostrarPeriodoFalta ? '<th>Período da Falta</th>' : ''}
+                                ${mostraUniforme ? '<th>Período do Uniforme</th>' : ''}
                                 ${mostrarTipoProva ? '<th>Tipo de Prova</th>' : ''}
                                 ${mostrarTipoProva ? '<th>Período</th>' : ''}
                                 <th>Motivo</th>
@@ -5134,6 +5352,7 @@ function exibirRelatorioModulo(modulo, data, tipo) {
                             <tr>
                                 <td>${a.dataFormatada}</td>
                                 ${mostrarPeriodoFalta ? `<td><strong>${a.periodoFaltaFormatado || '-'}</strong></td>` : ''}
+                                ${mostraUniforme ? `<td><strong>${a.uniformePeriodoFormatado || '-'}</strong></td>` : ''}
                                 ${mostrarTipoProva ? `<td>${escapeHTML(a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || '-')}</td>` : ''}
                                 ${mostrarTipoProva ? `<td>${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</td>` : ''}
                                 <td>${escapeHTML(a.motivoLabel)}</td>
@@ -5145,7 +5364,6 @@ function exibirRelatorioModulo(modulo, data, tipo) {
             </div></div>`;
     }
 }
-
 function exportarCSVModulo(modulo) {
     const data = relatoriosModulo[modulo];
     const cfg = getCfg(modulo);
@@ -5164,9 +5382,9 @@ function exportarCSVModulo(modulo) {
     const P = getPrefixo(modulo);
     const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
     const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+    const mostraUniforme = cfg.tipo === 'uniforme';   // 🆕
     const mostrarHorarios = cfg.tipo === 'autorizacao';
 
-    // ---------- Título / subtítulo ----------
     const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
     let titulo = `Relatório de ${cfg.nomeAmigavel}`;
     let subtitulo = '';
@@ -5182,12 +5400,11 @@ function exportarCSVModulo(modulo) {
         subtitulo = 'Visão consolidada de todos os registros';
     }
 
-    // ---------- Filtros aplicados ----------
     const filtros = [];
     const di = safeGet(`${P}DataInicio`)?.value;
     const df = safeGet(`${P}DataFim`)?.value;
     const tipoProvaFiltro = safeGet(`${P}FiltroTipoProva`)?.value;
-    const periodoProvaFiltro = safeGet(`${P}FiltroPeriodoProva`)?.value;   // 🆕
+    const periodoProvaFiltro = safeGet(`${P}FiltroPeriodoProva`)?.value;
 
     if (di) filtros.push({ label: 'Data inicial', valor: di });
     if (df) filtros.push({ label: 'Data final', valor: df });
@@ -5196,12 +5413,10 @@ function exportarCSVModulo(modulo) {
     if (tipoProvaFiltro && tipoProvaFiltro !== 'todos') {
         filtros.push({ label: 'Tipo de Prova', valor: tipoProvaFiltro });
     }
-    // 🆕
     if (periodoProvaFiltro && periodoProvaFiltro !== 'todos') {
         filtros.push({ label: 'Período da Prova', valor: periodoProvaFiltro });
     }
 
-    // ---------- Colunas ----------
     const colunas = [
         {
             label: 'Data do Registro',
@@ -5223,12 +5438,19 @@ function exportarCSVModulo(modulo) {
         });
     }
 
+    // 🆕 UNIFORME
+    if (mostraUniforme) {
+        colunas.push({
+            label: 'Período do Uniforme',
+            format: (a) => a.uniformePeriodoFormatado || ''
+        });
+    }
+
     if (mostrarTipoProva) {
         colunas.push({
             label: 'Tipo de Prova Perdida',
             format: (a) => a.tipoProvaPerdidaFormatado || a.tipoProvaPerdida || ''
         });
-        // 🆕
         colunas.push({
             label: 'Período da Prova',
             format: (a) => a.periodoProvaFormatado || a.periodoProva || ''
@@ -5307,20 +5529,34 @@ function aplicarFiltrosLista(modulo) {
 function configurarEventosModulo(modulo) {
     const P = getPrefixo(modulo);
 
+    // Listener do dashboard
     safeGet(`${modulo}-dashboard-tab`)?.addEventListener('shown.bs.tab', () => {
         carregarDashboardModulo(modulo);
     });
 
+    // 🆕 Para UNIFORME: sub-abas têm IDs diferentes (uniforme-sub-dashboard-tab, etc)
+    if (modulo === 'uniforme') {
+        safeGet('uniforme-sub-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
+            carregarDashboardModulo(modulo);
+        });
+        safeGet('uniforme-sub-relatorios-tab')?.addEventListener('shown.bs.tab', () => {
+            carregarTurmasFiltroModulo(modulo);
+        });
+    }
+
+    // Listener dos relatórios
     safeGet(`${modulo}-relatorios-tab`)?.addEventListener('shown.bs.tab', () => {
         carregarTurmasFiltroModulo(modulo);
     });
 
+    // Listener do select tipo relatório
     const selectTipo = safeGet(`${P}TipoRelatorio`);
     if (selectTipo && !selectTipo.dataset.listenerAttached) {
         selectTipo.dataset.listenerAttached = 'true';
         selectTipo.addEventListener('change', () => toggleRelatorioFiltrosModulo(modulo));
     }
 
+    // Filtros da lista
     safeGet(`filtroLista${P}Aluno`)?.addEventListener('input', () => {
         clearTimeout(window[`_timeoutFiltro${P}`]);
         window[`_timeoutFiltro${P}`] = setTimeout(() => carregarListaModulo(modulo, 1), 500);
@@ -5399,6 +5635,9 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
     
     const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
     const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
+    // 🆕 UNIFORME
+    const mostrarUniforme = cfg.tipo === 'uniforme';
+    
     let periodoFaltaHTML = '';
     
     if (mostrarPeriodoFalta && a.periodoFaltaInicio) {
@@ -5414,6 +5653,32 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
                 <p style="margin: 0; font-size: 11pt; text-align: center;">
                     <strong>${texto}</strong>
                 </p>
+            </div>
+        `;
+    }
+    
+    // 🆕 UNIFORME — texto padrão
+    let uniformeHTML = '';
+    if (mostrarUniforme && a.uniformePeriodoInicio) {
+        const ini = new Date(a.uniformePeriodoInicio);
+        const fim = a.uniformePeriodoFim ? new Date(a.uniformePeriodoFim) : ini;
+        const iniFmt = ini.toLocaleDateString('pt-BR');
+        const fimFmt = fim.toLocaleDateString('pt-BR');
+        const textoPeriodo = iniFmt === fimFmt ? iniFmt : `${iniFmt} a ${fimFmt}`;
+        
+        uniformeHTML = `
+            <div class="section-title">👕 Período da Autorização (Uniforme)</div>
+            <div class="motivo-box" style="background: #eef2ff; border-color: #1e3c72;">
+                <p style="margin: 0; font-size: 11pt; text-align: center;">
+                    <strong>${textoPeriodo}</strong>
+                </p>
+            </div>
+            <div class="descricao-box" style="font-size: 10pt; line-height: 1.55; margin-top: 6px; background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px 10px;">
+                Autorizo o(a) aluno(a) <strong>${escapeHTML(a.alunoNome || '')}</strong>, 
+                do curso <strong>${escapeHTML(a.alunoCurso || 'Não informado')}</strong>, 
+                da turma <strong>${escapeHTML(a.alunoTurma || 'Não informada')}</strong>, 
+                a permanecer <strong>sem uniforme</strong> no ambiente escolar no período de 
+                <strong>${textoPeriodo}</strong>.
             </div>
         `;
     }
@@ -5543,6 +5808,7 @@ function gerarHTMLImpressao(modulo, a, qrCodeUrl) {
         </div>
         
         ${periodoFaltaHTML}
+        ${uniformeHTML}
         ${tipoProvaHTML}
         ${periodoProvaHTML}
         
@@ -5643,27 +5909,46 @@ async function toggleNecessitaAssinatura(modulo) {
     if (!check) return;
     
     if (check.checked) {
-        // ==========================================
-        // 1. Verifica se tem aluno selecionado
-        // ==========================================
-        const snapshot = montarSnapshotAtendimento(modulo);
-        
-        if (!snapshot.alunoId) {
+        // CAPTURA FORÇADA DIRETO DA TELA E DO ESTADO
+        const est = estados[modulo];
+        let alunoId = est?.currentAluno?.id;
+        let alunoNome = est?.currentAluno?.nome;
+
+        // Se o estado falhar, pega o nome direto da tela (DOM)
+        if (!alunoId) {
+            const P = getPrefixo(modulo);
+            const elNome = safeGet(`alunoNome${P}`);
+            alunoNome = elNome ? elNome.textContent : '';
+            
+            if (alunoNome && alunoNome !== '-') {
+                // Cria um ID provisório só pra não travar
+                alunoId = "FORCADO_" + Date.now(); 
+            }
+        }
+
+        if (!alunoId) {
             notificar('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
             check.checked = false;
             return;
         }
+
+        const snapshot = montarSnapshotAtendimento(modulo);
         
-        // ==========================================
-        // 2. Gera ID único da sessão
-        // ==========================================
+        // 🔥 FORÇANDO OS DADOS NO SNAPSHOT (GARANTIA TOTAL)
+        snapshot.alunoId = alunoId;
+        snapshot.alunoNome = alunoNome;
+        if (est?.currentAluno) {
+            snapshot.alunoTurma = est.currentAluno.turma;
+            snapshot.alunoCurso = est.currentAluno.curso;
+            snapshot.alunoMatricula = est.currentAluno.matricula;
+        }
+
+        console.log(`📸 [${modulo}] Snapshot FORÇADO para assinatura:`, snapshot);
+        
         const sessaoId = gerarUUID();
         estadoSessaoAssinatura[modulo].sessaoId = sessaoId;
         estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
         
-        // ==========================================
-        // 3. Cria a sessão no backend
-        // ==========================================
         try {
             const response = await fetch('/api/gestao-geral/sessoes-assinatura', {
                 method: 'POST',
@@ -5683,9 +5968,6 @@ async function toggleNecessitaAssinatura(modulo) {
             
             console.log('✅ Sessão de assinatura criada:', sessaoId);
             
-            // ==========================================
-            // 4. Gera QR Code apontando para ESTA MESMA PÁGINA
-            // ==========================================
             const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
             
             try {
@@ -5706,19 +5988,11 @@ async function toggleNecessitaAssinatura(modulo) {
                         `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
                 }
             } catch (e) {
-                console.warn('Fallback QR Code:', e);
                 estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
                     `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
             
-            // ==========================================
-            // 5. Abre o modal com QR
-            // ==========================================
             abrirModalAssinatura(modulo, urlAssinatura);
-            
-            // ==========================================
-            // 6. Inicia o polling
-            // ==========================================
             iniciarMonitoramentoSessao(modulo, sessaoId);
             
             notificar('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
@@ -5730,7 +6004,6 @@ async function toggleNecessitaAssinatura(modulo) {
             estadoSessaoAssinatura[modulo].sessaoId = null;
         }
     } else {
-        // DESMARCOU → cancela a sessão
         await cancelarSessaoAssinatura(modulo);
     }
 }
@@ -5739,14 +6012,51 @@ async function toggleNecessitaAssinatura(modulo) {
  * Monta snapshot dos dados atuais para exibir na tela de assinatura.
  */
 function montarSnapshotAtendimento(modulo) {
+    // 1. Garante que o estado existe
+    const est = estados[modulo];
+    if (!est) {
+        console.error(`❌ [${modulo}] Estado não encontrado!`);
+        return { alunoId: null };
+    }
+
+    // 2. CAPTURA O ALUNO: Tenta pelo estado, se não tiver, tenta pela tela (DOM)
+    let aluno = est.currentAluno;
+    
+    // Se o aluno não estiver no estado, vamos forçar a captura pela tela
+    if (!aluno || !aluno.id) {
+        const P = getPrefixo(modulo);
+        const nomeNaTela = safeGet(`alunoNome${P}`)?.textContent;
+        
+        if (nomeNaTela && nomeNaTela !== '-') {
+            // Cria um objeto de segurança com o que temos na tela
+            aluno = {
+                id: "SALVO_PELA_TELA_" + Date.now(), 
+                nome: nomeNaTela,
+                turma: safeGet(`alunoTurma${P}`)?.textContent || '',
+                curso: safeGet(`alunoCurso${P}`)?.textContent || '',
+                matricula: safeGet(`alunoMatricula${P}`)?.textContent || ''
+            };
+        }
+    }
+
+    // Se mesmo assim não achou, aborta
+    if (!aluno || !aluno.id) {
+        console.error(`❌ [${modulo}] Impossível capturar o aluno.`);
+        return { alunoId: null };
+    }
+
+    const cfg = getCfg(modulo);
+    const I = getPrefixoInput(modulo);
+
+    // --- MÓDULO ATRASO ---
     if (modulo === 'atraso') {
         return {
-            alunoId: currentAluno?.id,
-            alunoNome: currentAluno?.nome,
-            alunoMatricula: currentAluno?.matricula,
-            alunoTurma: currentAluno?.turma,
-            alunoCurso: currentAluno?.curso,
-            alunoFoto: currentAluno?.fotoPerfil,
+            alunoId: aluno.id,
+            alunoNome: aluno.nome,
+            alunoMatricula: aluno.matricula,
+            alunoTurma: aluno.turma,
+            alunoCurso: aluno.curso,
+            alunoFoto: aluno.fotoPerfil,
             motivo: motivoSelecionado,
             motivoLabel: getMotivoLabelAtraso(motivoSelecionado),
             descricao: safeGet('descricao')?.value || '',
@@ -5754,13 +6064,8 @@ function montarSnapshotAtendimento(modulo) {
             dataHora: safeGet('atrasoData')?.value || ''
         };
     }
-    
-    const cfg = getCfg(modulo);
-    const P = getPrefixo(modulo);
-    const I = getPrefixoInput(modulo);
-    const est = estados[modulo];
-    const aluno = est.currentAluno || {};
-    
+
+    // --- OUTROS MÓDULOS ---
     const motivosLabel = {
         'problemas_pessoais': 'Problemas Pessoais',
         'problemas_saude': 'Problemas de Saúde',
@@ -5770,24 +6075,38 @@ function montarSnapshotAtendimento(modulo) {
         'viagens': 'Viagens',
         'consultas': 'Consultas',
         'viagem': 'Viagem',
+        'tratamento_medico': 'Tratamento Médico',
         'outros': 'Outros'
     };
-    
-    const periodoIni = safeGet(`${I}PeriodoFaltaInicio`)?.value || '';
-    const periodoFim = safeGet(`${I}PeriodoFaltaFim`)?.value || '';
-    
-    let periodoFormatado = '';
-    if (periodoIni) {
-        const ini = new Date(periodoIni + 'T12:00:00');
-        const fim = periodoFim ? new Date(periodoFim + 'T12:00:00') : ini;
+
+    // Captura Período de Falta
+    const pIni = safeGet(`${I}PeriodoFaltaInicio`)?.value || '';
+    const pFim = safeGet(`${I}PeriodoFaltaFim`)?.value || '';
+    let pFormatado = '';
+    if (pIni) {
+        const dIni = new Date(pIni + 'T12:00:00');
+        const dFim = pFim ? new Date(pFim + 'T12:00:00') : dIni;
         const fmt = d => d.toLocaleDateString('pt-BR');
-        periodoFormatado = ini.getTime() === fim.getTime() ? fmt(ini) : `${fmt(ini)} a ${fmt(fim)}`;
+        pFormatado = dIni.getTime() === dFim.getTime() ? fmt(dIni) : `${fmt(dIni)} a ${fmt(dFim)}`;
     }
-    
-    const tipoProva = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
-    const tipoProvaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
-    const periodoProva = safeGet('segundaChamadaPeriodoProva')?.value || '';   // 🆕
-    
+
+    // Captura Tipo de Prova
+    const tProva = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
+    const tProvaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
+    const pProva = safeGet('segundaChamadaPeriodoProva')?.value || '';
+
+    // Captura Período do Uniforme
+    const uIni = safeGet('uniformePeriodoInicio')?.value || '';
+    const uFim = safeGet('uniformePeriodoFim')?.value || '';
+    let uFormatado = '';
+    if (uIni) {
+        const dIni = new Date(uIni + 'T12:00:00');
+        const dFim = uFim ? new Date(uFim + 'T12:00:00') : dIni;
+        const fmt = d => d.toLocaleDateString('pt-BR');
+        uFormatado = dIni.getTime() === dFim.getTime() ? fmt(dIni) : `${fmt(dIni)} a ${fmt(dFim)}`;
+    }
+
+    // RETORNO FINAL
     return {
         alunoId: aluno.id,
         alunoNome: aluno.nome,
@@ -5797,14 +6116,15 @@ function montarSnapshotAtendimento(modulo) {
         alunoFoto: aluno.fotoPerfil,
         motivo: est.motivoSelecionado,
         motivoLabel: motivosLabel[est.motivoSelecionado] || est.motivoSelecionado,
-        periodoFaltaInicio: periodoIni || null,
-        periodoFaltaFim: periodoFim || periodoIni || null,
-        periodoFaltaFormatado: periodoFormatado,
-        tipoProvaPerdida: cfg.tipo === 'segunda_chamada' ? tipoProva : null,
-        tipoProvaPerdidaFormatado: cfg.tipo === 'segunda_chamada' 
-            ? (tipoProva === 'Outros' && tipoProvaOutros ? `Outros (${tipoProvaOutros})` : tipoProva)
-            : null,
-        periodoProva: cfg.tipo === 'segunda_chamada' ? periodoProva : null,   // 🆕
+        periodoFaltaInicio: pIni || null,
+        periodoFaltaFim: pFim || pIni || null,
+        periodoFaltaFormatado: pFormatado,
+        tipoProvaPerdida: cfg.tipo === 'segunda_chamada' ? tProva : null,
+        tipoProvaPerdidaFormatado: cfg.tipo === 'segunda_chamada' ? (tProva === 'Outros' && tProvaOutros ? `Outros (${tProvaOutros})` : tProva) : null,
+        periodoProva: cfg.tipo === 'segunda_chamada' ? pProva : null,
+        uniformePeriodoInicio: uIni || null,
+        uniformePeriodoFim: uFim || null,
+        uniformePeriodoFormatado: uFormatado,
         responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
         responsavelCPF: safeGet(`${I}ResponsavelCPF`)?.value || '',
         observacoes: safeGet(`${I}Observacoes`)?.value || '',
@@ -5823,9 +6143,6 @@ function getMotivoLabelAtraso(motivo) {
     return labels[motivo] || motivo;
 }
 
-/**
- * Abre o modal com QR Code (SEM sair da página).
- */
 function abrirModalAssinatura(modulo, urlAssinatura) {
     const antigo = safeGet('modalAssinaturaQR');
     if (antigo) antigo.remove();
@@ -5991,7 +6308,6 @@ function iniciarMonitoramentoSessao(modulo, sessaoId) {
     
     const intervalId = setInterval(async () => {
         try {
-            // ⚠️ Rota PÚBLICA — sem token (mesmo padrão da psicologia)
             const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`);
             
             if (!response.ok) {
@@ -5999,7 +6315,6 @@ function iniciarMonitoramentoSessao(modulo, sessaoId) {
                     console.warn('⚠️ Sessão expirou ou foi removida');
                     pararMonitoramentoSessao(modulo);
                     
-                    // Limpa estado
                     estadoSessaoAssinatura[modulo].sessaoId = null;
                     const check = safeGet(`${modulo}NecessitaAssinatura`);
                     if (check) check.checked = false;
@@ -6018,16 +6333,11 @@ function iniciarMonitoramentoSessao(modulo, sessaoId) {
             if (data.sessao.status === 'assinado') {
                 console.log('✅ Assinatura capturada!');
                 
-                // Guarda a assinatura no estado
                 estadoSessaoAssinatura[modulo].assinaturaCapturada = data.sessao.assinaturaBase64;
                 
-                // Atualiza o bloco visual
                 atualizarStatusAssinado(modulo, data.sessao);
-                
-                // Para o polling
                 pararMonitoramentoSessao(modulo);
                 
-                // Fecha o modal
                 if (estadoSessaoAssinatura[modulo].modalInstance) {
                     estadoSessaoAssinatura[modulo].modalInstance.hide();
                 }
@@ -6598,7 +6908,6 @@ function limparEstadoSessaoAssinaturaAluno(modulo) {
 async function mostrarTelaAssinatura(sessaoId) {
     console.log('📱 [MODO ASSINATURA] Iniciando tela para sessão:', sessaoId);
     
-    // Esconde todo o conteúdo principal
     document.querySelectorAll('.container > *').forEach(el => {
         if (el && !el.id?.includes('telaAssinatura')) {
             el.style.display = 'none';
@@ -6664,7 +6973,6 @@ async function mostrarTelaAssinatura(sessaoId) {
     `;
     
     try {
-        // ⚠️ Rota PÚBLICA — sem token
         const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoId}`);
         const data = await response.json();
         
@@ -6706,7 +7014,10 @@ async function mostrarTelaAssinatura(sessaoId) {
             'autorizacao': 'Autorização',
             'justificativa': 'Justificativa',
             'segunda_chamada': '2ª Chamada',
-            'atraso': 'Atraso'
+            'atraso': 'Atraso',
+            'uniforme': 'Uniforme',
+            'atendimento': 'Atendimento',
+            'atendimento_aluno': 'Atendimento (Aluno)'
         }[data.sessao.tipo] || data.sessao.tipo;
         
         safeGet('telaAssinaturaInfo').innerHTML = `
@@ -6732,6 +7043,12 @@ async function mostrarTelaAssinatura(sessaoId) {
                     <div>
                         <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Período da Falta</span>
                         <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.periodoFaltaFormatado)}</span>
+                    </div>
+                ` : ''}
+                ${d.uniformePeriodoFormatado ? `
+                    <div>
+                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Período do Uniforme</span>
+                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.uniformePeriodoFormatado)}</span>
                     </div>
                 ` : ''}
                 ${d.tipoProvaPerdidaFormatado ? `
@@ -6767,177 +7084,6 @@ async function mostrarTelaAssinatura(sessaoId) {
                 <p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p>
             </div>
         `;
-    }
-}
-
-function inicializarCanvasTela() {
-    const canvas = safeGet('canvasAssinatura');
-    const wrapper = safeGet('canvasWrapper');
-    const placeholder = safeGet('placeholder');
-    if (!canvas || !wrapper) return;
-    
-    telaCanvas = canvas;
-    telaWrapper = wrapper;
-    telaPlaceholder = placeholder;
-    telaTemAssinatura = false;
-    telaDesenhando = false;
-    
-    const ajustar = () => {
-        const rect = wrapper.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) { setTimeout(ajustar, 200); return; }
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        canvas.style.width = rect.width + 'px';
-        canvas.style.height = rect.height + 'px';
-        const ctx = canvas.getContext('2d');
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#1e3c72';
-        telaCtx = ctx;
-    };
-    ajustar();
-    
-    window.removeEventListener('resize', handleResizeCanvasTela);
-    window.addEventListener('resize', handleResizeCanvasTela);
-    
-    const getPos = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        let cx, cy;
-        if (e.touches?.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
-        else if (e.changedTouches?.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
-        else { cx = e.clientX; cy = e.clientY; }
-        return { x: cx - rect.left, y: cy - rect.top };
-    };
-    
-    const iniciar = (e) => {
-        e.preventDefault();
-        telaDesenhando = true;
-        telaTemAssinatura = true;
-        const p = getPos(e);
-        telaLastX = p.x;
-        telaLastY = p.y;
-        wrapper.style.borderColor = '#1e3c72';
-        wrapper.style.borderStyle = 'solid';
-        placeholder.style.opacity = '0';
-        
-        const btn = safeGet('btnSalvarAssinatura');
-        if (btn) {
-            btn.disabled = false;
-            btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-            btn.style.cursor = 'pointer';
-        }
-    };
-    
-    const desenhar = (e) => {
-        if (!telaDesenhando) return;
-        e.preventDefault();
-        const p = getPos(e);
-        telaCtx.beginPath();
-        telaCtx.moveTo(telaLastX, telaLastY);
-        telaCtx.lineTo(p.x, p.y);
-        telaCtx.stroke();
-        telaLastX = p.x;
-        telaLastY = p.y;
-    };
-    
-    const parar = (e) => {
-        if (e?.preventDefault) e.preventDefault();
-        telaDesenhando = false;
-    };
-    
-    canvas.addEventListener('touchstart', iniciar, { passive: false });
-    canvas.addEventListener('touchmove', desenhar, { passive: false });
-    canvas.addEventListener('touchend', parar, { passive: false });
-    canvas.addEventListener('touchcancel', parar, { passive: false });
-    canvas.addEventListener('mousedown', iniciar);
-    canvas.addEventListener('mousemove', desenhar);
-    canvas.addEventListener('mouseup', parar);
-    canvas.addEventListener('mouseleave', () => { if (telaDesenhando) parar(); });
-}
-
-function limparAssinaturaTela() {
-    if (!telaCtx || !telaCanvas) return;
-    const rect = telaCanvas.getBoundingClientRect();
-    telaCtx.clearRect(0, 0, rect.width, rect.height);
-    telaTemAssinatura = false;
-    if (telaPlaceholder) telaPlaceholder.style.opacity = '1';
-    if (telaWrapper) {
-        telaWrapper.style.borderColor = '#cbd5e0';
-        telaWrapper.style.borderStyle = 'dashed';
-    }
-    const btn = safeGet('btnSalvarAssinatura');
-    if (btn) {
-        btn.disabled = true;
-        btn.style.background = '#cbd5e0';
-        btn.style.cursor = 'not-allowed';
-    }
-}
-
-async function salvarAssinaturaTela() {
-    if (!telaTemAssinatura || !sessaoAssinaturaModo) return;
-    
-    const btn = safeGet('btnSalvarAssinatura');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
-    }
-    
-    try {
-        const base64 = telaCanvas.toDataURL('image/png');
-        
-        const response = await fetch(`/api/gestao-geral/sessoes-assinatura/${sessaoAssinaturaModo}/assinar`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                assinaturaBase64: base64,
-                assinanteNome: 'Responsável'
-            })
-        });
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Erro ao salvar');
-        
-        safeGet('telaAssinaturaInfo').innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%;">
-                <i class="fas fa-check-circle" style="font-size: 56px; color: #10b981; margin-bottom: 15px; display: block;"></i>
-                <h2 style="color: #10b981; margin: 0 0 8px; font-size: 20px;">Assinatura Confirmada!</h2>
-                <p style="color: #64748b; margin: 0 0 20px; font-size: 14px; line-height: 1.5;">
-                    A assinatura foi registrada com sucesso.<br>
-                    Você já pode fechar esta janela.
-                </p>
-                <button onclick="window.close()" 
-                        style="padding: 12px 28px; background: #1e3c72; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-times"></i> Fechar
-                </button>
-            </div>
-        `;
-        safeGet('telaAssinaturaArea').style.display = 'none';
-        
-        const telaInfo = safeGet('telaAssinaturaInfo');
-        if (telaInfo) {
-            telaInfo.style.flex = '1';
-            telaInfo.style.display = 'flex';
-            telaInfo.style.alignItems = 'center';
-            telaInfo.style.justifyContent = 'center';
-            telaInfo.style.maxHeight = 'none';
-            telaInfo.style.borderLeft = 'none';
-            telaInfo.style.borderRadius = '0 0 16px 16px';
-        }
-        
-    } catch (e) {
-        console.error('Erro ao salvar assinatura:', e);
-        notificar('❌ ' + e.message, 'error');
-        
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> Confirmar Assinatura';
-        }
     }
 }
 
@@ -7000,18 +7146,26 @@ function notificar(mensagem, tipo = 'success', duracao = 3500) {
 function selecionarMotivoAutorizacao(motivo) { selecionarMotivoModulo('autorizacao', motivo); }
 function selecionarMotivoJustificativa(motivo) { selecionarMotivoModulo('justificativa', motivo); }
 function selecionarMotivoSegundaChamada(motivo) { selecionarMotivoModulo('segundaChamada', motivo); }
+// 🆕 UNIFORME
+function selecionarMotivoUniforme(motivo) { selecionarMotivoModulo('uniforme', motivo); }
 
 function registrarAutorizacao() { registrarModulo('autorizacao'); }
 function registrarJustificativa() { registrarModulo('justificativa'); }
 function registrarSegundaChamada() { registrarModulo('segundaChamada'); }
+// 🆕 UNIFORME
+function registrarUniforme() { registrarModulo('uniforme'); }
 
 function limparTelaAutorizacao() { limparTelaModulo('autorizacao'); }
 function limparTelaJustificativa() { limparTelaModulo('justificativa'); }
 function limparTelaSegundaChamada() { limparTelaModulo('segundaChamada'); }
+// 🆕 UNIFORME
+function limparTelaUniforme() { limparTelaModulo('uniforme'); }
 
 function carregarAutorizacoes() { carregarListaModulo('autorizacao', 1); }
 function carregarJustificativas() { carregarListaModulo('justificativa', 1); }
 function carregarSegundaChamada() { carregarListaModulo('segundaChamada', 1); }
+// 🆕 UNIFORME
+function carregarUniformes() { carregarListaModulo('uniforme', 1); }
 
 function imprimirAutorizacao(id) { imprimirModulo('autorizacao', id); }
 function imprimirJustificativa(id) { imprimirModulo('justificativa', id); }
@@ -7139,7 +7293,6 @@ async function carregarNotificacoesSistema() {
 
 async function carregarLembretesRemarcacao() {
     // ⚠️ Gestão Geral NÃO tem sistema de remarcações (é exclusivo da Psicologia)
-    // Retorna vazio para não quebrar o sistema de notificações unificado
     __lembretesCache = [];
     return;
 }
@@ -7430,15 +7583,27 @@ window.setModo = setModo;
 window.selecionarMotivoAutorizacao = selecionarMotivoAutorizacao;
 window.selecionarMotivoJustificativa = selecionarMotivoJustificativa;
 window.selecionarMotivoSegundaChamada = selecionarMotivoSegundaChamada;
+// 🆕 UNIFORME
+window.selecionarMotivoUniforme = selecionarMotivoUniforme;
+
 window.registrarAutorizacao = registrarAutorizacao;
 window.registrarJustificativa = registrarJustificativa;
 window.registrarSegundaChamada = registrarSegundaChamada;
+// 🆕 UNIFORME
+window.registrarUniforme = registrarUniforme;
+
 window.limparTelaAutorizacao = limparTelaAutorizacao;
 window.limparTelaJustificativa = limparTelaJustificativa;
 window.limparTelaSegundaChamada = limparTelaSegundaChamada;
+// 🆕 UNIFORME
+window.limparTelaUniforme = limparTelaUniforme;
+
 window.carregarAutorizacoes = carregarAutorizacoes;
 window.carregarJustificativas = carregarJustificativas;
 window.carregarSegundaChamada = carregarSegundaChamada;
+// 🆕 UNIFORME
+window.carregarUniformes = carregarUniformes;
+
 window.imprimirModulo = imprimirModulo;
 window.excluirModulo = excluirModulo;
 window.carregarListaModulo = carregarListaModulo;
