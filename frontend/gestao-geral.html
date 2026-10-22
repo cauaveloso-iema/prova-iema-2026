@@ -304,6 +304,7 @@
                         </ul>
                         
                         <div class="tab-content">
+                            <!-- ABA REGISTRAR -->
                             <div class="tab-pane fade show active" id="atraso-registrar">
                                 <div id="modoAutomatico">
                                     <div class="card">
@@ -452,7 +453,7 @@
                                                 placeholder="Informações complementares..."></textarea>
                                     </div>
                                     
-                                    <!-- 🆕 ASSINATURA POR QR CODE (ATRASO) — RESPONSÁVEL + ALUNO -->
+                                    <!-- 🆕 ASSINATURA POR QR CODE (ATRASO) -->
                                     <div class="assinatura-wrapper">
                                         <div class="form-check p-3 mb-2" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
                                             <input class="form-check-input" type="checkbox" 
@@ -494,6 +495,7 @@
                                 </div>
                             </div>
                             
+                            <!-- ABA DASHBOARD -->
                             <div class="tab-pane fade" id="atraso-dashboard">
                                 <div class="row mb-4">
                                     <div class="col-md-3 mb-3">
@@ -564,42 +566,10 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    <div class="card mt-4" id="cardAtrasosRecentes" style="width: 100%;">
-                                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2"
-                                            style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
-                                            <div>
-                                                <i class="fas fa-list"></i> 
-                                                <strong>Atrasos Recentes</strong>
-                                                <span class="badge bg-light text-dark ms-2" id="contadorAtrasosRecentes">0</span>
-                                            </div>
-                                            <div class="d-flex gap-2 flex-wrap">
-                                                <input type="text" 
-                                                    id="filtroAtrasosRecentesBusca" 
-                                                    class="form-control form-control-sm" 
-                                                    placeholder="Buscar aluno..." 
-                                                    style="width: 200px;" 
-                                                    autocomplete="off">
-                                                <select id="filtroAtrasosRecentesTurma" class="form-select form-select-sm" style="width: 150px;">
-                                                    <option value="">Todas as turmas</option>
-                                                </select>
-                                                <button class="btn btn-sm btn-light" onclick="carregarAtrasosRecentes(1)">
-                                                    <i class="fas fa-sync-alt"></i> Atualizar
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="listaAtrasosRecentes">
-                                                <div class="text-center py-4">
-                                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                                                    <p class="text-muted mt-2 mb-0">Carregando atrasos...</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                             
+                            <!-- ABA RELATÓRIOS -->
                             <div class="tab-pane fade" id="atraso-relatorios">
                                 <div class="relatorio-filtros">
                                     <div class="row g-3">
@@ -662,7 +632,58 @@
                                     </div>
                                 </div>
                             </div>
+                        </div> <!-- FIM DO TAB-CONTENT -->
+
+                        <!-- 🆕 CARD FORA DO TAB-CONTENT (Fica visível em todas as sub-abas) -->
+                        <div class="card mt-4" id="cardAtrasosRecentes" style="width: 100%;">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
+                                <h5 class="mb-0"><i class="fas fa-history"></i> Atrasos Registrados</h5>
+                                <button class="btn btn-sm btn-light" onclick="carregarAtrasosRecentes(1)">
+                                    <i class="fas fa-sync-alt"></i> Atualizar
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-3">
+                                        <input type="text" id="filtroAtrasosRecentesBusca" class="form-control form-control-sm" placeholder="Buscar por aluno...">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <select id="filtroAtrasosRecentesTurma" class="form-select form-select-sm">
+                                            <option value="">Todas as turmas</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <select id="filtroAtrasosRecentesMotivo" class="form-select form-select-sm">
+                                            <option value="">Todos os motivos</option>
+                                            <option value="onibus">Ônibus</option>
+                                            <option value="transito">Trânsito</option>
+                                            <option value="problemas_pessoais">Problemas Pessoais</option>
+                                            <option value="fardamento">Fardamento</option>
+                                            <option value="outros">Outros</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="date" id="filtroAtrasosRecentesDataInicio" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="date" id="filtroAtrasosRecentesDataFim" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-md-1">
+                                        <button class="btn btn-primary btn-sm w-100" onclick="carregarAtrasosRecentes(1)">
+                                            <i class="fas fa-filter"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="listaAtrasosRecentes">
+                                    <div class="text-center py-3">
+                                        <div class="loading-spinner"></div>
+                                        <p>Carregando atrasos...</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                        <!-- FIM DO CARD -->
                     </div>
                                         <!-- ═══════════════════════════════════════════════════════════════ -->
                     <!-- ABA AUTORIZAÇÃO (3 sub-abas: Registrar | Dashboard | Relatórios) -->

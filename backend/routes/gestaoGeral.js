@@ -473,6 +473,7 @@ router.get('/atraso/aluno/:id', authenticateToken, verificarGestaoGeral, async (
     if (!aluno) return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
     if (aluno.role !== 'aluno') return res.status(400).json({ success: false, error: 'Usuário não é aluno' });
     
+    // Pega os últimos 5 atrasos
     const historicoRecente = await Atraso.find({ alunoId: aluno._id })
       .sort({ dataHora: -1 }).limit(5);
     
@@ -495,6 +496,15 @@ router.get('/atraso/aluno/:id', authenticateToken, verificarGestaoGeral, async (
         id: a._id, motivo: a.motivo,
         motivoLabel: Atraso.getMotivoLabel(a.motivo),
         descricao: a.descricao, dataHora: a.dataHora
+      })),
+      // 🆕 PADRONIZAÇÃO: Envia igual às outras abas
+      ultimasAutorizacoes: historicoRecente.map(a => ({
+        id: a._id,
+        motivoLabel: Atraso.getMotivoLabel(a.motivo),
+        data: a.dataHora,
+        horarioEntrada: a.detalhes?.horarioChegada || '',
+        horarioSaida: a.detalhes?.horarioPrevisto || '',
+        observacoes: a.descricao
       }))
     });
   } catch (error) {
@@ -903,7 +913,6 @@ router.get('/atraso/listar', authenticateToken, verificarGestaoGeral, async (req
 
 // ============================================
 // 🔍 BUSCAR ATRASO POR ID
-// ✅ Retorna TUDO que a impressão precisa, incluindo precisaAssinatura/precisaAssinaturaAluno
 // ============================================
 router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -935,7 +944,7 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         detalhes: atraso.detalhes,
         registradoPor: atraso.registradoPorNome,
         
-        // ✅ RESPONSÁVEL
+        // ✅ ASSINATURA DO RESPONSÁVEL
         precisaAssinatura: atraso.precisaAssinatura || false,
         assinaturaBase64: atraso.assinaturaBase64 || '',
         temAssinatura: atraso.temAssinatura || false,
@@ -943,7 +952,7 @@ router.get('/atraso/:id', authenticateToken, verificarGestaoGeral, async (req, r
         assinadaEm: atraso.assinadaEm,
         assinadaPorNome: atraso.assinadaPorNome,
         
-        // ✅ ALUNO
+        // ✅ ASSINATURA DO ALUNO (NOVO)
         precisaAssinaturaAluno: atraso.precisaAssinaturaAluno || false,
         assinaturaAlunoBase64: atraso.assinaturaAlunoBase64 || '',
         temAssinaturaAluno: atraso.temAssinaturaAluno || false,

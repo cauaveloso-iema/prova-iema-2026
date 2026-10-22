@@ -33,38 +33,11 @@ const authenticateToken = async (req, res, next) => {
     });
 };
 
-// ============================================
-// ROLES QUE PODEM CRIAR/ASSINAR SESSÕES
-// Aceita BOTH formas (com hífen E com underscore)
-// ============================================
 const verificarGestaoGeral = (req, res, next) => {
     const allowedRoles = [
-        // Gestão
-        'gestao_geral',
-        'gestao-geral',
-        'super_admin',
-        'super-admin',
-        'admin',
-        
-        // Setor Pedagógico
-        'setor_pedagogico',
-        'setor-pedagogico',
-        
-        // Psicologia
-        'psicologia',
-        'psicologo',
-        'psicologa',
-        
-        // Assistente Social
-        'assistente_social',
-        'assistente-social',
-        
-        // Supervisão
-        'supervisao',
-        'supervisão',
-        
-        // Biblioteca
-        'biblioteca'
+        'gestao_geral', 'gestao-geral', 'super_admin', 'super-admin', 'admin',
+        'setor_pedagogico', 'setor-pedagogico', 'psicologia', 'psicologo', 'psicologa',
+        'assistente_social', 'assistente-social', 'supervisao', 'supervisão', 'biblioteca'
     ];
     
     if (!allowedRoles.includes(req.userRole)) {
@@ -79,41 +52,25 @@ const verificarGestaoGeral = (req, res, next) => {
     next();
 };
 
-// ============================================
-// 🆕 LISTA CENTRALIZADA DE TIPOS VÁLIDOS
-// Use essa constante em TODOS os lugares que validam tipo
-// ============================================
 const TIPOS_VALIDOS = [
-    'autorizacao',
-    'justificativa',
-    'segunda_chamada',
-    'atraso',
-    'atraso_aluno',              // Assinatura do aluno em atrasos
-    'psicologia',
-    'assistente_social',
-    'supervisao',
-    'supervisao_participante',   // 🆕 Assinatura de participante da supervisão
-    'biblioteca'
+    'autorizacao', 'justificativa', 'segunda_chamada', 'atraso', 'atraso_aluno',
+    'uniforme', 'atendimento', 'atendimento_aluno',
+    'psicologia', 'assistente_social', 'supervisao', 'supervisao_participante', 'biblioteca'
 ];
 
 // ============================================
-// HEALTH CHECK (público)
+// HEALTH CHECK
 // ============================================
 router.get('/health', (req, res) => {
     res.json({ 
         success: true, 
         status: 'online', 
         service: 'Sessões de Assinatura (QR Code)',
-        versao: '2.0-participantes',
+        versao: '2.2-dados-completos',
         tiposSuportados: TIPOS_VALIDOS,
         timestamp: new Date().toISOString()
     });
 });
-
-// ============================================
-// ⚠️ IMPORTANTE: A ORDEM IMPORTA!
-// Rotas fixas (sem parâmetro) ANTES de /:param
-// ============================================
 
 // ============================================
 // 1. CRIAR / ATUALIZAR SESSÃO (AUTENTICADO)
@@ -127,14 +84,8 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
         if (!sessaoId) return res.status(400).json({ success: false, error: 'sessaoId obrigatório' });
         if (!tipo) return res.status(400).json({ success: false, error: 'tipo obrigatório' });
         
-        // 🆕 VALIDAÇÃO ATUALIZADA — aceita todos os tipos suportados
         if (!TIPOS_VALIDOS.includes(tipo)) {
-            console.warn(`⚠️ Tipo inválido recebido: "${tipo}"`);
-            return res.status(400).json({ 
-                success: false, 
-                error: `Tipo "${tipo}" inválido`,
-                tiposPermitidos: TIPOS_VALIDOS
-            });
+            return res.status(400).json({ success: false, error: `Tipo "${tipo}" inválido` });
         }
         
         const existente = await Sessao.findOne({ sessaoId });
@@ -142,6 +93,7 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
             if (existente.status === 'aguardando') {
                 existente.dadosAtendimento = dadosAtendimento || existente.dadosAtendimento;
                 existente.expiraEm = new Date(Date.now() + 30 * 60 * 1000);
+                existente.markModified('dadosAtendimento');
                 await existente.save();
                 return res.json({ success: true, sessaoId: existente.sessaoId, atualizada: true });
             }
@@ -160,8 +112,12 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
             expiraEm: new Date(Date.now() + 30 * 60 * 1000)
         });
         
+        // 🔥 A MÁGICA ACONTECE AQUI: Força o Mongo a salvar o objeto inteiro
+        sessao.markModified('dadosAtendimento');
+        
         await sessao.save();
         console.log(`✅ Sessão criada: ${sessao.sessaoId} (${sessao.tipo}) por ${sessao.criadoPorNome}`);
+        console.log('📦 Dados salvos no banco:', sessao.dadosAtendimento); 
         
         res.json({ success: true, sessaoId: sessao.sessaoId });
     } catch (error) {
@@ -231,6 +187,7 @@ router.put('/:sessaoId/dados', authenticateToken, verificarGestaoGeral, async (r
         }
         
         sessao.dadosAtendimento = dadosAtendimento || sessao.dadosAtendimento;
+        sessao.markModified('dadosAtendimento');
         await sessao.save();
         
         res.json({ success: true });
@@ -241,7 +198,7 @@ router.put('/:sessaoId/dados', authenticateToken, verificarGestaoGeral, async (r
 });
 
 // ============================================
-// 5. BUSCAR SESSÃO POR ID (🔓 PÚBLICA - responsável consulta sem login)
+// 5. BUSCAR SESSÃO POR ID (🔓 PÚBLICA)
 // ============================================
 router.get('/:sessaoId', async (req, res) => {
     try {
@@ -278,7 +235,7 @@ router.get('/:sessaoId', async (req, res) => {
 });
 
 // ============================================
-// 6. ASSINAR SESSÃO (🔓 PÚBLICA - responsável assina sem login)
+// 6. ASSINAR SESSÃO (🔓 PÚBLICA)
 // ============================================
 router.put('/:sessaoId/assinar', async (req, res) => {
     try {
@@ -340,7 +297,7 @@ router.put('/:sessaoId/assinar', async (req, res) => {
 });
 
 // ============================================
-// 7. CANCELAR SESSÃO (AUTENTICADO - profissional logado)
+// 7. CANCELAR SESSÃO (AUTENTICADO)
 // ============================================
 router.delete('/:sessaoId', authenticateToken, verificarGestaoGeral, async (req, res) => {
     try {

@@ -493,9 +493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modoAssinatura = new URLSearchParams(window.location.search).get('assinatura');
     if (modoAssinatura) {
         console.log('📱 Modo assinatura detectado:', modoAssinatura);
-        
         window.__MODO_ASSINATURA__ = true;
-        
         await mostrarTelaAssinatura(modoAssinatura);
         return;
     }
@@ -549,7 +547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }, 1500);
     
-    // ============ ATRASOS ============
+    // ============ ATRASOS (LISTENERS) ============
     safeGet('modoAutomaticoBtn')?.addEventListener('click', () => setModo('automatico'));
     safeGet('modoManualBtn')?.addEventListener('click', () => setModo('manual'));
     safeGet('filtroTurmaManual')?.addEventListener('change', () => carregarAlunosPorTurma());
@@ -558,13 +556,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     safeGet('atraso-dashboard-tab')?.addEventListener('shown.bs.tab', () => {
         carregarDashboardAtrasos();
         carregarAtrasosRecentes(1);
-        configurarFiltrosAtrasosRecentes();
     });
     safeGet('atraso-relatorios-tab')?.addEventListener('shown.bs.tab', () => carregarTurmasParaRelatorio());
+    
+    // 🆕 Evento da Aba Atrasos: Carrega Scanner, Filtros e Lista ao entrar
     safeGet('aba-atrasos')?.addEventListener('shown.bs.tab', () => {
         setTimeout(() => {
             if (modoAtual === 'automatico' && !scannerAutoAtivo) iniciarScannerAutomatico();
         }, 300);
+        configurarFiltrosAtrasosRecentes();
+        carregarAtrasosRecentes(1);
     });
     
     // ============ MÓDULOS EXTRAS ============
@@ -587,13 +588,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 iniciarScannerModulo('autorizacao');
             }
         }, 300);
-        // 🆕 Trava a data do registro assim que a aba abre
         setTimeout(() => travarDataRegistroAutorizacao(), 400);
     });
-    carregarListaModulo('autorizacao', 1);
-    
-    // 🆕 TRAVA A DATA DO REGISTRO JÁ NO CARREGAMENTO INICIAL
-    setTimeout(() => travarDataRegistroAutorizacao(), 800);
     
     // JUSTIFICATIVA
     safeGet('modoAutomaticoJustificativaBtn')?.addEventListener('click', () => setModoModulo('justificativa', 'automatico'));
@@ -609,7 +605,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }, 300);
     });
-    carregarListaModulo('justificativa', 1);
     
     // 2ª CHAMADA
     safeGet('modoAutomaticoSegundaChamadaBtn')?.addEventListener('click', () => setModoModulo('segundaChamada', 'automatico'));
@@ -625,7 +620,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }, 300);
     });
-    carregarListaModulo('segundaChamada', 1);
     
     // UNIFORME
     safeGet('modoAutomaticoUniformeBtn')?.addEventListener('click', () => setModoModulo('uniforme', 'automatico'));
@@ -641,6 +635,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }, 300);
     });
+    
+    // ============ CARREGAMENTO INICIAL GERAL ============
+    // 🆕 TRAVA A DATA DO REGISTRO JÁ NO CARREGAMENTO INICIAL
+    setTimeout(() => travarDataRegistroAutorizacao(), 800);
+    
+    // Carrega as listas e os filtros de todos os módulos logo que a página abre
+    carregarListaModulo('autorizacao', 1);
+    carregarListaModulo('justificativa', 1);
+    carregarListaModulo('segundaChamada', 1);
+    
+    // 🆕 CARREGA OS FILTROS E A LISTA DE ATRASOS NA INICIALIZAÇÃO
+    configurarFiltrosAtrasosRecentes();
+    carregarAtrasosRecentes(1);
     
     // ============ EVENTOS DOS MÓDULOS ============
     ['autorizacao', 'justificativa', 'segundaChamada', 'uniforme'].forEach(modulo => {
@@ -1070,15 +1077,34 @@ function exibirAluno(data) {
     }
     
     const histDiv = safeGet('historicoRecente');
-    if (histDiv && data.historicoRecente?.length > 0) {
-        histDiv.innerHTML = `
-            <h6 class="text-muted mt-3 mb-2"><i class="fas fa-history"></i> Histórico Recente</h6>
-            ${data.historicoRecente.map(h => `
-                <div class="p-2 mb-2" style="background: #f8fafc; border-radius: 8px; font-size: 13px;">
-                    <strong>${escapeHTML(h.motivoLabel)}</strong>: ${escapeHTML((h.descricao || '').substring(0, 80))}
-                    <br><small class="text-muted">${h.dataHora ? new Date(h.dataHora).toLocaleString('pt-BR') : ''}</small>
-                </div>`).join('')}`;
-    } else if (histDiv) { histDiv.innerHTML = ''; }
+    if (histDiv) {
+        // Pega o histórico (seja do campo historicoRecente ou ultimasAutorizacoes)
+        let historico = data.historicoRecente || [];
+        if (historico.length === 0 && data.ultimasAutorizacoes) {
+            historico = data.ultimasAutorizacoes.map(h => ({
+                id: h.id,
+                motivoLabel: h.motivoLabel,
+                descricao: h.observacoes || 'Sem descrição',
+                dataHora: h.data
+            }));
+        }
+        
+        if (historico.length > 0) {
+            histDiv.innerHTML = `
+                <h6 class="text-muted mt-3 mb-2"><i class="fas fa-history"></i> Últimos Registros</h6>
+                ${historico.map(h => `
+                    <div class="p-2 mb-2" style="background: #f8fafc; border-radius: 8px; font-size: 13px; border-left: 3px solid #1e3c72;">
+                        <strong>${escapeHTML(h.motivoLabel || 'Atraso')}</strong>
+                        <br><small class="text-muted">
+                            <i class="far fa-clock"></i> 
+                            ${h.dataHora ? new Date(h.dataHora).toLocaleString('pt-BR') : (h.data ? new Date(h.data).toLocaleDateString('pt-BR') : '')}
+                        </small>
+                        ${h.descricao ? `<br><span style="font-size: 12px; color: #475569;">${escapeHTML(h.descricao)}</span>` : ''}
+                    </div>`).join('')}`;
+        } else {
+            histDiv.innerHTML = `<p class="text-muted small">Nenhum registro recente.</p>`;
+        }
+    }
     
     safeGet('alunoInfo').style.display = 'block';
     safeGet('alunoInfo').scrollIntoView({ behavior: 'smooth' });
@@ -1413,9 +1439,13 @@ async function carregarAtrasosRecentes(pagina = null) {
 
     const busca = (safeGet('filtroAtrasosRecentesBusca')?.value || '').trim();
     const turma = safeGet('filtroAtrasosRecentesTurma')?.value || '';
+    const motivo = safeGet('filtroAtrasosRecentesMotivo')?.value || '';
+    const dataInicio = safeGet('filtroAtrasosRecentesDataInicio')?.value || '';
+    const dataFim = safeGet('filtroAtrasosRecentesDataFim')?.value || '';
 
     const limit = paginacaoAtrasosState.porPagina;
 
+    // Mostra o loading
     container.innerHTML = `
         <div class="text-center py-4">
             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
@@ -1426,16 +1456,24 @@ async function carregarAtrasosRecentes(pagina = null) {
         const params = new URLSearchParams();
         params.append('limit', limit);
         params.append('page', pagina);
+        
         if (turma) params.append('turma', turma);
         if (busca) params.append('alunoNome', busca);
+        if (motivo) params.append('motivo', motivo);
+        if (dataInicio) params.append('dataInicio', dataInicio);
+        if (dataFim) params.append('dataFim', dataFim);
 
         const response = await fetch(`/api/gestao-geral/atraso/listar?${params.toString()}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
 
-        if (!data.success || !Array.isArray(data.atrasos)) {
-            container.innerHTML = `<div class="alert alert-warning">Nenhum atraso encontrado</div>`;
+        if (!data.success || !Array.isArray(data.atrasos) || data.atrasos.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-inbox fa-3x mb-3" style="color:#cbd5e1;"></i>
+                    <p>Nenhum atraso registrado.</p>
+                </div>`;
             paginacaoAtrasosState.totalRegistros = 0;
             paginacaoAtrasosState.totalPaginas = 0;
             return;
@@ -1447,9 +1485,14 @@ async function carregarAtrasosRecentes(pagina = null) {
         __atrasosRecentes = data.atrasos;
         atualizarContadorAtrasosRecentes(data.total || 0);
         renderizarListaAtrasosRecentes(data.atrasos);
+
     } catch (error) {
         console.error('Erro ao carregar atrasos:', error);
-        container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar</div>`;
+        container.innerHTML = `
+            <div class="alert alert-danger text-center">
+                <i class="fas fa-exclamation-triangle"></i> 
+                Erro ao carregar a lista de atrasos.
+            </div>`;
     }
 }
 
@@ -1479,57 +1522,69 @@ function renderizarListaAtrasosRecentes(lista) {
         'outros': '#6b7280'
     };
     
+    const thStyle = 'padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057; white-space: nowrap;';
+    const tdStyle = 'padding: 12px; vertical-align: middle; border-bottom: 1px solid #dee2e6; white-space: nowrap;';
+
     container.innerHTML = `
-        <div class="table-responsive">
-            <table class="table table-hover table-sm align-middle">
-                <thead style="background: #eef2ff;">
+        <div class="table-responsive" style="overflow-x: auto; width: 100%;">
+            <table class="table table-hover" style="width: 100%; border-collapse: collapse; margin-bottom: 0;">
+                <thead style="background-color: #f8f9fa;">
                     <tr>
-                        <th style="width: 28%;">Aluno</th>
-                        <th style="width: 15%;">Turma</th>
-                        <th style="width: 15%;">Motivo</th>
-                        <th style="width: 20%;">Data/Hora</th>
-                        <th style="width: 22%; text-align: center;">Ações</th>
+                        <th style="${thStyle}">Data/Hora</th>
+                        <th style="${thStyle}">Aluno</th>
+                        <th style="${thStyle}">Turma</th>
+                        <th style="${thStyle}">Motivo</th>
+                        <th style="${thStyle}">Responsável</th>
+                        <th style="${thStyle}">Assinatura</th>
+                        <th style="${thStyle} text-align: center;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${lista.map(a => {
                         const cor = corMotivo[a.motivo] || '#6b7280';
                         return `
-                            <tr data-id="${a.id}">
-                                <td>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <img src="${gerarAvatarSVG(a.alunoNome || '?')}" 
-                                             style="width: 32px; height: 32px; border-radius: 50%;" alt="">
-                                        <div>
-                                            <strong style="font-size: 13px;">${escapeHTML(a.alunoNome || '')}</strong>
-                                            <br><small class="text-muted" style="font-size: 11px;">${escapeHTML(a.alunoMatricula || '')}</small>
-                                        </div>
-                                    </div>
+                            <tr>
+                                <td style="${tdStyle}">${a.dataHoraFormatada || new Date(a.dataHora).toLocaleString('pt-BR')}</td>
+                                <td style="${tdStyle}">
+                                    <strong>${escapeHTML(a.alunoNome || '')}</strong><br>
+                                    <small class="text-muted">${escapeHTML(a.alunoMatricula || '')}</small>
                                 </td>
-                                <td><small>${escapeHTML(a.alunoTurma || '-')}</small></td>
-                                <td>
+                                <td style="${tdStyle}">${escapeHTML(a.alunoTurma || '-')}</td>
+                                <td style="${tdStyle}">
                                     <span class="badge" style="background: ${cor}; font-size: 11px;">
                                         ${escapeHTML(a.motivoLabel || a.motivo || '-')}
                                     </span>
                                 </td>
-                                <td><small>${a.dataHoraFormatada || (a.dataHora ? new Date(a.dataHora).toLocaleString('pt-BR') : '-')}</small></td>
-                                <td class="text-center">
-                                    <div class="d-flex gap-1 justify-content-center flex-wrap">
-                                        <button class="btn btn-sm btn-info" onclick="verAtraso('${a.id}')" title="Ver detalhes">
+                                <td style="${tdStyle}">
+                                    ${a.responsavelNome ? `
+                                        <div style="font-size:12px; line-height: 1.3;">
+                                            <strong>${escapeHTML(a.responsavelNome)}</strong>
+                                            ${a.responsavelCPF ? `<br><small style="color: #6c757d;">CPF: ${escapeHTML(a.responsavelCPF)}</small>` : ''}
+                                        </div>` : '<span style="color: #6c757d;">-</span>'}
+                                </td>
+                                <td style="${tdStyle}">
+                                    ${a.temAssinatura 
+                                        ? '<span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>' 
+                                        : '<span class="badge bg-secondary">Sem</span>'}
+                                </td>
+                                <td style="${tdStyle} text-align: center;">
+                                    <div style="display: flex; gap: 4px; justify-content: center;">
+                                        <button class="btn btn-sm btn-info" onclick="verAtraso('${a.id}')" title="Ver detalhes" style="padding: 4px 8px;">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-warning" onclick="editarAtraso('${a.id}')" title="Editar">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-success" onclick="imprimirAtraso('${a.id}')" title="Imprimir">
+                                        <button class="btn btn-sm btn-primary" onclick="imprimirAtraso('${a.id}')" title="Imprimir" style="padding: 4px 8px;">
                                             <i class="fas fa-print"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="excluirAtraso('${a.id}', '${escapeHTML(a.alunoNome || '')}')" title="Excluir">
+                                        <button class="btn btn-sm btn-warning" onclick="editarAtraso('${a.id}')" title="Editar" style="padding: 4px 8px;">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="excluirAtraso('${a.id}', '${escapeHTML(a.alunoNome || '')}')" title="Excluir" style="padding: 4px 8px;">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
                                 </td>
-                            </tr>`;
+                            </tr>
+                        `;
                     }).join('')}
                 </tbody>
             </table>
@@ -1604,7 +1659,7 @@ function renderizarPaginacaoAtrasos() {
 }
 
 // ============================================
-// 👁️ VER ATRASO
+// 👁️ VER ATRASO (COM ASSINATURAS)
 // ============================================
 async function verAtraso(atrasoId) {
     if (!atrasoId) return;
@@ -1624,14 +1679,46 @@ async function verAtraso(atrasoId) {
         const oldModal = safeGet('modalVerAtraso');
         if (oldModal) oldModal.remove();
         
-        let assinaturaHTML = '';
+        let assinaturasHTML = '';
+
+        // Bloco da Assinatura do Responsável
         if (a.temAssinatura && a.assinaturaBase64) {
-            assinaturaHTML = `
+            assinaturasHTML += `
                 <div class="mb-3">
                     <strong><i class="fas fa-signature"></i> Assinatura do Responsável:</strong>
                     <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 10px; padding: 10px; margin-top: 6px;">
-                        <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 120px;" alt="Assinatura">
+                        <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 120px;" alt="Assinatura do Responsável">
                         ${a.assinadaPorNome ? `<p style="margin: 6px 0 0; font-size: 12px; color: #065f46;">Assinado por: <strong>${escapeHTML(a.assinadaPorNome)}</strong></p>` : ''}
+                        ${a.assinadaEm ? `<p style="margin: 2px 0 0; font-size: 11px; color: #065f46;">Em: ${new Date(a.assinadaEm).toLocaleString('pt-BR')}</p>` : ''}
+                    </div>
+                </div>`;
+        } else if (a.precisaAssinatura) {
+            assinaturasHTML += `
+                <div class="mb-3">
+                    <strong><i class="fas fa-signature"></i> Assinatura do Responsável:</strong>
+                    <div style="background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 10px; padding: 10px; margin-top: 6px; color: #92400e;">
+                        <i class="fas fa-clock"></i> Aguardando assinatura...
+                    </div>
+                </div>`;
+        }
+
+        // Bloco da Assinatura do Aluno
+        if (a.temAssinaturaAluno && a.assinaturaAlunoBase64) {
+            assinaturasHTML += `
+                <div class="mb-3">
+                    <strong><i class="fas fa-user-graduate"></i> Assinatura do Aluno:</strong>
+                    <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 10px; padding: 10px; margin-top: 6px;">
+                        <img src="${a.assinaturaAlunoBase64}" style="max-width: 100%; max-height: 120px;" alt="Assinatura do Aluno">
+                        ${a.assinadaPorNomeAluno ? `<p style="margin: 6px 0 0; font-size: 12px; color: #065f46;">Assinado por: <strong>${escapeHTML(a.assinadaPorNomeAluno)}</strong></p>` : ''}
+                        ${a.assinadaEmAluno ? `<p style="margin: 2px 0 0; font-size: 11px; color: #065f46;">Em: ${new Date(a.assinadaEmAluno).toLocaleString('pt-BR')}</p>` : ''}
+                    </div>
+                </div>`;
+        } else if (a.precisaAssinaturaAluno) {
+            assinaturasHTML += `
+                <div class="mb-3">
+                    <strong><i class="fas fa-user-graduate"></i> Assinatura do Aluno:</strong>
+                    <div style="background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 10px; padding: 10px; margin-top: 6px; color: #92400e;">
+                        <i class="fas fa-clock"></i> Aguardando assinatura...
                     </div>
                 </div>`;
         }
@@ -1683,7 +1770,7 @@ async function verAtraso(atrasoId) {
                                 </div>
                             ` : ''}
                             
-                            ${assinaturaHTML}
+                            ${assinaturasHTML}
                             
                             <div class="mb-3">
                                 <strong><i class="fas fa-user-tie"></i> Registrado por:</strong>
@@ -2127,26 +2214,17 @@ async function excluirAtraso(atrasoId, alunoNome) {
         const data = await response.json();
         
         if (data.success) {
-            const row = document.querySelector(`tr[data-id="${atrasoId}"]`);
-            if (row) {
-                row.style.transition = 'all 0.3s';
-                row.style.opacity = '0';
-                row.style.transform = 'translateX(-20px)';
-                setTimeout(() => {
-                    row.remove();
-                    const contador = safeGet('contadorAtrasosRecentes');
-                    if (contador) {
-                        const atual = parseInt(contador.textContent) || 0;
-                        contador.textContent = Math.max(0, atual - 1);
-                    }
-                    const tabela = document.querySelector('#listaAtrasosRecentes tbody');
-                    if (tabela && tabela.children.length === 0) {
-                        carregarAtrasosRecentes();
-                    }
-                }, 300);
+            notificar('✅ Atraso excluído com sucesso!', 'success');
+            
+            // 🆕 Recarrega a lista imediatamente na tela
+            // Se estiver na última página e ela ficar vazia, volta uma página
+            if (paginacaoAtrasosState.paginaAtual > 1 && __atrasosRecentes.length === 1) {
+                carregarAtrasosRecentes(paginacaoAtrasosState.paginaAtual - 1);
+            } else {
+                carregarAtrasosRecentes();
             }
             
-            notificar('✅ Atraso excluído com sucesso!', 'success');
+            // Recarrega o dashboard para atualizar os gráficos de fundo (opcional)
             carregarDashboardAtrasos();
         } else {
             notificar('❌ ' + (data.error || 'Erro ao excluir'), 'error');
@@ -2161,19 +2239,46 @@ async function excluirAtraso(atrasoId, alunoNome) {
 // 🔧 INICIALIZAÇÃO DOS FILTROS
 // ============================================
 function configurarFiltrosAtrasosRecentes() {
+    const selectTurma = safeGet('filtroAtrasosRecentesTurma');
+    if (selectTurma && selectTurma.options.length <= 1) {
+        fetch('/api/gestao-geral/atraso/turmas', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && Array.isArray(data.turmas)) {
+                data.turmas.forEach(t => {
+                    selectTurma.innerHTML += `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`;
+                });
+            }
+        })
+        .catch(e => console.warn('Erro ao buscar turmas:', e));
+    }
+
     const busca = safeGet('filtroAtrasosRecentesBusca');
-    if (busca) {
+    if (busca && !busca.dataset.listenerAttached) {
+        busca.dataset.listenerAttached = 'true';
         let timeout;
         busca.addEventListener('input', () => {
             clearTimeout(timeout);
-            timeout = setTimeout(() => carregarAtrasosRecentes(1), 300);
+            timeout = setTimeout(() => carregarAtrasosRecentes(1), 400);
         });
     }
     
-    const turma = safeGet('filtroAtrasosRecentesTurma');
-    if (turma) {
-        turma.addEventListener('change', () => carregarAtrasosRecentes(1));
-    }
+    const filtros = [
+        'filtroAtrasosRecentesTurma', 
+        'filtroAtrasosRecentesMotivo', 
+        'filtroAtrasosRecentesDataInicio', 
+        'filtroAtrasosRecentesDataFim'
+    ];
+    
+    filtros.forEach(id => {
+        const el = safeGet(id);
+        if (el && !el.dataset.listenerAttached) {
+            el.dataset.listenerAttached = 'true';
+            el.addEventListener('change', () => carregarAtrasosRecentes(1));
+        }
+    });
 }
 
 function popularFiltroTurmasAtrasosRecentes() {
@@ -3749,21 +3854,21 @@ async function carregarListaModulo(modulo, pagina = null) {
 
         const mostraHorario = cfg.tipo === 'autorizacao';
         const cabecalhoHorarios = mostraHorario 
-            ? '<th style="padding: 12px; text-align: left; white-space: nowrap;">Entrada</th><th style="padding: 12px; text-align: left; white-space: nowrap;">Saída</th>' 
-            : '<th style="padding: 12px; text-align: left; white-space: nowrap;">Horário</th>';
+            ? '<th>Entrada</th><th>Saída</th>' 
+            : '<th>Horário</th>';
         
         const mostrarPeriodoFalta = cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada';
         const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
         const mostraUniforme = cfg.tipo === 'uniforme';
 
-        // CSS inline para forçar o layout correto e ignorar CSS global quebrado
-        const thStyle = 'padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057; white-space: nowrap;';
-        const tdStyle = 'padding: 12px; vertical-align: middle; border-bottom: 1px solid #dee2e6; white-space: nowrap; position: relative;';
+        // FORÇANDO TUDO EM UMA LINHA E SEM QUEBRA (nowrap)
+        const thStyle = 'padding: 12px 8px; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057; white-space: nowrap; background: #f8f9fa;';
+        const tdStyle = 'padding: 12px 8px; vertical-align: middle; border-bottom: 1px solid #dee2e6; white-space: nowrap;';
 
         container.innerHTML = `
             <div class="table-responsive" style="overflow-x: auto; width: 100%;">
-                <table class="table table-hover" style="width: 100%; min-width: 900px; border-collapse: collapse; margin-bottom: 0;">
-                    <thead style="background-color: #f8f9fa;">
+                <table class="table table-hover" style="width: 100%; border-collapse: collapse; margin-bottom: 0;">
+                    <thead>
                         <tr>
                             <th style="${thStyle}">Data Registro</th>
                             ${mostrarPeriodoFalta ? `<th style="${thStyle}">Período da Falta</th>` : ''}
@@ -4439,6 +4544,17 @@ function toggleEditMotivoOutros() {
 
     const campoAusencia = safeGet('editCampoAusenciaRetorno');
     if (campoAusencia) campoAusencia.style.display = motivo === 'necessita_ausentar_retornar' ? 'block' : 'none';
+}
+
+// ============================================
+// 🆕 TOGGLE TIPO DE PROVA OUTROS (2ª Chamada)
+// ============================================
+function toggleEditTipoProvaOutros() {
+    const tipoProva = safeGet('editModuloTipoProva')?.value;
+    const campo = safeGet('editCampoTipoProvaOutros');
+    if (campo) {
+        campo.style.display = tipoProva === 'Outros' ? 'block' : 'none';
+    }
 }
 
 async function salvarEdicaoModulo() {
@@ -6047,97 +6163,203 @@ async function toggleNecessitaAssinatura(modulo) {
     if (!check) return;
     
     if (check.checked) {
-        // CAPTURA FORÇADA DIRETO DA TELA E DO ESTADO
-        const est = estados[modulo];
-        let alunoId = est?.currentAluno?.id;
-        let alunoNome = est?.currentAluno?.nome;
-
-        // Se o estado falhar, pega o nome direto da tela (DOM)
-        if (!alunoId) {
-            const P = getPrefixo(modulo);
-            const elNome = safeGet(`alunoNome${P}`);
-            alunoNome = elNome ? elNome.textContent : '';
-            
-            if (alunoNome && alunoNome !== '-') {
-                // Cria um ID provisório só pra não travar
-                alunoId = "FORCADO_" + Date.now(); 
+        // 1. CAPTURA DO ALUNO
+        let alunoId = null, alunoNome = null, alunoTurma = null, alunoCurso = null, alunoMatricula = null;
+        
+        if (modulo === 'atraso') {
+            if (typeof currentAluno !== 'undefined' && currentAluno?.id) {
+                alunoId = currentAluno.id; alunoNome = currentAluno.nome;
+                alunoTurma = currentAluno.turma; alunoCurso = currentAluno.curso; alunoMatricula = currentAluno.matricula;
+            }
+            if (!alunoId) {
+                const nomeDOM = safeGet('alunoNome')?.textContent?.trim();
+                if (nomeDOM && nomeDOM !== '-') {
+                    alunoNome = nomeDOM; alunoMatricula = safeGet('alunoMatricula')?.textContent?.trim();
+                    alunoTurma = safeGet('alunoTurma')?.textContent?.trim(); alunoCurso = safeGet('alunoCurso')?.textContent?.trim();
+                    alunoId = "DOM_" + Date.now();
+                }
+            }
+        } else {
+            const est = estados[modulo];
+            if (est?.currentAluno?.id) {
+                alunoId = est.currentAluno.id; alunoNome = est.currentAluno.nome;
+                alunoTurma = est.currentAluno.turma; alunoCurso = est.currentAluno.curso; alunoMatricula = est.currentAluno.matricula;
+            }
+            if (!alunoId) {
+                const P = getPrefixo(modulo);
+                const nomeDOM = safeGet(`alunoNome${P}`)?.textContent?.trim();
+                if (nomeDOM && nomeDOM !== '-') {
+                    alunoNome = nomeDOM; alunoMatricula = safeGet(`alunoMatricula${P}`)?.textContent?.trim();
+                    alunoTurma = safeGet(`alunoTurma${P}`)?.textContent?.trim(); alunoCurso = safeGet(`alunoCurso${P}`)?.textContent?.trim();
+                    alunoId = "DOM_" + Date.now();
+                }
             }
         }
-
-        if (!alunoId) {
+        
+        if (!alunoId || !alunoNome) {
             notificar('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
             check.checked = false;
             return;
         }
 
-        const snapshot = montarSnapshotAtendimento(modulo);
-        
-        // 🔥 FORÇANDO OS DADOS NO SNAPSHOT (GARANTIA TOTAL)
-        snapshot.alunoId = alunoId;
-        snapshot.alunoNome = alunoNome;
-        if (est?.currentAluno) {
-            snapshot.alunoTurma = est.currentAluno.turma;
-            snapshot.alunoCurso = est.currentAluno.curso;
-            snapshot.alunoMatricula = est.currentAluno.matricula;
-        }
+        // 2. CAPTURA DOS DADOS (APENAS DO MÓDULO ATUAL)
+        let snapshot = {
+            alunoId, alunoNome, alunoMatricula: alunoMatricula || '', alunoTurma: alunoTurma || '', alunoCurso: alunoCurso || ''
+        };
 
-        console.log(`📸 [${modulo}] Snapshot FORÇADO para assinatura:`, snapshot);
+        if (modulo === 'atraso') {
+            const motivosLabel = { 'onibus': 'Ônibus', 'transito': 'Trânsito', 'problemas_pessoais': 'Problemas Pessoais', 'fardamento': 'Fardamento', 'outros': 'Outros' };
+            let motVal = safeGet('motivoSelecionado')?.value || (document.querySelector('#formRegistro .tipo-card.selected')?.getAttribute('data-tipo')) || (typeof motivoSelecionado !== 'undefined' ? motivoSelecionado : '');
+            const motivoOutrosTxt = safeGet('motivoOutrosTexto')?.value || '';
+            let label = motivosLabel[motVal] || motVal;
+            if (motVal === 'outros' && motivoOutrosTxt) label = `Outros (${motivoOutrosTxt})`;
+
+            const dataStr = safeGet('atrasoData')?.value || '';
+            const horaChegada = safeGet('atrasoHoraChegada')?.value || '';
+
+            snapshot = {
+                ...snapshot,
+                motivo: motVal || 'onibus',
+                motivoLabel: label || 'Não informado',
+                motivoOutros: motivoOutrosTxt,
+                descricao: safeGet('descricao')?.value || '',
+                observacoes: safeGet('observacoes')?.value || '',
+                data: dataStr,
+                dataFormatada: dataStr ? new Date(dataStr + 'T12:00:00').toLocaleDateString('pt-BR') : '',
+                entradaCompleta: horaChegada,
+                horarioPrevisto: safeGet('horarioPrevisto')?.value || ''
+            };
+        } else {
+            const P = getPrefixo(modulo);
+            const I = getPrefixoInput(modulo);
+            const est = estados[modulo];
+            
+            const motivosLabelMod = {
+                'problemas_pessoais': 'Problemas Pessoais', 'problemas_saude': 'Problemas de Saúde',
+                'problemas_saude_responsavel_buscou': 'Problemas de Saúde (Responsável veio buscar)',
+                'problemas_saude_responsavel_whatsapp': 'Problemas de Saúde (Responsável via WhatsApp)',
+                'necessita_ausentar_retornar': 'Necessita se ausentar e retornar',
+                'viagens': 'Viagens', 'consultas': 'Consultas', 'viagem': 'Viagem',
+                'tratamento_medico': 'Tratamento Médico', 'outros': 'Outros'
+            };
+
+            let motivoInput = safeGet(`${I}MotivoSelecionado`)?.value || est?.motivoSelecionado || (document.querySelector(`#form${P} .tipo-card.selected`)?.getAttribute('data-tipo')) || '';
+            const motivoOutrosMod = safeGet(`${I}MotivoOutros`)?.value || '';
+            let labelMod = motivosLabelMod[motivoInput] || motivoInput;
+            if (motivoInput === 'outros' && motivoOutrosMod) labelMod = `Outros (${motivoOutrosMod})`;
+
+            // Campos base para todos os módulos
+            snapshot = {
+                ...snapshot,
+                motivo: motivoInput,
+                motivoLabel: labelMod,
+                motivoOutros: motivoOutrosMod,
+                responsavelNome: safeGet(`${I}ResponsavelNome`)?.value || '',
+                responsavelCPF: safeGet(`${I}ResponsavelCPF`)?.value || '',
+                responsavelTelefone: safeGet(`${I}ResponsavelTelefone`)?.value || '',
+                observacoes: safeGet(`${I}Observacoes`)?.value || '',
+                data: safeGet(`${I}Data`)?.value || ''
+            };
+
+            // Adiciona campos específicos de cada módulo
+            if (modulo === 'autorizacao') {
+                const dEntrada = safeGet('autorizacaoDataEntrada')?.value || '';
+                const hEntrada = safeGet('autorizacaoHorarioEntrada')?.value || '';
+                const dSaida = safeGet('autorizacaoDataSaida')?.value || '';
+                const hSaida = safeGet('autorizacaoHorarioSaida')?.value || '';
+                
+                let entradaCompleta = (dEntrada || hEntrada) 
+                    ? `${dEntrada ? new Date(dEntrada+'T12:00:00').toLocaleDateString('pt-BR') : ''} ${hEntrada ? 'às '+hEntrada : ''}`.trim() 
+                    : null;
+                let saidaCompleta = (dSaida || hSaida) 
+                    ? `${dSaida ? new Date(dSaida+'T12:00:00').toLocaleDateString('pt-BR') : ''} ${hSaida ? 'às '+hSaida : ''}`.trim() 
+                    : null;
+
+                snapshot.dataEntrada = dEntrada || null;
+                snapshot.horarioEntrada = hEntrada || null;
+                snapshot.dataSaida = dSaida || null;
+                snapshot.horarioSaida = hSaida || null;
+                snapshot.entradaCompleta = entradaCompleta;
+                snapshot.saidaCompleta = saidaCompleta;
+            }
+
+            if (modulo === 'justificativa' || modulo === 'segundaChamada') {
+                const pIni = safeGet(`${I}PeriodoFaltaInicio`)?.value || '';
+                const pFim = safeGet(`${I}PeriodoFaltaFim`)?.value || '';
+                let pFormatado = '';
+                if (pIni) {
+                    const dIni = new Date(pIni + 'T12:00:00');
+                    const dFim = pFim ? new Date(pFim + 'T12:00:00') : dIni;
+                    const fmt = d => d.toLocaleDateString('pt-BR');
+                    pFormatado = dIni.getTime() === dFim.getTime() ? fmt(dIni) : `${fmt(dIni)} a ${fmt(dFim)}`;
+                }
+                snapshot.periodoFaltaInicio = pIni || null;
+                snapshot.periodoFaltaFim = pFim || pIni || null;
+                snapshot.periodoFaltaFormatado = pFormatado;
+            }
+
+            if (modulo === 'segundaChamada') {
+                let tProva = safeGet('segundaChamadaTipoProvaPerdida')?.value || '';
+                const tProvaOutros = safeGet('segundaChamadaTipoProvaOutros')?.value || '';
+                let pProva = safeGet('segundaChamadaPeriodoProva')?.value || '';
+                let tipoProvaFormatado = tProva ? ((tProva === 'Outros' && tProvaOutros) ? `Outros (${tProvaOutros})` : tProva) : null;
+
+                snapshot.tipoProvaPerdida = tProva || null;
+                snapshot.tipoProvaPerdidaOutros = tProvaOutros || null;
+                snapshot.tipoProvaPerdidaFormatado = tipoProvaFormatado;
+                snapshot.periodoProva = pProva || null;
+            }
+            
+            if (modulo === 'uniforme') {
+                const uIni = safeGet('uniformePeriodoInicio')?.value || '';
+                const uFim = safeGet('uniformePeriodoFim')?.value || '';
+                let uFormatado = '';
+                if (uIni) {
+                    const dIni = new Date(uIni + 'T12:00:00');
+                    const dFim = uFim ? new Date(uFim + 'T12:00:00') : dIni;
+                    const fmt = d => d.toLocaleDateString('pt-BR');
+                    uFormatado = dIni.getTime() === dFim.getTime() ? fmt(dIni) : `${fmt(dIni)} a ${fmt(dFim)}`;
+                }
+                snapshot.uniformePeriodoInicio = uIni || null;
+                snapshot.uniformePeriodoFim = uFim || null;
+                snapshot.uniformePeriodoFormatado = uFormatado;
+            }
+        }
+        
+        console.log('%c📦 ENVIANDO PARA O BANCO:', 'background:#10b981;color:white;padding:4px;font-weight:bold;', snapshot);
         
         const sessaoId = gerarUUID();
         estadoSessaoAssinatura[modulo].sessaoId = sessaoId;
         estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
         
         try {
+            const tipoSessao = modulo === 'atraso' ? 'atraso' : modulo === 'segundaChamada' ? 'segunda_chamada' : modulo;
             const response = await fetch('/api/gestao-geral/sessoes-assinatura', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    sessaoId,
-                    tipo: modulo === 'atraso' ? 'atraso' : modulo === 'segundaChamada' ? 'segunda_chamada' : modulo,
-                    dadosAtendimento: snapshot
-                })
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ sessaoId, tipo: tipoSessao, dadosAtendimento: snapshot })
             });
             
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
             
-            console.log('✅ Sessão de assinatura criada:', sessaoId);
-            
             const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
-            
             try {
                 const qrResponse = await fetch('/api/qrcode/gerar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ url: urlAssinatura })
                 });
                 const qrData = await qrResponse.json();
-                
-                if (qrData.success && qrData.qrCode) {
-                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = qrData.qrCode;
-                } else {
-                    estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
-                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
-                }
+                estadoSessaoAssinatura[modulo].qrCodeDataUrl = (qrData.success && qrData.qrCode) ? qrData.qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             } catch (e) {
-                estadoSessaoAssinatura[modulo].qrCodeDataUrl = 
-                    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                estadoSessaoAssinatura[modulo].qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
             
             abrirModalAssinatura(modulo, urlAssinatura);
             iniciarMonitoramentoSessao(modulo, sessaoId);
-            
-            notificar('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
-            
+            notificar('📱 QR Code gerado!', 'info');
         } catch (e) {
-            console.error('Erro ao criar sessão:', e);
-            notificar('❌ Erro ao criar sessão de assinatura', 'error');
+            console.error('Erro:', e);
+            notificar('❌ Erro: ' + e.message, 'error');
             check.checked = false;
             estadoSessaoAssinatura[modulo].sessaoId = null;
         }
@@ -6648,22 +6870,54 @@ function limparEstadoSessaoAssinatura(modulo) {
 // ============================================================================
 
 async function toggleNecessitaAssinaturaAluno(modulo) {
-    if (modulo !== 'atraso') {
-        console.warn('⚠️ Assinatura do aluno só está disponível para Atrasos');
-        return;
-    }
-    
+    if (modulo !== 'atraso') return;
     const check = safeGet(`${modulo}NecessitaAssinaturaAluno`);
     if (!check) return;
     
     if (check.checked) {
-        const snapshot = montarSnapshotAtendimento(modulo);
+        let alunoId = null, alunoNome = null, alunoTurma = null, alunoCurso = null, alunoMatricula = null;
         
-        if (!snapshot.alunoId) {
+        if (typeof currentAluno !== 'undefined' && currentAluno?.id) {
+            alunoId = currentAluno.id; alunoNome = currentAluno.nome;
+            alunoTurma = currentAluno.turma; alunoCurso = currentAluno.curso; alunoMatricula = currentAluno.matricula;
+        }
+        if (!alunoId) {
+            const nomeDOM = safeGet('alunoNome')?.textContent?.trim();
+            if (nomeDOM && nomeDOM !== '-') {
+                alunoNome = nomeDOM; alunoMatricula = safeGet('alunoMatricula')?.textContent?.trim();
+                alunoTurma = safeGet('alunoTurma')?.textContent?.trim(); alunoCurso = safeGet('alunoCurso')?.textContent?.trim();
+                alunoId = "DOM_" + Date.now();
+            }
+        }
+        if (!alunoId || !alunoNome) {
             notificar('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
             check.checked = false;
             return;
         }
+
+        const motivosLabel = { 'onibus': 'Ônibus', 'transito': 'Trânsito', 'problemas_pessoais': 'Problemas Pessoais', 'fardamento': 'Fardamento', 'outros': 'Outros' };
+        let motVal = safeGet('motivoSelecionado')?.value || (document.querySelector('#formRegistro .tipo-card.selected')?.getAttribute('data-tipo')) || (typeof motivoSelecionado !== 'undefined' ? motivoSelecionado : '');
+        const motivoOutrosTxt = safeGet('motivoOutrosTexto')?.value || '';
+        let label = motivosLabel[motVal] || motVal;
+        if (motVal === 'outros' && motivoOutrosTxt) label = `Outros (${motivoOutrosTxt})`;
+
+        const dataStr = safeGet('atrasoData')?.value || '';
+        const horaChegada = safeGet('atrasoHoraChegada')?.value || '';
+
+        const snapshot = {
+            alunoId, alunoNome, alunoMatricula: alunoMatricula || '', alunoTurma: alunoTurma || '', alunoCurso: alunoCurso || '',
+            motivo: motVal || 'onibus',
+            motivoLabel: label || 'Não informado',
+            motivoOutros: motivoOutrosTxt,
+            descricao: safeGet('descricao')?.value || '',
+            observacoes: safeGet('observacoes')?.value || '',
+            data: dataStr,
+            entradaCompleta: horaChegada,
+            horarioPrevisto: safeGet('horarioPrevisto')?.value || '',
+            tipoAssinante: 'aluno'
+        };
+        
+        console.log('%c📦 ENVIANDO (ALUNO - ATRASO):', 'background:#059669;color:white;padding:4px;font-weight:bold;', snapshot);
         
         const sessaoId = gerarUUID();
         estadoSessaoAssinaturaAluno[modulo].sessaoId = sessaoId;
@@ -6671,59 +6925,31 @@ async function toggleNecessitaAssinaturaAluno(modulo) {
         
         try {
             const response = await fetch('/api/gestao-geral/sessoes-assinatura', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    sessaoId,
-                    tipo: 'atraso_aluno',
-                    dadosAtendimento: {
-                        ...snapshot,
-                        tipoAssinante: 'aluno'
-                    }
-                })
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ sessaoId, tipo: 'atraso_aluno', dadosAtendimento: snapshot })
             });
             
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
             
-            console.log('✅ Sessão de assinatura do aluno criada:', sessaoId);
-            
             const urlAssinatura = `${window.location.origin}/gestao-geral.html?assinatura=${sessaoId}`;
-            
             try {
                 const qrResponse = await fetch('/api/qrcode/gerar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ url: urlAssinatura })
                 });
                 const qrData = await qrResponse.json();
-                
-                if (qrData.success && qrData.qrCode) {
-                    estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = qrData.qrCode;
-                } else {
-                    estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = 
-                        `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
-                }
+                estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = (qrData.success && qrData.qrCode) ? qrData.qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             } catch (e) {
-                console.warn('Fallback QR Code aluno:', e);
-                estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = 
-                    `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
+                estadoSessaoAssinaturaAluno[modulo].qrCodeDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
             
             abrirModalAssinaturaAluno(modulo, urlAssinatura);
             iniciarMonitoramentoSessaoAluno(modulo, sessaoId);
-            
-            notificar('📱 QR Code do aluno gerado! Peça para ele escanear.', 'info');
-            
+            notificar('📱 QR Code do aluno gerado!', 'info');
         } catch (e) {
-            console.error('Erro ao criar sessão do aluno:', e);
-            notificar('❌ Erro ao criar sessão de assinatura do aluno', 'error');
+            console.error('Erro:', e);
+            notificar('❌ Erro: ' + e.message, 'error');
             check.checked = false;
             estadoSessaoAssinaturaAluno[modulo].sessaoId = null;
         }
@@ -7065,9 +7291,7 @@ async function mostrarTelaAssinatura(sessaoId) {
     console.log('📱 [MODO ASSINATURA] Iniciando tela para sessão:', sessaoId);
     
     document.querySelectorAll('.container > *').forEach(el => {
-        if (el && !el.id?.includes('telaAssinatura')) {
-            el.style.display = 'none';
-        }
+        if (el && !el.id?.includes('telaAssinatura')) el.style.display = 'none';
     });
     
     let container = safeGet('telaAssinaturaContainer');
@@ -7081,14 +7305,13 @@ async function mostrarTelaAssinatura(sessaoId) {
     container.innerHTML = `
         <div style="min-height: 100vh; background: #f0f4f8; padding: 10px; display: flex; flex-direction: column; box-sizing: border-box; overflow-y: auto;">
             <div style="max-width: 800px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                
                 <div style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 12px 20px; border-radius: 16px 16px 0 0; text-align: center; flex-shrink: 0;">
                     <h1 style="font-size: 18px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
                         <i class="fas fa-signature"></i> Assinatura Digital - Gestão Geral
                     </h1>
                 </div>
                 
-                <div id="telaAssinaturaInfo" style="background: white; padding: 15px; border-left: 4px solid #1e3c72; flex-shrink: 0; max-height: 40vh; overflow-y: auto;">
+                <div id="telaAssinaturaInfo" style="background: white; padding: 15px; border-left: 4px solid #1e3c72; flex-shrink: 0; max-height: 50vh; overflow-y: auto;">
                     <div style="text-align: center; padding: 20px;">
                         <div style="width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top-color: #1e3c72; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
                         <p style="color: #64748b; margin: 0; font-size: 14px;">Carregando atendimento...</p>
@@ -7105,23 +7328,16 @@ async function mostrarTelaAssinatura(sessaoId) {
                     </div>
                     
                     <div style="display: flex; gap: 10px; flex-shrink: 0;">
-                        <button onclick="gestaoGeral.limparAssinaturaTela()" 
-                                style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 14px;">
-                            <i class="fas fa-eraser"></i> Limpar
-                        </button>
-                        <button id="btnSalvarAssinatura" onclick="gestaoGeral.salvarAssinaturaTela()" disabled
-                                style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: not-allowed;">
-                            <i class="fas fa-check"></i> Confirmar Assinatura
-                        </button>
+                        <button onclick="gestaoGeral.limparAssinaturaTela()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #475569; border: none; border-radius: 12px; font-weight: 600; font-size: 14px;"><i class="fas fa-eraser"></i> Limpar</button>
+                        <button id="btnSalvarAssinatura" onclick="gestaoGeral.salvarAssinaturaTela()" disabled style="flex: 2; padding: 12px; background: #cbd5e0; color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: not-allowed;"><i class="fas fa-check"></i> Confirmar Assinatura</button>
                     </div>
                 </div>
             </div>
         </div>
-        
         <style>
             @keyframes spin { to { transform: rotate(360deg); } }
             @media (max-height: 500px) {
-                #telaAssinaturaInfo { max-height: 25vh; }
+                #telaAssinaturaInfo { max-height: 40vh; }
                 #telaAssinaturaArea { padding: 10px; }
                 #canvasWrapper { min-height: 80px; }
             }
@@ -7133,133 +7349,79 @@ async function mostrarTelaAssinatura(sessaoId) {
         const data = await response.json();
         
         if (!data.success) {
-            safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 30px 20px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                    <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão inválida ou expirada</h3>
-                    <p style="color: #64748b; margin: 0; font-size: 14px;">${data.error || 'Esta sessão de assinatura não existe mais ou expirou (30 min).'}</p>
-                </div>
-            `;
+            safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i><h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão inválida ou expirada</h3><p style="color: #64748b; margin: 0; font-size: 14px;">${data.error || 'Esta sessão expirou.'}</p></div>`;
             return;
         }
         
         if (data.sessao.status === 'assinado') {
-            safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 30px 20px;">
-                    <i class="fas fa-check-circle" style="font-size: 40px; color: #10b981; margin-bottom: 10px; display: block;"></i>
-                    <h3 style="color: #10b981; margin: 0 0 8px; font-size: 18px;">Esta sessão já foi assinada</h3>
-                    <p style="color: #64748b; margin: 0; font-size: 14px;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p>
-                </div>
-            `;
+            safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-check-circle" style="font-size: 40px; color: #10b981; margin-bottom: 10px; display: block;"></i><h3 style="color: #10b981; margin: 0 0 8px; font-size: 18px;">Sessão já assinada</h3><p style="color: #64748b; margin: 0; font-size: 14px;">Assinada por ${escapeHTML(data.sessao.assinadaPorNome || '')}</p></div>`;
             return;
         }
         
         if (data.sessao.status === 'cancelado') {
-            safeGet('telaAssinaturaInfo').innerHTML = `
-                <div style="text-align: center; padding: 30px 20px;">
-                    <i class="fas fa-times-circle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                    <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão cancelada</h3>
-                    <p style="color: #64748b; margin: 0; font-size: 14px;">Esta sessão de assinatura foi cancelada.</p>
-                </div>
-            `;
+            safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-times-circle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i><h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Sessão cancelada</h3><p style="color: #64748b; margin: 0; font-size: 14px;">Esta assinatura foi cancelada.</p></div>`;
             return;
         }
         
         const d = data.sessao.dadosAtendimento || {};
         const tipoLabel = {
-            'autorizacao': 'Autorização',
-            'justificativa': 'Justificativa',
-            'segunda_chamada': '2ª Chamada',
-            'atraso': 'Atraso',
-            'uniforme': 'Uniforme',
-            'atendimento': 'Atendimento',
-            'atendimento_aluno': 'Atendimento (Aluno)'
+            'autorizacao': 'Autorização', 'justificativa': 'Justificativa', 'segunda_chamada': '2ª Chamada',
+            'atraso': 'Atraso', 'atraso_aluno': 'Atraso (Assinatura do Aluno)', 'uniforme': 'Uniforme', 'atendimento': 'Atendimento'
         }[data.sessao.tipo] || data.sessao.tipo;
         
-        // 🆕 Monta bloco de entrada/saída (se existir)
-        let blocoEntradaSaida = '';
-        if (d.entradaCompleta || d.saidaCompleta) {
-            blocoEntradaSaida = `
-                ${d.entradaCompleta ? `
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Entrada</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.entradaCompleta)}</span>
-                    </div>
-                ` : ''}
-                ${d.saidaCompleta ? `
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Saída</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.saidaCompleta)}</span>
-                    </div>
-                ` : ''}
+        // Função auxiliar para só mostrar o bloco se o campo existir
+        const itemHTML = (label, valor, fullWidth = false, color = '#1e293b', bold = false) => {
+            if (!valor || valor === 'null' || valor === 'undefined' || valor === '') return '';
+            return `
+                <div style="${fullWidth ? 'grid-column: 1 / -1;' : ''}">
+                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block;">${label}</span>
+                    <span style="font-size: 13px; color: ${color}; ${bold ? 'font-weight: bold;' : ''}">${escapeHTML(valor)}</span>
+                </div>
             `;
-        }
+        };
+
+        let detalhesHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+                ${itemHTML('Aluno', d.alunoNome, true)}
+                ${itemHTML('Turma', d.alunoTurma)}
+                ${itemHTML('Motivo', d.motivoLabel, false, '#ef4444', true)}
+                
+                ${itemHTML('Data do Registro', d.dataFormatada || (d.data ? new Date(d.data).toLocaleDateString('pt-BR') : null))}
+                ${itemHTML('Responsável', d.responsavelNome, true)}
+                ${itemHTML('CPF', d.responsavelCPF)}
+                ${itemHTML('Telefone', d.responsavelTelefone)}
+                
+                ${itemHTML('Período da Falta', d.periodoFaltaFormatado, true, '#1e3c72', true)}
+                ${itemHTML('Período do Uniforme', d.uniformePeriodoFormatado, true, '#1e3c72', true)}
+                ${itemHTML('Tipo de Prova', d.tipoProvaPerdidaFormatado, true, '#1e3c72', true)}
+                ${itemHTML('Período da Prova', d.periodoProva, false, '#1e3c72', true)}
+                
+                ${itemHTML('Entrada', d.entradaCompleta)}
+                ${itemHTML('Saída', d.saidaCompleta)}
+                
+                ${itemHTML('Descrição', d.descricao, true)}
+                ${itemHTML('Observações', d.observacoes, true, '#475569')}
+            </div>
+        `;
         
         safeGet('telaAssinaturaInfo').innerHTML = `
             <div style="border-left: 4px solid #1e3c72; padding-left: 10px; margin-bottom: 10px;">
                 <h2 style="margin: 0 0 4px; font-size: 16px; color: #1e3c72;">${tipoLabel}</h2>
                 <p style="margin: 0; color: #64748b; font-size: 12px;">Confirme os dados e assine abaixo</p>
             </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Aluno</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoNome || '-')}</span>
-                </div>
-                <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Turma</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.alunoTurma || '-')}</span>
-                </div>
-                <div>
-                    <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Motivo</span>
-                    <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.motivoLabel || '-')}</span>
-                </div>
-                ${blocoEntradaSaida}
-                ${d.periodoFaltaFormatado ? `
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Período da Falta</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.periodoFaltaFormatado)}</span>
-                    </div>
-                ` : ''}
-                ${d.uniformePeriodoFormatado ? `
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Período do Uniforme</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.uniformePeriodoFormatado)}</span>
-                    </div>
-                ` : ''}
-                ${d.tipoProvaPerdidaFormatado ? `
-                    <div>
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Tipo de Prova</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.tipoProvaPerdidaFormatado)}</span>
-                    </div>
-                ` : ''}
-                ${d.responsavelNome ? `
-                    <div style="grid-column: 1 / -1;">
-                        <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Responsável</span>
-                        <span style="font-size: 13px; color: #1e293b; font-weight: 500;">${escapeHTML(d.responsavelNome)}</span>
-                    </div>
-                ` : ''}
-            </div>
+            ${detalhesHTML}
         `;
         
         safeGet('telaAssinaturaArea').style.display = 'flex';
-        
         sessaoAssinaturaModo = sessaoId;
         sessaoAssinaturaAtual = data.sessao;
         
         setTimeout(() => inicializarCanvasTela(), 100);
-        
         window.addEventListener('resize', handleResizeCanvasTela);
         
     } catch (e) {
         console.error('Erro ao carregar sessão:', e);
-        safeGet('telaAssinaturaInfo').innerHTML = `
-            <div style="text-align: center; padding: 30px 20px;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i>
-                <h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Erro ao carregar</h3>
-                <p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p>
-            </div>
-        `;
+        safeGet('telaAssinaturaInfo').innerHTML = `<div style="text-align: center; padding: 30px 20px;"><i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ef4444; margin-bottom: 10px; display: block;"></i><h3 style="color: #ef4444; margin: 0 0 8px; font-size: 18px;">Erro ao carregar</h3><p style="color: #64748b; margin: 0; font-size: 14px;">${e.message}</p></div>`;
     }
 }
 
@@ -7822,25 +7984,40 @@ window.formatarCPF = formatarCPF;
 window.formatarTelefone = formatarTelefone;
 window.validarCPFCliente = validarCPFCliente;
 
+// ============================================
 // 🆕 SISTEMA DE SESSÃO DE ASSINATURA
-window.gestaoGeral = {
-    // Responsável
-    toggleNecessitaAssinatura,
-    abrirModalAssinatura,
-    fecharModalAssinatura,
-    reabrirModalAssinatura,
-    copiarLinkAssinatura,
-    cancelarSessaoAssinatura,
-    refazerAssinatura,
-    // 🆕 Aluno
-    toggleNecessitaAssinaturaAluno,
-    abrirModalAssinaturaAluno,
-    fecharModalAssinaturaAluno,
-    reabrirModalAssinaturaAluno,
-    cancelarSessaoAssinaturaAluno,
-    refazerAssinaturaAluno,
-    // Comum
-    mostrarTelaAssinatura,
-    limparAssinaturaTela,
-    salvarAssinaturaTela
-};
+// ============================================
+(function exportarGestaoGeral() {
+    const funcoes = {
+        // Responsável
+        toggleNecessitaAssinatura: typeof toggleNecessitaAssinatura !== 'undefined' ? toggleNecessitaAssinatura : null,
+        abrirModalAssinatura: typeof abrirModalAssinatura !== 'undefined' ? abrirModalAssinatura : null,
+        fecharModalAssinatura: typeof fecharModalAssinatura !== 'undefined' ? fecharModalAssinatura : null,
+        reabrirModalAssinatura: typeof reabrirModalAssinatura !== 'undefined' ? reabrirModalAssinatura : null,
+        copiarLinkAssinatura: typeof copiarLinkAssinatura !== 'undefined' ? copiarLinkAssinatura : null,
+        cancelarSessaoAssinatura: typeof cancelarSessaoAssinatura !== 'undefined' ? cancelarSessaoAssinatura : null,
+        refazerAssinatura: typeof refazerAssinatura !== 'undefined' ? refazerAssinatura : null,
+        // 🆕 Aluno
+        toggleNecessitaAssinaturaAluno: typeof toggleNecessitaAssinaturaAluno !== 'undefined' ? toggleNecessitaAssinaturaAluno : null,
+        abrirModalAssinaturaAluno: typeof abrirModalAssinaturaAluno !== 'undefined' ? abrirModalAssinaturaAluno : null,
+        fecharModalAssinaturaAluno: typeof fecharModalAssinaturaAluno !== 'undefined' ? fecharModalAssinaturaAluno : null,
+        reabrirModalAssinaturaAluno: typeof reabrirModalAssinaturaAluno !== 'undefined' ? reabrirModalAssinaturaAluno : null,
+        cancelarSessaoAssinaturaAluno: typeof cancelarSessaoAssinaturaAluno !== 'undefined' ? cancelarSessaoAssinaturaAluno : null,
+        refazerAssinaturaAluno: typeof refazerAssinaturaAluno !== 'undefined' ? refazerAssinaturaAluno : null,
+        // Comum
+        mostrarTelaAssinatura: typeof mostrarTelaAssinatura !== 'undefined' ? mostrarTelaAssinatura : null,
+        limparAssinaturaTela: typeof limparAssinaturaTela !== 'undefined' ? limparAssinaturaTela : null,
+        salvarAssinaturaTela: typeof salvarAssinaturaTela !== 'undefined' ? salvarAssinaturaTela : null
+    };
+
+    // Remove funções nulas
+    Object.keys(funcoes).forEach(k => {
+        if (funcoes[k] === null) {
+            console.warn(`⚠️ [gestaoGeral] Função "${k}" não foi definida`);
+            delete funcoes[k];
+        }
+    });
+
+    window.gestaoGeral = funcoes;
+    console.log('✅ [gestaoGeral] Exportado com', Object.keys(funcoes).length, 'funções');
+})();
