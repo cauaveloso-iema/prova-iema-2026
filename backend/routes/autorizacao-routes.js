@@ -1311,9 +1311,22 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
             statusAssinatura: statusAssinatura,
             assinadaEm: assinaturaValida.length > 100 ? new Date() : null,
             assinadaPor: assinaturaValida.length > 100 ? req.userId : null,
-            assinadaPorNome: assinaturaValida.length > 100 ? (gestor?.nome || req.userNome) : null,
+
+            // ============================================
+            // ✅ CORREÇÃO: quem assinou é o RESPONSÁVEL, não o gestor
+            // ============================================
+            assinadaPorNome: assinaturaValida.length > 100 
+                ? (responsavelNome && String(responsavelNome).trim() 
+                    ? String(responsavelNome).trim() 
+                    : 'Responsável') 
+                : null,
+
             origemTipo: origemTipo || 'manual',
             origemId: origemId || null,
+
+            // ============================================
+            // ✅ Quem registrou é SEMPRE o gestor logado
+            // ============================================
             registradoPor: req.userId,
             registradoPorNome: gestor?.nome || req.userNome || 'Gestão Geral'
         });
@@ -1504,7 +1517,16 @@ router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => 
                 assinadaPorNome: a.assinadaPorNome,
                 origemTipo: a.origemTipo,
                 origemId: a.origemId,
-                registradoPorNome: a.registradoPorNome,
+
+                // ============================================
+                // ✅ CORREÇÃO: fallback robusto
+                // registradoPorNome = SEMPRE o gestor que registrou
+                // ============================================
+                registradoPor: a.registradoPor || null,
+                registradoPorNome: a.registradoPorNome || 
+                    (a.registradoPor && typeof a.registradoPor === 'object' ? a.registradoPor.nome : null) || 
+                    'Sistema',
+
                 createdAt: a.createdAt
             }
         });

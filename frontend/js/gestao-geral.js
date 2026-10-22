@@ -3786,34 +3786,52 @@ function reiniciarScannerModulo(modulo) {
 }
 
 // ============================================
-// 👁️ VER DETALHES DO MÓDULO (PROFISSIONAL COM ASSINATURA)
+// 👁️ VER DETALHES DO MÓDULO (CORRIGIDO)
 // ============================================
 async function verDetalhesModulo(modulo, id) {
     if (!id) return;
 
     try {
-        // Mostra um loading rápido enquanto busca no banco
         notificar('Carregando detalhes...', 'info', 1500);
 
         const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const data = await response.json();
-        
+
         if (!data.success || !data.autorizacao) {
             notificar('Erro ao carregar detalhes', 'error');
             return;
         }
-        
+
         const a = data.autorizacao;
         const cfg = getCfg(modulo);
-        
-        // Remove modal antigo se existir
+
         const oldModal = safeGet('modalVerDetalhesModulo');
         if (oldModal) oldModal.remove();
 
-        // Monta o bloco de assinatura (se existir)
+        // ============================================
+        // ✅ CORREÇÃO: separa claramente quem registrou de quem assinou
+        // ============================================
+        const nomeRegistrador =
+            a.registradoPorNome ||
+            (typeof a.registradoPor === 'string' ? a.registradoPor : null) ||
+            (a.registradoPor && typeof a.registradoPor === 'object' ? a.registradoPor.nome : null) ||
+            'Sistema';
+
+        // Quem assinou (responsável) — campo separado
+        const nomeAssinanteResp = a.assinadaPorNome || null;
+
+        // Resolve o nome do responsável
+        const nomeResponsavel =
+            a.responsavelNome ||
+            a.ultimoResponsavel?.nome ||
+            null;
+
+        // ============================================
+        // BLOCO DE ASSINATURA
+        // ============================================
         let assinaturaHTML = '';
         if (a.temAssinatura && a.assinaturaBase64) {
             assinaturaHTML = `
@@ -3821,7 +3839,9 @@ async function verDetalhesModulo(modulo, id) {
                     <label class="text-muted small fw-bold mb-2 d-block">ASSINATURA DO RESPONSÁVEL</label>
                     <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 15px; text-align: center;">
                         <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 150px; object-fit: contain;" alt="Assinatura">
-                        ${a.assinadaPorNome ? `<p class="mb-0 mt-2 text-success" style="font-size: 12px; font-weight: 600;"><i class="fas fa-check-circle"></i> Assinado por: ${escapeHTML(a.assinadaPorNome)}</p>` : ''}
+                        ${nomeAssinanteResp
+                            ? `<p class="mb-0 mt-2 text-success" style="font-size: 12px; font-weight: 600;"><i class="fas fa-check-circle"></i> Assinado por: ${escapeHTML(nomeAssinanteResp)}</p>`
+                            : `<p class="mb-0 mt-2 text-muted" style="font-size: 12px;"><i class="fas fa-info-circle"></i> Assinatura registrada</p>`}
                         ${a.assinadaEm ? `<p class="mb-0 text-muted" style="font-size: 11px;">Em: ${new Date(a.assinadaEm).toLocaleString('pt-BR')}</p>` : ''}
                     </div>
                 </div>
@@ -3838,10 +3858,12 @@ async function verDetalhesModulo(modulo, id) {
             `;
         }
 
-        // Monta os horários/períodos de acordo com o tipo
+        // ============================================
+        // INFO EXTRA POR TIPO
+        // ============================================
         let extraInfoHTML = '';
-        
-        if (cfg.tipo === 'autorizacao' && (a.horarioEntrada || a.horarioSaida)) {
+
+        if (cfg.tipo === 'autorizacao' && (a.horarioEntrada || a.horarioSaida || a.dataEntrada || a.dataSaida)) {
             extraInfoHTML = `
                 <div class="row mt-3">
                     <div class="col-6">
@@ -3889,13 +3911,50 @@ async function verDetalhesModulo(modulo, id) {
             `;
         }
 
-        // Modal HTML
+        // ============================================
+        // BLOCO DO RESPONSÁVEL
+        // ============================================
+        const temDadosResponsavel =
+            nomeResponsavel ||
+            a.responsavelCPF ||
+            a.responsavelTelefone;
+
+        const blocoResponsavelHTML = temDadosResponsavel ? `
+            <div class="mt-4">
+                <label class="text-muted small fw-bold mb-2 d-block">DADOS DO RESPONSÁVEL</label>
+                <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
+                    <div class="row">
+                        <div class="col-md-6 mb-2 mb-md-0">
+                            <span class="text-muted" style="font-size: 12px;">Nome</span><br>
+                            <strong style="font-size: 14px;">${escapeHTML(nomeResponsavel || 'Não informado')}</strong>
+                        </div>
+                        <div class="col-md-3 mb-2 mb-md-0">
+                            <span class="text-muted" style="font-size: 12px;">CPF</span><br>
+                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelCPF || '-')}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <span class="text-muted" style="font-size: 12px;">Telefone</span><br>
+                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelTelefone || '-')}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        ` : `
+            <div class="mt-4">
+                <div class="p-3 bg-white rounded" style="border: 1px dashed #cbd5e1; text-align: center; color: #64748b; font-size: 13px;">
+                    <i class="fas fa-user-slash"></i> Nenhum responsável cadastrado neste registro
+                </div>
+            </div>
+        `;
+
+        // ============================================
+        // MODAL
+        // ============================================
         const modalHtml = `
             <div class="modal fade" id="modalVerDetalhesModulo" tabindex="-1">
                 <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
                     <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
-                        
-                        <!-- Header -->
+
                         <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
                             <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
                                 <i class="fas fa-file-signature"></i> Detalhes - ${cfg.nomeAmigavel}
@@ -3903,59 +3962,37 @@ async function verDetalhesModulo(modulo, id) {
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
 
-                        <!-- Body -->
                         <div class="modal-body" style="padding: 25px; background: #f8fafc;">
-                            
-                            <!-- Card do Aluno -->
+
                             <div class="d-flex align-items-center gap-3 p-3 mb-4" style="background: white; border-radius: 12px; border-left: 4px solid #1e3c72; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
                                 <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid #1e3c72;" alt="">
                                 <div>
                                     <h5 style="margin: 0; color: #1e3c72; font-weight: 700;">${escapeHTML(a.alunoNome)}</h5>
                                     <p style="margin: 2px 0 0; font-size: 13px; color: #64748b;">
-                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || 'Sem matrícula')} • 
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || 'Sem matrícula')} •
                                         <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
                                     </p>
                                 </div>
                             </div>
 
-                            <!-- Grid de Informações -->
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
                                         <label class="text-muted small fw-bold d-block mb-1">DATA DO REGISTRO</label>
-                                        <span style="font-size: 15px; font-weight: 600; color: #1e293b;">${a.dataFormatada}</span>
+                                        <span style="font-size: 15px; font-weight: 600; color: #1e293b;">${a.dataFormatada || '-'}</span>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
                                         <label class="text-muted small fw-bold d-block mb-1">MOTIVO</label>
-                                        <span class="badge bg-info text-dark" style="font-size: 13px; padding: 6px 12px;">${escapeHTML(a.motivoLabel)}</span>
+                                        <span class="badge bg-info text-dark" style="font-size: 13px; padding: 6px 12px;">${escapeHTML(a.motivoLabel || '-')}</span>
                                     </div>
                                 </div>
                             </div>
 
                             ${extraInfoHTML}
 
-                            <!-- Responsável -->
-                            <div class="mt-4">
-                                <label class="text-muted small fw-bold mb-2 d-block">DADOS DO RESPONSÁVEL</label>
-                                <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-2 mb-md-0">
-                                            <span class="text-muted" style="font-size: 12px;">Nome</span><br>
-                                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelNome || 'Não informado')}</strong>
-                                        </div>
-                                        <div class="col-md-3 mb-2 mb-md-0">
-                                            <span class="text-muted" style="font-size: 12px;">CPF</span><br>
-                                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelCPF || '-')}</strong>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <span class="text-muted" style="font-size: 12px;">Telefone</span><br>
-                                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelTelefone || '-')}</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            ${blocoResponsavelHTML}
 
                             ${a.observacoes ? `
                             <div class="mt-4">
@@ -3968,14 +4005,18 @@ async function verDetalhesModulo(modulo, id) {
                             ${assinaturaHTML}
 
                             <div class="mt-4 text-end">
-                                <small class="text-muted" style="font-size: 11px;">
-                                    Registrado por: <strong>${escapeHTML(a.registradoPorNome || 'Sistema')}</strong>
+                                <small class="text-muted d-block" style="font-size: 11px;">
+                                    Registrado por: <strong>${escapeHTML(nomeRegistrador)}</strong>
                                 </small>
+                                ${nomeAssinanteResp ? `
+                                    <small class="text-muted d-block mt-1" style="font-size: 11px;">
+                                        Assinado por: <strong>${escapeHTML(nomeAssinanteResp)}</strong>
+                                    </small>
+                                ` : ''}
                             </div>
 
                         </div>
 
-                        <!-- Footer -->
                         <div class="modal-footer" style="background: white; border-top: 1px solid #e2e8f0; padding: 15px 25px;">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">Fechar</button>
                             <button type="button" class="btn btn-primary" onclick="imprimirModulo('${modulo}', '${a.id}')" style="border-radius: 8px;">
