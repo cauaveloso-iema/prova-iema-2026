@@ -3861,13 +3861,13 @@ async function carregarListaModulo(modulo, pagina = null) {
         const mostrarTipoProva = cfg.tipo === 'segunda_chamada';
         const mostraUniforme = cfg.tipo === 'uniforme';
 
-        // FORÇANDO TUDO EM UMA LINHA E SEM QUEBRA (nowrap)
-        const thStyle = 'padding: 12px 8px; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057; white-space: nowrap; background: #f8f9fa;';
-        const tdStyle = 'padding: 12px 8px; vertical-align: middle; border-bottom: 1px solid #dee2e6; white-space: nowrap;';
+        // ESTILOS COMPACTOS APLICADOS AQUI
+        const thStyle = 'padding: 10px 6px; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: 600; color: #495057; white-space: nowrap; background: #f8f9fa; font-size: 12px;';
+        const tdStyle = 'padding: 10px 6px; vertical-align: middle; border-bottom: 1px solid #dee2e6; white-space: nowrap; font-size: 12px;';
 
         container.innerHTML = `
-            <div class="table-responsive" style="overflow-x: auto; width: 100%;">
-                <table class="table table-hover" style="width: 100%; border-collapse: collapse; margin-bottom: 0;">
+            <div style="overflow-x: hidden; width: 100%;">
+                <table class="table table-hover" style="width: 100%; border-collapse: collapse; margin-bottom: 0; table-layout: auto;">
                     <thead>
                         <tr>
                             <th style="${thStyle}">Data Registro</th>
@@ -3880,7 +3880,7 @@ async function carregarListaModulo(modulo, pagina = null) {
                             ${cabecalhoHorarios}
                             <th style="${thStyle}">Motivo</th>
                             <th style="${thStyle}">Responsável</th>
-                            <th style="${thStyle}">Assinatura</th>
+                            <th style="${thStyle} text-align: center;">Assin.</th>
                             <th style="${thStyle} text-align: center;">Ações</th>
                         </tr>
                     </thead>
@@ -3929,34 +3929,47 @@ async function carregarListaModulo(modulo, pagina = null) {
                                     ${mostrarTipoProva 
                                         ? `<td style="${tdStyle}"><span class="badge bg-primary">${escapeHTML(a.periodoProvaFormatado || a.periodoProva || '-')}</span></td>` 
                                         : ''}
+                                    
                                     <td style="${tdStyle}"><strong>${escapeHTML(a.alunoNome)}</strong></td>
                                     <td style="${tdStyle}">${escapeHTML(a.alunoTurma)}</td>
+                                    
                                     ${mostraHorario 
                                         ? `<td style="${tdStyle}">${celulaEntrada}</td><td style="${tdStyle}">${celulaSaida}</td>`
                                         : `<td style="${tdStyle}">${a.horarioEntrada || '-'}</td>`}
-                                    <td style="${tdStyle}"><span class="badge bg-info text-dark">${escapeHTML(a.motivoLabel)}</span></td>
-                                    <td style="${tdStyle}">
+                                    
+                                    <td style="${tdStyle}; white-space: normal; max-width: 140px;">
+                                        <span class="badge bg-info text-dark" style="white-space: normal; display: inline-block; text-align: center; line-height: 1.2; font-size: 10px; padding: 4px 6px;">
+                                            ${escapeHTML(a.motivoLabel)}
+                                        </span>
+                                    </td>
+                                    
+                                    <td style="${tdStyle}; white-space: normal; min-width: 150px;">
                                         ${a.responsavelNome ? `
-                                            <div style="font-size:12px; line-height: 1.3;">
+                                            <div style="font-size:11px; line-height: 1.2;">
                                                 <strong>${escapeHTML(a.responsavelNome)}</strong>
                                                 ${a.responsavelCPF ? `<br><small style="color: #6c757d;">CPF: ${escapeHTML(a.responsavelCPF)}</small>` : ''}
                                                 ${a.responsavelTelefone ? `<br><small style="color: #6c757d;">Tel: ${escapeHTML(a.responsavelTelefone)}</small>` : ''}
                                             </div>` : '<span style="color: #6c757d;">-</span>'}
                                     </td>
-                                    <td style="${tdStyle}">
+                                    
+                                    <td style="${tdStyle} text-align: center;">
                                         ${a.temAssinatura 
-                                            ? '<span class="badge bg-success"><i class="fas fa-signature"></i> Assinado</span>' 
+                                            ? '<span class="badge bg-success" title="Assinado" style="padding: 4px 6px;"><i class="fas fa-signature"></i></span>' 
                                             : '<span class="badge bg-secondary">Sem</span>'}
                                     </td>
+                                    
                                     <td style="${tdStyle} text-align: center;">
-                                        <div style="display: flex; gap: 4px; justify-content: center;">
-                                            <button class="btn btn-sm btn-primary" onclick="imprimirModulo('${modulo}', '${a.id}')" title="Imprimir" style="padding: 4px 8px;">
+                                        <div style="display: flex; flex-direction: row; gap: 2px; justify-content: center;">
+                                            <button class="btn btn-sm btn-info" onclick="verAtraso('${a.id}')" title="Ver detalhes" style="padding: 3px 5px; font-size: 11px;">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-primary" onclick="imprimirModulo('${modulo}', '${a.id}')" title="Imprimir" style="padding: 3px 5px; font-size: 11px;">
                                                 <i class="fas fa-print"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-warning" onclick="abrirEditarModulo('${modulo}', '${a.id}')" title="Editar" style="padding: 4px 8px;">
+                                            <button class="btn btn-sm btn-warning" onclick="abrirEditarModulo('${modulo}', '${a.id}')" title="Editar" style="padding: 3px 5px; font-size: 11px;">
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-danger" onclick="excluirModulo('${modulo}', '${a.id}')" title="Excluir" style="padding: 4px 8px;">
+                                            <button class="btn btn-sm btn-danger" onclick="excluirModulo('${modulo}', '${a.id}')" title="Excluir" style="padding: 3px 5px; font-size: 11px;">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
