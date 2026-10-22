@@ -8,67 +8,27 @@
 // ESTADO DO MÓDULO
 // ============================================
 const atendimentoState = {
-  // Modo de busca: 'automatico' (QR) ou 'manual' (turma)
   modoBusca: 'automatico',
   scanner: null,
   scannerAtivo: false,
-
-  // Aluno selecionado
   alunoAtual: null,
-
-  // Tipo de atendimento: 'aluno' | 'responsavel'
   tipoAtendimento: 'aluno',
-
-  // Motivo / Providência selecionados
   motivoSelecionado: null,
   providenciaSelecionada: null,
-
-  // Sessões de assinatura
   sessaoAssinaturaResponsavel: {
-    sessaoId: null,
-    assinaturaCapturada: null,
-    qrCodeDataUrl: null,
-    monitoramentoInterval: null,
-    modalInstance: null
+    sessaoId: null, assinaturaCapturada: null, qrCodeDataUrl: null,
+    monitoramentoInterval: null, modalInstance: null
   },
   sessaoAssinaturaAluno: {
-    sessaoId: null,
-    assinaturaCapturada: null,
-    qrCodeDataUrl: null,
-    monitoramentoInterval: null,
-    modalInstance: null
+    sessaoId: null, assinaturaCapturada: null, qrCodeDataUrl: null,
+    monitoramentoInterval: null, modalInstance: null
   },
-
-  // Paginação da lista
-  paginacao: {
-    paginaAtual: 1,
-    porPagina: 10,
-    totalRegistros: 0,
-    totalPaginas: 0
-  },
-
-  // Cache de turmas e alunos
+  paginacao: { paginaAtual: 1, porPagina: 10, totalRegistros: 0, totalPaginas: 0 },
   turmasDisponiveis: [],
   alunosPorTurma: [],
-
-  // Relatórios
   relatorioAtual: null,
-
-  // Charts
-  charts: {
-    motivos: null,
-    atendimentos: null,
-    turmas: null
-  },
-
-  // Autocomplete
-  autocompleteAlunos: {
-    alunos: [],
-    filtrados: [],
-    indice: -1,
-    carregado: false,
-    carregando: false
-  }
+  charts: { motivos: null, atendimentos: null, turmas: null },
+  autocompleteAlunos: { alunos: [], filtrados: [], indice: -1, carregado: false, carregando: false }
 };
 
 // ============================================
@@ -103,7 +63,6 @@ function getAtendimentoMotivoLabel(valor) {
   const m = ATENDIMENTO_MOTIVOS.find(x => x.valor === valor);
   return m ? m.label : valor;
 }
-
 function getAtendimentoProvidenciaLabel(valor) {
   const p = ATENDIMENTO_PROVIDENCIAS.find(x => x.valor === valor);
   return p ? p.label : valor;
@@ -112,13 +71,8 @@ function getAtendimentoProvidenciaLabel(valor) {
 // ============================================
 // HELPERS
 // ============================================
-function safeGetAtendimento(id) {
-  return document.getElementById(id);
-}
-
-function getTokenAtendimento() {
-  return localStorage.getItem('auth_token');
-}
+function safeGetAtendimento(id) { return document.getElementById(id); }
+function getTokenAtendimento() { return localStorage.getItem('auth_token'); }
 
 function getDataLocalISOAtendimento(dateObj) {
   const d = dateObj || new Date();
@@ -139,13 +93,17 @@ function escapeHTMLAtendimento(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function safeSetTextAtendimento(id, valor) {
+  const el = safeGetAtendimento(id);
+  if (el) el.textContent = valor;
+}
+
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
 function inicializarModuloAtendimentos() {
   console.log('📋 [Atendimentos] Inicializando módulo...');
 
-  // Listener da aba principal
   const abaAtendimentos = document.getElementById('aba-atendimentos');
   if (abaAtendimentos) {
     abaAtendimentos.addEventListener('shown.bs.tab', () => {
@@ -158,7 +116,6 @@ function inicializarModuloAtendimentos() {
     });
   }
 
-  // Sub-abas
   const subRegistrar = document.getElementById('atendimento-registrar-tab');
   if (subRegistrar) {
     subRegistrar.addEventListener('shown.bs.tab', () => {
@@ -170,12 +127,17 @@ function inicializarModuloAtendimentos() {
     });
   }
 
-  const subDashboard = document.getElementById('atendimento-dashboard-tab');
-  if (subDashboard) {
-    subDashboard.addEventListener('shown.bs.tab', () => {
-      carregarDashboardAtendimentos();
+  // 🆕 Dashboard — escuta TODOS os IDs possíveis para garantir
+  ['atendimento-dashboard-tab', 'atendimentoDashboardTab', 'tab-dashboard-atendimento']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('shown.bs.tab', () => {
+          console.log('📊 [Atendimentos] Aba dashboard ativada — carregando...');
+          carregarDashboardAtendimentos();
+        });
+      }
     });
-  }
 
   const subRelatorios = document.getElementById('atendimento-relatorios-tab');
   if (subRelatorios) {
@@ -184,15 +146,12 @@ function inicializarModuloAtendimentos() {
     });
   }
 
-  // Botões de modo (QR x Manual)
   safeGetAtendimento('modoAutomaticoAtendimentoBtn')?.addEventListener('click', () => setModoBuscaAtendimento('automatico'));
   safeGetAtendimento('modoManualAtendimentoBtn')?.addEventListener('click', () => setModoBuscaAtendimento('manual'));
 
-  // Filtros do modo manual
   safeGetAtendimento('filtroTurmaManualAtendimento')?.addEventListener('change', () => carregarAlunosTurmaAtendimento());
   safeGetAtendimento('filtroBuscaManualAtendimento')?.addEventListener('input', () => filtrarAlunosManualAtendimento());
 
-  // Tipo de atendimento (aluno x responsável)
   safeGetAtendimento('tipoAtendimentoAlunoRadio')?.addEventListener('change', () => {
     atendimentoState.tipoAtendimento = 'aluno';
     atualizarUIPorTipoAtendimento();
@@ -202,13 +161,9 @@ function inicializarModuloAtendimentos() {
     atualizarUIPorTipoAtendimento();
   });
 
-  // Filtros da lista
   configurarFiltrosListaAtendimentos();
-
-  // Inicializa turmas no modo manual
   carregarTurmasManualAtendimento();
 
-  // Data padrão
   const dataEl = safeGetAtendimento('atendimentoData');
   if (dataEl) dataEl.value = getDataLocalISOAtendimento();
 
@@ -220,7 +175,6 @@ function inicializarModuloAtendimentos() {
 // ============================================
 async function setModoBuscaAtendimento(modo) {
   atendimentoState.modoBusca = modo;
-
   const infoEl = safeGetAtendimento('atendimentoAlunoInfo');
   const formEl = safeGetAtendimento('formAtendimento');
   if (infoEl) infoEl.style.display = 'none';
@@ -438,12 +392,11 @@ function exibirAlunoAtendimento(data) {
     foto.onerror = function () { this.onerror = null; this.src = gerarAvatarSVGAtendimento(aluno.nome); };
   }
 
-  safeGetAtendimento('atendimentoAlunoNome').textContent = aluno.nome || '-';
-  safeGetAtendimento('atendimentoAlunoMatricula').textContent = aluno.matricula || 'Não informada';
-  safeGetAtendimento('atendimentoAlunoTurma').textContent = aluno.turma || 'Não informada';
-  safeGetAtendimento('atendimentoAlunoCurso').textContent = aluno.curso || 'Não informado';
+  safeSetTextAtendimento('atendimentoAlunoNome', aluno.nome || '-');
+  safeSetTextAtendimento('atendimentoAlunoMatricula', aluno.matricula || 'Não informada');
+  safeSetTextAtendimento('atendimentoAlunoTurma', aluno.turma || 'Não informada');
+  safeSetTextAtendimento('atendimentoAlunoCurso', aluno.curso || 'Não informado');
 
-  // Histórico
   const hist = safeGetAtendimento('atendimentoHistoricoAluno');
   if (hist) {
     if (data.historicoRecente?.length > 0) {
@@ -462,7 +415,6 @@ function exibirAlunoAtendimento(data) {
     }
   }
 
-  // Pré-preenche responsável se já existir
   if (data.ultimoResponsavel) {
     const respNomeEl = safeGetAtendimento('atendimentoResponsavelNome');
     const respCPFEl = safeGetAtendimento('atendimentoResponsavelCPF');
@@ -484,12 +436,10 @@ function exibirAlunoAtendimento(data) {
 function mostrarFormAtendimento() {
   safeGetAtendimento('formAtendimento').style.display = 'block';
 
-  // Reset motivo / providência
   atendimentoState.motivoSelecionado = null;
   atendimentoState.providenciaSelecionada = null;
   document.querySelectorAll('#formAtendimento .tipo-card').forEach(c => c.classList.remove('selected'));
 
-  // Reset campos
   const descMotivo = safeGetAtendimento('atendimentoDescricaoMotivo');
   const descProv = safeGetAtendimento('atendimentoDescricaoProvidencias');
   const obs = safeGetAtendimento('atendimentoObservacoes');
@@ -497,11 +447,9 @@ function mostrarFormAtendimento() {
   if (descProv) descProv.value = '';
   if (obs) obs.value = '';
 
-  // Data
   const dataEl = safeGetAtendimento('atendimentoData');
   if (dataEl) dataEl.value = getDataLocalISOAtendimento();
 
-  // Limpa sessões de assinatura
   limparSessaoResponsavelAtendimento();
   limparSessaoAlunoAtendimento();
 
@@ -515,20 +463,16 @@ function mostrarFormAtendimento() {
   const blocoAluno = safeGetAtendimento('atendimentoBlocoAssinaturaAlunoInfo');
   if (blocoAluno) { blocoAluno.style.display = 'none'; blocoAluno.innerHTML = ''; }
 
-  // Configura visibilidade por tipo
   atualizarUIPorTipoAtendimento();
-
   setTimeout(() => safeGetAtendimento('atendimentoData')?.focus(), 100);
 }
 
 function atualizarUIPorTipoAtendimento() {
   const tipo = atendimentoState.tipoAtendimento;
 
-  // Mostra/oculta bloco de responsável
   const blocoResp = safeGetAtendimento('blocoDadosResponsavelAtendimento');
   if (blocoResp) blocoResp.style.display = tipo === 'responsavel' ? 'block' : 'none';
 
-  // Labels dinâmicos
   const tituloForm = safeGetAtendimento('atendimentoTituloForm');
   if (tituloForm) {
     tituloForm.innerHTML = tipo === 'aluno'
@@ -536,7 +480,6 @@ function atualizarUIPorTipoAtendimento() {
       : '<i class="fas fa-user-friends"></i> Atendimento aos Pais/Responsáveis';
   }
 
-  // Assinatura do aluno só faz sentido se for atendimento ao aluno
   const blocoAssinaturaAluno = safeGetAtendimento('blocoAssinaturaAlunoAtendimento');
   if (blocoAssinaturaAluno) {
     blocoAssinaturaAluno.style.display = tipo === 'aluno' ? 'block' : 'none';
@@ -571,46 +514,24 @@ function selecionarProvidenciaAtendimento(providencia) {
 // REGISTRAR ATENDIMENTO
 // ============================================
 async function registrarAtendimento() {
-  // ---------- Validações ----------
-  if (!atendimentoState.motivoSelecionado) {
-    notificar('Selecione o motivo do atendimento', 'error');
-    return;
-  }
-  if (!atendimentoState.providenciaSelecionada) {
-    notificar('Selecione as providências tomadas', 'error');
-    return;
-  }
+  if (!atendimentoState.motivoSelecionado) { notificar('Selecione o motivo do atendimento', 'error'); return; }
+  if (!atendimentoState.providenciaSelecionada) { notificar('Selecione as providências tomadas', 'error'); return; }
 
   const descricaoMotivo = (safeGetAtendimento('atendimentoDescricaoMotivo')?.value || '').trim();
-  if (!descricaoMotivo) {
-    notificar('Descreva o motivo do atendimento', 'error');
-    return;
-  }
+  if (!descricaoMotivo) { notificar('Descreva o motivo do atendimento', 'error'); return; }
 
   const descricaoProvidencias = (safeGetAtendimento('atendimentoDescricaoProvidencias')?.value || '').trim();
-  if (!descricaoProvidencias) {
-    notificar('Descreva as providências tomadas', 'error');
-    return;
-  }
+  if (!descricaoProvidencias) { notificar('Descreva as providências tomadas', 'error'); return; }
 
   const dataAtendimento = safeGetAtendimento('atendimentoData')?.value;
-  if (!dataAtendimento) {
-    notificar('Informe a data do atendimento', 'error');
-    return;
-  }
+  if (!dataAtendimento) { notificar('Informe a data do atendimento', 'error'); return; }
 
   if (!atendimentoState.alunoAtual || !atendimentoState.alunoAtual.id) {
-    notificar('Nenhum aluno selecionado', 'error');
-    return;
+    notificar('Nenhum aluno selecionado', 'error'); return;
   }
 
   const tipo = atendimentoState.tipoAtendimento;
-
-  // Validações de responsável
-  let responsavelNome = '';
-  let responsavelCPF = '';
-  let responsavelTelefone = '';
-  let responsavelParentesco = '';
+  let responsavelNome = '', responsavelCPF = '', responsavelTelefone = '', responsavelParentesco = '';
 
   if (tipo === 'responsavel') {
     responsavelNome = (safeGetAtendimento('atendimentoResponsavelNome')?.value || '').trim();
@@ -620,29 +541,25 @@ async function registrarAtendimento() {
 
     if (!responsavelNome) {
       notificar('Informe o nome do responsável', 'error');
-      safeGetAtendimento('atendimentoResponsavelNome')?.focus();
-      return;
+      safeGetAtendimento('atendimentoResponsavelNome')?.focus(); return;
     }
 
     if (responsavelCPF) {
       const validacao = validarCPFClienteAtendimento(responsavelCPF);
       if (!validacao.valido) {
         notificar(`⚠️ CPF inválido!\n\n${validacao.erro}`, 'error', 5000);
-        safeGetAtendimento('atendimentoResponsavelCPF')?.focus();
-        return;
+        safeGetAtendimento('atendimentoResponsavelCPF')?.focus(); return;
       }
     }
   }
 
-  // ---------- Assinaturas ----------
   const precisaAssinatura = safeGetAtendimento('atendimentoNecessitaAssinatura')?.checked || false;
   const assinaturaBase64 = atendimentoState.sessaoAssinaturaResponsavel.assinaturaCapturada || '';
   const sessaoAssinaturaId = atendimentoState.sessaoAssinaturaResponsavel.sessaoId || null;
 
   if (precisaAssinatura && !assinaturaBase64) {
     notificar('⚠️ Aguardando assinatura do responsável!', 'warning', 5000);
-    reabrirModalAssinaturaResponsavelAtendimento();
-    return;
+    reabrirModalAssinaturaResponsavelAtendimento(); return;
   }
 
   const precisaAssinaturaAluno = safeGetAtendimento('atendimentoNecessitaAssinaturaAluno')?.checked || false;
@@ -651,8 +568,7 @@ async function registrarAtendimento() {
 
   if (precisaAssinaturaAluno && !assinaturaAlunoBase64) {
     notificar('⚠️ Aguardando assinatura do aluno!', 'warning', 5000);
-    reabrirModalAssinaturaAlunoAtendimento();
-    return;
+    reabrirModalAssinaturaAlunoAtendimento(); return;
   }
 
   const btn = document.querySelector('#formAtendimento .btn-primary-custom');
@@ -662,42 +578,28 @@ async function registrarAtendimento() {
     const body = {
       tipoAtendimento: tipo,
       alunoId: atendimentoState.alunoAtual.id,
-      responsavelNome,
-      responsavelCPF,
-      responsavelTelefone,
-      responsavelParentesco,
+      responsavelNome, responsavelCPF, responsavelTelefone, responsavelParentesco,
       dataAtendimento,
       motivo: atendimentoState.motivoSelecionado,
       descricaoMotivo,
       providencias: atendimentoState.providenciaSelecionada,
       descricaoProvidencias,
       observacoes: safeGetAtendimento('atendimentoObservacoes')?.value || '',
-      precisaAssinatura,
-      assinaturaBase64,
-      sessaoAssinaturaId,
-      precisaAssinaturaAluno,
-      assinaturaAlunoBase64,
-      sessaoAssinaturaAlunoId
+      precisaAssinatura, assinaturaBase64, sessaoAssinaturaId,
+      precisaAssinaturaAluno, assinaturaAlunoBase64, sessaoAssinaturaAlunoId
     };
 
     const r = await fetch('/api/gestao-atendimento/registrar', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getTokenAtendimento()}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getTokenAtendimento()}` },
       body: JSON.stringify(body)
     });
     const d = await r.json();
 
-    if (!d.success) {
-      notificar('❌ ' + (d.error || 'Erro'), 'error');
-      return;
-    }
+    if (!d.success) { notificar('❌ ' + (d.error || 'Erro'), 'error'); return; }
 
     console.log('✅ Atendimento registrado:', d.atendimento.id);
 
-    // Limpa sessões
     limparSessaoResponsavelAtendimento(true);
     limparSessaoAlunoAtendimento(true);
 
@@ -719,10 +621,7 @@ async function registrarAtendimento() {
 }
 
 function validarCPFClienteAtendimento(cpf) {
-  if (typeof window.validarCPFCliente === 'function') {
-    return window.validarCPFCliente(cpf);
-  }
-  // fallback local
+  if (typeof window.validarCPFCliente === 'function') return window.validarCPFCliente(cpf);
   const cpfLimpo = cpf.replace(/\D/g, '');
   if (cpfLimpo.length !== 11) return { valido: false, erro: 'CPF deve ter 11 dígitos' };
   if (/^(\d)\1{10}$/.test(cpfLimpo)) return { valido: false, erro: 'CPF inválido' };
@@ -776,8 +675,7 @@ async function toggleNecessitaAssinaturaAtendimento() {
   if (check.checked) {
     if (!atendimentoState.alunoAtual?.id) {
       notificar('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
-      check.checked = false;
-      return;
+      check.checked = false; return;
     }
 
     const snapshot = montarSnapshotAtendimento();
@@ -788,15 +686,8 @@ async function toggleNecessitaAssinaturaAtendimento() {
     try {
       const response = await fetch('/api/gestao-geral/sessoes-assinatura', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getTokenAtendimento()}`
-        },
-        body: JSON.stringify({
-          sessaoId,
-          tipo: 'atendimento',
-          dadosAtendimento: snapshot
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getTokenAtendimento()}` },
+        body: JSON.stringify({ sessaoId, tipo: 'atendimento', dadosAtendimento: snapshot })
       });
       const data = await response.json();
       if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
@@ -806,10 +697,7 @@ async function toggleNecessitaAssinaturaAtendimento() {
       try {
         const qrResponse = await fetch('/api/qrcode/gerar', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${getTokenAtendimento()}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getTokenAtendimento()}` },
           body: JSON.stringify({ url: urlAssinatura })
         });
         const qrData = await qrResponse.json();
@@ -841,12 +729,8 @@ async function toggleNecessitaAssinaturaAtendimento() {
 function montarSnapshotAtendimento() {
   const aluno = atendimentoState.alunoAtual || {};
   return {
-    alunoId: aluno.id,
-    alunoNome: aluno.nome,
-    alunoMatricula: aluno.matricula,
-    alunoTurma: aluno.turma,
-    alunoCurso: aluno.curso,
-    alunoFoto: aluno.fotoPerfil,
+    alunoId: aluno.id, alunoNome: aluno.nome, alunoMatricula: aluno.matricula,
+    alunoTurma: aluno.turma, alunoCurso: aluno.curso, alunoFoto: aluno.fotoPerfil,
     tipoAtendimento: atendimentoState.tipoAtendimento,
     motivo: atendimentoState.motivoSelecionado,
     motivoLabel: getAtendimentoMotivoLabel(atendimentoState.motivoSelecionado),
@@ -1116,8 +1000,7 @@ async function toggleNecessitaAssinaturaAlunoAtendimento() {
   if (check.checked) {
     if (!atendimentoState.alunoAtual?.id) {
       notificar('⚠️ Selecione um aluno antes de marcar a assinatura', 'warning');
-      check.checked = false;
-      return;
+      check.checked = false; return;
     }
 
     const snapshot = montarSnapshotAtendimento();
@@ -1128,15 +1011,8 @@ async function toggleNecessitaAssinaturaAlunoAtendimento() {
     try {
       const response = await fetch('/api/gestao-geral/sessoes-assinatura', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getTokenAtendimento()}`
-        },
-        body: JSON.stringify({
-          sessaoId,
-          tipo: 'atendimento_aluno',
-          dadosAtendimento: { ...snapshot, tipoAssinante: 'aluno' }
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getTokenAtendimento()}` },
+        body: JSON.stringify({ sessaoId, tipo: 'atendimento_aluno', dadosAtendimento: { ...snapshot, tipoAssinante: 'aluno' } })
       });
       const data = await response.json();
       if (!data.success) throw new Error(data.error || 'Erro ao criar sessão');
@@ -1146,10 +1022,7 @@ async function toggleNecessitaAssinaturaAlunoAtendimento() {
       try {
         const qrResponse = await fetch('/api/qrcode/gerar', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${getTokenAtendimento()}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getTokenAtendimento()}` },
           body: JSON.stringify({ url: urlAssinatura })
         });
         const qrData = await qrResponse.json();
@@ -1517,9 +1390,18 @@ async function carregarListaAtendimentos(pagina = null) {
                   ${!a.temAssinatura && !a.temAssinaturaAluno ? '<span class="text-muted">-</span>' : ''}
                 </td>
                 <td>
-                  <button class="btn btn-sm btn-primary" onclick="imprimirAtendimento('${a.id}')" title="Imprimir"><i class="fas fa-print"></i></button>
-                  <button class="btn btn-sm btn-warning" onclick="abrirEditarAtendimento('${a.id}')" title="Editar"><i class="fas fa-edit"></i></button>
-                  <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                  <button class="btn btn-sm btn-info" onclick="verAtendimento('${a.id}')" title="Visualizar" style="padding: 4px 8px;">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="btn btn-sm btn-primary" onclick="imprimirAtendimento('${a.id}')" title="Imprimir" style="padding: 4px 8px;">
+                    <i class="fas fa-print"></i>
+                  </button>
+                  <button class="btn btn-sm btn-warning" onclick="abrirEditarAtendimento('${a.id}')" title="Editar" style="padding: 4px 8px;">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="btn btn-sm btn-danger" onclick="excluirAtendimento('${a.id}')" title="Excluir" style="padding: 4px 8px;">
+                    <i class="fas fa-trash"></i>
+                  </button>
                 </td>
               </tr>`).join('')}
           </tbody>
@@ -1534,6 +1416,206 @@ async function carregarListaAtendimentos(pagina = null) {
         <i class="fas fa-sync-alt"></i> Tentar novamente
       </button>
     </div>`;
+  }
+}
+
+// ============================================
+// 👁️ VER DETALHES DO ATENDIMENTO (NOVO)
+// ============================================
+async function verAtendimento(id) {
+  if (!id) return;
+
+  try {
+    const r = await fetch(`/api/gestao-atendimento/${id}`, {
+      headers: { 'Authorization': `Bearer ${getTokenAtendimento()}` }
+    });
+    const d = await r.json();
+
+    if (!d.success || !d.atendimento) {
+      notificar('Erro ao carregar atendimento', 'error');
+      return;
+    }
+
+    const a = d.atendimento;
+    const old = safeGetAtendimento('modalVerAtendimento');
+    if (old) old.remove();
+
+    const tipoLabel = a.tipoAtendimento === 'aluno' ? 'Atendimento ao Aluno' : 'Atendimento aos Pais/Responsáveis';
+    const tipoBadgeClass = a.tipoAtendimento === 'aluno' ? 'bg-primary' : 'bg-success';
+    const dataFmt = a.dataFormatada || new Date(a.dataAtendimento).toLocaleDateString('pt-BR');
+
+    // Bloco do responsável (só aparece se tipo responsavel)
+    let blocoResponsavel = '';
+    if (a.tipoAtendimento === 'responsavel' && (a.responsavelNome || a.responsavelCPF || a.responsavelTelefone || a.responsavelParentesco)) {
+      blocoResponsavel = `
+        <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <div class="card-body p-3">
+            <h6 style="color: #1e3c72; margin-bottom: 12px; font-size: 13px; text-transform: uppercase; font-weight: 700;">
+              <i class="fas fa-user-shield"></i> Dados do Responsável
+            </h6>
+            <div class="row g-2">
+              ${a.responsavelNome ? `<div class="col-md-6"><small class="text-muted d-block" style="font-size: 11px;">Nome</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelNome)}</strong></div>` : ''}
+              ${a.responsavelCPF ? `<div class="col-md-3"><small class="text-muted d-block" style="font-size: 11px;">CPF</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelCPF)}</strong></div>` : ''}
+              ${a.responsavelTelefone ? `<div class="col-md-3"><small class="text-muted d-block" style="font-size: 11px;">Telefone</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelTelefone)}</strong></div>` : ''}
+              ${a.responsavelParentesco ? `<div class="col-md-6"><small class="text-muted d-block" style="font-size: 11px;">Parentesco</small><strong style="font-size: 14px;">${escapeHTMLAtendimento(a.responsavelParentesco)}</strong></div>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Bloco de assinatura do responsável
+    let assinaturaRespHTML = '';
+    if (a.temAssinatura && a.assinaturaBase64) {
+      assinaturaRespHTML = `
+        <div class="mb-3">
+          <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">ASSINATURA DO RESPONSÁVEL</label>
+          <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 12px; text-align: center;">
+            <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 120px; object-fit: contain;" alt="Assinatura do Responsável">
+            ${a.assinadaPorNome ? `<p class="mb-0 mt-2" style="font-size: 12px; color: #065f46;"><i class="fas fa-check-circle"></i> Assinado por: <strong>${escapeHTMLAtendimento(a.assinadaPorNome)}</strong></p>` : ''}
+            ${a.assinadaEm ? `<p class="mb-0" style="font-size: 11px; color: #047857;">Em: ${new Date(a.assinadaEm).toLocaleString('pt-BR')}</p>` : ''}
+          </div>
+        </div>`;
+    } else if (a.precisaAssinatura) {
+      assinaturaRespHTML = `
+        <div class="mb-3">
+          <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">ASSINATURA DO RESPONSÁVEL</label>
+          <div style="background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 12px; padding: 12px; text-align: center; color: #92400e;">
+            <i class="fas fa-clock fa-2x mb-2"></i>
+            <p class="mb-0" style="font-size: 13px; font-weight: 600;">Aguardando assinatura</p>
+          </div>
+        </div>`;
+    }
+
+    // Bloco de assinatura do aluno
+    let assinaturaAlunoHTML = '';
+    if (a.temAssinaturaAluno && a.assinaturaAlunoBase64) {
+      assinaturaAlunoHTML = `
+        <div class="mb-3">
+          <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">ASSINATURA DO ALUNO</label>
+          <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 12px; text-align: center;">
+            <img src="${a.assinaturaAlunoBase64}" style="max-width: 100%; max-height: 120px; object-fit: contain;" alt="Assinatura do Aluno">
+            ${a.assinadaPorNomeAluno ? `<p class="mb-0 mt-2" style="font-size: 12px; color: #065f46;"><i class="fas fa-check-circle"></i> Assinado por: <strong>${escapeHTMLAtendimento(a.assinadaPorNomeAluno)}</strong></p>` : ''}
+            ${a.assinadaEmAluno ? `<p class="mb-0" style="font-size: 11px; color: #047857;">Em: ${new Date(a.assinadaEmAluno).toLocaleString('pt-BR')}</p>` : ''}
+          </div>
+        </div>`;
+    } else if (a.precisaAssinaturaAluno) {
+      assinaturaAlunoHTML = `
+        <div class="mb-3">
+          <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">ASSINATURA DO ALUNO</label>
+          <div style="background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 12px; padding: 12px; text-align: center; color: #92400e;">
+            <i class="fas fa-clock fa-2x mb-2"></i>
+            <p class="mb-0" style="font-size: 13px; font-weight: 600;">Aguardando assinatura</p>
+          </div>
+        </div>`;
+    }
+
+    const modalHtml = `
+      <div class="modal fade" id="modalVerAtendimento" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+          <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
+
+            <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
+              <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-eye"></i> Detalhes do Atendimento
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body" style="padding: 25px; background: #f8fafc;">
+
+              <!-- Card do Aluno -->
+              <div class="d-flex align-items-center gap-3 p-3 mb-4" style="background: white; border-radius: 12px; border-left: 4px solid #1e3c72; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <img src="${gerarAvatarSVGAtendimento(a.alunoNome)}" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid #1e3c72;" alt="">
+                <div style="flex: 1;">
+                  <h5 style="margin: 0; color: #1e3c72; font-weight: 700;">${escapeHTMLAtendimento(a.alunoNome)}</h5>
+                  <p style="margin: 2px 0 0; font-size: 13px; color: #64748b;">
+                    <i class="fas fa-id-card"></i> ${escapeHTMLAtendimento(a.alunoMatricula || 'Sem matrícula')} •
+                    <i class="fas fa-graduation-cap"></i> ${escapeHTMLAtendimento(a.alunoTurma || '-')}
+                    ${a.alunoCurso ? ` • ${escapeHTMLAtendimento(a.alunoCurso)}` : ''}
+                  </p>
+                </div>
+                <span class="badge ${tipoBadgeClass}" style="font-size: 12px; padding: 6px 12px;">
+                  ${a.tipoAtendimento === 'aluno' ? '<i class="fas fa-user-graduate"></i> Aluno' : '<i class="fas fa-user-friends"></i> Responsável'}
+                </span>
+              </div>
+
+              <!-- Grid de Informações -->
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
+                    <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">DATA DO ATENDIMENTO</label>
+                    <span style="font-size: 15px; font-weight: 600; color: #1e293b;">${dataFmt}</span>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
+                    <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">MOTIVO</label>
+                    <span class="badge bg-info text-dark" style="font-size: 13px; padding: 6px 12px;">${escapeHTMLAtendimento(a.motivoLabel)}</span>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
+                    <label class="text-muted small fw-bold d-block mb-1" style="font-size: 11px;">PROVIDÊNCIAS</label>
+                    <span class="badge bg-secondary" style="font-size: 13px; padding: 6px 12px;">${escapeHTMLAtendimento(a.providenciasLabel)}</span>
+                  </div>
+                </div>
+              </div>
+
+              ${blocoResponsavel}
+
+              <!-- Descrição do Motivo -->
+              <div class="mb-3">
+                <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">DESCRIÇÃO DO MOTIVO</label>
+                <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0; font-size: 13px; color: #475569; white-space: pre-line;">
+                  ${escapeHTMLAtendimento(a.descricaoMotivo || '-')}
+                </div>
+              </div>
+
+              <!-- Descrição das Providências -->
+              <div class="mb-3">
+                <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">DESCRIÇÃO DAS PROVIDÊNCIAS</label>
+                <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0; font-size: 13px; color: #475569; white-space: pre-line;">
+                  ${escapeHTMLAtendimento(a.descricaoProvidencias || '-')}
+                </div>
+              </div>
+
+              ${a.observacoes ? `
+                <div class="mb-3">
+                  <label class="text-muted small fw-bold d-block mb-2" style="font-size: 11px;">OBSERVAÇÕES</label>
+                  <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0; font-size: 13px; color: #475569; white-space: pre-line;">
+                    ${escapeHTMLAtendimento(a.observacoes)}
+                  </div>
+                </div>
+              ` : ''}
+
+              ${assinaturaRespHTML}
+              ${assinaturaAlunoHTML}
+
+              <div class="mt-4 text-end">
+                <small class="text-muted" style="font-size: 11px;">
+                  Registrado por: <strong>${escapeHTMLAtendimento(a.registradoPor || 'Sistema')}</strong>
+                </small>
+              </div>
+
+            </div>
+
+            <div class="modal-footer" style="background: white; border-top: 1px solid #e2e8f0; padding: 15px 25px;">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">Fechar</button>
+              <button type="button" class="btn btn-primary" onclick="imprimirAtendimento('${a.id}')" style="border-radius: 8px;">
+                <i class="fas fa-print"></i> Imprimir Documento
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    new bootstrap.Modal(safeGetAtendimento('modalVerAtendimento')).show();
+
+  } catch (e) {
+    console.error('Erro ao ver atendimento:', e);
+    notificar('Erro ao carregar detalhes do atendimento', 'error');
   }
 }
 
@@ -1659,14 +1741,11 @@ function gerarHTMLImpressaoAtendimento(a, qrCodeUrl) {
   const logo = '/uploads/logo-iema.png';
   const carimbo = '/icons/assinatura_gestao.ico';
   const dataGeracao = new Date().toLocaleString('pt-BR');
-
   const tipoLabel = a.tipoAtendimento === 'aluno' ? 'Atendimento ao Aluno' : 'Atendimento aos Pais/Responsáveis';
-
   const dataExt = a.dataAtendimento
     ? new Date(a.dataAtendimento).toLocaleDateString('pt-BR')
     : '-';
 
-  // Bloco do responsável (só aparece no tipo responsavel)
   let blocoResponsavelHTML = '';
   if (a.tipoAtendimento === 'responsavel' && (a.responsavelNome || a.responsavelCPF || a.responsavelTelefone || a.responsavelParentesco)) {
     blocoResponsavelHTML = `
@@ -1679,12 +1758,10 @@ function gerarHTMLImpressaoAtendimento(a, qrCodeUrl) {
       </div>`;
   }
 
-  // Assinaturas
   const temResp = !!(a.assinaturaBase64 && a.assinaturaBase64.length > 100);
   const temAluno = !!(a.assinaturaAlunoBase64 && a.assinaturaAlunoBase64.length > 100);
   const precisaResp = !!a.precisaAssinatura;
   const precisaAluno = !!a.precisaAssinaturaAluno;
-
   const mostrarResp = precisaResp || (!precisaResp && !precisaAluno);
   const mostrarAluno = precisaAluno;
 
@@ -1751,49 +1828,37 @@ function gerarHTMLImpressaoAtendimento(a, qrCodeUrl) {
       @page { size: A4 portrait; margin: 8mm; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; line-height: 1.25; color: #000; }
-
       .header { text-align: center; border-bottom: 1.5px double #000; padding-bottom: 4px; margin-bottom: 6px; }
       .header img { max-width: 100%; max-height: 14mm; object-fit: contain; display: block; margin: 0 auto 2px; }
       .header h1 { font-size: 10pt; text-transform: uppercase; font-weight: bold; margin: 2px 0 0; }
       .header p { font-size: 8pt; margin: 1px 0 0; }
-
       .titulo { text-align: center; font-size: 11pt; font-weight: bold; background: #eef2ff; padding: 4px 8px; border: 1.5px solid #000; margin: 6px 0 3px; text-transform: uppercase; letter-spacing: 0.5px; }
-
       .aluno-box { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 5px; margin-bottom: 6px; }
       .aluno-foto { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #1e3c72; flex-shrink: 0; }
       .aluno-info { flex: 1; }
       .aluno-nome { font-size: 10pt; font-weight: bold; color: #1e3c72; margin-bottom: 1px; }
       .aluno-detalhes { font-size: 8pt; color: #374151; }
-
       .section-title { font-size: 9pt; font-weight: bold; background: #e8e8e8; padding: 2px 6px; border-left: 3px solid #1e3c72; margin: 5px 0 3px; }
-
       .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px 12px; margin: 3px 0 5px; font-size: 8.5pt; }
       .info-item { display: flex; gap: 4px; }
       .info-label { font-weight: bold; white-space: nowrap; }
       .info-value { flex: 1; }
-
       .motivo-box { background: #f5f5f5; border: 1px solid #000; padding: 5px 8px; margin: 5px 0; border-radius: 4px; }
       .motivo-box strong { font-size: 9pt; }
-
       .descricao-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 5px 8px; font-size: 8.5pt; line-height: 1.3; min-height: 30px; max-height: 120px; overflow: hidden; word-wrap: break-word; }
-
       .assinaturas { display: flex; justify-content: space-around; margin-top: 18px; gap: 15px; }
       .assinatura { flex: 1; text-align: center; font-size: 7.5pt; position: relative; }
       .assinatura-container { position: relative; border-bottom: 1px solid #000; min-height: 14mm; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; }
       .assinatura-img { max-height: 13mm; max-width: 100%; object-fit: contain; position: relative; z-index: 2; margin-bottom: 1mm; }
       .carimbo-overlay { max-height: 13mm; max-width: 55%; object-fit: contain; opacity: 0.85; }
       .assinatura-linha { padding-top: 2px; font-size: 7.5pt; margin-top: 2px; font-weight: bold; }
-
       .qr-code { text-align: center; margin-top: 6px; }
       .qr-code img { width: 25mm; height: 25mm; border: 1.5px solid #000; padding: 2px; display: block; margin: 0 auto; }
       .qr-code p { font-size: 8pt; margin: 3px 0 0 0; color: #444; font-weight: bold; }
-
       .footer { text-align: center; margin-top: 5px; padding-top: 3px; border-top: 1px solid #ccc; font-size: 6.5pt; color: #666; }
       .footer p { margin: 1px 0; }
-
       .btn-print { display: block; margin: 10px auto; padding: 8px 20px; background: #1e3c72; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; font-family: Arial, sans-serif; }
       .btn-print:hover { background: #2a5298; }
-
       @media print { .no-print { display: none !important; } body { padding: 0; } }
     </style>
   </head>
@@ -2001,11 +2066,7 @@ async function salvarEdicaoAtendimento() {
   }
 
   const body = {
-    motivo,
-    descricaoMotivo,
-    providencias,
-    descricaoProvidencias,
-    observacoes,
+    motivo, descricaoMotivo, providencias, descricaoProvidencias, observacoes,
     dataAtendimento: data
   };
 
@@ -2020,10 +2081,7 @@ async function salvarEdicaoAtendimento() {
   try {
     const r = await fetch(`/api/gestao-atendimento/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getTokenAtendimento()}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getTokenAtendimento()}` },
       body: JSON.stringify(body)
     });
     const d = await r.json();
@@ -2073,12 +2131,20 @@ async function excluirAtendimento(id) {
 // DASHBOARD
 // ============================================
 async function carregarDashboardAtendimentos() {
+  console.log('📊 [Atendimentos] Carregando dashboard...');
   try {
     const r = await fetch('/api/gestao-atendimento/dashboard', {
       headers: { 'Authorization': `Bearer ${getTokenAtendimento()}` }
     });
+    if (!r.ok) {
+      console.error('Dashboard HTTP', r.status);
+      return;
+    }
     const d = await r.json();
-    if (!d.success) return;
+    if (!d.success) {
+      console.error('Dashboard error:', d.error);
+      return;
+    }
 
     safeSetTextAtendimento('AtendimentoTotalHoje', d.metricas?.hoje || 0);
     safeSetTextAtendimento('AtendimentoTotalSemana', d.metricas?.semana || 0);
@@ -2087,7 +2153,7 @@ async function carregarDashboardAtendimentos() {
 
     // Chart: por motivo
     const ctxMotivos = safeGetAtendimento('AtendimentoChartMotivos');
-    if (ctxMotivos && d.porMotivo) {
+    if (ctxMotivos && d.porMotivo && typeof Chart !== 'undefined') {
       if (atendimentoState.charts.motivos) {
         try { atendimentoState.charts.motivos.destroy(); } catch (e) {}
       }
@@ -2102,11 +2168,13 @@ async function carregarDashboardAtendimentos() {
         },
         options: { responsive: true, maintainAspectRatio: true }
       });
+    } else if (!ctxMotivos) {
+      console.warn('⚠️ Canvas AtendimentoChartMotivos não encontrado');
     }
 
     // Chart: por dia
     const ctxDia = safeGetAtendimento('AtendimentoChartAtrasos');
-    if (ctxDia && d.tendencias?.ultimos7Dias) {
+    if (ctxDia && d.tendencias?.ultimos7Dias && typeof Chart !== 'undefined') {
       if (atendimentoState.charts.atendimentos) {
         try { atendimentoState.charts.atendimentos.destroy(); } catch (e) {}
       }
@@ -2129,7 +2197,7 @@ async function carregarDashboardAtendimentos() {
 
     // Chart: por turma
     const ctxTurma = safeGetAtendimento('AtendimentoChartTurmas');
-    if (ctxTurma && d.tendencias?.porTurma) {
+    if (ctxTurma && d.tendencias?.porTurma && typeof Chart !== 'undefined') {
       if (atendimentoState.charts.turmas) {
         try { atendimentoState.charts.turmas.destroy(); } catch (e) {}
       }
@@ -2170,14 +2238,11 @@ async function carregarDashboardAtendimentos() {
         reinc.innerHTML = `<p class="text-muted text-center py-3"><i class="fas fa-check-circle text-success"></i> Nenhum aluno reincidente</p>`;
       }
     }
+
+    console.log('✅ [Atendimentos] Dashboard renderizado');
   } catch (e) {
     console.error('Erro no dashboard de atendimentos:', e);
   }
-}
-
-function safeSetTextAtendimento(id, valor) {
-  const el = safeGetAtendimento(id);
-  if (el) el.textContent = valor;
 }
 
 // ============================================
@@ -2514,12 +2579,7 @@ function exibirRelatorioAtendimento(data, tipo) {
         <div class="table-responsive">
           <table class="table table-sm">
             <thead>
-              <tr>
-                <th>Data</th>
-                <th>Tipo</th>
-                <th>Motivo</th>
-                <th>Providências</th>
-              </tr>
+              <tr><th>Data</th><th>Tipo</th><th>Motivo</th><th>Providências</th></tr>
             </thead>
             <tbody>${(data.registros || []).map(a => `
               <tr>
@@ -2538,11 +2598,9 @@ function exibirRelatorioAtendimento(data, tipo) {
 function exportarCSVAtendimento() {
   const data = atendimentoState.relatorioAtual;
   if (!data) { notificar('⚠️ Gere um relatório primeiro', 'warning'); return; }
-
   const registros = data.registros || [];
   if (registros.length === 0) { notificar('⚠️ Nenhum registro para exportar', 'warning'); return; }
 
-  // Usa o helper global de CSV
   if (typeof gerarBaixarCSV === 'function') {
     const colunas = [
       { label: 'Data', key: 'dataFormatada' },
@@ -2556,7 +2614,6 @@ function exportarCSVAtendimento() {
       { label: 'Assinatura Responsável', format: (a) => a.temAssinatura ? 'Sim' : 'Não' },
       { label: 'Assinatura Aluno', format: (a) => a.temAssinaturaAluno ? 'Sim' : 'Não' }
     ];
-
     const filtros = [];
     const di = safeGetAtendimento('AtendimentoDataInicio')?.value;
     const df = safeGetAtendimento('AtendimentoDataFim')?.value;
@@ -2567,13 +2624,10 @@ function exportarCSVAtendimento() {
       titulo: 'Relatório de Atendimentos',
       subtitulo: data.turma ? `Turma: ${data.turma}` : (data.aluno?.nome ? `Aluno: ${data.aluno.nome}` : 'Geral'),
       setor: 'Gestão Geral',
-      colunas,
-      registros,
-      filtros,
+      colunas, registros, filtros,
       nomeArquivo: 'relatorio-atendimentos',
       observacoes: `${registros.length} atendimento(s)`
     });
-
     if (ok) notificar(`✅ Relatório exportado (${registros.length})!`, 'success');
   } else {
     notificar('⚠️ Helper de CSV não encontrado', 'error');
@@ -2583,7 +2637,6 @@ function exportarCSVAtendimento() {
 function exportarPDFAtendimento() {
   const data = atendimentoState.relatorioAtual;
   if (!data) { notificar('⚠️ Gere um relatório primeiro', 'warning'); return; }
-
   const win = window.open('', '_blank');
   win.document.write(gerarHTMLRelatorioAtendimento(data));
   win.document.close();
@@ -2594,36 +2647,21 @@ function gerarHTMLRelatorioAtendimento(data) {
   const logo = '/uploads/logo-iema.png';
   const carimbo = '/icons/assinatura_gestao.ico';
   const dataGeracao = new Date().toLocaleString('pt-BR');
-
   const tipo = data.aluno ? 'aluno' : (data.turma ? 'turma' : 'geral');
   let titulo = 'Relatório de Atendimentos';
   let subtitulo = '';
-  if (tipo === 'turma') {
-    titulo = 'Relatório de Atendimentos por Turma';
-    subtitulo = `Turma: ${data.turma || ''}`;
-  } else if (tipo === 'aluno') {
-    titulo = 'Relatório Individual de Atendimentos';
-    subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`;
-  } else {
-    subtitulo = 'Visão consolidada';
-  }
+  if (tipo === 'turma') { titulo = 'Relatório de Atendimentos por Turma'; subtitulo = `Turma: ${data.turma || ''}`; }
+  else if (tipo === 'aluno') { titulo = 'Relatório Individual de Atendimentos'; subtitulo = `${data.aluno?.nome || ''} — ${data.aluno?.turma || ''}`; }
+  else { subtitulo = 'Visão consolidada'; }
 
   const registros = data.registros || [];
-
   let tabelaHTML = '';
   if (registros.length > 0) {
     tabelaHTML = `
       <div class="section-title">📋 Registros (${registros.length})</div>
       <table>
         <thead>
-          <tr>
-            <th>Data</th>
-            <th>Tipo</th>
-            <th>Aluno</th>
-            <th>Motivo</th>
-            <th>Providências</th>
-            <th>Registrado por</th>
-          </tr>
+          <tr><th>Data</th><th>Tipo</th><th>Aluno</th><th>Motivo</th><th>Providências</th><th>Registrado por</th></tr>
         </thead>
         <tbody>
           ${registros.map(a => `
@@ -2639,7 +2677,6 @@ function gerarHTMLRelatorioAtendimento(data) {
       </table>`;
   }
 
-  // Assinatura (pega a primeira que encontrar nos registros)
   let assinaturaDigital = null;
   const comAssinatura = registros.find(a => a.temAssinatura && a.assinaturaBase64);
   if (comAssinatura) assinaturaDigital = comAssinatura.assinaturaBase64;
@@ -2727,6 +2764,7 @@ window.refazerAssinaturaAlunoAtendimento = refazerAssinaturaAlunoAtendimento;
 window.copiarLinkAssinaturaAtendimento = copiarLinkAssinaturaAtendimento;
 window.carregarListaAtendimentos = carregarListaAtendimentos;
 window.imprimirAtendimento = imprimirAtendimento;
+window.verAtendimento = verAtendimento;      // 🆕
 window.abrirEditarAtendimento = abrirEditarAtendimento;
 window.salvarEdicaoAtendimento = salvarEdicaoAtendimento;
 window.excluirAtendimento = excluirAtendimento;

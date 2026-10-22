@@ -1,4 +1,4 @@
-///routes/gestao-atendimento.js
+// routes/gestao-atendimento.js
 // ============================================
 // ROTAS: ATENDIMENTOS - GESTÃO GERAL
 // Atendimento ao Aluno + Atendimento aos Pais/Responsáveis
@@ -59,7 +59,7 @@ router.get('/health', (req, res) => {
 });
 
 // ============================================
-// 📚 TURMAS (reutiliza lógica da gestão geral)
+// 📚 TURMAS
 // ============================================
 router.get('/turmas', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -120,7 +120,6 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
       return res.status(400).json({ success: false, error: 'Usuário não é aluno' });
     }
 
-    // Histórico recente de atendimentos
     const ultimosAtendimentos = await AtendimentoGestaoGeral.find({ alunoId: aluno._id })
       .select('-assinaturaBase64 -assinaturaAlunoBase64')
       .sort({ dataAtendimento: -1 })
@@ -128,7 +127,6 @@ router.get('/aluno/:id', authenticateToken, verificarGestaoGeral, async (req, re
 
     const totalAtendimentos = await AtendimentoGestaoGeral.countDocuments({ alunoId: aluno._id });
 
-    // Último responsável que compareceu (para pré-preencher no atendimento ao responsável)
     const ultimoAtendResponsavel = await AtendimentoGestaoGeral.findOne({
       alunoId: aluno._id,
       tipoAtendimento: 'responsavel',
@@ -193,7 +191,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       sessaoAssinaturaAlunoId = null
     } = req.body;
 
-    // ---------- Validações básicas ----------
     if (!tipoAtendimento || !['aluno', 'responsavel'].includes(tipoAtendimento)) {
       return res.status(400).json({ success: false, error: 'Tipo de atendimento inválido' });
     }
@@ -213,7 +210,6 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       return res.status(400).json({ success: false, error: 'Descrição das providências é obrigatória' });
     }
 
-    // ---------- Buscar aluno ----------
     const aluno = await User.findById(alunoId);
     if (!aluno || aluno.role !== 'aluno') {
       return res.status(404).json({ success: false, error: 'Aluno não encontrado' });
@@ -221,14 +217,12 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
 
     const gestor = await User.findById(req.userId).select('nome');
 
-    // ---------- Data ----------
     let dataFinal = new Date();
     if (dataAtendimento) {
       const parsed = new Date(dataAtendimento + 'T12:00:00');
       if (!isNaN(parsed.getTime())) dataFinal = parsed;
     }
 
-    // ---------- Validação CPF (só para responsável) ----------
     if (tipoAtendimento === 'responsavel') {
       if (!responsavelNome || responsavelNome.trim() === '') {
         return res.status(400).json({
@@ -238,9 +232,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       }
     }
 
-    // ============================================
-    // ASSINATURA DO RESPONSÁVEL
-    // ============================================
+    // ---------- ASSINATURA DO RESPONSÁVEL ----------
     let assinaturaValida = '';
     let assinadaPorNome = null;
     let assinadaEm = null;
@@ -282,9 +274,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       ? 'assinada'
       : (precisaAssinatura ? 'pendente' : 'nao_necessaria');
 
-    // ============================================
-    // ASSINATURA DO ALUNO
-    // ============================================
+    // ---------- ASSINATURA DO ALUNO ----------
     let assinaturaAlunoValida = '';
     let assinadaPorNomeAluno = null;
     let assinadaEmAluno = null;
@@ -326,9 +316,7 @@ router.post('/registrar', authenticateToken, verificarGestaoGeral, async (req, r
       ? 'assinada'
       : (precisaAssinaturaAluno ? 'pendente' : 'nao_necessaria');
 
-    // ============================================
-    // CRIA O REGISTRO
-    // ============================================
+    // ---------- CRIA O REGISTRO ----------
     const atendimento = new AtendimentoGestaoGeral({
       tipoAtendimento,
       alunoId: aluno._id,
@@ -498,174 +486,7 @@ router.get('/listar', authenticateToken, verificarGestaoGeral, async (req, res) 
 });
 
 // ============================================
-// 🔍 BUSCAR ATENDIMENTO POR ID
-// ============================================
-router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
-  try {
-    // Evita conflito com rotas nomeadas
-    if (['listar', 'dashboard', 'registrar', 'turmas', 'alunos-por-turma', 'relatorio'].includes(req.params.id)) {
-      return res.status(404).json({ success: false, error: 'Rota não encontrada' });
-    }
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ success: false, error: 'ID inválido' });
-    }
-
-    const a = await AtendimentoGestaoGeral.findById(req.params.id);
-    if (!a) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-
-    res.json({
-      success: true,
-      atendimento: {
-        id: a._id,
-        tipoAtendimento: a.tipoAtendimento,
-        alunoId: a.alunoId,
-        alunoNome: a.alunoNome,
-        alunoMatricula: a.alunoMatricula,
-        alunoTurma: a.alunoTurma,
-        alunoCurso: a.alunoCurso,
-        alunoFoto: a.alunoFoto,
-        responsavelNome: a.responsavelNome,
-        responsavelCPF: a.responsavelCPF,
-        responsavelTelefone: a.responsavelTelefone,
-        responsavelParentesco: a.responsavelParentesco,
-        dataAtendimento: a.dataAtendimento,
-        dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
-        motivo: a.motivo,
-        motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(a.motivo),
-        descricaoMotivo: a.descricaoMotivo,
-        providencias: a.providencias,
-        providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(a.providencias),
-        descricaoProvidencias: a.descricaoProvidencias,
-        observacoes: a.observacoes,
-        registradoPor: a.registradoPorNome,
-
-        // Responsável
-        precisaAssinatura: a.precisaAssinatura || false,
-        assinaturaBase64: a.assinaturaBase64 || '',
-        temAssinatura: a.temAssinatura || false,
-        statusAssinatura: a.statusAssinatura,
-        assinadaEm: a.assinadaEm,
-        assinadaPorNome: a.assinadaPorNome,
-
-        // Aluno
-        precisaAssinaturaAluno: a.precisaAssinaturaAluno || false,
-        assinaturaAlunoBase64: a.assinaturaAlunoBase64 || '',
-        temAssinaturaAluno: a.temAssinaturaAluno || false,
-        statusAssinaturaAluno: a.statusAssinaturaAluno,
-        assinadaEmAluno: a.assinadaEmAluno,
-        assinadaPorNomeAluno: a.assinadaPorNomeAluno,
-
-        criadoEm: a.criadoEm,
-        atualizadoEm: a.atualizadoEm
-      }
-    });
-  } catch (error) {
-    console.error('Erro ao buscar atendimento:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================
-// ✏️ EDITAR ATENDIMENTO
-// ============================================
-router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
-  try {
-    const {
-      responsavelNome,
-      responsavelCPF,
-      responsavelTelefone,
-      responsavelParentesco,
-      dataAtendimento,
-      motivo,
-      descricaoMotivo,
-      providencias,
-      descricaoProvidencias,
-      observacoes
-    } = req.body;
-
-    const atendimento = await AtendimentoGestaoGeral.findById(req.params.id);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-
-    if (motivo) {
-      atendimento.motivo = motivo;
-      atendimento.motivoLabel = AtendimentoGestaoGeral.getMotivoLabel(motivo);
-    }
-    if (providencias) {
-      atendimento.providencias = providencias;
-      atendimento.providenciasLabel = AtendimentoGestaoGeral.getProvidenciaLabel(providencias);
-    }
-    if (descricaoMotivo !== undefined) {
-      if (!descricaoMotivo.trim()) {
-        return res.status(400).json({ success: false, error: 'Descrição do motivo é obrigatória' });
-      }
-      atendimento.descricaoMotivo = descricaoMotivo.trim();
-    }
-    if (descricaoProvidencias !== undefined) {
-      if (!descricaoProvidencias.trim()) {
-        return res.status(400).json({ success: false, error: 'Descrição das providências é obrigatória' });
-      }
-      atendimento.descricaoProvidencias = descricaoProvidencias.trim();
-    }
-    if (observacoes !== undefined) atendimento.observacoes = observacoes;
-
-    if (dataAtendimento) {
-      const parsed = new Date(dataAtendimento + 'T12:00:00');
-      if (!isNaN(parsed.getTime())) atendimento.dataAtendimento = parsed;
-    }
-
-    if (atendimento.tipoAtendimento === 'responsavel') {
-      if (responsavelNome !== undefined) atendimento.responsavelNome = responsavelNome;
-      if (responsavelCPF !== undefined) atendimento.responsavelCPF = responsavelCPF;
-      if (responsavelTelefone !== undefined) atendimento.responsavelTelefone = responsavelTelefone;
-      if (responsavelParentesco !== undefined) atendimento.responsavelParentesco = responsavelParentesco;
-    }
-
-    atendimento.atualizadoEm = new Date();
-    await atendimento.save();
-
-    console.log(`✏️ Atendimento editado: ${atendimento.alunoNome} (${atendimento._id}) por ${req.userNome}`);
-
-    res.json({
-      success: true,
-      message: 'Atendimento atualizado com sucesso!',
-      atendimento: {
-        id: atendimento._id,
-        motivo: atendimento.motivo,
-        motivoLabel: atendimento.motivoLabel,
-        providencias: atendimento.providencias,
-        providenciasLabel: atendimento.providenciasLabel,
-        dataAtendimento: atendimento.dataAtendimento,
-        dataFormatada: new Date(atendimento.dataAtendimento).toLocaleDateString('pt-BR')
-      }
-    });
-  } catch (error) {
-    console.error('Erro ao editar atendimento:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================
-// 🗑️ EXCLUIR ATENDIMENTO
-// ============================================
-router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
-  try {
-    const atendimento = await AtendimentoGestaoGeral.findByIdAndDelete(req.params.id);
-    if (!atendimento) {
-      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
-    }
-    console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id}) por ${req.userNome}`);
-    res.json({ success: true, message: 'Atendimento excluído com sucesso' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============================================
-// 📊 DASHBOARD
+// 📊 DASHBOARD  🆕 MOVIDO PARA ANTES DE /:id
 // ============================================
 router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, res) => {
   try {
@@ -702,21 +523,18 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
       AtendimentoGestaoGeral.countDocuments(matchTipo)
     ]);
 
-    // Por motivo
     const porMotivo = await AtendimentoGestaoGeral.aggregate([
       { $match: { ...matchTipo, dataAtendimento: { $gte: ultimos30Dias } } },
       { $group: { _id: '$motivo', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
 
-    // Por tipo
     const porTipo = await AtendimentoGestaoGeral.aggregate([
       { $match: { dataAtendimento: { $gte: ultimos30Dias } } },
       { $group: { _id: '$tipoAtendimento', count: { $sum: 1 } } },
       { $sort: { count: -1 } }
     ]);
 
-    // Últimos 7 dias
     const ultimos7Dias = [];
     for (let i = 6; i >= 0; i--) {
       const data = new Date();
@@ -738,7 +556,6 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
       });
     }
 
-    // Por turma
     const porTurma = await AtendimentoGestaoGeral.aggregate([
       { $match: { ...matchTipo, dataAtendimento: { $gte: ultimos30Dias } } },
       { $group: { _id: '$alunoTurma', count: { $sum: 1 } } },
@@ -746,7 +563,6 @@ router.get('/dashboard', authenticateToken, verificarGestaoGeral, async (req, re
       { $limit: 8 }
     ]);
 
-    // Alunos reincidentes (3+ atendimentos)
     const alunosReincidentes = await AtendimentoGestaoGeral.aggregate([
       { $match: { ...matchTipo, dataAtendimento: { $gte: ultimos30Dias } } },
       {
@@ -1020,6 +836,176 @@ router.get('/relatorio/aluno/:alunoId', authenticateToken, verificarGestaoGeral,
     });
   } catch (error) {
     console.error('Erro no relatório por aluno:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🔍 BUSCAR ATENDIMENTO POR ID  🆕 POR ÚLTIMO
+// ============================================
+// ⚠️ ESTA ROTA DEVE SER A ÚLTIMA — captura qualquer /:id
+router.get('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
+  try {
+    // Sanity check: impede que rotas nomeadas que escaparam caiam aqui
+    const rotasReservadas = [
+      'listar', 'dashboard', 'registrar', 'turmas',
+      'alunos-por-turma', 'relatorio', 'health', 'aluno'
+    ];
+    if (rotasReservadas.includes(req.params.id)) {
+      return res.status(404).json({ success: false, error: 'Rota não encontrada' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+
+    const a = await AtendimentoGestaoGeral.findById(req.params.id);
+    if (!a) {
+      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+
+    res.json({
+      success: true,
+      atendimento: {
+        id: a._id,
+        tipoAtendimento: a.tipoAtendimento,
+        alunoId: a.alunoId,
+        alunoNome: a.alunoNome,
+        alunoMatricula: a.alunoMatricula,
+        alunoTurma: a.alunoTurma,
+        alunoCurso: a.alunoCurso,
+        alunoFoto: a.alunoFoto,
+        responsavelNome: a.responsavelNome,
+        responsavelCPF: a.responsavelCPF,
+        responsavelTelefone: a.responsavelTelefone,
+        responsavelParentesco: a.responsavelParentesco,
+        dataAtendimento: a.dataAtendimento,
+        dataFormatada: new Date(a.dataAtendimento).toLocaleDateString('pt-BR'),
+        motivo: a.motivo,
+        motivoLabel: AtendimentoGestaoGeral.getMotivoLabel(a.motivo),
+        descricaoMotivo: a.descricaoMotivo,
+        providencias: a.providencias,
+        providenciasLabel: AtendimentoGestaoGeral.getProvidenciaLabel(a.providencias),
+        descricaoProvidencias: a.descricaoProvidencias,
+        observacoes: a.observacoes,
+        registradoPor: a.registradoPorNome,
+
+        precisaAssinatura: a.precisaAssinatura || false,
+        assinaturaBase64: a.assinaturaBase64 || '',
+        temAssinatura: a.temAssinatura || false,
+        statusAssinatura: a.statusAssinatura,
+        assinadaEm: a.assinadaEm,
+        assinadaPorNome: a.assinadaPorNome,
+
+        precisaAssinaturaAluno: a.precisaAssinaturaAluno || false,
+        assinaturaAlunoBase64: a.assinaturaAlunoBase64 || '',
+        temAssinaturaAluno: a.temAssinaturaAluno || false,
+        statusAssinaturaAluno: a.statusAssinaturaAluno,
+        assinadaEmAluno: a.assinadaEmAluno,
+        assinadaPorNomeAluno: a.assinadaPorNomeAluno,
+
+        criadoEm: a.criadoEm,
+        atualizadoEm: a.atualizadoEm
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar atendimento:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ✏️ EDITAR ATENDIMENTO
+// ============================================
+router.put('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
+  try {
+    const {
+      responsavelNome,
+      responsavelCPF,
+      responsavelTelefone,
+      responsavelParentesco,
+      dataAtendimento,
+      motivo,
+      descricaoMotivo,
+      providencias,
+      descricaoProvidencias,
+      observacoes
+    } = req.body;
+
+    const atendimento = await AtendimentoGestaoGeral.findById(req.params.id);
+    if (!atendimento) {
+      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+
+    if (motivo) {
+      atendimento.motivo = motivo;
+      atendimento.motivoLabel = AtendimentoGestaoGeral.getMotivoLabel(motivo);
+    }
+    if (providencias) {
+      atendimento.providencias = providencias;
+      atendimento.providenciasLabel = AtendimentoGestaoGeral.getProvidenciaLabel(providencias);
+    }
+    if (descricaoMotivo !== undefined) {
+      if (!descricaoMotivo.trim()) {
+        return res.status(400).json({ success: false, error: 'Descrição do motivo é obrigatória' });
+      }
+      atendimento.descricaoMotivo = descricaoMotivo.trim();
+    }
+    if (descricaoProvidencias !== undefined) {
+      if (!descricaoProvidencias.trim()) {
+        return res.status(400).json({ success: false, error: 'Descrição das providências é obrigatória' });
+      }
+      atendimento.descricaoProvidencias = descricaoProvidencias.trim();
+    }
+    if (observacoes !== undefined) atendimento.observacoes = observacoes;
+
+    if (dataAtendimento) {
+      const parsed = new Date(dataAtendimento + 'T12:00:00');
+      if (!isNaN(parsed.getTime())) atendimento.dataAtendimento = parsed;
+    }
+
+    if (atendimento.tipoAtendimento === 'responsavel') {
+      if (responsavelNome !== undefined) atendimento.responsavelNome = responsavelNome;
+      if (responsavelCPF !== undefined) atendimento.responsavelCPF = responsavelCPF;
+      if (responsavelTelefone !== undefined) atendimento.responsavelTelefone = responsavelTelefone;
+      if (responsavelParentesco !== undefined) atendimento.responsavelParentesco = responsavelParentesco;
+    }
+
+    atendimento.atualizadoEm = new Date();
+    await atendimento.save();
+
+    console.log(`✏️ Atendimento editado: ${atendimento.alunoNome} (${atendimento._id}) por ${req.userNome}`);
+
+    res.json({
+      success: true,
+      message: 'Atendimento atualizado com sucesso!',
+      atendimento: {
+        id: atendimento._id,
+        motivo: atendimento.motivo,
+        motivoLabel: atendimento.motivoLabel,
+        providencias: atendimento.providencias,
+        providenciasLabel: atendimento.providenciasLabel,
+        dataAtendimento: atendimento.dataAtendimento,
+        dataFormatada: new Date(atendimento.dataAtendimento).toLocaleDateString('pt-BR')
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao editar atendimento:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 🗑️ EXCLUIR ATENDIMENTO
+// ============================================
+router.delete('/:id', authenticateToken, verificarGestaoGeral, async (req, res) => {
+  try {
+    const atendimento = await AtendimentoGestaoGeral.findByIdAndDelete(req.params.id);
+    if (!atendimento) {
+      return res.status(404).json({ success: false, error: 'Atendimento não encontrado' });
+    }
+    console.log(`🗑️ Atendimento excluído: ${atendimento.alunoNome} (${atendimento._id}) por ${req.userNome}`);
+    res.json({ success: true, message: 'Atendimento excluído com sucesso' });
+  } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
