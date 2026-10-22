@@ -101,20 +101,6 @@ function gerarAvatarSVG(nome) {
 // ============================================
 // 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
 // ============================================
-/**
- * Gera CSV profissional com cabeçalho institucional, metadados, tabela e rodapé.
- *
- * @param {Object} opts
- * @param {string}   opts.titulo        - Título do relatório
- * @param {string}  [opts.subtitulo]    - Subtítulo (ex: "Turma: 3º Ano A")
- * @param {string}  [opts.setor]        - Setor (default: "Secretaria")
- * @param {Array}    opts.colunas       - [{ label, key, format? }]
- * @param {Array}    opts.registros     - Dados
- * @param {Array<{label, valor}>} [opts.filtros] - Filtros aplicados
- * @param {string}   opts.nomeArquivo   - Nome do arquivo (sem extensão)
- * @param {string}  [opts.observacoes]  - Observações extras
- * @param {Object}  [opts.metricas]     - { label: valor } extras (opcional)
- */
 function gerarBaixarCSV(opts) {
     const {
         titulo = 'Relatório',
@@ -141,17 +127,15 @@ function gerarBaixarCSV(opts) {
     const dataGeracao = agora.toLocaleString('pt-BR');
     const dataArquivo = getDataLocalISO(agora);
 
-    // Escapa valor para célula CSV
     const esc = (v) => {
         if (v === null || v === undefined) return '""';
         let s = String(v)
-            .replace(/\r\n|\r|\n/g, ' ')   // remove quebras internas
-            .replace(/"/g, '""')            // escapa aspas
+            .replace(/\r\n|\r|\n/g, ' ')
+            .replace(/"/g, '""')
             .trim();
         return `"${s}"`;
     };
 
-    // Linha mesclada (1 célula visível + separadores até completar colunas)
     const linhaUnica = (texto) => {
         const t = String(texto ?? '').replace(/"/g, '""');
         return `"${t}"` + ';'.repeat(Math.max(0, colunas.length - 1));
@@ -171,23 +155,17 @@ function gerarBaixarCSV(opts) {
         }).join(';');
     });
 
-    // ============================================
-    // MONTAGEM
-    // ============================================
     const L = [];
 
-    // 🏛️ Cabeçalho institucional
     L.push(linhaUnica('IEMA PLENO: SÃO LUÍS - CENTRO'));
     L.push(linhaUnica('Sistema de Atendimentos — EducaPleno'));
     L.push(linhaUnica(`Setor: ${setor}`));
     L.push(linhaUnica(''));
 
-    // 📋 Título
     L.push(linhaUnica(titulo.toUpperCase()));
     if (subtitulo) L.push(linhaUnica(subtitulo));
     L.push(linhaUnica(''));
 
-    // 📊 Metadados
     L.push(linhaUnica(`Data de geração: ${dataGeracao}`));
     L.push(linhaUnica(`Total de registros: ${registros.length}`));
 
@@ -214,7 +192,6 @@ function gerarBaixarCSV(opts) {
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
 
-    // 📋 Tabela
     L.push(linhaCabecalho);
     L.push(...linhasDados);
 
@@ -222,7 +199,6 @@ function gerarBaixarCSV(opts) {
     L.push(linhaUnica('─'.repeat(40)));
     L.push(linhaUnica(''));
 
-    // 🖋️ Rodapé
     L.push(linhaUnica('Documento gerado automaticamente pelo EducaPleno'));
     L.push(linhaUnica(`Setor responsável: ${setor}`));
     L.push(linhaUnica(`Gerado em: ${dataGeracao}`));
@@ -230,7 +206,6 @@ function gerarBaixarCSV(opts) {
 
     const csv = '\uFEFF' + L.join('\r\n');
 
-    // Download
     try {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
@@ -410,7 +385,7 @@ function iniciarSistemaNotificacoes() {
 }
 
 async function carregarTudo() {
-    await Promise.all([carregarNotificacoesSistema(), carregarLembretesRemarcacao()]);
+    await Promise.all([carregarNotificacoesSistema(), carregarLembretesRetroativos()]);
     renderizarSinoUnificado();
     atualizarBadgeUnificado();
 }
@@ -427,49 +402,88 @@ async function carregarNotificacoesSistema() {
     } catch (error) { /* silencioso */ }
 }
 
-async function carregarLembretesRemarcacao() {
+async function carregarLembretesRetroativos() {
     try {
         const tk = localStorage.getItem('auth_token');
         if (!tk) return;
-        const response = await fetch('/api/gestao-geral/remarcacoes/pendentes', {
+        
+        const response = await fetch('/api/secretaria/lembretes-retroativos', {
             headers: { 'Authorization': `Bearer ${tk}` }
         });
+        
         const contentType = response.headers.get('content-type') || '';
-        if (!response.ok || !contentType.includes('application/json')) { __lembretesCache = []; return; }
+        if (!response.ok || !contentType.includes('application/json')) { 
+            __lembretesCache = []; 
+            return; 
+        }
+        
         const data = await response.json();
-        __lembretesCache = data.success && Array.isArray(data.remarcacoes) ? data.remarcacoes : [];
-    } catch (error) { __lembretesCache = []; }
+        __lembretesCache = data.success && Array.isArray(data.lembretes) ? data.lembretes : [];
+    } catch (error) { 
+        __lembretesCache = []; 
+    }
 }
 
 function renderizarSinoUnificado() {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
+    
     const temNotificacoes = __notificacoesCache.length > 0;
     const temLembretes = __lembretesCache.length > 0;
+    
     if (!temNotificacoes && !temLembretes) {
         lista.innerHTML = `<div style="text-align: center; padding: 40px; color: #6c757d;">
             <i class="fas fa-bell-slash" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.4;"></i>
             <p style="margin: 0;">Nenhuma notificação</p></div>`;
         return;
     }
+    
     let html = '';
+    
+    // 🆕 SEÇÃO DE LEMBRETES DE RETROATIVIDADE (clicáveis → abrem aba Por Data)
     if (temLembretes) {
-        html += `<div style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #d1fae5;">
-            <strong style="color: #059669; font-size: 0.85rem;">
-                <i class="fas fa-calendar-alt"></i> Lembretes (${__lembretesCache.length})
-            </strong></div>`;
-        __lembretesCache.forEach(r => {
-            html += `<div style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6;">
-                <strong style="font-size: 0.85rem;">${escapeHTML(r.alunoNome || '')}</strong>
-                <p style="margin: 4px 0 0; font-size: 0.78rem; color: #6b7280;">
-                    ${r.dataRemarcacao || ''} às ${r.horarioRemarcacao || ''}</p></div>`;
+        html += `<div style="padding: 12px 16px; background: #fffbeb; border-bottom: 1px solid #fde68a;">
+            <strong style="color: #d97706; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-exclamation-triangle"></i> Lembretes de Retroatividade (${__lembretesCache.length})
+            </strong>
+            <p style="margin: 4px 0 0; font-size: 0.75rem; color: #b45309;">Clique para abrir o registro na aba Por Data</p>
+        </div>`;
+        
+        __lembretesCache.forEach((r) => {
+            const d = r.dados || {};
+            html += `<div class="notificacao-item notificacao-lembrete"
+                data-lembrete-id="${r.id}"
+                style="padding: 14px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; border-left: 4px solid #f59e0b; transition: background 0.15s;"
+                onmouseover="this.style.background='#fef3c7'"
+                onmouseout="this.style.background='white'">
+                <div style="display: flex; gap: 10px; align-items: flex-start;">
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem;">
+                        <i class="fas ${r.icone || 'fa-calendar-alt'}"></i>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <strong style="display: block; font-size: 0.85rem; color: #92400e;">${escapeHTML(r.titulo || '')}</strong>
+                        <p style="margin: 4px 0 0; font-size: 0.78rem; color: #78350f; line-height: 1.3;">${escapeHTML(r.mensagem || '')}</p>
+                        <div style="font-size: 0.7rem; color: #d97706; margin-top: 6px; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span><i class="far fa-clock"></i> Recebido ${r.tempoDecorrido || 'recentemente'}</span>
+                            ${d.alunoNome ? `<span><i class="fas fa-user"></i> ${escapeHTML(d.alunoNome)}</span>` : ''}
+                            <span style="background:#f59e0b;color:white;padding:2px 8px;border-radius:10px;font-size:0.65rem;">
+                                <i class="fas fa-arrow-right"></i> Ver registro
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
         });
     }
+    
+    // SEÇÃO DE NOTIFICAÇÕES NORMAIS
     if (temNotificacoes) {
         html += `<div style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #d1fae5;">
-            <strong style="color: #059669; font-size: 0.85rem;">
-                <i class="fas fa-bell"></i> Notificações
-            </strong></div>`;
+            <strong style="color: #059669; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-bell"></i> Notificações do Sistema
+            </strong>
+        </div>`;
+        
         __notificacoesCache.forEach(notif => {
             const classeLida = notif.lida ? '' : 'font-weight: 600;';
             html += `<div class="notificacao-item" data-id="${notif._id}" style="padding: 14px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; ${classeLida}"
@@ -484,10 +498,176 @@ function renderizarSinoUnificado() {
                 </div></div>`;
         });
     }
+    
     lista.innerHTML = html;
-    lista.querySelectorAll('.notificacao-item').forEach(item => {
+    
+    // 🆕 Handlers de clique nos lembretes → abrem aba "Por Data"
+    lista.querySelectorAll('.notificacao-lembrete').forEach(item => {
+        item.addEventListener('click', () => {
+            const lembreteId = item.getAttribute('data-lembrete-id');
+            const lembrete = __lembretesCache.find(l => String(l.id) === String(lembreteId));
+            if (lembrete) abrirLembreteRetroativo(lembrete);
+        });
+    });
+    
+    // Handlers das notificações normais
+    lista.querySelectorAll('.notificacao-item[data-id]').forEach(item => {
         item.addEventListener('click', () => abrirNotificacao(item.getAttribute('data-id')));
     });
+}
+
+// ============================================
+// 🆕 DEEP LINK DOS LEMBRETES DE RETROATIVIDADE
+// ============================================
+
+/**
+ * Abre a aba "Por Data", pré-preenche filtros com a data da falta,
+ * executa a busca e destaca o registro específico.
+ */
+async function abrirLembreteRetroativo(lembrete) {
+    try {
+        const d = lembrete.dados || {};
+        const dataFaltaISO = d.dataFaltaISO || (d.dataFalta ? String(d.dataFalta).split('T')[0] : null);
+        const autorizacaoId = d.autorizacaoId || null;
+
+        if (!dataFaltaISO) {
+            notificar('Não foi possível identificar a data do registro', 'warning');
+            return;
+        }
+
+        // 1. Fecha o dropdown de notificações
+        fecharNotificacoes();
+
+        // 2. Marca o lembrete como visto (some do badge)
+        try {
+            await fetch(`/api/secretaria/lembretes-retroativos/${lembrete.id}/visto`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+            __lembretesCache = __lembretesCache.filter(l => String(l.id) !== String(lembrete.id));
+            atualizarBadgeUnificado();
+        } catch (e) { /* silencioso */ }
+
+        // 3. Muda para a aba "Por Data"
+        await setModo('data');
+
+        // 4. Pré-preenche os filtros
+        const inputInicio = safeGet('filtroDataInicio');
+        const inputFim    = safeGet('filtroDataFim');
+        const inputNome   = safeGet('filtroDataNome');
+
+        if (inputInicio) inputInicio.value = dataFaltaISO;
+        if (inputFim)    inputFim.value    = dataFaltaISO;
+        if (inputNome && d.alunoNome) inputNome.value = d.alunoNome;
+
+        // 5. Executa a busca
+        await buscarPorData();
+
+        // 6. Aguarda o DOM renderizar e destaca o registro
+        if (autorizacaoId) {
+            setTimeout(() => {
+                destacarRegistroPorId(autorizacaoId);
+                const abaData = safeGet('modoData');
+                if (abaData) abaData.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 500);
+        }
+
+        notificar(`📅 Abrindo registro de ${d.dataFaltaFormatada || dataFaltaISO}`, 'info', 2500);
+    } catch (error) {
+        console.error('[abrirLembreteRetroativo]', error);
+        notificar('Erro ao abrir o lembrete', 'error');
+    }
+}
+
+/**
+ * Rola até o card do registro e adiciona um destaque visual (pisca 3x).
+ */
+function destacarRegistroPorId(autorizacaoId) {
+    if (!autorizacaoId) return;
+
+    const seletores = [
+        `[data-registro-id="${autorizacaoId}"]`,
+        `.justificativa-item[data-id="${autorizacaoId}"]`,
+        `.btn-view-item[onclick*="${autorizacaoId}"]`,
+        `.btn-print-item[onclick*="${autorizacaoId}"]`
+    ];
+
+    let alvo = null;
+    for (const sel of seletores) {
+        const el = document.querySelector(sel);
+        if (el) {
+            alvo = el.closest('.justificativa-item') || el;
+            break;
+        }
+    }
+
+    if (!alvo) {
+        console.warn('[destacarRegistro] Registro não encontrado no DOM:', autorizacaoId);
+        return;
+    }
+
+    alvo.style.transition = 'all 0.4s ease';
+    alvo.style.boxShadow = '0 0 0 4px #f59e0b, 0 8px 25px rgba(245, 158, 11, 0.5)';
+    alvo.style.transform = 'scale(1.02)';
+    alvo.style.background = '#fffbeb';
+
+    alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    let piscadas = 0;
+    const interval = setInterval(() => {
+        piscadas++;
+        alvo.style.boxShadow = piscadas % 2 === 0
+            ? '0 0 0 4px #f59e0b, 0 8px 25px rgba(245, 158, 11, 0.5)'
+            : '0 0 0 2px #f59e0b';
+        if (piscadas >= 6) {
+            clearInterval(interval);
+            setTimeout(() => {
+                alvo.style.boxShadow = '';
+                alvo.style.transform = '';
+                alvo.style.background = '';
+            }, 1500);
+        }
+    }, 350);
+}
+
+/**
+ * 🔥 Processa deep link da URL (?tab=por-data&dataInicio=...&autorizacaoId=...)
+ * Chamado no DOMContentLoaded.
+ */
+async function processarDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+
+    if (tab !== 'por-data') return;
+
+    const dataInicio = params.get('dataInicio');
+    const dataFim = params.get('dataFim');
+    const autorizacaoId = params.get('autorizacaoId');
+
+    if (!dataInicio) return;
+
+    // Aguarda as turmas/cursos carregarem
+    await new Promise(r => setTimeout(r, 600));
+
+    await setModo('data');
+
+    const inputInicio = safeGet('filtroDataInicio');
+    const inputFim = safeGet('filtroDataFim');
+    if (inputInicio) inputInicio.value = dataInicio;
+    if (inputFim) inputFim.value = dataFim || dataInicio;
+
+    await buscarPorData();
+
+    if (autorizacaoId) {
+        setTimeout(() => {
+            destacarRegistroPorId(autorizacaoId);
+            const abaData = safeGet('modoData');
+            if (abaData) abaData.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 500);
+    }
+
+    // Limpa a URL para não reabrir em refresh
+    window.history.replaceState({}, document.title, window.location.pathname);
 }
 
 function atualizarBadgeUnificado() {
@@ -569,6 +749,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => { if (safeGet('modoAutomatico')?.offsetParent !== null) iniciarScannerAutomatico(); }, 800);
 
     selecionarTipoDeclaracao('aluno');
+
+    // 🆕 Processa deep-link (?tab=por-data&dataInicio=...&autorizacaoId=...)
+    await processarDeepLink();
 });
 
 window.addEventListener('beforeunload', () => {
@@ -995,7 +1178,7 @@ async function buscarJustificativasDoAluno() {
                     const periodoFalta = getPeriodoFaltaFormatado(j);
                     const tipoProva = getTipoProvaFormatado(j);
                     const dataFormatada = j.dataFormatada || (j.data ? new Date(j.data).toLocaleDateString('pt-BR') : '-');
-                    return `<div class="justificativa-item">
+                    return `<div class="justificativa-item" data-id="${j.id}">
                         <div class="justificativa-header-item">
                             <span class="badge-motivo-item">${escapeHTML(j.motivoLabel)}</span>
                             <span class="justificativa-data-item"><i class="fas fa-calendar"></i> ${dataFormatada}</span></div>
@@ -1232,11 +1415,10 @@ function gerarHTMLImpressao(a, qrCodeUrl) {
     const tipoProva = getTipoProvaFormatado(a);
     const dataFormatada = a.dataFormatada || (a.data ? new Date(a.data).toLocaleDateString('pt-BR') : '-');
 
-    // 🔥 Nome do arquivo: usa o período da falta (se existir), senão a data do registro
     const referenciaArquivo = periodoFalta || dataFormatada;
     const dataArquivo = referenciaArquivo
-        .replace(/\//g, '-')          // 10/03/2025 -> 10-03-2025
-        .replace(/\s+a\s+/g, '_a_');  // "10-03-2025 a 12-03-2025" -> "10-03-2025_a_12-03-2025"
+        .replace(/\//g, '-')
+        .replace(/\s+a\s+/g, '_a_');
 
     return `<!DOCTYPE html>
     <html lang="pt-BR">
@@ -1420,7 +1602,7 @@ async function buscarPorData() {
                     ${registros.map(j => {
                         const dataFormatada = j.dataFormatada || (j.data ? new Date(j.data).toLocaleDateString('pt-BR') : '-');
                         const tipoProva = getTipoProvaFormatado(j);
-                        return `<div class="justificativa-item">
+                        return `<div class="justificativa-item" data-id="${j.id}" data-registro-id="${j.id}">
                             <div class="justificativa-header-item">
                                 <span class="badge-motivo-item">${escapeHTML(j.motivoLabel)}</span>
                                 <span class="justificativa-data-item"><i class="fas fa-user-graduate"></i> ${escapeHTML(j.alunoNome)}</span>
@@ -1862,7 +2044,6 @@ function exportarCSV() {
 
     const tipo = tipoRelatorioAtual || 'geral';
 
-    // ---------- Título ----------
     let titulo = 'Relatório de Justificativas';
     let subtitulo = '';
 
@@ -1877,7 +2058,6 @@ function exportarCSV() {
         subtitulo = `${relatorioAtual.aluno?.nome || ''} — ${relatorioAtual.aluno?.turma || ''}`;
     }
 
-    // ---------- Colunas ----------
     const colunas = [
         {
             label: 'Data do Registro',
@@ -1938,7 +2118,6 @@ function exportarCSV() {
         }
     ];
 
-    // ---------- Filtros aplicados ----------
     const filtros = [];
     const di = safeGet('dataInicio')?.value;
     const df = safeGet('dataFim')?.value;
@@ -1947,7 +2126,6 @@ function exportarCSV() {
     if (relatorioAtual.turma) filtros.push({ label: 'Turma', valor: relatorioAtual.turma });
     if (relatorioAtual.aluno?.nome) filtros.push({ label: 'Aluno', valor: relatorioAtual.aluno.nome });
 
-    // ---------- Métricas ----------
     const metricas = {};
     if (tipo === 'geral') {
         metricas['Total de justificativas'] = relatorioAtual.totalRegistros || 0;
@@ -2096,7 +2274,6 @@ function gerarHTMLRelatorio(data, tipo) {
 // 📜 DECLARAÇÕES — LÓGICA
 // ============================================
 
-// Modelos dinâmicos de declaração
 const MODELOS_DECLARACAO = {
     aluno: {
         titulo: 'DECLARAÇÃO',
@@ -2164,9 +2341,6 @@ const MODELOS_DECLARACAO = {
     }
 };
 
-// ============================================
-// Seleciona tipo de declaração
-// ============================================
 function selecionarTipoDeclaracao(tipo) {
     if (!MODELOS_DECLARACAO[tipo]) return;
     tipoDeclaracaoAtual = tipo;
@@ -2197,12 +2371,10 @@ function selecionarTipoDeclaracao(tipo) {
     if (titulo) titulo.textContent = modelo.buscaLabel;
     if (sub) sub.textContent = modelo.buscaSub;
 
-    // Mostra o card de busca por turma quando aplicável (aluno E responsável)
     const cardTurma = safeGet('declBuscaTurmaCard');
     const mostraTurma = modelo.temBuscaTurma || modelo.temBuscaAlunoPorTurma;
     if (cardTurma) cardTurma.style.display = mostraTurma ? 'block' : 'none';
 
-    // Ajusta título do card de turma conforme o tipo
     const tituloTurma = safeGet('declBuscaTurmaTitulo');
     const subTurma = safeGet('declBuscaTurmaSubtitulo');
     if (tituloTurma && subTurma) {
@@ -2218,9 +2390,6 @@ function selecionarTipoDeclaracao(tipo) {
     renderizarFormularioDeclaracao();
 }
 
-// ============================================
-// Renderiza formulário dinâmico
-// ============================================
 function renderizarFormularioDeclaracao() {
     const modelo = MODELOS_DECLARACAO[tipoDeclaracaoAtual];
     const container = safeGet('declFormContainer');
@@ -2319,7 +2488,6 @@ function renderizarFormularioDeclaracao() {
     });
 }
 
-// Atualiza campo hidden com os anos selecionados
 function atualizarAnosCursados() {
     const selecionados = Array.from(document.querySelectorAll('.check-ano-input:checked'))
         .map(c => c.value)
@@ -2328,7 +2496,6 @@ function atualizarAnosCursados() {
     if (hidden) hidden.value = selecionados.join(', ');
 }
 
-// Handler do select-com-outro
 function onSelectComOutro(campoId, valor) {
     const inputOutro = safeGet(`decl_${campoId}_outro`);
     if (!inputOutro) return;
@@ -2341,9 +2508,6 @@ function onSelectComOutro(campoId, valor) {
     }
 }
 
-// ============================================
-// Busca usuário por nome (autocomplete)
-// ============================================
 async function buscarUsuarioDeclaracao(termo) {
     const listEl = safeGet('declAutocompleteList');
     if (!listEl) return;
@@ -2391,9 +2555,6 @@ async function buscarUsuarioDeclaracao(termo) {
     }
 }
 
-// ============================================
-// Busca por turma (para alunos)
-// ============================================
 async function carregarAlunosDeclaracaoPorTurma() {
     const turma = safeGet('declFiltroTurma')?.value;
     const container = safeGet('declListaAlunosTurma');
@@ -2457,11 +2618,7 @@ function filtrarAlunosDeclaracaoTurma() {
     });
 }
 
-// ============================================
-// Seleção do usuário principal
-// ============================================
 function selecionarUsuarioDeclaracao(usuario) {
-    // 🔥 Quando é declaração de responsável, o usuário clicado é o ALUNO
     if (tipoDeclaracaoAtual === 'responsavel') {
         usuarioSelecionadoAlunoResp = usuario;
         const inputResp = safeGet('declBuscaUsuario');
@@ -2502,9 +2659,6 @@ function limparFormularioDeclaracao() {
     notificar('Formulário limpo', 'info', 1500);
 }
 
-// ============================================
-// Coleta e valida dados
-// ============================================
 function coletarDadosDeclaracao() {
     const modelo = MODELOS_DECLARACAO[tipoDeclaracaoAtual];
     const dados = {};
@@ -2552,9 +2706,6 @@ function validarDeclaracao(dados) {
     return true;
 }
 
-// ============================================
-// Emitir
-// ============================================
 async function emitirDeclaracao(modo) {
     const dados = coletarDadosDeclaracao();
     if (!validarDeclaracao(dados)) return;
@@ -2599,9 +2750,6 @@ async function marcarDeclaracaoComoImpressa(id) {
     } catch (error) { /* silencioso */ }
 }
 
-// ============================================
-// Gera HTML de impressão da declaração
-// ============================================
 function gerarHTMLDeclaracao(tipo, dados) {
     const logo = '/uploads/logo-iema.png';
     const carimbo = '/icons/assinatura_secretaria.ico';
@@ -2705,7 +2853,6 @@ function gerarHTMLDeclaracao(tipo, dados) {
 
             .local-data { text-align: right; margin-top: 30px; margin-bottom: 30px; font-size: 11pt; }
 
-            /* ✅ Assinatura: carimbo EM CIMA, linha ABAIXO do carimbo */
             .assinaturas {
                 display: flex;
                 justify-content: center;
@@ -2785,9 +2932,6 @@ function gerarHTMLDeclaracao(tipo, dados) {
     </html>`;
 }
 
-// ============================================
-// Histórico
-// ============================================
 async function carregarHistoricoDeclaracoes() {
     const container = safeGet('listaDeclaracoes');
     if (!container) return;
@@ -2972,6 +3116,11 @@ window.limparFiltrosHistorico = limparFiltrosHistorico;
 window.selecionarUsuarioDeclaracao = selecionarUsuarioDeclaracao;
 window.selecionarAlunoResponsavel = selecionarAlunoResponsavel;
 window.onSelectComOutro = onSelectComOutro;
+
+// 🆕 Lembretes retroativos
+window.abrirLembreteRetroativo = abrirLembreteRetroativo;
+window.destacarRegistroPorId = destacarRegistroPorId;
+window.processarDeepLink = processarDeepLink;
 
 window.abrirNotificacoes = abrirNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;

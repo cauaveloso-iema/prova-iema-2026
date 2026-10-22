@@ -74,7 +74,8 @@ router.post('/', authenticateTokenLocal, async (req, res) => {
 
         logger.info(`📝 Criando notificação para usuário ${usuarioId}: ${titulo}`);
 
-        const tiposPermitidos = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'];
+        // 🆕 'lembrete' adicionado à lista de tipos permitidos
+        const tiposPermitidos = ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento', 'lembrete'];
 
         if (!tiposPermitidos.includes(tipo)) {
             return res.status(400).json({

@@ -534,8 +534,23 @@ function gerarCardAutorizacao(a) {
                     <span class="label"><i class="fas fa-tag"></i> Motivo</span>
                     <span class="value">${escapeHTML(a.motivoLabel || '-')}${motivoDetalhes}</span>
                 </div>
-                ${a.horarioEntrada ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-sign-in-alt"></i> Entrada</span><span class="value">${a.horarioEntrada}</span></div>` : ''}
-                ${a.horarioSaida ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-sign-out-alt"></i> Saída</span><span class="value">${a.horarioSaida}</span></div>` : ''}
+                
+                <!-- 🆕 ENTRADA / SAÍDA COM DATA -->
+                ${(a.entradaCompleta || a.saidaCompleta) ? `
+                    ${a.entradaCompleta ? `
+                        <div class="autorizacao-info-item" style="grid-column: span 2; background: #f0fdf4; border-radius: 6px; padding: 8px; border-left: 3px solid #10b981;">
+                            <span class="label" style="color: #065f46;"><i class="fas fa-sign-in-alt"></i> Entrada Prevista</span>
+                            <span class="value" style="color: #065f46; font-size: 15px;"><strong>${escapeHTML(a.entradaCompleta)}</strong></span>
+                        </div>
+                    ` : ''}
+                    ${a.saidaCompleta ? `
+                        <div class="autorizacao-info-item" style="grid-column: span 2; background: #fef2f2; border-radius: 6px; padding: 8px; border-left: 3px solid #ef4444;">
+                            <span class="label" style="color: #991b1b;"><i class="fas fa-sign-out-alt"></i> Saída Prevista</span>
+                            <span class="value" style="color: #991b1b; font-size: 15px;"><strong>${escapeHTML(a.saidaCompleta)}</strong></span>
+                        </div>
+                    ` : ''}
+                ` : ''}
+
                 ${a.periodoFaltaFormatado ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-calendar-alt"></i> Período</span><span class="value">${a.periodoFaltaFormatado}</span></div>` : ''}
                 ${a.responsavelNome ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-user-shield"></i> Responsável</span><span class="value">${escapeHTML(a.responsavelNome)}</span></div>` : ''}
                 ${a.responsavelCPF ? `<div class="autorizacao-info-item"><span class="label"><i class="fas fa-id-card"></i> CPF</span><span class="value">${escapeHTML(a.responsavelCPF)}</span></div>` : ''}
@@ -543,7 +558,7 @@ function gerarCardAutorizacao(a) {
             </div>
             
             ${a.observacoes ? `
-                <div class="autorizacao-info-item" style="grid-column: 1 / -1; border-left-color: #f59e0b;">
+                <div class="autorizacao-info-item" style="grid-column: 1 / -1; border-left-color: #f59e0b; margin-top: 10px;">
                     <span class="label"><i class="fas fa-comment"></i> Observações</span>
                     <span class="value">${escapeHTML(a.observacoes)}</span>
                 </div>
@@ -1078,12 +1093,20 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
         detalheMotivo = ` <strong>(Ausência: ${a.horarioAusencia} | Retorno: ${a.horarioRetorno})</strong>`;
     }
     
+    // 🆕 ENTRADA / SAÍDA COM DATA
     let horariosHTML = '';
-    if (a.horarioEntrada || a.horarioSaida) {
+    if (a.entradaCompleta || a.saidaCompleta) {
         horariosHTML = `
-            <div class="info-grid">
-                ${a.horarioEntrada ? `<div class="info-item"><span class="info-label">Entrada:</span><span class="info-value">${a.horarioEntrada}</span></div>` : ''}
-                ${a.horarioSaida ? `<div class="info-item"><span class="info-label">Saída:</span><span class="info-value">${a.horarioSaida}</span></div>` : ''}
+            <div class="section-title">📅 Previsão de Entrada / Saída</div>
+            <div class="info-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="info-item">
+                    <span class="info-label">Entrada:</span>
+                    <span class="info-value"><strong>${a.entradaCompleta || '-'}</strong></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Saída:</span>
+                    <span class="info-value"><strong>${a.saidaCompleta || '-'}</strong></span>
+                </div>
             </div>`;
     }
     
@@ -1170,13 +1193,14 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
             </div>
         </div>
         
+        ${horariosHTML}
+        
         <div class="section-title">📌 Dados do Registro</div>
         <div class="info-grid">
             <div class="info-item"><span class="info-label">Data:</span><span class="info-value">${dataExt}</span></div>
             <div class="info-item"><span class="info-label">Hora:</span><span class="info-value">${horaExt}</span></div>
             <div class="info-item"><span class="info-label">Registrado por:</span><span class="info-value">${escapeHTML(a.registradoPorNome || '-')}</span></div>
         </div>
-        ${horariosHTML}
         
         <div class="motivo-box">
             <strong>📌 Motivo:</strong>
@@ -1259,6 +1283,27 @@ async function verDetalhesCompletos(id) {
         
         const alunoFoto = a.alunoFoto || gerarAvatarSVG(a.alunoNome);
         
+        // 🆕 Bloco de entrada / saída no modal de detalhes
+        let horariosHTML = '';
+        if (a.entradaCompleta || a.saidaCompleta) {
+            horariosHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                    ${a.entradaCompleta ? `
+                        <div style="background: #f0fdf4; border-radius: 12px; padding: 14px; border-left: 4px solid #10b981;">
+                            <div style="font-size: 11px; color: #059669; text-transform: uppercase; font-weight: 600;"><i class="fas fa-sign-in-alt"></i> Entrada</div>
+                            <div style="font-size: 16px; font-weight: 700; color: #065f46; line-height: 1.2; margin-top: 4px;">${escapeHTML(a.entradaCompleta)}</div>
+                        </div>
+                    ` : ''}
+                    ${a.saidaCompleta ? `
+                        <div style="background: #fef2f2; border-radius: 12px; padding: 14px; border-left: 4px solid #ef4444;">
+                            <div style="font-size: 11px; color: #dc2626; text-transform: uppercase; font-weight: 600;"><i class="fas fa-sign-out-alt"></i> Saída</div>
+                            <div style="font-size: 16px; font-weight: 700; color: #991b1b; line-height: 1.2; margin-top: 4px;">${escapeHTML(a.saidaCompleta)}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
         const modalHtml = `
             <div class="modal fade" id="modalDetalhesAutorizacao" tabindex="-1">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -1300,12 +1345,7 @@ async function verDetalhesCompletos(id) {
                                     ${a.motivoOutros ? `<span style="color: #64748b; font-weight: 400;">(${escapeHTML(a.motivoOutros)})</span>` : ''}
                                 </div>
                             </div>
-                            ${(a.horarioEntrada || a.horarioSaida) ? `
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-                                    ${a.horarioEntrada ? `<div style="background: #f0fdf4; border-radius: 12px; padding: 14px; border-left: 4px solid #10b981;"><div style="font-size: 11px; color: #059669; text-transform: uppercase; font-weight: 600;"><i class="fas fa-sign-in-alt"></i> Entrada</div><div style="font-size: 18px; font-weight: 700; color: #065f46;">${a.horarioEntrada}</div></div>` : ''}
-                                    ${a.horarioSaida ? `<div style="background: #fef2f2; border-radius: 12px; padding: 14px; border-left: 4px solid #ef4444;"><div style="font-size: 11px; color: #dc2626; text-transform: uppercase; font-weight: 600;"><i class="fas fa-sign-out-alt"></i> Saída</div><div style="font-size: 18px; font-weight: 700; color: #991b1b;">${a.horarioSaida}</div></div>` : ''}
-                                </div>
-                            ` : ''}
+                            ${horariosHTML}
                             ${a.periodoFaltaFormatado ? `
                                 <div style="background: #fef3c7; border-radius: 12px; padding: 16px; margin-bottom: 16px; border-left: 4px solid #f59e0b;">
                                     <div style="font-size: 12px; color: #92400e; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;"><i class="fas fa-calendar-alt"></i> Período da Falta</div>
@@ -1404,6 +1444,7 @@ async function carregarResumoDia(pagina = null) {
             return;
         }
         
+        // 🆕 Na tabela de resumo, mostra Entrada/Saída formatadas
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table-resumo">
@@ -1425,8 +1466,8 @@ async function carregarResumoDia(pagina = null) {
                                 <td><strong>${escapeHTML(a.alunoNome)}</strong></td>
                                 <td>${escapeHTML(a.alunoMatricula || '-')}</td>
                                 <td>${escapeHTML(a.alunoTurma || '-')}</td>
-                                <td>${a.horarioEntrada || '-'}</td>
-                                <td>${a.horarioSaida || '-'}</td>
+                                <td><span style="font-size: 12px; white-space: nowrap;">${a.entradaCompleta || '-'}</span></td>
+                                <td><span style="font-size: 12px; white-space: nowrap;">${a.saidaCompleta || '-'}</span></td>
                                 <td><span class="badge bg-info text-dark">${escapeHTML(a.motivoLabel)}</span></td>
                                 <td style="text-align:center;">
                                     ${a.temAssinatura 

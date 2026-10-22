@@ -37,6 +37,29 @@ function getPeriodoFaltaFormatado(doc) {
     return `${fmt(iniDia)} a ${fmt(fimDia)}`;
 }
 
+// 🆕 Helper para formatar Entrada/Saída
+function getEntradaCompleta(doc) {
+    if (!doc) return null;
+    const temData = !!doc.dataEntrada;
+    const temHora = !!(doc.horarioEntrada && doc.horarioEntrada.trim());
+    if (!temData && !temHora) return null;
+    const partes = [];
+    if (temData) partes.push(new Date(doc.dataEntrada).toLocaleDateString('pt-BR'));
+    if (temHora) partes.push(temData ? `às ${doc.horarioEntrada}` : doc.horarioEntrada);
+    return partes.join(' ');
+}
+
+function getSaidaCompleta(doc) {
+    if (!doc) return null;
+    const temData = !!doc.dataSaida;
+    const temHora = !!(doc.horarioSaida && doc.horarioSaida.trim());
+    if (!temData && !temHora) return null;
+    const partes = [];
+    if (temData) partes.push(new Date(doc.dataSaida).toLocaleDateString('pt-BR'));
+    if (temHora) partes.push(temData ? `às ${doc.horarioSaida}` : doc.horarioSaida);
+    return partes.join(' ');
+}
+
 // ============================================
 // MIDDLEWARES
 // ============================================
@@ -189,6 +212,13 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
             periodoFaltaInicio: a.periodoFaltaInicio,
             periodoFaltaFim: a.periodoFaltaFim,
             periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
+            // 🆕 ENTRADA/SAÍDA
+            dataEntrada: a.dataEntrada,
+            dataSaida: a.dataSaida,
+            dataEntradaFormatada: a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : null,
+            dataSaidaFormatada: a.dataSaida ? new Date(a.dataSaida).toLocaleDateString('pt-BR') : null,
+            entradaCompleta: getEntradaCompleta(a),
+            saidaCompleta: getSaidaCompleta(a),
             horarioEntrada: a.horarioEntrada,
             horarioSaida: a.horarioSaida,
             motivo: a.motivo,
@@ -253,6 +283,13 @@ router.get('/autorizacao/:id', authenticateToken, verificarRecepcao, async (req,
                 periodoFaltaInicio: a.periodoFaltaInicio,
                 periodoFaltaFim: a.periodoFaltaFim,
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
+                // 🆕 ENTRADA/SAÍDA
+                dataEntrada: a.dataEntrada,
+                dataSaida: a.dataSaida,
+                dataEntradaFormatada: a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : null,
+                dataSaidaFormatada: a.dataSaida ? new Date(a.dataSaida).toLocaleDateString('pt-BR') : null,
+                entradaCompleta: getEntradaCompleta(a),
+                saidaCompleta: getSaidaCompleta(a),
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
                 responsavelNome: a.responsavelNome,
@@ -282,7 +319,6 @@ router.get('/autorizacao/:id', authenticateToken, verificarRecepcao, async (req,
 
 // ============================================
 // 🔥 6.1. ATUALIZAR ASSINATURA DA AUTORIZAÇÃO
-// Enum correto do schema: 'nao_necessaria' | 'pendente' | 'assinada'
 // ============================================
 router.put('/autorizacao/:id/assinatura', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
@@ -305,12 +341,11 @@ router.put('/autorizacao/:id/assinatura', authenticateToken, verificarRecepcao, 
             return res.status(404).json({ success: false, error: 'Autorização não encontrada' });
         }
 
-        // ✅ Enum correto do schema: 'nao_necessaria' | 'pendente' | 'assinada'
         autorizacao.assinaturaBase64 = assinaturaBase64;
         autorizacao.temAssinatura = true;
-        autorizacao.statusAssinatura = 'assinada';      // ← FEMININO (correto)
+        autorizacao.statusAssinatura = 'assinada';
         autorizacao.assinadaEm = new Date();
-        autorizacao.assinadaPor = req.userId;           // ← campo correto do schema
+        autorizacao.assinadaPor = req.userId;
         autorizacao.assinadaPorNome = (assinanteNome || req.userNome || 'Recepção').toString().slice(0, 120);
 
         await autorizacao.save();
@@ -349,7 +384,7 @@ router.delete('/autorizacao/:id/assinatura', authenticateToken, verificarRecepca
 
         autorizacao.assinaturaBase64 = '';
         autorizacao.temAssinatura = false;
-        autorizacao.statusAssinatura = 'pendente';      // volta ao enum válido
+        autorizacao.statusAssinatura = 'pendente';
         autorizacao.assinadaEm = null;
         autorizacao.assinadaPor = null;
         autorizacao.assinadaPorNome = null;
@@ -534,6 +569,9 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
                 alunoNome: a.alunoNome,
                 alunoMatricula: a.alunoMatricula,
                 alunoTurma: a.alunoTurma,
+                // 🆕 Entrada / Saída na listagem do dia
+                entradaCompleta: getEntradaCompleta(a),
+                saidaCompleta: getSaidaCompleta(a),
                 horarioEntrada: a.horarioEntrada,
                 horarioSaida: a.horarioSaida,
                 motivoLabel: Autorizacao.getMotivoLabel(a.motivo, a.tipo),

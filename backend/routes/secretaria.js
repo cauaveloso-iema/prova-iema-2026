@@ -529,7 +529,7 @@ router.get('/declaracoes/buscar-usuario', authenticateToken, verificarSecretaria
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// 🆕 Listar alunos por turma (para usar em declarações de responsável)
+// Listar alunos por turma (para usar em declarações de responsável)
 router.get('/declaracoes/alunos-por-turma', authenticateToken, verificarSecretaria, async (req, res) => {
   try {
     const { turma } = req.query;
@@ -652,5 +652,99 @@ router.delete('/declaracoes/:id', authenticateToken, verificarSecretaria, async 
     res.json({ success: true });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
+
+// ============================================
+// 🔔 LEMBRETES DE RETROATIVIDADE (SECRETARIA)
+// ============================================
+router.get('/lembretes-retroativos', authenticateToken, verificarSecretaria, async (req, res) => {
+  try {
+    const Notificacao = require('../models/Notificacao');
+    
+    const lembretes = await Notificacao.find({
+      usuarioId: req.userId,
+      tipo: 'lembrete',
+      lida: false
+    }).sort({ createdAt: -1 }).lean();
+
+    res.json({
+      success: true,
+      total: lembretes.length,
+      lembretes: lembretes.map(n => ({
+        id: n._id,
+        titulo: n.titulo,
+        mensagem: n.mensagem,
+        icone: n.icone,
+        cor: n.cor,
+        link: n.link,
+        criadaEm: n.createdAt,
+        tempoDecorrido: calcularTempoDecorrido(n.createdAt),
+
+        // 🆕 Campos dedicados (se existirem no schema)
+        autorizacaoId: n.autorizacaoId || null,
+        alunoId: n.alunoId || null,
+        dataFalta: n.dataFalta || null,
+
+        // 🆕 Dados estruturados (fonte principal para o deep-link)
+        dados: n.dados || {}
+      }))
+    });
+  } catch (error) {
+    console.error('Erro ao buscar lembretes:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 🆕 Marcar lembrete como visto (individual — some do badge)
+router.put('/lembretes-retroativos/:id/visto', authenticateToken, verificarSecretaria, async (req, res) => {
+  try {
+    const Notificacao = require('../models/Notificacao');
+    
+    if (!req.params.id.match(/^[a-f0-9]{24}$/i)) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+
+    const lembrete = await Notificacao.findOneAndUpdate(
+      { _id: req.params.id, usuarioId: req.userId, tipo: 'lembrete' },
+      { $set: { lida: true, lidaEm: new Date() } },
+      { new: true }
+    );
+
+    if (!lembrete) {
+      return res.status(404).json({ success: false, error: 'Lembrete não encontrado' });
+    }
+
+    res.json({ success: true, lida: true, lidaEm: lembrete.lidaEm });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 🆕 Marcar todos os lembretes como vistos
+router.put('/lembretes-retroativos/marcar-todos-vistos', authenticateToken, verificarSecretaria, async (req, res) => {
+  try {
+    const Notificacao = require('../models/Notificacao');
+    const result = await Notificacao.updateMany(
+      { usuarioId: req.userId, tipo: 'lembrete', lida: false },
+      { $set: { lida: true, lidaEm: new Date() } }
+    );
+    res.json({ success: true, modificados: result.modifiedCount });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Helper para formatar "há X dias"
+function calcularTempoDecorrido(data) {
+    const agora = new Date();
+    const diffMs = agora - new Date(data);
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMs / 3600000);
+    const diffDia = Math.floor(diffMs / 86400000);
+    
+    if (diffMin < 1) return 'agora mesmo';
+    if (diffMin < 60) return `há ${diffMin} min`;
+    if (diffHr < 24) return `há ${diffHr} h`;
+    return `há ${diffDia} d`;
+}
 
 module.exports = router;

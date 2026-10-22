@@ -1,3 +1,4 @@
+// backend/models/Notificacao.js
 const mongoose = require('mongoose');
 
 const NotificacaoSchema = new mongoose.Schema({
@@ -12,7 +13,14 @@ const NotificacaoSchema = new mongoose.Schema({
     // Tipo de notificação
     tipo: {
         type: String,
-        enum: ['resultado_liberado', 'resultado_editado', 'prova_corrigida', 'sistema', 'cancelamento'],
+        enum: [
+            'resultado_liberado', 
+            'resultado_editado', 
+            'prova_corrigida', 
+            'sistema', 
+            'cancelamento',
+            'lembrete' // 🆕 Adicionado para permitir os Lembretes de Retroatividade
+        ],
         required: true
     },
     
@@ -70,6 +78,24 @@ const NotificacaoSchema = new mongoose.Schema({
         min: 1,
         max: 5,
         default: 3
+    },
+
+    // 🆕 ============================================
+    // 🆕 METADADOS PARA DEEP LINKING (Lembretes de Retroatividade)
+    // 🆕 ============================================
+    autorizacaoId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Autorizacao',
+        default: null
+    },
+    alunoId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    dataFalta: {
+        type: Date,
+        default: null
     }
 }, {
     timestamps: true
@@ -78,6 +104,8 @@ const NotificacaoSchema = new mongoose.Schema({
 // Índices para consultas rápidas
 NotificacaoSchema.index({ usuarioId: 1, createdAt: -1 });
 NotificacaoSchema.index({ usuarioId: 1, lida: 1 });
+// 🆕 Índice para buscar lembretes de retroatividade rapidamente
+NotificacaoSchema.index({ usuarioId: 1, tipo: 1, lida: 1 });
 
 const Notificacao = mongoose.model('Notificacao', NotificacaoSchema);
 module.exports = Notificacao;

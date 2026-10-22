@@ -20,6 +20,12 @@ const AutorizacaoSchema = new mongoose.Schema({
     horarioEntrada: String,
     horarioSaida: String,
     
+    // 🆕 DATAS DE ENTRADA/SAÍDA (quando o aluno efetivamente entra/sai)
+    // Ex.: aluno vai entrar amanhã (23/10) às 10h
+    //      dataEntrada = 2025-10-23 | horarioEntrada = "10:00"
+    dataEntrada: { type: Date, default: null },
+    dataSaida:   { type: Date, default: null },
+    
     periodoFaltaInicio: { type: Date, default: null },
     periodoFaltaFim: { type: Date, default: null },
     
@@ -101,6 +107,8 @@ AutorizacaoSchema.index({ tipo: 1, createdAt: -1 });
 AutorizacaoSchema.index({ alunoId: 1, createdAt: -1 });
 AutorizacaoSchema.index({ alunoTurma: 1, createdAt: -1 });
 AutorizacaoSchema.index({ data: -1 });
+AutorizacaoSchema.index({ dataEntrada: -1 });
+AutorizacaoSchema.index({ dataSaida: -1 });
 AutorizacaoSchema.index({ periodoFaltaInicio: -1 });
 AutorizacaoSchema.index({ periodoFaltaFim: -1 });
 AutorizacaoSchema.index({ uniformePeriodoInicio: -1 });
@@ -136,6 +144,14 @@ AutorizacaoSchema.pre('save', function(next) {
     }
     if (!this.uniformePeriodoInicio && this.uniformePeriodoFim) {
         this.uniformePeriodoFim = null;
+    }
+    
+    // 🆕 Se tem hora de entrada mas não tem data, herda a data do registro
+    if (this.horarioEntrada && !this.dataEntrada && this.data) {
+        this.dataEntrada = this.data;
+    }
+    if (this.horarioSaida && !this.dataSaida && this.data) {
+        this.dataSaida = this.data;
     }
     
     this.updatedAt = new Date();
@@ -181,6 +197,40 @@ AutorizacaoSchema.methods.getUniformePeriodoFormatado = function() {
     return `${fmt(iniDia)} a ${fmt(fimDia)}`;
 };
 
+// 🆕 Entrada completa formatada — "23/10/2025 às 10:00"
+AutorizacaoSchema.methods.getEntradaCompleta = function() {
+    const temData = !!this.dataEntrada;
+    const temHora = !!(this.horarioEntrada && this.horarioEntrada.trim());
+    
+    if (!temData && !temHora) return null;
+    
+    const partes = [];
+    if (temData) {
+        partes.push(new Date(this.dataEntrada).toLocaleDateString('pt-BR'));
+    }
+    if (temHora) {
+        partes.push(temData ? `às ${this.horarioEntrada}` : this.horarioEntrada);
+    }
+    return partes.join(' ');
+};
+
+// 🆕 Saída completa formatada — "23/10/2025 às 15:00"
+AutorizacaoSchema.methods.getSaidaCompleta = function() {
+    const temData = !!this.dataSaida;
+    const temHora = !!(this.horarioSaida && this.horarioSaida.trim());
+    
+    if (!temData && !temHora) return null;
+    
+    const partes = [];
+    if (temData) {
+        partes.push(new Date(this.dataSaida).toLocaleDateString('pt-BR'));
+    }
+    if (temHora) {
+        partes.push(temData ? `às ${this.horarioSaida}` : this.horarioSaida);
+    }
+    return partes.join(' ');
+};
+
 // ============================================
 // MÉTODOS ESTÁTICOS
 // ============================================
@@ -195,7 +245,7 @@ AutorizacaoSchema.statics.getMotivoLabel = function(motivo, tipo = 'autorizacao'
         'outros': 'Outros',
         'problemas_saude': 'Problemas de Saúde',
         'viagem': 'Viagem',
-        'tratamento_medico': 'Tratamento Médico'   // 🆕
+        'tratamento_medico': 'Tratamento Médico'
     };
     return labels[motivo] || motivo;
 };
@@ -243,6 +293,30 @@ AutorizacaoSchema.statics.getUniformePeriodoFormatado = function(doc) {
     const fmt = (d) => d.toLocaleDateString('pt-BR');
     if (iniDia.getTime() === fimDia.getTime()) return fmt(iniDia);
     return `${fmt(iniDia)} a ${fmt(fimDia)}`;
+};
+
+// 🆕 Entrada formatada (estático)
+AutorizacaoSchema.statics.getEntradaCompleta = function(doc) {
+    if (!doc) return null;
+    const temData = !!doc.dataEntrada;
+    const temHora = !!(doc.horarioEntrada && doc.horarioEntrada.trim());
+    if (!temData && !temHora) return null;
+    const partes = [];
+    if (temData) partes.push(new Date(doc.dataEntrada).toLocaleDateString('pt-BR'));
+    if (temHora) partes.push(temData ? `às ${doc.horarioEntrada}` : doc.horarioEntrada);
+    return partes.join(' ');
+};
+
+// 🆕 Saída formatada (estático)
+AutorizacaoSchema.statics.getSaidaCompleta = function(doc) {
+    if (!doc) return null;
+    const temData = !!doc.dataSaida;
+    const temHora = !!(doc.horarioSaida && doc.horarioSaida.trim());
+    if (!temData && !temHora) return null;
+    const partes = [];
+    if (temData) partes.push(new Date(doc.dataSaida).toLocaleDateString('pt-BR'));
+    if (temHora) partes.push(temData ? `às ${doc.horarioSaida}` : doc.horarioSaida);
+    return partes.join(' ');
 };
 
 module.exports = mongoose.model('Autorizacao', AutorizacaoSchema);
