@@ -3786,6 +3786,217 @@ function reiniciarScannerModulo(modulo) {
 }
 
 // ============================================
+// 👁️ VER DETALHES DO MÓDULO (PROFISSIONAL COM ASSINATURA)
+// ============================================
+async function verDetalhesModulo(modulo, id) {
+    if (!id) return;
+
+    try {
+        // Mostra um loading rápido enquanto busca no banco
+        notificar('Carregando detalhes...', 'info', 1500);
+
+        const response = await fetch(`/api/gestao-geral/autorizacao/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success || !data.autorizacao) {
+            notificar('Erro ao carregar detalhes', 'error');
+            return;
+        }
+        
+        const a = data.autorizacao;
+        const cfg = getCfg(modulo);
+        
+        // Remove modal antigo se existir
+        const oldModal = safeGet('modalVerDetalhesModulo');
+        if (oldModal) oldModal.remove();
+
+        // Monta o bloco de assinatura (se existir)
+        let assinaturaHTML = '';
+        if (a.temAssinatura && a.assinaturaBase64) {
+            assinaturaHTML = `
+                <div class="mt-4">
+                    <label class="text-muted small fw-bold mb-2 d-block">ASSINATURA DO RESPONSÁVEL</label>
+                    <div style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px; padding: 15px; text-align: center;">
+                        <img src="${a.assinaturaBase64}" style="max-width: 100%; max-height: 150px; object-fit: contain;" alt="Assinatura">
+                        ${a.assinadaPorNome ? `<p class="mb-0 mt-2 text-success" style="font-size: 12px; font-weight: 600;"><i class="fas fa-check-circle"></i> Assinado por: ${escapeHTML(a.assinadaPorNome)}</p>` : ''}
+                        ${a.assinadaEm ? `<p class="mb-0 text-muted" style="font-size: 11px;">Em: ${new Date(a.assinadaEm).toLocaleString('pt-BR')}</p>` : ''}
+                    </div>
+                </div>
+            `;
+        } else if (a.precisaAssinatura) {
+            assinaturaHTML = `
+                <div class="mt-4">
+                    <label class="text-muted small fw-bold mb-2 d-block">ASSINATURA DO RESPONSÁVEL</label>
+                    <div style="background: #fef3c7; border: 2px dashed #f59e0b; border-radius: 12px; padding: 15px; text-align: center; color: #92400e;">
+                        <i class="fas fa-clock fa-2x mb-2"></i>
+                        <p class="mb-0" style="font-size: 13px; font-weight: 600;">Aguardando assinatura via QR Code</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Monta os horários/períodos de acordo com o tipo
+        let extraInfoHTML = '';
+        
+        if (cfg.tipo === 'autorizacao' && (a.horarioEntrada || a.horarioSaida)) {
+            extraInfoHTML = `
+                <div class="row mt-3">
+                    <div class="col-6">
+                        <label class="text-muted small fw-bold">ENTRADA</label>
+                        <p class="mb-0">${a.dataEntradaFormatada || ''} ${a.horarioEntrada ? `<span class="badge bg-success">${a.horarioEntrada}</span>` : ''}</p>
+                    </div>
+                    <div class="col-6">
+                        <label class="text-muted small fw-bold">SAÍDA</label>
+                        <p class="mb-0">${a.dataSaidaFormatada || ''} ${a.horarioSaida ? `<span class="badge bg-danger">${a.horarioSaida}</span>` : ''}</p>
+                    </div>
+                </div>
+            `;
+        } else if (cfg.tipo === 'justificativa' || cfg.tipo === 'segunda_chamada') {
+            extraInfoHTML = `
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <label class="text-muted small fw-bold">PERÍODO DA FALTA</label>
+                        <p class="mb-0 fw-bold text-primary">${a.periodoFaltaFormatado || 'Não informado'}</p>
+                    </div>
+                </div>
+            `;
+        } else if (cfg.tipo === 'uniforme') {
+            extraInfoHTML = `
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <label class="text-muted small fw-bold">PERÍODO DO UNIFORME</label>
+                        <p class="mb-0 fw-bold text-primary">${a.uniformePeriodoFormatado || 'Não informado'}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (cfg.tipo === 'segunda_chamada' && a.tipoProvaPerdidaFormatado) {
+            extraInfoHTML += `
+                <div class="row mt-3">
+                    <div class="col-6">
+                        <label class="text-muted small fw-bold">TIPO DE PROVA</label>
+                        <p class="mb-0"><span class="badge bg-warning text-dark">${escapeHTML(a.tipoProvaPerdidaFormatado)}</span></p>
+                    </div>
+                    <div class="col-6">
+                        <label class="text-muted small fw-bold">PERÍODO DA PROVA</label>
+                        <p class="mb-0"><span class="badge bg-primary">${escapeHTML(a.periodoProva || '-')}</span></p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Modal HTML
+        const modalHtml = `
+            <div class="modal fade" id="modalVerDetalhesModulo" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content" style="border-radius: 16px; border: none; overflow: hidden;">
+                        
+                        <!-- Header -->
+                        <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; border: none; padding: 20px 25px;">
+                            <h5 class="modal-title" style="display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-file-signature"></i> Detalhes - ${cfg.nomeAmigavel}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <!-- Body -->
+                        <div class="modal-body" style="padding: 25px; background: #f8fafc;">
+                            
+                            <!-- Card do Aluno -->
+                            <div class="d-flex align-items-center gap-3 p-3 mb-4" style="background: white; border-radius: 12px; border-left: 4px solid #1e3c72; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                                <img src="${gerarAvatarSVG(a.alunoNome)}" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid #1e3c72;" alt="">
+                                <div>
+                                    <h5 style="margin: 0; color: #1e3c72; font-weight: 700;">${escapeHTML(a.alunoNome)}</h5>
+                                    <p style="margin: 2px 0 0; font-size: 13px; color: #64748b;">
+                                        <i class="fas fa-id-card"></i> ${escapeHTML(a.alunoMatricula || 'Sem matrícula')} • 
+                                        <i class="fas fa-graduation-cap"></i> ${escapeHTML(a.alunoTurma || '-')}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Grid de Informações -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
+                                        <label class="text-muted small fw-bold d-block mb-1">DATA DO REGISTRO</label>
+                                        <span style="font-size: 15px; font-weight: 600; color: #1e293b;">${a.dataFormatada}</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
+                                        <label class="text-muted small fw-bold d-block mb-1">MOTIVO</label>
+                                        <span class="badge bg-info text-dark" style="font-size: 13px; padding: 6px 12px;">${escapeHTML(a.motivoLabel)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${extraInfoHTML}
+
+                            <!-- Responsável -->
+                            <div class="mt-4">
+                                <label class="text-muted small fw-bold mb-2 d-block">DADOS DO RESPONSÁVEL</label>
+                                <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0;">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2 mb-md-0">
+                                            <span class="text-muted" style="font-size: 12px;">Nome</span><br>
+                                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelNome || 'Não informado')}</strong>
+                                        </div>
+                                        <div class="col-md-3 mb-2 mb-md-0">
+                                            <span class="text-muted" style="font-size: 12px;">CPF</span><br>
+                                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelCPF || '-')}</strong>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <span class="text-muted" style="font-size: 12px;">Telefone</span><br>
+                                            <strong style="font-size: 14px;">${escapeHTML(a.responsavelTelefone || '-')}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${a.observacoes ? `
+                            <div class="mt-4">
+                                <label class="text-muted small fw-bold mb-2 d-block">OBSERVAÇÕES</label>
+                                <div class="p-3 bg-white rounded" style="border: 1px solid #e2e8f0; font-size: 13px; color: #475569; white-space: pre-line;">
+                                    ${escapeHTML(a.observacoes)}
+                                </div>
+                            </div>` : ''}
+
+                            ${assinaturaHTML}
+
+                            <div class="mt-4 text-end">
+                                <small class="text-muted" style="font-size: 11px;">
+                                    Registrado por: <strong>${escapeHTML(a.registradoPorNome || 'Sistema')}</strong>
+                                </small>
+                            </div>
+
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="modal-footer" style="background: white; border-top: 1px solid #e2e8f0; padding: 15px 25px;">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="border-radius: 8px;">Fechar</button>
+                            <button type="button" class="btn btn-primary" onclick="imprimirModulo('${modulo}', '${a.id}')" style="border-radius: 8px;">
+                                <i class="fas fa-print"></i> Imprimir Documento
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        new bootstrap.Modal(safeGet('modalVerDetalhesModulo')).show();
+
+    } catch (error) {
+        console.error('Erro ao buscar detalhes:', error);
+        notificar('Erro de conexão ao buscar detalhes', 'error');
+    }
+}
+
+// ============================================
 // LISTAR MÓDULO - COM PAGINAÇÃO + FILTRO POR PERÍODO DA FALTA
 // ============================================
 async function carregarListaModulo(modulo, pagina = null) {
@@ -3960,7 +4171,7 @@ async function carregarListaModulo(modulo, pagina = null) {
                                     
                                     <td style="${tdStyle} text-align: center;">
                                         <div style="display: flex; flex-direction: row; gap: 2px; justify-content: center;">
-                                            <button class="btn btn-sm btn-info" onclick="verAtraso('${a.id}')" title="Ver detalhes" style="padding: 3px 5px; font-size: 11px;">
+                                            <button class="btn btn-sm btn-info" onclick="verDetalhesModulo('${modulo}', '${a.id}')" title="Ver detalhes" style="padding: 3px 5px; font-size: 11px;">
                                                 <i class="fas fa-eye"></i>
                                             </button>
                                             <button class="btn btn-sm btn-primary" onclick="imprimirModulo('${modulo}', '${a.id}')" title="Imprimir" style="padding: 3px 5px; font-size: 11px;">
