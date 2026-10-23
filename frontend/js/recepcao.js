@@ -19,6 +19,12 @@ let totalRegistrosResumoDia = 0;
 const itensPorPaginaResumoDia = 10;
 
 // ============================================
+// CACHES GLOBAIS DE NOTIFICAÇÕES
+// ============================================
+window.__notificacoesCache = window.__notificacoesCache || [];
+window.__lembretesCache    = window.__lembretesCache    || [];
+
+// ============================================
 // 🔥 ESTADO DO MODAL DE ASSINATURA
 // ============================================
 const estadoAssinatura = {
@@ -96,7 +102,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     safeSetText('userName', userData.nome || 'Recepção');
     safeSetText('userRole', userData.role === 'recepcao' ? 'Recepção' : 'Gestão Geral');
-    safeSetText('dataAtual', new Date().toLocaleDateString('pt-BR'));
     
     const hoje = getDataLocalISO();
     safeGet('dataVerificacao').value = hoje;
@@ -137,7 +142,6 @@ async function carregarFotoPerfil() {
 
 // ============================================================
 // HEADER DA RECEPÇÃO
-// Relógio + Menu do Usuário + Sino + Badge + Boas-vindas + Turno
 // ============================================================
 
 // ------------------------------------------------------------
@@ -199,15 +203,13 @@ function abrirMenuNotificacoesSeguro(event) {
         notifDropdown.style.display = 'block';
     }
 
-    if (typeof carregarNotificacoesHeader === 'function') {
-        carregarNotificacoesHeader();
-    } else if (typeof carregarNotificacoes === 'function') {
-        carregarNotificacoes();
+    if (typeof carregarTudo === 'function') {
+        carregarTudo();
     }
 }
 
 // ------------------------------------------------------------
-// 4. BADGES UNIFICADOS (avatar + menu)
+// 4. BADGES UNIFICADOS (avatar + menu + sino)
 // ------------------------------------------------------------
 function atualizarBadgeUnificado() {
     let total = 0;
@@ -215,21 +217,21 @@ function atualizarBadgeUnificado() {
         const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
         const lembretes = (window.__lembretesCache || []).length;
         total = naoLidas + lembretes;
-    } catch (e) {}
+    } catch (e) { total = 0; }
 
-    const badgeDot = document.getElementById('userNotificationBadge');
+    const badgeDot  = document.getElementById('userNotificationBadge');
     const menuBadge = document.getElementById('menuNotifBadge');
-    const trigger = document.getElementById('userTrigger');
+    const trigger   = document.getElementById('userTrigger');
 
     if (total > 0) {
-        if (badgeDot) badgeDot.style.display = 'block';
+        if (badgeDot)  badgeDot.style.display = 'block';
         if (menuBadge) {
             menuBadge.style.display = 'inline-block';
             menuBadge.textContent = total > 99 ? '99+' : total;
         }
         if (trigger) trigger.classList.add('tem-notificacao');
     } else {
-        if (badgeDot) badgeDot.style.display = 'none';
+        if (badgeDot)  badgeDot.style.display = 'none';
         if (menuBadge) menuBadge.style.display = 'none';
         if (trigger) trigger.classList.remove('tem-notificacao');
     }
@@ -345,18 +347,9 @@ document.addEventListener('DOMContentLoaded', function () {
     carregarFotoPerfilRecepcao();
 
     setTimeout(() => {
-        atualizarBadgeUnificado();
-    }, 500);
-
-    setTimeout(() => {
-        if (typeof carregarNotificacoesHeader === 'function') {
-            carregarNotificacoesHeader();
-        } else if (typeof carregarNotificacoes === 'function') {
-            carregarNotificacoes();
-        }
-    }, 1500);
+        if (typeof carregarTudo === 'function') carregarTudo();
+    }, 800);
 });
-
 // ============================================
 // FILTRO DE DATA
 // ============================================
@@ -612,7 +605,6 @@ async function selecionarAluno(alunoId, itemEl) {
     }
     try { await buscarAluno(alunoId); } catch (error) { console.error('Erro:', error); }
 }
-
 // ============================================
 // BUSCAR ALUNO / VERIFICAR
 // ============================================
@@ -757,7 +749,6 @@ function gerarCardAutorizacao(a) {
                     <span class="value">${escapeHTML(a.motivoLabel || '-')}${motivoDetalhes}</span>
                 </div>
                 
-                <!-- 🆕 ENTRADA / SAÍDA COM DATA -->
                 ${(a.entradaCompleta || a.saidaCompleta) ? `
                     ${a.entradaCompleta ? `
                         <div class="autorizacao-info-item" style="grid-column: span 2; background: #f0fdf4; border-radius: 6px; padding: 8px; border-left: 3px solid #10b981;">
@@ -798,7 +789,6 @@ function gerarCardAutorizacao(a) {
         </div>
     `;
 }
-
 // ============================================
 // 🔥 MODAL DE ASSINATURA — ABRIR
 // ============================================
@@ -1064,7 +1054,6 @@ async function copiarLinkAssinaturaRecepcao() {
         notificar('✅ Link copiado!', 'success');
     }
 }
-
 // ============================================
 // CANVAS (fallback — assinar direto na recepção)
 // ============================================
@@ -1315,7 +1304,6 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
         detalheMotivo = ` <strong>(Ausência: ${a.horarioAusencia} | Retorno: ${a.horarioRetorno})</strong>`;
     }
     
-    // 🆕 ENTRADA / SAÍDA COM DATA
     let horariosHTML = '';
     if (a.entradaCompleta || a.saidaCompleta) {
         horariosHTML = `
@@ -1464,7 +1452,6 @@ function gerarHTMLImpressaoAutorizacao(a, qrCodeUrl) {
     </body>
     </html>`;
 }
-
 // ============================================
 // VER DETALHES COMPLETOS
 // ============================================
@@ -1505,7 +1492,6 @@ async function verDetalhesCompletos(id) {
         
         const alunoFoto = a.alunoFoto || gerarAvatarSVG(a.alunoNome);
         
-        // 🆕 Bloco de entrada / saída no modal de detalhes
         let horariosHTML = '';
         if (a.entradaCompleta || a.saidaCompleta) {
             horariosHTML = `
@@ -1666,7 +1652,6 @@ async function carregarResumoDia(pagina = null) {
             return;
         }
         
-        // 🆕 Na tabela de resumo, mostra Entrada/Saída formatadas
         container.innerHTML = `
             <div class="table-responsive">
                 <table class="table-resumo">
@@ -1810,7 +1795,7 @@ function limparTela() {
 }
 
 // ============================================
-// NOTIFICAÇÕES
+// NOTIFICAÇÕES (TOAST)
 // ============================================
 function notificar(mensagem, tipo = 'success', duracao = 3500) {
     if (typeof window.mostrarToastConcluido === 'function') {
@@ -1847,10 +1832,9 @@ function notificar(mensagem, tipo = 'success', duracao = 3500) {
 }
 
 // ============================================
-// NOTIFICAÇÕES (SINO)
+// NOTIFICAÇÕES (SINO + BADGES)
 // ============================================
 let notificacoesInterval = null;
-let __notificacoesCache = [];
 
 async function carregarNotificacoesSistema() {
     try {
@@ -1860,7 +1844,10 @@ async function carregarNotificacoesSistema() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        if (data.success) __notificacoesCache = data.notificacoes || [];
+        if (data.success) {
+            window.__notificacoesCache = data.notificacoes || [];
+            if (!window.__lembretesCache) window.__lembretesCache = [];
+        }
     } catch (error) {
         console.error('Erro ao carregar notificações:', error);
     }
@@ -1869,22 +1856,31 @@ async function carregarNotificacoesSistema() {
 function renderizarSino() {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
-    if (__notificacoesCache.length === 0) {
-        lista.innerHTML = `<div style="text-align:center;padding:40px;color:#6c757d;"><i class="fas fa-bell-slash" style="font-size:2rem;margin-bottom:10px;display:block;"></i><p style="margin:0;">Nenhuma notificação</p></div>`;
+
+    const cache = window.__notificacoesCache || [];
+
+    if (cache.length === 0) {
+        lista.innerHTML = `<div style="text-align:center;padding:40px;color:#6c757d;">
+            <i class="fas fa-bell-slash" style="font-size:2rem;margin-bottom:10px;display:block;"></i>
+            <p style="margin:0;">Nenhuma notificação</p>
+        </div>`;
         return;
     }
-    lista.innerHTML = __notificacoesCache.map(notif => {
+
+    lista.innerHTML = cache.map(notif => {
         const data = new Date(notif.createdAt);
         const agora = new Date();
         const diffMs = agora - data;
         const diffMin = Math.floor(diffMs / 60000);
         const diffHr = Math.floor(diffMs / 3600000);
         const diffDia = Math.floor(diffMs / 86400000);
+
         let tempoTexto;
         if (diffMin < 1) tempoTexto = 'agora mesmo';
         else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
         else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
         else tempoTexto = `há ${diffDia} d`;
+
         return `
             <div class="notificacao-item ${notif.lida ? '' : 'nao-lida'}"
                  data-notif-id="${notif._id}"
@@ -1902,6 +1898,7 @@ function renderizarSino() {
                 </div>
             </div>`;
     }).join('');
+
     lista.querySelectorAll('.notificacao-item').forEach(item => {
         item.addEventListener('click', () => {
             abrirNotificacao(item.getAttribute('data-notif-id'), item.getAttribute('data-notif-link'));
@@ -1913,7 +1910,9 @@ function atualizarBadge() {
     const badge = document.getElementById('notificacoesBadge');
     const btn = document.getElementById('notificacoesBtn');
     if (!badge || !btn) return;
-    const naoLidas = __notificacoesCache.filter(n => !n.lida).length;
+
+    const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
+
     if (naoLidas > 0) {
         badge.textContent = naoLidas > 99 ? '99+' : naoLidas;
         badge.style.display = 'inline-flex';
@@ -1922,45 +1921,14 @@ function atualizarBadge() {
         badge.style.display = 'none';
         btn.classList.remove('tem-notificacao');
     }
-}
 
-// ============================================
-// LIMPAR NOTIFICAÇÕES
-// ============================================
-async function limparMinhasNotificacoes(event) {
-    if (event) event.stopPropagation();
-
-    const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
-    if (!confirmacao) return;
-
-    try {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch('/api/notificacoes/limpar-minhas', {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            window.__notificacoesCache = [];
-            await carregarTudo();
-            notificar('✅ Notificações excluídas!', 'success');
-        } else {
-            throw new Error(data.error || 'Erro ao excluir');
-        }
-    } catch (error) {
-        console.error('Erro ao limpar notificações:', error);
-        notificar('❌ Erro ao limpar notificações', 'error');
-    }
+    atualizarBadgeUnificado();
 }
 
 async function carregarTudo() {
     await carregarNotificacoesSistema();
     renderizarSino();
-    atualizarBadge();                             
-    if (typeof atualizarBadgeUnificado === 'function') {
-        atualizarBadgeUnificado();                
-    }
+    atualizarBadge();
 }
 
 function abrirNotificacoes() {
@@ -2006,21 +1974,32 @@ async function marcarTodasLidas() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        carregarTudo();
-        if (notificacoesInterval) clearInterval(notificacoesInterval);
-        notificacoesInterval = setInterval(carregarTudo, 30000);
-    }, 500);
-});
+async function limparMinhasNotificacoes(event) {
+    if (event) event.stopPropagation();
 
-document.addEventListener('click', function(event) {
-    const dropdown = document.getElementById('notificacoesDropdown');
-    const btn = document.getElementById('notificacoesBtn');
-    if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
-        dropdown.classList.remove('show');
+    const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+    if (!confirmacao) return;
+
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            window.__notificacoesCache = [];
+            await carregarTudo();
+            notificar('✅ Notificações excluídas!', 'success');
+        } else {
+            throw new Error(data.error || 'Erro ao excluir');
+        }
+    } catch (error) {
+        console.error('Erro ao limpar notificações:', error);
+        notificar('❌ Erro ao limpar notificações', 'error');
     }
-});
+}
 
 // ============================================
 // LOGOUT
@@ -2033,6 +2012,23 @@ async function logout() {
         window.location.href = '/login.html';
     }
 }
+
+// ============================================
+// INICIALIZAÇÃO DAS NOTIFICAÇÕES
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+    carregarTudo();
+    if (notificacoesInterval) clearInterval(notificacoesInterval);
+    notificacoesInterval = setInterval(carregarTudo, 15000);
+});
+
+document.addEventListener('click', function(event) {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    const btn = document.getElementById('notificacoesBtn');
+    if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
+        dropdown.classList.remove('show');
+    }
+});
 
 // ============================================
 // EXPORTAR GLOBAIS

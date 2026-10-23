@@ -737,41 +737,6 @@ document.addEventListener('click', function(event) {
 });
 
 // ============================================
-// 3. NOTIFICAÇÕES NO AVATAR (Anel pulsante)
-// ============================================
-const _originalAtualizarBadgeUnificado = typeof atualizarBadgeUnificado === 'function' ? atualizarBadgeUnificado : null;
-
-atualizarBadgeUnificado = function() {
-    if (typeof _originalAtualizarBadgeUnificado === 'function') {
-        _originalAtualizarBadgeUnificado();
-    }
-    
-    let total = 0;
-    try {
-        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
-        const lembretes = (window.__lembretesCache || []).length;
-        total = naoLidas + lembretes;
-    } catch(e) {}
-
-    const badgeDot = document.getElementById('userNotificationBadge');
-    const menuBadge = document.getElementById('menuNotifBadge');
-    const trigger = document.getElementById('userTrigger');
-
-    if (total > 0) {
-        if (badgeDot) badgeDot.style.display = 'block';
-        if (menuBadge) {
-            menuBadge.style.display = 'inline-block';
-            menuBadge.textContent = total > 99 ? '99+' : total;
-        }
-        if (trigger) trigger.classList.add('tem-notificacao');
-    } else {
-        if (badgeDot) badgeDot.style.display = 'none';
-        if (menuBadge) menuBadge.style.display = 'none';
-        if (trigger) trigger.classList.remove('tem-notificacao');
-    }
-};
-
-// ============================================
 // 4. BOAS-VINDAS E TURNO DINÂMICO
 // ============================================
 function atualizarBoasVindasETurno() {
@@ -5506,6 +5471,9 @@ async function carregarNotificacoesSistema() {
         if (data.success) {
             __notificacoesCache = data.notificacoes || [];
         }
+
+        // ✅ Atualiza os badges (avatar / menu / sino)
+        atualizarBadgeUnificado();
     } catch (error) {
         console.error('Erro ao carregar notificações:', error);
     }
@@ -5522,6 +5490,7 @@ async function carregarLembretesRemarcacao() {
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || !contentType.includes('application/json')) {
             __lembretesCache = [];
+            atualizarBadgeUnificado();
             return;
         }
         const data = await response.json();
@@ -5530,8 +5499,12 @@ async function carregarLembretesRemarcacao() {
         } else {
             __lembretesCache = [];
         }
+
+        // ✅ Atualiza os badges após carregar lembretes
+        atualizarBadgeUnificado();
     } catch (error) {
         __lembretesCache = [];
+        atualizarBadgeUnificado();
     }
 }
 
@@ -5666,27 +5639,105 @@ function renderizarSinoUnificado() {
 }
 
 function atualizarBadgeUnificado() {
-    const badge = document.getElementById('notificacoesBadge');
-    const btn = document.getElementById('notificacoesBtn');
-    if (!badge || !btn) return;
+    // 1) Calcula total a partir das variáveis LOCAIS
+    let totalNaoLidas = 0;
+    let totalLembretes = 0;
+    try {
+        totalNaoLidas = (__notificacoesCache || []).filter(n => !n.lida).length;
+        totalLembretes = (__lembretesCache || []).length;
+    } catch (e) {
+        console.warn('[atualizarBadgeUnificado] erro ao contar:', e);
+    }
+    const total = totalNaoLidas + totalLembretes;
 
-    const total = __notificacoesCache.filter(n => !n.lida).length + __lembretesCache.length;
+    console.log(`[atualizarBadgeUnificado] 📊 Total: ${total} (${totalNaoLidas} notif + ${totalLembretes} lembretes)`);
 
-    if (total > 0) {
-        badge.textContent = total > 99 ? '99+' : total;
-        badge.style.display = 'inline-flex';
-
-        const temUrgente = __lembretesCache.some(r => calcularNivelAlerta(r).urgente);
-        if (temUrgente) {
-            btn.classList.add('tem-notificacao');
-            badge.style.background = '#dc2626';
+    // 2) Badge do sino
+    const badgeSino = document.getElementById('notificacoesBadge');
+    const btnSino = document.getElementById('notificacoesBtn');
+    if (badgeSino) {
+        if (total > 0) {
+            badgeSino.textContent = total > 99 ? '99+' : total;
+            badgeSino.style.setProperty('display', 'inline-flex', 'important');
         } else {
-            btn.classList.remove('tem-notificacao');
-            badge.style.background = '#ef4444';
+            badgeSino.style.setProperty('display', 'none', 'important');
+        }
+    }
+
+    // 3) 🆕 BADGE NUMÉRICO NO AVATAR (userNotificationBadge) — O QUE FALTAVA!
+    const badgeAvatar = document.getElementById('userNotificationBadge');
+    if (badgeAvatar) {
+        if (total > 0) {
+            badgeAvatar.textContent = total > 9 ? '9+' : String(total);
+            badgeAvatar.style.setProperty('display', 'flex', 'important');
+            console.log(`[atualizarBadgeUnificado] ✅ Badge avatar exibindo: "${badgeAvatar.textContent}"`);
+        } else {
+            badgeAvatar.style.setProperty('display', 'none', 'important');
+            console.log('[atualizarBadgeUnificado] Badge avatar ocultado (total = 0)');
         }
     } else {
-        badge.style.display = 'none';
-        btn.classList.remove('tem-notificacao');
+        console.warn('[atualizarBadgeUnificado] ❌ #userNotificationBadge NÃO ENCONTRADO');
+    }
+
+    // 4) 🆕 BADGE NO MENU DROPDOWN (menuNotifBadge)
+    const badgeMenu = document.getElementById('menuNotifBadge');
+    if (badgeMenu) {
+        if (total > 0) {
+            badgeMenu.style.setProperty('display', 'inline-block', 'important');
+            badgeMenu.textContent = total > 99 ? '99+' : total;
+        } else {
+            badgeMenu.style.setProperty('display', 'none', 'important');
+        }
+    }
+
+    // 5) Anel pulsante no trigger
+    const trigger = document.getElementById('userTrigger');
+    if (trigger) {
+        if (total > 0) trigger.classList.add('tem-notificacao');
+        else trigger.classList.remove('tem-notificacao');
+    }
+
+    // 6) Cor do sino (urgente = vermelho escuro)
+    if (badgeSino && total > 0) {
+        const temUrgente = (__lembretesCache || []).some(r => calcularNivelAlerta(r).urgente);
+        badgeSino.style.background = temUrgente ? '#dc2626' : '#ef4444';
+        if (temUrgente && btnSino) btnSino.classList.add('tem-novidade');
+        else if (btnSino) btnSino.classList.remove('tem-novidade');
+    }
+}
+
+// ============================================
+// ✅ ABRIR NOTIFICAÇÃO (marca lida + fecha + navega)
+// ============================================
+async function abrirNotificacao(id, link) {
+    try {
+        const token = localStorage.getItem('auth_token');
+
+        // 1) Marca como lida
+        if (id) {
+            try {
+                await fetch(`/api/notificacoes/${id}/lida`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.warn('[abrirNotificacao] erro ao marcar como lida:', e);
+            }
+        }
+
+        // 2) Fecha o dropdown
+        fecharNotificacoes();
+
+        // 3) Atualiza badges
+        await carregarTudo();
+
+        // 4) Navega se houver link válido
+        if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') {
+            window.location.href = link;
+        }
+    } catch (error) {
+        console.error('[abrirNotificacao]', error);
+        mostrarNotificacaoInterna('Erro ao processar notificação', 'error');
     }
 }
 
@@ -5772,6 +5823,11 @@ async function limparMinhasNotificacoes(event) {
 
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
+
+    // ✅ Força atualização dos badges do avatar após boot
+    setTimeout(async () => {
+        try { await carregarTudo(); } catch (e) { /* silencioso */ }
+    }, 1200);
 });
 
 window.addEventListener('beforeunload', () => {

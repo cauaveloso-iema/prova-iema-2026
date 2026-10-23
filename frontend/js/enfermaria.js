@@ -436,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================
-// 5. BUSCAR E RENDERIZAR NOTIFICAÇÕES NA API
+// 5. BUSCAR E RENDERIZAR NOTIFICAÇÕES NA API (CORRIGIDO)
 // ============================================
 async function carregarNotificacoesHeader() {
     const token = localStorage.getItem('auth_token');
@@ -448,87 +448,99 @@ async function carregarNotificacoesHeader() {
     }
 
     try {
-        // Busca o contador de não lidas
+        // 🔥 1. Buscar contador de não lidas
         const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        let totalNaoLidas = 0;
         if (countRes.ok) {
             const countData = await countRes.json();
-            window.__notificacoesCache = new Array(countData.count || 0).fill({ lida: false });
-            if (typeof window.atualizarBadgeUnificado === 'function') {
-                window.atualizarBadgeUnificado();
-            }
+            totalNaoLidas = countData.count || 0;
         }
 
-        // Busca a lista completa (limitada a 20)
+        // 🔥 2. Buscar a lista completa
         const res = await fetch('/api/notificacoes?limite=20', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
 
-        if (data.success && lista) {
-            if (!data.notificacoes || data.notificacoes.length === 0) {
-                lista.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #6c757d;">
-                        <i class="fas fa-bell-slash" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i>
-                        <p style="margin: 0;">Nenhuma notificação</p>
-                    </div>
-                `;
-                return;
-            }
+        if (data.success) {
+            // 🔥 3. Atualizar badge DIRETAMENTE (não depende de cache)
+            atualizarBadgeNotificacoes(totalNaoLidas);
+            
+            // 🔥 4. Renderizar lista com LINK
+            if (lista) {
+                if (!data.notificacoes || data.notificacoes.length === 0) {
+                    lista.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #6c757d;">
+                            <i class="fas fa-bell-slash" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i>
+                            <p style="margin: 0;">Nenhuma notificação</p>
+                        </div>
+                    `;
+                    return;
+                }
 
-            // Renderiza a lista
-            lista.innerHTML = data.notificacoes.map(n => {
-                const dateObj = new Date(n.createdAt);
-                const agora = new Date();
-                const diffMin = Math.floor((agora - dateObj) / 60000);
-                
-                let tempoTexto = 'agora';
-                if (diffMin >= 1 && diffMin < 60) tempoTexto = `há ${diffMin} min`;
-                else if (diffMin >= 60 && diffMin < 1440) tempoTexto = `há ${Math.floor(diffMin / 60)} h`;
-                else if (diffMin >= 1440) tempoTexto = `há ${Math.floor(diffMin / 1440)} d`;
-                
-                const naoLida = !n.lida ? 'background: #f0fdf4; border-left: 3px solid #10b981;' : '';
-                
-                return `
-                    <div style="
-                        padding: 12px 16px;
-                        border-bottom: 1px solid #f3f4f6;
-                        display: flex;
-                        gap: 12px;
-                        align-items: flex-start;
-                        cursor: pointer;
-                        transition: background 0.15s;
-                        ${naoLida}
-                    " onclick="marcarNotificacaoLidaHeader('${n._id}')">
+                lista.innerHTML = data.notificacoes.map(n => {
+                    const dateObj = new Date(n.createdAt);
+                    const agora = new Date();
+                    const diffMin = Math.floor((agora - dateObj) / 60000);
+                    
+                    let tempoTexto = 'agora';
+                    if (diffMin >= 1 && diffMin < 60) tempoTexto = `há ${diffMin} min`;
+                    else if (diffMin >= 60 && diffMin < 1440) tempoTexto = `há ${Math.floor(diffMin / 60)} h`;
+                    else if (diffMin >= 1440) tempoTexto = `há ${Math.floor(diffMin / 1440)} d`;
+                    
+                    const naoLida = !n.lida ? 'background: #f0fdf4; border-left: 3px solid #10b981;' : '';
+                    
+                    // 🔥 ESCAPAR link para não quebrar HTML
+                    const linkSeguro = (n.link || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+                    const idSeguro = (n._id || '').replace(/'/g, '');
+                    
+                    return `
                         <div style="
-                            width: 40px;
-                            height: 40px;
-                            border-radius: 50%;
-                            background: ${n.cor || '#10b981'};
-                            color: white;
+                            padding: 12px 16px;
+                            border-bottom: 1px solid #f3f4f6;
                             display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 16px;
-                            flex-shrink: 0;
-                        ">
-                            <i class="fas ${n.icone || 'fa-bell'}"></i>
+                            gap: 12px;
+                            align-items: flex-start;
+                            cursor: pointer;
+                            transition: background 0.15s;
+                            ${naoLida}
+                        " 
+                        onmouseover="this.style.background='#f3f4f6'" 
+                        onmouseout="this.style.background='${n.lida ? 'transparent' : '#f0fdf4'}'"
+                        onclick="abrirNotificacaoEnfermaria('${idSeguro}', '${linkSeguro}')">
+                            <div style="
+                                width: 40px;
+                                height: 40px;
+                                border-radius: 50%;
+                                background: ${n.cor || '#10b981'};
+                                color: white;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 16px;
+                                flex-shrink: 0;
+                            ">
+                                <i class="fas ${n.icone || 'fa-bell'}"></i>
+                            </div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 700; font-size: 14px; color: #1f2937; margin-bottom: 3px;">
+                                    ${escapeHTML(n.titulo || 'Notificação')}
+                                </div>
+                                <div style="font-size: 13px; color: #4b5563; line-height: 1.4; margin-bottom: 5px;">
+                                    ${escapeHTML(n.mensagem || '')}
+                                </div>
+                                <div style="font-size: 11px; color: #9ca3af;">
+                                    <i class="far fa-clock"></i> ${tempoTexto}
+                                    ${linkSeguro && linkSeguro !== '#' ? '<span style="margin-left: 8px; color: #10b981;"><i class="fas fa-external-link-alt"></i> Abrir</span>' : ''}
+                                </div>
+                            </div>
                         </div>
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="font-weight: 700; font-size: 14px; color: #1f2937; margin-bottom: 3px;">
-                                ${escapeHTML(n.titulo || 'Notificação')}
-                            </div>
-                            <div style="font-size: 13px; color: #4b5563; line-height: 1.4; margin-bottom: 5px;">
-                                ${escapeHTML(n.mensagem || '')}
-                            </div>
-                            <div style="font-size: 11px; color: #9ca3af;">
-                                <i class="far fa-clock"></i> ${tempoTexto}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            }
         }
     } catch (error) {
         console.error('Erro ao carregar notificações:', error);
@@ -546,13 +558,88 @@ async function carregarNotificacoesHeader() {
     }
 }
 
+// ============================================
+// 🔥 5.1 ATUALIZAR BADGE (versão direta, sem cache)
+// ============================================
+function atualizarBadgeNotificacoes(total) {
+    const badgeDot = document.getElementById('userNotificationBadge');
+    const menuBadge = document.getElementById('menuNotifBadge');
+    const trigger = document.getElementById('userTrigger');
+    
+    if (total > 0) {
+        if (badgeDot) {
+            badgeDot.style.display = 'block';
+            badgeDot.textContent = total > 9 ? '9+' : total;
+        }
+        if (menuBadge) {
+            menuBadge.style.display = 'inline-block';
+            menuBadge.textContent = total > 99 ? '99+' : total;
+        }
+        if (trigger) trigger.classList.add('tem-notificacao');
+    } else {
+        if (badgeDot) badgeDot.style.display = 'none';
+        if (menuBadge) menuBadge.style.display = 'none';
+        if (trigger) trigger.classList.remove('tem-notificacao');
+    }
+}
+
+// ============================================
+// 🔥 5.2 CLIQUE EM NOTIFICAÇÃO (marca como lida E navega)
+// ============================================
+async function abrirNotificacaoEnfermaria(id, link) {
+    const token = localStorage.getItem('auth_token');
+    
+    console.log('🔔 Clique em notificação:', { id, link });
+    
+    try {
+        // 1. Marcar como lida
+        if (id) {
+            await fetch(`/api/notificacoes/${id}/lida`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        }
+        
+        // 2. Atualizar badge após marcar como lida
+        const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (countRes.ok) {
+            const countData = await countRes.json();
+            atualizarBadgeNotificacoes(countData.count || 0);
+        }
+        
+        // 3. Navegar se tiver link
+        if (link && link !== '#' && link !== 'null' && link !== 'undefined' && link !== '') {
+            console.log('🚀 Navegando para:', link);
+            
+            // Fechar o dropdown antes de navegar
+            fecharNotificacoes();
+            
+            // Navegar (funciona com links absolutos e relativos)
+            window.location.href = link;
+        } else {
+            console.log('ℹ️ Notificação sem link, apenas marcada como lida');
+            // Recarregar a lista pra atualizar visual
+            carregarNotificacoesHeader();
+        }
+    } catch (error) {
+        console.error('❌ Erro ao processar clique:', error);
+    }
+}
+
+// ============================================
+// 🔥 5.3 PULAR PARA O LINK (fallback)
+// ============================================
 function escapeHTML(str) {
     if (typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
               .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// ============================================
 // 6. ABRIR SINO PELO AVATAR
+// ============================================
 function abrirMenuNotificacoesSeguro(event) {
     if (event) event.stopPropagation();
 
@@ -569,11 +656,13 @@ function abrirMenuNotificacoesSeguro(event) {
         notifDropdown.style.display = 'block';
     }
 
-    // Chama a função de carregar (agora nativa do header)
+    // Carrega notificações
     carregarNotificacoesHeader();
 }
 
+// ============================================
 // 7. FECHAR SINO
+// ============================================
 function fecharNotificacoes() {
     const dropdown = document.getElementById('notificacoesDropdown');
     if (dropdown) {
@@ -586,25 +675,22 @@ function fecharNotificacoes() {
 }
 
 document.addEventListener('click', function (event) {
-    const btnFecharSino = event.target.closest('.notificacoes-header button[onclick*="fecharNotificacoes"]');
-    if (btnFecharSino) {
-        event.stopPropagation();
-        fecharNotificacoes();
-    }
-}, true);
-
-document.addEventListener('click', function (event) {
     const notifDropdown = document.getElementById('notificacoesDropdown');
     const containerSino = document.getElementById('containerSinoOriginal');
 
     if (notifDropdown && notifDropdown.classList.contains('show')) {
         if (containerSino && !containerSino.contains(event.target)) {
-            fecharNotificacoes();
+            // Não fechar se clicou em um item de notificação (ele já navega)
+            if (!event.target.closest('[onclick*="abrirNotificacaoEnfermaria"]')) {
+                fecharNotificacoes();
+            }
         }
     }
 });
 
-// 8. MARCAR COMO LIDA E LIMPAR
+// ============================================
+// 8. MARCAR COMO LIDA (mantido para compatibilidade)
+// ============================================
 async function marcarNotificacaoLidaHeader(id) {
     const token = localStorage.getItem('auth_token');
     try {
@@ -625,9 +711,9 @@ async function marcarTodasLidas() {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        atualizarBadgeNotificacoes(0);
         carregarNotificacoesHeader();
-        window.__notificacoesCache = [];
-        if (typeof window.atualizarBadgeUnificado === 'function') window.atualizarBadgeUnificado();
     } catch (error) {
         console.error('Erro ao marcar todas como lidas:', error);
     }
@@ -647,8 +733,7 @@ async function limparMinhasNotificacoes(event) {
         
         if (data.success) {
             fecharNotificacoes();
-            window.__notificacoesCache = [];
-            if (typeof window.atualizarBadgeUnificado === 'function') window.atualizarBadgeUnificado();
+            atualizarBadgeNotificacoes(0);
             alert('✅ Notificações excluídas!');
         }
     } catch (error) {
@@ -656,22 +741,31 @@ async function limparMinhasNotificacoes(event) {
     }
 }
 
-// Iniciar verificação de notificações ao carregar a página
+// ============================================
+// 🔥 9. INICIALIZAÇÃO (com polling do badge)
+// ============================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Carrega imediatamente após a página carregar
     setTimeout(() => {
-        carregarNotificacoesHeader(); // Busca ao entrar na tela
-    }, 1500);
+        carregarNotificacoesHeader();
+    }, 1000);
     
-    // Atualiza o contador a cada 30 segundos
-    setInterval(() => {
+    // Polling do badge a cada 30 segundos (sempre atualiza)
+    setInterval(async () => {
         const token = localStorage.getItem('auth_token');
-        if(token) {
-            fetch('/api/notificacoes/nao-lidas/contador', {
+        if (!token) return;
+        
+        try {
+            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()).then(data => {
-                window.__notificacoesCache = new Array(data.count || 0).fill({ lida: false });
-                if (typeof window.atualizarBadgeUnificado === 'function') window.atualizarBadgeUnificado();
-            }).catch(() => {});
+            });
+            
+            if (countRes.ok) {
+                const countData = await countRes.json();
+                atualizarBadgeNotificacoes(countData.count || 0);
+            }
+        } catch (error) {
+            console.warn('Erro ao atualizar badge:', error);
         }
     }, 30000);
 });
@@ -3764,6 +3858,15 @@ window.finalizarAtendimentoAtivo = finalizarAtendimentoAtivo;
 
 window.imprimirAtendimentosAtivos = imprimirAtendimentosAtivos;
 window.imprimirAtendimentoIndividual = imprimirAtendimentoIndividual;
+
+window.carregarNotificacoesHeader = carregarNotificacoesHeader;
+window.abrirNotificacaoEnfermaria = abrirNotificacaoEnfermaria;
+window.atualizarBadgeNotificacoes = atualizarBadgeNotificacoes;
+window.marcarTodasLidas = marcarTodasLidas;
+window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+window.abrirMenuNotificacoesSeguro = abrirMenuNotificacoesSeguro;
+window.fecharNotificacoes = fecharNotificacoes;
+window.marcarNotificacaoLidaHeader = marcarNotificacaoLidaHeader;
 
 // Dashboard - atendimentos recentes
 window.carregarAtendimentosRecentes = carregarAtendimentosRecentes;

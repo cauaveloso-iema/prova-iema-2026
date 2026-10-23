@@ -1695,21 +1695,30 @@ td div[style*="font-size: 12px"] small {
 }
 
 .user-notification-badge {
-    display: none;
+    display: none;                    /* controlado via JS */
+    align-items: center;              /* centraliza o número */
+    justify-content: center;
     position: absolute;
-    top: -2px;
-    right: -2px;
-    width: 14px;
-    height: 14px;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
     background: #ef4444;
-    border-radius: 50%;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 10px;
     border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     animation: pulse-badge 2s infinite;
+    z-index: 5;
 }
 
 @keyframes pulse-badge {
     0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.2); }
+    50% { transform: scale(1.15); }
 }
 
 .user-details {

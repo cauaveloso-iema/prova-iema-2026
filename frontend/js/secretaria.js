@@ -371,9 +371,13 @@ function confirmarInternoNotif(mensagem) {
 
 function iniciarSistemaNotificacoes() {
     if (!document.getElementById('notificacoesBtn')) return;
+
+    // Carrega imediatamente e depois a cada 30s
     carregarTudo();
     if (notificacoesInterval) clearInterval(notificacoesInterval);
     notificacoesInterval = setInterval(carregarTudo, 30000);
+
+    // Fecha o dropdown ao clicar fora
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('notificacoesDropdown');
         const btn = document.getElementById('notificacoesBtn');
@@ -390,16 +394,38 @@ async function carregarTudo() {
     atualizarBadgeUnificado();
 }
 
+// Cache do contador vindo direto do servidor (mais confiável)
+let __totalNaoLidasServidor = null;
+
 async function carregarNotificacoesSistema() {
     try {
         const tk = localStorage.getItem('auth_token');
         if (!tk) return;
+
+        // 1) Busca a lista completa
         const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
             headers: { 'Authorization': `Bearer ${tk}` }
         });
         const data = await response.json();
-        if (data.success) __notificacoesCache = data.notificacoes || [];
-    } catch (error) { /* silencioso */ }
+        if (data.success) {
+            __notificacoesCache = data.notificacoes || [];
+        }
+
+        // 2) Busca o contador real (mais confiável se houver >20)
+        try {
+            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
+                headers: { 'Authorization': `Bearer ${tk}` }
+            });
+            if (countRes.ok) {
+                const countData = await countRes.json();
+                __totalNaoLidasServidor = Number(countData.count) || 0;
+            }
+        } catch (e) {
+            __totalNaoLidasServidor = null; // fallback: usa o cache
+        }
+    } catch (error) {
+        /* silencioso */
+    }
 }
 
 async function carregarLembretesRetroativos() {
@@ -427,20 +453,22 @@ async function carregarLembretesRetroativos() {
 function renderizarSinoUnificado() {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
-    
+
     const temNotificacoes = __notificacoesCache.length > 0;
     const temLembretes = __lembretesCache.length > 0;
-    
+
     if (!temNotificacoes && !temLembretes) {
         lista.innerHTML = `<div style="text-align: center; padding: 40px; color: #6c757d;">
             <i class="fas fa-bell-slash" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.4;"></i>
             <p style="margin: 0;">Nenhuma notificação</p></div>`;
         return;
     }
-    
+
     let html = '';
-    
-    // 🆕 SEÇÃO DE LEMBRETES DE RETROATIVIDADE (clicáveis → abrem aba Por Data)
+
+    // =============================================
+    // 🆕 SEÇÃO DE LEMBRETES DE RETROATIVIDADE
+    // =============================================
     if (temLembretes) {
         html += `<div style="padding: 12px 16px; background: #fffbeb; border-bottom: 1px solid #fde68a;">
             <strong style="color: #d97706; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
@@ -448,7 +476,7 @@ function renderizarSinoUnificado() {
             </strong>
             <p style="margin: 4px 0 0; font-size: 0.75rem; color: #b45309;">Clique para abrir o registro na aba Por Data</p>
         </div>`;
-        
+
         __lembretesCache.forEach((r) => {
             const d = r.dados || {};
             html += `<div class="notificacao-item notificacao-lembrete"
@@ -475,32 +503,44 @@ function renderizarSinoUnificado() {
             </div>`;
         });
     }
-    
-    // SEÇÃO DE NOTIFICAÇÕES NORMAIS
+
+    // =============================================
+    // SEÇÃO DE NOTIFICAÇÕES NORMAIS (com link)
+    // =============================================
     if (temNotificacoes) {
         html += `<div style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #d1fae5;">
             <strong style="color: #059669; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
                 <i class="fas fa-bell"></i> Notificações do Sistema
             </strong>
         </div>`;
-        
+
         __notificacoesCache.forEach(notif => {
+            const temLink = notif.link && notif.link !== '#' && notif.link !== 'null' && notif.link !== 'undefined';
             const classeLida = notif.lida ? '' : 'font-weight: 600;';
-            html += `<div class="notificacao-item" data-id="${notif._id}" style="padding: 14px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; ${classeLida}"
-                onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='white'">
+            // Escapa o link para não quebrar o HTML
+            const linkSeguro = String(notif.link || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            const idSeguro = String(notif._id || '').replace(/"/g, '').replace(/'/g, '');
+
+            html += `<div class="notificacao-item" 
+                data-id="${idSeguro}" 
+                data-link="${linkSeguro}"
+                style="padding: 14px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; ${classeLida}"
+                onmouseover="this.style.background='#f9fafb'" 
+                onmouseout="this.style.background='white'">
                 <div style="display: flex; gap: 10px;">
                     <div style="width: 36px; height: 36px; border-radius: 50%; background: ${notif.cor || '#10b981'}; color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1rem;">
                         ${notif.icone || '📋'}</div>
                     <div style="flex: 1; min-width: 0;">
                         <strong style="display: block; font-size: 0.85rem; color: #1f2937;">${escapeHTML(notif.titulo || '')}</strong>
                         <p style="margin: 2px 0 0; font-size: 0.78rem; color: #6b7280; line-height: 1.3;">${escapeHTML(notif.mensagem || '')}</p>
+                        ${temLink ? `<span style="font-size: 0.7rem; color: #10b981; font-weight: 600; margin-top: 4px; display: inline-block;"><i class="fas fa-external-link-alt"></i> Abrir</span>` : ''}
                     </div>
                 </div></div>`;
         });
     }
-    
+
     lista.innerHTML = html;
-    
+
     // 🆕 Handlers de clique nos lembretes → abrem aba "Por Data"
     lista.querySelectorAll('.notificacao-lembrete').forEach(item => {
         item.addEventListener('click', () => {
@@ -509,10 +549,15 @@ function renderizarSinoUnificado() {
             if (lembrete) abrirLembreteRetroativo(lembrete);
         });
     });
-    
-    // Handlers das notificações normais
+
+    // ✅ Handlers das notificações normais (agora com link)
     lista.querySelectorAll('.notificacao-item[data-id]').forEach(item => {
-        item.addEventListener('click', () => abrirNotificacao(item.getAttribute('data-id')));
+        item.addEventListener('click', () => {
+            abrirNotificacao(
+                item.getAttribute('data-id'),
+                item.getAttribute('data-link')
+            );
+        });
     });
 }
 
@@ -680,12 +725,35 @@ function atualizarBadgeUnificado() {
     } else { badge.style.display = 'none'; }
 }
 
-async function abrirNotificacao(id) {
+async function abrirNotificacao(id, link) {
     try {
         const tk = localStorage.getItem('auth_token');
-        await fetch(`/api/notificacoes/${id}/lida`, { method: 'PUT', headers: { 'Authorization': `Bearer ${tk}` } });
-        carregarTudo();
-    } catch (error) { /* silencioso */ }
+
+        // 1) Marca como lida
+        if (id) {
+            try {
+                await fetch(`/api/notificacoes/${id}/lida`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${tk}` }
+                });
+            } catch (e) {
+                console.warn('[abrirNotificacao] erro ao marcar como lida:', e);
+            }
+        }
+
+        // 2) Fecha o dropdown
+        fecharNotificacoes();
+
+        // 3) Recarrega badges/lista
+        await carregarTudo();
+
+        // 4) Navega se houver link válido
+        if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') {
+            window.location.href = link;
+        }
+    } catch (error) {
+        console.error('[abrirNotificacao]', error);
+    }
 }
 
 function abrirNotificacoes() {
@@ -921,6 +989,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await carregarTurmasDeclaracao();
 
     setTimeout(iniciarSistemaNotificacoes, 500);
+    // Garante que o badge apareça logo (sem esperar 30s do polling)
+    setTimeout(async () => {
+        try { await carregarTudo(); } catch (e) { /* silencioso */ }
+    }, 1200);
     setTimeout(() => { if (safeGet('modoAutomatico')?.offsetParent !== null) iniciarScannerAutomatico(); }, 800);
 
     selecionarTipoDeclaracao('aluno');
@@ -1013,41 +1085,65 @@ document.addEventListener('click', function (event) {
 });
 
 // ============================================
-// 3. NOTIFICAÇÕES NO AVATAR (Anel pulsante)
+// 3. NOTIFICAÇÕES NO AVATAR (Badge + anel pulsante)
+// ✅ Versão corrigida: usa variáveis LOCAIS e atualiza TODOS os badges
 // ============================================
-const _originalAtualizarBadgeUnificadoSec = typeof atualizarBadgeUnificado === 'function'
-    ? atualizarBadgeUnificado
-    : null;
-
-atualizarBadgeUnificado = function () {
-    if (typeof _originalAtualizarBadgeUnificadoSec === 'function') {
-        _originalAtualizarBadgeUnificadoSec();
-    }
-
-    let total = 0;
+function atualizarBadgeUnificado() {
+    // 1) Calcula total a partir das variáveis LOCAIS (não do window!)
+    let totalNaoLidas = 0;
+    let totalLembretes = 0;
     try {
-        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
-        const lembretes = (window.__lembretesCache || []).length;
-        total = naoLidas + lembretes;
-    } catch (e) {}
-
-    const badgeDot = document.getElementById('userNotificationBadge');
-    const menuBadge = document.getElementById('menuNotifBadge');
-    const trigger = document.getElementById('userTrigger');
-
-    if (total > 0) {
-        if (badgeDot) badgeDot.style.display = 'block';
-        if (menuBadge) {
-            menuBadge.style.display = 'inline-block';
-            menuBadge.textContent = total > 99 ? '99+' : total;
+        if (typeof __totalNaoLidasServidor === 'number' && __totalNaoLidasServidor >= 0) {
+            totalNaoLidas = __totalNaoLidasServidor;
+        } else {
+            totalNaoLidas = (__notificacoesCache || []).filter(n => !n.lida).length;
         }
-        if (trigger) trigger.classList.add('tem-notificacao');
-    } else {
-        if (badgeDot) badgeDot.style.display = 'none';
-        if (menuBadge) menuBadge.style.display = 'none';
-        if (trigger) trigger.classList.remove('tem-notificacao');
+        totalLembretes = (__lembretesCache || []).length;
+    } catch (e) {
+        console.warn('[atualizarBadgeUnificado] erro ao contar:', e);
     }
-};
+    const total = totalNaoLidas + totalLembretes;
+
+    // 2) Badge do sino escondido (notificacoesBadge)
+    const badgeSino = document.getElementById('notificacoesBadge');
+    if (badgeSino) {
+        if (total > 0) {
+            badgeSino.textContent = total > 99 ? '99+' : total;
+            badgeSino.style.display = 'flex';
+        } else {
+            badgeSino.style.display = 'none';
+        }
+    }
+
+    // 3) Badge numérico no avatar (userNotificationBadge)
+    const badgeAvatar = document.getElementById('userNotificationBadge');
+    if (badgeAvatar) {
+        if (total > 0) {
+            badgeAvatar.textContent = total > 9 ? '9+' : String(total);
+            badgeAvatar.style.display = 'flex';
+        } else {
+            badgeAvatar.style.display = 'none';
+        }
+    }
+
+    // 4) Badge no item "Notificações" do menu dropdown
+    const badgeMenu = document.getElementById('menuNotifBadge');
+    if (badgeMenu) {
+        if (total > 0) {
+            badgeMenu.style.display = 'inline-block';
+            badgeMenu.textContent = total > 99 ? '99+' : total;
+        } else {
+            badgeMenu.style.display = 'none';
+        }
+    }
+
+    // 5) Anel pulsante no trigger do usuário
+    const trigger = document.getElementById('userTrigger');
+    if (trigger) {
+        if (total > 0) trigger.classList.add('tem-notificacao');
+        else trigger.classList.remove('tem-notificacao');
+    }
+}
 
 // ============================================
 // 4. BOAS-VINDAS E TURNO DINÂMICO

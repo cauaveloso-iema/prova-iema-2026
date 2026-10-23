@@ -826,3 +826,131 @@ body {
         width: 100%;
     }
 }
+
+/* ============================================
+   SEÇÕES DO MODAL (destinatário, informações, etc)
+   ============================================ */
+.form-section {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+}
+
+.form-section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e3c72;
+    margin-bottom: 6px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.form-section-title i {
+    font-size: 16px;
+    color: #667eea;
+}
+
+.form-section-hint {
+    font-size: 12px;
+    color: #64748b;
+    margin: 8px 0 14px;
+    line-height: 1.5;
+}
+
+/* ============================================
+   RADIO CARDS (Público-alvo)
+   ============================================ */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.radio-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.radio-card:hover {
+    border-color: #c7d2fe;
+    background: #f5f7ff;
+}
+
+.radio-card.selected {
+    border-color: #667eea;
+    background: #eef2ff;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.radio-card input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.radio-card-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.radio-card-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.radio-card-content strong {
+    display: block;
+    font-size: 14px;
+    color: #1f2937;
+    margin-bottom: 3px;
+}
+
+.radio-card-content small {
+    display: block;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+/* ============================================
+   RESPONSIVO
+   ============================================ */
+@media (max-width: 600px) {
+    .form-section {
+        padding: 14px;
+    }
+    .radio-card {
+        padding: 12px;
+        gap: 10px;
+    }
+    .radio-card-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 15px;
+    }
+    .radio-card-content strong {
+        font-size: 13px;
+    }
+    .radio-card-content small {
+        font-size: 11px;
+    }
+}

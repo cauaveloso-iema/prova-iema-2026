@@ -207,41 +207,68 @@ document.addEventListener('click', function (event) {
 });
 
 // ============================================
-// 3. NOTIFICAÇÕES NO AVATAR (Anel pulsante)
+// 3. NOTIFICAÇÕES NO AVATAR (Badge + anel pulsante)
+// ✅ Versão corrigida: usa variáveis LOCAIS e atualiza TODOS os badges
 // ============================================
-const _originalAtualizarBadgeUnificado = typeof atualizarBadgeUnificado === 'function'
-    ? atualizarBadgeUnificado
-    : null;
-
-atualizarBadgeUnificado = function () {
-    if (typeof _originalAtualizarBadgeUnificado === 'function') {
-        _originalAtualizarBadgeUnificado();
-    }
-
-    let total = 0;
+function atualizarBadgeUnificado() {
+    // 1) Calcula total a partir das variáveis LOCAIS (não do window!)
+    let totalNaoLidas = 0;
+    let totalLembretes = 0;
     try {
-        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
-        const lembretes = (window.__lembretesCache || []).length;
-        total = naoLidas + lembretes;
-    } catch (e) {}
-
-    const badgeDot = document.getElementById('userNotificationBadge');
-    const menuBadge = document.getElementById('menuNotifBadge');
-    const trigger = document.getElementById('userTrigger');
-
-    if (total > 0) {
-        if (badgeDot) badgeDot.style.display = 'block';
-        if (menuBadge) {
-            menuBadge.style.display = 'inline-block';
-            menuBadge.textContent = total > 99 ? '99+' : total;
+        if (typeof __totalNaoLidasServidor === 'number' && __totalNaoLidasServidor >= 0) {
+            totalNaoLidas = __totalNaoLidasServidor;
+        } else {
+            totalNaoLidas = (__notificacoesCache || []).filter(n => !n.lida).length;
         }
-        if (trigger) trigger.classList.add('tem-notificacao');
-    } else {
-        if (badgeDot) badgeDot.style.display = 'none';
-        if (menuBadge) menuBadge.style.display = 'none';
-        if (trigger) trigger.classList.remove('tem-notificacao');
+        // Protagonismo não tem lembretes retroativos, mas mantém compatibilidade
+        totalLembretes = (typeof __lembretesCache !== 'undefined' && Array.isArray(__lembretesCache))
+            ? __lembretesCache.length
+            : 0;
+    } catch (e) {
+        console.warn('[atualizarBadgeUnificado] erro ao contar:', e);
     }
-};
+    const total = totalNaoLidas + totalLembretes;
+
+    // 2) Badge do sino escondido (notificacoesBadge)
+    const badgeSino = document.getElementById('notificacoesBadge');
+    if (badgeSino) {
+        if (total > 0) {
+            badgeSino.textContent = total > 99 ? '99+' : total;
+            badgeSino.style.display = 'flex';
+        } else {
+            badgeSino.style.display = 'none';
+        }
+    }
+
+    // 3) Badge numérico no avatar (userNotificationBadge)
+    const badgeAvatar = document.getElementById('userNotificationBadge');
+    if (badgeAvatar) {
+        if (total > 0) {
+            badgeAvatar.textContent = total > 9 ? '9+' : String(total);
+            badgeAvatar.style.display = 'flex';
+        } else {
+            badgeAvatar.style.display = 'none';
+        }
+    }
+
+    // 4) Badge no item "Notificações" do menu dropdown
+    const badgeMenu = document.getElementById('menuNotifBadge');
+    if (badgeMenu) {
+        if (total > 0) {
+            badgeMenu.style.display = 'inline-block';
+            badgeMenu.textContent = total > 99 ? '99+' : total;
+        } else {
+            badgeMenu.style.display = 'none';
+        }
+    }
+
+    // 5) Anel pulsante no trigger do usuário
+    const trigger = document.getElementById('userTrigger');
+    if (trigger) {
+        if (total > 0) trigger.classList.add('tem-notificacao');
+        else trigger.classList.remove('tem-notificacao');
+    }
+}
 
 // ============================================
 // 4. BOAS-VINDAS E TURNO DINÂMICO
@@ -1825,21 +1852,28 @@ function iniciarNotificacoes() {
     });
 }
 
+// Cache do contador vindo direto do servidor (mais confiável)
+let __totalNaoLidasServidor = null;
+
 async function carregarNotificacoes() {
     try {
         const token = localStorage.getItem('auth_token');
         if (!token) return;
-        
+
+        // 1) Buscar contador (badge)
         const countResponse = await fetch('/api/notificacoes/nao-lidas/contador', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const countData = await countResponse.json();
-        
+
         if (countData.success) {
+            __totalNaoLidasServidor = Number(countData.count) || 0;
+
+            // Atualiza badge do sino
             const badge = document.getElementById('notificacoesBadge');
             if (badge) {
-                if (countData.count > 0) {
-                    badge.textContent = countData.count > 99 ? '99+' : countData.count;
+                if (__totalNaoLidasServidor > 0) {
+                    badge.textContent = __totalNaoLidasServidor > 99 ? '99+' : __totalNaoLidasServidor;
                     badge.style.display = 'inline';
                     document.getElementById('notificacoesBtn')?.classList.add('tem-notificacao');
                 } else {
@@ -1848,12 +1882,15 @@ async function carregarNotificacoes() {
                 }
             }
         }
-        
+
+        // 2) Atualiza os badges do avatar / menu
+        atualizarBadgeUnificado();
+
+        // 3) Se o dropdown estiver aberto, recarrega a lista
         const dropdown = document.getElementById('notificacoesDropdown');
-        if (dropdown && dropdown.classList.contains('show')) {
+        if (dropdown && (dropdown.classList.contains('show') || dropdown.style.display === 'block')) {
             await carregarListaNotificacoes();
         }
-        
     } catch (error) {
         console.error('Erro ao carregar notificações:', error);
     }
@@ -1862,26 +1899,54 @@ async function carregarNotificacoes() {
 async function carregarListaNotificacoes() {
     try {
         const token = localStorage.getItem('auth_token');
+        if (!token) {
+            const lista = document.getElementById('notificacoesLista');
+            if (lista) {
+                lista.innerHTML = '<p style="text-align:center; padding: 20px;">Faça login para ver as notificações.</p>';
+            }
+            return;
+        }
+
         const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
+            // ✅ Atualiza o cache LOCAL para os badges
+            if (Array.isArray(data.notificacoes)) {
+                __notificacoesCache = data.notificacoes;
+            }
+
             renderizarNotificacoes(data.notificacoes);
+
+            // ✅ Atualiza contadores
+            atualizarBadgeUnificado();
         }
-        
     } catch (error) {
         console.error('Erro ao carregar lista:', error);
+        const lista = document.getElementById('notificacoesLista');
+        if (lista) {
+            lista.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #6c757d;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px; color: #f59e0b;"></i>
+                    <p>Erro ao carregar as notificações.</p>
+                    <button onclick="carregarListaNotificacoes()" 
+                            style="margin-top: 10px; padding: 8px 16px; background: #f97316; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                        <i class="fas fa-sync-alt"></i> Tentar novamente
+                    </button>
+                </div>
+            `;
+        }
     }
 }
 
 function renderizarNotificacoes(notificacoes) {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
-    
-    if (notificacoes.length === 0) {
+
+    if (!notificacoes || notificacoes.length === 0) {
         lista.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #6c757d;">
                 <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
@@ -1890,7 +1955,7 @@ function renderizarNotificacoes(notificacoes) {
         `;
         return;
     }
-    
+
     let html = '';
     notificacoes.forEach(notif => {
         const data = new Date(notif.createdAt);
@@ -1899,20 +1964,30 @@ function renderizarNotificacoes(notificacoes) {
         const diffMin = Math.floor(diffMs / 60000);
         const diffHr = Math.floor(diffMs / 3600000);
         const diffDia = Math.floor(diffMs / 86400000);
-        
+
         let tempoTexto;
         if (diffMin < 1) tempoTexto = 'agora mesmo';
         else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
         else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
         else tempoTexto = `há ${diffDia} d`;
-        
+
         const classeLida = notif.lida ? '' : 'nao-lida';
-        
-        // 🔥 CORREÇÃO: data-attributes para evitar problemas com aspas
+
+        // ✅ Escapa atributos com segurança
+        const linkSeguro = String(notif.link || '#')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        const idSeguro = String(notif._id).replace(/"/g, '').replace(/'/g, '');
+
+        const temLink = notif.link
+            && notif.link !== '#'
+            && notif.link !== 'null'
+            && notif.link !== 'undefined';
+
         html += `
             <div class="notificacao-item ${classeLida}" 
-                 data-notif-id="${notif._id}" 
-                 data-notif-link="${escapeHTML(notif.link || '#')}">
+                 data-notif-id="${idSeguro}" 
+                 data-notif-link="${linkSeguro}">
                 <div class="notificacao-icone" style="background: ${notif.cor || '#f97316'};">
                     ${notif.icone || '📋'}
                 </div>
@@ -1921,15 +1996,16 @@ function renderizarNotificacoes(notificacoes) {
                     <div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div>
                     <div class="notificacao-tempo">
                         <i class="far fa-clock"></i> ${tempoTexto}
+                        ${temLink ? `<span style="margin-left: 8px; color: #f97316; font-weight: 600;"><i class="fas fa-external-link-alt"></i> Abrir</span>` : ''}
                     </div>
                 </div>
             </div>
         `;
     });
-    
+
     lista.innerHTML = html;
-    
-    // 🔥 CORREÇÃO: Adicionar listeners após renderizar
+
+    // ✅ Adicionar listeners após renderizar
     lista.querySelectorAll('.notificacao-item').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.getAttribute('data-notif-id');
@@ -1937,6 +2013,40 @@ function renderizarNotificacoes(notificacoes) {
             abrirNotificacao(id, link);
         });
     });
+}
+
+// ============================================
+// ✅ ABRIR NOTIFICAÇÃO (fecha dropdown, marca como lida, navega)
+// ============================================
+async function abrirNotificacao(id, link) {
+    try {
+        const tk = localStorage.getItem('auth_token');
+
+        // 1) Marca como lida
+        if (id) {
+            try {
+                await fetch(`/api/notificacoes/${id}/lida`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${tk}` }
+                });
+            } catch (e) {
+                console.warn('[abrirNotificacao] erro ao marcar como lida:', e);
+            }
+        }
+
+        // 2) Fecha o dropdown
+        fecharNotificacoes();
+
+        // 3) Atualiza badges
+        await carregarNotificacoes();
+
+        // 4) Navega se houver link válido
+        if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') {
+            window.location.href = link;
+        }
+    } catch (error) {
+        console.error('[abrirNotificacao]', error);
+    }
 }
 
 function abrirNotificacoes() {
@@ -2021,9 +2131,13 @@ async function limparMinhasNotificacoes(event) {
 
 // Iniciar quando o DOM carregar
 document.addEventListener('DOMContentLoaded', function() {
-    // Só inicia se o sino existir
     if (document.getElementById('notificacoesBtn')) {
         iniciarNotificacoes();
+
+        // ✅ Força atualização dos badges do avatar logo após o boot
+        setTimeout(async () => {
+            try { await carregarNotificacoes(); } catch (e) { /* silencioso */ }
+        }, 1200);
     }
 });
 

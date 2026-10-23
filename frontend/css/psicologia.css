@@ -784,6 +784,7 @@ body {
 .list-group-item .btn-danger:hover {
     background: linear-gradient(135deg, #dc2626, #b91c1c);
 }
+
 /* ===== CARDS RESUMO DIA ===== */
 .card-acompanhamento {
   display: flex;
@@ -1064,23 +1065,20 @@ body {
     .notificacao-item { padding: 10px 12px; }
     .notificacao-icone { width: 36px; height: 36px; font-size: 16px; }
 }
+
 /* ============================================================================
    🔧 FIX: DROPDOWN DE NOTIFICAÇÕES NO MOBILE
    ============================================================================ */
-
 @media (max-width: 768px) {
-    /* Container pai não deve mais ser relative no mobile
-       (para o dropdown poder escapar) */
     .notificacoes-container {
         position: static !important;
     }
     
-    /* Dropdown fixo na viewport */
     .notificacoes-dropdown {
         position: fixed !important;
-        top: 70px !important;           /* Logo abaixo do header */
-        left: 10px !important;          /* Margem esquerda */
-        right: 10px !important;         /* Margem direita */
+        top: 70px !important;
+        left: 10px !important;
+        right: 10px !important;
         width: auto !important;
         max-width: none !important;
         max-height: calc(100vh - 90px) !important;
@@ -1095,17 +1093,10 @@ body {
     }
     
     @keyframes dropdown-slide-down {
-        from { 
-            opacity: 0; 
-            transform: translateY(-15px); 
-        }
-        to { 
-            opacity: 1; 
-            transform: translateY(0); 
-        }
+        from { opacity: 0; transform: translateY(-15px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
-    /* Header do dropdown */
     .notificacoes-header {
         padding: 12px 16px !important;
         border-radius: 16px 16px 0 0 !important;
@@ -1115,12 +1106,10 @@ body {
         font-size: 15px !important;
     }
     
-    /* Lista interna */
     #notificacoesLista {
         max-height: calc(100vh - 200px) !important;
     }
     
-    /* Item de notificação */
     .notificacao-item {
         padding: 12px 14px !important;
     }
@@ -1131,14 +1120,12 @@ body {
         font-size: 15px !important;
     }
     
-    /* Footer */
     .notificacao-footer {
         padding: 12px 16px !important;
         border-radius: 0 0 16px 16px !important;
     }
 }
 
-/* Para telas MUITO pequenas */
 @media (max-width: 400px) {
     .notificacoes-dropdown {
         top: 65px !important;
@@ -1147,17 +1134,9 @@ body {
         max-height: calc(100vh - 80px) !important;
     }
     
-    .notificacoes-header h3 {
-        font-size: 14px !important;
-    }
-    
-    .notificacao-titulo {
-        font-size: 13px !important;
-    }
-    
-    .notificacao-mensagem {
-        font-size: 12px !important;
-    }
+    .notificacoes-header h3 { font-size: 14px !important; }
+    .notificacao-titulo { font-size: 13px !important; }
+    .notificacao-mensagem { font-size: 12px !important; }
 }
 
 /* 🔥 CARD BIBLIOTECA */
@@ -1186,7 +1165,6 @@ body {
     gap: 15px;
 }
 
-/* Relógio (Lado Esquerdo) */
 .relogio-card {
     background: white;
     padding: 10px 20px;
@@ -1215,7 +1193,6 @@ body {
     font-weight: 600;
 }
 
-/* Menu do Usuário (Lado Direito) */
 .user-menu-container {
     position: relative;
 }
@@ -1229,6 +1206,7 @@ body {
     border-radius: 60px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     transition: transform 0.2s;
+    position: relative;
 }
 
 .user-trigger:hover {
@@ -1241,6 +1219,7 @@ body {
     align-items: center;
     justify-content: center;
     margin-right: 12px;
+    overflow: visible !important;
 }
 
 .user-avatar {
@@ -1264,25 +1243,46 @@ body {
     object-fit: cover;
 }
 
-/* 🔥 ANEL DE NOTIFICAÇÃO NA FOTO */
+/* ============================================
+   🔥 BADGE NUMÉRICO NO AVATAR (ÚNICA DEFINIÇÃO)
+   ============================================ */
 .user-notification-badge {
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    width: 14px;
-    height: 14px;
-    background: #ef4444;
-    border: 2px solid white;
-    border-radius: 50%;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-    animation: pulse-ring 2s infinite;
     display: none;
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 2px solid white;
+    align-items: center;
+    justify-content: center;
+    animation: pulse-badge 2s infinite;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+    line-height: 1;
+    z-index: 100;
 }
 
-@keyframes pulse-ring {
+@keyframes pulse-badge {
     0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-    70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.user-trigger.tem-notificacao {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05) !important;
+    animation: pulse-ring-trigger 2s infinite !important;
+}
+
+@keyframes pulse-ring-trigger {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05); }
+    50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0), 0 4px 15px rgba(0, 0, 0, 0.05); }
 }
 
 .user-trigger.tem-notificacao .user-avatar {
@@ -1355,7 +1355,6 @@ body {
     flex: 1;
 }
 
-/* Cores dos ícones */
 .bg-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
 .bg-blue { background: linear-gradient(135deg, #14b8a6, #0d9488); }
 .bg-green { background: linear-gradient(135deg, #10b981, #059669); }
@@ -1378,7 +1377,6 @@ body {
     margin-left: auto;
 }
 
-/* Ajuste Mobile */
 @media (max-width: 768px) {
     .header-top {
         flex-direction: column;
@@ -1399,45 +1397,6 @@ body {
         right: -10px;
         width: 220px;
     }
-}
-
-/* ============================================ */
-/* AUTOCOMPLETE                                  */
-/* ============================================ */
-.autocomplete-aluno-wrapper { position: relative; }
-.autocomplete-aluno-list {
-    position: absolute; top: 100%; left: 0; right: 0;
-    background: white; border: 2px solid #14b8a6; border-radius: 10px;
-    max-height: 280px; overflow-y: auto; z-index: 1000;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15); margin-top: 4px;
-}
-.autocomplete-aluno-list::-webkit-scrollbar { width: 6px; }
-.autocomplete-aluno-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-.autocomplete-aluno-item {
-    padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f3f4f6;
-    transition: background 0.15s; display: flex; justify-content: space-between;
-    align-items: center; gap: 10px;
-}
-.autocomplete-aluno-item:last-child { border-bottom: none; }
-.autocomplete-aluno-item:hover, .autocomplete-aluno-item.selected { background: #f0fdfa; }
-.autocomplete-aluno-item .aluno-nome { font-weight: 600; color: #1f2937; flex: 1; }
-.autocomplete-aluno-item .aluno-nome mark {
-    background: #fef3c7; color: #92400e; padding: 0 2px; border-radius: 3px; font-weight: 700;
-}
-.autocomplete-aluno-item .aluno-info { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.autocomplete-aluno-item .aluno-turma {
-    background: #ccfbf1; color: #115e59; font-size: 11px;
-    padding: 2px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap;
-}
-.autocomplete-aluno-item .aluno-matricula { font-size: 10px; color: #9ca3af; }
-.autocomplete-aluno-empty { padding: 16px; text-align: center; color: #9ca3af; font-size: 13px; }
-.autocomplete-aluno-loading {
-    padding: 16px; text-align: center; color: #6b7280; font-size: 13px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-}
-.autocomplete-aluno-loading::before {
-    content: ''; width: 14px; height: 14px; border: 2px solid #e5e7eb;
-    border-top: 2px solid #14b8a6; border-radius: 50%; animation: spin 0.8s linear infinite;
 }
 
 /* ============================================ */
@@ -1680,9 +1639,6 @@ body {
     50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
 }
 
-/* ============================================ */
-/* 🆕 ALERTA DE ATENDIMENTOS >24H               */
-/* ============================================ */
 .alerta-24h-container {
     background: #fef2f2;
     border-left: 4px solid #dc2626;

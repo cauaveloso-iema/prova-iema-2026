@@ -160,20 +160,6 @@ function formatarDataBR(dataStr) {
 // ============================================
 // 📄 UTILITÁRIO: GERADOR DE CSV PROFISSIONAL
 // ============================================
-/**
- * Gera CSV profissional com cabeçalho institucional, metadados, tabela e rodapé.
- *
- * @param {Object} opts
- * @param {string}   opts.titulo        - Título do relatório
- * @param {string}  [opts.subtitulo]    - Subtítulo
- * @param {string}  [opts.setor]        - Setor (default: "Assistente Social")
- * @param {Array}    opts.colunas       - [{ label, key, format? }]
- * @param {Array}    opts.registros     - Dados
- * @param {Array<{label, valor}>} [opts.filtros] - Filtros aplicados
- * @param {string}   opts.nomeArquivo   - Nome do arquivo (sem extensão)
- * @param {string}  [opts.observacoes]  - Observações extras
- * @param {Object}  [opts.metricas]     - { label: valor } extras
- */
 function gerarBaixarCSV(opts) {
     const {
         titulo = 'Relatório',
@@ -619,41 +605,6 @@ document.addEventListener('click', function(event) {
         if (chevron) chevron.style.transform = 'rotate(0deg)';
     }
 });
-
-// ============================================
-// 3. NOTIFICAÇÕES NO AVATAR (Anel pulsante)
-// ============================================
-const _originalAtualizarBadgeUnificado = typeof atualizarBadgeUnificado === 'function' ? atualizarBadgeUnificado : null;
-
-atualizarBadgeUnificado = function() {
-    if (typeof _originalAtualizarBadgeUnificado === 'function') {
-        _originalAtualizarBadgeUnificado();
-    }
-    
-    let total = 0;
-    try {
-        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
-        const lembretes = (window.__lembretesCache || []).length;
-        total = naoLidas + lembretes;
-    } catch(e) {}
-
-    const badgeDot = document.getElementById('userNotificationBadge');
-    const menuBadge = document.getElementById('menuNotifBadge');
-    const trigger = document.getElementById('userTrigger');
-
-    if (total > 0) {
-        if (badgeDot) badgeDot.style.display = 'block';
-        if (menuBadge) {
-            menuBadge.style.display = 'inline-block';
-            menuBadge.textContent = total > 99 ? '99+' : total;
-        }
-        if (trigger) trigger.classList.add('tem-notificacao');
-    } else {
-        if (badgeDot) badgeDot.style.display = 'none';
-        if (menuBadge) menuBadge.style.display = 'none';
-        if (trigger) trigger.classList.remove('tem-notificacao');
-    }
-};
 
 // ============================================
 // 4. BOAS-VINDAS E TURNO DINÂMICO
@@ -3986,16 +3937,11 @@ function gerarUUID() {
     });
 }
 
-/**
- * Marca/desmarca necessidade de assinatura.
- * Cria sessão + gera QR Code + abre modal.
- */
 async function toggleNecessitaAssinatura(modulo) {
     const check = safeGet(`${modulo}NecessitaAssinatura`);
     if (!check) return;
     
     if (check.checked) {
-        // 1. Monta snapshot dos dados atuais
         const snapshot = montarSnapshotAtendimento(modulo);
         
         if (!snapshot.alunoId) {
@@ -4004,12 +3950,10 @@ async function toggleNecessitaAssinatura(modulo) {
             return;
         }
         
-        // 2. Gera ID único para a sessão
         const sessaoId = gerarUUID();
         estadoSessaoAssinatura[modulo].sessaoId = sessaoId;
         estadoSessaoAssinatura[modulo].assinaturaCapturada = null;
         
-        // 3. Cria a sessão no backend
         try {
             const response = await fetch('/api/sessoes-assinatura', {
                 method: 'POST',
@@ -4029,7 +3973,6 @@ async function toggleNecessitaAssinatura(modulo) {
             
             console.log('✅ Sessão criada:', sessaoId);
             
-            // 4. Gera QR Code
             const urlAssinatura = `${window.location.origin}/assistente-social.html?assinatura=${sessaoId}`;
             
             try {
@@ -4055,10 +3998,7 @@ async function toggleNecessitaAssinatura(modulo) {
                     `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(urlAssinatura)}`;
             }
             
-            // 5. Abre o modal com QR Code
             abrirModalAssinatura(modulo, urlAssinatura);
-            
-            // 6. Inicia monitoramento
             iniciarMonitoramentoSessao(modulo, sessaoId);
             
             mostrarToastConcluido('📱 QR Code gerado! Peça para o responsável escanear.', 'info');
@@ -4070,7 +4010,6 @@ async function toggleNecessitaAssinatura(modulo) {
             estadoSessaoAssinatura[modulo].sessaoId = null;
         }
     } else {
-        // Desmarcou → cancela a sessão
         const sessaoId = estadoSessaoAssinatura[modulo].sessaoId;
         if (sessaoId) {
             try {
@@ -4089,9 +4028,6 @@ async function toggleNecessitaAssinatura(modulo) {
     }
 }
 
-/**
- * Monta snapshot dos dados atuais para exibir na tela de assinatura.
- */
 function montarSnapshotAtendimento(modulo) {
     return {
         alunoId: currentAluno?.id,
@@ -4110,9 +4046,6 @@ function montarSnapshotAtendimento(modulo) {
     };
 }
 
-/**
- * Abre o modal com QR Code.
- */
 function abrirModalAssinatura(modulo, urlAssinatura) {
     const antigo = safeGet('modalAssinaturaQR');
     if (antigo) antigo.remove();
@@ -4590,7 +4523,6 @@ async function mostrarTelaAssinatura(sessaoId) {
     }
 }
 
-// 🆕 Função auxiliar para redimensionar o canvas quando a tela gira
 function handleResizeCanvasTela() {
     const canvas = safeGet('canvasAssinatura');
     const wrapper = safeGet('canvasWrapper');
@@ -4819,6 +4751,7 @@ async function salvarAssinaturaTela() {
 let notificacoesInterval = null;
 let __notificacoesCache = [];
 let __lembretesCache = [];
+let __totalNaoLidasServidor = null;
 
 function isWebView() {
     return /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
@@ -4889,11 +4822,12 @@ function confirmarInterno(mensagem) {
 
 function iniciarSistemaNotificacoesUnificado() {
     if (!document.getElementById('notificacoesBtn')) return;
-    
+
     carregarTudo();
+
     if (notificacoesInterval) clearInterval(notificacoesInterval);
     notificacoesInterval = setInterval(carregarTudo, 30000);
-    
+
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('notificacoesDropdown');
         const btn = document.getElementById('notificacoesBtn');
@@ -4914,16 +4848,30 @@ async function carregarTudo() {
 
 async function carregarNotificacoesSistema() {
     try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
-        
+        const tk = localStorage.getItem('auth_token');
+        if (!tk) return;
+
         const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${tk}` }
         });
         const data = await response.json();
         if (data.success) {
             __notificacoesCache = data.notificacoes || [];
         }
+
+        try {
+            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
+                headers: { 'Authorization': `Bearer ${tk}` }
+            });
+            if (countRes.ok) {
+                const countData = await countRes.json();
+                __totalNaoLidasServidor = Number(countData.count) || 0;
+            }
+        } catch (e) {
+            __totalNaoLidasServidor = null;
+        }
+
+        atualizarBadgeUnificado();
     } catch (error) {
         console.error('Erro ao carregar notificações:', error);
     }
@@ -4931,15 +4879,16 @@ async function carregarNotificacoesSistema() {
 
 async function carregarLembretesRemarcacao() {
     try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
-        
+        const tk = localStorage.getItem('auth_token');
+        if (!tk) return;
+
         const response = await fetch('/api/assistente-social/remarcacoes/pendentes', {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${tk}` }
         });
         const contentType = response.headers.get('content-type') || '';
         if (!response.ok || !contentType.includes('application/json')) {
             __lembretesCache = [];
+            atualizarBadgeUnificado();
             return;
         }
         const data = await response.json();
@@ -4948,18 +4897,21 @@ async function carregarLembretesRemarcacao() {
         } else {
             __lembretesCache = [];
         }
+
+        atualizarBadgeUnificado();
     } catch (error) {
         __lembretesCache = [];
+        atualizarBadgeUnificado();
     }
 }
 
 function renderizarSinoUnificado() {
     const lista = document.getElementById('notificacoesLista');
     if (!lista) return;
-    
+
     const temNotificacoes = __notificacoesCache.length > 0;
     const temLembretes = __lembretesCache.length > 0;
-    
+
     if (!temNotificacoes && !temLembretes) {
         lista.innerHTML = `
             <div class="notificacoes-vazio">
@@ -4968,9 +4920,9 @@ function renderizarSinoUnificado() {
             </div>`;
         return;
     }
-    
+
     let html = '';
-    
+
     if (temLembretes) {
         html += `
             <div class="notificacoes-secao">
@@ -4979,24 +4931,24 @@ function renderizarSinoUnificado() {
                     <span>Lembretes de Remarcação</span>
                     <span class="badge-count">${__lembretesCache.length}</span>
                 </div>`;
-        
+
         const ordem = { atrasado: 0, iminente: 1, proximo: 2, hoje: 3, amanha: 4, futuro: 5 };
         const lembretesOrdenados = [...__lembretesCache].sort((a, b) => {
             return ordem[calcularNivelAlerta(a).nivel] - ordem[calcularNivelAlerta(b).nivel];
         });
-        
+
         lembretesOrdenados.forEach(r => {
             const nivel = calcularNivelAlerta(r);
             let itemClass = '';
             let badgeClass = 'futuro';
             let badgeText = nivel.label;
-            
+
             if (nivel.nivel === 'atrasado') { itemClass = 'atrasado'; badgeClass = 'atrasado'; badgeText = `⚠️ ${nivel.label}`; }
             else if (nivel.nivel === 'iminente') { itemClass = 'urgente'; badgeClass = 'urgente'; badgeText = `🔴 ${nivel.label}`; }
             else if (nivel.nivel === 'proximo') { itemClass = 'proximo'; badgeClass = 'proximo'; badgeText = `🟠 ${nivel.label}`; }
             else if (nivel.nivel === 'hoje') { itemClass = 'hoje'; badgeClass = 'hoje'; badgeText = `🟡 Hoje ${r.horarioRemarcacao}`; }
             else if (nivel.nivel === 'amanha') { itemClass = 'amanha'; badgeClass = 'amanha'; badgeText = `🔵 Amanhã ${r.horarioRemarcacao}`; }
-            
+
             html += `
                 <div class="lembrete-item ${itemClass}">
                     <div class="lembrete-header">
@@ -5024,10 +4976,10 @@ function renderizarSinoUnificado() {
                     </div>
                 </div>`;
         });
-        
+
         html += `</div>`;
     }
-    
+
     if (temNotificacoes) {
         html += `
             <div class="notificacoes-secao">
@@ -5036,7 +4988,7 @@ function renderizarSinoUnificado() {
                     <span>Notificações do Sistema</span>
                     <span class="badge-count" style="background: #8b5cf6;">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
                 </div>`;
-        
+
         __notificacoesCache.forEach(notif => {
             const data = new Date(notif.createdAt);
             const agora = new Date();
@@ -5044,19 +4996,22 @@ function renderizarSinoUnificado() {
             const diffMin = Math.floor(diffMs / 60000);
             const diffHr = Math.floor(diffMs / 3600000);
             const diffDia = Math.floor(diffMs / 86400000);
-            
+
             let tempoTexto;
             if (diffMin < 1) tempoTexto = 'agora mesmo';
             else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
             else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
             else tempoTexto = `há ${diffDia} d`;
-            
+
             const classeLida = notif.lida ? '' : 'nao-lida';
-            
+            const linkSeguro = String(notif.link || '#').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            const idSeguro = String(notif._id || '').replace(/"/g, '').replace(/'/g, '');
+            const temLink = notif.link && notif.link !== '#' && notif.link !== 'null' && notif.link !== 'undefined';
+
             html += `
                 <div class="notificacao-item ${classeLida}"
-                     data-notif-id="${notif._id}"
-                     data-notif-link="${escapeHTML(notif.link || '#')}"
+                     data-notif-id="${idSeguro}"
+                     data-notif-link="${linkSeguro}"
                      style="cursor: pointer;">
                     <div class="notificacao-icone" style="background: ${notif.cor || '#8b5cf6'};">
                         ${notif.icone || '📋'}
@@ -5064,16 +5019,19 @@ function renderizarSinoUnificado() {
                     <div class="notificacao-conteudo">
                         <div class="notificacao-titulo">${escapeHTML(notif.titulo || '')}</div>
                         <div class="notificacao-mensagem">${escapeHTML(notif.mensagem || '')}</div>
-                        <div class="notificacao-tempo"><i class="far fa-clock"></i> ${tempoTexto}</div>
+                        <div class="notificacao-tempo">
+                            <i class="far fa-clock"></i> ${tempoTexto}
+                            ${temLink ? `<span style="margin-left: 8px; color: #8b5cf6; font-weight: 600;"><i class="fas fa-external-link-alt"></i> Abrir</span>` : ''}
+                        </div>
                     </div>
                 </div>`;
         });
-        
+
         html += `</div>`;
     }
-    
+
     lista.innerHTML = html;
-    
+
     lista.querySelectorAll('.notificacao-item').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.getAttribute('data-notif-id');
@@ -5083,28 +5041,96 @@ function renderizarSinoUnificado() {
     });
 }
 
+async function abrirNotificacao(id, link) {
+    try {
+        const tk = localStorage.getItem('auth_token');
+
+        if (id) {
+            try {
+                await fetch(`/api/notificacoes/${id}/lida`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${tk}` }
+                });
+            } catch (e) {
+                console.warn('[abrirNotificacao] erro ao marcar como lida:', e);
+            }
+        }
+
+        fecharNotificacoes();
+        await carregarTudo();
+
+        if (link && link !== '#' && link !== 'null' && link !== 'undefined' && String(link).trim() !== '') {
+            window.location.href = link;
+        }
+    } catch (error) {
+        console.error('[abrirNotificacao]', error);
+        mostrarNotificacaoInterna('Erro ao processar notificação', 'error');
+    }
+}
+
 function atualizarBadgeUnificado() {
-    const badge = document.getElementById('notificacoesBadge');
-    const btn = document.getElementById('notificacoesBtn');
-    if (!badge || !btn) return;
-    
-    const total = __notificacoesCache.filter(n => !n.lida).length + __lembretesCache.length;
-    
-    if (total > 0) {
-        badge.textContent = total > 99 ? '99+' : total;
-        badge.style.display = 'inline';
-        
-        const temUrgente = __lembretesCache.some(r => calcularNivelAlerta(r).urgente);
-        if (temUrgente) {
-            btn.classList.add('tem-notificacao');
-            badge.style.background = '#dc2626';
+    let totalNaoLidas = 0;
+    let totalLembretes = 0;
+    try {
+        if (typeof __totalNaoLidasServidor === 'number' && __totalNaoLidasServidor >= 0) {
+            totalNaoLidas = __totalNaoLidasServidor;
         } else {
-            btn.classList.remove('tem-notificacao');
-            badge.style.background = '#ef4444';
+            totalNaoLidas = (__notificacoesCache || []).filter(n => !n.lida).length;
+        }
+        totalLembretes = (__lembretesCache || []).length;
+    } catch (e) {
+        console.warn('[atualizarBadgeUnificado] erro ao contar:', e);
+    }
+    const total = totalNaoLidas + totalLembretes;
+
+    console.log(`[atualizarBadgeUnificado] 📊 Total: ${total} (${totalNaoLidas} notif + ${totalLembretes} lembretes)`);
+
+    const badgeSino = document.getElementById('notificacoesBadge');
+    const btnSino = document.getElementById('notificacoesBtn');
+    if (badgeSino) {
+        if (total > 0) {
+            badgeSino.textContent = total > 99 ? '99+' : total;
+            badgeSino.style.setProperty('display', 'inline', 'important');
+        } else {
+            badgeSino.style.setProperty('display', 'none', 'important');
+        }
+    }
+
+    const badgeAvatar = document.getElementById('userNotificationBadge');
+    if (badgeAvatar) {
+        if (total > 0) {
+            badgeAvatar.textContent = total > 9 ? '9+' : String(total);
+            badgeAvatar.style.setProperty('display', 'flex', 'important');
+            console.log(`[atualizarBadgeUnificado] ✅ Badge avatar exibindo: "${badgeAvatar.textContent}"`);
+        } else {
+            badgeAvatar.style.setProperty('display', 'none', 'important');
+            console.log('[atualizarBadgeUnificado] Badge avatar ocultado (total = 0)');
         }
     } else {
-        badge.style.display = 'none';
-        btn.classList.remove('tem-notificacao');
+        console.warn('[atualizarBadgeUnificado] ❌ #userNotificationBadge NÃO ENCONTRADO');
+    }
+
+    const badgeMenu = document.getElementById('menuNotifBadge');
+    if (badgeMenu) {
+        if (total > 0) {
+            badgeMenu.style.setProperty('display', 'inline-block', 'important');
+            badgeMenu.textContent = total > 99 ? '99+' : total;
+        } else {
+            badgeMenu.style.setProperty('display', 'none', 'important');
+        }
+    }
+
+    const trigger = document.getElementById('userTrigger');
+    if (trigger) {
+        if (total > 0) trigger.classList.add('tem-notificacao');
+        else trigger.classList.remove('tem-notificacao');
+    }
+
+    if (badgeSino && total > 0) {
+        const temUrgente = (__lembretesCache || []).some(r => calcularNivelAlerta(r).urgente);
+        badgeSino.style.background = temUrgente ? '#dc2626' : '#ef4444';
+        if (temUrgente && btnSino) btnSino.classList.add('tem-novidade');
+        else if (btnSino) btnSino.classList.remove('tem-novidade');
     }
 }
 
@@ -5116,7 +5142,6 @@ function abrirNotificacoes() {
         carregarTudo();
     }
 }
-
 
 async function marcarTodasLidas() {
     try {
@@ -5165,6 +5190,10 @@ async function limparMinhasNotificacoes(event) {
 
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => iniciarSistemaNotificacoesUnificado(), 500);
+
+    setTimeout(async () => {
+        try { await carregarTudo(); } catch (e) { /* silencioso */ }
+    }, 1200);
 });
 
 window.addEventListener('beforeunload', () => {

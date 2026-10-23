@@ -2,7 +2,6 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
 
 // ============================================
 // LAZY LOADING
@@ -36,8 +35,6 @@ function getPeriodoFaltaFormatado(doc) {
     if (iniDia.getTime() === fimDia.getTime()) return fmt(iniDia);
     return `${fmt(iniDia)} a ${fmt(fimDia)}`;
 }
-
-// 🆕 Helper para formatar Entrada/Saída
 function getEntradaCompleta(doc) {
     if (!doc) return null;
     const temData = !!doc.dataEntrada;
@@ -48,7 +45,6 @@ function getEntradaCompleta(doc) {
     if (temHora) partes.push(temData ? `às ${doc.horarioEntrada}` : doc.horarioEntrada);
     return partes.join(' ');
 }
-
 function getSaidaCompleta(doc) {
     if (!doc) return null;
     const temData = !!doc.dataSaida;
@@ -212,7 +208,6 @@ router.get('/verificar/:alunoId', authenticateToken, verificarRecepcao, async (r
             periodoFaltaInicio: a.periodoFaltaInicio,
             periodoFaltaFim: a.periodoFaltaFim,
             periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
-            // 🆕 ENTRADA/SAÍDA
             dataEntrada: a.dataEntrada,
             dataSaida: a.dataSaida,
             dataEntradaFormatada: a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : null,
@@ -283,7 +278,6 @@ router.get('/autorizacao/:id', authenticateToken, verificarRecepcao, async (req,
                 periodoFaltaInicio: a.periodoFaltaInicio,
                 periodoFaltaFim: a.periodoFaltaFim,
                 periodoFaltaFormatado: getPeriodoFaltaFormatado(a),
-                // 🆕 ENTRADA/SAÍDA
                 dataEntrada: a.dataEntrada,
                 dataSaida: a.dataSaida,
                 dataEntradaFormatada: a.dataEntrada ? new Date(a.dataEntrada).toLocaleDateString('pt-BR') : null,
@@ -318,7 +312,7 @@ router.get('/autorizacao/:id', authenticateToken, verificarRecepcao, async (req,
 });
 
 // ============================================
-// 🔥 6.1. ATUALIZAR ASSINATURA DA AUTORIZAÇÃO
+// 6.1 ATUALIZAR ASSINATURA
 // ============================================
 router.put('/autorizacao/:id/assinatura', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
@@ -349,7 +343,6 @@ router.put('/autorizacao/:id/assinatura', authenticateToken, verificarRecepcao, 
         autorizacao.assinadaPorNome = (assinanteNome || req.userNome || 'Recepção').toString().slice(0, 120);
 
         await autorizacao.save();
-
         console.log(`✅ [Recepção] Assinatura salva na autorização ${id} por ${req.userNome}`);
 
         res.json({
@@ -366,7 +359,7 @@ router.put('/autorizacao/:id/assinatura', authenticateToken, verificarRecepcao, 
 });
 
 // ============================================
-// 🔥 6.2. REMOVER ASSINATURA DA AUTORIZAÇÃO
+// 6.2 REMOVER ASSINATURA
 // ============================================
 router.delete('/autorizacao/:id/assinatura', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
@@ -390,7 +383,6 @@ router.delete('/autorizacao/:id/assinatura', authenticateToken, verificarRecepca
         autorizacao.assinadaPorNome = null;
 
         await autorizacao.save();
-
         console.log(`🗑️ [Recepção] Assinatura removida da autorização ${id} por ${req.userNome}`);
 
         res.json({ success: true, message: 'Assinatura removida' });
@@ -401,7 +393,7 @@ router.delete('/autorizacao/:id/assinatura', authenticateToken, verificarRecepca
 });
 
 // ============================================
-// 🔥 6.3. CRIAR SESSÃO DE ASSINATURA (QR CODE)
+// 6.3 CRIAR SESSÃO DE ASSINATURA
 // ============================================
 router.post('/sessoes-assinatura', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
@@ -435,13 +427,8 @@ router.post('/sessoes-assinatura', authenticateToken, verificarRecepcao, async (
             tipo: 'autorizacao',
             status: 'aguardando',
             dadosAtendimento: {
-                alunoId,
-                alunoNome,
-                alunoTurma,
-                alunoMatricula,
-                alunoCurso,
-                responsavelNome,
-                tipoAssinante: 'responsavel'
+                alunoId, alunoNome, alunoTurma, alunoMatricula, alunoCurso,
+                responsavelNome, tipoAssinante: 'responsavel'
             },
             criadoPor: req.userId,
             criadoPorNome: req.userNome,
@@ -449,7 +436,6 @@ router.post('/sessoes-assinatura', authenticateToken, verificarRecepcao, async (
         });
 
         await sessao.save();
-
         console.log(`📱 [Recepção] Sessão de assinatura criada: ${sessaoId} (expira em 30min)`);
 
         res.json({ success: true, sessaoId, expiraEm });
@@ -460,7 +446,7 @@ router.post('/sessoes-assinatura', authenticateToken, verificarRecepcao, async (
 });
 
 // ============================================
-// 🔥 6.4. CONSULTAR SESSÃO (polling da Recepção)
+// 6.4 CONSULTAR SESSÃO
 // ============================================
 router.get('/sessoes-assinatura/:sessaoId', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
@@ -495,7 +481,7 @@ router.get('/sessoes-assinatura/:sessaoId', authenticateToken, verificarRecepcao
 });
 
 // ============================================
-// 🔥 6.5. CANCELAR SESSÃO
+// 6.5 CANCELAR SESSÃO
 // ============================================
 router.delete('/sessoes-assinatura/:sessaoId', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
@@ -519,7 +505,7 @@ router.delete('/sessoes-assinatura/:sessaoId', authenticateToken, verificarRecep
 });
 
 // ============================================
-// 7. LISTAR AUTORIZAÇÕES DO DIA (COM PAGINAÇÃO)
+// 7. LISTAR AUTORIZAÇÕES DO DIA
 // ============================================
 router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (req, res) => {
     try {
@@ -569,7 +555,6 @@ router.get('/autorizacoes-do-dia', authenticateToken, verificarRecepcao, async (
                 alunoNome: a.alunoNome,
                 alunoMatricula: a.alunoMatricula,
                 alunoTurma: a.alunoTurma,
-                // 🆕 Entrada / Saída na listagem do dia
                 entradaCompleta: getEntradaCompleta(a),
                 saidaCompleta: getSaidaCompleta(a),
                 horarioEntrada: a.horarioEntrada,

@@ -1482,25 +1482,57 @@ body {
     object-fit: cover;
 }
 
-/* 🔥 ANEL DE NOTIFICAÇÃO NA FOTO */
-.user-notification-badge {
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    width: 14px;
-    height: 14px;
-    background: #ef4444;
-    border: 2px solid white;
-    border-radius: 50%;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-    animation: pulse-ring 2s infinite;
-    display: none; /* Oculto por padrão */
+/* ============================================
+   🔥 BADGE NUMÉRICO NO AVATAR (versão correta)
+   ============================================ */
+
+/* Garante que o badge possa escapar do avatar */
+.user-avatar-wrapper {
+    position: relative !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+    overflow: visible !important;
 }
 
-@keyframes pulse-ring {
+.user-notification-badge {
+    display: none;
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 2px solid white;
+    align-items: center;
+    justify-content: center;
+    animation: pulse-badge 2s infinite;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+    line-height: 1;
+    z-index: 100;
+}
+
+@keyframes pulse-badge {
     0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-    70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.user-trigger.tem-notificacao {
+    border: 2px solid #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2), 0 5px 15px rgba(0,0,0,0.1) !important;
+    animation: pulse-ring-trigger 2s infinite !important;
+}
+
+@keyframes pulse-ring-trigger {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2), 0 5px 15px rgba(0,0,0,0.1); }
+    50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0), 0 5px 15px rgba(0,0,0,0.1); }
 }
 
 .user-trigger.tem-notificacao .user-avatar {

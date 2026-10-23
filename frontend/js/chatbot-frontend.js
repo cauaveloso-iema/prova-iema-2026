@@ -1,1327 +1,1312 @@
-// ============================================
-// chatbot-frontend.js - Frontend do Chatbot (VERSÃO COMPLETA CORRIGIDA)
-// ============================================
+// ============================================================================
+// CALENDÁRIO ACADÊMICO — FRONTEND (VERSÃO FINAL CORRIGIDA)
+// ============================================================================
 
-class SistemaProvasChatbot {
+class CalendarioAcademico {
     constructor() {
-        this.isOpen = false;
-        this.isTyping = false;
-        this.conversation = [];
-        this.userData = this.getUserData();
-        this.currentPage = this.detectCurrentPage();
-        this.sessionId = this.generateSessionId();
-        
-        this.config = {
-            maxMessageLength: 500,
-            maxConversationHistory: 50,
-            responseTimeout: 30000,
-            autoCloseInactive: 600000
-        };
-        
-        this.inactivityTimer = null;
-        this.messageQueue = [];
-        this.isProcessing = false;
-        this.connectionStatus = 'online';
-        this.hasNewMessages = false;
-        
-        this.init();
-        this.setupEventListeners();
-        this.loadConversation();
-        this.networkMonitor();
-        
-        setTimeout(() => this.showWelcomeMessage(), 1000);
-    }
+        this.apiBase = '/api/calendario';
+        this.eventos = [];
+        this.dataAtual = new Date();
+        this.mesAtual = this.dataAtual.getMonth();
+        this.anoAtual = this.dataAtual.getFullYear();
+        this.usuario = JSON.parse(localStorage.getItem('user_data') || '{}');
+        this.filtros = { tipo: 'todos', professor: 'todos', turma: 'todas' };
+        this.podeCriar = false;
+        this.modoLeitura = true;
+        this.professores = [];
+        this.setoresDisponiveis = [];
+        this.turmas = [];
+        this.eventoEditando = null;
 
-    generateSessionId() {
-        return 'chatbot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-    
-    getUserData() {
-        try {
-            const userData = localStorage.getItem('user_data');
-            return userData ? JSON.parse(userData) : { role: 'guest' };
-        } catch (error) {
-            return { role: 'guest' };
+        this.rolesComFiltroTurma = ['admin', 'super_admin', 'professor'];
+        this.rolesComFiltroProfessor = ['admin', 'super_admin'];
+        this.rolesCriacaoGarantida = ['admin', 'super_admin', 'professor'];
+
+        if (this.rolesCriacaoGarantida.includes(this.usuario.role)) {
+            this.podeCriar = true;
+            this.modoLeitura = false;
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
         }
     }
 
-    // ============================================
-    // DETECTAR PERFIL - VERSÃO COMPLETA
-    // ============================================
-    detectCurrentPage() {
-        const url = window.location.href.toLowerCase();
-        const path = window.location.pathname.toLowerCase();
-        
-        // Função auxiliar para verificar múltiplos termos
-        const urlMatch = (termos) => termos.some(t => url.includes(t) || path.includes(t));
-        
-        // ========== PERFIS ESPECÍFICOS ==========
-        
-        // GESTÃO GERAL
-        if (urlMatch(['gestao-geral', 'gestao_geral', 'gestao geral', 'gestao-geral.html'])) {
-            console.log('📍 Página GESTÃO GERAL detectada');
-            return 'gestaoGeral';
-        }
-        
-        // ENFERMARIA
-        if (urlMatch(['enfermaria', 'enfermaria.html'])) {
-            console.log('📍 Página ENFERMARIA detectada');
-            return 'enfermaria';
-        }
-        
-        // COZINHA
-        if (urlMatch(['cozinha', 'cozinha.html', 'cozinha-dashboard', 'cozinha-dashboard.html'])) {
-            console.log('📍 Página COZINHA detectada');
-            return 'cozinha';
-        }
-        
-        // COORDENAÇÃO DE PÁTIO
-        if (urlMatch(['coordenacao-patio', 'coordenacao_patio', 'coordenacao patio', 'coordenacao-patio.html'])) {
-            console.log('📍 Página COORDENAÇÃO DE PÁTIO detectada');
-            return 'coordenacaoPatio';
-        }
-        
-        // SETOR PEDAGÓGICO
-        if (urlMatch(['setor-pedagogico', 'setor_pedagogico', 'setor pedagogico', 'setorpedagogico', 'setor-pedagogico.html'])) {
-            console.log('📍 Página SETOR PEDAGÓGICO detectada');
-            return 'setorPedagogico';
-        }
-        
-        // ADMIN SIMPLES
-        if (urlMatch(['admin-simples', 'admin_simples', 'adminsimples', 'admin-simples.html'])) {
-            console.log('📍 Página ADMIN SIMPLES detectada');
-            return 'adminSimples';
-        }
-        
-        // SUPER ADMIN
-        if (urlMatch(['admin.html', 'super-admin', 'super_admin', 'painel admin', 'superadmin'])) {
-            console.log('📍 Página SUPER ADMIN detectada');
-            return 'superAdmin';
-        }
-        
-        // PROFESSOR
-        if (urlMatch(['index.html', 'professor', 'dashboard', '/admin']) && 
-            !urlMatch(['admin-simples', 'admin_simples', 'admin.html', 'super-admin', 'super_admin'])) {
-            console.log('📍 Página PROFESSOR detectada');
-            return 'professor';
-        }
-        
-        // ALUNO
-        if (urlMatch(['/aluno', 'aluno.html', 'capturar-face', 'validar-face', 'resultado-aluno', 
-                      'editar-perfil', 'calendario', 'minhas-provas', 'meus-resultados'])) {
-            console.log('📍 Página ALUNO detectada');
-            return 'aluno';
-        }
-        
-        // LOGIN
-        if (urlMatch(['/login', 'login.html', '/register', '/cadastro', 'recuperar-senha', 'trocar-senha'])) {
-            console.log('📍 Página LOGIN detectada');
-            return 'login';
-        }
-        
-        // ========== VERIFICAR PELOS DADOS DO USUÁRIO (FALLBACK) ==========
-        try {
-            const userData = localStorage.getItem('user_data');
-            if (userData) {
-                const user = JSON.parse(userData);
-                const role = user.role;
-                
-                // Mapear role para página
-                const roleMap = {
-                    'gestao_geral': 'gestaoGeral',
-                    'enfermaria': 'enfermaria',
-                    'cozinha': 'cozinha',
-                    'coordenacao_patio': 'coordenacaoPatio',
-                    'setor_pedagogico': 'setorPedagogico',
-                    'admin': 'adminSimples',
-                    'super_admin': 'superAdmin',
-                    'professor': 'professor',
-                    'aluno': 'aluno'
-                };
-                
-                if (roleMap[role]) {
-                    console.log(`📍 Perfil detectado pelo user_data: ${role} → ${roleMap[role]}`);
-                    return roleMap[role];
-                }
-            }
-        } catch (e) {
-            console.warn('⚠️ Erro ao ler user_data:', e);
-        }
-        
-        // ========== FALLBACK: VERIFICAR PELA URL RAIZ ==========
-        if (path === '/' || path === '') {
-            const token = localStorage.getItem('auth_token');
-            if (token) {
-                console.log('📍 Página raiz com token - tentando buscar perfil...');
-                this.buscarPerfilDoUsuario();
-                return 'padrao';
-            }
-        }
-        
-        console.log('📍 Nenhum perfil específico detectado - usando PADRÃO');
-        return 'padrao';
+    async init() {
+        await this.verificarPermissaoEdicao();
+        this.configurarInterfacePorRole();
+        this.configurarBotaoVoltar();
+        await this.carregarDadosIniciais();
+        this.renderizarCalendario();
+        this.configurarEventListeners();
+        await this.processarParametrosUrl();
     }
 
-    // ============================================
-    // BUSCAR PERFIL DO USUÁRIO (FALLBACK)
-    // ============================================
-    async buscarPerfilDoUsuario() {
+    getMeuId() {
+        return this.usuario.id || this.usuario._id;
+    }
+
+    // ============================================================================
+    // Processa parâmetros da URL (?evento=ID&editavel=true|visualizar=true)
+    // ============================================================================
+    async processarParametrosUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const eventoId = params.get('evento');
+
+        if (!eventoId) return;
+
         try {
             const token = localStorage.getItem('auth_token');
             if (!token) return;
-            
-            const response = await fetch('/api/auth/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
+
+            const resp = await fetch(`${this.apiBase}/eventos/${eventoId}`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success && data.user) {
-                    const user = data.user;
-                    localStorage.setItem('user_data', JSON.stringify(user));
-                    
-                    // Atualizar perfil
-                    const roleMap = {
-                        'gestao_geral': 'gestaoGeral',
-                        'enfermaria': 'enfermaria',
-                        'cozinha': 'cozinha',
-                        'coordenacao_patio': 'coordenacaoPatio',
-                        'setor_pedagogico': 'setorPedagogico',
-                        'admin': 'adminSimples',
-                        'super_admin': 'superAdmin',
-                        'professor': 'professor',
-                        'aluno': 'aluno'
-                    };
-                    
-                    if (roleMap[user.role]) {
-                        this.currentPage = roleMap[user.role];
-                        console.log(`✅ Perfil atualizado via API: ${user.role} → ${this.currentPage}`);
-                        this.updateQuickActions();
-                        this.showWelcomeMessage();
-                    }
-                }
+
+            if (!resp.ok) return;
+
+            const data = await resp.json();
+            if (!data.success || !data.evento) return;
+
+            const ev = data.evento;
+
+            const dataEvento = new Date(ev.dataInicio);
+            this.mesAtual = dataEvento.getMonth();
+            this.anoAtual = dataEvento.getFullYear();
+
+            await this.carregarEventos();
+            this.renderizarCalendario();
+
+            // 🔥 Monta objeto normalizado para o modal
+            const criadoPor = ev.criadoPor || null;
+            const usuarioDest = ev.usuarioId || null;
+
+            const idCriador = criadoPor?._id || criadoPor?.id;
+            const idDestino = usuarioDest?._id || usuarioDest?.id;
+            const meuId = this.getMeuId();
+
+            const isCriador = idCriador && idCriador.toString() === meuId?.toString();
+            const isDestinatario = idDestino && idDestino.toString() === meuId?.toString();
+            const isAdmin = ['admin', 'super_admin'].includes(this.usuario.role);
+            const podeEditar = isAdmin || isCriador || isDestinatario;
+
+            const eventoParaModal = {
+                id: ev.id,
+                title: ev.titulo,
+                start: ev.dataInicio,
+                end: ev.dataFim || ev.dataInicio,
+                allDay: ev.diaInteiro,
+                tipo: ev.tipo,
+                cor: ev.cor,
+                descricao: ev.descricao,
+                local: ev.local,
+                horarioInicio: ev.horarioInicio,
+                horarioFim: ev.horarioFim,
+                turma: ev.turma
+                    ? { id: ev.turma._id || ev.turma.id, nome: ev.turma.nome }
+                    : null,
+                prova: ev.prova
+                    ? { id: ev.prova._id || ev.prova.id, titulo: ev.prova.titulo }
+                    : null,
+                criadoPor: criadoPor ? {
+                    id: idCriador,
+                    nome: criadoPor.nome,
+                    email: criadoPor.email,
+                    role: criadoPor.role
+                } : null,
+                // 🔥 NOVO: destinatário real (usuarioId)
+                usuarioId: usuarioDest ? {
+                    id: idDestino,
+                    nome: usuarioDest.nome,
+                    email: usuarioDest.email,
+                    role: usuarioDest.role
+                } : null,
+                notificacaoAtivada: ev.notificacaoAtivada,
+                notificacoes: ev.notificacoes,
+                permissoes: { podeEditar, podeExcluir: podeEditar }
+            };
+
+            const editavel = params.get('editavel') === 'true';
+
+            if (editavel && podeEditar && this.podeCriar) {
+                this.abrirCriadorEvento(null, eventoParaModal);
+            } else {
+                this.mostrarDetalhesEvento(eventoParaModal);
+            }
+
+            window.history.replaceState({}, '', window.location.pathname);
+
+        } catch (error) {
+            console.error('❌ Erro ao processar ?evento=:', error);
+        }
+    }
+
+    async verificarPermissaoEdicao() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch(
+                `/api/admin/permissoes-modulos/verificar/calendario_setor_pedagogico?email=${encodeURIComponent(this.usuario.email || '')}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const data = await resp.json();
+
+            if (data.success && data.temPermissao) {
+                this.podeCriar = true;
+                this.modoLeitura = false;
+            } else if (!this.rolesCriacaoGarantida.includes(this.usuario.role)) {
+                this.podeCriar = false;
+                this.modoLeitura = true;
             }
         } catch (error) {
-            console.error('❌ Erro ao buscar perfil:', error);
+            console.error('❌ Erro ao verificar permissão:', error);
         }
     }
 
-    // ============================================
-    // OBTER SUGESTÕES POR PERFIL
-    // ============================================
-    obterSugestoesPorPerfil(perfil) {
-        const sugestoes = {
-            'aluno': [
-                '📝 Ver provas pendentes',
-                '✅ Ver provas concluídas',
-                '📊 Ver resultados',
-                '📅 Calendário de provas',
-                '🔔 Notificações',
-                '👤 Editar perfil'
-            ],
-            'professor': [
-                '📝 Nova prova',
-                '🏫 Nova turma',
-                '📚 Minhas provas',
-                '📊 Resultados',
-                '📅 Meu calendário',
-                '♿ Adaptar documento',
-                '👤 Editar perfil'
-            ],
-            'adminSimples': [
-                '📊 Dashboard',
-                '👥 Usuários',
-                '🏫 Turmas',
-                '📝 Provas',
-                '📚 Eixos',
-                '🎓 Cursos',
-                '📊 Resultados',
-                '♿ Adaptar documento'
-            ],
-            'superAdmin': [
-                '📊 Dashboard',
-                '👥 Usuários',
-                '🏫 Turmas',
-                '📝 Provas',
-                '🖥️ Monitoramento',
-                '📊 Resultados',
-                '📚 Eixos',
-                '🎓 Cursos',
-                '💾 Backups',
-                '⚙️ Configurações'
-            ],
-            'setorPedagogico': [
-                '📊 Dashboard',
-                '👥 Alunos com Acessibilidade',
-                '📝 Provas Adaptadas',
-                '📊 Relatórios',
-                '♿ Adaptar documento'
-            ],
-            'coordenacaoPatio': [
-                '📊 Dashboard',
-                '🍽️ Registrar Refeição',
-                '👥 Alunos',
-                '🏫 Turmas',
-                '📊 Relatórios'
-            ],
-            'cozinha': [
-                '📊 Dashboard',
-                '📋 Planejar Refeições',
-                '📊 Monitorar',
-                '📦 Estoque',
-                '📊 Relatórios',
-                '⭐ Feedback alunos'
-            ],
-            'gestaoGeral': [
-                '📊 Dashboard',
-                '🔄 Rodízio de Refeições',
-                '🏫 Turmas',
-                '📊 Relatórios'
-            ],
-            'enfermaria': [
-                '📊 Dashboard',
-                '📋 Atendimentos',
-                '👥 Alunos',
-                '📊 Relatórios'
-            ],
-            'login': [
-                '🔐 Login',
-                '📝 Criar Conta',
-                '🔑 Recuperar Senha'
-            ],
-            'padrao': [
-                '📝 Provas',
-                '🏫 Turmas',
-                '📞 Suporte'
-            ]
-        };
+    configurarInterfacePorRole() {
+        const btnCriar = document.getElementById('btnCriarEvento');
+        const filtroProfessorGroup = document.getElementById('filtroProfessorGroup')
+            || document.getElementById('filtroProfessor')?.parentElement;
+        const filtroTurmaGroup = document.getElementById('filtroTurmaGroup')
+            || document.getElementById('filtroTurma')?.parentElement;
 
-        return sugestoes[perfil] || sugestoes['padrao'];
-    }
-
-    // ============================================
-    // OBTER MENSAGEM DE BOAS-VINDAS
-    // ============================================
-    obterMensagemBoasVindas(perfil) {
-        const mensagens = {
-            'aluno': 'Olá! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel do aluno você pode:\n• 📝 Ver provas pendentes e concluídas\n• 📊 Acompanhar seus resultados\n• 📅 Visualizar o calendário de provas\n• 🔔 Receber notificações\n• 👤 Editar seu perfil\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'professor': 'Olá Professor(a)! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel do professor você pode:\n• 📝 Criar novas provas com IA\n• 🏫 Gerenciar turmas e alunos\n• 📚 Acompanhar minhas provas\n• 📊 Visualizar resultados\n• ♿ Adaptar documentos para acessibilidade\n• 📅 Ver meu calendário\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'adminSimples': 'Olá Administrador(a)! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel administrativo você pode:\n• 📊 Acompanhar o dashboard\n• 👥 Gerenciar usuários\n• 🏫 Gerenciar turmas\n• 📝 Gerenciar provas\n• 📚 Gerenciar eixos\n• 🎓 Gerenciar cursos\n• 📊 Visualizar resultados\n• ♿ Adaptar documentos\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'superAdmin': 'Olá Super Administrador(a)! 👑 Sou seu assistente virtual do EducaPleno.\n\n📌 No painel completo você pode:\n• 📊 Dashboard completo\n• 👥 Gerenciar todos os usuários\n• 🏫 Gerenciar turmas\n• 📝 Gerenciar provas\n• 🖥️ Monitorar violações\n• 📊 Resultados gerais\n• 📚 Gerenciar eixos\n• 🎓 Gerenciar cursos\n• 💾 Gerenciar backups\n• ⚙️ Configurações do sistema\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'setorPedagogico': 'Olá! 👋 Sou seu assistente virtual do Setor Pedagógico.\n\n📌 No painel do Setor Pedagógico você pode:\n• 📊 Dashboard com visão geral\n• 👥 Gerenciar alunos com acessibilidade\n• 📝 Gerenciar provas adaptadas\n• 📊 Gerar relatórios\n• ♿ Adaptar documentos\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'coordenacaoPatio': 'Olá! 👋 Sou seu assistente virtual da Coordenação de Pátio.\n\n📌 No painel você pode:\n• 📊 Dashboard do dia\n• 🍽️ Registrar refeições\n• 👥 Visualizar alunos\n• 🏫 Visualizar turmas\n• 📊 Gerar relatórios\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'cozinha': 'Olá! 👋 Sou seu assistente virtual da Cozinha.\n\n📌 No painel da Cozinha você pode:\n• 📊 Dashboard com estatísticas\n• 📋 Planejar refeições\n• 📊 Monitorar produção\n• 📦 Gerenciar estoque\n• 📊 Gerar relatórios\n• ⭐ Ver feedback dos alunos\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'gestaoGeral': 'Olá! 👋 Sou seu assistente virtual da Gestão Geral.\n\n📌 No painel da Gestão Geral você pode:\n• 📊 Dashboard do rodízio\n• 🔄 Gerenciar rodízio de refeições\n• 🏫 Visualizar turmas\n• 📊 Gerar relatórios\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'enfermaria': 'Olá! 👋 Sou seu assistente virtual da Enfermaria.\n\n📌 No painel da Enfermaria você pode:\n• 📊 Dashboard com estatísticas\n• 📋 Registrar atendimentos\n• 👥 Visualizar alunos e histórico\n• 📊 Gerar relatórios\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'login': 'Olá! 👋 Sou seu assistente virtual do EducaPleno.\n\n📌 Na página de login você pode:\n• 🔐 Fazer login com email e senha\n• 📝 Criar uma nova conta\n• 🔑 Recuperar sua senha\n\nComo posso ajudá-lo hoje? 😊',
-            
-            'padrao': 'Olá! 👋 Sou seu assistente virtual do EducaPleno.\n\nComo posso ajudá-lo hoje? 😊'
-        };
-
-        return mensagens[perfil] || mensagens['padrao'];
-    }
-
-    // ============================================
-    // ATUALIZAR AÇÕES RÁPIDAS
-    // ============================================
-    updateQuickActions() {
-        const actionsContainer = document.getElementById('chatbotActions');
-        if (!actionsContainer) return;
-        
-        console.log(`🔄 Atualizando ações rápidas para o perfil: ${this.currentPage}`);
-        
-        // Usar o perfil atual
-        const perfil = this.currentPage || this.detectCurrentPage() || 'padrao';
-        
-        // Se o perfil ainda não foi detectado, tentar buscar do usuário
-        let perfilFinal = perfil;
-        if (perfilFinal === 'padrao') {
-            try {
-                const userData = localStorage.getItem('user_data');
-                if (userData) {
-                    const user = JSON.parse(userData);
-                    const roleMap = {
-                        'gestao_geral': 'gestaoGeral',
-                        'enfermaria': 'enfermaria',
-                        'cozinha': 'cozinha',
-                        'coordenacao_patio': 'coordenacaoPatio',
-                        'setor_pedagogico': 'setorPedagogico',
-                        'admin': 'adminSimples',
-                        'super_admin': 'superAdmin',
-                        'professor': 'professor',
-                        'aluno': 'aluno'
-                    };
-                    if (roleMap[user.role]) {
-                        perfilFinal = roleMap[user.role];
-                        this.currentPage = perfilFinal;
-                        console.log(`✅ Perfil atualizado do localStorage: ${user.role} → ${perfilFinal}`);
-                    }
-                }
-            } catch (e) {}
+        if (filtroTurmaGroup) {
+            filtroTurmaGroup.style.display =
+                this.rolesComFiltroTurma.includes(this.usuario.role) ? '' : 'none';
         }
-        
-        console.log(`📋 Usando perfil: ${perfilFinal}`);
-        
-        const actions = this.obterSugestoesPorPerfil(perfilFinal);
-        
-        actionsContainer.innerHTML = actions.map(action => `
-            <button class="chatbot-action-btn" onclick="window.chatbot.suggestAction('${action.replace(/'/g, "\\'")}')" ${this.connectionStatus === 'offline' ? 'disabled' : ''}>
-                ${action}
-            </button>
-        `).join('');
-        
-        console.log(`✅ ${actions.length} ações rápidas exibidas para ${perfilFinal}`);
-    }
 
-    // ============================================
-    // MENSAGEM DE BOAS-VINDAS
-    // ============================================
-    showWelcomeMessage() {
-        const lastWelcome = localStorage.getItem('chatbot_last_welcome');
-        const today = new Date().toDateString();
-        if (lastWelcome === today) return;
-        
-        // Detectar perfil atual
-        const perfil = this.currentPage || this.detectCurrentPage() || 'padrao';
-        
-        // Tentar obter do user_data se ainda for padrao
-        let perfilFinal = perfil;
-        if (perfilFinal === 'padrao') {
-            try {
-                const userData = localStorage.getItem('user_data');
-                if (userData) {
-                    const user = JSON.parse(userData);
-                    const roleMap = {
-                        'gestao_geral': 'gestaoGeral',
-                        'enfermaria': 'enfermaria',
-                        'cozinha': 'cozinha',
-                        'coordenacao_patio': 'coordenacaoPatio',
-                        'setor_pedagogico': 'setorPedagogico',
-                        'admin': 'adminSimples',
-                        'super_admin': 'superAdmin',
-                        'professor': 'professor',
-                        'aluno': 'aluno'
-                    };
-                    if (roleMap[user.role]) {
-                        perfilFinal = roleMap[user.role];
-                        this.currentPage = perfilFinal;
-                        console.log(`✅ Perfil da boas-vindas: ${user.role} → ${perfilFinal}`);
-                    }
-                }
-            } catch (e) {}
+        if (filtroProfessorGroup) {
+            filtroProfessorGroup.style.display =
+                this.rolesComFiltroProfessor.includes(this.usuario.role) ? '' : 'none';
         }
-        
-        console.log(`👋 Exibindo boas-vindas para: ${perfilFinal}`);
-        
-        const mensagem = this.obterMensagemBoasVindas(perfilFinal);
-        const sugestoes = this.obterSugestoesPorPerfil(perfilFinal);
-        
-        // Criar botões a partir das sugestões
-        let botoesHTML = sugestoes.slice(0, 4).map(s => `
-            <button onclick="window.chatbot.suggestAction('${s.replace(/'/g, "\\'")}')" 
-                style="background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; margin: 2px;">
-                ${s}
-            </button>
-        `).join('');
-        
-        const welcomeHTML = `
-            <div class="message bot" style="background: white; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span style="font-size: 22px;">👋</span>
-                    <strong style="font-size: 15px;">Olá! Como posso ajudar?</strong>
-                </div>
-                <p style="color: #6b7280; font-size: 13px; margin: 0 0 10px 0; white-space: pre-wrap;">${mensagem}</p>
-                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                    ${botoesHTML}
-                </div>
-                <div style="margin-top: 8px; font-size: 10px; color: #9ca3af; border-top: 1px solid #f3f4f6; padding-top: 6px;">
-                    💡 Clique nos botões para perguntas rápidas
-                </div>
-            </div>
-        `;
-        
-        const messagesContainer = document.getElementById('chatbotMessages');
-        if (messagesContainer) {
-            // Verificar se já tem mensagem de boas-vindas
-            const existing = messagesContainer.querySelector('.message.bot .chatbot-welcome');
-            if (!existing) {
-                messagesContainer.insertAdjacentHTML('beforeend', welcomeHTML);
-                localStorage.setItem('chatbot_last_welcome', today);
+
+        if (btnCriar) {
+            btnCriar.style.display = this.podeCriar ? 'flex' : 'none';
+        }
+
+        if (this.modoLeitura) {
+            const header = document.querySelector('.calendario-header');
+            if (header && !header.querySelector('.badge-leitura')) {
+                const badge = document.createElement('div');
+                badge.className = 'badge-leitura';
+                badge.style.cssText = 'position:absolute;top:10px;right:10px;background:rgba(0,0,0,.5);color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;';
+                badge.innerHTML = '<i class="fas fa-eye"></i> Modo Leitura';
+                header.style.position = 'relative';
+                header.appendChild(badge);
             }
         }
-        
-        // Atualizar ações rápidas
-        this.updateQuickActions();
     }
 
-    init() {
-        if (!document.getElementById('chatbotContainer')) {
-            this.createChatbotHTML();
+    configurarBotaoVoltar() {
+        const btn = document.getElementById('btnVoltarCalendario');
+        const txt = document.getElementById('textoBotaoVoltar');
+        if (!btn) return;
+
+        const novo = btn.cloneNode(true);
+        btn.parentNode.replaceChild(novo, btn);
+
+        const mapa = {
+            admin: ['admin.html', 'Voltar ao Painel Admin'],
+            super_admin: ['admin.html', 'Voltar ao Painel Admin'],
+            professor: ['index.html', 'Voltar ao Painel Professor'],
+            aluno: ['aluno.html', 'Voltar ao Painel do Aluno'],
+            setor_pedagogico: ['setor-pedagogico.html', 'Voltar ao Setor Pedagógico'],
+            gestao_geral: ['gestao-geral.html', 'Voltar à Gestão Geral'],
+            supervisao: ['supervisao.html', 'Voltar à Supervisão'],
+            coordenacao_patio: ['coordenacao-patio.html', 'Voltar'],
+            cozinha: ['cozinha-dashboard.html', 'Voltar'],
+            enfermaria: ['enfermaria.html', 'Voltar'],
+            biblioteca: ['biblioteca.html', 'Voltar'],
+            psicologia: ['psicologia.html', 'Voltar'],
+            'assistente-social': ['assistente-social.html', 'Voltar'],
+            protagonismo: ['protagonismo.html', 'Voltar'],
+            secretaria: ['secretaria.html', 'Voltar'],
+            recepcao: ['recepcao.html', 'Voltar']
+        };
+        const config = mapa[this.usuario.role] || ['admin.html', 'Voltar'];
+        if (txt) txt.textContent = config[1];
+        novo.addEventListener('click', () => window.location.href = config[0]);
+    }
+
+    async carregarDadosIniciais() {
+        await Promise.all([
+            this.carregarEventos(),
+            this.carregarProfessores(),
+            this.carregarSetores(),
+            this.carregarTurmas()
+        ]);
+    }
+
+    async carregarEventos() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            if (!token) return;
+            const resp = await fetch(
+                `${this.apiBase}/eventos?mes=${this.mesAtual + 1}&ano=${this.anoAtual}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const data = await resp.json();
+            if (data.success) this.eventos = data.eventos || [];
+        } catch (e) {
+            console.error('❌ Erro ao carregar eventos:', e);
         }
-        this.addDynamicStyles();
-        this.setupInactivityTimer();
-        this.updateConnectionStatus();
     }
 
-    createChatbotHTML() {
-        const chatbotHTML = `
-            <div class="chatbot-container" id="chatbotContainer">
-                <div class="chatbot-window" id="chatbotWindow" role="dialog" aria-label="Assistente Virtual">
-                    <div class="chatbot-header">
-                        <div class="header-content">
-                            <div class="header-brand">
-                                <div class="chatbot-avatar">
-                                    <i class="fas fa-graduation-cap"></i>
-                                </div>
-                                <div class="header-info">
-                                    <h3>Assistente</h3>
-                                    <p class="chatbot-subtitle">EducaPleno</p>
-                                </div>
-                            </div>
-                            <div class="chatbot-status">
-                                <div class="status-indicator">
-                                    <span class="status-dot" id="statusDot"></span>
-                                    <span class="status-text" id="statusText">Online</span>
-                                </div>
-                            </div>
+    async carregarProfessores() {
+        if (!this.rolesComFiltroProfessor.includes(this.usuario.role)) return;
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch('/api/admin/usuarios?role=professor&limit=100',
+                { headers: { Authorization: `Bearer ${token}` } });
+            const data = await resp.json();
+            if (data.success) {
+                this.professores = data.usuarios || [];
+                const sel = document.getElementById('filtroProfessor');
+                if (sel) {
+                    sel.innerHTML = '<option value="todos">Todos</option>';
+                    this.professores.forEach(p => {
+                        const o = document.createElement('option');
+                        o.value = p._id || p.id;
+                        o.textContent = p.nome || 'Sem nome';
+                        sel.appendChild(o);
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('❌ Erro ao carregar professores:', e);
+        }
+    }
+
+    // ============================================================================
+    // 🔥 CARREGA SETORES DIRETO DO BANCO (nada hardcoded)
+    // ============================================================================
+    async carregarSetores() {
+        const isAdmin = ['admin', 'super_admin'].includes(this.usuario.role);
+        if (!isAdmin) return;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch('/api/admin/usuarios?limit=1000', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await resp.json();
+
+            if (!data.success) {
+                this.setoresDisponiveis = [];
+                return;
+            }
+
+            const usuarios = data.usuarios || [];
+            const contagemPorRole = {};
+            const nomesRepresentantes = {};
+
+            usuarios.forEach(u => {
+                if (!u.role) return;
+                if (u.ativo === false) return;
+                contagemPorRole[u.role] = (contagemPorRole[u.role] || 0) + 1;
+                if (!nomesRepresentantes[u.role]) {
+                    nomesRepresentantes[u.role] = u.nome || '—';
+                }
+            });
+
+            const labelsConhecidos = {
+                'admin': 'Administradores',
+                'super_admin': 'Super Admins',
+                'professor': 'Professores',
+                'setor_pedagogico': 'Setor Pedagógico',
+                'gestao_geral': 'Gestão Geral',
+                'supervisao': 'Supervisão',
+                'coordenacao_patio': 'Coordenação de Pátio',
+                'secretaria': 'Secretaria',
+                'recepcao': 'Recepção',
+                'enfermaria': 'Enfermaria',
+                'cozinha': 'Cozinha',
+                'assistente-social': 'Assistente Social',
+                'psicologia': 'Psicologia',
+                'protagonismo': 'Protagonismo',
+                'biblioteca': 'Biblioteca'
+            };
+
+            const ordemPreferida = [
+                'setor_pedagogico', 'gestao_geral', 'professor',
+                'supervisao', 'coordenacao_patio',
+                'secretaria', 'recepcao',
+                'enfermaria', 'psicologia', 'assistente-social',
+                'cozinha', 'biblioteca', 'protagonismo',
+                'admin', 'super_admin'
+            ];
+
+            const setoresDoBanco = Object.keys(contagemPorRole).map(role => ({
+                role,
+                nome: labelsConhecidos[role] || this.humanizarRole(role),
+                totalUsuarios: contagemPorRole[role],
+                representante: nomesRepresentantes[role] || '—'
+            }));
+
+            setoresDoBanco.sort((a, b) => {
+                const ia = ordemPreferida.indexOf(a.role);
+                const ib = ordemPreferida.indexOf(b.role);
+                if (ia !== -1 && ib !== -1) return ia - ib;
+                if (ia !== -1) return -1;
+                if (ib !== -1) return 1;
+                return a.nome.localeCompare(b.nome);
+            });
+
+            this.setoresDisponiveis = setoresDoBanco;
+
+        } catch (e) {
+            console.error('❌ Erro ao carregar setores do banco:', e);
+            this.setoresDisponiveis = [];
+        }
+    }
+
+    humanizarRole(role) {
+        return role
+            .replace(/[-_]/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    getLabelRole(role) {
+        const labels = {
+            professor: 'Professor(a)',
+            setor_pedagogico: 'Setor Pedagógico',
+            gestao_geral: 'Gestão Geral',
+            supervisao: 'Supervisão',
+            coordenacao_patio: 'Coordenação de Pátio',
+            secretaria: 'Secretaria',
+            recepcao: 'Recepção',
+            enfermaria: 'Enfermaria',
+            cozinha: 'Cozinha',
+            'assistente-social': 'Assistente Social',
+            psicologia: 'Psicologia',
+            protagonismo: 'Protagonismo',
+            biblioteca: 'Biblioteca',
+            admin: 'Administrador',
+            super_admin: 'Super Admin'
+        };
+        return labels[role] || this.humanizarRole(role || '');
+    }
+
+    async carregarTurmas() {
+        if (!this.rolesComFiltroTurma.includes(this.usuario.role)) {
+            this.turmas = [];
+            return;
+        }
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch('/api/turmas', { headers: { Authorization: `Bearer ${token}` } });
+            const data = await resp.json();
+            if (data.success) {
+                this.turmas = data.turmas || [];
+                const sel = document.getElementById('filtroTurma');
+                if (sel) {
+                    sel.innerHTML = '<option value="todas">Todas as turmas</option>';
+                    this.turmas.forEach(t => {
+                        const o = document.createElement('option');
+                        o.value = t.id || t._id;
+                        o.textContent = `${t.nome || 'Sem nome'} - ${t.disciplina || ''}`;
+                        sel.appendChild(o);
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('❌ Erro ao carregar turmas:', e);
+        }
+    }
+
+    renderizarCalendario() {
+        const container = document.getElementById('calendarioGrid');
+        if (!container) return;
+
+        const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                       'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        const titulo = document.getElementById('mesAtual');
+        if (titulo) titulo.textContent = `${meses[this.mesAtual]} ${this.anoAtual}`;
+
+        const primeiro = new Date(this.anoAtual, this.mesAtual, 1);
+        const ultimo = new Date(this.anoAtual, this.mesAtual + 1, 0);
+        let diaInicio = primeiro.getDay();
+        if (diaInicio === 0) diaInicio = 7;
+        const diasMes = ultimo.getDate();
+
+        container.innerHTML = '';
+        ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].forEach(d => {
+            const el = document.createElement('div');
+            el.className = 'calendario-dia-semana';
+            el.textContent = d;
+            container.appendChild(el);
+        });
+
+        for (let i = 1; i < diaInicio; i++) {
+            const v = document.createElement('div');
+            v.className = 'calendario-dia vazio';
+            container.appendChild(v);
+        }
+
+        const todos = [];
+
+        for (let dia = 1; dia <= diasMes; dia++) {
+            const data = new Date(this.anoAtual, this.mesAtual, dia);
+            const isHoje = data.toDateString() === new Date().toDateString();
+
+            const eventosDia = this.eventos.filter(e => {
+                if (!e || !e.start) return false;
+                const d = new Date(e.start);
+                return d.getDate() === dia &&
+                       d.getMonth() === this.mesAtual &&
+                       d.getFullYear() === this.anoAtual;
+            });
+
+            if (data >= new Date()) eventosDia.forEach(e => todos.push(e));
+
+            const el = document.createElement('div');
+            el.className = `calendario-dia ${isHoje ? 'hoje' : ''} ${eventosDia.length > 0 ? 'tem-evento' : ''}`;
+            el.dataset.data = `${this.anoAtual}-${String(this.mesAtual + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+
+            const num = document.createElement('div');
+            num.className = 'numero-dia';
+            num.textContent = dia;
+            el.appendChild(num);
+
+            eventosDia.slice(0, 3).forEach(ev => {
+                const mini = document.createElement('div');
+                mini.className = `evento-mini tipo-${ev.tipo || 'evento'}`;
+                mini.style.backgroundColor = ev.cor || '#667eea';
+                mini.style.borderLeftColor = ev.cor || '#667eea';
+                mini.textContent = (ev.title || 'Evento').substring(0, 12) +
+                    ((ev.title || '').length > 12 ? '…' : '');
+                mini.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.mostrarDetalhesEvento(ev);
+                });
+                el.appendChild(mini);
+            });
+
+            if (eventosDia.length > 3) {
+                const mais = document.createElement('div');
+                mais.className = 'evento-mais';
+                mais.textContent = `+${eventosDia.length - 3}`;
+                el.appendChild(mais);
+            }
+
+            if (this.podeCriar) {
+                el.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('evento-mini') &&
+                        !e.target.classList.contains('evento-mais')) {
+                        this.abrirCriadorEvento(el.dataset.data);
+                    }
+                });
+            }
+
+            container.appendChild(el);
+        }
+
+        this.renderizarProximosEventos(todos);
+    }
+
+    renderizarProximosEventos(todos) {
+        const container = document.getElementById('proximosEventosLista');
+        if (!container) return;
+
+        const agora = new Date();
+        const proximos = todos
+            .filter(e => new Date(e.start) > agora)
+            .sort((a, b) => new Date(a.start) - new Date(b.start))
+            .slice(0, 5);
+
+        if (proximos.length === 0) {
+            container.innerHTML = '<p style="color:#6c757d;text-align:center;">Nenhum evento próximo</p>';
+            return;
+        }
+
+        container.innerHTML = proximos.map(e => {
+            const d = new Date(e.start);
+            const json = JSON.stringify(e).replace(/"/g, '&quot;');
+            return `<div class="evento-item-lista" onclick='calendario.mostrarDetalhesEvento(${json})'>
+                <div class="cor" style="background:${e.cor || '#667eea'}"></div>
+                <div class="info">
+                    <div class="titulo">${e.title || 'Evento'}</div>
+                    <div class="horario">${d.toLocaleDateString('pt-BR')} às ${e.horarioInicio || '--:--'}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    configurarEventListeners() {
+        const btnAnt = document.getElementById('btnMesAnterior');
+        if (btnAnt) {
+            btnAnt.addEventListener('click', () => {
+                this.mesAtual--;
+                if (this.mesAtual < 0) { this.mesAtual = 11; this.anoAtual--; }
+                this.carregarEventos().then(() => this.renderizarCalendario());
+            });
+        }
+
+        const btnProx = document.getElementById('btnProximoMes');
+        if (btnProx) {
+            btnProx.addEventListener('click', () => {
+                this.mesAtual++;
+                if (this.mesAtual > 11) { this.mesAtual = 0; this.anoAtual++; }
+                this.carregarEventos().then(() => this.renderizarCalendario());
+            });
+        }
+
+        const fTipo = document.getElementById('filtroTipo');
+        if (fTipo) {
+            fTipo.addEventListener('change', (e) => {
+                this.filtros.tipo = e.target.value;
+                this.renderizarCalendario();
+            });
+        }
+
+        const fProf = document.getElementById('filtroProfessor');
+        if (fProf && this.rolesComFiltroProfessor.includes(this.usuario.role)) {
+            fProf.addEventListener('change', (e) => {
+                this.filtros.professor = e.target.value;
+                this.renderizarCalendario();
+            });
+        }
+
+        const fTurma = document.getElementById('filtroTurma');
+        if (fTurma && this.rolesComFiltroTurma.includes(this.usuario.role)) {
+            fTurma.addEventListener('change', (e) => {
+                this.filtros.turma = e.target.value;
+                this.renderizarCalendario();
+            });
+        }
+
+        const btnCriar = document.getElementById('btnCriarEvento');
+        if (btnCriar && this.podeCriar) {
+            btnCriar.addEventListener('click', () => this.abrirCriadorEvento());
+        }
+    }
+
+    // ============================================================================
+    // 🔥 MODAL DE CRIAR / EDITAR
+    // ============================================================================
+    abrirCriadorEvento(dataStr = null, eventoExistente = null) {
+        this.eventoEditando = eventoExistente;
+        if (!this.podeCriar) {
+            alert('Você não tem permissão para criar ou editar eventos.');
+            return;
+        }
+
+        const isAdmin = ['admin', 'super_admin'].includes(this.usuario.role);
+        const meuId = this.getMeuId();
+
+        const isCriador = eventoExistente &&
+            (eventoExistente.criadoPor?.id === meuId ||
+             eventoExistente.criadoPor?._id === meuId);
+        const isDestinatario = eventoExistente &&
+            (eventoExistente.usuarioId?.id === meuId ||
+             eventoExistente.usuarioId?._id === meuId);
+
+        if (!isAdmin && eventoExistente && !isCriador && !isDestinatario) {
+            alert('❌ Você só pode editar seus próprios eventos');
+            return;
+        }
+
+        const body = document.getElementById('modalBody');
+        const title = document.getElementById('modalTitle');
+        const footer = document.getElementById('modalFooter');
+        if (!body || !title || !footer) return;
+
+        const isEditando = !!eventoExistente;
+        title.innerHTML = isEditando
+            ? '<i class="fas fa-edit"></i> Editar Evento'
+            : '<i class="fas fa-plus"></i> Criar Novo Evento';
+
+        let dataInicio = dataStr || '';
+        let dataFim = '';
+        let horaInicio = '08:00';
+        let horaFim = '09:00';
+        let titulo = '';
+        let descricao = '';
+        let tipo = 'personalizado';
+        let cor = '#3b82f6';
+        let local = '';
+        let turmaId = '';
+        let notificar = true;
+        let notifValue = '30';
+        let diaInteiro = false;
+        let destinatarioModo = 'eu';
+        let setorDestino = '';
+
+        if (isEditando && eventoExistente) {
+            if (eventoExistente.start) {
+                dataInicio = new Date(eventoExistente.start).toISOString().split('T')[0];
+            }
+            if (eventoExistente.end) {
+                dataFim = new Date(eventoExistente.end).toISOString().split('T')[0];
+            }
+            horaInicio = eventoExistente.horarioInicio || '08:00';
+            horaFim = eventoExistente.horarioFim || '09:00';
+            titulo = eventoExistente.title || '';
+            descricao = eventoExistente.descricao || '';
+            tipo = eventoExistente.tipo || 'personalizado';
+            cor = eventoExistente.cor || '#3b82f6';
+            local = eventoExistente.local || '';
+            turmaId = eventoExistente.turma?.id || '';
+            notificar = eventoExistente.notificacaoAtivada !== false;
+            if (eventoExistente.notificacoes && eventoExistente.notificacoes.length > 0) {
+                const ativa = eventoExistente.notificacoes.find(n => !n.enviada);
+                if (ativa) notifValue = ativa.minutosAntes.toString();
+            }
+            diaInteiro = eventoExistente.allDay || false;
+
+            // 🔥 Detecta o setor do DESTINATÁRIO (usuarioId) ou, fallback, do criador
+            if (isAdmin) {
+                const roleDest = eventoExistente.usuarioId?.role;
+                const roleCriador = eventoExistente.criadoPor?.role;
+
+                const roleParaSelecionar =
+                    (roleDest && this.setoresDisponiveis.some(s => s.role === roleDest)) ? roleDest :
+                    (roleCriador && this.setoresDisponiveis.some(s => s.role === roleCriador)) ? roleCriador :
+                    null;
+
+                if (roleParaSelecionar) {
+                    destinatarioModo = 'setor';
+                    setorDestino = roleParaSelecionar;
+                }
+            }
+        }
+
+        const turmasOpts = this.rolesComFiltroTurma.includes(this.usuario.role)
+            ? (this.turmas || []).map(t =>
+                `<option value="${t.id || t._id}" ${turmaId === (t.id || t._id) ? 'selected' : ''}>${t.nome || ''} - ${t.disciplina || ''}</option>`
+            ).join('')
+            : '';
+
+        const setoresOpts = (this.setoresDisponiveis || []).map(s => {
+            const selecionado = setorDestino === s.role ? 'selected' : '';
+            const sufixoQtd = s.totalUsuarios
+                ? ` — ${s.totalUsuarios} usuário${s.totalUsuarios > 1 ? 's' : ''}`
+                : '';
+            return `<option value="${s.role}" ${selecionado}>${s.nome}${sufixoQtd}</option>`;
+        }).join('');
+
+        const blocoDestinatario = isAdmin ? `
+            <div class="form-section">
+                <div class="form-section-title">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Público-alvo do Evento</span>
+                </div>
+                <p class="form-section-hint">
+                    Escolha para quem este evento será direcionado. As notificações serão enviadas conforme o público escolhido.
+                </p>
+
+                <div class="radio-group">
+                    <label class="radio-card ${destinatarioModo === 'eu' ? 'selected' : ''}" data-modo="eu">
+                        <input type="radio" name="destinatarioModo" value="eu" ${destinatarioModo === 'eu' ? 'checked' : ''}>
+                        <div class="radio-card-icon" style="background:#dbeafe;color:#1e40af;">
+                            <i class="fas fa-user"></i>
                         </div>
-                        <div class="header-controls">
-                            <button class="chatbot-minimize" id="minimizeChatbot" aria-label="Minimizar" title="Minimizar">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                            <button class="chatbot-close" id="closeChatbot" aria-label="Fechar" title="Fechar">
-                                <i class="fas fa-times"></i>
-                            </button>
+                        <div class="radio-card-content">
+                            <strong>Eu mesmo</strong>
+                            <small>Criar em meu nome. Notifica todos os setores administrativos.</small>
+                        </div>
+                    </label>
+
+                    <label class="radio-card ${destinatarioModo === 'todos_adm' ? 'selected' : ''}" data-modo="todos_adm">
+                        <input type="radio" name="destinatarioModo" value="todos_adm" ${destinatarioModo === 'todos_adm' ? 'checked' : ''}>
+                        <div class="radio-card-icon" style="background:#d1fae5;color:#065f46;">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="radio-card-content">
+                            <strong>Todos os setores administrativos</strong>
+                            <small>Notifica todos os setores cadastrados no sistema.</small>
+                        </div>
+                    </label>
+
+                    <label class="radio-card ${destinatarioModo === 'setor' ? 'selected' : ''}" data-modo="setor">
+                        <input type="radio" name="destinatarioModo" value="setor" ${destinatarioModo === 'setor' ? 'checked' : ''}>
+                        <div class="radio-card-icon" style="background:#fef3c7;color:#92400e;">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="radio-card-content">
+                            <strong>Setor específico</strong>
+                            <small>Escolha um setor cadastrado. A notificação seguirá a regra daquele setor.</small>
+                        </div>
+                    </label>
+                </div>
+
+                <div id="blocoSetorDestino" style="display: ${destinatarioModo === 'setor' ? 'block' : 'none'}; margin-top: 14px;">
+                    <label class="form-label"><i class="fas fa-building"></i> Selecione o setor *</label>
+                    <select id="eventoSetorDestino" class="form-control">
+                        <option value="">Selecione o setor…</option>
+                        ${setoresOpts}
+                    </select>
+                    <small class="text-muted">
+                        ${this.setoresDisponiveis.length === 0
+                            ? '⚠️ Nenhum setor com usuários ativos foi encontrado no banco.'
+                            : 'O evento será associado a um usuário ativo do setor escolhido.'}
+                    </small>
+                </div>
+            </div>
+        ` : '';
+
+        body.innerHTML = `
+            <form id="formEvento">
+
+                <div class="form-section">
+                    <div class="form-section-title">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Informações Básicas</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-tag"></i> Título do Evento *</label>
+                        <input type="text" id="eventoTitulo" class="form-control" value="${this.escapeHtml(titulo)}" placeholder="Ex.: Reunião de pais, Prova de Matemática…" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-calendar"></i> Data Início *</label>
+                            <input type="date" id="eventoDataInicio" class="form-control" value="${dataInicio}" required>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-clock"></i> Horário Início</label>
+                            <input type="time" id="eventoHorarioInicio" class="form-control" value="${horaInicio}">
                         </div>
                     </div>
-                    <div class="chatbot-messages" id="chatbotMessages" role="log" aria-live="polite"></div>
-                    <div class="chatbot-actions" id="chatbotActions" role="toolbar" aria-label="Ações rápidas"></div>
-                    <div class="chatbot-input-area">
-                        <div class="input-wrapper">
-                            <textarea id="chatbotInput" rows="1" placeholder="${this.connectionStatus === 'offline' ? 'Conecte-se...' : 'Digite sua mensagem...'}" maxlength="${this.config.maxMessageLength}" ${this.connectionStatus === 'offline' ? 'disabled' : ''}></textarea>
-                            <button id="sendMessage" class="send-button" aria-label="Enviar" ${this.connectionStatus === 'offline' ? 'disabled' : ''}>
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-calendar"></i> Data Fim</label>
+                            <input type="date" id="eventoDataFim" class="form-control" value="${dataFim}">
                         </div>
-                        <div class="input-footer">
-                            <span class="char-count" id="charCount">0/${this.config.maxMessageLength}</span>
+                        <div class="form-group">
+                            <label><i class="fas fa-clock"></i> Horário Fim</label>
+                            <input type="time" id="eventoHorarioFim" class="form-control" value="${horaFim}">
                         </div>
+                    </div>
+
+                    <div class="form-check">
+                        <input type="checkbox" id="eventoDiaInteiro" ${diaInteiro ? 'checked' : ''}>
+                        <label for="eventoDiaInteiro">Dia inteiro (sem horário)</label>
                     </div>
                 </div>
-                <button class="chatbot-toggle" id="chatbotToggle" aria-label="Abrir assistente" title="Assistente Virtual">
-                    <i class="fas fa-graduation-cap"></i>
-                    <span class="notification-badge" id="notificationBadge" style="display:none;">1</span>
+
+                ${blocoDestinatario}
+
+                <div class="form-section">
+                    <div class="form-section-title">
+                        <i class="fas fa-align-left"></i>
+                        <span>Detalhes do Evento</span>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-tag"></i> Tipo</label>
+                            <select id="eventoTipo" class="form-control">
+                                <option value="prova" ${tipo === 'prova' ? 'selected' : ''}>📝 Prova</option>
+                                <option value="lembrete" ${tipo === 'lembrete' ? 'selected' : ''}>🔔 Lembrete</option>
+                                <option value="feriado" ${tipo === 'feriado' ? 'selected' : ''}>🎉 Feriado</option>
+                                <option value="reuniao" ${tipo === 'reuniao' ? 'selected' : ''}>👥 Reunião</option>
+                                <option value="prazo" ${tipo === 'prazo' ? 'selected' : ''}>⏰ Prazo</option>
+                                <option value="personalizado" ${tipo === 'personalizado' ? 'selected' : ''}>📌 Personalizado</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-palette"></i> Cor</label>
+                            <input type="color" id="eventoCor" class="form-control" value="${cor}">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-align-left"></i> Descrição</label>
+                        <textarea id="eventoDescricao" class="form-control" rows="3" placeholder="Detalhes, pauta, observações…">${this.escapeHtml(descricao)}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-map-marker-alt"></i> Local</label>
+                        <input type="text" id="eventoLocal" class="form-control" value="${this.escapeHtml(local)}" placeholder="Ex.: Auditório, Sala 12…">
+                    </div>
+
+                    ${this.rolesComFiltroTurma.includes(this.usuario.role) ? `
+                    <div class="form-group">
+                        <label><i class="fas fa-school"></i> Turma (opcional)</label>
+                        <select id="eventoTurma" class="form-control">
+                            <option value="">Todas as turmas</option>
+                            ${turmasOpts}
+                        </select>
+                        <small class="text-muted">Se escolher uma turma, os alunos dela também serão notificados.</small>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section-title">
+                        <i class="fas fa-bell"></i>
+                        <span>Notificações</span>
+                    </div>
+
+                    <div class="form-check">
+                        <input type="checkbox" id="eventoNotificar" ${notificar ? 'checked' : ''}>
+                        <label for="eventoNotificar">Ativar notificações</label>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-bell"></i> Notificar antes</label>
+                        <select id="eventoNotificacao" class="form-control">
+                            <option value="0" ${notifValue === '0' ? 'selected' : ''}>No momento</option>
+                            <option value="5" ${notifValue === '5' ? 'selected' : ''}>5 minutos antes</option>
+                            <option value="15" ${notifValue === '15' ? 'selected' : ''}>15 minutos antes</option>
+                            <option value="30" ${notifValue === '30' ? 'selected' : ''}>30 minutos antes</option>
+                            <option value="60" ${notifValue === '60' ? 'selected' : ''}>1 hora antes</option>
+                            <option value="120" ${notifValue === '120' ? 'selected' : ''}>2 horas antes</option>
+                            <option value="1440" ${notifValue === '1440' ? 'selected' : ''}>1 dia antes</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        `;
+
+        if (isEditando) {
+            footer.innerHTML = `
+                <button class="btn-cancel" onclick="calendario.fecharModal()">Cancelar</button>
+                <button class="btn-delete" onclick="calendario.excluirEvento('${eventoExistente.id}')">
+                    <i class="fas fa-trash"></i> Excluir
                 </button>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', chatbotHTML);
-    }
-
-    addDynamicStyles() {
-        const style = document.createElement('style');
-        style.textContent = `
-            .chatbot-container {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                z-index: 10000;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            }
-            .chatbot-toggle {
-                width: 56px;
-                height: 56px;
-                background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 24px;
-                cursor: pointer;
-                box-shadow: 0 4px 16px rgba(26, 86, 219, 0.35);
-                transition: all 0.3s ease;
-                border: none;
-                outline: none;
-                z-index: 10001;
-                position: relative;
-            }
-            .chatbot-toggle:hover {
-                transform: scale(1.05);
-                box-shadow: 0 6px 24px rgba(26, 86, 219, 0.45);
-            }
-            .notification-badge {
-                position: absolute;
-                top: -4px;
-                right: -4px;
-                background: #ef4444;
-                color: white;
-                font-size: 11px;
-                font-weight: 600;
-                min-width: 20px;
-                height: 20px;
-                border-radius: 10px;
-                display: none;
-                align-items: center;
-                justify-content: center;
-                padding: 0 6px;
-                border: 2px solid white;
-            }
-            .chatbot-window {
-                position: absolute;
-                bottom: 68px;
-                right: 0;
-                width: 360px;
-                max-width: calc(100vw - 40px);
-                height: 480px;
-                max-height: 60vh;
-                background: white;
-                border-radius: 16px;
-                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-                display: none;
-                flex-direction: column;
-                overflow: hidden;
-                border: 1px solid #e5e7eb;
-            }
-            .chatbot-window.active { display: flex; }
-            .chatbot-header {
-                background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
-                color: white;
-                padding: 12px 16px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                flex-shrink: 0;
-                border-radius: 16px 16px 0 0;
-            }
-            .header-content {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                flex: 1;
-            }
-            .header-brand { display: flex; align-items: center; gap: 8px; }
-            .chatbot-avatar {
-                width: 32px;
-                height: 32px;
-                background: rgba(255,255,255,0.2);
-                border-radius: 8px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 16px;
-            }
-            .header-info h3 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.2; }
-            .chatbot-subtitle { margin: 0; font-size: 10px; opacity: 0.8; }
-            .chatbot-status { margin-left: auto; }
-            .status-indicator {
-                display: flex;
-                align-items: center;
-                gap: 4px;
-                font-size: 10px;
-                background: rgba(255,255,255,0.15);
-                padding: 3px 8px;
-                border-radius: 10px;
-            }
-            .status-dot {
-                width: 6px;
-                height: 6px;
-                border-radius: 50%;
-                background: #10b981;
-                animation: blink 2s infinite;
-            }
-            .header-controls {
-                display: flex;
-                gap: 4px;
-                margin-left: 8px;
-            }
-            .chatbot-minimize, .chatbot-close {
-                background: rgba(255,255,255,0.1);
-                border: none;
-                color: white;
-                font-size: 12px;
-                cursor: pointer;
-                padding: 4px;
-                border-radius: 6px;
-                transition: all 0.2s ease;
-                width: 24px;
-                height: 24px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .chatbot-minimize:hover, .chatbot-close:hover { background: rgba(255,255,255,0.2); }
-            .chatbot-messages {
-                flex: 1;
-                padding: 16px;
-                overflow-y: auto;
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                background: #f9fafb;
-                scroll-behavior: smooth;
-            }
-            .message {
-                max-width: 85%;
-                padding: 8px 12px;
-                border-radius: 12px;
-                line-height: 1.4;
-                word-wrap: break-word;
-                animation: messageAppear 0.2s ease-out;
-                font-size: 13px;
-            }
-            .message.bot {
-                align-self: flex-start;
-                background: white;
-                color: #1f2937;
-                border: 1px solid #e5e7eb;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                border-radius: 12px 12px 12px 4px;
-            }
-            .message.user {
-                align-self: flex-end;
-                background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
-                color: white;
-                border-radius: 12px 12px 4px 12px;
-            }
-            .message.system {
-                align-self: center;
-                background: #f3f4f6;
-                color: #374151;
-                font-size: 12px;
-                padding: 6px 12px;
-                border-radius: 8px;
-                max-width: 90%;
-                text-align: center;
-                border: 1px solid #e5e7eb;
-            }
-            .message.error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
-            .message.success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
-            .message.info { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-            .message.warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-            .message.loading {
-                background: white;
-                padding: 10px 14px;
-                border: 1px solid #e5e7eb;
-                border-radius: 12px 12px 12px 4px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                width: fit-content;
-            }
-            .loading-dots { display: flex; gap: 4px; }
-            .loading-dots span {
-                width: 5px;
-                height: 5px;
-                border-radius: 50%;
-                background: #1a56db;
-                animation: bounce 1.4s infinite;
-            }
-            .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-            .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
-            .message-time {
-                font-size: 9px;
-                opacity: 0.5;
-                margin-top: 3px;
-                text-align: right;
-                display: block;
-            }
-            .message.user .message-time { color: rgba(255,255,255,0.7); }
-            .chatbot-input-area {
-                padding: 12px 16px;
-                border-top: 1px solid #e5e7eb;
-                background: white;
-                flex-shrink: 0;
-            }
-            .input-wrapper {
-                display: flex;
-                align-items: flex-end;
-                gap: 8px;
-                background: #f9fafb;
-                border-radius: 12px;
-                padding: 2px;
-                border: 1px solid #e5e7eb;
-                transition: all 0.3s ease;
-            }
-            .input-wrapper:focus-within {
-                border-color: #1a56db;
-                background: white;
-                box-shadow: 0 0 0 2px rgba(26,86,219,0.1);
-            }
-            .chatbot-input-area textarea {
-                flex: 1;
-                padding: 8px 12px;
-                border: none;
-                background: transparent;
-                font-size: 13px;
-                line-height: 1.4;
-                resize: none;
-                max-height: 60px;
-                outline: none;
-                font-family: inherit;
-            }
-            .chatbot-input-area textarea:disabled { cursor: not-allowed; opacity: 0.5; }
-            .send-button {
-                width: 32px;
-                height: 32px;
-                border-radius: 8px;
-                background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
-                color: white;
-                border: none;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.3s ease;
-                flex-shrink: 0;
-                font-size: 13px;
-            }
-            .send-button:hover:not(:disabled) { transform: scale(1.05); }
-            .send-button:disabled { opacity: 0.5; cursor: not-allowed; background: #9ca3af; }
-            .input-footer { display: flex; justify-content: flex-end; margin-top: 4px; padding: 0 4px; }
-            .char-count { font-size: 10px; color: #6b7280; }
-            .chatbot-actions {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 4px;
-                padding: 8px 12px;
-                border-top: 1px solid #e5e7eb;
-                background: white;
-                flex-shrink: 0;
-            }
-            .chatbot-action-btn {
-                padding: 4px 10px;
-                background: white;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                font-size: 11px;
-                font-weight: 500;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                flex: 1;
-                min-width: calc(50% - 2px);
-                text-align: center;
-                color: #4b5563;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 4px;
-            }
-            .chatbot-action-btn:hover:not(:disabled) {
-                background: #1a56db;
-                color: white;
-                border-color: #1a56db;
-            }
-            .chatbot-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-            @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0.6; } }
-            @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
-            @keyframes messageAppear { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-            @media (max-width: 480px) {
-                .chatbot-container { bottom: 16px; right: 16px; }
-                .chatbot-window { width: calc(100vw - 32px); height: calc(100vh - 120px); max-height: none; bottom: 64px; border-radius: 16px; }
-                .chatbot-header { padding: 10px 14px; }
-                .chatbot-messages { padding: 12px; gap: 8px; }
-                .chatbot-input-area { padding: 10px 14px; }
-                .chatbot-actions { padding: 6px 10px; gap: 3px; }
-                .chatbot-action-btn { font-size: 10px; height: 26px; padding: 3px 8px; }
-                .message { font-size: 12px; padding: 6px 10px; }
-            }
-            .chatbot-messages::-webkit-scrollbar { width: 3px; }
-            .chatbot-messages::-webkit-scrollbar-track { background: transparent; }
-            .chatbot-messages::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
-            .chatbot-messages::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-        `;
-        document.head.appendChild(style);
-    }
-
-    setupEventListeners() {
-        document.getElementById('chatbotToggle').addEventListener('click', () => this.toggleChat());
-        document.getElementById('closeChatbot').addEventListener('click', () => this.closeChat());
-        document.getElementById('minimizeChatbot').addEventListener('click', () => this.minimizeChat());
-        document.getElementById('sendMessage').addEventListener('click', () => this.sendMessage());
-        
-        const textarea = document.getElementById('chatbotInput');
-        textarea.addEventListener('input', () => {
-            this.adjustTextareaHeight(textarea);
-            const count = textarea.value.length;
-            document.getElementById('charCount').textContent = `${count}/${this.config.maxMessageLength}`;
-        });
-        textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendMessage();
-            }
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isOpen) this.closeChat();
-        });
-    }
-
-    adjustTextareaHeight(textarea) {
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 60) + 'px';
-    }
-
-    resetInactivityTimer() {
-        if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
-        if (this.isOpen) {
-            this.inactivityTimer = setTimeout(() => {
-                if (this.isOpen) {
-                    this.closeChat();
-                    this.addMessage('system', '💤 Chat pausado por inatividade.', 'info');
-                }
-            }, this.config.autoCloseInactive);
-        }
-    }
-
-    networkMonitor() {
-        window.addEventListener('online', () => {
-            this.connectionStatus = 'online';
-            this.updateConnectionStatus();
-        });
-        window.addEventListener('offline', () => {
-            this.connectionStatus = 'offline';
-            this.updateConnectionStatus();
-        });
-        setInterval(() => {
-            if (navigator.onLine && this.connectionStatus !== 'online') {
-                this.connectionStatus = 'online';
-                this.updateConnectionStatus();
-            }
-        }, 5000);
-    }
-
-    updateConnectionStatus() {
-        const statusDot = document.querySelector('.status-dot');
-        const statusText = document.querySelector('.status-text');
-        if (statusDot && statusText) {
-            if (this.connectionStatus === 'online') {
-                statusDot.style.background = '#10b981';
-                statusDot.style.boxShadow = '0 0 8px #10b981';
-                statusText.textContent = 'Online';
-                statusText.style.color = '#10b981';
-            } else {
-                statusDot.style.background = '#ef4444';
-                statusDot.style.boxShadow = '0 0 8px #ef4444';
-                statusText.textContent = 'Offline';
-                statusText.style.color = '#ef4444';
-            }
-        }
-    }
-
-    setupInactivityTimer() {
-        const resetTimer = () => {
-            if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
-            if (this.isOpen) {
-                this.inactivityTimer = setTimeout(() => {
-                    if (this.isOpen) {
-                        this.closeChat();
-                        this.addMessage('system', '💤 Chat pausado por inatividade.', 'info');
-                    }
-                }, this.config.autoCloseInactive);
-            }
-        };
-        const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
-        events.forEach(event => document.addEventListener(event, resetTimer, { passive: true }));
-        resetTimer();
-    }
-
-    toggleChat() {
-        this.isOpen = !this.isOpen;
-        const windowElement = document.getElementById('chatbotWindow');
-        if (this.isOpen) {
-            windowElement.classList.add('active');
-            document.getElementById('chatbotInput').focus();
-            this.updateQuickActions();
-            this.resetInactivityTimer();
-            this.clearNotification();
+                <button class="btn-update" onclick="calendario.atualizarEvento('${eventoExistente.id}')">
+                    <i class="fas fa-save"></i> Atualizar
+                </button>
+            `;
         } else {
-            windowElement.classList.remove('active');
-            this.resetInactivityTimer();
-        }
-    }
-
-    minimizeChat() {
-        this.isOpen = false;
-        document.getElementById('chatbotWindow').classList.remove('active');
-    }
-
-    closeChat() {
-        this.isOpen = false;
-        document.getElementById('chatbotWindow').classList.remove('active');
-        if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
-    }
-
-    addMessage(sender, content, type = 'normal') {
-        if (!content || content.trim() === '') return;
-        const messagesContainer = document.getElementById('chatbotMessages');
-        if (!messagesContainer) return;
-        
-        const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-        const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        
-        let messageClass = sender;
-        if (type !== 'normal') messageClass = type;
-        
-        let contentLimpo = content;
-        if (content.includes('<think>')) {
-            contentLimpo = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-            if (!contentLimpo) contentLimpo = content;
-        }
-        
-        const messageHTML = `
-            <div class="message ${messageClass}" id="${messageId}" role="article">
-                ${this.formatMessage(contentLimpo)}
-                <span class="message-time">${time}</span>
-            </div>
-        `;
-        messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
-        
-        this.conversation.push({ id: messageId, sender, content: contentLimpo, type, time, timestamp: Date.now() });
-        this.saveConversation();
-        
-        setTimeout(() => {
-            const element = document.getElementById(messageId);
-            if (element) element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 50);
-        
-        if (!this.isOpen && sender === 'bot') this.showNotification();
-        return messageId;
-    }
-
-    formatMessage(content) {
-        if (!content) return '';
-        return content
-            .replace(/[<>]/g, (m) => m === '<' ? '&lt;' : '&gt;')
-            .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #1a56db; text-decoration: underline;">$1</a>')
-            .replace(/^\s*[-•]\s+(.*$)/gm, '<div style="display: flex; gap: 4px; margin: 2px 0;"><span>•</span><span>$1</span></div>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n/g, '<br>');
-    }
-
-    showTypingIndicator() {
-        if (this.isTyping) return;
-        const messagesContainer = document.getElementById('chatbotMessages');
-        if (!messagesContainer) return;
-        
-        const typingId = 'typing_' + Date.now();
-        const typingHTML = `
-            <div class="message bot loading" id="${typingId}">
-                <div class="loading-dots"><span></span><span></span><span></span></div>
-                <span style="font-size: 11px; color: #6b7280;">Digitando...</span>
-            </div>
-        `;
-        messagesContainer.insertAdjacentHTML('beforeend', typingHTML);
-        this.isTyping = true;
-        this.typingIndicatorId = typingId;
-        setTimeout(() => {
-            const indicator = document.getElementById(typingId);
-            if (indicator) indicator.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 50);
-    }
-
-    hideTypingIndicator() {
-        if (!this.isTyping || !this.typingIndicatorId) return;
-        const indicator = document.getElementById(this.typingIndicatorId);
-        if (indicator) indicator.remove();
-        this.isTyping = false;
-        this.typingIndicatorId = null;
-    }
-
-    showNotification() {
-        const badge = document.getElementById('notificationBadge');
-        if (!this.isOpen && badge) {
-            badge.style.display = 'flex';
-            badge.textContent = '1';
-            this.hasNewMessages = true;
-        }
-    }
-
-    clearNotification() {
-        const badge = document.getElementById('notificationBadge');
-        if (badge) { badge.style.display = 'none'; }
-        this.hasNewMessages = false;
-    }
-
-    async sendMessage() {
-        if (this.connectionStatus === 'offline') {
-            this.addMessage('error', '⚠️ Você está offline. Conecte-se à internet.', 'warning');
-            return;
+            footer.innerHTML = `
+                <button class="btn-cancel" onclick="calendario.fecharModal()">Cancelar</button>
+                <button class="btn-save" onclick="calendario.salvarEvento()">
+                    <i class="fas fa-check"></i> Criar Evento
+                </button>
+            `;
         }
 
-        const textarea = document.getElementById('chatbotInput');
-        const message = textarea.value.trim();
-        if (!message) { textarea.focus(); return; }
-        if (message.length > this.config.maxMessageLength) {
-            this.addMessage('error', `Mensagem muito longa (${message.length} caracteres). Limite: ${this.config.maxMessageLength}.`, 'error');
-            return;
+        if (isAdmin) {
+            body.querySelectorAll('input[name="destinatarioModo"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const modo = e.target.value;
+                    body.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
+                    e.target.closest('.radio-card').classList.add('selected');
+
+                    const bloco = document.getElementById('blocoSetorDestino');
+                    if (bloco) bloco.style.display = modo === 'setor' ? 'block' : 'none';
+                });
+            });
         }
-        if (this.isTyping || this.isProcessing) {
-            this.messageQueue.push(message);
-            this.addMessage('system', 'Aguarde a resposta atual...', 'info');
-            return;
-        }
-        
-        this.addMessage('user', message);
-        textarea.value = '';
-        textarea.style.height = 'auto';
-        document.getElementById('charCount').textContent = `0/${this.config.maxMessageLength}`;
-        
-        textarea.disabled = true;
-        document.getElementById('sendMessage').disabled = true;
-        this.isProcessing = true;
-        
-        try {
-            this.showTypingIndicator();
-            const response = await Promise.race([
-                this.getBackendResponse(message),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), this.config.responseTimeout))
-            ]);
-            this.hideTypingIndicator();
-            if (response) this.addMessage('bot', response);
-        } catch (error) {
-            console.error('❌ Erro no chatbot:', error);
-            this.hideTypingIndicator();
-            this.addMessage('bot', this.getFallbackMessage(), 'error');
-        } finally {
-            textarea.disabled = false;
-            document.getElementById('sendMessage').disabled = false;
-            this.isProcessing = false;
-            textarea.focus();
-            if (this.messageQueue.length > 0) {
-                setTimeout(() => {
-                    const nextMessage = this.messageQueue.shift();
-                    textarea.value = nextMessage;
-                    this.adjustTextareaHeight(textarea);
-                    this.sendMessage();
-                }, 1000);
-            }
-        }
+
+        this.abrirModal();
     }
 
-    getFallbackMessage() {
-        return `Desculpe, estou com dificuldades técnicas.
+    // ============================================================================
+    // Coleta o payload (criar/atualizar)
+    // ============================================================================
+    coletarPayloadEvento() {
+        const titulo = document.getElementById('eventoTitulo')?.value;
+        const dataInicio = document.getElementById('eventoDataInicio')?.value;
 
-📞 Entre em contato com o suporte:
-Email: caua.veloso@iemasaoluiscentro.net
-Telefone: (98) 98308-6504
-Site: educapleno.com
-
-🔄 Tente novamente em alguns instantes.`;
-    }
-
-    async getBackendResponse(userMessage) {
-        const token = localStorage.getItem('auth_token');
-        const endpoint = token ? '/api/chatbot/message' : '/api/chatbot/public/message';
-        
-        const url = window.location.href.toLowerCase();
-        const path = window.location.pathname.toLowerCase();
-        
-        // DETECTAR PERFIL CORRETAMENTE
-        let perfilDetectado = this.currentPage || 'padrao';
-        
-        // Se ainda for padrao, tentar detectar pela URL
-        if (perfilDetectado === 'padrao') {
-            const urlMatch = (termos) => termos.some(t => url.includes(t) || path.includes(t));
-            
-            if (urlMatch(['gestao-geral', 'gestao_geral', 'gestao geral', 'gestao-geral.html'])) perfilDetectado = 'gestaoGeral';
-            else if (urlMatch(['enfermaria', 'enfermaria.html'])) perfilDetectado = 'enfermaria';
-            else if (urlMatch(['cozinha', 'cozinha.html', 'cozinha-dashboard', 'cozinha-dashboard.html'])) perfilDetectado = 'cozinha';
-            else if (urlMatch(['coordenacao-patio', 'coordenacao_patio', 'coordenacao patio', 'coordenacao-patio.html'])) perfilDetectado = 'coordenacaoPatio';
-            else if (urlMatch(['setor-pedagogico', 'setor_pedagogico', 'setor pedagogico', 'setorpedagogico', 'setor-pedagogico.html'])) perfilDetectado = 'setorPedagogico';
-            else if (urlMatch(['admin-simples', 'admin_simples', 'adminsimples', 'admin-simples.html'])) perfilDetectado = 'adminSimples';
-            else if (urlMatch(['admin.html', 'super-admin', 'super_admin', 'painel admin', 'superadmin'])) perfilDetectado = 'superAdmin';
-            else if (urlMatch(['index.html', 'professor', 'dashboard', '/admin']) && !urlMatch(['admin-simples', 'admin_simples', 'admin.html', 'super-admin', 'super_admin'])) perfilDetectado = 'professor';
-            else if (urlMatch(['/aluno', 'aluno.html', 'capturar-face', 'validar-face', 'resultado-aluno', 'editar-perfil', 'calendario', 'minhas-provas', 'meus-resultados'])) perfilDetectado = 'aluno';
-            else if (urlMatch(['/login', 'login.html', '/register', '/cadastro', 'recuperar-senha', 'trocar-senha'])) perfilDetectado = 'login';
+        if (!titulo || titulo.trim().length < 3) {
+            throw new Error('Título deve ter pelo menos 3 caracteres');
         }
-        
-        // Se ainda for padrao, tentar pelo user_data
-        if (perfilDetectado === 'padrao') {
-            try {
-                const userData = localStorage.getItem('user_data');
-                if (userData) {
-                    const user = JSON.parse(userData);
-                    const roleMap = {
-                        'gestao_geral': 'gestaoGeral',
-                        'enfermaria': 'enfermaria',
-                        'cozinha': 'cozinha',
-                        'coordenacao_patio': 'coordenacaoPatio',
-                        'setor_pedagogico': 'setorPedagogico',
-                        'admin': 'adminSimples',
-                        'super_admin': 'superAdmin',
-                        'professor': 'professor',
-                        'aluno': 'aluno'
-                    };
-                    if (roleMap[user.role]) {
-                        perfilDetectado = roleMap[user.role];
-                        this.currentPage = perfilDetectado;
-                        console.log(`✅ Perfil detectado do user_data: ${user.role} → ${perfilDetectado}`);
-                    }
-                }
-            } catch (e) {}
+        if (!dataInicio) {
+            throw new Error('Preencha a data de início');
         }
-        
-        console.log(`📤 Enviando mensagem com perfil: ${perfilDetectado}`);
-        
-        const requestData = {
-            sessionId: this.sessionId,
-            message: userMessage,
-            conversationHistory: this.conversation.slice(-5).map(msg => ({
-                sender: msg.sender,
-                content: msg.content,
-                timestamp: msg.timestamp
-            })),
-            context: {
-                currentPage: this.currentPage || perfilDetectado,
-                currentPath: path,
-                fullUrl: url,
-                perfil: perfilDetectado,
-                userRole: this.userData.role || 'guest',
-                timestamp: new Date().toISOString()
-            }
+
+        const evento = {
+            titulo,
+            dataInicio,
+            descricao: document.getElementById('eventoDescricao')?.value || '',
+            tipo: document.getElementById('eventoTipo')?.value || 'personalizado',
+            cor: document.getElementById('eventoCor')?.value || '#3b82f6',
+            dataFim: document.getElementById('eventoDataFim')?.value || null,
+            horarioInicio: document.getElementById('eventoHorarioInicio')?.value,
+            horarioFim: document.getElementById('eventoHorarioFim')?.value,
+            diaInteiro: document.getElementById('eventoDiaInteiro')?.checked || false,
+            local: document.getElementById('eventoLocal')?.value || '',
+            turmaId: document.getElementById('eventoTurma')?.value || null,
+            notificacaoAtivada: document.getElementById('eventoNotificar')?.checked || false,
+            notificacoes: [{
+                minutosAntes: parseInt(document.getElementById('eventoNotificacao')?.value || '30'),
+                tipo: 'sistema'
+            }]
         };
-        
-        const headers = {
-            'Content-Type': 'application/json',
-            'X-Chatbot-Session': this.sessionId
-        };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(requestData)
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Erro ${response.status}: ${errorText || response.statusText}`);
-        }
-        
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || 'Erro na resposta');
-        return data.response;
-    }
 
-    suggestAction(actionText) {
-        if (this.connectionStatus === 'offline') {
-            this.addMessage('warning', '⚠️ Esta ação requer internet.', 'warning');
-            return;
-        }
-        const textarea = document.getElementById('chatbotInput');
-        textarea.value = actionText;
-        this.adjustTextareaHeight(textarea);
-        textarea.focus();
-        setTimeout(() => this.sendMessage(), 200);
-    }
+        const isAdmin = ['admin', 'super_admin'].includes(this.usuario.role);
+        if (isAdmin) {
+            const modo = document.querySelector('input[name="destinatarioModo"]:checked')?.value || 'eu';
 
-    loadConversation() {
-        try {
-            const saved = localStorage.getItem('chatbot_conversation');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
-                this.conversation = parsed.filter(msg => msg.timestamp && msg.timestamp > twentyFourHoursAgo);
-                if (this.conversation.length > this.config.maxConversationHistory) {
-                    this.conversation = this.conversation.slice(-this.config.maxConversationHistory);
+            if (modo === 'setor') {
+                const roleSetor = document.getElementById('eventoSetorDestino')?.value;
+                if (!roleSetor) {
+                    throw new Error('Selecione o setor do evento');
                 }
+                evento.setorDestino = roleSetor;
             }
-        } catch (error) {
-            console.error('❌ Erro ao carregar conversação:', error);
-            this.conversation = [];
         }
+
+        return evento;
     }
 
-    saveConversation() {
+    async salvarEvento() {
         try {
-            if (this.conversation.length > this.config.maxConversationHistory) {
-                this.conversation = this.conversation.slice(-this.config.maxConversationHistory);
-            }
-            localStorage.setItem('chatbot_conversation', JSON.stringify(this.conversation));
-        } catch (error) {
-            console.error('❌ Erro ao salvar conversação:', error);
+            const token = localStorage.getItem('auth_token');
+            const evento = this.coletarPayloadEvento();
+
+            const resp = await fetch(`${this.apiBase}/eventos`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(evento)
+            });
+
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Erro');
+
+            const dataCriada = new Date(evento.dataInicio + 'T12:00:00');
+            this.mesAtual = dataCriada.getMonth();
+            this.anoAtual = dataCriada.getFullYear();
+
+            alert('✅ Evento criado com sucesso!');
+            this.fecharModal();
+            await this.carregarEventos();
+            this.renderizarCalendario();
+
+        } catch (e) {
+            console.error('❌ Erro:', e);
+            alert('❌ ' + e.message);
         }
     }
 
-    async clearConversation() {
-        const confirmar = await confirm('Limpar histórico da conversa?');
-        if (confirmar) {
-            this.conversation = [];
-            localStorage.removeItem('chatbot_conversation');
-            const messagesContainer = document.getElementById('chatbotMessages');
-            if (messagesContainer) messagesContainer.innerHTML = '';
-            this.addMessage('system', '🗑️ Histórico limpo.', 'info');
-            setTimeout(() => this.showWelcomeMessage(), 500);
-        }
-    }
-
-    // ============================================
-    // ENVIAR MENSAGEM DE SISTEMA (NOVO MÉTODO)
-    // ============================================
-    sendSystemMessage(mensagem) {
-        if (!mensagem) return;
-        
-        // Log no console
-        console.log('📢 [chatbot system]', mensagem);
-        
-        // Adicionar como mensagem do sistema no chat
-        this.addMessage('system', mensagem, 'info');
-        
-        // Se o chat estiver fechado, mostrar notificação no badge
-        if (!this.isOpen) {
-            this.showNotification();
-        }
-    }
-
-    debug() {
-        console.group('🎓 Chatbot Debug');
-        console.log('Session ID:', this.sessionId);
-        console.log('Open:', this.isOpen);
-        console.log('Processing:', this.isProcessing);
-        console.log('Page:', this.currentPage);
-        console.log('URL:', window.location.href);
-        console.log('Role:', this.userData.role);
-        console.log('Status:', this.connectionStatus);
-        console.log('Messages:', this.conversation.length);
-        console.groupEnd();
-    }
-}
-
-// ============================================
-// INICIALIZAÇÃO
-// ============================================
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
+    async atualizarEvento(id) {
         try {
-            if (!window.chatbot) {
-                window.chatbot = new SistemaProvasChatbot();
-                window.chatbotDebug = () => window.chatbot.debug();
-                window.chatbotClear = () => window.chatbot.clearConversation();
-                console.log('🎓 Chatbot inicializado!');
-                console.log('💡 Comandos: chatbotDebug(), chatbotClear()');
+            const token = localStorage.getItem('auth_token');
+            const evento = this.coletarPayloadEvento();
+
+            const resp = await fetch(`${this.apiBase}/eventos/${id}`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(evento)
+            });
+
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Erro');
+
+            const dataAtualizada = new Date(evento.dataInicio + 'T12:00:00');
+            this.mesAtual = dataAtualizada.getMonth();
+            this.anoAtual = dataAtualizada.getFullYear();
+
+            alert('✅ Evento atualizado!');
+            this.fecharModal();
+            await this.carregarEventos();
+            this.renderizarCalendario();
+
+        } catch (e) {
+            console.error('❌ Erro:', e);
+            alert('❌ ' + e.message);
+        }
+    }
+
+    async excluirEvento(id) {
+        const confirmar = await confirm('Tem certeza que deseja excluir este evento?');
+        if (!confirmar) return;
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const resp = await fetch(`${this.apiBase}/eventos/${id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            const contentType = resp.headers.get('content-type');
+            let data;
+            if (contentType && contentType.includes('application/json')) {
+                data = await resp.json();
             } else {
-                console.log('🔄 Chatbot já inicializado, atualizando perfil...');
-                window.chatbot.currentPage = window.chatbot.detectCurrentPage();
-                window.chatbot.updateQuickActions();
+                const text = await resp.text();
+                throw new Error('Resposta inválida do servidor');
             }
-        } catch (error) {
-            console.error('❌ Falha ao inicializar chatbot:', error);
-        }
-    }, 1000);
-});
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = SistemaProvasChatbot;
-} else {
-    window.SistemaProvasChatbot = SistemaProvasChatbot;
+            if (data.success) {
+                alert('✅ Evento excluído!');
+                this.fecharModal();
+                await this.carregarEventos();
+                this.renderizarCalendario();
+            } else {
+                throw new Error(data.error || 'Erro');
+            }
+        } catch (e) {
+            console.error('❌ Erro:', e);
+            alert('❌ ' + e.message);
+        }
+    }
+
+    // ============================================================================
+    // 🔥 DETALHES DO EVENTO — mostra criador E destinatário
+    // ============================================================================
+    mostrarDetalhesEvento(evento) {
+        const body = document.getElementById('modalBody');
+        const title = document.getElementById('modalTitle');
+        const footer = document.getElementById('modalFooter');
+        if (!body || !title || !footer) return;
+
+        title.innerHTML = `<i class="fas fa-calendar-check"></i> ${this.escapeHtml(evento.title || 'Evento')}`;
+
+        const dataInicioFmt = evento.start
+            ? new Date(evento.start).toLocaleDateString('pt-BR')
+            : 'Data não disponível';
+        const dataFimFmt = evento.end
+            ? new Date(evento.end).toLocaleDateString('pt-BR')
+            : null;
+        const temPeriodo = dataFimFmt && dataFimFmt !== dataInicioFmt;
+
+        const horaInicio = evento.horarioInicio || '--:--';
+        const horaFim = evento.horarioFim || '--:--';
+
+        const meuId = this.getMeuId();
+        const isAdmin = ['admin', 'super_admin'].includes(this.usuario.role);
+
+        const idCriador = evento.criadoPor?.id || evento.criadoPor?._id;
+        const idDestino = evento.usuarioId?.id || evento.usuarioId?._id;
+
+        const ehCriador = idCriador && idCriador.toString() === meuId?.toString();
+        const ehDestinatario = idDestino && idDestino.toString() === meuId?.toString();
+
+        const podeEditar = isAdmin || ehCriador || ehDestinatario;
+
+        // Bloco de período
+        const blocoPeriodo = temPeriodo
+            ? `<div class="detalhe-item">
+                   <i class="fas fa-calendar-week"></i>
+                   <div><strong>Período:</strong> ${dataInicioFmt} até ${dataFimFmt}</div>
+               </div>`
+            : `<div class="detalhe-item">
+                   <i class="fas fa-calendar"></i>
+                   <div><strong>Data:</strong> ${dataInicioFmt}</div>
+               </div>`;
+
+        // Bloco do criador
+        let blocoCriador = '';
+        if (evento.criadoPor?.nome) {
+            const cargo = this.getLabelRole(evento.criadoPor.role);
+            blocoCriador = `
+                <div class="detalhe-item">
+                    <i class="fas fa-user-edit"></i>
+                    <div>
+                        <strong>Criado por:</strong> ${this.escapeHtml(evento.criadoPor.nome)}
+                        ${cargo ? `<span class="badge-role">${this.escapeHtml(cargo)}</span>` : ''}
+                        ${ehCriador ? '<span class="badge-voce">(você)</span>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Bloco do destinatário
+        let blocoDestinatario = '';
+        if (evento.usuarioId?.nome) {
+            const cargo = this.getLabelRole(evento.usuarioId.role);
+            blocoDestinatario = `
+                <div class="detalhe-item">
+                    <i class="fas fa-bullseye"></i>
+                    <div>
+                        <strong>Destinado a:</strong> ${this.escapeHtml(evento.usuarioId.nome)}
+                        ${cargo ? `<span class="badge-role">${this.escapeHtml(cargo)}</span>` : ''}
+                        ${ehDestinatario ? '<span class="badge-voce">(você)</span>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Bloco das notificações
+        let blocoNotificacoes = '';
+        if (evento.notificacaoAtivada && Array.isArray(evento.notificacoes) && evento.notificacoes.length > 0) {
+            const mapa = {
+                0: 'No momento',
+                5: '5 min antes',
+                15: '15 min antes',
+                30: '30 min antes',
+                60: '1 h antes',
+                120: '2 h antes',
+                1440: '1 dia antes'
+            };
+            const enviadas = evento.notificacoes.filter(n => n.enviada).length;
+            const pendentes = evento.notificacoes.filter(n => !n.enviada).length;
+
+            blocoNotificacoes = `
+                <div class="notificacao-info" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-bell text-success"></i>
+                        <strong>Notificações ativadas</strong>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; padding-left: 26px;">
+                        ${evento.notificacoes.map(n => `
+                            <span class="badge-notif ${n.enviada ? 'badge-notif-enviada' : 'badge-notif-pendente'}">
+                                ${n.enviada ? '✓' : '⏰'} ${mapa[n.minutosAntes] || (n.minutosAntes + ' min antes')}
+                            </span>
+                        `).join('')}
+                    </div>
+                    <small class="text-muted" style="padding-left: 26px;">
+                        ${enviadas} enviada(s), ${pendentes} pendente(s)
+                    </small>
+                </div>
+            `;
+        } else {
+            blocoNotificacoes = `
+                <div class="notificacao-info">
+                    <i class="fas fa-bell-slash text-muted"></i>
+                    Notificações desativadas
+                </div>
+            `;
+        }
+
+        body.innerHTML = `
+            <style>
+                .badge-role {
+                    display: inline-block;
+                    background: #eef2ff;
+                    color: #1e3c72;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    margin-left: 6px;
+                }
+                .badge-voce {
+                    display: inline-block;
+                    background: #d1fae5;
+                    color: #065f46;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    margin-left: 6px;
+                }
+                .badge-notif {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 3px 10px;
+                    border-radius: 12px;
+                }
+                .badge-notif-enviada {
+                    background: #d1fae5;
+                    color: #065f46;
+                }
+                .badge-notif-pendente {
+                    background: #fef3c7;
+                    color: #92400e;
+                }
+            </style>
+
+            <div class="evento-detalhes">
+                <div class="evento-header" style="border-left:4px solid ${evento.cor || '#667eea'}; background:${(evento.cor || '#667eea')}20;">
+                    <div class="evento-tipo tipo-${evento.tipo || 'evento'}">
+                        ${this.getIconeTipo(evento.tipo)} ${this.getNomeTipo(evento.tipo)}
+                    </div>
+                </div>
+
+                <div class="detalhes-grid">
+                    ${blocoPeriodo}
+
+                    ${!evento.allDay ? `
+                    <div class="detalhe-item">
+                        <i class="fas fa-clock"></i>
+                        <div><strong>Horário:</strong> ${horaInicio} - ${horaFim}</div>
+                    </div>
+                    ` : ''}
+
+                    ${evento.local ? `
+                    <div class="detalhe-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <div><strong>Local:</strong> ${this.escapeHtml(evento.local)}</div>
+                    </div>
+                    ` : ''}
+
+                    ${blocoCriador}
+                    ${blocoDestinatario}
+
+                    ${evento.turma ? `
+                    <div class="detalhe-item">
+                        <i class="fas fa-school"></i>
+                        <div><strong>Turma:</strong> ${this.escapeHtml(evento.turma.nome)}</div>
+                    </div>
+                    ` : ''}
+
+                    ${evento.prova ? `
+                    <div class="detalhe-item">
+                        <i class="fas fa-file-alt"></i>
+                        <div><strong>Prova:</strong> ${this.escapeHtml(evento.prova.titulo)}</div>
+                    </div>
+                    ` : ''}
+                </div>
+
+                ${evento.descricao ? `
+                <div class="descricao-box">
+                    <strong><i class="fas fa-align-left"></i> Descrição:</strong>
+                    <p>${this.escapeHtml(evento.descricao).replace(/\n/g, '<br>')}</p>
+                </div>
+                ` : ''}
+
+                ${blocoNotificacoes}
+            </div>
+        `;
+
+        footer.innerHTML = '';
+        const btnFechar = document.createElement('button');
+        btnFechar.className = 'btn-cancel';
+        btnFechar.innerHTML = 'Fechar';
+        btnFechar.onclick = () => this.fecharModal();
+        footer.appendChild(btnFechar);
+
+        if (podeEditar && this.podeCriar) {
+            const btnEditar = document.createElement('button');
+            btnEditar.className = 'btn-update';
+            btnEditar.innerHTML = '<i class="fas fa-edit"></i> Editar';
+            btnEditar.onclick = () => this.abrirCriadorEvento(null, evento);
+            footer.appendChild(btnEditar);
+        }
+
+        this.abrirModal();
+    }
+
+    getIconeTipo(t) {
+        return { prova: '📝', lembrete: '🔔', feriado: '🎉',
+                 reuniao: '👥', prazo: '⏰', evento: '📅',
+                 personalizado: '📌' }[t] || '📌';
+    }
+
+    getNomeTipo(t) {
+        return { prova: 'Prova', lembrete: 'Lembrete', feriado: 'Feriado',
+                 reuniao: 'Reunião', prazo: 'Prazo', evento: 'Evento',
+                 personalizado: 'Personalizado' }[t] || 'Evento';
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    abrirModal() {
+        const modal = document.getElementById('modal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    fecharModal() {
+        const modal = document.getElementById('modal');
+        if (modal) modal.style.display = 'none';
+    }
 }
+
+const calendario = new CalendarioAcademico();
+window.calendario = calendario;

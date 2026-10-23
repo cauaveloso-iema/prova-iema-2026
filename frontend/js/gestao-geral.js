@@ -8109,10 +8109,65 @@ async function carregarTudo() {
         carregarNotificacoesSistema(),
         carregarLembretesRemarcacao()
     ]);
+
     renderizarSinoUnificado();
-    atualizarBadgeUnificado();                          // ← já existia
-    if (typeof window.atualizarBadgeUnificadoGestao === 'function') {
-        window.atualizarBadgeUnificadoGestao();         // 🆕 sincroniza avatar + menu
+    atualizarBadgeUnificado();
+
+    // 🔥 Busca o contador REAL da API (fonte da verdade)
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            const res = await fetch('/api/notificacoes/nao-lidas/contador', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const d = await res.json();
+                atualizarBadgeNotificacoes(d.count || 0);
+            }
+        }
+    } catch (e) {
+        console.warn('[Badge] Erro ao buscar contador:', e);
+    }
+}
+
+// ============================================================
+// 🔔 POLLING DO BADGE — atualiza o contador do avatar a cada 30s
+// (independente do carregarTudo / cache)
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Primeira atualização após 1.5s (espera o DOM e o login estabilizarem)
+    setTimeout(async () => {
+        await atualizarContadorBadgeDireto();
+    }, 1500);
+
+    // Polling contínuo
+    setInterval(async () => {
+        await atualizarContadorBadgeDireto();
+    }, 30000);
+});
+
+async function atualizarContadorBadgeDireto() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
+        const res = await fetch('/api/notificacoes/nao-lidas/contador', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const total = data.count || 0;
+
+        // Soma lembretes em cache, se houver
+        let lembretes = 0;
+        try {
+            lembretes = (window.__lembretesCache || []).length;
+        } catch (e) {}
+
+        atualizarBadgeNotificacoes(total + lembretes);
+    } catch (e) {
+        // silencioso — não spamma console em caso de rede instável
     }
 }
 
@@ -8288,28 +8343,79 @@ function renderizarSinoUnificado() {
     });
 }
 
+// ============================================================
+// 🔔 BADGE UNIFICADO — número ao redor do avatar + badge no menu
+// ============================================================
 function atualizarBadgeUnificado() {
-    const badge = document.getElementById('notificacoesBadge');
-    const btn = document.getElementById('notificacoesBtn');
-    if (!badge || !btn) return;
-    
-    const total = __notificacoesCache.filter(n => !n.lida).length + __lembretesCache.length;
-    
+    // Conta a partir do cache (se já carregou) ou usa o último valor conhecido
+    let naoLidas = 0;
+    try {
+        naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
+    } catch (e) {}
+
+    let lembretes = 0;
+    try {
+        lembretes = (window.__lembretesCache || []).length;
+    } catch (e) {}
+
+    const total = naoLidas + lembretes;
+
+    // Elementos do header
+    const badgeDot   = document.getElementById('userNotificationBadge'); // ponto/número no avatar
+    const menuBadge  = document.getElementById('menuNotifBadge');        // badge no dropdown
+    const trigger    = document.getElementById('userTrigger');           // container do avatar
+
     if (total > 0) {
-        badge.textContent = total > 99 ? '99+' : total;
-        badge.style.display = 'inline-flex';
-        
-        const temUrgente = __lembretesCache.some(r => calcularNivelAlertaNotif(r).urgente);
-        if (temUrgente) {
-            btn.classList.add('tem-notificacao');
-            badge.style.background = '#dc2626';
-        } else {
-            btn.classList.remove('tem-notificacao');
-            badge.style.background = '#ef4444';
+        if (badgeDot) {
+            badgeDot.style.display = 'flex';
+            badgeDot.textContent = total > 9 ? '9+' : total;
         }
+        if (menuBadge) {
+            menuBadge.style.display = 'inline-block';
+            menuBadge.textContent = total > 99 ? '99+' : total;
+        }
+        if (trigger) trigger.classList.add('tem-notificacao');
     } else {
-        badge.style.display = 'none';
-        btn.classList.remove('tem-notificacao');
+        if (badgeDot) {
+            badgeDot.style.display = 'none';
+            badgeDot.textContent = '';
+        }
+        if (menuBadge) {
+            menuBadge.style.display = 'none';
+            menuBadge.textContent = '';
+        }
+        if (trigger) trigger.classList.remove('tem-notificacao');
+    }
+}
+
+// ============================================================
+// 🔔 BADGE DIRETO (recebe o total da API e escreve no avatar)
+// ============================================================
+function atualizarBadgeNotificacoes(total) {
+    const badgeDot  = document.getElementById('userNotificationBadge');
+    const menuBadge = document.getElementById('menuNotifBadge');
+    const trigger   = document.getElementById('userTrigger');
+
+    if (total > 0) {
+        if (badgeDot) {
+            badgeDot.style.display = 'flex';
+            badgeDot.textContent = total > 9 ? '9+' : total;
+        }
+        if (menuBadge) {
+            menuBadge.style.display = 'inline-block';
+            menuBadge.textContent = total > 99 ? '99+' : total;
+        }
+        if (trigger) trigger.classList.add('tem-notificacao');
+    } else {
+        if (badgeDot) {
+            badgeDot.style.display = 'none';
+            badgeDot.textContent = '';
+        }
+        if (menuBadge) {
+            menuBadge.style.display = 'none';
+            menuBadge.textContent = '';
+        }
+        if (trigger) trigger.classList.remove('tem-notificacao');
     }
 }
 
