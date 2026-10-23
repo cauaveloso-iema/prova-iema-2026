@@ -60,26 +60,28 @@
                 <i class="fas fa-redo"></i> 2ª Chamada
             </a>
 
+            <!-- REMOVIDO O FUNDO ROXO INLINE -->
             <a href="#" class="nav-link"
-               onclick="event.preventDefault(); setorPedagogico.fecharMenuLateral(); setTimeout(() => setorPedagogico.abrirModalUploadAdaptarDocumento(), 300);"
-               style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; margin: 12px 16px;">
+               onclick="event.preventDefault(); setorPedagogico.fecharMenuLateral(); setTimeout(() => setorPedagogico.abrirModalUploadAdaptarDocumento(), 300);">
                 <i class="fas fa-universal-access"></i> Adaptar Documento
             </a>
 
             <hr style="margin: 16px 24px; border-color: rgba(255,255,255,0.15);">
 
-            <a href="editar-perfil.html" class="btn-editar-perfil">
+            <a href="calendario.html" class="nav-link">
+                <i class="fas fa-calendar-alt"></i> Calendário
+            </a>
+
+            <!-- REMOVIDO A CLASSE btn-editar-perfil PARA PADRONIZAR COM OS DEMAIS -->
+            <a href="editar-perfil.html" class="nav-link">
                 <i class="fas fa-user-edit"></i> Editar Perfil
             </a>
 
+            <!-- REMOVIDO O FUNDO VERDE INLINE, PADRONIZADO COM O RESTO -->
             <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
                target="_blank"
-               class="nav-link btn-download-app"
-               style="background: linear-gradient(135deg, #10b981, #059669); color: white; margin: 10px 16px; border-radius: 12px; padding: 12px 20px; display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 0.9rem; text-decoration: none; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);"
-               onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(16,185,129,0.4)'"
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'">
-                <i class="fas fa-download" style="font-size: 1.1rem;"></i>
-                <span>Baixar Aplicativo</span>
+               class="nav-link">
+                <i class="fas fa-download"></i> Baixar Aplicativo
             </a>
 
             <a href="#" class="nav-link" id="logoutBtn">
