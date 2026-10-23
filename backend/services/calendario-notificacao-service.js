@@ -1,19 +1,112 @@
 // ============================================================================
-// SERVIÇO DE NOTIFICAÇÕES DO CALENDÁRIO (VERSÃO COMPLETA)
+// SERVIÇO DE NOTIFICAÇÕES DO CALENDÁRIO (VERSÃO COMPLETA E CORRIGIDA)
+// Notifica todos os perfis que têm permissão de visualizar o evento,
+// de acordo com a matriz de visibilidade.
 // ============================================================================
+
+const mongoose = require('mongoose');
 const Evento = require('../models/Evento');
 const Notificacao = require('../models/Notificacao');
 const User = require('../models/User');
 const Turma = require('../models/Turma');
 
+// 🔥 FUNÇÃO AUXILIAR: OBTER O MODELO CONFIG (REGISTRADO PELO SERVER.JS)
+function getConfigModel() {
+    try {
+        return mongoose.model('Config');
+    } catch (error) {
+        // Se o modelo não existir, cria um fallback (para evitar crash)
+        const ConfigSchema = new mongoose.Schema({
+            chave: { type: String, required: true, unique: true, trim: true },
+            valor: { type: mongoose.Schema.Types.Mixed, required: true },
+            tipo: { type: String, enum: ['string', 'number', 'boolean', 'object', 'array'], default: 'string' },
+            descricao: { type: String, default: '' },
+            categoria: { type: String, default: 'geral' },
+            publico: { type: Boolean, default: false },
+            editavel: { type: Boolean, default: true },
+            atualizadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            atualizadoEm: { type: Date, default: Date.now }
+        }, { timestamps: true });
+
+        return mongoose.model('Config', ConfigSchema);
+    }
+}
+
 class CalendarioNotificacaoService {
-    
+
+    // ============ FUNÇÃO AUXILIAR: BUSCAR PERFIS ADMINISTRATIVOS DO BANCO ============
+    async obterPerfisAdministrativos() {
+        try {
+            const Config = getConfigModel();
+            const config = await Config.findOne({ chave: 'sistema.perfisAdministrativos' });
+            if (config && Array.isArray(config.valor) && config.valor.length > 0) {
+                return config.valor;
+            }
+            return [
+                'admin', 'super_admin', 'setor_pedagogico', 'gestao_geral',
+                'supervisao', 'coordenacao_patio', 'secretaria', 'recepcao',
+                'enfermaria', 'cozinha', 'assistente-social', 'psicologia',
+                'protagonismo', 'biblioteca'
+            ];
+        } catch (error) {
+            console.error('⚠️ Erro ao buscar perfis administrativos, usando padrão:', error.message);
+            return [
+                'admin', 'super_admin', 'setor_pedagogico', 'gestao_geral',
+                'supervisao', 'coordenacao_patio', 'secretaria', 'recepcao',
+                'enfermaria', 'cozinha', 'assistente-social', 'psicologia',
+                'protagonismo', 'biblioteca'
+            ];
+        }
+    }
+
+    // ============ FUNÇÃO AUXILIAR: DETERMINAR QUEM DEVE SER NOTIFICADO ============
+    async determinarDestinatarios(evento) {
+        const perfisAdministrativos = await this.obterPerfisAdministrativos();
+        const roleCriador = evento.usuarioId?.role;
+        const idCriador = evento.usuarioId?._id?.toString() || evento.usuarioId?.toString();
+
+        let destinatarios = new Set();
+
+        if (roleCriador === 'admin' || roleCriador === 'super_admin') {
+            if (evento.turmaId) {
+                const turma = await Turma.findById(evento.turmaId).populate('alunos', '_id');
+                if (turma && turma.alunos) {
+                    turma.alunos.forEach(aluno => destinatarios.add(aluno._id.toString()));
+                }
+            }
+            if (evento.usuarioId && evento.usuarioId._id) {
+                destinatarios.add(evento.usuarioId._id.toString());
+            }
+        }
+        else if (roleCriador === 'professor') {
+            const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+            admins.forEach(admin => destinatarios.add(admin._id.toString()));
+        }
+        else if (roleCriador === 'setor_pedagogico') {
+            const usuarios = await User.find({ role: { $in: ['admin', 'super_admin', 'setor_pedagogico'] } }).select('_id');
+            usuarios.forEach(u => destinatarios.add(u._id.toString()));
+        }
+        else if (perfisAdministrativos.includes(roleCriador)) {
+            const usuarios = await User.find({ role: { $in: perfisAdministrativos } }).select('_id');
+            usuarios.forEach(u => destinatarios.add(u._id.toString()));
+        }
+        else {
+            const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+            admins.forEach(admin => destinatarios.add(admin._id.toString()));
+        }
+
+        if (idCriador) {
+            destinatarios.delete(idCriador);
+        }
+
+        return Array.from(destinatarios);
+    }
+
     // ============ VERIFICAR NOTIFICAÇÕES PENDENTES DO CALENDÁRIO ============
     async verificarNotificacoesCalendario() {
         try {            
             const agora = new Date();
             
-            // Buscar eventos que precisam de notificação
             const eventos = await Evento.find({
                 notificacaoAtivada: true,
                 'notificacoes.enviada': false,
@@ -27,27 +120,21 @@ class CalendarioNotificacaoService {
             let notificacoesEnviadas = 0;
 
             for (const evento of eventos) {
-                
                 for (const notif of evento.notificacoes) {
                     if (notif.enviada) {
                         continue;
                     }
 
                     const dataEvento = new Date(evento.dataInicio);
-                    
-                    // Calcular quando deve notificar
                     const dataNotificar = new Date(dataEvento);
                     dataNotificar.setMinutes(dataNotificar.getMinutes() - notif.minutosAntes);
 
-                    // Se já passou da hora de notificar
                     if (agora >= dataNotificar) {
                         console.log(`      ✅ HORA DE NOTIFICAR!`);
                         
-                        // Marcar como enviada
                         notif.enviada = true;
                         notif.enviadaEm = agora;
 
-                        // Buscar nome do professor responsável
                         const professor = await User.findById(evento.usuarioId._id).select('nome');
                         const nomeProfessor = professor?.nome || 'Professor';
 
@@ -143,7 +230,7 @@ class CalendarioNotificacaoService {
         }
     }
 
-    // ============ NOTIFICAÇÃO DE EVENTO ATUALIZADO (NOVO MÉTODO) ============
+    // ============ NOTIFICAÇÃO DE EVENTO ATUALIZADO ============
     async notificarEventoAtualizado(evento, editorId, camposAlterados) {
         try {
             const editor = await User.findById(editorId).select('nome role');
@@ -158,7 +245,6 @@ class CalendarioNotificacaoService {
             const nomeProfessor = professor.nome;
             const cargoEditor = editor.role === 'admin' || editor.role === 'super_admin' ? 'Administrador' : 'Professor';
 
-            // 🔥 NOTIFICAR O PROFESSOR (se não for ele mesmo que editou)
             if (evento.usuarioId.toString() !== editorId) {
                 const camposTexto = camposAlterados.map(campo => {
                     const nomes = {
@@ -294,7 +380,6 @@ class CalendarioNotificacaoService {
             const nomeCriador = criador?.nome || criadorNome || 'Administrador';
             const cargoCriador = criador?.role === 'admin' || criador?.role === 'super_admin' ? 'Administrador' : 'Professor';
 
-            // 🔥 NOTIFICAR SOMENTE O PROFESSOR (se o criador for diferente)
             if (criadorId !== evento.usuarioId.toString()) {
                 console.log(`👤 ${cargoCriador} ${nomeCriador} criou evento para professor ${nomeProfessor}`);
                 
@@ -357,7 +442,6 @@ class CalendarioNotificacaoService {
             
             let notificacoesEnviadas = 0;
             
-            // Notificar professor
             const mensagemProf = this.construirMensagemParaProfessor(evento, 5);
             
             const notifProf = new Notificacao({
@@ -379,7 +463,6 @@ class CalendarioNotificacaoService {
             await notifProf.save();
             notificacoesEnviadas++;
             
-            // Notificar turma
             if (evento.turmaId && evento.turmaId.alunos) {
                 const mensagemTurma = this.construirMensagemParaTurma(evento, 5, nomeProfessor);
                 

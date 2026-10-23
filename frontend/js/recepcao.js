@@ -135,6 +135,228 @@ async function carregarFotoPerfil() {
     }
 }
 
+// ============================================================
+// HEADER DA RECEPÇÃO
+// Relógio + Menu do Usuário + Sino + Badge + Boas-vindas + Turno
+// ============================================================
+
+// ------------------------------------------------------------
+// 1. RELÓGIO EM TEMPO REAL
+// ------------------------------------------------------------
+function atualizarRelogioRecepcao() {
+    const elTempo = document.getElementById('relogioTempoReal');
+    const elData = document.getElementById('relogioData');
+    if (!elTempo) return;
+
+    const agora = new Date();
+    const horas = String(agora.getHours()).padStart(2, '0');
+    const minutos = String(agora.getMinutes()).padStart(2, '0');
+    const segundos = String(agora.getSeconds()).padStart(2, '0');
+
+    elTempo.textContent = `${horas}:${minutos}:${segundos}`;
+
+    if (elData) {
+        const dataFormatada = agora.toLocaleDateString('pt-BR', {
+            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+        });
+        elData.textContent = dataFormatada.replace(/\./g, '').replace(/,/g, ' •');
+    }
+}
+
+// ------------------------------------------------------------
+// 2. MENU DO USUÁRIO (toggle)
+// ------------------------------------------------------------
+function toggleUserMenu(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+    if (!dropdown) return;
+
+    const isShowing = dropdown.classList.contains('show');
+    if (isShowing) {
+        dropdown.classList.remove('show');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    } else {
+        dropdown.classList.add('show');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+    }
+}
+
+// ------------------------------------------------------------
+// 3. ABRIR O SINO A PARTIR DO MENU DO USUÁRIO
+// ------------------------------------------------------------
+function abrirMenuNotificacoesSeguro(event) {
+    if (event) event.stopPropagation();
+
+    const userDropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+    if (userDropdown) userDropdown.classList.remove('show');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+
+    const notifDropdown = document.getElementById('notificacoesDropdown');
+    if (notifDropdown) {
+        notifDropdown.classList.add('show');
+        notifDropdown.style.display = 'block';
+    }
+
+    if (typeof carregarNotificacoesHeader === 'function') {
+        carregarNotificacoesHeader();
+    } else if (typeof carregarNotificacoes === 'function') {
+        carregarNotificacoes();
+    }
+}
+
+// ------------------------------------------------------------
+// 4. BADGES UNIFICADOS (avatar + menu)
+// ------------------------------------------------------------
+function atualizarBadgeUnificado() {
+    let total = 0;
+    try {
+        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
+        const lembretes = (window.__lembretesCache || []).length;
+        total = naoLidas + lembretes;
+    } catch (e) {}
+
+    const badgeDot = document.getElementById('userNotificationBadge');
+    const menuBadge = document.getElementById('menuNotifBadge');
+    const trigger = document.getElementById('userTrigger');
+
+    if (total > 0) {
+        if (badgeDot) badgeDot.style.display = 'block';
+        if (menuBadge) {
+            menuBadge.style.display = 'inline-block';
+            menuBadge.textContent = total > 99 ? '99+' : total;
+        }
+        if (trigger) trigger.classList.add('tem-notificacao');
+    } else {
+        if (badgeDot) badgeDot.style.display = 'none';
+        if (menuBadge) menuBadge.style.display = 'none';
+        if (trigger) trigger.classList.remove('tem-notificacao');
+    }
+}
+
+// ------------------------------------------------------------
+// 5. CARREGAR FOTO DO PERFIL NO AVATAR
+// ------------------------------------------------------------
+async function carregarFotoPerfilRecepcao() {
+    try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        const response = await fetch('/api/perfil/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success && data.perfil?.fotoPerfil) {
+            const avatar = document.getElementById('userAvatar');
+            if (avatar) {
+                avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao carregar foto do perfil:', error);
+    }
+}
+
+// ------------------------------------------------------------
+// 6. PREENCHER NOME/ROLE NO TRIGGER
+// ------------------------------------------------------------
+function preencherDadosUsuarioHeader() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const nameEl = document.getElementById('userName');
+        const roleEl = document.getElementById('userRole');
+        if (nameEl && userData.nome) nameEl.textContent = userData.nome;
+        if (roleEl) {
+            roleEl.textContent = userData.role === 'super_admin' ? 'Super Admin' : 'Recepção';
+        }
+    } catch (e) {}
+}
+
+// ------------------------------------------------------------
+// 7. BOAS-VINDAS E TURNO NO CARD DE TÍTULO
+// ------------------------------------------------------------
+function atualizarBoasVindasETurnoRecepcao() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const nomeEl = document.getElementById('headerNomeUsuario');
+        if (nomeEl && userData.nome) {
+            nomeEl.textContent = userData.nome.split(' ')[0];
+        }
+    } catch (e) {}
+
+    const agora = new Date();
+    const hora = agora.getHours();
+    let turno = 'Matutino';
+    let icone = 'fa-sun text-warning';
+
+    if (hora >= 12 && hora < 18) {
+        turno = 'Vespertino';
+        icone = 'fa-cloud-sun text-warning';
+    } else if (hora >= 18 || hora < 5) {
+        turno = 'Noturno';
+        icone = 'fa-moon text-primary';
+    }
+
+    const turnoEl = document.getElementById('headerTurno');
+    const iconeEl = document.getElementById('headerTurnoIcone');
+
+    if (turnoEl) turnoEl.textContent = turno;
+    if (iconeEl) iconeEl.className = `fas ${icone} me-1`;
+}
+
+// ------------------------------------------------------------
+// 8. FECHAR DROPDOWNS AO CLICAR FORA
+// ------------------------------------------------------------
+document.addEventListener('click', function (event) {
+    const userContainer = document.getElementById('userMenuContainer');
+    const userDropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+    if (userContainer && !userContainer.contains(event.target)) {
+        if (userDropdown) userDropdown.classList.remove('show');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+
+    const notifDropdown = document.getElementById('notificacoesDropdown');
+    const containerSino = document.getElementById('containerSinoOriginal');
+    if (notifDropdown && notifDropdown.classList.contains('show')) {
+        if (containerSino && !containerSino.contains(event.target)) {
+            if (typeof fecharNotificacoes === 'function') {
+                fecharNotificacoes();
+            } else {
+                notifDropdown.classList.remove('show');
+                notifDropdown.style.display = 'none';
+            }
+        }
+    }
+});
+
+// ------------------------------------------------------------
+// 9. INICIALIZAÇÃO DO HEADER
+// ------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', function () {
+    atualizarRelogioRecepcao();
+    setInterval(atualizarRelogioRecepcao, 1000);
+
+    preencherDadosUsuarioHeader();
+
+    atualizarBoasVindasETurnoRecepcao();
+    setInterval(atualizarBoasVindasETurnoRecepcao, 60000);
+
+    carregarFotoPerfilRecepcao();
+
+    setTimeout(() => {
+        atualizarBadgeUnificado();
+    }, 500);
+
+    setTimeout(() => {
+        if (typeof carregarNotificacoesHeader === 'function') {
+            carregarNotificacoesHeader();
+        } else if (typeof carregarNotificacoes === 'function') {
+            carregarNotificacoes();
+        }
+    }, 1500);
+});
+
 // ============================================
 // FILTRO DE DATA
 // ============================================
@@ -1702,10 +1924,43 @@ function atualizarBadge() {
     }
 }
 
+// ============================================
+// LIMPAR NOTIFICAÇÕES
+// ============================================
+async function limparMinhasNotificacoes(event) {
+    if (event) event.stopPropagation();
+
+    const confirmacao = await confirm('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
+    if (!confirmacao) return;
+
+    try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('/api/notificacoes/limpar-minhas', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            window.__notificacoesCache = [];
+            await carregarTudo();
+            notificar('✅ Notificações excluídas!', 'success');
+        } else {
+            throw new Error(data.error || 'Erro ao excluir');
+        }
+    } catch (error) {
+        console.error('Erro ao limpar notificações:', error);
+        notificar('❌ Erro ao limpar notificações', 'error');
+    }
+}
+
 async function carregarTudo() {
     await carregarNotificacoesSistema();
     renderizarSino();
-    atualizarBadge();
+    atualizarBadge();                             
+    if (typeof atualizarBadgeUnificado === 'function') {
+        atualizarBadgeUnificado();                
+    }
 }
 
 function abrirNotificacoes() {
@@ -1801,5 +2056,11 @@ window.salvarCanvasRecepcao = salvarCanvasRecepcao;
 window.removerAssinaturaRecepcao = removerAssinaturaRecepcao;
 window.copiarLinkAssinaturaRecepcao = copiarLinkAssinaturaRecepcao;
 window.reimprimirAutorizacaoAtual = reimprimirAutorizacaoAtual;
+window.toggleUserMenu = toggleUserMenu;
+window.abrirMenuNotificacoesSeguro = abrirMenuNotificacoesSeguro;
+window.atualizarBadgeUnificado = atualizarBadgeUnificado;
+window.atualizarBoasVindasETurnoRecepcao = atualizarBoasVindasETurnoRecepcao;
+window.atualizarRelogioRecepcao = atualizarRelogioRecepcao;
+window.limparMinhasNotificacoes = limparMinhasNotificacoes;
 
 console.log('✅ Recepção JS carregado (QR Code + Canvas + polling)');

@@ -33,78 +33,69 @@
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- ============================================= -->
+        <!-- NOVO HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
+        <!-- ============================================= -->
         <div class="header-top">
-            <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar">
-                    <i class="fas fa-star"></i>
-                </div>
-                <div class="user-details">
-                    <div class="user-name" id="userName">Carregando...</div>
-                    <div class="user-role" id="userRole">Protagonismo</div>
+            
+            <!-- Lado Esquerdo: Relógio -->
+            <div class="relogio-card">
+                <i class="far fa-clock"></i>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
                 </div>
             </div>
-            <div class="btn-actions">
-                
-                <!-- 🔔 SINO DE NOTIFICAÇÕES -->
-                <div class="notificacoes-container">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn">
+            
+            <!-- Lado Direito: Notificações + Perfil -->
+            <div class="d-flex align-items-center gap-3">
+
+                <!-- 🔔 SINO OCULTO (aberto pelo menu do usuário) -->
+                <div class="notificacoes-container" id="containerSinoOriginal" style="position: relative;">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                            title="Notificações e Lembretes" style="display: none;">
                         <i class="fas fa-bell"></i>
                         <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
-                    
-                    <div class="notificacoes-dropdown" id="notificacoesDropdown">
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown"
+                         style="position: absolute; top: 100%; right: 0; z-index: 9999;">
                         <div class="notificacoes-header">
                             <h3>
                                 <i class="fas fa-bell" style="color: #f97316;"></i>
                                 Notificações
                             </h3>
                             <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="
-                                    background: none;
-                                    border: none;
-                                    color: #6b7280;
-                                    cursor: pointer;
-                                    font-size: 0.8rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                    transition: all 0.3s;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="marcarTodasLidas()"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Marcar todas como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="
-                                    background: none;
-                                    border: none;
-                                    color: #6b7280;
-                                    cursor: pointer;
-                                    font-size: 0.8rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                    transition: all 0.3s;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="limparMinhasNotificacoes(event)"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Excluir todas">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="
-                                    background: none;
-                                    border: none;
-                                    color: #9ca3af;
-                                    cursor: pointer;
-                                    font-size: 1.2rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="fecharNotificacoes()"
+                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div id="notificacoesLista" style="max-height: 400px; overflow-y: auto;">
                             <div style="text-align: center; padding: 40px; color: #6c757d;">
                                 <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                                <p>Carregando notificações...</p>
+                                <p>Carregando...</p>
                             </div>
                         </div>
-                        
+
                         <div class="notificacao-footer">
                             <a href="/notificacoes.html">
                                 <i class="fas fa-eye"></i> Ver todas as notificações
@@ -113,39 +104,93 @@
                     </div>
                 </div>
                 <!-- FIM DO SINO -->
-                
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" 
-                target="_blank" class="btn-icon" 
-                style="background: linear-gradient(135deg, #10b981, #059669); color: white;" 
-                title="Baixar App">
-                    <i class="fas fa-download"></i>
-                </a>
-                <button class="btn-icon" onclick="abrirModalQRCode()" title="Gerar QR Code Público">
-                    <i class="fas fa-qrcode"></i>
-                </button>
-                <button class="btn-icon" onclick="copiarLinkPublico()" title="Copiar Link Público">
-                    <i class="fas fa-link"></i>
-                </button>
-                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
-                    <i class="fas fa-user-edit"></i>
-                </button>
-                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
+
+                <!-- Perfil do Usuário -->
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-star"></i>
+                            </div>
+                            <span class="user-notification-badge" id="userNotificationBadge"></span>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Protagonismo</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
+                    </div>
+
+                    <!-- Dropdown do Usuário -->
+                    <div class="user-dropdown-menu" id="userDropdown">
+                        <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
+                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+
+                        <!-- Item que ABRE O SINO -->
+                        <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)"
+                             title="Notificações e Lembretes">
+                            <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                            <div class="item-text">Notificações</div>
+                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <div class="dropdown-item" onclick="abrirModalQRCode()" title="Gerar QR Code Público">
+                            <div class="icon-box bg-green"><i class="fas fa-qrcode"></i></div>
+                            <div class="item-text">Gerar QR Code</div>
+                        </div>
+
+                        <div class="dropdown-item" onclick="copiarLinkPublico()" title="Copiar Link Público">
+                            <div class="icon-box bg-blue"><i class="fas fa-link"></i></div>
+                            <div class="item-text">Copiar Link</div>
+                        </div>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item" title="Baixar App">
+                            <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
+                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-divider"></div>
+
+                        <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
+                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <!-- Título -->
+
+        <!-- Título com Boas-vindas e Turno -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
                     <i class="fas fa-star me-2"></i>
                     Protagonismo - EducaPleno
                 </div>
-                <span id="dataAtual" class="badge bg-light text-dark"></span>
+
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fw-bold" id="headerNomeUsuarioContainer" style="color: white !important;">
+                        <i class="fas fa-smile me-1" style="color: #fde047;"></i>
+                        Bem-vindo(a), <span id="headerNomeUsuario" style="color: white !important;">Protagonista</span>
+                    </span>
+
+                    <span class="badge bg-light text-dark shadow-sm border" id="headerTurnoContainer"
+                          style="font-size: 12px; padding: 6px 12px; border-radius: 20px;">
+                        <i class="fas fa-sun text-warning me-1" id="headerTurnoIcone"></i>
+                        Turno: <span id="headerTurno" class="fw-bold">Matutino</span>
+                    </span>
+                </div>
             </div>
         </div>
-        
+
         <!-- Abas Principais -->
         <div class="card">
             <div class="card-body">
@@ -186,9 +231,9 @@
                         </button>
                     </li>
                 </ul>
-                
+
                 <div class="tab-content mt-3">
-                    
+
                     <!-- ================================
                          ABA DASHBOARD
                     ================================= -->
@@ -221,7 +266,7 @@
                             </button>
                         </div>
                         </div>
-                        
+
                         <div class="row">
                             <div class="col-md-6 mb-4">
                                 <div class="card">
@@ -267,7 +312,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA CLUBES
                     ================================= -->
@@ -283,7 +328,7 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div id="listaClubes" class="clubes-grid">
                             <div class="text-center py-5">
                                 <div class="loading-spinner"></div>
@@ -291,7 +336,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA INSCRIÇÕES
                     ================================= -->
@@ -301,7 +346,7 @@
                             <button class="btn btn-danger btn-sm" onclick="exportarPDFInscricoes()">
                                 <i class="fas fa-file-pdf"></i> PDF
                             </button>
-                        </div>                        
+                        </div>
                         <div class="row g-3 mb-3">
                             <div class="col-md-4">
                                 <label class="form-label">Filtrar por Clube</label>
@@ -324,7 +369,7 @@
                                 </select>
                             </div>
                         </div>
-                        
+
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead>
@@ -344,7 +389,7 @@
                             </table>
                         </div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA TUTORIA
                     ================================= -->
@@ -363,7 +408,7 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div class="row g-3 mb-3">
                             <div class="col-md-4">
                                 <label class="form-label">Filtrar por Turma</label>
@@ -372,10 +417,10 @@
                                 </select>
                             </div>
                         </div>
-                        
+
                         <div id="listaTutores"></div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA CANDIDATOS
                     ================================= -->
@@ -391,7 +436,7 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div class="row g-3 mb-3">
                             <div class="col-md-4">
                                 <label class="form-label">Filtrar por Turma</label>
@@ -408,10 +453,10 @@
                                 </select>
                             </div>
                         </div>
-                        
+
                         <div id="listaCandidatos"></div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA ELEIÇÃO
                     ================================= -->
@@ -422,7 +467,7 @@
                                 <i class="fas fa-file-pdf"></i> PDF
                             </button>
                         </div>
-                        
+
                         <div class="row mb-4">
                             <div class="col-md-3">
                                 <div class="stat-card">
@@ -432,16 +477,16 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div id="resultadosEleicao"></div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA CONFIGURAÇÕES
                     ================================= -->
                     <div class="tab-pane fade" id="tab-config">
                         <h5><i class="fas fa-cog me-2"></i> Configurações do Protagonismo</h5>
-                        
+
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="card">
@@ -455,36 +500,36 @@
                                                 <p class="text-muted small mb-0">Permite alunos se inscreverem nos clubes</p>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="configInscricoes" 
+                                                <input class="form-check-input" type="checkbox" id="configInscricoes"
                                                        onchange="atualizarConfiguracao()">
                                             </div>
                                         </div>
-                                        
+
                                         <div class="config-item">
                                             <div>
                                                 <strong>Eleição de Líder/Vice</strong>
                                                 <p class="text-muted small mb-0">Habilita a votação na página pública</p>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="configEleicao" 
+                                                <input class="form-check-input" type="checkbox" id="configEleicao"
                                                        onchange="atualizarConfiguracao()">
                                             </div>
                                         </div>
-                                        
+
                                         <div class="config-item">
                                             <div>
                                                 <strong>Tutoria Visível</strong>
                                                 <p class="text-muted small mb-0">Mostra os tutores na página pública</p>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="configTutoria" 
+                                                <input class="form-check-input" type="checkbox" id="configTutoria"
                                                        onchange="atualizarConfiguracao()">
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div class="col-md-6">
                                 <div class="card">
                                     <div class="card-header">
@@ -493,10 +538,10 @@
                                     <div class="card-body">
                                         <div class="mb-3">
                                             <label class="form-label">Mensagem de aviso</label>
-                                            <textarea id="configAviso" class="form-control" rows="4" 
+                                            <textarea id="configAviso" class="form-control" rows="4"
                                                       placeholder="Ex: As inscrições encerram em 30/11..."></textarea>
                                         </div>
-                                        
+
                                         <button class="btn btn-primary" onclick="atualizarConfiguracao()">
                                             <i class="fas fa-save"></i> Salvar Aviso
                                         </button>
@@ -509,7 +554,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- ================================
          MODAL CLUBE
     ================================= -->
@@ -528,7 +573,7 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Descrição <span class="text-danger">*</span></label>
-                            <textarea id="clubeDescricao" class="form-control" rows="3" 
+                            <textarea id="clubeDescricao" class="form-control" rows="3"
                                       placeholder="Descreva as atividades do clube..."></textarea>
                         </div>
                         <div class="row">
@@ -597,7 +642,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- ================================
          MODAL TUTOR
     ================================= -->
@@ -645,7 +690,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- ================================
          MODAL CANDIDATO
     ================================= -->
@@ -680,12 +725,12 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Slogan</label>
-                            <input type="text" id="candidatoSlogan" class="form-control" 
+                            <input type="text" id="candidatoSlogan" class="form-control"
                                    placeholder="Ex: Juntos somos mais fortes!">
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Proposta</label>
-                            <textarea id="candidatoProposta" class="form-control" rows="3" 
+                            <textarea id="candidatoProposta" class="form-control" rows="3"
                                       placeholder="O que você pretende fazer se eleito..."></textarea>
                         </div>
                     </form>
@@ -701,7 +746,7 @@
     </div>
 
     <!-- ================================
-     MODAL QR CODE
+         MODAL QR CODE
     ================================= -->
     <div class="modal fade" id="modalQRCode" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
@@ -716,7 +761,7 @@
                     <p style="color: #6b7280; font-size: 14px; margin-bottom: 20px;">
                         Peça para os alunos escanearem este QR Code para acessar a página de inscrição e votação!
                     </p>
-                    
+
                     <div id="qrCodeContainer" style="
                         background: white;
                         padding: 20px;
@@ -733,10 +778,10 @@
                             <div class="loading-spinner"></div>
                             <p style="color: #6b7280; margin-top: 15px; font-size: 13px;">Gerando QR Code...</p>
                         </div>
-                        <img id="qrCodeImg" src="" alt="QR Code" 
+                        <img id="qrCodeImg" src="" alt="QR Code"
                             style="width: 280px; height: 280px; display: none; border-radius: 8px;">
                     </div>
-                    
+
                     <div style="
                         background: #f3f4f6;
                         border-radius: 12px;
@@ -767,9 +812,10 @@
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/protagonismo.js"></script>
+    <script src="js/protagonismo-header.js"></script>
 
     <!-- Escalonamento Mobile -->
     <script>

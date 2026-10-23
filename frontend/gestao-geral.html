@@ -27,51 +27,6 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/gestao-geral.css">
-    
-    <!-- 🆕 CSS DO MODAL DE ASSINATURA -->
-    <style>
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .assinatura-wrapper {
-            margin-top: 20px;
-        }
-        
-        .assinatura-wrapper .form-check {
-            transition: all 0.3s ease;
-        }
-        
-        .assinatura-wrapper .form-check:hover {
-            background: #eef2ff !important;
-            border-color: #c7d2fe !important;
-        }
-        
-        #modalAssinaturaQR .modal-content {
-            border: none;
-            overflow: hidden;
-        }
-        
-        #modalAssinaturaQR img#qrCodeImage {
-            image-rendering: pixelated;
-            image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
-        }
-        
-        .btn-copiar-link {
-            background: #f1f5f9;
-            border: 1px solid #cbd5e0;
-            color: #475569;
-            border-radius: 10px;
-            padding: 8px 16px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .btn-copiar-link:hover {
-            background: #e2e8f0;
-            border-color: #94a3b8;
-        }
-    </style>
 </head>
 <body>
 
@@ -87,38 +42,62 @@
 </script>
 
     <div class="container">
+        <!-- ============================================= -->
+        <!-- NOVO HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
+        <!-- ============================================= -->
         <div class="header-top">
-            <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar"><i class="fas fa-user-tie"></i></div>
-                <div class="user-details">
-                    <div class="user-name" id="userName">Carregando...</div>
-                    <div class="user-role" id="userRole">Gestão Geral</div>
+
+            <!-- Lado Esquerdo: Relógio -->
+            <div class="relogio-card">
+                <i class="far fa-clock"></i>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
                 </div>
             </div>
-            <div class="btn-actions">
-                <div class="notificacoes-container">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações e Lembretes">
+
+            <!-- Lado Direito: Notificações + Perfil -->
+            <div class="d-flex align-items-center gap-3">
+
+                <!-- 🔔 SINO OCULTO (aberto pelo menu do usuário) -->
+                <div class="notificacoes-container" id="containerSinoOriginal">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                            title="Notificações e Lembretes" style="display: none;">
                         <i class="fas fa-bell"></i>
                         <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
 
                     <div class="notificacoes-dropdown" id="notificacoesDropdown">
                         <div class="notificacoes-header">
-                            <h3><i class="fas fa-bell"></i> Notificações</h3>
+                            <h3>
+                                <i class="fas fa-bell" style="color: #1e3c72;"></i>
+                                Notificações
+                            </h3>
                             <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                                <button onclick="marcarTodasLidas()"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Marcar todas como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                <button onclick="limparMinhasNotificacoes(event)"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Excluir todas">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="fecharNotificacoes()"
+                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <div id="notificacoesLista" style="max-height: 500px; overflow-y: auto;">
+                        <div id="notificacoesLista" style="max-height: 400px; overflow-y: auto;">
                             <div style="text-align: center; padding: 40px; color: #6c757d;">
                                 <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
                                 <p>Carregando...</p>
@@ -132,32 +111,84 @@
                         </div>
                     </div>
                 </div>
+                <!-- FIM DO SINO -->
 
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" 
-                   target="_blank" class="btn-icon" 
-                   style="background: linear-gradient(135deg, #10b981, #059669); color: white;" 
-                   title="Baixar App">
-                    <i class="fas fa-download"></i>
-                </a>
-                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
-                    <i class="fas fa-user-edit"></i>
-                </button>
-                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
-            </div>
-        </div>
-        
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <div>
-                    <i class="fas fa-user-tie me-2"></i>
-                    Gestão Geral - EducaPleno
+                <!-- Perfil do Usuário -->
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-user-tie"></i>
+                            </div>
+                            <span class="user-notification-badge" id="userNotificationBadge"></span>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Gestão Geral</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
+                    </div>
+
+                    <!-- Dropdown do Usuário -->
+                    <div class="user-dropdown-menu" id="userDropdown">
+                        <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
+                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+
+                        <!-- Item que ABRE O SINO -->
+                        <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)"
+                             title="Notificações e Lembretes">
+                            <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                            <div class="item-text">Notificações</div>
+                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item" title="Baixar App">
+                            <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
+                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-divider"></div>
+
+                        <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
+                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair</div>
+                        </div>
+                    </div>
                 </div>
-                <span id="dataAtual" class="badge bg-light text-dark"></span>
             </div>
         </div>
-        
+        <!-- ============================================= -->
+        <!-- FIM DO HEADER                                  -->
+        <!-- ============================================= -->
+
+        <div class="card">
+            <div class="card-header card-header-boas-vindas d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-user-tie me-2"></i> Gestão Geral - EducaPleno
+                </div>
+
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fw-bold header-boas-vindas-texto">
+                        <i class="fas fa-smile me-1 header-boas-vindas-icone"></i> 
+                        Bem-vindo(a), <span id="headerNomeUsuario">Gestor(a)</span>
+                    </span>
+
+                    <span class="badge bg-light text-dark shadow-sm border header-turno-badge">
+                        <i class="fas fa-sun text-warning me-1" id="headerTurnoIcone"></i> 
+                        Turno: <span id="headerTurno" class="fw-bold">Matutino</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-body">
                 <ul class="nav nav-tabs" role="tablist">
@@ -186,7 +217,6 @@
                             <i class="fas fa-redo"></i> 2ª Chamada
                         </button>
                     </li>
-                    <!-- 🆕 UNIFORME AO LADO DE ATENDIMENTOS -->
                     <li class="nav-item">
                         <button class="nav-link" id="aba-uniforme" data-bs-toggle="tab" data-bs-target="#tab-uniforme" type="button">
                             <i class="fas fa-tshirt"></i> Uniforme
@@ -203,9 +233,9 @@
                         </button>
                     </li>
                 </ul>
-                
+
                 <div class="tab-content mt-3">
-                    
+
                     <!-- ═══════════════════════════════ -->
                     <!-- ABA RODÍZIOS                    -->
                     <!-- ═══════════════════════════════ -->
@@ -228,7 +258,7 @@
                                 <div class="stat-label">Turmas sem Rodízio</div>
                             </div>
                         </div>
-                        
+
                         <div class="card">
                             <div class="card-body">
                                 <button class="btn-primary btn-sm" onclick="abrirModalRodizio()">
@@ -239,7 +269,7 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div class="card">
                             <div class="card-header">
                                 <i class="fas fa-list me-2"></i> Rodízios Configurados
@@ -267,7 +297,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- ═══════════════════════════════ -->
                     <!-- ABA ATRASOS                     -->
                     <!-- ═══════════════════════════════ -->
@@ -284,7 +314,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <ul class="nav nav-tabs mb-3" role="tablist">
                             <li class="nav-item">
                                 <button class="nav-link active" id="atraso-registrar-tab" data-bs-toggle="tab" data-bs-target="#atraso-registrar" type="button">
@@ -302,7 +332,7 @@
                                 </button>
                             </li>
                         </ul>
-                        
+
                         <div class="tab-content">
                             <!-- ABA REGISTRAR -->
                             <div class="tab-pane fade show active" id="atraso-registrar">
@@ -319,7 +349,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div id="modoManual" style="display: none;">
                                     <div class="card">
                                         <div class="card-body">
@@ -330,7 +360,7 @@
                                                 <i class="fas fa-info-circle"></i> 
                                                 Selecione uma turma e clique no aluno para registrar o atraso.
                                             </p>
-                                            
+
                                             <div class="row g-3 mb-3">
                                                 <div class="col-md-6">
                                                     <label class="form-label">Turma</label>
@@ -344,7 +374,7 @@
                                                         placeholder="Digite o nome do aluno...">
                                                 </div>
                                             </div>
-                                            
+
                                             <div id="listaAlunosManual" class="mt-3">
                                                 <div class="text-center py-3">
                                                     <div class="loading-spinner"></div>
@@ -354,7 +384,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div id="alunoInfo" style="display: none;">
                                     <div class="aluno-card">
                                         <div class="d-flex flex-wrap align-items-center">
@@ -376,10 +406,10 @@
                                         <div id="historicoRecente" class="mt-3"></div>
                                     </div>
                                 </div>
-                                
+
                                 <div id="formRegistro" class="form-container" style="display: none;">
                                     <h5><i class="fas fa-clock"></i> Registrar Atraso</h5>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Data do Atraso <span class="text-danger">*</span></label>
@@ -392,7 +422,7 @@
                                             <small class="text-muted">Horário em que o aluno chegou</small>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="mb-3">
                                         <label class="form-label">Motivo do Atraso <span class="text-danger">*</span></label>
                                         <div class="tipos-tarefa-grid">
@@ -419,7 +449,7 @@
                                         </div>
                                         <input type="hidden" id="motivoSelecionado">
                                     </div>
-                                    
+
                                     <div id="campoOutros" style="display: none;">
                                         <div class="mb-3">
                                             <label class="form-label">Especifique o Motivo <span class="text-danger">*</span></label>
@@ -427,13 +457,13 @@
                                                 placeholder="Descreva o motivo do atraso...">
                                         </div>
                                     </div>
-                                    
+
                                     <div class="mb-3">
                                         <label class="form-label">Descrição do Ocorrido <span class="text-danger">*</span></label>
                                         <textarea id="descricao" class="form-control" rows="3" 
                                                 placeholder="Descreva detalhadamente o que aconteceu..."></textarea>
                                     </div>
-                                    
+
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Horário Previsto</label>
@@ -446,16 +476,16 @@
                                             <small class="text-muted">Horário real de chegada</small>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="mb-3">
                                         <label class="form-label">Observações Adicionais</label>
                                         <textarea id="observacoes" class="form-control" rows="2" 
                                                 placeholder="Informações complementares..."></textarea>
                                     </div>
-                                    
-                                    <!-- 🆕 ASSINATURA POR QR CODE (ATRASO) -->
+
+                                    <!-- ASSINATURA POR QR CODE (ATRASO) -->
                                     <div class="assinatura-wrapper">
-                                        <div class="form-check p-3 mb-2" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                        <div class="form-check p-3 mb-2 assinatura-check">
                                             <input class="form-check-input" type="checkbox" 
                                                 id="atrasoNecessitaAssinatura" 
                                                 onchange="gestaoGeral.toggleNecessitaAssinatura('atraso')"
@@ -468,8 +498,8 @@
                                             </label>
                                         </div>
                                         <div id="atrasoBlocoAssinaturaInfo" style="display: none;"></div>
-                                        
-                                        <div class="form-check p-3" style="background: #f0fdf4; border-radius: 10px; border: 2px solid #bbf7d0;">
+
+                                        <div class="form-check p-3 assinatura-check-aluno">
                                             <input class="form-check-input" type="checkbox" 
                                                 id="atrasoNecessitaAssinaturaAluno" 
                                                 onchange="gestaoGeral.toggleNecessitaAssinaturaAluno('atraso')"
@@ -483,7 +513,7 @@
                                         </div>
                                         <div id="atrasoBlocoAssinaturaAlunoInfo" style="display: none;"></div>
                                     </div>
-                                    
+
                                     <div class="d-flex gap-2">
                                         <button class="btn-primary-custom" onclick="registrarAtraso()">
                                             <i class="fas fa-check-circle me-2"></i> Registrar Atraso
@@ -494,7 +524,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <!-- ABA DASHBOARD -->
                             <div class="tab-pane fade" id="atraso-dashboard">
                                 <div class="row mb-4">
@@ -527,7 +557,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="row">
                                     <div class="col-md-6 mb-4">
                                         <div class="card h-100">
@@ -568,7 +598,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <!-- ABA RELATÓRIOS -->
                             <div class="tab-pane fade" id="atraso-relatorios">
                                 <div class="relatorio-filtros">
@@ -624,7 +654,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div id="resultadoRelatorio" class="mt-4">
                                     <div class="text-center py-5">
                                         <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
@@ -632,11 +662,10 @@
                                     </div>
                                 </div>
                             </div>
-                        </div> <!-- FIM DO TAB-CONTENT -->
+                        </div>
 
-                        <!-- 🆕 CARD FORA DO TAB-CONTENT (Fica visível em todas as sub-abas) -->
-                        <div class="card mt-4" id="cardAtrasosRecentes" style="width: 100%;">
-                            <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1e3c72, #2a5298); color: white;">
+                        <div class="card mt-4" id="cardAtrasosRecentes">
+                            <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0"><i class="fas fa-history"></i> Atrasos Registrados</h5>
                                 <button class="btn btn-sm btn-light" onclick="carregarAtrasosRecentes(1)">
                                     <i class="fas fa-sync-alt"></i> Atualizar
@@ -674,7 +703,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 <div id="listaAtrasosRecentes">
                                     <div class="text-center py-3">
                                         <div class="loading-spinner"></div>
@@ -683,10 +712,10 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- FIM DO CARD -->
                     </div>
-                                        <!-- ═══════════════════════════════════════════════════════════════ -->
-                    <!-- ABA AUTORIZAÇÃO (3 sub-abas: Registrar | Dashboard | Relatórios) -->
+
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- ABA AUTORIZAÇÃO                                                -->
                     <!-- ═══════════════════════════════════════════════════════════════ -->
                     <div class="tab-pane fade" id="tab-autorizacao">
                         <div class="card mb-3">
@@ -779,7 +808,6 @@
                                 <div id="formAutorizacao" class="form-container" style="display: none;">
                                     <h5><i class="fas fa-file-signature"></i> Registrar Autorização</h5>
 
-                                    <!-- 🆕 LINHA 1: Data do Registro (inalterada) -->
                                     <div class="row">
                                         <div class="col-md-4 mb-3">
                                             <label class="form-label">Data do Registro <span class="text-danger">*</span></label>
@@ -791,7 +819,6 @@
                                         </div>
                                     </div>
 
-                                    <!-- 🆕 LINHA 2: Entrada (Data + Hora) | Saída (Data + Hora) - OPCIONAIS -->
                                     <div class="row">
                                         <div class="col-md-3 mb-3">
                                             <label class="form-label">
@@ -874,9 +901,9 @@
                                         </div>
                                     </div>
 
-                                    <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                                    <div class="card mb-3 dados-responsavel-card">
                                         <div class="card-body">
-                                            <h6 style="margin-bottom: 15px; color: #1e3c72;">
+                                            <h6 class="dados-responsavel-titulo">
                                                 <i class="fas fa-user-shield"></i> Dados do Responsável
                                             </h6>
                                             <div class="row">
@@ -902,7 +929,7 @@
                                     </div>
 
                                     <div class="assinatura-wrapper">
-                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                        <div class="form-check p-3 assinatura-check">
                                             <input class="form-check-input" type="checkbox" 
                                                 id="autorizacaoNecessitaAssinatura" 
                                                 onchange="gestaoGeral.toggleNecessitaAssinatura('autorizacao')"
@@ -1264,9 +1291,9 @@
                                         </div>
                                     </div>
 
-                                    <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                                    <div class="card mb-3 dados-responsavel-card">
                                         <div class="card-body">
-                                            <h6 style="margin-bottom: 15px; color: #1e3c72;">
+                                            <h6 class="dados-responsavel-titulo">
                                                 <i class="fas fa-user-shield"></i> Dados do Responsável
                                             </h6>
                                             <div class="row">
@@ -1292,7 +1319,7 @@
                                     </div>
 
                                     <div class="assinatura-wrapper">
-                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                        <div class="form-check p-3 assinatura-check">
                                             <input class="form-check-input" type="checkbox" 
                                                 id="justificativaNecessitaAssinatura" 
                                                 onchange="gestaoGeral.toggleNecessitaAssinatura('justificativa')"
@@ -1707,9 +1734,9 @@
                                         </div>
                                     </div>
 
-                                    <div class="card mb-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                                    <div class="card mb-3 dados-responsavel-card">
                                         <div class="card-body">
-                                            <h6 style="margin-bottom: 15px; color: #1e3c72;">
+                                            <h6 class="dados-responsavel-titulo">
                                                 <i class="fas fa-user-shield"></i> Dados do Responsável
                                             </h6>
                                             <div class="row">
@@ -1735,7 +1762,7 @@
                                     </div>
 
                                     <div class="assinatura-wrapper">
-                                        <div class="form-check p-3" style="background: #f8fafc; border-radius: 10px; border: 2px solid #e2e8f0;">
+                                        <div class="form-check p-3 assinatura-check">
                                             <input class="form-check-input" type="checkbox" 
                                                 id="segundaChamadaNecessitaAssinatura" 
                                                 onchange="gestaoGeral.toggleNecessitaAssinatura('segundaChamada')"
@@ -1991,7 +2018,7 @@
                     </div>
 
                     <!-- ═══════════════════════════════════════════════════════════════ -->
-                    <!-- 🆕 ABA UNIFORME (ao lado de Atendimentos)                      -->
+                    <!-- ABA UNIFORME                                                   -->
                     <!-- ═══════════════════════════════════════════════════════════════ -->
                     <div class="tab-pane fade" id="tab-uniforme">
                         <div class="card mb-3">
@@ -2027,7 +2054,6 @@
 
                         <div class="tab-content">
 
-                            <!-- ═══════════ UNIFORME — REGISTRAR ═══════════ -->
                             <div class="tab-pane fade show active" id="uniforme-registrar">
 
                                 <div id="modoAutomaticoUniforme">
@@ -2093,9 +2119,9 @@
                                         por motivos de saúde ou outros motivos justificados.
                                     </div>
 
-                                    <div class="card mb-3" style="background:#f8fafc; border:1px solid #e2e8f0;">
+                                    <div class="card mb-3 dados-responsavel-card">
                                         <div class="card-body">
-                                            <h6 style="margin-bottom:15px; color:#1e3c72;">
+                                            <h6 class="dados-responsavel-titulo">
                                                 <i class="fas fa-calendar-alt"></i> Período da Autorização
                                             </h6>
                                             <div class="row">
@@ -2154,9 +2180,9 @@
                                         <textarea id="uniformeObservacoes" class="form-control" rows="3" placeholder="Informações complementares..."></textarea>
                                     </div>
 
-                                    <div class="card mb-3" style="background:#f8fafc; border:1px solid #e2e8f0;">
+                                    <div class="card mb-3 dados-responsavel-card">
                                         <div class="card-body">
-                                            <h6 style="margin-bottom:15px; color:#1e3c72;">
+                                            <h6 class="dados-responsavel-titulo">
                                                 <i class="fas fa-user-shield"></i> Dados do Responsável
                                             </h6>
                                             <div class="row">
@@ -2177,7 +2203,7 @@
                                     </div>
 
                                     <div class="assinatura-wrapper">
-                                        <div class="form-check p-3" style="background:#f8fafc; border-radius:10px; border:2px solid #e2e8f0;">
+                                        <div class="form-check p-3 assinatura-check">
                                             <input class="form-check-input" type="checkbox"
                                                 id="uniformeNecessitaAssinatura"
                                                 onchange="gestaoGeral.toggleNecessitaAssinatura('uniforme')"
@@ -2203,7 +2229,6 @@
                                 </div>
                             </div>
 
-                            <!-- ═══════════ UNIFORME — DASHBOARD ═══════════ -->
                             <div class="tab-pane fade" id="uniforme-dashboard">
                                 <div class="row mb-4">
                                     <div class="col-md-3 mb-3">
@@ -2238,21 +2263,21 @@
 
                                 <div class="row mb-4">
                                     <div class="col-md-4 mb-3">
-                                        <div class="metric-card" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7);">
+                                        <div class="metric-card metric-card-assinatura-ok">
                                             <i class="fas fa-signature fa-2x text-success mb-2"></i>
                                             <div class="metric-value" id="UniformeTotalComAssinatura">0</div>
                                             <div class="metric-label">Com Assinatura</div>
                                         </div>
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <div class="metric-card" style="background: linear-gradient(135deg, #fef3c7, #fde68a);">
+                                        <div class="metric-card metric-card-assinatura-pendente">
                                             <i class="fas fa-signature fa-2x text-warning mb-2"></i>
                                             <div class="metric-value" id="UniformeTotalSemAssinatura">0</div>
                                             <div class="metric-label">Sem Assinatura</div>
                                         </div>
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <div class="metric-card" style="background: linear-gradient(135deg, #eef2ff, #c7d2fe);">
+                                        <div class="metric-card metric-card-percentual">
                                             <i class="fas fa-percentage fa-2x text-primary mb-2"></i>
                                             <div class="metric-value" id="UniformePercentualAssinatura">0%</div>
                                             <div class="metric-label">% Assinado</div>
@@ -2309,7 +2334,6 @@
                                 </div>
                             </div>
 
-                            <!-- ═══════════ UNIFORME — RELATÓRIOS ═══════════ -->
                             <div class="tab-pane fade" id="uniforme-relatorios">
                                 <div class="relatorio-filtros">
                                     <div class="row g-3">
@@ -2515,7 +2539,7 @@
 
                                     <h5 id="atendimentoTituloForm"><i class="fas fa-user-graduate"></i> Atendimento ao Aluno</h5>
 
-                                    <div class="mb-3 p-3" style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
+                                    <div class="mb-3 p-3 bloco-tipo-atendimento">
                                         <label class="form-label fw-bold"><i class="fas fa-tags"></i> Tipo de Atendimento</label>
                                         <div class="d-flex flex-wrap gap-3">
                                             <div class="form-check">
@@ -2541,9 +2565,9 @@
                                     </div>
 
                                     <div id="blocoDadosResponsavelAtendimento" style="display:none;">
-                                        <div class="card mb-3" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                                        <div class="card mb-3 dados-responsavel-card">
                                             <div class="card-body">
-                                                <h6 style="margin-bottom:15px;color:#1e3c72;"><i class="fas fa-user-shield"></i> Dados do Responsável</h6>
+                                                <h6 class="dados-responsavel-titulo"><i class="fas fa-user-shield"></i> Dados do Responsável</h6>
                                                 <div class="row">
                                                     <div class="col-md-6 mb-3">
                                                         <label class="form-label">Nome do Responsável <span class="text-danger">*</span></label>
@@ -2651,7 +2675,7 @@
                                     </div>
 
                                     <div class="assinatura-wrapper">
-                                        <div class="form-check p-3 mb-2" style="background:#f8fafc;border-radius:10px;border:2px solid #e2e8f0;">
+                                        <div class="form-check p-3 mb-2 assinatura-check">
                                             <input class="form-check-input" type="checkbox" id="atendimentoNecessitaAssinatura" onchange="toggleNecessitaAssinaturaAtendimento()" style="width:20px;height:20px;margin-top:2px;">
                                             <label class="form-check-label" for="atendimentoNecessitaAssinatura" style="margin-left:8px;cursor:pointer;">
                                                 <strong><i class="fas fa-signature"></i> Necessita de assinatura do responsável</strong>
@@ -2664,7 +2688,7 @@
                                     </div>
 
                                     <div class="assinatura-wrapper" id="blocoAssinaturaAlunoAtendimento">
-                                        <div class="form-check p-3" style="background:#f0fdf4;border-radius:10px;border:2px solid #bbf7d0;">
+                                        <div class="form-check p-3 assinatura-check-aluno">
                                             <input class="form-check-input" type="checkbox" id="atendimentoNecessitaAssinaturaAluno" onchange="toggleNecessitaAssinaturaAlunoAtendimento()" style="width:20px;height:20px;margin-top:2px;">
                                             <label class="form-check-label" for="atendimentoNecessitaAssinaturaAluno" style="margin-left:8px;cursor:pointer;">
                                                 <strong><i class="fas fa-user-graduate"></i> Necessita de assinatura do aluno</strong>
@@ -2887,17 +2911,12 @@
                     <!-- ═══════════════════════════════════════════════════ -->
                     <div class="tab-pane fade" id="tab-acompanhamento" role="tabpanel">
                         
-                        <div style="text-align: center; margin-bottom: 25px;">
-                            <button class="btn btn-primary" 
-                                    onclick="abrirAcompanhamentoVisitas()"
-                                    style="padding: 16px 36px; border-radius: 50px; font-size: 16px; font-weight: 600;
-                                           background: linear-gradient(135deg, #667eea, #764ba2); 
-                                           border: none; color: white; 
-                                           box-shadow: 0 8px 25px rgba(102,126,234,0.4);
-                                           transition: all 0.3s;">
+                        <div class="acompanhamento-visitas-cta">
+                            <button class="btn btn-primary btn-acompanhamento-visitas"
+                                    onclick="abrirAcompanhamentoVisitas()">
                                 <i class="fas fa-map-marked-alt"></i> Acompanhamento de Visitas
                             </button>
-                            <p style="margin-top: 10px; font-size: 13px; color: #6b7280;">
+                            <p class="acompanhamento-visitas-hint">
                                 <i class="fas fa-info-circle"></i> Monitore o status das autorizações de visitas técnicas
                             </p>
                         </div>
@@ -3008,7 +3027,7 @@
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 
-                <div class="modal-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+                <div class="modal-header modal-header-acompanhamento">
                     <div>
                         <h5 class="modal-title" style="margin: 0;">
                             <i class="fas fa-map-marked-alt"></i> Acompanhamento de Autorizações de Visitas
@@ -3018,16 +3037,16 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
 
-                <div class="modal-body" style="background: #f8fafc; padding: 24px;">
+                <div class="modal-body modal-body-acompanhamento">
 
-                    <div style="background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                        <h6 style="color: #1e3c72; margin-bottom: 15px;">
+                    <div class="modal-filtros-visitas">
+                        <h6 class="modal-filtros-titulo">
                             <i class="fas fa-filter"></i> Filtros
                         </h6>
                         
                         <div class="row g-3">
                             <div class="col-md-3">
-                                <label class="form-label" style="font-size: 13px; font-weight: 600;">
+                                <label class="form-label form-label-visitas">
                                     <i class="fas fa-info-circle"></i> Status
                                 </label>
                                 <select id="filtroVisitasStatus" class="form-select form-select-sm" onchange="filtrarAcompanhamentoVisitas()">
@@ -3040,7 +3059,7 @@
                             </div>
 
                             <div class="col-md-3">
-                                <label class="form-label" style="font-size: 13px; font-weight: 600;">
+                                <label class="form-label form-label-visitas">
                                     <i class="fas fa-school"></i> Turma
                                 </label>
                                 <select id="filtroVisitasTurma" class="form-select form-select-sm" onchange="filtrarAcompanhamentoVisitas()">
@@ -3049,7 +3068,7 @@
                             </div>
 
                             <div class="col-md-2">
-                                <label class="form-label" style="font-size: 13px; font-weight: 600;">
+                                <label class="form-label form-label-visitas">
                                     <i class="fas fa-calendar"></i> Data da Visita
                                 </label>
                                 <select id="filtroVisitasPeriodo" class="form-select form-select-sm" onchange="filtrarAcompanhamentoVisitas()">
@@ -3061,7 +3080,7 @@
                             </div>
 
                             <div class="col-md-3">
-                                <label class="form-label" style="font-size: 13px; font-weight: 600;">
+                                <label class="form-label form-label-visitas">
                                     <i class="fas fa-search"></i> Buscar
                                 </label>
                                 <input type="text" 
@@ -3085,11 +3104,11 @@
 
                     <div id="listaAcompanhamentoVisitas"></div>
 
-                    <div id="paginacaoAcompanhamentoVisitas" style="text-align: center; margin-top: 20px;"></div>
+                    <div id="paginacaoAcompanhamentoVisitas" class="modal-paginacao-visitas"></div>
 
                 </div>
 
-                <div class="modal-footer" style="background: #f8fafc;">
+                <div class="modal-footer modal-footer-acompanhamento">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                         <i class="fas fa-times"></i> Fechar
                     </button>
@@ -3217,6 +3236,9 @@
     
     <!-- 🛡️ Carrega gestao-geral.js SEMPRE (é ele quem trata o modo assinatura) -->
     <script src="js/gestao-geral.js"></script>
+
+    <!-- 🆕 HEADER DA GESTÃO GERAL -->
+    <script src="js/gestao-geral-header.js"></script>
     
     <!-- 🛡️ Os outros scripts só carregam se NÃO for modo assinatura -->
     <script>

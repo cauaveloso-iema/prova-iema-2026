@@ -30,30 +30,50 @@
 <body>
 
     <div class="container">
-        <!-- HEADER -->
+        <!-- ============================================= -->
+        <!-- NOVO HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
+        <!-- ============================================= -->
         <div class="header-top">
-            <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar"><i class="fas fa-concierge-bell"></i></div>
-                <div class="user-details">
-                    <div class="user-name" id="userName">Carregando...</div>
-                    <div class="user-role" id="userRole">Recepção</div>
+
+            <!-- Lado Esquerdo: Relógio -->
+            <div class="relogio-card">
+                <i class="far fa-clock"></i>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
                 </div>
             </div>
-            <div class="btn-actions">
-                <div class="notificacoes-container">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações">
+
+            <!-- Lado Direito: Notificações + Perfil -->
+            <div class="d-flex align-items-center gap-3">
+
+                <!-- 🔔 SINO OCULTO (aberto pelo menu do usuário) -->
+                <div class="notificacoes-container" id="containerSinoOriginal">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                            title="Notificações e Lembretes">
                         <i class="fas fa-bell"></i>
                         <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
 
                     <div class="notificacoes-dropdown" id="notificacoesDropdown">
                         <div class="notificacoes-header">
-                            <h3><i class="fas fa-bell"></i> Notificações</h3>
+                            <h3>
+                                <i class="fas fa-bell" style="color: #1e3c72;"></i>
+                                Notificações
+                            </h3>
                             <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" title="Marcar todas como lidas">
+                                <button onclick="marcarTodasLidas()"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    title="Marcar todas como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;">
+                                <button onclick="limparMinhasNotificacoes(event)"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    title="Excluir todas">
+                                    <i class="fas fa-trash"></i> Limpar
+                                </button>
+                                <button onclick="fecharNotificacoes()"
+                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
@@ -73,24 +93,81 @@
                         </div>
                     </div>
                 </div>
+                <!-- FIM DO SINO -->
 
-                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
-                    <i class="fas fa-user-edit"></i>
-                </button>
-                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
+                <!-- Perfil do Usuário -->
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-concierge-bell"></i>
+                            </div>
+                            <span class="user-notification-badge" id="userNotificationBadge"></span>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Recepção</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
+                    </div>
+
+                    <!-- Dropdown do Usuário -->
+                    <div class="user-dropdown-menu" id="userDropdown">
+                        <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
+                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+
+                        <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)"
+                             title="Notificações e Lembretes">
+                            <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                            <div class="item-text">Notificações</div>
+                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item" title="Baixar App">
+                            <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
+                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-divider"></div>
+
+                        <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
+                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <!-- CABEÇALHO -->
+        <!-- ============================================= -->
+        <!-- FIM DO HEADER                                  -->
+        <!-- ============================================= -->
+
+        <!-- CARD DE BOAS-VINDAS + TURNO -->
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header card-header-boas-vindas d-flex justify-content-between align-items-center">
                 <div>
-                    <i class="fas fa-concierge-bell me-2"></i>
-                    Recepção - Verificação de Autorizações
+                    <i class="fas fa-concierge-bell me-2"></i> Recepção - Verificação de Autorizações
                 </div>
-                <span id="dataAtual" class="badge bg-light text-dark"></span>
+
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fw-bold header-boas-vindas-texto">
+                        <i class="fas fa-smile me-1 header-boas-vindas-icone"></i> 
+                        Bem-vindo(a), <span id="headerNomeUsuario">Recepcionista</span>
+                    </span>
+
+                    <span class="badge bg-light text-dark shadow-sm border header-turno-badge">
+                        <i class="fas fa-sun text-warning me-1" id="headerTurnoIcone"></i> 
+                        Turno: <span id="headerTurno" class="fw-bold">Matutino</span>
+                    </span>
+                </div>
             </div>
         </div>
         
@@ -197,7 +274,6 @@
                 <!-- RESULTADO DA CONSULTA -->
                 <div id="resultadoConsulta" style="display: none;">
                     
-                    <!-- INFO DO ALUNO -->
                     <div class="aluno-card-consulta mb-3">
                         <div class="d-flex flex-wrap align-items-center">
                             <img id="alunoFoto" class="aluno-foto" src="" alt="Foto">
@@ -216,13 +292,10 @@
                         </div>
                     </div>
                     
-                    <!-- STATUS DA VERIFICAÇÃO -->
                     <div id="statusVerificacao" class="mb-3"></div>
                     
-                    <!-- LISTA DE AUTORIZAÇÕES -->
                     <div id="listaAutorizacoes" class="mt-3"></div>
                     
-                    <!-- BOTÃO LIMPAR -->
                     <div class="d-flex gap-2 mt-3">
                         <button class="btn-secondary-custom" onclick="limparTela()">
                             <i class="fas fa-times me-2"></i> Nova Consulta
@@ -280,7 +353,6 @@
 
                 <div class="modal-body" style="padding: 22px;">
 
-                    <!-- Info do aluno -->
                     <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #eef2ff; border-radius: 12px; margin-bottom: 18px;">
                         <img id="assinaturaAlunoFoto" src="" alt="Foto" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #1e3c72; flex-shrink: 0;">
                         <div style="flex: 1; min-width: 0;">
@@ -289,7 +361,6 @@
                         </div>
                     </div>
 
-                    <!-- Abas -->
                     <ul class="nav nav-pills mb-3" id="tabsAssinatura" role="tablist" style="gap: 6px;">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" id="tab-qr" data-bs-toggle="pill" data-bs-target="#pane-qr" type="button" role="tab" style="border-radius: 10px; font-size: 13px; padding: 8px 14px;">
@@ -305,7 +376,6 @@
 
                     <div class="tab-content">
 
-                        <!-- ABA QR CODE -->
                         <div class="tab-pane fade show active" id="pane-qr" role="tabpanel">
                             <div id="assinaturaQrArea" style="text-align: center;">
                                 <div id="assinaturaQrLoading" style="padding: 30px; color: #64748b;">
@@ -340,7 +410,6 @@
                             </div>
                         </div>
 
-                        <!-- ABA CANVAS -->
                         <div class="tab-pane fade" id="pane-canvas" role="tabpanel">
                             <div style="position: relative; background: white; border: 3px dashed #cbd5e0; border-radius: 14px; overflow: hidden; height: 220px; touch-action: none;" id="canvasRecepcaoWrapper">
                                 <canvas id="canvasAssinaturaRecepcao" style="width: 100%; height: 100%; display: block;"></canvas>
@@ -362,7 +431,6 @@
 
                     </div>
 
-                    <!-- Assinatura atual -->
                     <div id="assinaturaAtualBloco" style="display: none; margin-top: 18px; padding: 14px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 12px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <strong style="color: #065f46; font-size: 14px;">

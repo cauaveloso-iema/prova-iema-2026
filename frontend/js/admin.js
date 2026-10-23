@@ -30081,12 +30081,9 @@ class AdminPanel {
                 const faceData = await faceResponse.json();
                 
                 if (faceData.success && faceData.configuracao) {
-                    // Garantir que seguranca existe
                     if (!config.seguranca) {
                         config.seguranca = {};
                     }
-                    
-                    // Adicionar/sobrescrever o valor
                     config.seguranca.exigirFaceIdProvas = faceData.configuracao.valor;
                     console.log('✅ Face ID carregado do banco:', faceData.configuracao.valor);
                 }
@@ -30136,6 +30133,10 @@ class AdminPanel {
                         </button>
                         <button class="tab-btn" onclick="admin.mudarTabConfig('seguranca')">
                             <i class="fas fa-shield-alt"></i> Segurança
+                        </button>
+                        <!-- 🔥 NOVA ABA: PERFIS ADMINISTRATIVOS -->
+                        <button class="tab-btn" onclick="admin.mudarTabConfig('perfis-administrativos')">
+                            <i class="fas fa-users-cog"></i> Perfis Administrativos
                         </button>
                         <button class="tab-btn" onclick="admin.mudarTabConfig('provas')">
                             <i class="fas fa-file-alt"></i> Provas
@@ -31220,6 +31221,229 @@ class AdminPanel {
         `;
     }
 
+    // ============ RENDERIZAR CONFIGURAÇÃO DE PERFIS ADMINISTRATIVOS ============
+    renderConfigPerfisAdministrativos(config) {
+        return `
+            <div class="config-section active" id="config-perfis-administrativos">
+                <h3 class="section-title">
+                    <i class="fas fa-users-cog"></i> Perfis com Acesso ao Calendário
+                </h3>
+                
+                <div class="info-box" style="background: #eef2ff; border-left: 4px solid #3b82f6; padding: 12px 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <i class="fas fa-info-circle" style="color: #3b82f6;"></i>
+                    <span>
+                        Selecione quais perfis devem ser considerados <strong>administrativos</strong> para o calendário.
+                        Eles verão eventos uns dos outros (exceto os de professores e alunos). 
+                        Adicione novos perfis aqui para que o calendário funcione automaticamente para eles.
+                    </span>
+                </div>
+
+                <div id="perfisAdministrativosContainer">
+                    <div style="text-align: center; padding: 40px; color: #6b7280;">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando perfis...
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 12px;">
+                    <h4 style="margin: 0 0 10px; font-size: 14px;">Adicionar novo perfil</h4>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="novoPerfilInput" class="form-control" 
+                            placeholder="Ex: ouvidoria, financeiro..." 
+                            style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <button onclick="admin.adicionarPerfilAdministrativo()" 
+                                class="btn-primary" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+                    <small style="color: #6b7280; display: block; margin-top: 5px;">
+                        Use o nome interno do perfil (ex: <code>ouvidoria</code>).
+                    </small>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============ CARREGAR PERFIS ADMINISTRATIVOS ============
+    async carregarPerfisAdministrativos() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/configuracoes/perfis-administrativos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) throw new Error(data.error || 'Erro ao carregar perfis');
+            
+            this.perfisAdministrativos = data.perfis || [];
+            this.renderizarPerfisAdministrativos();
+        } catch (error) {
+            console.error('❌ Erro ao carregar perfis administrativos:', error);
+            const container = document.getElementById('perfisAdministrativosContainer');
+            if (container) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #dc3545;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Erro ao carregar perfis: ${error.message}</p>
+                        <button onclick="admin.carregarPerfisAdministrativos()" class="btn-primary">Tentar novamente</button>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    // ============ RENDERIZAR PERFIS ADMINISTRATIVOS ============
+    renderizarPerfisAdministrativos() {
+        const container = document.getElementById('perfisAdministrativosContainer');
+        if (!container) return;
+
+        const todosPerfis = [
+            { role: 'admin', label: 'Admin', icon: '👑' },
+            { role: 'super_admin', label: 'Super Admin', icon: '⭐' },
+            { role: 'setor_pedagogico', label: 'Setor Pedagógico', icon: '👩‍🏫' },
+            { role: 'gestao_geral', label: 'Gestão Geral', icon: '📊' },
+            { role: 'supervisao', label: 'Supervisão', icon: '🛡️' },
+            { role: 'coordenacao_patio', label: 'Coord. Pátio', icon: '🏃' },
+            { role: 'secretaria', label: 'Secretaria', icon: '🎓' },
+            { role: 'recepcao', label: 'Recepção', icon: '🛎️' },
+            { role: 'enfermaria', label: 'Enfermaria', icon: '🏥' },
+            { role: 'cozinha', label: 'Cozinha', icon: '🍽️' },
+            { role: 'assistente-social', label: 'Assistente Social', icon: '🤝' },
+            { role: 'psicologia', label: 'Psicologia', icon: '🧠' },
+            { role: 'protagonismo', label: 'Protagonismo', icon: '⭐' },
+            { role: 'biblioteca', label: 'Biblioteca', icon: '📚' },
+            { role: 'professor', label: 'Professor', icon: '👨‍🏫' },
+            { role: 'aluno', label: 'Aluno', icon: '👨‍🎓' }
+        ];
+
+        const perfisNaoAdmin = todosPerfis.filter(p => !['admin', 'super_admin'].includes(p.role));
+
+        let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">';
+
+        perfisNaoAdmin.forEach(perfil => {
+            const ativo = this.perfisAdministrativos.includes(perfil.role);
+            
+            html += `
+                <div style="background: white; border: 2px solid ${ativo ? '#10b981' : '#e5e7eb'}; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">${perfil.icon}</span>
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px;">${perfil.label}</div>
+                            <div style="font-size: 11px; color: #6b7280;">${perfil.role}</div>
+                        </div>
+                    </div>
+                    <button onclick="admin.togglePerfilAdministrativo('${perfil.role}')" 
+                            style="background: ${ativo ? '#fee2e2' : '#d1fae5'}; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: ${ativo ? '#dc2626' : '#10b981'};">
+                        <i class="fas ${ativo ? 'fa-times' : 'fa-plus'}"></i>
+                    </button>
+                </div>
+            `;
+        });
+
+        const perfisCustomizados = this.perfisAdministrativos.filter(p => !todosPerfis.some(t => t.role === p));
+        
+        perfisCustomizados.forEach(perfil => {
+            html += `
+                <div style="background: white; border: 2px solid #10b981; border-radius: 12px; padding: 15px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">👤</span>
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px;">${perfil}</div>
+                            <div style="font-size: 11px; color: #6b7280;">Customizado</div>
+                        </div>
+                    </div>
+                    <button onclick="admin.togglePerfilAdministrativo('${perfil}')" 
+                            style="background: #fee2e2; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #dc2626;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    // ============ TOGGLE PERFIL ADMINISTRATIVO ============
+    async togglePerfilAdministrativo(perfil) {
+        const ativo = this.perfisAdministrativos.includes(perfil);
+        const token = localStorage.getItem('auth_token');
+        
+        try {
+            let response;
+            if (ativo) {
+                response = await fetch(`/api/admin/configuracoes/perfis-administrativos/${perfil}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } else {
+                response = await fetch('/api/admin/configuracoes/perfis-administrativos', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ perfil })
+                });
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.perfisAdministrativos = data.perfis;
+                this.renderizarPerfisAdministrativos();
+                this.showToast(`✅ Perfil ${perfil} ${ativo ? 'removido' : 'adicionado'}!`, 'success');
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
+    // ============ ADICIONAR PERFIL CUSTOMIZADO ============
+    async adicionarPerfilAdministrativo() {
+        const input = document.getElementById('novoPerfilInput');
+        const perfil = input?.value.trim().toLowerCase();
+        
+        if (!perfil) {
+            this.showToast('❌ Digite o nome do perfil', 'error');
+            return;
+        }
+        
+        if (this.perfisAdministrativos.includes(perfil)) {
+            this.showToast('❌ Perfil já está na lista', 'error');
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/admin/configuracoes/perfis-administrativos', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ perfil })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.perfisAdministrativos = data.perfis;
+                this.renderizarPerfisAdministrativos();
+                input.value = '';
+                this.showToast(`✅ Perfil ${perfil} adicionado!`, 'success');
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            this.showToast('❌ ' + error.message, 'error');
+        }
+    }
+
     // ============ FUNÇÃO AUXILIAR PARA CONTAR REQUISITOS ============
     contarRequisitosSenha(senhaConfig) {
         if (!senhaConfig) return 'Nenhum';
@@ -32233,11 +32457,12 @@ class AdminPanel {
             'aparencia': 'config-aparencia',
             'sistema': 'config-sistema',
             'seguranca': 'config-seguranca',
+            'perfis-administrativos': 'config-perfis-administrativos', // 🔥 NOVA ABA
             'provas': 'config-provas',
             'notificacoes': 'config-notificacoes',
             'email': 'config-email',
             'logs': 'config-logs',
-            'banco-dados': 'config-banco-dados',   // 🔥 NOVA LINHA
+            'banco-dados': 'config-banco-dados',
             'backups': 'config-backup',
             'desempenho': 'config-desempenho',
             'api': 'config-api'
@@ -32278,6 +32503,11 @@ class AdminPanel {
             this.atualizarCamposEmail();
         }
         
+        // 🔥 NOVA PARTE: Se for a tab de perfis-administrativos, carregar os perfis
+        if (tab === 'perfis-administrativos') {
+            setTimeout(() => this.carregarPerfisAdministrativos(), 100);
+        }
+        
         // 🔥 NOVA PARTE: Se for a tab de banco-dados, inicializar o módulo
         if (tab === 'banco-dados') {
             setTimeout(() => {
@@ -32314,8 +32544,12 @@ class AdminPanel {
         // Recriar todas as seções
         let html = '';
         
-        // Lista de todas as abas (INCLUINDO banco-dados)
-        const tabs = ['aparencia', 'sistema', 'seguranca', 'provas', 'notificacoes', 'email', 'logs', 'banco-dados', 'backups', 'desempenho', 'api'];
+        // Lista de todas as abas (INCLUINDO perfis-administrativos)
+        const tabs = [
+            'aparencia', 'sistema', 'seguranca', 'perfis-administrativos',
+            'provas', 'notificacoes', 'email', 'logs', 'banco-dados',
+            'backups', 'desempenho', 'api'
+        ];
         
         tabs.forEach(tab => {
             switch(tab) {
@@ -32327,6 +32561,9 @@ class AdminPanel {
                     break;
                 case 'seguranca':
                     html += this.renderConfigSeguranca(config);
+                    break;
+                case 'perfis-administrativos':
+                    html += this.renderConfigPerfisAdministrativos(config);
                     break;
                 case 'provas':
                     html += this.renderConfigProvas(config);
@@ -32340,7 +32577,6 @@ class AdminPanel {
                 case 'logs':
                     html += this.renderConfigLogs(config);
                     break;
-                // 🔥 NOVO CASE: BANCO DE DADOS
                 case 'banco-dados':
                     html += this.renderConfigBancoDados(config);
                     break;
@@ -32381,6 +32617,11 @@ class AdminPanel {
         // Se for a tab de email, atualizar campos
         if (tabAtiva === 'email') {
             this.atualizarCamposEmail();
+        }
+        
+        // 🔥 NOVO: Se for perfis-administrativos, carregar perfis
+        if (tabAtiva === 'perfis-administrativos') {
+            setTimeout(() => this.carregarPerfisAdministrativos(), 100);
         }
         
         // 🔥 NOVO: Se for banco-dados, inicializar módulo
@@ -43213,7 +43454,8 @@ class AdminPanel {
                 'substituicao_professores_setor_pedagogico': 'fa-people-arrows',
                 'autorizacao_visitas': 'fa-map-marked-alt',
                 'gestao_professores_setor_pedagogico': 'fa-chalkboard-teacher',
-                'aee_setor_pedagogico': 'fa-universal-access'
+                'aee_setor_pedagogico': 'fa-universal-access',
+                'calendario_setor_pedagogico': 'fa-calendar-alt'
             };
             return icones[modulo] || 'fa-key';
         };
@@ -43226,7 +43468,8 @@ class AdminPanel {
                 'substituicao_professores_setor_pedagogico': 'linear-gradient(135deg, #ef4444, #dc2626)',
                 'autorizacao_visitas': 'linear-gradient(135deg, #667eea, #764ba2)',
                 'gestao_professores_setor_pedagogico': 'linear-gradient(135deg, #f59e0b, #d97706)',
-                'aee_setor_pedagogico': 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+                'aee_setor_pedagogico': 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                'calendario_setor_pedagogico': 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
             };
             return cores[modulo] || 'linear-gradient(135deg, #8b5cf6, #7c3aed)';
         };

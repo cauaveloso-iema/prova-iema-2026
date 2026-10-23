@@ -1,6 +1,5 @@
 // ============================================================================
-// CALENDÁRIO ACADÊMICO - FRONTEND (VERSÃO CORRIGIDA)
-// Alunos podem VISUALIZAR, professores e admins podem CRIAR/EDITAR/EXCLUIR
+// CALENDÁRIO ACADÊMICO - FRONTEND (VERSÃO FINAL COMPLETA)
 // ============================================================================
 
 class CalendarioAcademico {
@@ -13,27 +12,18 @@ class CalendarioAcademico {
         this.usuario = JSON.parse(localStorage.getItem('user_data') || '{}');
         this.filtros = { tipo: 'todos', professor: 'todos', turma: 'todas' };
         
-        // 🔥 CORREÇÃO: Alunos PODEM ver o calendário (modo somente leitura)
-        const isAluno = this.usuario.role === 'aluno';
-        const isProfessor = this.usuario.role === 'professor';
-        const isAdmin = this.usuario.role === 'admin' || this.usuario.role === 'super_admin';
+        // 🔥 PERMISSÕES
+        this.podeCriar = false; 
+        this.modoLeitura = true;
         
-        if (!isAluno && !isProfessor && !isAdmin) {
-            alert('⛔ Acesso negado! Faça login para acessar o calendário.');
-            window.location.href = 'login.html';
-            return;
+        // Verificação inicial básica (Admin/Professor já garantem permissão de criação)
+        if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin' || this.usuario.role === 'professor') {
+            this.podeCriar = true;
+            this.modoLeitura = false;
         }
-        
-        // Definir permissões
-        this.modoLeitura = isAluno;
-        this.podeCriar = isProfessor || isAdmin;
-        this.podeEditar = isProfessor || isAdmin;
-        this.podeExcluir = isProfessor || isAdmin;
-        
-        console.log('📅 Inicializando Calendário Acadêmico...');
+
+        console.log('📅 Inicializando Calendário...');
         console.log('👤 Role:', this.usuario.role);
-        console.log('📖 Modo leitura:', this.modoLeitura);
-        console.log('✏️ Pode criar/editar:', this.podeCriar);
         
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
@@ -45,7 +35,10 @@ class CalendarioAcademico {
     async init() {
         console.log('🚀 Iniciando calendário...');
         
-        // Configurar interface baseada no role
+        // 🔥 VERIFICAR PERMISSÃO REAL NO BACKEND
+        await this.verificarPermissaoEdicao();
+        
+        // Configurar interface baseada na permissão final
         this.configurarInterfacePorRole();
         
         // Configurar botão voltar
@@ -56,18 +49,52 @@ class CalendarioAcademico {
         this.configurarEventListeners();
     }
 
+    // 🔥 NOVO MÉTODO: VERIFICA A PERMISSÃO NO BACKEND
+    async verificarPermissaoEdicao() {
+        try {
+            const token = localStorage.getItem('auth_token');
+            
+            // Chamar a rota de verificação
+            const response = await fetch(`/api/admin/permissoes-modulos/verificar/calendario_setor_pedagogico?email=${encodeURIComponent(this.usuario.email || '')}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.temPermissao) {
+                console.log('✅ Permissão de criação CONCEDIDA');
+                this.podeCriar = true;
+                this.modoLeitura = false;
+            } else {
+                console.log('🔒 Permissão de criação NEGADA:', data.motivo);
+                
+                // Se for admin ou prof, o backend já retorna true, mas se falhar por algum motivo, mantemos a lógica
+                if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin' || this.usuario.role === 'professor') {
+                    this.podeCriar = true;
+                    this.modoLeitura = false;
+                } else {
+                    this.podeCriar = false;
+                    this.modoLeitura = true;
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erro ao verificar permissão:', error);
+            // Fallback seguro: se der erro na rede, mantém o que foi definido no construtor
+        }
+    }
+
     // ============ CONFIGURAR INTERFACE POR ROLE ============
     configurarInterfacePorRole() {
         const btnCriar = document.getElementById('btnCriarEvento');
         const filtroProfessor = document.getElementById('filtroProfessor');
         
         if (this.modoLeitura) {
-            // Alunos: esconder botão de criar evento
+            // Esconder botão de criar evento
             if (btnCriar) {
                 btnCriar.style.display = 'none';
             }
             
-            // Alunos: esconder filtro de professor
+            // Esconder filtro de professor
             if (filtroProfessor && filtroProfessor.parentElement) {
                 filtroProfessor.parentElement.style.display = 'none';
             }
@@ -91,9 +118,14 @@ class CalendarioAcademico {
                 header.style.position = 'relative';
                 header.appendChild(badge);
             }
+        } else {
+            // Modo Edição: Mostrar botão
+            if (btnCriar) {
+                btnCriar.style.display = 'flex';
+            }
         }
         
-        console.log(`🔧 Interface configurada para ${this.usuario.role}`);
+        console.log(`🔧 Interface configurada: ${this.podeCriar ? 'EDIÇÃO' : 'LEITURA'}`);
     }
 
     // ============ CONFIGURAR BOTÃO VOLTAR ============
@@ -118,10 +150,42 @@ class CalendarioAcademico {
             novoBtn.addEventListener('click', () => {
                 window.location.href = 'index.html';
             });
-        } else {
+        } else if (this.usuario.role === 'aluno') {
             textoBtn.textContent = 'Voltar ao Painel do Aluno';
             novoBtn.addEventListener('click', () => {
                 window.location.href = 'aluno.html';
+            });
+        } else if (this.usuario.role === 'setor_pedagogico') {
+            textoBtn.textContent = 'Voltar ao Setor Pedagógico';
+            novoBtn.addEventListener('click', () => {
+                window.location.href = 'setor-pedagogico.html';
+            });
+        } else if (this.usuario.role === 'gestao_geral') {
+            textoBtn.textContent = 'Voltar à Gestão Geral';
+            novoBtn.addEventListener('click', () => {
+                window.location.href = 'gestao-geral.html';
+            });
+        } else if (this.usuario.role === 'supervisao') {
+            textoBtn.textContent = 'Voltar ao Painel de Supervisão';
+            novoBtn.addEventListener('click', () => {
+                window.location.href = 'supervisao.html';
+            });
+        } else {
+            // Fallback
+            textoBtn.textContent = 'Voltar ao Painel';
+            novoBtn.addEventListener('click', () => {
+                const redirectMap = {
+                    'coordenacao_patio': 'coordenacao-patio.html',
+                    'cozinha': 'cozinha-dashboard.html',
+                    'enfermaria': 'enfermaria.html',
+                    'biblioteca': 'biblioteca.html',
+                    'psicologia': 'psicologia.html',
+                    'assistente-social': 'assistente-social.html',
+                    'protagonismo': 'protagonismo.html',
+                    'secretaria': 'secretaria.html',
+                    'recepcao': 'recepcao.html'
+                };
+                window.location.href = redirectMap[this.usuario.role] || 'admin.html';
             });
         }
     }
@@ -137,12 +201,7 @@ class CalendarioAcademico {
     async carregarEventos() {
         try {
             const token = localStorage.getItem('auth_token');
-            if (!token) {
-                console.error('❌ Token não encontrado');
-                return;
-            }
-            
-            console.log(`📡 Buscando eventos para ${this.mesAtual + 1}/${this.anoAtual}...`);
+            if (!token) return;
             
             const response = await fetch(
                 `${this.apiBase}/eventos?mes=${this.mesAtual + 1}&ano=${this.anoAtual}`,
@@ -156,19 +215,20 @@ class CalendarioAcademico {
             if (data.success) {
                 let eventosCarregados = data.eventos || [];
                 
-                // 🔥 FILTRAR BASEADO NO ROLE DO USUÁRIO
+                // 🔥 FILTRAR BASEADO NO ROLE DO USUÁRIO (já vem filtrado do backend, mas mantemos por segurança)
                 if (this.usuario.role === 'professor') {
-                    // Professor vê apenas eventos que ele CRIOU
-                    this.eventos = eventosCarregados.filter(e => e.criadoPor?.id === this.usuario.id);
-                    console.log(`👨‍🏫 Professor: ${this.eventos.length} eventos encontrados`);
+                    // Professor vê apenas eventos que ele CRIOU ou do Admin
+                    this.eventos = eventosCarregados.filter(e => 
+                        e.criadoPor?.id === this.usuario.id || 
+                        e.criadoPor?.role === 'admin' || 
+                        e.criadoPor?.role === 'super_admin'
+                    );
                 } else if (this.usuario.role === 'aluno') {
                     // Aluno vê eventos da sua turma
                     this.eventos = eventosCarregados;
-                    console.log(`👨‍🎓 Aluno: ${this.eventos.length} eventos encontrados`);
                 } else {
-                    // Admin vê todos os eventos
+                    // Admin/Pedagogico/Gestão vê todos os eventos
                     this.eventos = eventosCarregados;
-                    console.log(`👑 Admin: ${this.eventos.length} eventos encontrados`);
                 }
             }
         } catch (error) {
@@ -180,7 +240,6 @@ class CalendarioAcademico {
         try {
             const token = localStorage.getItem('auth_token');
             
-            // Só carregar professores se for admin (para filtro)
             if (this.usuario.role === 'admin' || this.usuario.role === 'super_admin') {
                 const response = await fetch('/api/admin/usuarios?role=professor&limit=100', {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -190,7 +249,6 @@ class CalendarioAcademico {
                 
                 if (data.success) {
                     this.professores = data.usuarios || [];
-                    console.log(`✅ ${this.professores.length} professores carregados`);
                     
                     const selectProf = document.getElementById('filtroProfessor');
                     if (selectProf) {
@@ -198,7 +256,7 @@ class CalendarioAcademico {
                         this.professores.forEach(p => {
                             const option = document.createElement('option');
                             option.value = p._id || p.id;
-                            option.textContent = `${p.nome || 'Sem nome'} - ${p.email || 'Sem email'}`;
+                            option.textContent = `${p.nome || 'Sem nome'}`;
                             selectProf.appendChild(option);
                         });
                     }
@@ -221,9 +279,7 @@ class CalendarioAcademico {
             
             if (data.success) {
                 this.turmas = data.turmas || [];
-                console.log(`✅ ${this.turmas.length} turmas carregadas`);
                 
-                // Atualizar filtro de turmas
                 const selectTurma = document.getElementById('filtroTurma');
                 if (selectTurma) {
                     selectTurma.innerHTML = '<option value="todas">Todas as turmas</option>';
@@ -235,7 +291,6 @@ class CalendarioAcademico {
                     });
                 }
                 
-                // Atualizar select no modal de criação
                 const selectTurmaModal = document.getElementById('eventoTurma');
                 if (selectTurmaModal && this.podeCriar) {
                     selectTurmaModal.innerHTML = '<option value="">Selecione uma turma...</option>';
@@ -349,7 +404,7 @@ class CalendarioAcademico {
                 diaEl.appendChild(maisEl);
             }
             
-            // 🔥 Ao clicar no dia: apenas admins/professores podem criar
+            // 🔥 Ao clicar no dia: apenas quem pode criar
             if (this.podeCriar) {
                 diaEl.addEventListener('click', (e) => {
                     if (!e.target.classList.contains('evento-mini') && !e.target.classList.contains('evento-mais')) {
@@ -457,12 +512,15 @@ class CalendarioAcademico {
         
         // 🔥 Verificar permissão
         if (!this.podeCriar) {
-            alert('Apenas administradores e professores podem criar eventos');
+            alert('Você não tem permissão para criar ou editar eventos.');
             return;
         }
 
-        // Se for professor editando um evento, verificar se é dele
-        if (this.usuario.role === 'professor' && eventoExistente && eventoExistente.criadoPor?.id !== this.usuario.id) {
+        // Se for professor/pedagogico editando um evento, verificar se é dele
+        const isAdmin = this.usuario.role === 'admin' || this.usuario.role === 'super_admin';
+        const isCriador = eventoExistente && eventoExistente.criadoPor?.id === this.usuario.id;
+
+        if (!isAdmin && eventoExistente && !isCriador) {
             alert('❌ Você só pode editar seus próprios eventos');
             return;
         }
@@ -874,9 +932,10 @@ class CalendarioAcademico {
         const horaFim = evento.horarioFim || '--:--';
         
         // 🔥 VERIFICAR PERMISSÃO DE EDIÇÃO
-        const podeEditar = this.usuario.role === 'admin' || 
-                          this.usuario.role === 'super_admin' || 
-                          (this.usuario.role === 'professor' && this.usuario.id === evento.criadoPor?.id);
+        const isAdmin = this.usuario.role === 'admin' || this.usuario.role === 'super_admin';
+        const isCriador = evento.criadoPor?.id === this.usuario.id;
+        
+        const podeEditar = isAdmin || isCriador;
         
         modalBody.innerHTML = `
             <div class="evento-detalhes">
@@ -961,6 +1020,7 @@ class CalendarioAcademico {
         btnFechar.onclick = () => this.fecharModal();
         modalFooter.appendChild(btnFechar);
         
+        // 🔥 SÓ MOSTRA O BOTÃO EDITAR SE TIVER PERMISSÃO
         if (podeEditar) {
             const btnEditar = document.createElement('button');
             btnEditar.className = 'btn-update';

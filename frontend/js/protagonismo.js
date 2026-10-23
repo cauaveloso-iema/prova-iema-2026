@@ -151,6 +151,246 @@ async function carregarFotoPerfil() {
 }
 
 // ============================================
+// 1. RELÓGIO EM TEMPO REAL
+// ============================================
+function atualizarRelogio() {
+    const elTempo = document.getElementById('relogioTempoReal');
+    const elData = document.getElementById('relogioData');
+    if (!elTempo) return;
+
+    const agora = new Date();
+    const horas = String(agora.getHours()).padStart(2, '0');
+    const minutos = String(agora.getMinutes()).padStart(2, '0');
+    const segundos = String(agora.getSeconds()).padStart(2, '0');
+
+    elTempo.textContent = `${horas}:${minutos}:${segundos}`;
+
+    if (elData) {
+        const dataFormatada = agora.toLocaleDateString('pt-BR', {
+            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+        });
+        elData.textContent = dataFormatada.replace(/\./g, '').replace(/,/g, ' •');
+    }
+}
+setInterval(atualizarRelogio, 1000);
+atualizarRelogio();
+
+// ============================================
+// 2. MENU DO USUÁRIO (Avatar)
+// ============================================
+function toggleUserMenu(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+
+    if (dropdown) {
+        const isShowing = dropdown.classList.contains('show');
+        if (isShowing) {
+            dropdown.classList.remove('show');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        } else {
+            dropdown.classList.add('show');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+        }
+    }
+}
+
+document.addEventListener('click', function (event) {
+    const container = document.getElementById('userMenuContainer');
+    const dropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+
+    if (container && !container.contains(event.target)) {
+        if (dropdown) dropdown.classList.remove('show');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+});
+
+// ============================================
+// 3. NOTIFICAÇÕES NO AVATAR (Anel pulsante)
+// ============================================
+const _originalAtualizarBadgeUnificado = typeof atualizarBadgeUnificado === 'function'
+    ? atualizarBadgeUnificado
+    : null;
+
+atualizarBadgeUnificado = function () {
+    if (typeof _originalAtualizarBadgeUnificado === 'function') {
+        _originalAtualizarBadgeUnificado();
+    }
+
+    let total = 0;
+    try {
+        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
+        const lembretes = (window.__lembretesCache || []).length;
+        total = naoLidas + lembretes;
+    } catch (e) {}
+
+    const badgeDot = document.getElementById('userNotificationBadge');
+    const menuBadge = document.getElementById('menuNotifBadge');
+    const trigger = document.getElementById('userTrigger');
+
+    if (total > 0) {
+        if (badgeDot) badgeDot.style.display = 'block';
+        if (menuBadge) {
+            menuBadge.style.display = 'inline-block';
+            menuBadge.textContent = total > 99 ? '99+' : total;
+        }
+        if (trigger) trigger.classList.add('tem-notificacao');
+    } else {
+        if (badgeDot) badgeDot.style.display = 'none';
+        if (menuBadge) menuBadge.style.display = 'none';
+        if (trigger) trigger.classList.remove('tem-notificacao');
+    }
+};
+
+// ============================================
+// 4. BOAS-VINDAS E TURNO DINÂMICO
+// ============================================
+function atualizarBoasVindasETurno() {
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    const nomeEl = document.getElementById('headerNomeUsuario');
+    if (nomeEl && userData.nome) {
+        nomeEl.textContent = userData.nome.split(' ')[0];
+    }
+
+    const agora = new Date();
+    const hora = agora.getHours();
+    let turno = 'Matutino';
+    let icone = 'fa-sun text-warning';
+
+    if (hora >= 12 && hora < 18) {
+        turno = 'Vespertino';
+        icone = 'fa-cloud-sun text-warning';
+    } else if (hora >= 18 || hora < 5) {
+        turno = 'Noturno';
+        icone = 'fa-moon text-primary';
+    }
+
+    const turnoEl = document.getElementById('headerTurno');
+    const iconeEl = document.getElementById('headerTurnoIcone');
+
+    if (turnoEl) turnoEl.textContent = turno;
+    if (iconeEl) iconeEl.className = `fas ${icone} me-1`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    atualizarBoasVindasETurno();
+    setInterval(atualizarBoasVindasETurno, 60000);
+});
+
+// ============================================
+// 5. ABRIR MENU DE NOTIFICAÇÕES PELO AVATAR
+// 🔥 CORREÇÃO PRINCIPAL: chama carregarListaNotificacoes()
+// ============================================
+function abrirMenuNotificacoesSeguro(event) {
+    if (event) event.stopPropagation();
+
+    // 1. Fecha o menu do usuário
+    const userDropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+    if (userDropdown) userDropdown.classList.remove('show');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+
+    // 2. Abre o dropdown do sino
+    const notifDropdown = document.getElementById('notificacoesDropdown');
+    if (notifDropdown) {
+        notifDropdown.classList.add('show');
+        notifDropdown.style.display = 'block';
+    }
+
+    // 3. 🔥 CARREGA AS NOTIFICAÇÕES IMEDIATAMENTE
+    // Estratégia em cascata: tenta as funções na ordem de preferência
+    const lista = document.getElementById('notificacoesLista');
+
+    // Mostra loading no lugar do conteúdo antigo (feedback visual imediato)
+    if (lista) {
+        lista.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                <p>Carregando...</p>
+            </div>
+        `;
+    }
+
+    // Tenta cada função na ordem de disponibilidade
+    if (typeof carregarListaNotificacoes === 'function') {
+        // ✅ Função existe no protagonismo.js
+        carregarListaNotificacoes().catch(err => {
+            console.error('Erro ao carregar notificações:', err);
+            mostrarFallbackNotificacoes(lista);
+        });
+    } else if (typeof carregarNotificacoes === 'function') {
+        // Função do protagonismo.js que checa o contador E carrega a lista se dropdown aberto
+        carregarNotificacoes().catch(err => {
+            console.error('Erro ao carregar notificações:', err);
+            mostrarFallbackNotificacoes(lista);
+        });
+    } else if (typeof carregarTudo === 'function') {
+        // Fallback do push-client.js
+        try { carregarTudo(); } catch (e) {
+            mostrarFallbackNotificacoes(lista);
+        }
+    } else if (typeof abrirNotificacoes === 'function') {
+        // Último recurso: chama a função original (só faz toggle)
+        try { abrirNotificacoes(); } catch (e) {
+            mostrarFallbackNotificacoes(lista);
+        }
+    } else {
+        mostrarFallbackNotificacoes(lista);
+    }
+}
+
+// Fallback: mensagem caso nenhuma função de carregamento exista
+function mostrarFallbackNotificacoes(lista) {
+    if (!lista) return;
+    lista.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #6c757d;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px; color: #f59e0b;"></i>
+            <p>Não foi possível carregar as notificações.</p>
+            <button onclick="abrirMenuNotificacoesSeguro()" 
+                    style="margin-top: 10px; padding: 8px 16px; background: #f97316; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <i class="fas fa-sync-alt"></i> Tentar novamente
+            </button>
+        </div>
+    `;
+}
+
+// ============================================
+// 6. FECHAR O SINO (BOTÃO X)
+// ============================================
+function fecharNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+        dropdown.style.display = 'none';
+    }
+
+    const btn = document.getElementById('notificacoesBtn');
+    if (btn) btn.classList.remove('active');
+}
+
+// Impede que o clique no X se propague
+document.addEventListener('click', function (event) {
+    const btnFecharSino = event.target.closest('.notificacoes-header button[onclick*="fecharNotificacoes"]');
+    if (btnFecharSino) {
+        event.stopPropagation();
+        fecharNotificacoes();
+    }
+}, true);
+
+// Fecha o sino ao clicar fora dele
+document.addEventListener('click', function (event) {
+    const notifDropdown = document.getElementById('notificacoesDropdown');
+    const containerSino = document.getElementById('containerSinoOriginal');
+
+    if (notifDropdown && notifDropdown.classList.contains('show')) {
+        if (containerSino && !containerSino.contains(event.target)) {
+            fecharNotificacoes();
+        }
+    }
+});
+
+// ============================================
 // CURSOS E TURMAS
 // ============================================
 async function carregarCursosTurmas() {
@@ -1710,28 +1950,6 @@ function abrirNotificacoes() {
     }
 }
 
-async function abrirNotificacao(id, link) {
-    try {
-        const token = localStorage.getItem('auth_token');
-        
-        await fetch(`/api/notificacoes/${id}/lida`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        document.getElementById('notificacoesDropdown').classList.remove('show');
-        
-        if (link && link !== '#') {
-            window.location.href = link;
-        }
-        
-        carregarNotificacoes();
-        
-    } catch (error) {
-        console.error('Erro ao abrir notificação:', error);
-    }
-}
-
 async function marcarTodasLidas() {
     try {
         const token = localStorage.getItem('auth_token');
@@ -1798,13 +2016,6 @@ async function limparMinhasNotificacoes(event) {
             btn.innerHTML = '<i class="fas fa-trash"></i> Limpar todas';
             btn.disabled = false;
         }
-    }
-}
-
-function fecharNotificacoes() {
-    const dropdown = document.getElementById('notificacoesDropdown');
-    if (dropdown) {
-        dropdown.classList.remove('show');
     }
 }
 

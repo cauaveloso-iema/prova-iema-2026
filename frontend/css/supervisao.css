@@ -1391,3 +1391,231 @@ body {
 }
 
 .card-acoes-massa { border-left: 4px solid #dc2626; }
+
+/* ============================================
+    HEADER ESPELHADO: RELÓGIO À ESQUERDA, PERFIL À DIREITA
+    ============================================ */
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+/* Relógio (Lado Esquerdo) */
+.relogio-card {
+    background: white;
+    padding: 10px 20px;
+    border-radius: 60px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.relogio-card i {
+    color: #0ea5e9;
+    font-size: 1.2rem;
+}
+
+.relogio-tempo {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #1f2937;
+    line-height: 1;
+}
+
+.relogio-data {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+/* Menu do Usuário (Lado Direito) */
+.user-menu-container {
+    position: relative;
+}
+
+.user-trigger {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    background: white;
+    padding: 6px 20px 6px 6px;
+    border-radius: 60px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.user-trigger:hover {
+    transform: scale(1.02);
+}
+
+.user-avatar-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+}
+
+.user-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+    overflow: hidden;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 🔥 ANEL DE NOTIFICAÇÃO NA FOTO */
+.user-notification-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 14px;
+    height: 14px;
+    background: #ef4444;
+    border: 2px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    animation: pulse-ring 2s infinite;
+    display: none; /* Oculto por padrão */
+}
+
+@keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.user-trigger.tem-notificacao .user-avatar {
+    border-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+/* Dropdown Menu */
+.user-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 260px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    border: 1px solid #e2e8f0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 3000;
+    overflow: hidden;
+}
+
+.user-dropdown-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    text-decoration: none;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+}
+
+.dropdown-item:hover {
+    background: #f8fafc;
+}
+
+.dropdown-item .icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin-right: 12px;
+    font-size: 14px;
+    transition: transform 0.2s;
+}
+
+.dropdown-item:hover .icon-box {
+    transform: scale(1.1) rotate(-5deg);
+}
+
+.dropdown-item .item-text {
+    flex: 1;
+}
+
+/* Cores dos ícones */
+.bg-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.bg-blue { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+.bg-green { background: linear-gradient(135deg, #10b981, #059669); }
+.bg-gray { background: linear-gradient(135deg, #64748b, #475569); }
+.bg-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+.dropdown-divider {
+    height: 1px;
+    background: #e2e8f0;
+    margin: 6px 0;
+}
+
+/* Badge de contagem dentro do menu */
+.badge-count {
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: auto;
+}
+
+/* Ajuste Mobile */
+@media (max-width: 768px) {
+    .header-top {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .relogio-card {
+        justify-content: center;
+        border-radius: 12px;
+    }
+    .user-trigger {
+        border-radius: 50px;
+        justify-content: center;
+    }
+    .user-details {
+        display: none !important;
+    }
+    .user-dropdown-menu {
+        right: -10px;
+        width: 220px;
+    }
+}

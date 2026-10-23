@@ -1602,3 +1602,487 @@ td div[style*="font-size: 12px"] small {
     background: #f9fafb;
     cursor: not-allowed;
 }
+
+/* ============================================= */
+/* HEADER REORGANIZADO - RELÓGIO + PERFIL        */
+/* (Adicionar ao final de css/gestao-geral.css)  */
+/* ============================================= */
+
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.relogio-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(30, 60, 114, 0.25);
+    min-width: 220px;
+}
+
+.relogio-card i {
+    font-size: 22px;
+    opacity: 0.9;
+}
+
+.relogio-tempo {
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
+.relogio-data {
+    font-size: 11px;
+    opacity: 0.85;
+    margin-top: 3px;
+    text-transform: capitalize;
+}
+
+.user-menu-container {
+    position: relative;
+}
+
+.user-trigger {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 8px 14px 8px 10px;
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s;
+}
+
+.user-trigger:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    border-color: #cbd5e0;
+}
+
+.user-avatar-wrapper {
+    position: relative;
+}
+
+.user-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 18px;
+    overflow: hidden;
+}
+
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-notification-badge {
+    display: none;
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 14px;
+    height: 14px;
+    background: #ef4444;
+    border-radius: 50%;
+    border: 2px solid white;
+    animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.user-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.user-role {
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.user-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e5e7eb;
+    min-width: 240px;
+    padding: 8px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.2s;
+    z-index: 9999;
+}
+
+.user-dropdown-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-decoration: none;
+    color: #374151;
+    transition: background 0.15s;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+}
+
+.dropdown-item:hover {
+    background: #f3f4f6;
+    color: #1f2937;
+}
+
+.dropdown-item .icon-box {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.icon-box.bg-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.icon-box.bg-blue   { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.icon-box.bg-green  { background: linear-gradient(135deg, #10b981, #059669); }
+.icon-box.bg-gray   { background: linear-gradient(135deg, #6b7280, #4b5563); }
+.icon-box.bg-red    { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+.dropdown-item .item-text {
+    flex: 1;
+}
+
+.dropdown-item .badge-count {
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 6px 8px;
+}
+
+.dropdown-item.text-danger {
+    color: #ef4444;
+}
+
+.dropdown-item.text-danger:hover {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+/* SINO OCULTO - só aparece via dropdown */
+.notificacoes-container {
+    position: relative;
+}
+
+.notificacoes-btn {
+    display: none;
+}
+
+.notificacoes-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e5e7eb;
+    width: 380px;
+    max-width: 90vw;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: all 0.2s;
+    z-index: 10000;
+}
+
+.notificacoes-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.notificacoes-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notificacoes-header h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notificacao-footer {
+    padding: 10px 16px;
+    border-top: 1px solid #f3f4f6;
+    text-align: center;
+}
+
+.notificacao-footer a {
+    color: #1e3c72;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.notificacao-footer a:hover {
+    text-decoration: underline;
+}
+
+/* ============================================= */
+/* ASSINATURA - blocos que antes eram inline     */
+/* ============================================= */
+
+.assinatura-check {
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+}
+
+.assinatura-check-aluno {
+    background: #f0fdf4;
+    border-radius: 10px;
+    border: 2px solid #bbf7d0;
+}
+
+.dados-responsavel-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.dados-responsavel-titulo {
+    margin-bottom: 15px;
+    color: #1e3c72;
+}
+
+.bloco-tipo-atendimento {
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+/* Métricas condicionais do dashboard de uniforme */
+.metric-card-assinatura-ok {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+}
+
+.metric-card-assinatura-pendente {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+}
+
+.metric-card-percentual {
+    background: linear-gradient(135deg, #eef2ff, #c7d2fe);
+}
+
+/* CTA Acompanhamento de Visitas */
+.acompanhamento-visitas-cta {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.btn-acompanhamento-visitas {
+    padding: 16px 36px;
+    border-radius: 50px;
+    font-size: 16px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    color: white;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s;
+}
+
+.btn-acompanhamento-visitas:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(102, 126, 234, 0.5);
+    color: white;
+}
+
+.acompanhamento-visitas-hint {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+/* Modal de Acompanhamento de Visitas */
+.modal-header-acompanhamento {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.modal-body-acompanhamento {
+    background: #f8fafc;
+    padding: 24px;
+}
+
+.modal-filtros-visitas {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.modal-filtros-titulo {
+    color: #1e3c72;
+    margin-bottom: 15px;
+}
+
+.form-label-visitas {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.modal-paginacao-visitas {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.modal-footer-acompanhamento {
+    background: #f8fafc;
+}
+
+/* ============================================= */
+/* RESPONSIVO                                    */
+/* ============================================= */
+
+@media (max-width: 768px) {
+    .header-top {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .relogio-card {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .user-trigger {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .user-dropdown-menu {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 20px 20px 0 0;
+        transform: translateY(100%);
+        min-width: 100%;
+    }
+
+    .user-dropdown-menu.show {
+        transform: translateY(0);
+    }
+
+    .notificacoes-dropdown {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.9);
+        width: 90vw;
+        max-height: 80vh;
+    }
+
+    .notificacoes-dropdown.show {
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* ============================================= */
+/* CARD DE BOAS-VINDAS + TURNO                   */
+/* ============================================= */
+
+.card-header-boas-vindas {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: white;
+    border: none;
+    padding: 15px 20px;
+}
+
+.header-boas-vindas-texto {
+    font-size: 14px;
+    color: #ffffff !important;
+}
+
+.header-boas-vindas-icone {
+    color: #fde047;
+}
+
+.header-turno-badge {
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+@media (max-width: 576px) {
+    .card-header-boas-vindas {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 8px;
+    }
+}

@@ -24,115 +24,162 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/biblioteca.css">
-    
-    <style>
-        /* ========== ESTILOS DO DASHBOARD DE VISITAS ========== */
-        .visitas-filtros {
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 1px solid #e2e8f0;
-        }
-        
-        .visitas-filtros .form-label {
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: #475569;
-            margin-bottom: 4px;
-        }
-        
-        .visitas-filtros .form-control,
-        .visitas-filtros .form-select {
-            font-size: 0.85rem;
-        }
-        
-        .visitas-table th {
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: #475569;
-            white-space: nowrap;
-        }
-        
-        .visitas-table td {
-            font-size: 0.85rem;
-            vertical-align: middle;
-        }
-        
-        .visitas-table .badge {
-            font-size: 0.7rem;
-            font-weight: 500;
-        }
-        
-        .pagination .page-link {
-            font-size: 0.85rem;
-            color: #0ea5e9;
-        }
-        
-        .pagination .page-item.active .page-link {
-            background: #0ea5e9;
-            border-color: #0ea5e9;
-        }
-        
-        .loading-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255,255,255,0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            border-radius: 12px;
-        }
-        
-        .visitas-container {
-            position: relative;
-            min-height: 200px;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- ============================================= -->
+        <!-- NOVO HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
+        <!-- ============================================= -->
         <div class="header-top">
-            <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar"><i class="fas fa-book-reader"></i></div>
-                <div class="user-details">
-                    <div class="user-name" id="userName">Carregando...</div>
-                    <div class="user-role" id="userRole">Biblioteca</div>
+
+            <!-- Lado Esquerdo: Relógio -->
+            <div class="relogio-card">
+                <i class="far fa-clock"></i>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
                 </div>
             </div>
-            <div class="btn-actions">
-                <div class="notificacoes-container">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn">
+
+            <!-- Lado Direito: Notificações + Perfil -->
+            <div class="d-flex align-items-center gap-3">
+
+                <!-- 🔔 SINO OCULTO (aberto pelo menu do usuário) -->
+                <div class="notificacoes-container" id="containerSinoOriginal" style="position: relative;">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                            title="Notificações e Lembretes" style="display: none;">
                         <i class="fas fa-bell"></i>
                         <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
-                    <div class="notificacoes-dropdown" id="notificacoesDropdown">
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown"
+                         style="position: absolute; top: 100%; right: 0; z-index: 9999;">
                         <div class="notificacoes-header">
-                            <h3><i class="fas fa-bell"></i> Notificações</h3>
-                            <button onclick="fecharNotificacoes()"><i class="fas fa-times"></i></button>
+                            <h3>
+                                <i class="fas fa-bell" style="color: #0ea5e9;"></i>
+                                Notificações
+                            </h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="marcarTodasLidas()"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Marcar todas como lidas">
+                                    <i class="fas fa-check-double"></i> Ler todas
+                                </button>
+                                <button onclick="limparMinhasNotificacoes(event)"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Excluir todas">
+                                    <i class="fas fa-trash"></i> Limpar
+                                </button>
+                                <button onclick="fecharNotificacoes()"
+                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div id="notificacoesLista"></div>
+
+                        <div id="notificacoesLista" style="max-height: 400px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                                <p>Carregando...</p>
+                            </div>
+                        </div>
+
+                        <div class="notificacao-footer">
+                            <a href="/notificacoes.html">
+                                <i class="fas fa-eye"></i> Ver todas as notificações
+                            </a>
+                        </div>
                     </div>
                 </div>
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="btn-icon" style="background: linear-gradient(135deg, #10b981, #059669);" title="Baixar App"><i class="fas fa-download"></i></a>
-                <button class="btn-icon" onclick="abrirModalQRCode()" title="QR Code Público"><i class="fas fa-qrcode"></i></button>
-                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil"><i class="fas fa-user-edit"></i></button>
-                <button class="btn-icon danger" onclick="logout()" title="Sair"><i class="fas fa-sign-out-alt"></i></button>
+                <!-- FIM DO SINO -->
+
+                <!-- Perfil do Usuário -->
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-book-reader"></i>
+                            </div>
+                            <span class="user-notification-badge" id="userNotificationBadge"></span>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Biblioteca</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
+                    </div>
+
+                    <!-- Dropdown do Usuário -->
+                    <div class="user-dropdown-menu" id="userDropdown">
+                        <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
+                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+
+                        <!-- Item que ABRE O SINO -->
+                        <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)"
+                             title="Notificações e Lembretes">
+                            <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                            <div class="item-text">Notificações</div>
+                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <div class="dropdown-item" onclick="abrirModalQRCode()" title="QR Code Público">
+                            <div class="icon-box bg-green"><i class="fas fa-qrcode"></i></div>
+                            <div class="item-text">QR Code Público</div>
+                        </div>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item" title="Baixar App">
+                            <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
+                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-divider"></div>
+
+                        <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
+                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        
+
+        <!-- Card Superior com Boas-Vindas e Turno -->
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <div><i class="fas fa-book-reader me-2"></i> Biblioteca — EducaPleno</div>
-                <span id="dataAtual" class="badge bg-light text-dark"></span>
+            <div class="card-header d-flex justify-content-between align-items-center" 
+                 style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; border: none; padding: 15px 20px;">
+                <div>
+                    <i class="fas fa-book-reader me-2"></i> Biblioteca — EducaPleno
+                </div>
+                
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fw-bold" style="font-size: 14px; color: white !important;">
+                        <i class="fas fa-smile me-1" style="color: #fde047;"></i> 
+                        Bem-vindo(a), <span id="headerNomeUsuario" style="color: white !important;">Bibliotecário(a)</span>
+                    </span>
+                    
+                    <span class="badge bg-light text-dark shadow-sm border" 
+                          style="font-size: 12px; padding: 6px 12px; border-radius: 20px;">
+                        <i class="fas fa-sun text-warning me-1" id="headerTurnoIcone"></i> 
+                        Turno: <span id="headerTurno" class="fw-bold">Matutino</span>
+                    </span>
+                </div>
             </div>
         </div>
-        
+
         <!-- Abas -->
         <div class="card">
             <div class="card-body">
@@ -163,14 +210,14 @@
                         </button>
                     </li>
                 </ul>
-                
+
                 <div class="tab-content mt-3">
-                    
+
                     <!-- ABA REGISTRO -->
                     <div class="tab-pane fade show active" id="tab-registro">
                         <!-- 🚦 Status da Biblioteca -->
                         <div id="statusBibliotecaAlerta" style="display: none; margin-bottom: 15px;"></div>
-                        
+
                         <!-- Toggle Modo -->
                         <div class="mode-toggle mb-3">
                             <button class="mode-btn active" id="modoAutomaticoBtn" onclick="setModo('automatico')">
@@ -180,7 +227,7 @@
                                 <i class="fas fa-users"></i> Buscar Manual
                             </button>
                         </div>
-                        
+
                         <!-- Modo Automático (QR) -->
                         <div id="modoAutomatico" class="modo-content">
                             <div class="scanner-container">
@@ -190,7 +237,7 @@
                                 <i class="fas fa-info-circle"></i> Aponte a câmera para o QR Code do aluno
                             </p>
                         </div>
-                        
+
                         <!-- Modo Manual -->
                         <div id="modoManual" class="modo-content" style="display: none;">
                             <div class="row g-3 mb-3">
@@ -209,7 +256,7 @@
                                 <div class="text-center py-3">Selecione uma turma para ver os alunos</div>
                             </div>
                         </div>
-                        
+
                         <!-- Info do Aluno -->
                         <div id="alunoInfo" style="display: none;" class="aluno-info-card">
                             <div class="aluno-header">
@@ -223,16 +270,16 @@
                             </div>
                             <div id="statusAtendimento"></div>
                         </div>
-                        
+
                         <!-- Formulário de Entrada -->
                         <div id="formEntrada" style="display: none;" class="form-card">
                             <h4><i class="fas fa-sign-in-alt"></i> Registrar Entrada</h4>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label"><i class="fas fa-calendar-alt"></i> Data/Hora de Entrada *</label>
                                 <input type="datetime-local" id="dataEntrada" class="form-control" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label"><i class="fas fa-clipboard-list"></i> Motivo da Visita *</label>
                                 <div class="motivos-grid">
@@ -254,12 +301,12 @@
                                 </div>
                                 <input type="hidden" id="motivoSelecionado">
                             </div>
-                            
+
                             <div id="campoOutros" style="display: none;" class="mb-3">
                                 <label class="form-label">Especifique o motivo</label>
                                 <input type="text" id="motivoOutros" class="form-control">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label"><i class="fas fa-tasks"></i> Atividades (opcional)</label>
                                 <div class="atividades-grid">
@@ -273,12 +320,12 @@
                                     <label><input type="checkbox" value="atividade_pedagogica"> Atividade Pedagógica</label>
                                 </div>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Observações</label>
                                 <textarea id="observacoesEntrada" class="form-control" rows="2"></textarea>
                             </div>
-                            
+
                             <button class="btn-primary-custom" onclick="registrarEntrada()">
                                 <i class="fas fa-check"></i> Confirmar Entrada
                             </button>
@@ -286,26 +333,26 @@
                                 <i class="fas fa-times"></i> Cancelar
                             </button>
                         </div>
-                        
+
                         <!-- Formulário de Saída -->
                         <div id="formSaida" style="display: none;" class="form-card">
                             <h4><i class="fas fa-sign-out-alt"></i> Registrar Saída</h4>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Observações finais</label>
                                 <textarea id="observacoesSaida" class="form-control" rows="2"></textarea>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Livros consultados (opcional)</label>
                                 <input type="text" id="livrosConsultados" class="form-control" placeholder="Separar por vírgula">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Computadores usados</label>
                                 <input type="number" id="computadoresUsados" class="form-control" value="0" min="0">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Satisfação</label>
                                 <select id="satisfacao" class="form-select">
@@ -316,7 +363,7 @@
                                     <option value="ruim">Ruim</option>
                                 </select>
                             </div>
-                            
+
                             <button class="btn-primary-custom" onclick="registrarSaida()">
                                 <i class="fas fa-check"></i> Confirmar Saída
                             </button>
@@ -325,7 +372,7 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- ABA ATIVOS -->
                     <div class="tab-pane fade" id="tab-ativos">
                         <div class="d-flex justify-content-between mb-3">
@@ -336,7 +383,7 @@
                         </div>
                         <div id="listaAtendimentosAtivos"></div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA DASHBOARD
                     ================================= -->
@@ -364,7 +411,7 @@
                                 <div class="stat-label">Total</div>
                             </div>
                         </div>
-                        
+
                         <!-- Gráficos -->
                         <div class="row mt-4">
                             <div class="col-md-6 mb-4">
@@ -380,7 +427,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="row">
                             <div class="col-md-6 mb-4">
                                 <div class="card">
@@ -395,7 +442,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- ================================
                              LISTA DE VISITAS (PAGINADA)
                         ================================= -->
@@ -448,7 +495,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Loading -->
                                 <div id="loadingVisitasDashboard" class="loading-overlay" style="display: none;">
                                     <div class="text-center">
@@ -456,7 +503,7 @@
                                         <p class="mt-2 text-muted">Carregando visitas...</p>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Lista -->
                                 <div id="listaVisitasDashboard" class="visitas-container">
                                     <div class="text-center py-5 text-muted">
@@ -467,11 +514,11 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- ABA RELATÓRIOS -->
                     <div class="tab-pane fade" id="tab-relatorios">
                         <h5><i class="fas fa-file-alt"></i> Relatórios</h5>
-                        
+
                         <div class="row g-3 mb-3">
                             <div class="col-md-3">
                                 <label class="form-label">Tipo</label>
@@ -509,16 +556,16 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <div id="resultadoRelatorio"></div>
                     </div>
-                    
+
                     <!-- ================================
                          ABA CONFIGURAÇÕES
                     ================================= -->
                     <div class="tab-pane fade" id="tab-config">
                         <h5><i class="fas fa-cog me-2"></i> Configurações da Biblioteca</h5>
-                        
+
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="card">
@@ -532,19 +579,19 @@
                                                 <p class="text-muted small mb-0">Permite que alunos registrem entrada na página pública</p>
                                             </div>
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" id="configVisitasAbertas" 
+                                                <input class="form-check-input" type="checkbox" id="configVisitasAbertas"
                                                        style="width: 50px; height: 25px; cursor: pointer;"
                                                        onchange="atualizarConfiguracaoBiblioteca()">
                                             </div>
                                         </div>
-                                        
+
                                         <div id="statusConfigBadge" style="margin-top: 15px; padding: 12px; border-radius: 8px; text-align: center; font-weight: 600;">
                                             <!-- Preenchido via JS -->
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <div class="col-md-6">
                                 <div class="card">
                                     <div class="card-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white;">
@@ -553,11 +600,11 @@
                                     <div class="card-body">
                                         <div class="mb-3">
                                             <label class="form-label">Mensagem exibida na página pública</label>
-                                            <textarea id="configMensagemFechado" class="form-control" rows="4" 
+                                            <textarea id="configMensagemFechado" class="form-control" rows="4"
                                                       placeholder="Ex: A biblioteca está temporariamente fechada para novas visitas."></textarea>
                                             <small class="text-muted">Esta mensagem aparece quando as visitas estão desativadas</small>
                                         </div>
-                                        
+
                                         <div class="row">
                                             <div class="col-6">
                                                 <label class="form-label">Abre às</label>
@@ -568,7 +615,7 @@
                                                 <input type="time" id="configHorarioFechamento" class="form-control">
                                             </div>
                                         </div>
-                                        
+
                                         <button class="btn btn-primary w-100 mt-3" onclick="salvarConfiguracaoBiblioteca()">
                                             <i class="fas fa-save"></i> Salvar Configurações
                                         </button>
@@ -614,7 +661,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" id="editAtendimentoId">
-                    
+
                     <div class="alert alert-info d-flex align-items-center gap-3">
                         <i class="fas fa-user-graduate fa-2x"></i>
                         <div>
@@ -622,13 +669,13 @@
                             <small>Turma: <span id="editAlunoTurma">-</span></small>
                         </div>
                     </div>
-                    
+
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label"><i class="fas fa-calendar-alt"></i> Data/Hora de Entrada *</label>
                             <input type="datetime-local" id="editDataEntrada" class="form-control" required>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label class="form-label"><i class="fas fa-clipboard-list"></i> Motivo da Visita *</label>
                             <select id="editMotivoVisita" class="form-select">
@@ -639,12 +686,12 @@
                                 <option value="outros">Outros</option>
                             </select>
                         </div>
-                        
+
                         <div class="col-md-12" id="editCampoOutros" style="display: none;">
                             <label class="form-label">Especifique o motivo</label>
                             <input type="text" id="editMotivoOutros" class="form-control">
                         </div>
-                        
+
                         <div class="col-md-12">
                             <label class="form-label"><i class="fas fa-tasks"></i> Atividades</label>
                             <div class="d-flex flex-wrap gap-3">
@@ -658,7 +705,7 @@
                                 <label><input type="checkbox" class="edit-atividade" value="atividade_pedagogica"> Atividade Pedagógica</label>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-12">
                             <label class="form-label">Observações</label>
                             <textarea id="editObservacoes" class="form-control" rows="2"></textarea>
@@ -679,5 +726,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/biblioteca.js"></script>
+    <script src="js/biblioteca-header.js"></script>
 </body>
 </html>

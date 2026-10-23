@@ -21,6 +21,7 @@ body {
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     overflow: hidden;
     margin-bottom: 20px;
+    background: white;
 }
 
 .card-header {
@@ -30,62 +31,6 @@ body {
     font-weight: bold;
     font-size: 1.2rem;
 }
-
-.header-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.user-info-card {
-    background: white;
-    border-radius: 60px;
-    padding: 8px 20px 8px 8px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-}
-
-.user-avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #10b981, #059669);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.2rem;
-    overflow: hidden;
-}
-
-.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.user-details { text-align: right; }
-.user-name { font-weight: bold; color: #1f2937; }
-.user-role { font-size: 0.7rem; color: #6c757d; }
-.btn-actions { display: flex; gap: 10px; }
-
-.btn-icon {
-    background: white;
-    border: none;
-    border-radius: 50%;
-    width: 45px;
-    height: 45px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    color: #10b981;
-    font-size: 1.1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.btn-icon:hover { transform: scale(1.05); background: #f3f4f6; }
-.btn-icon.danger { color: #ef4444; }
-.btn-icon.danger:hover { background: #fee2e2; }
 
 .qr-scanner-container {
     background: #000;
@@ -278,363 +223,455 @@ body {
     font-size: 12px;
 }
 
-/* Item sendo processado */
 #listaAlunosManual .list-group-item.processing {
     background: #d1fae5 !important;
     border-color: #10b981 !important;
     pointer-events: none;
 }
 
-/* Responsivo */
-@media (max-width: 768px) {
-    body { padding: 10px; }
-    .aluno-foto { width: 70px; height: 70px; }
-    .header-top { flex-direction: column; gap: 10px; }
-    .user-info-card { width: 100%; justify-content: space-between; }
-    .btn-actions { justify-content: center; }
-    .metric-value { font-size: 1.8rem; }
-    .modo-selector { flex-direction: column; }
-}
-
 /* ============================================
-   🔔 SISTEMA DE NOTIFICAÇÕES (SINO)
+   DETALHES DO ATENDIMENTO (MODAL)
    ============================================ */
-
-.notificacoes-container {
-    position: relative;
-    display: inline-block;
+.detalhe-atendimento .section-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #065f46;
+    margin-top: 16px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #d1fae5;
 }
 
-.notificacoes-btn {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+.detalhe-atendimento .info-row {
+    display: flex;
+    margin-bottom: 8px;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 14px;
+}
+
+.detalhe-atendimento .info-label {
+    font-weight: 600;
+    color: #4b5563;
+    min-width: 140px;
+}
+
+.detalhe-atendimento .info-value {
+    color: #1f2937;
+    flex: 1;
+}
+
+.list-group-item .btn-sm {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+}
+
+.list-group-item .btn-sm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+#listaAtendimentosRecentes .table thead th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #065f46;
+    font-weight: 700;
+    border-bottom: 2px solid #10b981;
+}
+
+#listaAtendimentosRecentes .table tbody tr {
+    transition: background 0.15s;
+}
+
+#listaAtendimentosRecentes .table tbody tr:hover {
+    background: #f0fdf4;
+}
+
+#listaAtendimentosRecentes .btn-sm {
+    padding: 0.35rem 0.55rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+#listaAtendimentosRecentes .btn-sm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 🆕 CARD DE ATENDIMENTOS +24H */
+.metric-card.metric-card-alerta {
+    border-left: 4px solid #dc2626 !important;
+    position: relative;
+}
+.metric-card.metric-card-alerta .metric-value { color: #dc2626 !important; }
+.metric-card.metric-card-alerta .metric-label { color: #991b1b !important; font-weight: 700; }
+.metric-card.metric-card-alerta.tem-alerta { animation: pulsaAlerta 2s infinite; }
+@keyframes pulsaAlerta {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+}
+
+/* =========================================================
+   NOVO HEADER (Padronizado: Relógio + Perfil + Sino)
+   ========================================================= */
+
+/* Container principal do topo */
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px 0;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+/* --- RELÓGIO (ESQUERDA) --- */
+.relogio-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 10px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb;
+}
+
+.relogio-card i {
+    font-size: 24px;
+    color: #10b981;
+}
+
+.relogio-tempo {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.2;
+}
+
+.relogio-data {
+    font-size: 12px;
+    color: #6b7280;
+    text-transform: capitalize;
+}
+
+/* --- MENU DO USUÁRIO (DIREITA) --- */
+.user-menu-container {
+    position: relative;
+}
+
+.user-trigger {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 8px 16px;
+    border-radius: 50px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.user-trigger:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.user-avatar-wrapper {
+    position: relative;
+}
+
+.user-avatar {
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
-    width: 48px;
-    height: 48px;
+    background: linear-gradient(135deg, #10b981, #059669);
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s;
     color: white;
-    font-size: 1.2rem;
-    position: relative;
-    backdrop-filter: blur(5px);
+    font-size: 20px;
+    overflow: hidden;
 }
 
-.notificacoes-btn:hover {
-    background: rgba(255, 255, 255, 0.25) !important;
-    transform: scale(1.05);
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
-.notificacoes-btn.tem-notificacao {
-    animation: pulse-notification 2s infinite;
+.user-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
-@keyframes pulse-notification {
-    0%   { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
-    70%  { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+.user-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.2;
 }
 
-.notificacoes-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #dc3545;
-    color: white;
-    font-size: 0.7rem;
-    font-weight: bold;
-    padding: 3px 6px;
-    border-radius: 20px;
-    min-width: 22px;
-    text-align: center;
-    border: 2px solid white;
+.user-role {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.user-notification-badge {
     display: none;
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    background: #ef4444;
+    border-radius: 50%;
+    border: 2px solid white;
+    animation: pulse-badge 2s infinite;
 }
 
-.notificacoes-dropdown {
+@keyframes pulse-badge {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* --- DROPDOWN DO USUÁRIO --- */
+.user-dropdown-menu {
     position: absolute;
-    top: 60px;
+    top: calc(100% + 10px);
     right: 0;
-    width: 380px;
     background: white;
+    min-width: 240px;
     border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    padding: 10px;
     display: none;
     z-index: 1000;
-    overflow: hidden;
-    max-height: 500px;
-    overflow-y: auto;
+    border: 1px solid #e5e7eb;
 }
 
-.notificacoes-dropdown.show {
-    display: block !important;
-    animation: slideDown 0.3s ease;
+.user-dropdown-menu.show {
+    display: block;
+    animation: slideDown 0.2s ease-out;
 }
 
 @keyframes slideDown {
     from { opacity: 0; transform: translateY(-10px); }
-    to   { opacity: 1; transform: translateY(0); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.notificacoes-header {
-    padding: 15px 20px;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: white;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.notificacoes-header h3 {
-    margin: 0;
-    font-size: 1rem;
+.dropdown-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-}
-
-.notificacao-item {
-    padding: 12px 15px;
-    border-bottom: 1px solid #e5e7eb;
-    cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
     gap: 12px;
-    background: white;
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #374151;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
-.notificacao-item.nao-lida {
-    background: #eff6ff;
-    border-left: 3px solid #10b981;
+.dropdown-item:hover {
+    background: #f3f4f6;
 }
 
-.notificacao-item:hover {
-    background: #f1f5f9 !important;
-    transform: translateX(5px);
+.dropdown-item.text-danger {
+    color: #dc2626;
 }
 
-.notificacao-icone {
-    width: 36px;
-    height: 36px;
+.dropdown-item.text-danger:hover {
+    background: #fee2e2;
+}
+
+.icon-box {
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
-    background: #10b981;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    font-size: 1rem;
-    flex-shrink: 0;
+    font-size: 14px;
 }
 
-.notificacao-conteudo { flex: 1; }
+.bg-purple { background: #8b5cf6; }
+.bg-blue { background: #3b82f6; }
+.bg-green { background: #10b981; }
+.bg-gray { background: #6b7280; }
+.bg-red { background: #ef4444; }
 
-.notificacao-titulo {
-    font-weight: 600;
-    margin-bottom: 3px;
-    font-size: 0.9rem;
-    color: #1f2937;
+.item-text {
+    flex: 1;
 }
 
-.notificacao-mensagem {
-    font-size: 0.8rem;
-    color: #6b7280;
-    margin-bottom: 4px;
-    line-height: 1.4;
+.badge-count {
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
 }
 
-.notificacao-tempo {
-    font-size: 0.65rem;
-    color: #9ca3af;
+.dropdown-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 8px 0;
+}
+
+/* --- SINO DE NOTIFICAÇÕES --- */
+.notificacoes-container {
+    position: relative;
+}
+
+.notificacoes-btn {
+    background: white;
+    border: 1px solid #e5e7eb;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 18px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s;
+}
+
+.notificacoes-btn:hover {
+    color: #10b981;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.notificacoes-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+}
+
+.notificacoes-dropdown {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 360px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    display: none;
+    z-index: 9999;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+}
+
+.notificacoes-dropdown.show {
+    display: block;
+    animation: slideDown 0.2s ease-out;
+}
+
+.notificacoes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.notificacoes-header h3 {
+    font-size: 16px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1f2937;
+    font-weight: 700;
 }
 
 .notificacao-footer {
-    padding: 12px 20px;
-    border-top: 1px solid #e5e7eb;
+    padding: 12px;
     text-align: center;
+    border-top: 1px solid #e5e7eb;
     background: #f9fafb;
 }
 
 .notificacao-footer a {
     color: #10b981;
     text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 500;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
+    font-size: 13px;
+    font-weight: 600;
 }
 
-.notificacao-footer button:hover {
-    color: #b91c1c !important;
+.notificacao-footer a:hover {
     text-decoration: underline;
 }
 
-.notificacao-footer button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Responsivo */
-@media (max-width: 480px) {
-    .notificacoes-dropdown {
-        width: calc(100vw - 32px) !important;
-        right: -16px !important;
+/* =========================================================
+   RESPONSIVIDADE DO HEADER
+   ========================================================= */
+@media (max-width: 768px) {
+    body { padding: 10px; }
+    .aluno-foto { width: 70px; height: 70px; }
+    .metric-value { font-size: 1.8rem; }
+    .modo-selector { flex-direction: column; }
+    
+    .header-top {
+        flex-direction: column;
+        align-items: stretch;
     }
-}
+    
+    .relogio-card, .user-trigger {
+        justify-content: center;
+    }
 
-/* ============================================================
-   SINO DE NOTIFICAÇÕES - AJUSTES PARA WEBVIEW/KODULAR
-   ============================================================ */
-
-/* Container do sino */
-.notificacoes-container {
-    position: relative;
-    display: inline-block;
-}
-
-/* Dropdown padrão (desktop) */
-.notificacoes-dropdown {
-    position: absolute;
-    top: 60px;
-    right: 0;
-    width: 380px;
-    max-width: calc(100vw - 20px); /* 🔥 NUNCA MAIOR QUE A TELA */
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-    display: none;
-    z-index: 99999; /* 🔥 Z-INDEX MUITO ALTO */
-    overflow: hidden;
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.notificacoes-dropdown.show {
-    display: block !important;
-    animation: slideDown 0.3s ease;
-}
-
-/* ============================================================
-   🔥 AJUSTES PARA WEBVIEW (KODULAR, APP ANDROID)
-   ============================================================ */
-
-/* Telas pequenas (até 480px) - mobile e WebView do app */
-@media (max-width: 480px) {
     .notificacoes-dropdown {
-        position: fixed !important;      /* 🔥 FIXO NA TELA */
+        position: fixed !important;
         top: 70px !important;
-        left: 10px !important;            /* 🔥 ALINHADO À ESQUERDA */
-        right: 10px !important;           /* 🔥 ALINHADO À DIREITA */
-        width: auto !important;           /* 🔥 LARGURA AUTOMÁTICA */
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
         max-width: calc(100vw - 20px) !important;
-        max-height: 70vh !important;      /* 🔥 70% DA ALTURA DA TELA */
-    }
-    
-    .notificacoes-header {
-        padding: 12px 15px !important;
-    }
-    
-    .notificacoes-header h3 {
-        font-size: 0.9rem !important;
-    }
-    
-    .notificacao-item {
-        padding: 10px 12px !important;
-    }
-    
-    .notificacao-icone {
-        width: 32px !important;
-        height: 32px !important;
-        font-size: 0.9rem !important;
-    }
-    
-    .notificacao-titulo {
-        font-size: 0.85rem !important;
-    }
-    
-    .notificacao-mensagem {
-        font-size: 0.75rem !important;
+        max-height: 70vh !important;
+        z-index: 99999 !important;
     }
 }
 
-/* Telas muito pequenas (até 360px) */
-@media (max-width: 360px) {
+@media (max-width: 480px) {
     .notificacoes-dropdown {
         top: 65px !important;
         left: 5px !important;
         right: 5px !important;
         max-width: calc(100vw - 10px) !important;
         max-height: 65vh !important;
-    }
-    
-    .notificacoes-header {
-        padding: 10px 12px !important;
-    }
-    
-    .notificacoes-header h3 {
-        font-size: 0.85rem !important;
-    }
-    
-    .notificacao-titulo {
-        font-size: 0.8rem !important;
-    }
-    
-    .notificacao-mensagem {
-        font-size: 0.7rem !important;
-    }
-}
-
-/* 🔥 DETECÇÃO DE WEBVIEW VIA USER AGENT (para casos específicos) */
-@media (max-width: 500px) {
-    .notificacoes-container {
-        position: static !important;
-    }
-    
-    .notificacoes-dropdown {
-        position: fixed !important;
-        top: 60px !important;
-        left: 8px !important;
-        right: 8px !important;
-        width: auto !important;
-        max-width: calc(100vw - 16px) !important;
-        max-height: 75vh !important;
-        z-index: 99999 !important;
-    }
-}
-
-/* 🔥 GARANTIR QUE APARECE EM CIMA DE TUDO */
-.notificacoes-dropdown.show {
-    z-index: 99999 !important;
-    position: fixed !important;
-    top: 70px !important;
-    left: 10px !important;
-    right: 10px !important;
-    width: auto !important;
-    max-width: calc(100vw - 20px) !important;
-    max-height: 70vh !important;
-    overflow-y: auto !important;
-}
-
-/* ============================================================
-   BACKGROUND ESCURO ATRÁS DO DROPDOWN (para mobile)
-   ============================================================ */
-@media (max-width: 500px) {
-    .notificacoes-dropdown.show::before {
-        content: '';
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.3);
-        z-index: -1;
     }
 }

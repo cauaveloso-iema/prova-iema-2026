@@ -29,287 +29,156 @@
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/enfermaria.css">
-
-    <style>
-        .detalhe-atendimento .section-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: #065f46;
-            margin-top: 16px;
-            margin-bottom: 8px;
-            padding-bottom: 4px;
-            border-bottom: 2px solid #d1fae5;
-        }
-
-        .detalhe-atendimento .info-row {
-            display: flex;
-            margin-bottom: 8px;
-            gap: 10px;
-            align-items: baseline;
-            font-size: 14px;
-        }
-
-        .detalhe-atendimento .info-label {
-            font-weight: 600;
-            color: #4b5563;
-            min-width: 140px;
-        }
-
-        .detalhe-atendimento .info-value {
-            color: #1f2937;
-            flex: 1;
-        }
-
-        .list-group-item .btn-sm {
-            padding: 0.35rem 0.6rem;
-            font-size: 0.78rem;
-            font-weight: 600;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            transition: all 0.2s;
-        }
-
-        .list-group-item .btn-sm:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
-        }
-
-        #listaAtendimentosRecentes .table thead th {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #065f46;
-            font-weight: 700;
-            border-bottom: 2px solid #10b981;
-        }
-
-        #listaAtendimentosRecentes .table tbody tr {
-            transition: background 0.15s;
-        }
-
-        #listaAtendimentosRecentes .table tbody tr:hover {
-            background: #f0fdf4;
-        }
-
-        #listaAtendimentosRecentes .btn-sm {
-            padding: 0.35rem 0.55rem;
-            font-size: 0.78rem;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        #listaAtendimentosRecentes .btn-sm:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
-        }
-
-        /* 🆕 CARD DE ATENDIMENTOS +24H */
-        .metric-card.metric-card-alerta {
-            border-left: 4px solid #dc2626 !important;
-            position: relative;
-        }
-        .metric-card.metric-card-alerta .metric-value { color: #dc2626 !important; }
-        .metric-card.metric-card-alerta .metric-label { color: #991b1b !important; font-weight: 700; }
-        .metric-card.metric-card-alerta.tem-alerta { animation: pulsaAlerta 2s infinite; }
-        @keyframes pulsaAlerta {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
-            50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
-        }
-    </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
+        <!-- ============================================= -->
+        <!-- NOVO HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
+        <!-- ============================================= -->
         <div class="header-top">
-            <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar">
-                    <i class="fas fa-hospital-user"></i>
-                </div>
-                <div class="user-details">
-                    <div class="user-name" id="userName">Carregando...</div>
-                    <div class="user-role" id="userRole">Enfermaria</div>
+
+            <!-- Lado Esquerdo: Relógio -->
+            <div class="relogio-card">
+                <i class="far fa-clock"></i>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
                 </div>
             </div>
-            <div class="btn-actions">
-                
-                <div class="notificacoes-container" style="position: relative; display: inline-block;">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="
-                        background: rgba(255,255,255,0.15);
-                        border: 1px solid rgba(255,255,255,0.3);
-                        border-radius: 50%;
-                        width: 48px;
-                        height: 48px;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                        color: white;
-                        font-size: 1.2rem;
-                        position: relative;
-                        backdrop-filter: blur(5px);
-                    ">
+
+            <!-- Lado Direito: Notificações + Perfil -->
+            <div class="d-flex align-items-center gap-3">
+
+                <!-- 🔔 SINO OCULTO (aberto pelo menu do usuário) -->
+                <div class="notificacoes-container" id="containerSinoOriginal" style="position: relative;">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                            title="Notificações e Lembretes" style="display: none;">
                         <i class="fas fa-bell"></i>
-                        <span class="notificacoes-badge" id="notificacoesBadge" style="
-                            position: absolute;
-                            top: -5px;
-                            right: -5px;
-                            background: #dc3545;
-                            color: white;
-                            font-size: 0.7rem;
-                            font-weight: bold;
-                            padding: 3px 6px;
-                            border-radius: 20px;
-                            min-width: 22px;
-                            text-align: center;
-                            border: 2px solid white;
-                            display: none;
-                        ">0</span>
+                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
-                    
-                    <div class="notificacoes-dropdown" id="notificacoesDropdown" style="
-                        position: absolute;
-                        top: 60px;
-                        right: 0;
-                        width: 380px;
-                        background: white;
-                        border-radius: 16px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-                        display: none;
-                        z-index: 1000;
-                        overflow: hidden;
-                        max-height: 500px;
-                        overflow-y: auto;
-                    ">
-                        <div class="notificacoes-header" style="
-                            padding: 15px 20px;
-                            border-bottom: 1px solid #e5e7eb;
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            background: white;
-                            position: sticky;
-                            top: 0;
-                            z-index: 10;
-                        ">
-                            <h3 style="margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown"
+                         style="position: absolute; top: 100%; right: 0; z-index: 9999;">
+                        <div class="notificacoes-header">
+                            <h3>
                                 <i class="fas fa-bell" style="color: #10b981;"></i>
                                 Notificações
                             </h3>
                             <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="
-                                    background: none;
-                                    border: none;
-                                    color: #6b7280;
-                                    cursor: pointer;
-                                    font-size: 0.8rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                    transition: all 0.3s;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="marcarTodasLidas()"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Marcar todas como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="
-                                    background: none;
-                                    border: none;
-                                    color: #6b7280;
-                                    cursor: pointer;
-                                    font-size: 0.8rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                    transition: all 0.3s;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="limparMinhasNotificacoes(event)"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Excluir todas">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="
-                                    background: none;
-                                    border: none;
-                                    color: #9ca3af;
-                                    cursor: pointer;
-                                    font-size: 1.2rem;
-                                    padding: 4px 8px;
-                                    border-radius: 6px;
-                                " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="fecharNotificacoes()"
+                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
-                        
-                        <div id="notificacoesLista" style="
-                            max-height: 400px;
-                            overflow-y: auto;
-                        ">
+
+                        <div id="notificacoesLista" style="max-height: 400px; overflow-y: auto;">
                             <div style="text-align: center; padding: 40px; color: #6c757d;">
                                 <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                                <p>Carregando notificações...</p>
+                                <p>Carregando...</p>
                             </div>
                         </div>
-                        
-                        <div class="notificacao-footer" style="
-                            padding: 12px 20px;
-                            border-top: 1px solid #e5e7eb;
-                            text-align: center;
-                            background: #f9fafb;
-                        ">
-                            <a href="/notificacoes.html" style="
-                                color: #10b981;
-                                text-decoration: none;
-                                font-size: 0.85rem;
-                                font-weight: 500;
-                                display: inline-flex;
-                                align-items: center;
-                                gap: 5px;
-                            ">
+
+                        <div class="notificacao-footer">
+                            <a href="/notificacoes.html">
                                 <i class="fas fa-eye"></i> Ver todas as notificações
                             </a>
                         </div>
                     </div>
                 </div>
-                
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" 
-                target="_blank" class="btn-icon" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 50%;
-                    width: 40px;
-                    height: 40px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    text-decoration: none;
-                    color: white;
-                    transition: all 0.3s;
-                    border: none;
-                    cursor: pointer;
-                " title="Baixar App">
-                    <i class="fas fa-download"></i>
-                </a>
-                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
-                    <i class="fas fa-user-edit"></i>
-                </button>
-                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
+                <!-- FIM DO SINO -->
+
+                <!-- Perfil do Usuário -->
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-hospital-user"></i>
+                            </div>
+                            <span class="user-notification-badge" id="userNotificationBadge"></span>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Enfermaria</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
+                    </div>
+
+                    <!-- Dropdown do Usuário -->
+                    <div class="user-dropdown-menu" id="userDropdown">
+                        <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
+                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+
+                        <!-- Item que ABRE O SINO -->
+                        <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)"
+                             title="Notificações e Lembretes">
+                            <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                            <div class="item-text">Notificações</div>
+                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item" title="Baixar App">
+                            <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
+                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-divider"></div>
+
+                        <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
+                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <!-- Título -->
+
+        <!-- Título com Boas-vindas e Turno -->
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 15px 20px;">
                 <div>
-                    <i class="fas fa-hospital-user me-2"></i>
-                    Enfermaria - Atendimentos
+                    <i class="fas fa-hospital-user me-2"></i> Enfermaria - Atendimentos
                 </div>
-                <div>
-                    <span id="dataAtual" class="badge bg-light text-dark"></span>
+                
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fw-bold" style="font-size: 14px; color: white !important;">
+                        <i class="fas fa-smile me-1" style="color: #fde047;"></i> 
+                        Bem-vindo(a), <span id="headerNomeUsuario" style="color: white !important;">Enfermeiro(a)</span>
+                    </span>
+                    
+                    <span class="badge bg-light text-dark shadow-sm border" 
+                          style="font-size: 12px; padding: 6px 12px; border-radius: 20px;">
+                        <i class="fas fa-sun text-warning me-1" id="headerTurnoIcone"></i> 
+                        Turno: <span id="headerTurno" class="fw-bold">Matutino</span>
+                    </span>
                 </div>
             </div>
         </div>
-        
+
         <!-- Seletor de Modo -->
         <div class="card">
             <div class="card-body">
@@ -323,7 +192,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Abas -->
         <div class="card">
             <div class="card-body">
@@ -349,11 +218,11 @@
                         </button>
                     </li>
                 </ul>
-                
+
                 <div class="tab-content mt-3">
                     <!-- ABA ATENDIMENTO -->
                     <div class="tab-pane fade show active" id="atendimento" role="tabpanel">
-                        
+
                         <div id="modoAutomatico">
                             <div class="card">
                                 <div class="card-body">
@@ -367,7 +236,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div id="modoManual" style="display: none;">
                             <div class="card">
                                 <div class="card-body">
@@ -378,7 +247,7 @@
                                         <i class="fas fa-info-circle"></i> 
                                         Selecione uma turma e clique no aluno para atendê-lo diretamente.
                                     </p>
-                                    
+
                                     <div class="row g-3 mb-3">
                                         <div class="col-md-6">
                                             <label class="form-label">Turma</label>
@@ -392,7 +261,7 @@
                                                    placeholder="Digite o nome do aluno...">
                                         </div>
                                     </div>
-                                    
+
                                     <div id="listaAlunosManual" class="mt-3">
                                         <div class="text-center py-3">
                                             <div class="loading"></div>
@@ -402,7 +271,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div id="alunoInfo" style="display: none;">
                             <div class="aluno-card">
                                 <div class="d-flex flex-wrap align-items-center">
@@ -423,10 +292,10 @@
                                 <div id="statusAtendimento" class="mt-3"></div>
                             </div>
                         </div>
-                        
+
                         <div id="formEntrada" class="form-container" style="display: none;">
                             <h5><i class="fas fa-notes-medical"></i> Registrar Atendimento</h5>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">
                                     <i class="fas fa-calendar-alt me-1"></i> Data/Hora do Atendimento <span class="text-danger">*</span>
@@ -437,7 +306,7 @@
                                     Você pode alterar a data caso esteja registrando um atendimento retroativo.
                                 </small>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Queixa / Motivo <span class="text-danger">*</span></label>
                                 <textarea id="queixa" class="form-control" rows="3" placeholder="Descreva o que o aluno está sentindo..."></textarea>
@@ -450,10 +319,10 @@
                                 <i class="fas fa-check-circle me-2"></i> Registrar Entrada
                             </button>
                         </div>
-                        
+
                         <div id="formSaida" class="form-container" style="display: none;">
                             <h5><i class="fas fa-clipboard-list"></i> Finalizar Atendimento</h5>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">
                                     <i class="fas fa-calendar-alt me-1"></i> Data/Hora da Saída <span class="text-danger">*</span>
@@ -464,7 +333,7 @@
                                     Informe a data e hora em que o atendimento foi finalizado.
                                 </small>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Desfecho <span class="text-danger">*</span></label>
                                 <select id="desfecho" class="form-select" onchange="toggleOutrosCampos()">
@@ -497,7 +366,7 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- ABA ATENDIMENTOS ATIVOS -->
                     <div class="tab-pane fade" id="ativos" role="tabpanel">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -516,7 +385,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- ABA DASHBOARD -->
                     <div class="tab-pane fade" id="dashboard" role="tabpanel">
 
@@ -564,7 +433,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="row">
                             <div class="col-md-6 mb-4">
                                 <div class="card h-100">
@@ -599,7 +468,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="card mb-4">
                             <div class="card-body">
                                 <h6 class="card-title"><i class="fas fa-notes-medical"></i> Queixas Mais Comuns</h6>
@@ -643,7 +512,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- ABA RELATÓRIOS -->
                     <div class="tab-pane fade" id="relatorios" role="tabpanel">
                         <div class="relatorio-filtros">
@@ -695,7 +564,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div id="resultadoRelatorio">
                             <div class="text-center py-5">
                                 <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
@@ -707,9 +576,10 @@
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/enfermaria.js"></script>
+    <script src="js/enfermaria-header.js"></script>
 
     <script>
         (function() {

@@ -697,11 +697,6 @@ function abrirNotificacoes() {
     if (!isVisible) carregarTudo();
 }
 
-function fecharNotificacoes() {
-    const dropdown = document.getElementById('notificacoesDropdown');
-    if (dropdown) { dropdown.classList.remove('show'); dropdown.style.display = 'none'; }
-}
-
 async function marcarTodasLidas() {
     try {
         const tk = localStorage.getItem('auth_token');
@@ -722,6 +717,186 @@ async function limparMinhasNotificacoes() {
         const data = await response.json();
         if (data.success) { __notificacoesCache = []; await carregarTudo(); mostrarNotificacaoInterna('Notificações excluídas!', 'success'); }
     } catch (error) { mostrarNotificacaoInterna('Erro ao limpar notificações', 'error'); }
+}
+
+// ============================================
+// 📊 DASHBOARD DA SECRETARIA
+// ============================================
+
+/**
+ * Busca as métricas do dashboard e preenche os 4 cards + gráfico.
+ * Chamada quando a aba Dashboard é ativada e no carregamento inicial.
+ */
+async function carregarDashboard() {
+    // Loading visual nos cards
+    ['SecretariaTotalGeral', 'SecretariaTotalHoje', 'SecretariaTotalSemana', 'SecretariaTotalMes']
+        .forEach(id => safeSetText(id, '...'));
+
+    try {
+        const response = await fetch('/api/secretaria/dashboard', {
+            headers: { 'Authorization': `Bearer ${token}` },
+            cache: 'no-store'
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok || !contentType.includes('application/json')) {
+            throw new Error('Resposta inválida do servidor');
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Erro ao carregar dashboard');
+        }
+
+        const m = data.metricas || {};
+
+        // Preenche os 4 cards (com fallback para 0)
+        safeSetText('SecretariaTotalGeral', m.total ?? 0);
+        safeSetText('SecretariaTotalHoje', m.hoje ?? 0);
+        safeSetText('SecretariaTotalSemana', m.semana ?? 0);
+        safeSetText('SecretariaTotalMes', m.mes ?? 0);
+
+        // Desenha o gráfico de motivos
+        renderizarGraficoMotivos(data.porMotivo || []);
+
+    } catch (error) {
+        console.error('[carregarDashboard]', error);
+        ['SecretariaTotalGeral', 'SecretariaTotalHoje', 'SecretariaTotalSemana', 'SecretariaTotalMes']
+            .forEach(id => safeSetText(id, '0'));
+
+        // Mostra mensagem amigável no gráfico
+        const canvas = safeGet('SecretariaChartMotivos');
+        if (canvas) {
+            const parent = canvas.parentElement;
+            if (parent) {
+                parent.innerHTML = `<div style="text-align:center;padding:40px 20px;color:#9ca3af;">
+                    <i class="fas fa-exclamation-triangle" style="font-size:2rem;margin-bottom:10px;color:#f59e0b;"></i>
+                    <p style="margin:0;font-size:0.9rem;">Não foi possível carregar o gráfico.<br>Tente novamente em instantes.</p>
+                </div>`;
+            }
+        }
+        notificar('Erro ao carregar dashboard', 'error', 3000);
+    }
+}
+
+/**
+ * Desenha (ou redesenha) o gráfico doughnut de motivos.
+ */
+function renderizarGraficoMotivos(porMotivo) {
+    const canvas = safeGet('SecretariaChartMotivos');
+    if (!canvas) return;
+
+    // Se o canvas foi substituído por mensagem de erro, restaura
+    if (canvas.tagName !== 'CANVAS') {
+        const parent = canvas.parentElement;
+        if (parent) {
+            parent.innerHTML = '<canvas id="SecretariaChartMotivos"></canvas>';
+        }
+        return renderizarGraficoMotivos(porMotivo);
+    }
+
+    // Se o Chart.js não está carregado, avisa
+    if (typeof Chart === 'undefined') {
+        console.warn('[renderizarGraficoMotivos] Chart.js não carregado');
+        return;
+    }
+
+    // Destrói instância anterior para evitar memory leak
+    if (charts.motivos) {
+        try { charts.motivos.destroy(); } catch (e) { /* ignora */ }
+        charts.motivos = null;
+    }
+
+    const labels = porMotivo.map(m => m.label || getMotivoLabel(m.motivo) || 'Sem motivo');
+    const valores = porMotivo.map(m => m.count || 0);
+    const total = valores.reduce((a, b) => a + b, 0);
+
+    // Paleta verde/dourada da Secretaria
+    const paleta = [
+        '#10b981', '#059669', '#34d399', '#6ee7b7',
+        '#f59e0b', '#d97706', '#fbbf24', '#fcd34d',
+        '#3b82f6', '#8b5cf6', '#ef4444', '#6b7280'
+    ];
+
+    if (total === 0) {
+        // Sem dados: mostra gráfico vazio com mensagem
+        charts.motivos = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Sem registros'],
+                datasets: [{ data: [1], backgroundColor: ['#e5e7eb'], borderWidth: 0 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                cutout: '65%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false }
+                }
+            },
+            plugins: [{
+                id: 'textoVazio',
+                afterDraw(chart) {
+                    const { ctx, chartArea } = chart;
+                    if (!chartArea) return;
+                    ctx.save();
+                    ctx.font = '600 14px system-ui, -apple-system, sans-serif';
+                    ctx.fillStyle = '#9ca3af';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const cx = (chartArea.left + chartArea.right) / 2;
+                    const cy = (chartArea.top + chartArea.bottom) / 2;
+                    ctx.fillText('Nenhum registro', cx, cy);
+                    ctx.restore();
+                }
+            }]
+        });
+        return;
+    }
+
+    charts.motivos = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: valores,
+                backgroundColor: paleta.slice(0, valores.length),
+                borderColor: '#fff',
+                borderWidth: 2,
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '60%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 14,
+                        font: { size: 12, family: 'system-ui, -apple-system, sans-serif' },
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                    padding: 12,
+                    titleFont: { size: 13, weight: '600' },
+                    bodyFont: { size: 13 },
+                    callbacks: {
+                        label: (ctx) => {
+                            const valor = ctx.parsed;
+                            const pct = ((valor / total) * 100).toFixed(1);
+                            return ` ${ctx.label}: ${valor} (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 // ============================================
@@ -750,6 +925,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     selecionarTipoDeclaracao('aluno');
 
+    // 🆕 Listener da aba Dashboard → carrega ao abrir
+    const abaDashboard = safeGet('aba-dashboard');
+    if (abaDashboard) {
+        abaDashboard.addEventListener('shown.bs.tab', carregarDashboard);
+    }
+
+    // Se a aba Dashboard já estiver ativa no load, carrega
+    if (abaDashboard && abaDashboard.classList.contains('active')) {
+        carregarDashboard();
+    }
+
     // 🆕 Processa deep-link (?tab=por-data&dataInicio=...&autorizacaoId=...)
     await processarDeepLink();
 });
@@ -769,6 +955,236 @@ async function carregarFotoPerfil() {
         }
     } catch (error) { /* silencioso */ }
 }
+
+// ============================================
+// 1. RELÓGIO EM TEMPO REAL
+// ============================================
+function atualizarRelogio() {
+    const elTempo = document.getElementById('relogioTempoReal');
+    const elData = document.getElementById('relogioData');
+    if (!elTempo) return;
+
+    const agora = new Date();
+    const horas = String(agora.getHours()).padStart(2, '0');
+    const minutos = String(agora.getMinutes()).padStart(2, '0');
+    const segundos = String(agora.getSeconds()).padStart(2, '0');
+
+    elTempo.textContent = `${horas}:${minutos}:${segundos}`;
+
+    if (elData) {
+        const dataFormatada = agora.toLocaleDateString('pt-BR', {
+            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+        });
+        elData.textContent = dataFormatada.replace(/\./g, '').replace(/,/g, ' •');
+    }
+}
+setInterval(atualizarRelogio, 1000);
+atualizarRelogio();
+
+// ============================================
+// 2. MENU DO USUÁRIO (Avatar)
+// ============================================
+function toggleUserMenu(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+
+    if (dropdown) {
+        const isShowing = dropdown.classList.contains('show');
+        if (isShowing) {
+            dropdown.classList.remove('show');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        } else {
+            dropdown.classList.add('show');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+        }
+    }
+}
+
+document.addEventListener('click', function (event) {
+    const container = document.getElementById('userMenuContainer');
+    const dropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+
+    if (container && !container.contains(event.target)) {
+        if (dropdown) dropdown.classList.remove('show');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+});
+
+// ============================================
+// 3. NOTIFICAÇÕES NO AVATAR (Anel pulsante)
+// ============================================
+const _originalAtualizarBadgeUnificadoSec = typeof atualizarBadgeUnificado === 'function'
+    ? atualizarBadgeUnificado
+    : null;
+
+atualizarBadgeUnificado = function () {
+    if (typeof _originalAtualizarBadgeUnificadoSec === 'function') {
+        _originalAtualizarBadgeUnificadoSec();
+    }
+
+    let total = 0;
+    try {
+        const naoLidas = (window.__notificacoesCache || []).filter(n => !n.lida).length;
+        const lembretes = (window.__lembretesCache || []).length;
+        total = naoLidas + lembretes;
+    } catch (e) {}
+
+    const badgeDot = document.getElementById('userNotificationBadge');
+    const menuBadge = document.getElementById('menuNotifBadge');
+    const trigger = document.getElementById('userTrigger');
+
+    if (total > 0) {
+        if (badgeDot) badgeDot.style.display = 'block';
+        if (menuBadge) {
+            menuBadge.style.display = 'inline-block';
+            menuBadge.textContent = total > 99 ? '99+' : total;
+        }
+        if (trigger) trigger.classList.add('tem-notificacao');
+    } else {
+        if (badgeDot) badgeDot.style.display = 'none';
+        if (menuBadge) menuBadge.style.display = 'none';
+        if (trigger) trigger.classList.remove('tem-notificacao');
+    }
+};
+
+// ============================================
+// 4. BOAS-VINDAS E TURNO DINÂMICO
+// ============================================
+function atualizarBoasVindasETurno() {
+    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+    const nomeEl = document.getElementById('headerNomeUsuario');
+    if (nomeEl && userData.nome) {
+        nomeEl.textContent = userData.nome.split(' ')[0];
+    }
+
+    const agora = new Date();
+    const hora = agora.getHours();
+    let turno = 'Matutino';
+    let icone = 'fa-sun text-warning';
+
+    if (hora >= 12 && hora < 18) {
+        turno = 'Vespertino';
+        icone = 'fa-cloud-sun text-warning';
+    } else if (hora >= 18 || hora < 5) {
+        turno = 'Noturno';
+        icone = 'fa-moon text-primary';
+    }
+
+    const turnoEl = document.getElementById('headerTurno');
+    const iconeEl = document.getElementById('headerTurnoIcone');
+
+    if (turnoEl) turnoEl.textContent = turno;
+    if (iconeEl) iconeEl.className = `fas ${icone} me-1`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    atualizarBoasVindasETurno();
+    setInterval(atualizarBoasVindasETurno, 60000);
+});
+
+// ============================================
+// 5. ABRIR MENU DE NOTIFICAÇÕES PELO AVATAR
+// ============================================
+function abrirMenuNotificacoesSeguro(event) {
+    if (event) event.stopPropagation();
+
+    // 1. Fecha o menu do usuário
+    const userDropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+    if (userDropdown) userDropdown.classList.remove('show');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+
+    // 2. Abre o dropdown do sino
+    const notifDropdown = document.getElementById('notificacoesDropdown');
+    if (notifDropdown) {
+        notifDropdown.classList.add('show');
+        notifDropdown.style.display = 'block';
+    }
+
+    // 3. Carrega as notificações (cascata de fallbacks)
+    const lista = document.getElementById('notificacoesLista');
+    if (lista) {
+        lista.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                <p>Carregando...</p>
+            </div>
+        `;
+    }
+
+    if (typeof carregarListaNotificacoes === 'function') {
+        carregarListaNotificacoes().catch(err => {
+            console.error('Erro ao carregar notificações:', err);
+            mostrarFallbackNotificacoesSec(lista);
+        });
+    } else if (typeof carregarNotificacoes === 'function') {
+        carregarNotificacoes().catch(err => {
+            console.error('Erro ao carregar notificações:', err);
+            mostrarFallbackNotificacoesSec(lista);
+        });
+    } else if (typeof carregarTudo === 'function') {
+        try { carregarTudo(); } catch (e) {
+            mostrarFallbackNotificacoesSec(lista);
+        }
+    } else if (typeof abrirNotificacoes === 'function') {
+        try { abrirNotificacoes(); } catch (e) {
+            mostrarFallbackNotificacoesSec(lista);
+        }
+    } else {
+        mostrarFallbackNotificacoesSec(lista);
+    }
+}
+
+function mostrarFallbackNotificacoesSec(lista) {
+    if (!lista) return;
+    lista.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #6c757d;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px; color: #f59e0b;"></i>
+            <p>Não foi possível carregar as notificações.</p>
+            <button onclick="abrirMenuNotificacoesSeguro()"
+                    style="margin-top: 10px; padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                <i class="fas fa-sync-alt"></i> Tentar novamente
+            </button>
+        </div>
+    `;
+}
+
+// ============================================
+// 6. FECHAR O SINO (BOTÃO X)
+// ============================================
+function fecharNotificacoes() {
+    const dropdown = document.getElementById('notificacoesDropdown');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+        dropdown.style.display = 'none';
+    }
+
+    const btn = document.getElementById('notificacoesBtn');
+    if (btn) btn.classList.remove('active');
+}
+
+// Impede que o clique no X se propague
+document.addEventListener('click', function (event) {
+    const btnFecharSino = event.target.closest('.notificacoes-header button[onclick*="fecharNotificacoes"]');
+    if (btnFecharSino) {
+        event.stopPropagation();
+        fecharNotificacoes();
+    }
+}, true);
+
+// Fecha o sino ao clicar fora dele
+document.addEventListener('click', function (event) {
+    const notifDropdown = document.getElementById('notificacoesDropdown');
+    const containerSino = document.getElementById('containerSinoOriginal');
+
+    if (notifDropdown && notifDropdown.classList.contains('show')) {
+        if (containerSino && !containerSino.contains(event.target)) {
+            fecharNotificacoes();
+        }
+    }
+});
 
 async function carregarCursosDisponiveis() {
     try {
@@ -3121,6 +3537,10 @@ window.onSelectComOutro = onSelectComOutro;
 window.abrirLembreteRetroativo = abrirLembreteRetroativo;
 window.destacarRegistroPorId = destacarRegistroPorId;
 window.processarDeepLink = processarDeepLink;
+
+// 🆕 Dashboard
+window.carregarDashboard = carregarDashboard;
+window.renderizarGraficoMotivos = renderizarGraficoMotivos;
 
 window.abrirNotificacoes = abrirNotificacoes;
 window.fecharNotificacoes = fecharNotificacoes;

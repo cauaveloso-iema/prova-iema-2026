@@ -1,7 +1,13 @@
 // ============================================================================
-// CALENDÁRIO ACADÊMICO - BACKEND (VERSÃO COMPLETA E CORRIGIDA)
-// Alunos podem VISUALIZAR eventos (somente leitura)
-// Professores e Admins podem CRIAR, EDITAR e EXCLUIR
+// CALENDÁRIO ACADÊMICO - BACKEND (VERSÃO FINAL COMPLETA)
+// REGRAS DE VISIBILIDADE:
+// - Aluno: vê eventos da sua turma.
+// - Professor: vê APENAS Admin e ele mesmo.
+// - Setor Pedagógico: vê Admin, Setor Pedagógico e ele mesmo.
+// - Setores Administrativos: veem Admin, Pedagógico, Gestão Geral, outros Setores e eles mesmos.
+// - Admin: vê TUDO.
+// REGRAS DE EDIÇÃO:
+// - Admin edita tudo. Outros só editam o que criaram.
 // ============================================================================
 
 const express = require('express');
@@ -13,6 +19,7 @@ const Evento = require('../models/Evento');
 const Prova = require('../models/Prova');
 const Turma = require('../models/Turma');
 const User = require('../models/User');
+const PermissaoModulo = require('../models/PermissaoModulo');
 
 // Importar serviço de notificações
 const CalendarioNotificacaoService = require('../services/calendario-notificacao-service');
@@ -44,16 +51,67 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-// ============ MIDDLEWARE PARA VERIFICAR PERMISSÃO DE ESCRITA ============
-const verificarPermissaoEscrita = (req, res, next) => {
-    // Apenas professores e admins podem criar/editar/excluir
-    if (req.userRole !== 'admin' && req.userRole !== 'super_admin' && req.userRole !== 'professor') {
+// ============================================================================
+// 🔥 MIDDLEWARE PARA VERIFICAR PERMISSÃO DE CRIAÇÃO (COM PERMISSÃO ESPECÍFICA)
+// ============================================================================
+const verificarPermissaoCriacao = async (req, res, next) => {
+    try {
+        const role = req.userRole;
+        
+        // 1. Admin e Super Admin SEMPRE podem
+        if (role === 'admin' || role === 'super_admin') {
+            return next();
+        }
+
+        // 2. Professor SEMPRE pode criar
+        if (role === 'professor') {
+            return next();
+        }
+
+        // 3. Outros perfis (Pedagógico, Gestão, etc): Verificar permissão no banco
+        const user = await User.findById(req.userId).select('email');
+        
+        if (!user || !user.email) {
+            return res.status(403).json({
+                success: false,
+                error: 'Email do usuário não encontrado'
+            });
+        }
+
+        // Buscar permissão no banco para o módulo de calendário
+        const permissao = await PermissaoModulo.findOne({ 
+            modulo: 'calendario_setor_pedagogico', 
+            ativo: true 
+        });
+
+        if (!permissao) {
+            return res.status(403).json({
+                success: false,
+                error: 'Módulo de calendário não configurado para o seu setor'
+            });
+        }
+
+        // Normalizar emails para comparação
+        const emailsAutorizados = permissao.emailsAutorizados.map(e => e.trim().toLowerCase());
+        const emailUsuario = user.email.trim().toLowerCase();
+
+        if (emailsAutorizados.includes(emailUsuario)) {
+            console.log(`✅ ${role} ${user.email} autorizado a criar eventos`);
+            return next();
+        }
+
         return res.status(403).json({
             success: false,
-            error: 'Apenas professores e administradores podem modificar eventos'
+            error: 'Você não tem permissão para criar eventos. Contate o administrador.'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao verificar permissão:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Erro interno ao verificar permissão'
         });
     }
-    next();
 };
 
 // ============ TESTE - ROTA PÚBLICA ============
@@ -66,7 +124,7 @@ router.get('/teste', (req, res) => {
 });
 
 // ============================================
-// ROTAS DE LEITURA (TODOS OS USUÁRIOS AUTENTICADOS)
+// ROTAS DE LEITURA (MATRIZ DE VISIBILIDADE)
 // ============================================
 
 // ============ LISTAR EVENTOS ============
@@ -85,37 +143,19 @@ router.get('/eventos', authenticateToken, async (req, res) => {
 
         let query = {};
 
-        // 🔥 REGRAS DE PERMISSÃO:
-        // - Admin/Super Admin: vê TODOS os eventos
-        // - Professor: vê APENAS seus próprios eventos
-        // - Aluno: vê eventos das suas turmas
-        
-        if (req.userRole === 'admin' || req.userRole === 'super_admin') {
-            // Admin pode ver todos ou filtrar por professor
-            if (professorId && professorId !== 'todos' && professorId !== '') {
-                query.usuarioId = professorId;
-            }
-            console.log(`👑 Admin ${req.userId} listando eventos` + (professorId ? ` do professor ${professorId}` : ''));
-            
-        } else if (req.userRole === 'professor') {
-            // Professor vê apenas seus eventos
-            query.usuarioId = req.userId;
-            console.log(`👨‍🏫 Professor ${req.userId} listando seus eventos`);
-            
-        } else if (req.userRole === 'aluno') {
-            // Aluno vê eventos das suas turmas
+        // 🔥 MATRIZ DE VISIBILIDADE
+        if (req.userRole === 'aluno') {
+            // Aluno vê eventos da sua turma (criados por Admin, Pedagógico ou Gestão Geral)
             const aluno = await User.findById(req.userId);
             const turmaAluno = aluno?.turma;
             
             if (turmaAluno) {
-                // Buscar turma pelo nome
                 const turma = await Turma.findOne({ nome: turmaAluno });
                 if (turma) {
                     query.turmaId = turma._id;
                 }
             }
             
-            // Se não encontrar turma, buscar por turmaId em eventos
             if (!query.turmaId) {
                 const turmasDoAluno = await Turma.find({ alunos: req.userId });
                 const turmaIds = turmasDoAluno.map(t => t._id);
@@ -125,6 +165,56 @@ router.get('/eventos', authenticateToken, async (req, res) => {
             }
             
             console.log(`👨‍🎓 Aluno ${req.userId} listando eventos da turma:`, query.turmaId);
+        } 
+        else if (req.userRole === 'professor') {
+            // 🔥 Professor: vê APENAS Admin e ele mesmo.
+            // NÃO vê Setor Pedagógico, NÃO vê Gestão Geral, NÃO vê outros professores.
+            const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } }).select('_id');
+            const idsAdmins = admins.map(u => u._id);
+            
+            // Adiciona o próprio professor
+            idsAdmins.push(req.userId);
+            
+            query.usuarioId = { $in: idsAdmins };
+            
+            console.log(`👨‍🏫 Professor ${req.userId} listando eventos do Admin e dele mesmo`);
+        } 
+        else if (req.userRole === 'setor_pedagogico') {
+            // 🔥 Setor Pedagógico: vê Admin, Setor Pedagógico e ele mesmo.
+            // NÃO vê Professores, NÃO vê Gestão Geral.
+            const usuariosPermitidos = await User.find({ 
+                role: { $in: ['admin', 'super_admin', 'setor_pedagogico'] } 
+            }).select('_id');
+            const idsPermitidos = usuariosPermitidos.map(u => u._id);
+            
+            query.usuarioId = { $in: idsPermitidos };
+            
+            console.log(`👩‍🏫 Setor Pedagógico ${req.userId} listando eventos permitidos`);
+        }
+        else if (['gestao_geral', 'supervisao', 'coordenacao_patio', 'secretaria', 'recepcao', 'enfermaria', 'cozinha', 'assistente-social', 'psicologia', 'protagonismo', 'biblioteca'].includes(req.userRole)) {
+            // 🔥 Setores Administrativos: veem Admin, Pedagógico, Gestão Geral e outros Setores Adm.
+            const rolesPermitidos = [
+                'admin', 'super_admin', 'setor_pedagogico', 'gestao_geral',
+                'supervisao', 'coordenacao_patio', 'secretaria', 'recepcao',
+                'enfermaria', 'cozinha', 'assistente-social', 'psicologia', 
+                'protagonismo', 'biblioteca'
+            ];
+            
+            const usuariosPermitidos = await User.find({ 
+                role: { $in: rolesPermitidos } 
+            }).select('_id');
+            const idsPermitidos = usuariosPermitidos.map(u => u._id);
+            
+            query.usuarioId = { $in: idsPermitidos };
+            
+            console.log(`📊 ${req.userRole} ${req.userId} listando eventos administrativos`);
+        } 
+        else if (req.userRole === 'admin' || req.userRole === 'super_admin') {
+            // Admin vê TUDO
+            if (professorId && professorId !== 'todos' && professorId !== '') {
+                query.usuarioId = professorId;
+            }
+            console.log(`👑 Admin ${req.userId} listando todos os eventos`);
         }
 
         // Filtrar por mês/ano
@@ -153,7 +243,7 @@ router.get('/eventos', authenticateToken, async (req, res) => {
         }
 
         const eventos = await Evento.find(query)
-            .populate('usuarioId', 'nome email')
+            .populate('usuarioId', 'nome email role')
             .populate('turmaId', 'nome disciplina')
             .populate('provaId', 'titulo')
             .populate('participantes', 'nome email')
@@ -161,8 +251,8 @@ router.get('/eventos', authenticateToken, async (req, res) => {
             .limit(parseInt(limit))
             .lean();
 
-        // Registrar visualizações para monitoramento (apenas admin)
-        if (req.userRole === 'admin' || req.userRole === 'super_admin') {
+        // Registrar visualizações para monitoramento (apenas admin e setor pedagogico)
+        if (req.userRole === 'admin' || req.userRole === 'super_admin' || req.userRole === 'setor_pedagogico') {
             const eventoIds = eventos.map(e => e._id);
             await Evento.updateMany(
                 { _id: { $in: eventoIds } },
@@ -171,41 +261,49 @@ router.get('/eventos', authenticateToken, async (req, res) => {
         }
 
         // Formatar para o frontend, incluindo permissões
-        const eventosFormatados = eventos.map(e => ({
-            id: e._id,
-            title: e.titulo,
-            start: e.dataInicio,
-            end: e.dataFim || e.dataInicio,
-            allDay: e.diaInteiro,
-            tipo: e.tipo,
-            cor: e.cor,
-            descricao: e.descricao,
-            local: e.local,
-            horarioInicio: e.horarioInicio,
-            horarioFim: e.horarioFim,
-            turma: e.turmaId ? {
-                id: e.turmaId._id,
-                nome: e.turmaId.nome
-            } : null,
-            prova: e.provaId ? {
-                id: e.provaId._id,
-                titulo: e.provaId.titulo
-            } : null,
-            criadoPor: e.usuarioId ? {
-                id: e.usuarioId._id,
-                nome: e.usuarioId.nome,
-                email: e.usuarioId.email
-            } : null,
-            notificacaoAtivada: e.notificacaoAtivada,
-            status: e.status,
-            notificacoes: e.notificacoes,
-            // 🔥 Permissões baseadas no role
-            permissoes: {
-                podeEditar: req.userRole === 'admin' || req.userRole === 'super_admin' || (req.userRole === 'professor' && req.userId === e.usuarioId?._id?.toString()),
-                podeExcluir: req.userRole === 'admin' || req.userRole === 'super_admin' || (req.userRole === 'professor' && req.userId === e.usuarioId?._id?.toString()),
-                podeVisualizar: true
-            }
-        }));
+        const eventosFormatados = eventos.map(e => {
+            const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+            const isCriador = e.usuarioId && e.usuarioId._id.toString() === req.userId;
+            
+            // Admin edita tudo. Outros só editam o que criaram.
+            const podeEditar = isAdmin || isCriador;
+
+            return {
+                id: e._id,
+                title: e.titulo,
+                start: e.dataInicio,
+                end: e.dataFim || e.dataInicio,
+                allDay: e.diaInteiro,
+                tipo: e.tipo,
+                cor: e.cor,
+                descricao: e.descricao,
+                local: e.local,
+                horarioInicio: e.horarioInicio,
+                horarioFim: e.horarioFim,
+                turma: e.turmaId ? {
+                    id: e.turmaId._id,
+                    nome: e.turmaId.nome
+                } : null,
+                prova: e.provaId ? {
+                    id: e.provaId._id,
+                    titulo: e.provaId.titulo
+                } : null,
+                criadoPor: e.usuarioId ? {
+                    id: e.usuarioId._id,
+                    nome: e.usuarioId.nome,
+                    email: e.usuarioId.email,
+                    role: e.usuarioId.role
+                } : null,
+                notificacaoAtivada: e.notificacaoAtivada,
+                status: e.status,
+                notificacoes: e.notificacoes,
+                permissoes: {
+                    podeEditar: podeEditar,
+                    podeExcluir: podeEditar,
+                    podeVisualizar: true
+                }
+            };
+        });
 
         res.json({
             success: true,
@@ -231,7 +329,7 @@ router.get('/eventos/:id', authenticateToken, async (req, res) => {
         const { id } = req.params;
 
         const evento = await Evento.findById(id)
-            .populate('usuarioId', 'nome email')
+            .populate('usuarioId', 'nome email role')
             .populate('turmaId', 'nome disciplina')
             .populate('provaId', 'titulo')
             .populate('participantes', 'nome email');
@@ -243,7 +341,7 @@ router.get('/eventos/:id', authenticateToken, async (req, res) => {
             });
         }
 
-        // 🔥 Alunos só podem ver eventos da sua turma
+        // 🔥 Verificação de visibilidade
         if (req.userRole === 'aluno') {
             const aluno = await User.findById(req.userId);
             const turmaAluno = aluno?.turma;
@@ -259,18 +357,13 @@ router.get('/eventos/:id', authenticateToken, async (req, res) => {
             }
         }
 
-        // Professores só podem ver seus próprios eventos (ou eventos das suas turmas)
-        if (req.userRole === 'professor' && evento.usuarioId._id.toString() !== req.userId) {
-            // Verificar se o evento é de uma turma que o professor leciona
-            if (evento.turmaId) {
-                const turma = await Turma.findById(evento.turmaId);
-                if (turma && turma.professorId && turma.professorId.toString() !== req.userId) {
-                    return res.status(403).json({
-                        success: false,
-                        error: 'Você não tem permissão para ver este evento'
-                    });
-                }
-            } else {
+        // Professor só vê Admin ou ele mesmo
+        if (req.userRole === 'professor') {
+            const roleCriador = evento.usuarioId?.role;
+            const isCriador = evento.usuarioId._id.toString() === req.userId;
+            const isAdmin = roleCriador === 'admin' || roleCriador === 'super_admin';
+            
+            if (!isCriador && !isAdmin) {
                 return res.status(403).json({
                     success: false,
                     error: 'Você não tem permissão para ver este evento'
@@ -315,11 +408,11 @@ router.get('/eventos/:id', authenticateToken, async (req, res) => {
 });
 
 // ============================================
-// ROTAS DE ESCRITA (APENAS PROFESSORES E ADMINS)
+// ROTAS DE ESCRITA
 // ============================================
 
 // ============ CRIAR EVENTO ============
-router.post('/eventos', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
+router.post('/eventos', authenticateToken, verificarPermissaoCriacao, async (req, res) => {
     try {
         const {
             titulo,
@@ -358,7 +451,7 @@ router.post('/eventos', authenticateToken, verificarPermissaoEscrita, async (req
         }
 
         // Verificar permissões para turma
-        if (turmaId && req.userRole !== 'professor' && req.userRole !== 'admin') {
+        if (turmaId && req.userRole !== 'professor' && req.userRole !== 'admin' && req.userRole !== 'setor_pedagogico') {
             const turma = await Turma.findById(turmaId);
             if (!turma || turma.professorId.toString() !== req.userId) {
                 return res.status(403).json({
@@ -511,7 +604,7 @@ router.post('/eventos', authenticateToken, verificarPermissaoEscrita, async (req
 });
 
 // ============ ATUALIZAR EVENTO ============
-router.put('/eventos/:id', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
+router.put('/eventos/:id', authenticateToken, verificarPermissaoCriacao, async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
@@ -527,11 +620,14 @@ router.put('/eventos/:id', authenticateToken, verificarPermissaoEscrita, async (
             });
         }
 
-        // Verificar permissão
-        if (req.userRole === 'professor' && evento.usuarioId.toString() !== req.userId) {
+        // 🔥 REGRA DE EDIÇÃO: Apenas Admin ou o Criador
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        const isCriador = evento.usuarioId.toString() === req.userId;
+
+        if (!isAdmin && !isCriador) {
             return res.status(403).json({
                 success: false,
-                error: 'Você não tem permissão para editar este evento'
+                error: 'Você só pode editar seus próprios eventos'
             });
         }
 
@@ -661,7 +757,7 @@ router.put('/eventos/:id', authenticateToken, verificarPermissaoEscrita, async (
         
         await evento.save();
 
-        // Notificar o professor sobre a atualização
+        // Notificar o professor sobre a atualização (se não for ele mesmo)
         if (camposAlterados.length > 0 && evento.usuarioId.toString() !== req.userId) {
             await calendarioNotificacaoService.notificarEventoAtualizado(evento, req.userId, camposAlterados);
         }
@@ -695,7 +791,7 @@ router.put('/eventos/:id', authenticateToken, verificarPermissaoEscrita, async (
 });
 
 // ============ EXCLUIR EVENTO ============
-router.delete('/eventos/:id', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
+router.delete('/eventos/:id', authenticateToken, verificarPermissaoCriacao, async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -708,14 +804,18 @@ router.delete('/eventos/:id', authenticateToken, verificarPermissaoEscrita, asyn
             });
         }
 
-        if (req.userRole === 'professor' && evento.usuarioId.toString() !== req.userId) {
+        // 🔥 REGRA DE EXCLUSÃO: Apenas Admin ou o Criador
+        const isAdmin = req.userRole === 'admin' || req.userRole === 'super_admin';
+        const isCriador = evento.usuarioId.toString() === req.userId;
+
+        if (!isAdmin && !isCriador) {
             return res.status(403).json({
                 success: false,
-                error: 'Você não tem permissão para excluir este evento'
+                error: 'Você só pode excluir seus próprios eventos'
             });
         }
 
-        console.log(`📝 Evento ${id} excluído por ${req.userId}`);
+        console.log(`📝 Evento ${id} excluído por ${req.userId} (${req.userRole})`);
 
         await Evento.findByIdAndDelete(id);
 
@@ -732,7 +832,6 @@ router.delete('/eventos/:id', authenticateToken, verificarPermissaoEscrita, asyn
         });
     }
 });
-
 // ============================================
 // ROTAS ADMINISTRATIVAS
 // ============================================
@@ -768,14 +867,14 @@ router.post('/notificacoes/verificar', async (req, res) => {
 });
 
 // ============ IMPORTAR PROVAS PARA O CALENDÁRIO ============
-router.post('/importar-provas', authenticateToken, verificarPermissaoEscrita, async (req, res) => {
+router.post('/importar-provas', authenticateToken, verificarPermissaoCriacao, async (req, res) => {
     try {
         const { turmaId } = req.body;
 
-        if (req.userRole !== 'professor' && req.userRole !== 'admin') {
+        if (req.userRole !== 'professor' && req.userRole !== 'admin' && req.userRole !== 'setor_pedagogico') {
             return res.status(403).json({
                 success: false,
-                error: 'Apenas professores podem importar provas'
+                error: 'Apenas professores e setores autorizados podem importar provas'
             });
         }
 

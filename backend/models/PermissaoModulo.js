@@ -64,7 +64,9 @@ PermissaoModuloSchema.pre('save', function(next) {
 // ============================================
 
 /**
- * Busca permissão por módulo, criando se não existir
+ * Busca permissão por módulo, criando se não existir.
+ * 🔥 ATUALIZA nomeAmigavel e descricao se estiverem diferentes
+ *    (garante que alterações no código sejam refletidas no banco).
  */
 PermissaoModuloSchema.statics.buscarOuCriar = async function(modulo, nomeAmigavel, descricao = '') {
     let permissao = await this.findOne({ modulo });
@@ -77,6 +79,25 @@ PermissaoModuloSchema.statics.buscarOuCriar = async function(modulo, nomeAmigave
             emailsAutorizados: []
         });
         console.log(`✅ Permissão criada: ${modulo}`);
+    } else {
+        // 🔥 FORÇAR ATUALIZAÇÃO DO NOME E DESCRIÇÃO SE ESTIVEREM DIFERENTES
+        let alterou = false;
+
+        if (permissao.nomeAmigavel !== nomeAmigavel) {
+            console.log(`📝 Atualizando nomeAmigavel de "${permissao.nomeAmigavel}" para "${nomeAmigavel}" (módulo: ${modulo})`);
+            permissao.nomeAmigavel = nomeAmigavel;
+            alterou = true;
+        }
+
+        if (permissao.descricao !== descricao) {
+            permissao.descricao = descricao;
+            alterou = true;
+        }
+
+        if (alterou) {
+            await permissao.save();
+            console.log(`✅ Permissão atualizada: ${modulo}`);
+        }
     }
 
     return permissao;

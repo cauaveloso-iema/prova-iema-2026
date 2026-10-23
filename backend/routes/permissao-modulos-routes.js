@@ -86,15 +86,17 @@ const MODULOS_DISPONIVEIS = {
         nomeAmigavel: 'Autorização de Visitas',
         descricao: 'Permite criar e gerenciar termos de visita técnica e autorizações de responsáveis'
     },
-    // 🔥 GESTÃO DE PROFESSORES
     'gestao_professores_setor_pedagogico': {
         nomeAmigavel: 'Gestão de Professores',
         descricao: 'Permite registrar e gerenciar a gestão de professores, componentes curriculares, turmas e aulas por período'
     },
-    // 🆕 AEE - ATENDIMENTO EDUCACIONAL ESPECIALIZADO
     'aee_setor_pedagogico': {
         nomeAmigavel: 'AEE - Atendimento Educacional Especializado',
         descricao: 'Permite acessar o módulo AEE: alunos com necessidades específicas, relatórios de acessibilidade e provas adaptadas'
+    },
+    'calendario_setor_pedagogico': {
+        nomeAmigavel: 'Calendário Acadêmico',
+        descricao: 'Permite que usuários autorizados (Setor Pedagógico, Gestão Geral, etc) criem e editem eventos no calendário'
     }
 };
 
