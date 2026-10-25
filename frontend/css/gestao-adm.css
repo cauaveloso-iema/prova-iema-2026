@@ -199,56 +199,41 @@ body.gestao-adm-theme {
     margin: 6px 0;
 }
 
-/* ===================== NOTIFICAÇÕES DROPDOWN ===================== */
-.notificacoes-container {
-    position: relative;
-}
-
-.notificacoes-btn {
-    background: white;
-    border: none;
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    cursor: pointer;
-    color: #4b5563;
-    font-size: 16px;
-    position: relative;
-    transition: all 0.2s;
-}
-
-.notificacoes-btn:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    color: #0f766e;
-}
-
-.notificacoes-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: #ef4444;
-    color: white;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 10px;
-    min-width: 18px;
-    text-align: center;
-}
-
+/* ============================================================
+   NOTIFICAÇÕES DROPDOWN
+   Com proteção anti-ghost-click:
+   - pointer-events: none desativa cliques enquanto invisível
+   - transition-delay: 0.25s no .active evita o clique de abertura
+   ============================================================ */
 .notificacoes-dropdown {
     background: white;
     border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+
+    /* Posicionamento */
+    position: absolute;
+    top: calc(100% + 20px);          /* 👈 espaço maior embaixo do avatar */
+    right: 0;
     width: 380px;
     max-width: 90vw;
     overflow: hidden;
+    z-index: 10000;
+
+    /* Estado inicial: fechado e sem cliques */
     display: none;
+    visibility: visible;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
 .notificacoes-dropdown.active {
-    display: block;
+    display: block !important;
+
+    /* 🔑 Anti-ghost-click: só aceita cliques após 250ms */
+    pointer-events: auto;
+    opacity: 1;
+    transition-delay: 0.25s;
 }
 
 .notificacoes-header {
@@ -268,6 +253,12 @@ body.gestao-adm-theme {
     align-items: center;
     gap: 8px;
     color: #111827;
+}
+
+#notificacoesLista {
+    max-height: 400px;
+    overflow-y: auto;
+    visibility: visible;
 }
 
 .notificacao-footer {

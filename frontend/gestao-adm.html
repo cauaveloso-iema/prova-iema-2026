@@ -36,99 +36,91 @@
                 </div>
             </div>
 
-            <div class="d-flex align-items-center gap-3">
-                <div class="notificacoes-container" id="containerSinoOriginal" style="position: relative;">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
-                            title="Notificações e Lembretes" style="display: none;">
-                        <i class="fas fa-bell"></i>
-                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
-                    </button>
-
-                    <div class="notificacoes-dropdown" id="notificacoesDropdown"
-                         style="position: absolute; top: 100%; right: 0; z-index: 9999;">
-                        <div class="notificacoes-header">
-                            <h3><i class="fas fa-bell" style="color: #0f766e;"></i> Notificações</h3>
-                            <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()"
-                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
-                                    title="Marcar todas como lidas">
-                                    <i class="fas fa-check-double"></i> Ler todas
-                                </button>
-                                <button onclick="limparMinhasNotificacoes(event)"
-                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
-                                    title="Excluir todas">
-                                    <i class="fas fa-trash"></i> Limpar
-                                </button>
-                                <button onclick="fecharNotificacoes()"
-                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
+            <!-- MENU DO USUÁRIO -->
+            <div class="user-menu-container" id="userMenuContainer">
+                <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                    <div class="user-avatar-wrapper">
+                        <div class="user-avatar gestao-avatar" id="userAvatar">
+                            <i class="fas fa-user-tie"></i>
                         </div>
+                        <span class="user-notification-badge" id="userNotificationBadge"></span>
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name" id="userName">Carregando...</div>
+                        <div class="user-role" id="userRole">Gestão ADM</div>
+                    </div>
+                    <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
+                </div>
 
-                        <div id="notificacoesLista" style="max-height: 400px; overflow-y: auto;">
-                            <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
-                                <p>Carregando...</p>
-                            </div>
-                        </div>
+                <!-- MENU DROPDOWN DO AVATAR -->
+                <div class="user-dropdown-menu" id="userDropdown">
+                    <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
+                        <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                        <div class="item-text">Calendário</div>
+                    </a>
+                    <a href="cardapio.html" class="dropdown-item" title="Cardápio Escolar">
+                        <div class="icon-box bg-orange"><i class="fas fa-utensils"></i></div>
+                        <div class="item-text">Cardápio</div>
+                    </a>
 
-                        <div class="notificacao-footer">
-                            <a href="/notificacoes.html">
-                                <i class="fas fa-eye"></i> Ver todas as notificações
-                            </a>
-                        </div>
+                    <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)" title="Notificações">
+                        <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                        <div class="item-text">Notificações</div>
+                        <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                    </div>
+
+                    <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                       target="_blank" class="dropdown-item" title="Baixar App">
+                        <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                        <div class="item-text">Baixar App</div>
+                    </a>
+
+                    <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
+                        <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                        <div class="item-text">Editar Perfil</div>
+                    </a>
+
+                    <div class="dropdown-divider"></div>
+
+                    <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
+                        <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                        <div class="item-text">Sair</div>
                     </div>
                 </div>
 
-                <div class="user-menu-container" id="userMenuContainer">
-                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
-                        <div class="user-avatar-wrapper">
-                            <div class="user-avatar gestao-avatar" id="userAvatar">
-                                <i class="fas fa-user-tie"></i>
-                            </div>
-                            <span class="user-notification-badge" id="userNotificationBadge"></span>
+                <!-- DROPDOWN DE NOTIFICAÇÕES -->
+                <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                    <div class="notificacoes-header">
+                        <h3><i class="fas fa-bell" style="color: #0f766e;"></i> Notificações</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="marcarTodasLidas()"
+                                style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                title="Marcar todas como lidas">
+                                <i class="fas fa-check-double"></i> Ler todas
+                            </button>
+                            <button onclick="limparMinhasNotificacoes(event)"
+                                style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                title="Excluir todas">
+                                <i class="fas fa-trash"></i> Limpar
+                            </button>
+                            <button onclick="fecharNotificacoes()"
+                                style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
-                        <div class="user-details">
-                            <div class="user-name" id="userName">Carregando...</div>
-                            <div class="user-role" id="userRole">Gestão ADM</div>
-                        </div>
-                        <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
                     </div>
 
-                    <div class="user-dropdown-menu" id="userDropdown">
-                        <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
-                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
-                            <div class="item-text">Calendário</div>
-                        </a>
-                        <a href="cardapio.html" class="dropdown-item" title="Cardápio Escolar">
-                            <div class="icon-box bg-orange"><i class="fas fa-utensils"></i></div>
-                            <div class="item-text">Cardápio</div>
-                        </a>
-
-                        <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)" title="Notificações">
-                            <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
-                            <div class="item-text">Notificações</div>
-                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                    <div id="notificacoesLista">
+                        <div style="text-align: center; padding: 40px; color: #6c757d;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                            <p>Carregando...</p>
                         </div>
+                    </div>
 
-                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
-                           target="_blank" class="dropdown-item" title="Baixar App">
-                            <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
-                            <div class="item-text">Baixar App</div>
+                    <div class="notificacao-footer">
+                        <a href="/notificacoes.html">
+                            <i class="fas fa-eye"></i> Ver todas as notificações
                         </a>
-
-                        <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
-                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
-                            <div class="item-text">Editar Perfil</div>
-                        </a>
-
-                        <div class="dropdown-divider"></div>
-
-                        <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
-                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
-                            <div class="item-text">Sair</div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -274,7 +266,7 @@
         </div>
     </div>
 
-    <!-- MODAL -->
+    <!-- MODAL CARDÁPIO -->
     <div class="modal" id="modal" style="display: none;">
         <div class="modal-content gestao-adm-modal">
             <div class="modal-header gestao-adm-modal-header">

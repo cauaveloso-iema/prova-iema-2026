@@ -1,5 +1,6 @@
 // ============================================================================
 // PAINEL GESTÃO ADM - JAVASCRIPT
+// Notificações no menu do avatar (padrão Enfermaria) + anti-ghost-click
 // ============================================================================
 
 const HORARIOS_REFEICOES = {
@@ -15,6 +16,8 @@ class GestaoAdmPanel {
         this.cardapios = [];
         this.cardapiosFiltrados = [];
         this.editandoId = null;
+        this._notifInterval = null;
+        this._notifAbertaEm = 0;
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.init());
@@ -39,8 +42,10 @@ class GestaoAdmPanel {
         this.preencherDadosUsuario();
         this.iniciarRelogio();
         this.setupEventListeners();
-        this.carregarNotificacoes();
+        await this.carregarNotificacoes();
         await this.carregarCardapios();
+
+        this._notifInterval = setInterval(() => this.carregarNotificacoes(), 30000);
     }
 
     preencherDadosUsuario() {
@@ -92,7 +97,7 @@ class GestaoAdmPanel {
         const atualizar = () => {
             const agora = new Date();
             if (tempo) {
-                tempo.textContent = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}:${String(agora.getSeconds()).padStart(2,'0')}`;
+                tempo.textContent = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}:${String(agora.getSeconds()).padStart(2, '0')}`;
             }
             if (data) {
                 data.textContent = agora.toLocaleDateString('pt-BR', {
@@ -108,48 +113,141 @@ class GestaoAdmPanel {
 
     setupEventListeners() {
         document.addEventListener('click', (e) => {
-            const container = document.getElementById('userMenuContainer');
-            const dropdown = document.getElementById('userDropdown');
-            if (container && dropdown && !container.contains(e.target)) {
-                dropdown.classList.remove('active');
+            const userContainer = document.getElementById('userMenuContainer');
+            const userDropdown = document.getElementById('userDropdown');
+            const notifDropdown = document.getElementById('notificacoesDropdown');
+
+            if (userContainer && userDropdown && !userContainer.contains(e.target)) {
+                userDropdown.classList.remove('active');
             }
 
-            const notifContainer = document.getElementById('containerSinoOriginal');
-            const notifDropdown = document.getElementById('notificacoesDropdown');
-            if (notifContainer && notifDropdown && !notifContainer.contains(e.target)) {
-                notifDropdown.classList.remove('active');
+            if (notifDropdown && notifDropdown.classList.contains('active')) {
+                if (!notifDropdown.contains(e.target) && !e.target.closest('[onclick*="abrirMenuNotificacoesSeguro"]')) {
+                    notifDropdown.classList.remove('active');
+                }
             }
         });
     }
 
+    // ==========================================================================
+    // 🔔 NOTIFICAÇÕES
+    // ==========================================================================
     async carregarNotificacoes() {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+
         try {
-            const token = localStorage.getItem('auth_token');
-            if (!token) return;
-            const response = await fetch('/api/notificacoes/minhas', {
+            const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!response.ok) return;
-            const data = await response.json();
-            if (data.success && data.notificacoes) {
-                const naoLidas = data.notificacoes.filter(n => !n.lida).length;
-                this.atualizarBadges(naoLidas);
+            let total = 0;
+            if (countRes.ok) {
+                const c = await countRes.json();
+                total = c.count || 0;
             }
-        } catch (error) {
-            console.log('Notificações não carregadas');
+            this.atualizarBadges(total);
+
+            const res = await fetch('/api/notificacoes?limite=20', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            const lista = document.getElementById('notificacoesLista');
+            if (!lista) return;
+
+            if (!data.success || !data.notificacoes || data.notificacoes.length === 0) {
+                lista.innerHTML = `
+                    <div style="text-align:center;padding:30px 16px;color:#6c757d;">
+                        <i class="fas fa-bell-slash" style="font-size:2rem;margin-bottom:10px;opacity:.5;"></i>
+                        <p style="margin:0;">Nenhuma notificação</p>
+                    </div>`;
+                return;
+            }
+
+            lista.innerHTML = data.notificacoes.slice(0, 10).map(n => {
+                const naoLida = !n.lida;
+                const idSeguro = String(n._id || n.id || '').replace(/'/g, '');
+                const linkSeguro = String(n.link || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+                const temLink = linkSeguro && linkSeguro !== '#' && linkSeguro !== 'null' && linkSeguro !== 'undefined';
+
+                return `
+                    <div style="
+                        padding:12px 16px;
+                        border-bottom:1px solid #f3f4f6;
+                        display:flex;
+                        gap:10px;
+                        align-items:flex-start;
+                        cursor:pointer;
+                        ${naoLida ? 'background:#f0fdfa;border-left:3px solid #0f766e;' : ''}
+                    "
+                    onmouseover="this.style.background='#f3f4f6'"
+                    onmouseout="this.style.background='${naoLida ? '#f0fdfa' : 'transparent'}'"
+                    onclick="abrirNotificacao('${idSeguro}', '${linkSeguro}')">
+                        <div style="width:34px;height:34px;border-radius:8px;background:${n.cor || 'linear-gradient(135deg,#0f766e,#115e59)'};color:white;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas ${n.icone || 'fa-bell'}"></i>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:13px;font-weight:600;color:#111827;">${this.escapeHtml(n.titulo || 'Notificação')}</div>
+                            <div style="font-size:12px;color:#6b7280;margin-top:2px;">${this.escapeHtml(n.mensagem || '')}</div>
+                            ${temLink ? '<div style="font-size:11px;color:#0f766e;margin-top:4px;"><i class="fas fa-external-link-alt"></i> Abrir</div>' : ''}
+                        </div>
+                    </div>`;
+            }).join('');
+        } catch (err) {
+            console.warn('[notificações] erro:', err);
+        }
+    }
+
+    async abrirNotificacao(id, link) {
+        // 🛡️ ANTI-GHOST-CLICK: ignora cliques nos primeiros 400ms
+        const tempoDesdeAbertura = Date.now() - this._notifAbertaEm;
+        if (tempoDesdeAbertura < 400) {
+            console.log('🛡️ Clique ignorado (proteção anti-misclick — aguarde)');
+            return;
+        }
+
+        const token = localStorage.getItem('auth_token');
+        try {
+            if (id) {
+                await fetch(`/api/notificacoes/${id}/lida`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            }
+            const c = await fetch('/api/notificacoes/nao-lidas/contador', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (c.ok) {
+                const d = await c.json();
+                this.atualizarBadges(d.count || 0);
+            }
+            const dd = document.getElementById('notificacoesDropdown');
+            if (dd) dd.classList.remove('active');
+
+            if (link && link !== '#' && link !== 'null' && link !== 'undefined' && link !== '') {
+                window.location.href = link;
+            } else {
+                this.carregarNotificacoes();
+            }
+        } catch (err) {
+            console.error('[abrirNotificacao] erro:', err);
         }
     }
 
     atualizarBadges(count) {
-        const badge = document.getElementById('notificacoesBadge');
         const menuBadge = document.getElementById('menuNotifBadge');
         const userBadge = document.getElementById('userNotificationBadge');
 
-        if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'inline-block' : 'none'; }
-        if (menuBadge) { menuBadge.textContent = count; menuBadge.style.display = count > 0 ? 'inline-flex' : 'none'; }
+        if (menuBadge) {
+            menuBadge.textContent = count > 99 ? '99+' : count;
+            menuBadge.style.display = count > 0 ? 'inline-flex' : 'none';
+        }
         if (userBadge) userBadge.classList.toggle('active', count > 0);
     }
 
+    // ==========================================================================
+    // 📅 CARDÁPIOS
+    // ==========================================================================
     async carregarCardapios() {
         try {
             const token = localStorage.getItem('auth_token');
@@ -364,7 +462,7 @@ class GestaoAdmPanel {
                             <div class="form-group">
                                 <label><i class="fas fa-tag"></i> Semana <span class="required">*</span></label>
                                 <select id="fieldSemana" class="form-control" required>
-                                    ${[1,2,3,4,5].map(n => `
+                                    ${[1, 2, 3, 4, 5].map(n => `
                                         <option value="SEMANA ${n}" ${semanaAtual === `SEMANA ${n}` ? 'selected' : ''}>SEMANA ${n}</option>
                                     `).join('')}
                                 </select>
@@ -612,15 +710,47 @@ class GestaoAdmPanel {
     }
 }
 
+// ============================================================================
+// FUNÇÕES GLOBAIS
+// ============================================================================
+
 function toggleUserMenu(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
-    if (dropdown) dropdown.classList.toggle('active');
+    const chevron = document.getElementById('userChevron');
+    if (!dropdown) return;
+
+    const estaAberto = dropdown.classList.toggle('active');
+    if (chevron) chevron.style.transform = estaAberto ? 'rotate(180deg)' : 'rotate(0deg)';
 }
 
-function abrirNotificacoes() {
-    const dropdown = document.getElementById('notificacoesDropdown');
-    if (dropdown) dropdown.classList.toggle('active');
+/**
+ * 🔔 Abre o dropdown de notificações (igual Enfermaria).
+ * Marca o timestamp de abertura para a proteção anti-ghost-click.
+ */
+function abrirMenuNotificacoesSeguro(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+
+    // Fecha o menu do usuário
+    const userDropdown = document.getElementById('userDropdown');
+    const chevron = document.getElementById('userChevron');
+    if (userDropdown) userDropdown.classList.remove('active');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+
+    // Abre o dropdown de notificações
+    const dd = document.getElementById('notificacoesDropdown');
+    if (!dd) return;
+
+    dd.classList.add('active');
+
+    // 🔑 Marca o momento de abertura (anti-ghost-click)
+    if (window.gestaoAdm) {
+        window.gestaoAdm._notifAbertaEm = Date.now();
+        window.gestaoAdm.carregarNotificacoes();
+    }
 }
 
 function fecharNotificacoes() {
@@ -628,14 +758,9 @@ function fecharNotificacoes() {
     if (dropdown) dropdown.classList.remove('active');
 }
 
-function abrirMenuNotificacoesSeguro(event) {
-    if (event) event.stopPropagation();
-    const userDropdown = document.getElementById('userDropdown');
-    if (userDropdown) userDropdown.classList.remove('active');
-    const dropdown = document.getElementById('notificacoesDropdown');
-    if (dropdown) {
-        dropdown.classList.add('active');
-        if (typeof carregarNotificacoesLista === 'function') carregarNotificacoesLista();
+function abrirNotificacao(id, link) {
+    if (window.gestaoAdm) {
+        window.gestaoAdm.abrirNotificacao(id, link);
     }
 }
 
@@ -643,11 +768,12 @@ async function marcarTodasLidas() {
     try {
         const token = localStorage.getItem('auth_token');
         await fetch('/api/notificacoes/marcar-todas-lidas', {
-            method: 'POST',
+            method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (window.gestaoAdm) {
             window.gestaoAdm.atualizarBadges(0);
+            window.gestaoAdm.carregarNotificacoes();
             window.gestaoAdm.showToast('✅ Todas marcadas como lidas', 'success');
         }
     } catch (err) { console.error(err); }
@@ -657,47 +783,17 @@ async function limparMinhasNotificacoes(event) {
     if (event) event.stopPropagation();
     try {
         const token = localStorage.getItem('auth_token');
-        await fetch('/api/notificacoes/limpar', {
+        await fetch('/api/notificacoes/limpar-minhas', {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const lista = document.getElementById('notificacoesLista');
-        if (lista) lista.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:8px;display:block;"></i>Sem notificações</div>';
-        if (window.gestaoAdm) window.gestaoAdm.atualizarBadges(0);
-    } catch (err) { console.error(err); }
-}
-
-async function carregarNotificacoesLista() {
-    const lista = document.getElementById('notificacoesLista');
-    if (!lista) return;
-    try {
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch('/api/notificacoes/minhas', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
-
-        if (!data.success || !data.notificacoes || data.notificacoes.length === 0) {
-            lista.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#6c757d;"><i class="fas fa-inbox" style="font-size:2rem; margin-bottom:10px; display:block;"></i><p>Nenhuma notificação</p></div>`;
-            return;
+        if (lista) lista.innerHTML = '<div style="text-align:center;padding:30px 16px;color:#6c757d;"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:10px;display:block;"></i>Sem notificações</div>';
+        if (window.gestaoAdm) {
+            window.gestaoAdm.atualizarBadges(0);
+            window.gestaoAdm.showToast('✅ Notificações limpas', 'success');
         }
-
-        lista.innerHTML = data.notificacoes.slice(0, 10).map(n => `
-            <div style="padding: 12px 16px; border-bottom: 1px solid #f3f4f6; ${!n.lida ? 'background:#f0fdfa;' : ''}">
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#0f766e,#115e59);color:white;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <i class="fas fa-bell"></i>
-                    </div>
-                    <div style="flex:1; min-width:0;">
-                        <div style="font-size:13px; font-weight:600; color:#111827;">${n.titulo || 'Notificação'}</div>
-                        <div style="font-size:12px; color:#6b7280; margin-top:2px;">${n.mensagem || ''}</div>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    } catch (err) {
-        lista.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#6c757d;"><i class="fas fa-exclamation-triangle" style="font-size:2rem; margin-bottom:10px; display:block;"></i><p>Erro ao carregar</p></div>`;
-    }
+    } catch (err) { console.error(err); }
 }
 
 function logout() {
@@ -706,5 +802,15 @@ function logout() {
     window.location.href = 'login.html';
 }
 
+// ============================================================================
+// BOOTSTRAP
+// ============================================================================
 const gestaoAdm = new GestaoAdmPanel();
 window.gestaoAdm = gestaoAdm;
+window.abrirNotificacao = abrirNotificacao;
+window.abrirMenuNotificacoesSeguro = abrirMenuNotificacoesSeguro;
+window.fecharNotificacoes = fecharNotificacoes;
+window.marcarTodasLidas = marcarTodasLidas;
+window.limparMinhasNotificacoes = limparMinhasNotificacoes;
+window.toggleUserMenu = toggleUserMenu;
+window.logout = logout;
