@@ -84,6 +84,7 @@ body.gestao-adm-theme {
 
 .user-avatar-wrapper {
     position: relative;
+    display: inline-block;
 }
 
 .user-avatar {
@@ -96,26 +97,50 @@ body.gestao-adm-theme {
     color: white;
     font-size: 18px;
     overflow: hidden;
+    position: relative;
 }
 
 .user-avatar.gestao-avatar {
     background: linear-gradient(135deg, #0f766e, #115e59);
 }
 
+/* Garante que a foto preencha sem deixar borda do container aparecer */
+.user-avatar > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 50%;
+}
+
+/* ============================================================================
+   BADGE DO AVATAR — contador igual Enfermaria
+   ============================================================================ */
 .user-notification-badge {
     position: absolute;
-    top: -2px;
-    right: -2px;
-    width: 12px;
-    height: 12px;
+    top: -6px;
+    right: -8px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
     background: #ef4444;
-    border-radius: 50%;
-    border: 2px solid white;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 10px;
+    border: 2px solid #fff;
     display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    z-index: 10;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: -0.3px;
 }
 
 .user-notification-badge.active {
-    display: block;
+    display: inline-flex;
 }
 
 .user-details {
@@ -199,27 +224,48 @@ body.gestao-adm-theme {
     margin: 6px 0;
 }
 
-/* ============================================================
+/* ============================================================================
+   BADGE DO MENU — contador no item "Notificações"
+   ============================================================================ */
+.badge-count {
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    margin-left: auto;
+    min-width: 20px;
+    text-align: center;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+}
+
+.badge-count.visible {
+    display: inline-flex;
+}
+
+/* ============================================================================
    NOTIFICAÇÕES DROPDOWN
    Com proteção anti-ghost-click:
    - pointer-events: none desativa cliques enquanto invisível
    - transition-delay: 0.25s no .active evita o clique de abertura
-   ============================================================ */
+   ============================================================================ */
 .notificacoes-dropdown {
     background: white;
     border-radius: 16px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.18);
 
-    /* Posicionamento */
     position: absolute;
-    top: calc(100% + 20px);          /* 👈 espaço maior embaixo do avatar */
+    top: calc(100% + 20px);
     right: 0;
     width: 380px;
     max-width: 90vw;
     overflow: hidden;
     z-index: 10000;
 
-    /* Estado inicial: fechado e sem cliques */
     display: none;
     visibility: visible;
     pointer-events: none;
@@ -229,8 +275,6 @@ body.gestao-adm-theme {
 
 .notificacoes-dropdown.active {
     display: block !important;
-
-    /* 🔑 Anti-ghost-click: só aceita cliques após 250ms */
     pointer-events: auto;
     opacity: 1;
     transition-delay: 0.25s;
@@ -280,16 +324,6 @@ body.gestao-adm-theme {
 
 .notificacao-footer a:hover {
     text-decoration: underline;
-}
-
-.badge-count {
-    background: #ef4444;
-    color: white;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 10px;
-    margin-left: auto;
 }
 
 /* ===================== BANNER ===================== */

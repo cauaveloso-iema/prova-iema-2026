@@ -1,6 +1,7 @@
 // ============================================================================
 // PAINEL GESTÃO ADM - JAVASCRIPT
 // Notificações no menu do avatar (padrão Enfermaria) + anti-ghost-click
+// + badge com contador de não lidas
 // ============================================================================
 
 const HORARIOS_REFEICOES = {
@@ -45,6 +46,7 @@ class GestaoAdmPanel {
         await this.carregarNotificacoes();
         await this.carregarCardapios();
 
+        // 🔔 Polling do badge de notificações a cada 30s
         this._notifInterval = setInterval(() => this.carregarNotificacoes(), 30000);
     }
 
@@ -61,7 +63,7 @@ class GestaoAdmPanel {
 
         if (userAvatar) {
             if (this.usuario.fotoPerfil) {
-                userAvatar.innerHTML = `<img src="${this.usuario.fotoPerfil}" style="width:100%;height:100%;object-fit:cover;">`;
+                userAvatar.innerHTML = `<img src="${this.usuario.fotoPerfil}" alt="Foto de perfil">`;
             } else {
                 const iniciais = nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 userAvatar.innerHTML = `<span>${iniciais}</span>`;
@@ -137,6 +139,7 @@ class GestaoAdmPanel {
         if (!token) return;
 
         try {
+            // 1) Contador de não lidas → atualiza os badges
             const countRes = await fetch('/api/notificacoes/nao-lidas/contador', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -147,6 +150,7 @@ class GestaoAdmPanel {
             }
             this.atualizarBadges(total);
 
+            // 2) Lista → renderiza o dropdown
             const res = await fetch('/api/notificacoes?limite=20', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -199,7 +203,7 @@ class GestaoAdmPanel {
     }
 
     async abrirNotificacao(id, link) {
-        // 🛡️ ANTI-GHOST-CLICK: ignora cliques nos primeiros 400ms
+        // 🛡️ ANTI-GHOST-CLICK: ignora cliques nos primeiros 400ms após abrir o dropdown
         const tempoDesdeAbertura = Date.now() - this._notifAbertaEm;
         if (tempoDesdeAbertura < 400) {
             console.log('🛡️ Clique ignorado (proteção anti-misclick — aguarde)');
@@ -214,6 +218,7 @@ class GestaoAdmPanel {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
             }
+            // Atualiza o badge
             const c = await fetch('/api/notificacoes/nao-lidas/contador', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -221,9 +226,11 @@ class GestaoAdmPanel {
                 const d = await c.json();
                 this.atualizarBadges(d.count || 0);
             }
+            // Fecha dropdown
             const dd = document.getElementById('notificacoesDropdown');
             if (dd) dd.classList.remove('active');
 
+            // Navega (se tiver link) ou recarrega
             if (link && link !== '#' && link !== 'null' && link !== 'undefined' && link !== '') {
                 window.location.href = link;
             } else {
@@ -238,11 +245,28 @@ class GestaoAdmPanel {
         const menuBadge = document.getElementById('menuNotifBadge');
         const userBadge = document.getElementById('userNotificationBadge');
 
+        // Badge do menu (número ao lado de "Notificações")
         if (menuBadge) {
-            menuBadge.textContent = count > 99 ? '99+' : count;
-            menuBadge.style.display = count > 0 ? 'inline-flex' : 'none';
+            if (count > 0) {
+                menuBadge.textContent = count > 99 ? '99+' : count;
+                menuBadge.style.display = 'inline-flex';
+            } else {
+                menuBadge.style.display = 'none';
+            }
         }
-        if (userBadge) userBadge.classList.toggle('active', count > 0);
+
+        // Badge do avatar (bolinha vermelha com número no canto da foto)
+        if (userBadge) {
+            if (count > 0) {
+                userBadge.textContent = count > 99 ? '99+' : count;
+                userBadge.classList.add('active');
+                userBadge.style.display = 'inline-flex';
+            } else {
+                userBadge.textContent = '';
+                userBadge.classList.remove('active');
+                userBadge.style.display = 'none';
+            }
+        }
     }
 
     // ==========================================================================
