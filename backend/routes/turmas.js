@@ -2181,6 +2181,105 @@ publicoRouter.get('/eixos/:id', async (req, res) => {
 });
 
 // ============================================================================
+// GET /turmas-publicas — lista TODAS as turmas ativas
+// Fonte 1: coleção Turma (com populate condicional de cursoId/eixoId)
+// Fonte 2: turmas embutidas em cursos[].turmas (fonte oficial do banco)
+// ============================================================================
+publicoRouter.get('/turmas-publicas', async (req, res) => {
+    try {
+        const todasTurmas = [];
+
+        // ---------- 1) Coleção Turma ----------
+        if (Turma) {
+            // Detecta quais refs existem no schema (defensivo)
+            const schemaPaths = Object.keys(Turma.schema.paths);
+            const populateList = [];
+
+            if (schemaPaths.includes('cursoId')) {
+                populateList.push({ path: 'cursoId', select: 'nome codigo' });
+            }
+            if (schemaPaths.includes('eixoId')) {
+                populateList.push({ path: 'eixoId', select: 'nome label codigo' });
+            }
+
+            let query = Turma.find({ ativa: { $ne: false } })
+                .select('_id codigo nome periodo cursoId eixoId eixo disciplina')
+                .sort({ codigo: 1 })
+                .setOptions({ skipAutopopulate: true }) // 🔥 evita professorId/alunos desnecessários
+                .lean();
+
+            // Aplica populate um a um (só os que existem no schema)
+            for (const p of populateList) {
+                query = query.populate(p.path, p.select);
+            }
+
+            const turmasColecao = await query;
+
+            turmasColecao.forEach(t => {
+                todasTurmas.push({
+                    _id: String(t._id),
+                    codigo: t.codigo || null,
+                    nome: t.nome || `Turma ${t.codigo || ''}`.trim(),
+                    periodo: t.periodo || null,
+                    cursoId: (t.cursoId && t.cursoId._id) ? String(t.cursoId._id) : (t.cursoId ? String(t.cursoId) : null),
+                    cursoNome: (t.cursoId && t.cursoId.nome) ? t.cursoId.nome : null,
+                    eixoId: (t.eixoId && t.eixoId._id) ? String(t.eixoId._id) : (t.eixoId ? String(t.eixoId) : null),
+                    eixoNome: (t.eixoId && (t.eixoId.nome || t.eixoId.label))
+                        ? (t.eixoId.nome || t.eixoId.label)
+                        : (t.eixo || null),
+                    disciplina: t.disciplina || null,
+                    origem: 'colecao_turma'
+                });
+            });
+        }
+
+        // ---------- 2) Turmas embutidas em cursos[].turmas ----------
+        if (Curso) {
+            const cursos = await Curso.find({ ativo: { $ne: false } })
+                .select('_id nome eixo turmas')
+                .lean();
+
+            for (const curso of cursos) {
+                for (const t of (curso.turmas || [])) {
+                    if (t.ativa === false) continue;
+
+                    // Evita duplicar se já veio da coleção Turma
+                    if (todasTurmas.some(x => String(x._id) === String(t._id))) continue;
+
+                    todasTurmas.push({
+                        _id: t._id ? String(t._id) : `${curso._id}_${t.codigo}`,
+                        codigo: t.codigo || null,
+                        nome: t.nome || `Turma ${t.codigo || ''}`.trim(),
+                        periodo: t.periodo || null,
+                        cursoId: String(curso._id),
+                        cursoNome: curso.nome,
+                        eixoId: null, // turma embutida não tem eixoId
+                        eixoNome: curso.eixo || null,
+                        disciplina: null,
+                        origem: 'curso_embutido'
+                    });
+                }
+            }
+        }
+
+        logger.info(`✅ [publico] /turmas-publicas: ${todasTurmas.length} turma(s) retornada(s)`);
+
+        res.json({
+            success: true,
+            total: todasTurmas.length,
+            turmas: todasTurmas
+        });
+
+    } catch (error) {
+        logger.error('❌ [publico] Erro ao listar turmas públicas:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
 // EXPORTAR ROUTER (principal + publico)
 // ============================================================================
 module.exports = router;

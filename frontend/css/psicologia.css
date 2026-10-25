@@ -1656,3 +1656,9 @@ body {
     .filtros-andamento { padding: 12px; }
     .filtros-andamento .row { gap: 8px; }
 }
+
+/* ===================== COR LARANJA (CARDÁPIO) ===================== */
+.icon-box.bg-orange {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}

@@ -13,11 +13,17 @@ const TurmaSchema = new mongoose.Schema({
     uppercase: true,
     trim: true
   },
-  
+
   // ===== RELACIONAMENTOS =====
   cursoId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Curso',
+    required: false,
+    index: true
+  },
+  eixoId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Eixo',
     required: false,
     index: true
   },
@@ -27,7 +33,7 @@ const TurmaSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  
+
   // ===== CAMPOS ACADÊMICOS =====
   disciplina: {
     type: String,
@@ -49,13 +55,13 @@ const TurmaSchema = new mongoose.Schema({
     min: 1,
     max: 100
   },
-  
+
   // ===== DESCRIÇÃO =====
   descricao: {
     type: String,
     default: ''
   },
-  
+
   // ===== RELACIONAMENTOS COM USUÁRIOS =====
   alunos: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -65,24 +71,25 @@ const TurmaSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Prova'
   }],
-  
+
   // ===== STATUS =====
   ativa: {
     type: Boolean,
     default: true
   },
-  
+
   // ===== TIMESTAMPS =====
   dataCriacao: {
     type: Date,
     default: Date.now
   }
 }, {
-  timestamps: true // Adiciona createdAt e updatedAt automaticamente
+  timestamps: true
 });
 
-// ===== ÍNDICES PARA MELHOR PERFORMANCE =====
+// ===== ÍNDICES =====
 TurmaSchema.index({ cursoId: 1, ativa: 1 });
+TurmaSchema.index({ eixoId: 1, ativa: 1 });
 TurmaSchema.index({ professorId: 1, ativa: 1 });
 TurmaSchema.index({ eixo: 1 });
 TurmaSchema.index({ codigo: 1 }, { unique: true });
@@ -90,25 +97,21 @@ TurmaSchema.index({ codigo: 1 }, { unique: true });
 // ===== GERAR CÓDIGO ÚNICO ANTES DE SALVAR =====
 TurmaSchema.pre('save', async function(next) {
   try {
-    // Só gerar código se não existir
     if (!this.codigo) {
       let codigoGerado = '';
       let existe = true;
-      
-      // Garantir que o código é único
+
       while (existe) {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         codigoGerado = '';
         for (let i = 0; i < 6; i++) {
           codigoGerado += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-        
-        // Verificar se já existe
         const Turma = mongoose.model('Turma');
         const turmaExistente = await Turma.findOne({ codigo: codigoGerado });
         existe = !!turmaExistente;
       }
-      
+
       this.codigo = codigoGerado;
     }
     next();
@@ -117,16 +120,31 @@ TurmaSchema.pre('save', async function(next) {
   }
 });
 
-// ===== MIDDLEWARE PARA POPULAR DADOS QUANDO NECESSÁRIO =====
+// ============================================================================
+// HOOK DE POPULATE CORRIGIDO
+// ============================================================================
+// ANTES: populava professorId e alunos em TODA query → lento + conflito de populate
+// AGORA: só popula se o caller pedir explicitamente (via .populate() na query)
+//        ou se passar { autopopulate: true } nas options
+// ============================================================================
 TurmaSchema.pre(/^find/, function(next) {
-  // Popular automaticamente em algumas queries
-  this.populate({
-    path: 'professorId',
-    select: 'nome email'
-  }).populate({
-    path: 'alunos',
-    select: 'nome email matricula precisaAcessibilidade condicaoAcessibilidade'
-  });
+  const opts = this.getOptions() || {};
+
+  // Se o caller já especificou populates manualmente, NÃO injeta os padrão
+  const temPopulateManual = !!opts.populate;
+
+  // Se o caller pediu explicitamente para pular, respeita
+  if (opts.skipAutopopulate === true) return next();
+
+  // Se NÃO tem populate manual E não é skip → aplica o autopopulate padrão
+  if (!temPopulateManual) {
+    this.populate({ path: 'professorId', select: 'nome email' });
+    this.populate({
+      path: 'alunos',
+      select: 'nome email matricula precisaAcessibilidade condicaoAcessibilidade'
+    });
+  }
+
   next();
 });
 

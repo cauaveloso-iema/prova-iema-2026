@@ -266,6 +266,7 @@ function obterDestinoPorPerfil(role) {
         'protagonismo': '/protagonismo.html',
         'secretaria': '/secretaria.html',
         'recepcao': '/recepcao.html',
+        'gestao-adm': '/gestao-adm.html',
         'aluno': '/aluno.html'
     };
     return redirectMap[role] || '/login.html';

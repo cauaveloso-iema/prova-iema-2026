@@ -1021,6 +1021,10 @@ app.use('/api/calendario', require('./routes/calendario-routes'));
 app.use('/api/coordenacao-patio', require('./routes/coordenacaoPatio'));
 app.use('/api/cozinha', require('./routes/cozinha'));
 
+// PARA GESTAO ADM
+app.use('/api/cardapio', require('./routes/cardapio'));
+app.use('/api/gestao-adm', require('./routes/gestao-adm'));
+
 // CORRIGIDO: prefixo deve ser cozinha-monitoramento (frontend chama assim)
 app.use('/api/cozinha-monitoramento', require('./routes/monitoramento-cozinha'));
 
@@ -1553,23 +1557,18 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
       .select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret -twoFactorSecretSms');
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'Usuário não encontrado'
-      });
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
     }
 
     let dataNascimentoFormatada = null;
     if (user.dataNascimento) {
-      const data = new Date(user.dataNascimento);
-      dataNascimentoFormatada = data.toISOString().split('T')[0];
+      dataNascimentoFormatada = new Date(user.dataNascimento).toISOString().split('T')[0];
     }
 
     const perfilBase = {
       id: user._id,
       nome: user.nome,
       email: user.email,
-      // 🔒 LGPD: NÃO retorna CPF aqui (usar /api/auth/me/dados-sensiveis)
       telefone: user.telefone,
       role: user.role,
       ativo: user.ativo,
@@ -1587,12 +1586,8 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
       website: user.website,
       interesses: user.interesses || [],
       preferenciasNotificacao: user.preferenciasNotificacao || {
-        email: true,
-        push: true,
-        whatsapp: false,
-        lembreteProvas: true,
-        resultadoProvas: true,
-        novidades: false
+        email: true, push: true, whatsapp: false,
+        lembreteProvas: true, resultadoProvas: true, novidades: false
       },
       precisaAcessibilidade: user.precisaAcessibilidade,
       condicaoAcessibilidade: user.condicaoAcessibilidade,
@@ -1606,38 +1601,39 @@ app.get('/api/perfil/me', authenticateToken, async (req, res) => {
     const dadosEspecificos = {};
 
     if (user.role === 'aluno') {
-      dadosEspecificos.curso = user.curso;
-      dadosEspecificos.turma = user.turma;
-      dadosEspecificos.periodo = user.periodo;
-      dadosEspecificos.matricula = user.matricula;
+      dadosEspecificos.cursoId = user.cursoId || null;
+      dadosEspecificos.turmaId = user.turmaId || null;
+      dadosEspecificos.curso = user.curso || null;
+      dadosEspecificos.turma = user.turma || null;
+      dadosEspecificos.periodo = user.periodo || null;
+      dadosEspecificos.matricula = user.matricula || null;
     } else if (user.role === 'professor') {
-      dadosEspecificos.eixo = user.eixo;
-      dadosEspecificos.departamento = user.departamento;
-      dadosEspecificos.titulacao = user.titulacao;
-      dadosEspecificos.matricula = user.matricula;
+      dadosEspecificos.eixoId = user.eixoId || null;
+      dadosEspecificos.eixo = user.eixo || null;
+      dadosEspecificos.departamento = user.departamento || null;
+      dadosEspecificos.titulacao = user.titulacao || null;
+      dadosEspecificos.matricula = user.matricula || null;
     } else if (user.role === 'admin' || user.role === 'super_admin') {
-      dadosEspecificos.departamento = user.departamento;
+      dadosEspecificos.departamento = user.departamento || null;
       dadosEspecificos.nivel = user.role === 'super_admin' ? 'Super Administrador' : 'Administrador';
     } else {
-      dadosEspecificos.departamento = user.departamento;
+      dadosEspecificos.departamento = user.departamento || null;
     }
 
     res.json({
       success: true,
-      perfil: {
-        ...perfilBase,
-        ...dadosEspecificos
-      }
+      perfil: { ...perfilBase, ...dadosEspecificos }
     });
   } catch (error) {
     logger.error('❌ Erro ao buscar perfil:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Erro ao buscar perfil: ' + error.message
-    });
+    res.status(500).json({ success: false, error: 'Erro ao buscar perfil: ' + error.message });
   }
 });
 
+// ============================================================================
+// PUT /api/perfil/me — aceita cursoId/turmaId/eixoId e resolve para nomes
+// Busca turmaId primeiro na coleção Turma; se não achar, procura em curso.turmas[]
+// ============================================================================
 app.put('/api/perfil/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.userId;
@@ -1655,9 +1651,9 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
     ];
 
     if (req.userRole === 'aluno') {
-      camposPermitidos.push('curso', 'turma', 'periodo');
+      camposPermitidos.push('cursoId', 'turmaId', 'periodo');
     } else if (req.userRole === 'professor') {
-      camposPermitidos.push('eixo', 'departamento', 'titulacao');
+      camposPermitidos.push('eixoId', 'departamento', 'titulacao');
     } else if (req.userRole === 'admin' || req.userRole === 'super_admin') {
       camposPermitidos.push('departamento');
     } else {
@@ -1671,6 +1667,93 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
       }
     }
 
+    // ===== RESOLVER IDs → NOMES (aluno) =====
+    if (req.userRole === 'aluno') {
+      const CursoModel = require('./models/Cursos');
+      const TurmaModel = require('./models/Turma');
+
+      // ----- cursoId → curso (String) -----
+      if (dadosAtualizar.cursoId) {
+        if (!mongoose.Types.ObjectId.isValid(dadosAtualizar.cursoId)) {
+          return res.status(400).json({ success: false, error: 'cursoId inválido' });
+        }
+        const curso = await CursoModel.findById(dadosAtualizar.cursoId).select('nome');
+        if (!curso) {
+          return res.status(400).json({ success: false, error: 'Curso não encontrado' });
+        }
+        dadosAtualizar.curso = curso.nome;
+        logger.info(`✅ cursoId ${dadosAtualizar.cursoId} → curso "${curso.nome}"`);
+      }
+
+      // ----- turmaId → turma (String) -----
+      // 1) tenta na coleção Turma
+      // 2) se não achar, procura dentro de curso.turmas[] (turma embutida)
+      if (dadosAtualizar.turmaId) {
+        let turmaNome = null;
+
+        if (mongoose.Types.ObjectId.isValid(dadosAtualizar.turmaId)) {
+          const turma = await TurmaModel.findById(dadosAtualizar.turmaId)
+            .select('nome codigo')
+            .setOptions({ skipAutopopulate: true });
+
+          if (turma) {
+            turmaNome = turma.nome || turma.codigo;
+            logger.info(`✅ turmaId ${dadosAtualizar.turmaId} → Turma (coleção): "${turmaNome}"`);
+          }
+        }
+
+        if (!turmaNome) {
+          const cursosParaBuscar = dadosAtualizar.cursoId
+            ? await CursoModel.find({ _id: dadosAtualizar.cursoId }).select('turmas')
+            : await CursoModel.find({}).select('turmas');
+
+          for (const curso of cursosParaBuscar) {
+            for (const t of (curso.turmas || [])) {
+              if (String(t._id) === String(dadosAtualizar.turmaId)) {
+                turmaNome = t.codigo || t.nome;
+                logger.info(`✅ turmaId ${dadosAtualizar.turmaId} → Turma (embutida em "${curso.nome}"): "${turmaNome}"`);
+                break;
+              }
+            }
+            if (turmaNome) break;
+          }
+        }
+
+        if (!turmaNome) {
+          return res.status(400).json({
+            success: false,
+            error: 'Turma não encontrada (nem na coleção Turma, nem embutida em cursos)'
+          });
+        }
+
+        dadosAtualizar.turma = turmaNome;
+      }
+
+      // ----- periodo -----
+      if (dadosAtualizar.periodo) {
+        const periodosValidos = ['1', '2', '3', '4'];
+        if (!periodosValidos.includes(String(dadosAtualizar.periodo))) {
+          return res.status(400).json({ success: false, error: 'Período inválido' });
+        }
+        dadosAtualizar.periodo = String(dadosAtualizar.periodo);
+      }
+    }
+
+    // ===== RESOLVER IDs → NOMES (professor) =====
+    if (req.userRole === 'professor' && dadosAtualizar.eixoId) {
+      if (!mongoose.Types.ObjectId.isValid(dadosAtualizar.eixoId)) {
+        return res.status(400).json({ success: false, error: 'eixoId inválido' });
+      }
+      const EixoModel = require('./models/Eixo');
+      const eixo = await EixoModel.findById(dadosAtualizar.eixoId).select('nome codigo');
+      if (!eixo) {
+        return res.status(400).json({ success: false, error: 'Eixo não encontrado' });
+      }
+      dadosAtualizar.eixo = eixo.codigo || eixo.nome;
+      logger.info(`✅ eixoId ${dadosAtualizar.eixoId} → eixo "${dadosAtualizar.eixo}"`);
+    }
+
+    // ===== SANITIZAÇÕES =====
     if (dadosAtualizar.estado) {
       dadosAtualizar.estado = dadosAtualizar.estado.toUpperCase().substring(0, 2);
     }
@@ -1694,10 +1777,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
     if (dadosAtualizar.perfilAlimentar) {
       const valoresPermitidos = ['sempre', 'as_vezes', 'nunca', 'nao_informado'];
       if (!valoresPermitidos.includes(dadosAtualizar.perfilAlimentar)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Valor inválido para perfilAlimentar'
-        });
+        return res.status(400).json({ success: false, error: 'Valor inválido para perfilAlimentar' });
       }
     }
 
@@ -1705,15 +1785,14 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
       const refeicoesPermitidas = ['manha', 'almoco', 'tarde'];
       for (const ref of dadosAtualizar.refeicoesQueParticipa) {
         if (!refeicoesPermitidas.includes(ref)) {
-          return res.status(400).json({
-            success: false,
-            error: `Valor inválido para refeicoesQueParticipa: ${ref}`
-          });
+          return res.status(400).json({ success: false, error: `Valor inválido para refeicoesQueParticipa: ${ref}` });
         }
       }
     }
 
     dadosAtualizar.ultimaAtualizacaoPerfil = new Date();
+
+    logger.info('💾 Dados finais a gravar:', dadosAtualizar);
 
     const user = await User.findByIdAndUpdate(
       userId,
@@ -1722,10 +1801,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
     ).select('-password -twoFactorSecret -twoFactorBackupCodes -twoFactorTempSecret -twoFactorSecretSms -cpf');
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'Usuário não encontrado'
-      });
+      return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
     }
 
     logger.info(`✅ Perfil do usuário ${user.email} atualizado`);
@@ -1735,6 +1811,7 @@ app.put('/api/perfil/me', authenticateToken, async (req, res) => {
       message: 'Perfil atualizado com sucesso!',
       perfil: user
     });
+
   } catch (error) {
     logger.error('❌ Erro ao atualizar perfil:', error);
     res.status(500).json({
@@ -2713,6 +2790,7 @@ app.get('/', async (req, res) => {
         'assistente-social': '/assistente-social.html',
         'protagonismo': '/protagonismo.html',
         'secretaria': '/secretaria.html',
+        'gestao-adm': '/gestao-adm.html',
         'aluno': '/aluno.html'
       };
 

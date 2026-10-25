@@ -111,6 +111,7 @@ const PERFIS_QRCODE_AUTORIZADOS = [
   'biblioteca',
   'protagonismo',
   'secretaria',
+  'gestao-adm',
   'gestao_geral',
   'cozinha'
 ];

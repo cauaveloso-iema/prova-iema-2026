@@ -82,7 +82,7 @@ const UserSchema = new mongoose.Schema({
   
   role: {
     type: String,
-    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria','recepcao'],
+    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico','coordenacao_patio','cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria','recepcao', 'gestao-adm'],
     default: 'aluno'
   },
 
@@ -205,7 +205,7 @@ const UserSchema = new mongoose.Schema({
   
   qrCodeUsuarioTipo: {
     type: String,
-    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria', 'recepcao', null],
+    enum: ['aluno', 'professor', 'admin', 'super_admin', 'setor_pedagogico', 'coordenacao_patio', 'cozinha', 'gestao_geral', 'enfermaria','supervisao','psicologia','assistente-social','protagonismo','biblioteca', 'secretaria', 'recepcao','gestao-adm', null],
     default: null,
     set: v => (v === '' || v === undefined) ? null : v
   },
@@ -284,6 +284,28 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Turma'
   }],
+
+  // ========== REFERÊNCIAS (ObjectId) ==========
+  cursoId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Curso',
+    default: null,
+    index: true
+  },
+
+  turmaId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Turma',
+    default: null,
+    index: true
+  },
+
+  eixoId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Eixo',
+    default: null,
+    index: true
+  },
   
   // ========== CAMPOS DE ACESSIBILIDADE ==========
   precisaAcessibilidade: {
@@ -659,6 +681,9 @@ UserSchema.index({ matricula: 1 });
 UserSchema.index({ role: 1 });
 UserSchema.index({ precisaAcessibilidade: 1 });
 UserSchema.index({ eixo: 1 });
+UserSchema.index({ cursoId: 1 });
+UserSchema.index({ turmaId: 1 });
+UserSchema.index({ eixoId: 1 });
 UserSchema.index({ lastActive: -1 });
 UserSchema.index({ lastLogin: -1 });
 UserSchema.index({ lgpdConsent: 1 });

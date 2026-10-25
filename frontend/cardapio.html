@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Cardápio - EducaPleno</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+    <script src="js/helpers-formatacao.js"></script>
+    <script src="js/dialog-helper.js"></script>
+    <script src="/js/core-security.js"></script>
+
+    <link rel="stylesheet" href="css/gestao-geral.css">
+    <link rel="stylesheet" href="css/cardapio.css">
+</head>
+<body class="cardapio-body">
+    <div class="container">
+
+        <!-- HEADER -->
+        <div class="header-top">
+            <div class="relogio-card">
+                <div class="relogio-icon"><i class="far fa-clock"></i></div>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar cardapio-avatar" id="userAvatar">
+                                <i class="fas fa-utensils"></i>
+                            </div>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Consulta</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-2 text-muted"></i>
+                    </div>
+
+                    <div class="user-dropdown-menu" id="userDropdown">
+                        <a href="calendario.html" class="dropdown-item">
+                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+                        <a href="editar-perfil.html" class="dropdown-item">
+                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item text-danger" onclick="logout()">
+                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BANNER -->
+        <div class="cardapio-banner">
+            <div class="banner-icon">
+                <i class="fas fa-utensils"></i>
+            </div>
+            <div class="banner-text">
+                <h2>Cardápio Escolar</h2>
+                <p>Consulta das refeições servidas diariamente</p>
+            </div>
+
+            <div class="banner-info">
+                <div class="banner-info-item">
+                    <i class="fas fa-smile"></i>
+                    <span>Olá, <strong id="headerNomeUsuario">Usuário</strong></span>
+                </div>
+                <div class="banner-info-item">
+                    <i class="fas fa-calendar-day"></i>
+                    <span id="dataAtual">--/--/----</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- HORÁRIOS -->
+        <div class="horarios-refeicoes">
+            <div class="horario-card manha">
+                <div class="horario-icon"><i class="fas fa-coffee"></i></div>
+                <div class="horario-info">
+                    <span class="horario-label">Lanche da Manhã</span>
+                    <span class="horario-time">09:00</span>
+                </div>
+            </div>
+            <div class="horario-card almoco">
+                <div class="horario-icon"><i class="fas fa-drumstick-bite"></i></div>
+                <div class="horario-info">
+                    <span class="horario-label">Almoço</span>
+                    <span class="horario-time">12:00</span>
+                </div>
+            </div>
+            <div class="horario-card tarde">
+                <div class="horario-icon"><i class="fas fa-cookie"></i></div>
+                <div class="horario-info">
+                    <span class="horario-label">Lanche da Tarde</span>
+                    <span class="horario-time">15:00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- NAVEGAÇÃO DE MÊS -->
+        <div class="cardapio-controls">
+            <div class="mes-navegacao">
+                <button class="btn-mes" id="btnMesAnterior" title="Mês anterior">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <h3 id="mesAtual">Carregando...</h3>
+                <button class="btn-mes" id="btnProximoMes" title="Próximo mês">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="btn-hoje" id="btnIrHoje" title="Abrir calendário para escolher dia">
+                    <i class="fas fa-calendar-day"></i> Hoje
+                </button>
+            </div>
+        </div>
+
+        <!-- CHIP DE FILTRO ATIVO -->
+        <div id="filtroAtivo" class="filtro-ativo" style="display: none;">
+            <div class="filtro-chip">
+                <i class="fas fa-calendar-check"></i>
+                <span>Mostrando: <strong id="filtroDataLabel">--/--/----</strong></span>
+                <button class="btn-limpar-filtro" onclick="cardapio.limparFiltroData()" title="Remover filtro">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- CONTEÚDO PRINCIPAL -->
+        <div class="card cardapio-main-card">
+            <div class="card-body">
+
+                <!-- BLOCO: CARDÁPIO DO DIA (só aparece quando há filtro) -->
+                <div class="semana-atual-section" id="diaSection" style="display: none;">
+                    <h4 class="section-title">
+                        <i class="fas fa-calendar-check"></i>
+                        Cardápio do Dia
+                        <span class="section-subtitle" id="subtituloDia"></span>
+                    </h4>
+                    <div class="semana-grid" id="diaGrid">
+                        <div class="empty-state">
+                            <i class="fas fa-utensils" style="font-size: 40px; color: #d1d5db; margin-bottom: 12px; display: block;"></i>
+                            <p>Nenhum cardápio cadastrado para este dia</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BLOCO: ESTA SEMANA (só aparece sem filtro) -->
+                <div class="semana-atual-section" id="semanaSection">
+                    <h4 class="section-title" id="tituloSemana">
+                        <i class="fas fa-calendar-week"></i>
+                        Esta Semana
+                    </h4>
+                    <div class="semana-grid" id="semanaGrid">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Carregando cardápio da semana...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LISTA DO MÊS -->
+                <div class="mes-section" id="mesSection">
+                    <h4 class="section-title">
+                        <i class="fas fa-list"></i>
+                        Todos os Cardápios do Mês
+                        <span class="badge-count" id="badgeTotalMes">0</span>
+                    </h4>
+                    <div id="listaMes" class="lista-cardapios">
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>Carregando...</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <footer class="cardapio-footer">
+            <p><i class="fas fa-utensils"></i> EducaPleno — Cardápio Escolar</p>
+            <p><i class="fas fa-graduation-cap"></i> Gestão ADM • <span id="anoFooter">2026</span></p>
+        </footer>
+    </div>
+
+    <!-- MODAL DE DETALHES -->
+    <div class="modal" id="modal" style="display: none;">
+        <div class="modal-content cardapio-modal">
+            <div class="modal-header cardapio-modal-header">
+                <h2 id="modalTitle"><i class="fas fa-utensils"></i> Cardápio</h2>
+                <button class="modal-close" onclick="cardapio.fecharModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter">
+                <button class="btn-cancel" onclick="cardapio.fecharModal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CALENDÁRIO -->
+    <div class="modal" id="modalCalendario" style="display: none;">
+        <div class="modal-content calendario-modal">
+            <div class="modal-header cardapio-modal-header">
+                <h2><i class="fas fa-calendar-alt"></i> Selecione um dia</h2>
+                <button class="modal-close" onclick="cardapio.fecharModalCalendario()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="calendario-nav">
+                    <button class="btn-mes" id="btnCalMesAnterior" title="Mês anterior">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <h3 id="calMesAtual">Carregando...</h3>
+                    <button class="btn-mes" id="btnCalMesProximo" title="Próximo mês">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="calendario-semana-header">
+                    <div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div><div>Dom</div>
+                </div>
+                <div class="calendario-grid" id="calendarioGrid"></div>
+                <div class="calendario-legenda">
+                    <span class="legenda-item"><span class="legenda-dot hoje"></span> Hoje</span>
+                    <span class="legenda-item"><span class="legenda-dot com-cardapio"></span> Com cardápio</span>
+                    <span class="legenda-item"><span class="legenda-dot selecionado"></span> Selecionado</span>
+                </div>
+                <div class="calendario-acoes">
+                    <button class="btn-limpar-calendario" onclick="cardapio.irParaHoje()">
+                        <i class="fas fa-crosshairs"></i> Ir para hoje
+                    </button>
+                    <button class="btn-cancel" onclick="cardapio.fecharModalCalendario()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/cardapio.js?v=2024"></script>
+
+    <script>
+        document.getElementById('anoFooter').textContent = new Date().getFullYear();
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>

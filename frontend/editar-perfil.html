@@ -9,12 +9,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Editar Perfil">
 
-    <!-- 🔥 FAVICON LOCAL -->
+    <!-- FAVICON LOCAL -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
-    <!-- 🔒 LGPD: helper de armazenamento seguro (deve vir ANTES de outros JS) -->
+    <!-- LGPD: helper de armazenamento seguro -->
     <script src="js/user-storage.js"></script>
 
     <!-- VLibras Oficial -->
@@ -26,14 +26,14 @@
     <!-- Client Push -->
     <script src="js/push-client.js"></script>
 
-    <!-- Incluir o chatbot -->
+    <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
 
     <!-- Botões arrastáveis -->
     <script src="js/draggable.js"></script>
     <script src="js/dialog-helper.js"></script>
 
-    <!-- ===== MOBILE OPTIMIZATION ===== -->
+    <!-- MOBILE OPTIMIZATION -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="js/toggle-buttons.js"></script>
@@ -42,18 +42,13 @@
     <title>Editar Perfil | EducaPleno</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/editar-perfil.css">
-
-    <!-- Biblioteca html2canvas para converter cartão em imagem -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 </head>
 <body>
     <div class="perfil-container">
         <div class="perfil-card">
-            <!-- Cabeçalho com Foto de Perfil -->
             <div class="perfil-header">
                 <a href="javascript:history.back()" class="btn-voltar">
                     <i class="fas fa-arrow-left"></i> Voltar
@@ -75,12 +70,11 @@
                 <div class="role-badge" id="perfilRole">Carregando...</div>
             </div>
 
-            <!-- Corpo -->
             <div class="perfil-body">
                 <div id="alertMessage" class="alert"></div>
 
                 <form id="formPerfil">
-                    <!-- Seção 1: Informações Pessoais -->
+                    <!-- SEÇÃO 1 -->
                     <div class="form-section">
                         <div class="form-section-title">
                             <i class="fas fa-user"></i>
@@ -88,38 +82,28 @@
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-user"></i> Nome Completo
-                                </label>
+                                <label class="form-label"><i class="fas fa-user"></i> Nome Completo</label>
                                 <input type="text" id="nome" name="nome" class="form-control" required autocomplete="name">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-envelope"></i> Email
-                                </label>
+                                <label class="form-label"><i class="fas fa-envelope"></i> Email</label>
                                 <input type="email" id="email" class="form-control" disabled autocomplete="email">
                                 <small style="color: #6b7280; font-size: 0.7rem;">O email não pode ser alterado</small>
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-phone"></i> Telefone
-                                </label>
+                                <label class="form-label"><i class="fas fa-phone"></i> Telefone</label>
                                 <input type="tel" id="telefone" name="telefone" class="form-control" placeholder="(00) 00000-0000" autocomplete="tel">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-calendar"></i> Data de Nascimento
-                                </label>
+                                <label class="form-label"><i class="fas fa-calendar"></i> Data de Nascimento</label>
                                 <input type="date" id="dataNascimento" name="dataNascimento" class="form-control" autocomplete="bday">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-venus-mars"></i> Gênero
-                                </label>
+                                <label class="form-label"><i class="fas fa-venus-mars"></i> Gênero</label>
                                 <select id="genero" name="genero" class="form-control">
                                     <option value="">Selecione...</option>
                                     <option value="masculino">Masculino</option>
@@ -129,17 +113,14 @@
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-id-card"></i> CPF
-                                </label>
-                                <!-- 🔒 LGPD: autocomplete off para não permitir autofill -->
+                                <label class="form-label"><i class="fas fa-id-card"></i> CPF</label>
                                 <input type="text" id="cpf" class="form-control" disabled autocomplete="off">
                                 <small style="color: #6b7280; font-size: 0.7rem;">O CPF não pode ser alterado</small>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Seção 2: Biografia -->
+                    <!-- SEÇÃO 2 -->
                     <div class="form-section">
                         <div class="form-section-title">
                             <i class="fas fa-align-left"></i>
@@ -151,7 +132,7 @@
                         </div>
                     </div>
 
-                    <!-- Seção 3: Endereço -->
+                    <!-- SEÇÃO 3 -->
                     <div class="form-section">
                         <div class="form-section-title">
                             <i class="fas fa-map-marker-alt"></i>
@@ -159,38 +140,30 @@
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-home"></i> Endereço
-                                </label>
+                                <label class="form-label"><i class="fas fa-home"></i> Endereço</label>
                                 <input type="text" id="endereco" name="endereco" class="form-control" placeholder="Rua, número, complemento" autocomplete="street-address">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-city"></i> Cidade
-                                </label>
+                                <label class="form-label"><i class="fas fa-city"></i> Cidade</label>
                                 <input type="text" id="cidade" name="cidade" class="form-control" autocomplete="address-level2">
                             </div>
 
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label class="form-label">
-                                        <i class="fas fa-map-pin"></i> Estado
-                                    </label>
+                                    <label class="form-label"><i class="fas fa-map-pin"></i> Estado</label>
                                     <input type="text" id="estado" name="estado" class="form-control" maxlength="2" placeholder="UF" autocomplete="address-level1">
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="form-label">
-                                        <i class="fas fa-mail-bulk"></i> CEP
-                                    </label>
+                                    <label class="form-label"><i class="fas fa-mail-bulk"></i> CEP</label>
                                     <input type="text" id="cep" name="cep" class="form-control" placeholder="00000-000" autocomplete="postal-code">
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Seção 4: Redes Sociais -->
+                    <!-- SEÇÃO 4 -->
                     <div class="form-section">
                         <div class="form-section-title">
                             <i class="fas fa-share-alt"></i>
@@ -198,38 +171,30 @@
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fab fa-instagram"></i> Instagram
-                                </label>
+                                <label class="form-label"><i class="fab fa-instagram"></i> Instagram</label>
                                 <input type="text" id="instagram" name="instagram" class="form-control" placeholder="@seuusuario">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fab fa-linkedin"></i> LinkedIn
-                                </label>
+                                <label class="form-label"><i class="fab fa-linkedin"></i> LinkedIn</label>
                                 <input type="text" id="linkedin" name="linkedin" class="form-control" placeholder="linkedin.com/in/seuusuario">
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-globe"></i> Website
-                                </label>
+                                <label class="form-label"><i class="fas fa-globe"></i> Website</label>
                                 <input type="url" id="website" name="website" class="form-control" placeholder="https://seusite.com">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Seção 5: Interesses (Tags) -->
+                    <!-- SEÇÃO 5 -->
                     <div class="form-section">
                         <div class="form-section-title">
                             <i class="fas fa-tags"></i>
                             <span>Interesses</span>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">
-                                <i class="fas fa-plus-circle"></i> Áreas de Interesse
-                            </label>
+                            <label class="form-label"><i class="fas fa-plus-circle"></i> Áreas de Interesse</label>
                             <div id="interessesContainer" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;"></div>
                             <div style="display: flex; gap: 8px;">
                                 <input type="text" id="novoInteresse" class="form-control" placeholder="Digite um interesse e aperte Enter" style="flex: 1;">
@@ -241,10 +206,17 @@
                         </div>
                     </div>
 
-                    <!-- Seção 6: Dados Específicos do Perfil (dinâmico) -->
-                    <div id="dadosEspecificos"></div>
+                    <!-- SEÇÃO 6: dados dinâmicos do banco -->
+                    <div id="dadosEspecificos">
+                        <div class="form-section">
+                            <div style="text-align: center; padding: 1rem;">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p style="color: #6b7280; margin-top: 0.5rem;">Carregando dados do banco...</p>
+                            </div>
+                        </div>
+                    </div>
 
-                    <!-- Seção 7: Preferências Alimentares (ALUNO) -->
+                    <!-- SEÇÃO 7 -->
                     <div id="preferenciasAlimentares" style="display: none;">
                         <div class="preferencias-alimentares-section">
                             <div class="form-section-title">
@@ -256,9 +228,7 @@
                             </div>
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label class="form-label">
-                                        <i class="fas fa-question-circle"></i> Você participa das refeições na escola?
-                                    </label>
+                                    <label class="form-label"><i class="fas fa-question-circle"></i> Você participa das refeições na escola?</label>
                                     <select id="perfilAlimentar" name="perfilAlimentar" class="form-control">
                                         <option value="sempre">✅ Sim, sempre participo</option>
                                         <option value="as_vezes">⚠️ Participo às vezes</option>
@@ -270,31 +240,21 @@
                             <div id="refeicoesQueParticipaDiv" style="display: none; margin-top: 15px;">
                                 <label class="form-label">Quais refeições você costuma participar?</label>
                                 <div class="checkbox-group">
-                                    <label>
-                                        <input type="checkbox" value="manha" id="refeicaoManha">
-                                        ☀️ Lanche da Manhã (8h - 10h)
-                                    </label>
-                                    <label>
-                                        <input type="checkbox" value="almoco" id="refeicaoAlmoco">
-                                        🍽️ Almoço (11h - 13h)
-                                    </label>
-                                    <label>
-                                        <input type="checkbox" value="tarde" id="refeicaoTarde">
-                                        🌙 Lanche da Tarde (14h - 16h)
-                                    </label>
+                                    <label><input type="checkbox" value="manha" id="refeicaoManha"> ☀️ Lanche da Manhã (8h - 10h)</label>
+                                    <label><input type="checkbox" value="almoco" id="refeicaoAlmoco"> 🍽️ Almoço (11h - 13h)</label>
+                                    <label><input type="checkbox" value="tarde" id="refeicaoTarde"> 🌙 Lanche da Tarde (14h - 16h)</label>
                                 </div>
                                 <small style="color: #6b7280; font-size: 0.7rem;">Selecione as refeições que você costuma fazer na escola.</small>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Botão Salvar -->
                     <button type="submit" class="btn-salvar" id="btnSalvar">
                         <i class="fas fa-save"></i> Salvar Alterações
                     </button>
                 </form>
 
-                <!-- QR CODE SECTION -->
+                <!-- QR CODE -->
                 <div class="form-section" id="qrCodeSection" style="display: none;">
                     <div class="form-section-title">
                         <i class="fas fa-qrcode"></i>
@@ -330,7 +290,7 @@
 
     <input type="file" id="inputFoto" accept="image/*" style="display: none;" onchange="uploadFotoPerfil(this.files[0])">
 
-    <!-- CARTÃO PARA IMPRESSÃO (OCULTO) -->
+    <!-- CARTÃO PARA IMPRESSÃO -->
     <div id="cartaoParaImpressao" style="position: fixed; top: -9999px; left: -9999px; width: 400px; background: white; border-radius: 16px; font-family: 'Segoe UI', sans-serif; z-index: -1;">
         <div style="padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px;">
             <div style="text-align: center; margin-bottom: 20px; color: white;">
@@ -357,35 +317,33 @@
         let leitorAtivo = false;
         let synth = window.speechSynthesis;
         let qrCodeImageData = '';
-        let cpfCarregado = false; // 🔒 LGPD: só carrega CPF sob demanda
+        let cpfCarregado = false;
+
+        const listasBanco = {
+            cursos: [],
+            turmas: [],
+            eixos: []
+        };
 
         // ============================================
-        // 🛡️ PROTEÇÃO CONTRA alert() NATIVO
+        // PROTEÇÃO CONTRA alert()
         // ============================================
         (function protegerContraAlertNativo() {
             let __emProgresso = false;
-
             window.alert = function(mensagem) {
-                if (__emProgresso) {
-                    console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
-                    return;
-                }
+                if (__emProgresso) return;
                 __emProgresso = true;
-
                 try {
                     const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
                                     (typeof window.AppInventor !== 'undefined');
-
                     if (typeof window.mostrarAlerta === 'function') {
                         window.mostrarAlerta(String(mensagem), 'info');
                         return;
                     }
-
                     if (!isWebView) {
                         console.log('%c[ALERT] ' + mensagem, 'background:#667eea;color:white;padding:4px 8px;border-radius:4px;');
                         return;
                     }
-
                     const modal = document.createElement('div');
                     modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
                         background:rgba(0,0,0,0.6);display:flex;align-items:center;
@@ -403,37 +361,25 @@
                         </div>
                     `;
                     document.body.appendChild(modal);
-                } finally {
-                    __emProgresso = false;
-                }
+                } finally { __emProgresso = false; }
             };
-
-            console.log('🛡️ [Proteção] window.alert sobrescrito (editar-perfil)');
         })();
 
         // ============================================
-        // 🌉 PONTE DE COMUNICAÇÃO COM O KODULAR
+        // PONTE KODULAR
         // ============================================
         function solicitarFotoAoSite() {
             if (window.AppInventor && window.AppInventor.setWebViewString) {
-                console.log("📤 Solicitando foto ao aplicativo...");
                 window.AppInventor.setWebViewString("ABRIR_GALERIA");
             } else {
-                console.log("🌐 Navegador detectado. Abrindo seletor padrão.");
                 document.getElementById('inputFoto').click();
             }
         }
 
         function receberFotoDoApp(base64Image) {
-            if (!base64Image) {
-                console.log("❌ Nenhuma imagem recebida do aplicativo.");
-                return;
-            }
-
-            console.log("📸 Foto recebida do aplicativo via Base64.");
-
+            if (!base64Image) return;
             fetch(base64Image)
-                .then(res => res.blob())
+                .then(r => r.blob())
                 .then(blob => {
                     const file = new File([blob], "foto_perfil.jpg", { type: "image/jpeg" });
                     uploadFotoPerfil(file);
@@ -442,70 +388,120 @@
         }
 
         // ============================================
-        // 🔒 LGPD: CARREGAR CPF SOB DEMANDA (rota dedicada)
+        // CPF — rota dedicada
         // ============================================
         async function carregarCpfUsuario() {
             try {
                 const token = localStorage.getItem('auth_token');
                 if (!token) return;
-
                 const response = await fetch('/api/auth/me/dados-sensiveis', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
-                if (!response.ok) {
-                    document.getElementById('cpf').value = '—';
-                    return;
-                }
-
+                if (!response.ok) { document.getElementById('cpf').value = '—'; return; }
                 const data = await response.json();
-
                 if (data.success && data.cpf) {
-                    // Formatar CPF: 61350707384 → 613.507.073-84
                     const cpfStr = String(data.cpf).replace(/\D/g, '');
                     const formatado = cpfStr.length === 11
                         ? cpfStr.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
                         : cpfStr;
                     document.getElementById('cpf').value = formatado;
                     cpfCarregado = true;
-                    console.log('🔒 CPF carregado via rota dedicada (não salvo em localStorage)');
                 } else {
                     document.getElementById('cpf').value = '—';
                 }
             } catch (e) {
-                console.warn('Erro ao carregar CPF:', e);
                 document.getElementById('cpf').value = '—';
             }
         }
 
         // ============================================
-        // CARREGAR DADOS DO PERFIL
+        // LISTAS DO BANCO
+        // ============================================
+        async function carregarListasDoBanco() {
+            const token = localStorage.getItem('auth_token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            const resultados = await Promise.allSettled([
+                fetch('/api/cursos', { headers }).then(r => r.json()),
+                fetch('/api/eixos',  { headers }).then(r => r.json()),
+                fetch('/api/turmas-publicas', { headers }).then(r => {
+                    if (!r.ok) throw new Error('não disponível');
+                    return r.json();
+                })
+            ]);
+
+            listasBanco.cursos = [];
+            if (resultados[0].status === 'fulfilled' && resultados[0].value.success) {
+                listasBanco.cursos = resultados[0].value.cursos || [];
+                console.log(`📚 Cursos do banco: ${listasBanco.cursos.length}`);
+            } else {
+                console.warn('⚠️ /api/cursos falhou');
+            }
+
+            listasBanco.eixos = [];
+            if (resultados[1].status === 'fulfilled' && resultados[1].value.success) {
+                listasBanco.eixos = resultados[1].value.eixos || [];
+                console.log(`📚 Eixos do banco: ${listasBanco.eixos.length}`);
+            } else {
+                console.warn('⚠️ /api/eixos falhou');
+            }
+
+            listasBanco.turmas = [];
+            if (resultados[2].status === 'fulfilled' && resultados[2].value.success) {
+                listasBanco.turmas = resultados[2].value.turmas || [];
+                console.log(`📚 Turmas do banco (rota dedicada): ${listasBanco.turmas.length}`);
+            } else {
+                console.warn('⚠️ /api/turmas-publicas indisponível. Agregando cursos[].turmas.');
+                const agregadas = [];
+                for (const curso of listasBanco.cursos) {
+                    for (const t of (curso.turmas || [])) {
+                        agregadas.push({
+                            _id: t._id ? String(t._id) : `${curso._id}_${t.codigo}`,
+                            codigo: t.codigo,
+                            nome: t.nome || `Turma ${t.codigo}`,
+                            periodo: t.periodo,
+                            cursoId: String(curso._id),
+                            cursoNome: curso.nome,
+                            origem: t.origem || 'curso_embutido'
+                        });
+                    }
+                }
+                listasBanco.turmas = agregadas;
+                console.log(`📚 Turmas agregadas de cursos[].turmas: ${listasBanco.turmas.length}`);
+            }
+
+            console.log('📊 Listas finais:', {
+                cursos: listasBanco.cursos.length,
+                eixos: listasBanco.eixos.length,
+                turmas: listasBanco.turmas.length
+            });
+        }
+
+        // ============================================
+        // CARREGAR PERFIL
         // ============================================
         async function carregarPerfil() {
             try {
                 const token = localStorage.getItem('auth_token');
-
-                if (!token) {
-                    window.location.href = 'login.html';
-                    return;
-                }
+                if (!token) { window.location.href = 'login.html'; return; }
 
                 const response = await fetch('/api/perfil/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
                 const data = await response.json();
 
                 if (data.success) {
                     userData = data.perfil;
                     userRole = userData.role;
 
-                    console.log('🎯 Role detectado:', userRole);
-                    console.log('📦 Dados do usuário:', userData);
+                    console.log('🎯 Role:', userRole);
+                    console.log('📦 Perfil do banco:', userData);
 
                     preencherFormulario(userData);
                     carregarFotoPerfil(userData.fotoPerfil);
-                    carregarCamposEspecificos(userData);
+
+                    await carregarListasDoBanco();
+                    await carregarCamposEspecificos(userData);
 
                     if (userRole === 'aluno') {
                         document.getElementById('preferenciasAlimentares').style.display = 'block';
@@ -514,123 +510,117 @@
 
                     document.getElementById('perfilNome').textContent = userData.nome;
 
-                    let roleText = '';
-                    let roleIcon = '';
-                    if (userData.role === 'aluno') {
-                        roleText = '👨‍🎓 Aluno';
-                        roleIcon = 'fa-user-graduate';
-                    } else if (userData.role === 'professor') {
-                        roleText = '👨‍🏫 Professor';
-                        roleIcon = 'fa-chalkboard-teacher';
-                    } else if (userData.role === 'admin') {
-                        roleText = '👨‍💼 Administrador';
-                        roleIcon = 'fa-user-shield';
-                    } else if (userData.role === 'super_admin') {
-                        roleText = '⭐ Super Administrador';
-                        roleIcon = 'fa-crown';
-                    } else if (userData.role === 'setor_pedagogico') {
-                        roleText = '👩‍🏫 Setor Pedagógico';
-                        roleIcon = 'fa-chalkboard-user';
-                    } else if (userData.role === 'coordenacao_patio') {
-                        roleText = '🏃 Coordenação de Pátio';
-                        roleIcon = 'fa-utensils';
-                    } else if (userData.role === 'cozinha') {
-                        roleText = '🍽️ Cozinha';
-                        roleIcon = 'fa-kitchen-set';
-                    }
-
+                    const map = {
+                        aluno: ['👨‍🎓 Aluno', 'fa-user-graduate'],
+                        professor: ['👨‍🏫 Professor', 'fa-chalkboard-teacher'],
+                        admin: ['👨‍💼 Administrador', 'fa-user-shield'],
+                        super_admin: ['⭐ Super Administrador', 'fa-crown'],
+                        setor_pedagogico: ['👩‍🏫 Setor Pedagógico', 'fa-chalkboard-user'],
+                        coordenacao_patio: ['🏃 Coordenação de Pátio', 'fa-utensils'],
+                        cozinha: ['🍽️ Cozinha', 'fa-kitchen-set']
+                    };
+                    const [roleText, roleIcon] = map[userData.role] || ['', ''];
                     document.getElementById('perfilRole').textContent = roleText;
 
                     const placeholderIcon = document.querySelector('#fotoPlaceholder i');
-                    if (placeholderIcon) {
-                        placeholderIcon.className = `fas ${roleIcon}`;
-                    }
+                    if (placeholderIcon && roleIcon) placeholderIcon.className = `fas ${roleIcon}`;
 
                 } else {
                     mostrarAlerta('Erro ao carregar perfil: ' + (data.error || 'Erro desconhecido'), 'error');
                 }
-
             } catch (error) {
                 console.error('Erro ao carregar perfil:', error);
-                mostrarAlerta('Erro ao carregar perfil. Tente novamente.', 'error');
+                mostrarAlerta('Erro ao carregar perfil.', 'error');
             }
         }
 
-        function atualizarFotoPerfilNoSite() {
-            console.log("📸 Foto atualizada! Recarregando perfil...");
-            carregarPerfil();
-        }
+        function atualizarFotoPerfilNoSite() { carregarPerfil(); }
 
         // ============================================
-        // CARREGAR PREFERÊNCIAS ALIMENTARES
+        // PREFERÊNCIAS ALIMENTARES
         // ============================================
         function carregarPreferenciasAlimentares(data) {
-            const perfilAlimentar = data.perfilAlimentar || 'nao_informado';
-            const refeicoesQueParticipa = data.refeicoesQueParticipa || [];
-
             const select = document.getElementById('perfilAlimentar');
-            if (select) {
-                select.value = perfilAlimentar;
-                toggleRefeicoesDiv(perfilAlimentar);
-            }
+            const pa = data.perfilAlimentar || 'nao_informado';
+            if (select) { select.value = pa; toggleRefeicoesDiv(pa); }
 
-            if (refeicoesQueParticipa.includes('manha')) document.getElementById('refeicaoManha').checked = true;
-            if (refeicoesQueParticipa.includes('almoco')) document.getElementById('refeicaoAlmoco').checked = true;
-            if (refeicoesQueParticipa.includes('tarde')) document.getElementById('refeicaoTarde').checked = true;
+            const ref = data.refeicoesQueParticipa || [];
+            if (ref.includes('manha')) document.getElementById('refeicaoManha').checked = true;
+            if (ref.includes('almoco')) document.getElementById('refeicaoAlmoco').checked = true;
+            if (ref.includes('tarde')) document.getElementById('refeicaoTarde').checked = true;
 
-            if (select) {
-                select.addEventListener('change', function() {
-                    toggleRefeicoesDiv(this.value);
-                });
-            }
+            if (select) select.addEventListener('change', function() { toggleRefeicoesDiv(this.value); });
         }
 
-        function toggleRefeicoesDiv(perfilAlimentar) {
-            const div = document.getElementById('refeicoesQueParticipaDiv');
-            if (perfilAlimentar === 'sempre' || perfilAlimentar === 'as_vezes') {
-                div.style.display = 'block';
-            } else {
-                div.style.display = 'none';
-            }
+        function toggleRefeicoesDiv(pa) {
+            document.getElementById('refeicoesQueParticipaDiv').style.display =
+                (pa === 'sempre' || pa === 'as_vezes') ? 'block' : 'none';
         }
 
         // ============================================
-        // PREENCHER FORMULÁRIO COM DADOS DO BANCO
-        // 🔒 LGPD: CPF NÃO é preenchido aqui — vem da rota dedicada
+        // PREENCHER FORM
         // ============================================
         function preencherFormulario(data) {
-            document.getElementById('nome').value = data.nome || '';
-            document.getElementById('email').value = data.email || '';
-            document.getElementById('telefone').value = data.telefone || '';
-            // 🔒 CPF NÃO é mais preenchido aqui (vem de /auth/me/dados-sensiveis)
-            document.getElementById('dataNascimento').value = data.dataNascimento || '';
-            document.getElementById('genero').value = data.genero || '';
-            document.getElementById('bio').value = data.bio || '';
-            document.getElementById('endereco').value = data.endereco || '';
-            document.getElementById('cidade').value = data.cidade || '';
-            document.getElementById('estado').value = data.estado || '';
-            document.getElementById('cep').value = data.cep || '';
-            document.getElementById('instagram').value = data.instagram || '';
-            document.getElementById('linkedin').value = data.linkedin || '';
-            document.getElementById('website').value = data.website || '';
+            const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+            set('nome', data.nome);
+            set('email', data.email);
+            set('telefone', data.telefone);
+            set('dataNascimento', data.dataNascimento);
+            set('genero', data.genero);
+            set('bio', data.bio);
+            set('endereco', data.endereco);
+            set('cidade', data.cidade);
+            set('estado', data.estado);
+            set('cep', data.cep);
+            set('instagram', data.instagram);
+            set('linkedin', data.linkedin);
+            set('website', data.website);
 
-            if (data.interesses && data.interesses.length > 0) {
+            if (Array.isArray(data.interesses) && data.interesses.length > 0) {
                 interessesList = [...data.interesses];
                 atualizarListaInteresses();
             }
         }
 
         // ============================================
-        // CARREGAR CAMPOS ESPECÍFICOS POR ROLE
+        // CAMPOS ESPECÍFICOS — casamento POR ID
         // ============================================
-        function carregarCamposEspecificos(data) {
+        async function carregarCamposEspecificos(data) {
             const container = document.getElementById('dadosEspecificos');
-
             if (!container) return;
 
-            console.log('🎯 Carregando campos para role:', userRole);
+            console.log('🎯 Render campos específicos para:', userRole);
 
             if (userRole === 'aluno') {
+                let opcoesCurso = '<option value="">Selecione o curso...</option>';
+                listasBanco.cursos.forEach(c => {
+                    const sel = data.cursoId && String(c._id) === String(data.cursoId) ? 'selected' : '';
+                    opcoesCurso += `<option value="${c._id}" ${sel}>${c.nome}</option>`;
+                });
+
+                let turmasParaSelect = listasBanco.turmas;
+                if (data.cursoId) {
+                    const filtradas = listasBanco.turmas.filter(t => String(t.cursoId) === String(data.cursoId));
+                    if (filtradas.length > 0) turmasParaSelect = filtradas;
+                }
+
+                let opcoesTurma = '<option value="">Selecione a turma...</option>';
+                turmasParaSelect.forEach(t => {
+                    const sel = data.turmaId && String(t._id) === String(data.turmaId) ? 'selected' : '';
+                    const label = `${t.nome}${t.codigo ? ` (${t.codigo})` : ''}`;
+                    opcoesTurma += `<option value="${t._id}" data-periodo="${t.periodo || ''}" ${sel}>${label}</option>`;
+                });
+
+                const periodos = [
+                    { v: '1', l: '1º Período' }, { v: '2', l: '2º Período' },
+                    { v: '3', l: '3º Período' }, { v: '4', l: '4º Período' }
+                ];
+                let opcoesPeriodo = '<option value="">Selecione...</option>';
+                periodos.forEach(p => {
+                    const sel = String(data.periodo) === p.v ? 'selected' : '';
+                    opcoesPeriodo += `<option value="${p.v}" ${sel}>${p.l}</option>`;
+                });
+
                 container.innerHTML = `
                     <div class="form-section">
                         <div class="form-section-title">
@@ -639,41 +629,73 @@
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-book"></i> Curso
-                                </label>
-                                <input type="text" id="curso" name="curso" class="form-control" value="${data.curso || ''}" placeholder="Ex: Desenvolvimento de Sistemas">
+                                <label class="form-label"><i class="fas fa-book"></i> Curso</label>
+                                <select id="cursoId" name="cursoId" class="form-control">${opcoesCurso}</select>
+                                ${listasBanco.cursos.length === 0 ? '<small style="color:#ef4444;">⚠️ Nenhum curso cadastrado no banco</small>' : ''}
                             </div>
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-users"></i> Turma
-                                </label>
-                                <input type="text" id="turma" name="turma" class="form-control" value="${data.turma || ''}" placeholder="Ex: 3º Ano A">
+                                <label class="form-label"><i class="fas fa-users"></i> Turma</label>
+                                <select id="turmaId" name="turmaId" class="form-control">${opcoesTurma}</select>
+                                ${turmasParaSelect.length === 0 ? '<small style="color:#ef4444;">⚠️ Nenhuma turma cadastrada</small>' : ''}
                             </div>
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-calendar-week"></i> Período
-                                </label>
-                                <select id="periodo" name="periodo" class="form-control">
-                                    <option value="">Selecione...</option>
-                                    <option value="1" ${data.periodo === '1' ? 'selected' : ''}>1º Período</option>
-                                    <option value="2" ${data.periodo === '2' ? 'selected' : ''}>2º Período</option>
-                                    <option value="3" ${data.periodo === '3' ? 'selected' : ''}>3º Período</option>
-                                    <option value="4" ${data.periodo === '4' ? 'selected' : ''}>4º Período</option>
-                                </select>
+                                <label class="form-label"><i class="fas fa-calendar-week"></i> Período</label>
+                                <select id="periodo" name="periodo" class="form-control">${opcoesPeriodo}</select>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-id-card"></i> Matrícula
-                                </label>
+                                <label class="form-label"><i class="fas fa-id-card"></i> Matrícula</label>
                                 <input type="text" class="form-control" value="${data.matricula || ''}" disabled>
-                                <small style="color: #6b7280;">A matrícula não pode ser alterada</small>
+                                <small style="color: #6b7280;">Não pode ser alterada</small>
                             </div>
                         </div>
                     </div>
                 `;
-            }
-            else if (userRole === 'professor') {
+
+                const selCurso = document.getElementById('cursoId');
+                if (selCurso) {
+                    selCurso.addEventListener('change', function () {
+                        const novoCursoId = this.value;
+                        const selTurma = document.getElementById('turmaId');
+                        if (!selTurma) return;
+
+                        let turmasFiltradas = listasBanco.turmas;
+                        if (novoCursoId) {
+                            const f = listasBanco.turmas.filter(t => String(t.cursoId) === String(novoCursoId));
+                            if (f.length > 0) turmasFiltradas = f;
+                        }
+
+                        selTurma.innerHTML = '<option value="">Selecione a turma...</option>';
+                        turmasFiltradas.forEach(t => {
+                            const opt = document.createElement('option');
+                            opt.value = t._id;
+                            opt.dataset.periodo = t.periodo || '';
+                            opt.textContent = `${t.nome}${t.codigo ? ` (${t.codigo})` : ''}`;
+                            selTurma.appendChild(opt);
+                        });
+
+                        const selPeriodo = document.getElementById('periodo');
+                        if (selPeriodo) selPeriodo.value = '';
+                    });
+                }
+
+                const selTurma = document.getElementById('turmaId');
+                if (selTurma) {
+                    selTurma.addEventListener('change', function () {
+                        const opt = this.options[this.selectedIndex];
+                        const periodo = opt?.dataset?.periodo;
+                        const selPeriodo = document.getElementById('periodo');
+                        if (periodo && selPeriodo) selPeriodo.value = periodo;
+                    });
+                }
+
+            } else if (userRole === 'professor') {
+                let opcoesEixo = '<option value="">Selecione o eixo...</option>';
+                listasBanco.eixos.forEach(e => {
+                    const sel = data.eixoId && String(e._id) === String(data.eixoId) ? 'selected' : '';
+                    const label = e.label || e.nome || '';
+                    opcoesEixo += `<option value="${e._id}" ${sel}>${label}</option>`;
+                });
+
                 container.innerHTML = `
                     <div class="form-section">
                         <div class="form-section-title">
@@ -682,18 +704,9 @@
                         </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label class="form-label">Eixo</label>
-                                <select id="eixo" name="eixo" class="form-control">
-                                    <option value="">Selecione...</option>
-                                    <option value="natureza" ${data.eixo === 'natureza' ? 'selected' : ''}>🔬 Natureza e Matemática</option>
-                                    <option value="humanas" ${data.eixo === 'humanas' ? 'selected' : ''}>🏛️ Humanas</option>
-                                    <option value="linguagens" ${data.eixo === 'linguagens' ? 'selected' : ''}>🎭 Linguagens</option>
-                                    <option value="desenvolvimento" ${data.eixo === 'desenvolvimento' ? 'selected' : ''}>💻 Desenvolvimento de Sistemas</option>
-                                    <option value="gestao" ${data.eixo === 'gestao' ? 'selected' : ''}>📊 Gestão e Negócios</option>
-                                    <option value="producao" ${data.eixo === 'producao' ? 'selected' : ''}>🎬 Produção Cultural e Design</option>
-                                    <option value="turismo" ${data.eixo === 'turismo' ? 'selected' : ''}>✈️ Turismo, Hospitalidade e Lazer</option>
-                                    <option value="ambiente" ${data.eixo === 'ambiente' ? 'selected' : ''}>🌱 Ambiente e Saúde</option>
-                                </select>
+                                <label class="form-label"><i class="fas fa-layer-group"></i> Eixo</label>
+                                <select id="eixoId" name="eixoId" class="form-control">${opcoesEixo}</select>
+                                ${listasBanco.eixos.length === 0 ? '<small style="color:#ef4444;">⚠️ Nenhum eixo cadastrado</small>' : ''}
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Departamento</label>
@@ -706,13 +719,13 @@
                             <div class="form-group">
                                 <label class="form-label">Matrícula</label>
                                 <input type="text" class="form-control" value="${data.matricula || ''}" disabled>
-                                <small style="color: #6b7280;">A matrícula não pode ser alterada</small>
+                                <small style="color: #6b7280;">Não pode ser alterada</small>
                             </div>
                         </div>
                     </div>
                 `;
-            }
-            else if (userRole === 'admin' || userRole === 'super_admin') {
+
+            } else if (userRole === 'admin' || userRole === 'super_admin') {
                 container.innerHTML = `
                     <div class="form-section">
                         <div class="form-section-title">
@@ -731,11 +744,26 @@
                         </div>
                     </div>
                 `;
+            } else {
+                container.innerHTML = `
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <i class="fas fa-briefcase"></i>
+                            <span>Dados Profissionais</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Departamento</label>
+                                <input type="text" id="departamento" name="departamento" class="form-control" value="${data.departamento || ''}">
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
         }
 
         // ============================================
-        // GERENCIAR INTERESSES
+        // INTERESSES
         // ============================================
         function adicionarInteresse() {
             const input = document.getElementById('novoInteresse');
@@ -773,7 +801,7 @@
         }
 
         // ============================================
-        // FOTO DE PERFIL
+        // FOTO
         // ============================================
         function carregarFotoPerfil(foto) {
             const img = document.getElementById('fotoPerfilImg');
@@ -781,21 +809,14 @@
             const btnRemove = document.getElementById('btnRemoveFoto');
 
             if (foto && (foto.startsWith('data:image') || foto.startsWith('/') || foto.startsWith('http'))) {
-                if (foto.startsWith('/')) {
-                    img.src = window.location.origin + foto;
-                } else {
-                    img.src = foto;
-                }
-
+                img.src = foto.startsWith('/') ? window.location.origin + foto : foto;
                 img.style.display = 'block';
                 placeholder.style.display = 'none';
                 btnRemove.style.display = 'flex';
-                console.log('✅ Foto de perfil carregada:', foto);
             } else {
                 img.style.display = 'none';
                 placeholder.style.display = 'flex';
                 btnRemove.style.display = 'none';
-                console.log('📸 Nenhuma foto de perfil cadastrada');
             }
         }
 
@@ -818,16 +839,13 @@
 
             try {
                 mostrarAlerta('Enviando foto...', 'info');
-
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch('/api/perfil/upload-foto', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData
                 });
-
                 const data = await response.json();
-
                 if (data.success) {
                     carregarFotoPerfil(data.fotoPerfil);
                     mostrarAlerta('Foto de perfil atualizada!', 'success');
@@ -835,7 +853,6 @@
                 } else {
                     throw new Error(data.error || 'Erro ao enviar foto');
                 }
-
             } catch (error) {
                 console.error('Erro no upload:', error);
                 mostrarAlerta(error.message, 'error');
@@ -848,15 +865,12 @@
 
             try {
                 mostrarAlerta('Removendo foto...', 'info');
-
                 const token = localStorage.getItem('auth_token');
                 const response = await fetch('/api/perfil/remover-foto', {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
                 const data = await response.json();
-
                 if (data.success) {
                     carregarFotoPerfil(null);
                     mostrarAlerta('Foto de perfil removida!', 'success');
@@ -864,7 +878,6 @@
                 } else {
                     throw new Error(data.error || 'Erro ao remover foto');
                 }
-
             } catch (error) {
                 console.error('Erro ao remover foto:', error);
                 mostrarAlerta(error.message, 'error');
@@ -876,22 +889,16 @@
         // ============================================
         function falar(texto) {
             if (!leitorAtivo) return;
-
-            if (synth.speaking) {
-                synth.cancel();
-            }
-
+            if (synth.speaking) synth.cancel();
             const utterance = new SpeechSynthesisUtterance(texto);
             utterance.lang = 'pt-BR';
             utterance.rate = 0.9;
             utterance.pitch = 1;
-
             synth.speak(utterance);
         }
 
         // ============================================
-        // SALVAR PERFIL
-        // 🔒 LGPD: usa salvarUserDataSeguro (não salva CPF)
+        // SALVAR — envia IDs
         // ============================================
         async function salvarPerfil(event) {
             event.preventDefault();
@@ -930,27 +937,27 @@
                     if (document.getElementById('refeicaoTarde')?.checked) refeicoesQueParticipa.push('tarde');
                     dados.refeicoesQueParticipa = refeicoesQueParticipa;
 
-                    console.log('🍽️ Salvando preferências alimentares:', {
-                        perfilAlimentar: dados.perfilAlimentar,
-                        refeicoesQueParticipa: dados.refeicoesQueParticipa
-                    });
-                }
+                    const cursoId = document.getElementById('cursoId')?.value || null;
+                    const turmaId = document.getElementById('turmaId')?.value || null;
+                    const periodo = document.getElementById('periodo')?.value || null;
 
-                if (userRole === 'aluno') {
-                    dados.curso = document.getElementById('curso')?.value;
-                    dados.turma = document.getElementById('turma')?.value;
-                    dados.periodo = document.getElementById('periodo')?.value;
-                    console.log('📚 Salvando dados de ALUNO:', { curso: dados.curso, turma: dados.turma, periodo: dados.periodo });
+                    if (cursoId) dados.cursoId = cursoId;
+                    if (turmaId) dados.turmaId = turmaId;
+                    if (periodo) dados.periodo = periodo;
+
+                    console.log('📚 Salvando aluno:', { cursoId, turmaId, periodo });
                 }
                 else if (userRole === 'professor') {
-                    dados.eixo = document.getElementById('eixo')?.value;
+                    const eixoId = document.getElementById('eixoId')?.value || null;
+                    if (eixoId) dados.eixoId = eixoId;
                     dados.departamento = document.getElementById('departamento')?.value;
                     dados.titulacao = document.getElementById('titulacao')?.value;
-                    console.log('👨‍🏫 Salvando dados de PROFESSOR:', { eixo: dados.eixo, departamento: dados.departamento });
                 }
                 else if (userRole === 'admin' || userRole === 'super_admin') {
                     dados.departamento = document.getElementById('departamento')?.value;
-                    console.log('👨‍💼 Salvando dados de ADMIN:', { departamento: dados.departamento });
+                }
+                else {
+                    dados.departamento = document.getElementById('departamento')?.value;
                 }
 
                 const token = localStorage.getItem('auth_token');
@@ -969,37 +976,12 @@
                     mostrarAlerta('Perfil atualizado com sucesso!', 'success');
                     document.getElementById('perfilNome').textContent = dados.nome;
 
-                    // 🔒 LGPD: usa o helper seguro (não salva CPF/senha)
                     const userDataStorage = window.lerUserDataSeguro
                         ? window.lerUserDataSeguro() || {}
                         : JSON.parse(localStorage.getItem('user_data') || '{}');
-
                     userDataStorage.nome = dados.nome;
-
-                    if (userRole === 'aluno') {
-                        userDataStorage.curso = dados.curso;
-                        userDataStorage.turma = dados.turma;
-                        userDataStorage.periodo = dados.periodo;
-                        userDataStorage.perfilAlimentar = dados.perfilAlimentar;
-                        userDataStorage.refeicoesQueParticipa = dados.refeicoesQueParticipa;
-                    } else if (userRole === 'professor') {
-                        userDataStorage.eixo = dados.eixo;
-                        userDataStorage.departamento = dados.departamento;
-                        userDataStorage.titulacao = dados.titulacao;
-                    } else if (userRole === 'admin' || userRole === 'super_admin') {
-                        userDataStorage.departamento = dados.departamento;
-                    }
-
-                    // 🔒 Salva com filtro de campos sensíveis
                     if (window.salvarUserDataSeguro) {
                         window.salvarUserDataSeguro(userDataStorage);
-                    } else {
-                        // fallback: filtro manual
-                        delete userDataStorage.cpf;
-                        delete userDataStorage.password;
-                        delete userDataStorage.twoFactorSecret;
-                        delete userDataStorage.twoFactorBackupCodes;
-                        localStorage.setItem('user_data', JSON.stringify(userDataStorage));
                     }
 
                     if (leitorAtivo) falar('Perfil atualizado com sucesso');
@@ -1008,7 +990,6 @@
                                     /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent);
 
                     if (isWebView && window.AppInventor && window.AppInventor.setWebViewString) {
-                        console.log('📱 Salvamento concluído. Avisando o aplicativo...');
                         setTimeout(() => {
                             window.AppInventor.setWebViewString("SALVAMENTO_CONCLUIDO");
                         }, 1500);
@@ -1017,11 +998,9 @@
                             window.location.href = 'javascript:history.back()';
                         }, 2000);
                     }
-
                 } else {
                     throw new Error(data.error || 'Erro ao salvar perfil');
                 }
-
             } catch (error) {
                 console.error('Erro ao salvar:', error);
                 mostrarAlerta(error.message, 'error');
@@ -1033,7 +1012,7 @@
         }
 
         // ============================================
-        // MOSTRAR ALERTA
+        // ALERTA
         // ============================================
         function mostrarAlerta(mensagem, tipo) {
             const alertDiv = document.getElementById('alertMessage');
@@ -1045,28 +1024,18 @@
                 </div>
             `;
             alertDiv.style.display = 'block';
-
-            setTimeout(() => {
-                alertDiv.style.display = 'none';
-            }, 3000);
+            setTimeout(() => { alertDiv.style.display = 'none'; }, 3000);
         }
 
         // ============================================
-        // CARREGAR QR CODE DO USUÁRIO
+        // QR CODE
         // ============================================
         async function carregarQRCodeUsuario() {
             try {
                 const token = localStorage.getItem('auth_token');
-                const userDataStorage = window.lerUserDataSeguro
-                    ? window.lerUserDataSeguro() || {}
-                    : JSON.parse(localStorage.getItem('user_data') || '{}');
-
-                console.log(`📱 Carregando QR Code para ${userDataStorage.role}: ${userDataStorage.nome}`);
-
                 const response = await fetch('/api/usuario/qrcode', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
                 const data = await response.json();
 
                 if (data.success && data.qrCode) {
@@ -1078,8 +1047,7 @@
 
                     if (container && section) {
                         container.innerHTML = `
-                            <img src="${data.qrCode}"
-                                 alt="QR Code do Usuário"
+                            <img src="${data.qrCode}" alt="QR Code"
                                  style="width: 180px; height: 180px; margin: 0 auto; border: 2px solid #e5e7eb; border-radius: 16px; padding: 10px; background: white;">
                             <div style="margin-top: 10px;">
                                 <p style="font-size: 0.8rem; color: #10b981;">
@@ -1089,59 +1057,28 @@
                                     <i class="fas fa-user"></i> ${data.usuario.nome}
                                 </p>
                                 <p style="font-size: 0.7rem; color: #8b5cf6;">
-                                    <i class="fas fa-arrow-right"></i> Escaneie para acessar: ${data.usuario.tituloDestino}
+                                    <i class="fas fa-arrow-right"></i> ${data.usuario.tituloDestino}
                                 </p>
                             </div>
                         `;
-
-                        if (info) {
-                            info.innerHTML = `Escaneie este QR Code para acessar sua área personalizada: <strong>${data.usuario.tituloDestino}</strong>`;
-                        }
-
+                        if (info) info.innerHTML = `Escaneie para acessar: <strong>${data.usuario.tituloDestino}</strong>`;
                         section.style.display = 'block';
-                        console.log(`✅ QR Code carregado para ${userDataStorage.role}`);
                     }
-                } else {
-                    console.log('⚠️ QR Code não encontrado:', data.error);
                 }
-
             } catch (error) {
                 console.error('❌ Erro ao carregar QR Code:', error);
             }
         }
 
-        // ============================================
-        // BAIXAR QR CODE
-        // ============================================
         function baixarQRCode() {
             const img = document.querySelector('#qrCodeContainer img');
-            if (!img) {
-                alert('QR Code não disponível');
-                return;
-            }
-
-            const userDataStorage = window.lerUserDataSeguro
-                ? window.lerUserDataSeguro() || {}
-                : JSON.parse(localStorage.getItem('user_data') || '{}');
-
-            const nomeArquivo = `qrcode-${userDataStorage.role}-${Date.now()}.png`;
-
+            if (!img) { alert('QR Code não disponível'); return; }
             const link = document.createElement('a');
-            link.download = nomeArquivo;
+            link.download = `qrcode-${userRole}-${Date.now()}.png`;
             link.href = img.src;
             link.click();
-
-            const btn = event.currentTarget;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check"></i> Baixado!';
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-            }, 2000);
         }
 
-        // ============================================
-        // BAIXAR CARTÃO COMPLETO
-        // ============================================
         async function baixarCartaoCompleto() {
             try {
                 if (!qrCodeImageData) {
@@ -1150,120 +1087,83 @@
                 }
 
                 mostrarAlerta('Gerando cartão para impressão...', 'info');
-
-                const userDataStorage = window.lerUserDataSeguro
-                    ? window.lerUserDataSeguro() || {}
-                    : JSON.parse(localStorage.getItem('user_data') || '{}');
                 const token = localStorage.getItem('auth_token');
-
                 const response = await fetch('/api/perfil/me', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await response.json();
-                const perfil = data.perfil || userDataStorage;
+                const perfil = data.perfil || userData;
 
                 const cartao = document.getElementById('cartaoParaImpressao');
                 const cartaoQR = document.getElementById('cartaoQRCode');
                 const cartaoInfo = document.getElementById('cartaoInfo');
                 const dataEmissao = document.getElementById('cartaoDataEmissao');
 
-                cartaoQR.innerHTML = `
-                    <img src="${qrCodeImageData}"
-                         alt="QR Code"
-                         style="width: 160px; height: 160px; border: 2px solid #e5e7eb; border-radius: 12px; padding: 8px; background: white;">
-                `;
+                cartaoQR.innerHTML = `<img src="${qrCodeImageData}" alt="QR Code"
+                    style="width: 160px; height: 160px; border: 2px solid #e5e7eb; border-radius: 12px; padding: 8px; background: white;">`;
 
                 let matricula = perfil.matricula || 'Não informada';
-                let curso = '';
-                let turma = '';
-                let periodo = '';
-                let eixo = '';
-                let departamento = '';
-                let titulacao = '';
 
                 if (userRole === 'aluno') {
-                    curso = perfil.curso || document.getElementById('curso')?.value || 'Não informado';
-                    turma = perfil.turma || document.getElementById('turma')?.value || 'Não informada';
-                    periodo = perfil.periodo || document.getElementById('periodo')?.value || 'Não informado';
+                    const curso = perfil.curso || 'Não informado';
+                    const turma = perfil.turma || 'Não informada';
+                    const periodo = perfil.periodo || '';
                     const periodoTexto = periodo === '1' ? '1º Período' : periodo === '2' ? '2º Período' : periodo === '3' ? '3º Período' : periodo === '4' ? '4º Período' : periodo;
 
                     cartaoInfo.innerHTML = `
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
-                            <span class="info-value" style="color: #1f2937;">${perfil.nome || 'Não informado'}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">👤 Nome:</span>
+                            <span style="color:#1f2937;">${perfil.nome || 'Não informado'}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🎓 Matrícula:</span>
-                            <span class="info-value" style="color: #1f2937;">${matricula}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">🎓 Matrícula:</span>
+                            <span style="color:#1f2937;">${matricula}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">📚 Curso:</span>
-                            <span class="info-value" style="color: #1f2937;">${curso}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">📚 Curso:</span>
+                            <span style="color:#1f2937;">${curso}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👥 Turma:</span>
-                            <span class="info-value" style="color: #1f2937;">${turma}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">👥 Turma:</span>
+                            <span style="color:#1f2937;">${turma}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">📅 Período:</span>
-                            <span class="info-value" style="color: #1f2937;">${periodoTexto}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">📅 Período:</span>
+                            <span style="color:#1f2937;">${periodoTexto}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏷️ Tipo:</span>
-                            <span class="info-value" style="color: #1f2937;">
-                                <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">👨‍🎓 ALUNO</span>
-                            </span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">🏷️ Tipo:</span>
+                            <span style="background:#667eea;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">👨‍🎓 ALUNO</span>
                         </div>
                     `;
                 } else if (userRole === 'professor') {
-                    eixo = perfil.eixo || document.getElementById('eixo')?.value || 'Não informado';
-                    departamento = perfil.departamento || document.getElementById('departamento')?.value || 'Não informado';
-                    titulacao = perfil.titulacao || document.getElementById('titulacao')?.value || 'Não informada';
-
-                    const eixoTexto = eixo === 'natureza' ? '🔬 Natureza e Matemática' :
-                                    eixo === 'humanas' ? '🏛️ Humanas' :
-                                    eixo === 'linguagens' ? '🎭 Linguagens' :
-                                    eixo === 'desenvolvimento' ? '💻 Desenvolvimento de Sistemas' :
-                                    eixo === 'gestao' ? '📊 Gestão e Negócios' :
-                                    eixo === 'producao' ? '🎬 Produção Cultural e Design' :
-                                    eixo === 'turismo' ? '✈️ Turismo, Hospitalidade e Lazer' :
-                                    eixo === 'ambiente' ? '🌱 Ambiente e Saúde' : eixo;
-
                     cartaoInfo.innerHTML = `
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
-                            <span class="info-value" style="color: #1f2937;">${perfil.nome || 'Não informado'}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">👤 Nome:</span>
+                            <span style="color:#1f2937;">${perfil.nome || 'Não informado'}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🎓 Matrícula:</span>
-                            <span class="info-value" style="color: #1f2937;">${matricula}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">🎓 Matrícula:</span>
+                            <span style="color:#1f2937;">${matricula}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">📚 Eixo:</span>
-                            <span class="info-value" style="color: #1f2937;">${eixoTexto}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">📚 Eixo:</span>
+                            <span style="color:#1f2937;">${perfil.eixo || 'Não informado'}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏢 Departamento:</span>
-                            <span class="info-value" style="color: #1f2937;">${departamento}</span>
-                        </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏷️ Tipo:</span>
-                            <span class="info-value" style="color: #1f2937;">
-                                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">👨‍🏫 PROFESSOR</span>
-                            </span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">🏷️ Tipo:</span>
+                            <span style="background:#10b981;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">👨‍🏫 PROFESSOR</span>
                         </div>
                     `;
                 } else {
                     cartaoInfo.innerHTML = `
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">👤 Nome:</span>
-                            <span class="info-value" style="color: #1f2937;">${perfil.nome || 'Não informado'}</span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">👤 Nome:</span>
+                            <span style="color:#1f2937;">${perfil.nome || 'Não informado'}</span>
                         </div>
-                        <div class="info-row" style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px;">
-                            <span class="info-label" style="font-weight: 600; color: #4b5563;">🏷️ Tipo:</span>
-                            <span class="info-value" style="color: #1f2937;">
-                                <span style="background: #8b5cf6; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">👨‍💼 ${userRole.toUpperCase()}</span>
-                            </span>
+                        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;">
+                            <span style="font-weight:600;color:#4b5563;">🏷️ Tipo:</span>
+                            <span style="background:#8b5cf6;color:white;padding:2px 8px;border-radius:12px;font-size:11px;">${userRole.toUpperCase()}</span>
                         </div>
                     `;
                 }
@@ -1276,29 +1176,22 @@
                 cartao.style.position = 'fixed';
                 cartao.style.zIndex = '9999';
 
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(r => setTimeout(r, 100));
 
-                const canvas = await html2canvas(cartao, {
-                    scale: 2,
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                    useCORS: true
-                });
+                const canvas = await html2canvas(cartao, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true });
 
                 cartao.style.top = '-9999px';
                 cartao.style.left = '-9999px';
 
                 const link = document.createElement('a');
-                const nomeArquivo = `cartao-${userRole}-${perfil.nome?.replace(/\s/g, '_') || 'usuario'}-${Date.now()}.png`;
-                link.download = nomeArquivo;
+                link.download = `cartao-${userRole}-${(perfil.nome || 'usuario').replace(/\s/g, '_')}-${Date.now()}.png`;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
 
-                mostrarAlerta('Cartão gerado com sucesso! Verifique seus downloads.', 'success');
-
+                mostrarAlerta('Cartão gerado com sucesso!', 'success');
             } catch (error) {
                 console.error('Erro ao gerar cartão:', error);
-                mostrarAlerta('Erro ao gerar cartão. Tente novamente.', 'error');
+                mostrarAlerta('Erro ao gerar cartão.', 'error');
             }
         }
 
@@ -1307,7 +1200,7 @@
         // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             carregarPerfil();
-            carregarCpfUsuario(); // 🔒 CPF vem de rota dedicada, não de /perfil/me
+            carregarCpfUsuario();
 
             const form = document.getElementById('formPerfil');
             form.addEventListener('submit', salvarPerfil);
@@ -1315,54 +1208,35 @@
             const telefoneInput = document.getElementById('telefone');
             telefoneInput.addEventListener('input', (e) => {
                 let value = e.target.value.replace(/\D/g, '');
-                if (value.length <= 10) {
-                    value = value.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
-                } else {
-                    value = value.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
-                }
+                if (value.length <= 10) value = value.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+                else value = value.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
                 e.target.value = value;
             });
 
             const cepInput = document.getElementById('cep');
             cepInput.addEventListener('input', (e) => {
                 let value = e.target.value.replace(/\D/g, '');
-                if (value.length > 5) {
-                    value = value.replace(/^(\d{5})(\d{0,3})/, '$1-$2');
-                }
+                if (value.length > 5) value = value.replace(/^(\d{5})(\d{0,3})/, '$1-$2');
                 e.target.value = value;
             });
 
             const interesseInput = document.getElementById('novoInteresse');
             interesseInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    adicionarInteresse();
-                }
+                if (e.key === 'Enter') { e.preventDefault(); adicionarInteresse(); }
             });
 
-            setTimeout(() => {
-                carregarQRCodeUsuario();
-            }, 1000);
+            setTimeout(() => { carregarQRCodeUsuario(); }, 1000);
         });
     </script>
 
     <script>
-        // ============================================
-        // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-        // ============================================
         (function() {
-            if (window.innerWidth > 768) {
-                console.log('📐 Desktop detectado - escalonamento desativado');
-                return;
-            }
+            if (window.innerWidth > 768) return;
 
-            console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-
-            function calcularEscalaMobile() {
+            function aplicar() {
+                if (window.innerWidth > 768) return;
                 const width = window.innerWidth;
-                const baseWidth = 768;
-                let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-
+                let escala = Math.max(0.5, Math.min(1, width / 768));
                 if (width <= 320) escala = 0.55;
                 else if (width <= 360) escala = 0.6;
                 else if (width <= 400) escala = 0.65;
@@ -1370,54 +1244,23 @@
                 else if (width <= 600) escala = 0.85;
                 else if (width <= 700) escala = 0.95;
                 else escala = 1;
-
-                return escala;
-            }
-
-            function aplicarEscalaMobile() {
-                if (window.innerWidth > 768) return;
-                const escala = calcularEscalaMobile();
                 document.documentElement.style.setProperty('--scale-ratio', escala);
                 document.documentElement.style.setProperty('--current-width', window.innerWidth);
-                console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
             }
 
-            aplicarEscalaMobile();
-
-            let timeout;
-            window.addEventListener('resize', function() {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    } else {
-                        document.documentElement.style.setProperty('--scale-ratio', '1');
-                        console.log('📐 Modo desktop - escala resetada');
-                    }
-                }, 100);
-            });
-
-            window.addEventListener('orientationchange', function() {
-                setTimeout(() => {
-                    if (window.innerWidth <= 768) {
-                        aplicarEscalaMobile();
-                    }
-                }, 200);
-            });
-
-            console.log('✅ Sistema de escalonamento mobile ativo!');
+            aplicar();
+            let t;
+            window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(aplicar, 100); });
+            window.addEventListener('orientationchange', () => setTimeout(aplicar, 200));
         })();
     </script>
 
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('✅ Service Worker ativo'))
-                    .catch(err => console.log('❌ Erro:', err));
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
             });
         }
-
         window.addEventListener('online', () => console.log('🌐 Online'));
         window.addEventListener('offline', () => console.log('📴 Offline'));
     </script>

@@ -5,87 +5,62 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Simples - EducaPleno</title>
-    
-    <!-- Font Awesome -->
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
 
-    <!-- FAVICON LOCAL -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
-    <!-- CSS GLOBAL -->
     <link rel="stylesheet" href="css/admin-simples-painel.css">
 
-    <!-- ========== ONE SIGNAL - NOTIFICAÇÕES PUSH ========== -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(async function(OneSignal) {
         await OneSignal.init({
-        appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
-        safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
-        notifyButton: {
-            enable: true,
-            position: 'bottom-right',
-            size: 'medium',
-            showCredit: false,
-            text: {
-            'tapTitle': '🔔 Receber Notificações',
-            'message': 'Receba avisos de provas e resultados',
-            'acceptButton': 'PERMITIR',
-            'cancelButton': 'AGORA NÃO'
-            }
-        },
-        welcomeNotification: {
-            title: '🔔 Notificações Ativadas!',
-            message: 'Você receberá avisos de provas e resultados',
-            url: window.location.href
-        },
-        allowLocalhostAsSecureOrigin: true,
-        persistNotification: true,
-        autoResubscribe: true,
-        autoRegister: true
+            appId: "610ac3bc-db81-4ff9-965d-6669489ce406",
+            safari_web_id: "web.onesignal.auto.83a7b8a0-4b7d-4b8a-9c3d-5f2e8a1b9c0d",
+            notifyButton: { enable: true, position: 'bottom-right', size: 'medium', showCredit: false },
+            welcomeNotification: {
+                title: '🔔 Notificações Ativadas!',
+                message: 'Você receberá avisos de provas e resultados'
+            },
+            allowLocalhostAsSecureOrigin: true,
+            persistNotification: true,
+            autoResubscribe: true,
+            autoRegister: true
         });
-        
-        console.log('✅ OneSignal inicializado');
-        
-        // Capturar quando o usuário se inscreve
+
         OneSignal.on('subscriptionChange', async function(isSubscribed) {
-        if (isSubscribed) {
-            const playerId = await OneSignal.User.PushSubscription.getId();
-            console.log('📱 Novo player_id:', playerId);
-            
-            // Salvar no backend
-            const token = localStorage.getItem('auth_token');
-            if (token) {
-            fetch('/api/usuario/salvar-player-id', {
-                method: 'POST',
-                headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ playerId })
-            });
+            if (isSubscribed) {
+                const playerId = await OneSignal.User.PushSubscription.getId();
+                const token = localStorage.getItem('auth_token');
+                if (token) {
+                    fetch('/api/usuario/salvar-player-id', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ playerId })
+                    });
+                }
             }
-        }
         });
     });
     </script>
-<!-- ========== FIM ONE SIGNAL ========== -->
 </head>
 <body>
     <div class="admin-container">
-        <!-- Sidebar -->
+        <!-- ============ SIDEBAR ============ -->
         <aside class="sidebar" id="sidebar">
-            <!-- Header com Botão Voltar -->
             <div class="sidebar-header">
                 <div class="menu-header">
                     <div class="logo-area">
@@ -98,13 +73,12 @@
                 </div>
             </div>
 
-            <!-- User Info -->
             <div class="user-info" id="userInfo">
                 <div class="user-avatar" style="position: relative; width: 48px; height: 48px; background: linear-gradient(135deg, #3498db, #2980b9); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; overflow: hidden;">
-                    <img id="adminFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                    <img id="adminFotoPerfil" style="width: 100%; height: 100%; object-fit: cover; display: none;" alt="">
                     <i id="adminAvatarIcon" class="fas fa-user-shield" style="font-size: 24px; color: white;"></i>
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 1; min-width: 0;">
                     <div class="user-name" id="adminNome">Carregando...</div>
                     <div class="user-email" id="adminEmail">...</div>
                 </div>
@@ -114,7 +88,6 @@
                 </div>
             </div>
 
-            <!-- Navegação -->
             <nav>
                 <div class="nav-item" data-section="dashboard" onclick="adminSimples.mudarAba('dashboard')">
                     <i class="fas fa-tachometer-alt"></i> Dashboard
@@ -138,41 +111,24 @@
                 <div class="nav-item" data-section="resultados" onclick="adminSimples.mudarAba('resultados')">
                     <i class="fas fa-chart-bar"></i> Resultados
                 </div>
-                
-                <!-- 🔥 NOVO: SEPARADOR -->
-                <div style="height: 1px; background: #f0f0f0; margin: 12px 16px;"></div>
-                
-                <!-- 🔥 AÇÕES QUE SAÍRAM DO HEADER -->
-                <div class="nav-item nav-action" onclick="adminSimples.abrirMenuEnvioNotificacao()" style="background: #fffbeb !important; color: #d97706 !important;">
-                    <i class="fas fa-bullhorn" style="background: #fef3c7 !important; color: #d97706 !important;"></i>
-                    <span style="color: #d97706 !important; font-weight: 600;">Enviar Notificação</span>
+
+                <div class="nav-separator"></div>
+
+                <div class="nav-item nav-action notificacao" onclick="adminSimples.abrirMenuEnvioNotificacao()">
+                    <i class="fas fa-bullhorn"></i>
+                    <span>Enviar Notificação</span>
                 </div>
-                
-                <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing" target="_blank" class="nav-item nav-action" style="background: #f0fdf4 !important; color: #059669 !important; text-decoration: none;">
-                    <i class="fas fa-download" style="background: #d1fae5 !important; color: #059669 !important;"></i>
-                    <span style="color: #059669 !important; font-weight: 600;">Baixar App</span>
+                <a href="https://drive.google.com/file/d/1qIspYZKZpYAcZbBXHqFPtY0yhZpvX2Wy/view?usp=sharing"
+                   target="_blank" class="nav-item nav-action download">
+                    <i class="fas fa-download"></i>
+                    <span>Baixar App</span>
                 </a>
             </nav>
 
-            <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'" style="
-                margin-top: 1rem;
-                padding: 0.75rem;
-                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-weight: 600;
-                font-size: 0.9rem;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 0.5rem;
-            ">
+            <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'">
                 <i class="fas fa-user-edit"></i> Editar Perfil
             </button>
 
-            <!-- Footer -->
             <div class="sidebar-footer">
                 <button class="logout-btn" onclick="adminSimples.logout()">
                     <i class="fas fa-sign-out-alt"></i> Sair
@@ -180,77 +136,119 @@
             </div>
         </aside>
 
-        <!-- Main Content -->
+        <!-- ============ MAIN ============ -->
         <main class="main-content" id="mainContent">
-        <div class="top-bar">
-            <!-- Logo clicável (abre o menu) -->
-            <button class="mobile-menu-trigger" onclick="adminSimples.abrirMenuLateral()">
-                <div class="menu-logo">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
-            </button>
-            
-            <!-- Título da página -->
-            <span class="page-title" id="pageTitle">Dashboard</span>
-            
-            <!-- Notificações -->
-            <button class="btn-notificacao-mobile" onclick="adminSimples.abrirPainelNotificacoes()">
-                <i class="fas fa-bell"></i>
-                <span class="badge" id="topNotificacaoBadge" style="display: none;">0</span>
-            </button>
-            
-            <!-- Ações que só aparecem no DESKTOP -->
-            <div class="top-bar-actions desktop-only">
-                <button onclick="adminSimples.abrirModalEnvioNotificacao()" style="
-                    background: linear-gradient(135deg, #f59e0b, #d97706);
-                    color: white;
-                    border: none;
-                    border-radius: 40px;
-                    padding: 8px 20px;
-                    font-size: 0.9rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 10px;
-                    margin-right: 10px;
-                ">
-                    <i class="fas fa-bullhorn"></i>
-                    <span>Enviar Notificação</span>
-                </button>
 
-                <div class="notificacao-icone" onclick="adminSimples.abrirPainelNotificacoes()">
-                    <i class="fas fa-bell"></i>
-                    <span class="badge" id="topNotificacaoBadgeDesktop">0</span>
+            <!-- HEADER UNIFICADO -->
+            <div class="app-header">
+
+                <div class="relogio-card">
+                    <div class="relogio-icon"><i class="far fa-clock"></i></div>
+                    <div>
+                        <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                        <div class="relogio-data" id="relogioData">Carregando...</div>
+                    </div>
                 </div>
 
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    color: white;
-                    padding: 6px 15px;
-                    border-radius: 30px;
-                    text-decoration: none;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                ">
-                    <i class="fas fa-download"></i> App
-                </a>
-                <div class="datetime" id="datetime"></div>
+                <h1 class="page-title" id="pageTitle">Dashboard</h1>
+
+                <div class="header-actions">
+
+                    <!-- Sino oculto (abre pelo menu) -->
+                    <div class="notificacoes-container" id="containerSinoOriginal" style="position: relative;">
+                        <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                                title="Notificações" style="display: none;">
+                            <i class="fas fa-bell"></i>
+                            <span class="notificacoes-badge" id="notificacoesBadge">0</span>
+                        </button>
+
+                        <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                            <div class="notificacoes-header">
+                                <h3><i class="fas fa-bell" style="color: #0d6efd;"></i> Notificações</h3>
+                                <div style="display: flex; gap: 10px;">
+                                    <button onclick="marcarTodasLidasHeader(event)" title="Marcar todas como lidas">
+                                        <i class="fas fa-check-double"></i> Ler todas
+                                    </button>
+                                    <button onclick="limparMinhasNotificacoes(event)" title="Excluir todas">
+                                        <i class="fas fa-trash"></i> Limpar
+                                    </button>
+                                    <button onclick="fecharNotificacoes()" class="btn-close-mini">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="notificacoesLista" class="notificacoes-lista">
+                                <div class="notif-loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <p>Carregando...</p>
+                                </div>
+                            </div>
+                            <div class="notificacao-footer">
+                                <a href="/notificacoes.html">
+                                    <i class="fas fa-eye"></i> Ver todas as notificações
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PERFIL -->
+                    <div class="user-menu-container" id="userMenuContainer">
+                        <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                            <div class="user-avatar-wrapper">
+                                <div class="user-avatar" id="userAvatar" style="background: linear-gradient(135deg, #3498db, #2980b9);">
+                                    <i class="fas fa-user-shield"></i>
+                                </div>
+                                <span class="user-notification-badge" id="userNotificationBadge"></span>
+                            </div>
+                            <div class="user-details">
+                                <div class="user-name" id="userName">Carregando...</div>
+                                <div class="user-role" id="userRole">Admin</div>
+                            </div>
+                            <i class="fas fa-chevron-down user-chevron" id="userChevron"></i>
+                        </div>
+
+                        <div class="user-dropdown-menu" id="userDropdown">
+                            <a href="calendario.html" class="dropdown-item">
+                                <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                                <div class="item-text">Calendário</div>
+                            </a>
+                            <a href="cardapio.html" class="dropdown-item">
+                                <div class="icon-box bg-orange"><i class="fas fa-utensils"></i></div>
+                                <div class="item-text">Cardápio</div>
+                            </a>
+                            <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)">
+                                <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                                <div class="item-text">Notificações</div>
+                                <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                            </div>
+                            <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                               target="_blank" class="dropdown-item">
+                                <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                                <div class="item-text">Baixar App</div>
+                            </a>
+                            <a href="editar-perfil.html" class="dropdown-item">
+                                <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                                <div class="item-text">Editar Perfil</div>
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item text-danger" onclick="adminSimples.logout()">
+                                <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                                <div class="item-text">Sair</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
 
-            <!-- Painel de Notificações -->
+            <!-- PAINEL NOTIFICAÇÕES -->
             <div class="notificacoes-panel" id="notificacoesPanel">
                 <div class="notificacoes-header">
                     <h3><i class="fas fa-bell"></i> Notificações</h3>
                     <div class="notificacoes-actions">
-                        <button class="btn-notificacao" onclick="adminSimples.marcarTodasLidas()" title="Marcar todas como lidas">
+                        <button class="btn-notificacao" onclick="adminSimples.marcarTodasLidas()">
                             <i class="fas fa-check-double"></i>
                         </button>
-                        <button class="btn-notificacao" onclick="adminSimples.fecharPainelNotificacoes()" title="Fechar">
+                        <button class="btn-notificacao" onclick="adminSimples.fecharPainelNotificacoes()">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -263,55 +261,43 @@
                 </div>
             </div>
 
-            <!-- Toast Container -->
-            <div id="toastContainer" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999;"></div>
+            <div id="toastContainer"></div>
 
-            <!-- Content Area -->
             <div id="contentArea">
                 <div class="loading-spinner">
                     <div class="spinner"></div>
                     <p>Carregando sistema...</p>
                 </div>
             </div>
+
+            <nav class="bottom-nav-simples" id="bottomNavSimples">
+                <button class="nav-item-bottom active" data-section="dashboard" onclick="adminSimples.mudarAba('dashboard'); adminSimples.updateBottomNav('dashboard');">
+                    <div class="icon-wrapper"><i class="fas fa-home"></i></div>
+                    <span class="nav-label">Início</span>
+                </button>
+                <button class="nav-item-bottom" data-section="usuarios" onclick="adminSimples.mudarAba('usuarios'); adminSimples.updateBottomNav('usuarios');">
+                    <div class="icon-wrapper"><i class="fas fa-users"></i></div>
+                    <span class="nav-label">Usuários</span>
+                </button>
+                <button class="nav-item-bottom" data-section="turmas" onclick="adminSimples.mudarAba('turmas'); adminSimples.updateBottomNav('turmas');">
+                    <div class="icon-wrapper"><i class="fas fa-school"></i></div>
+                    <span class="nav-label">Turmas</span>
+                </button>
+                <button class="nav-item-bottom" data-section="provas" onclick="adminSimples.mudarAba('provas'); adminSimples.updateBottomNav('provas');">
+                    <div class="icon-wrapper"><i class="fas fa-file-alt"></i></div>
+                    <span class="nav-label">Provas</span>
+                </button>
+                <button class="nav-item-bottom" data-section="menu" onclick="adminSimples.abrirMenuLateral()">
+                    <div class="icon-wrapper"><i class="fas fa-bars"></i></div>
+                    <span class="nav-label">Menu</span>
+                </button>
+            </nav>
         </main>
     </div>
 
-    <!-- ============================================ -->
-    <!-- 📱 BOTTOM NAVIGATION (Admin Simples)         -->
-    <!-- ============================================ -->
-    <nav class="bottom-nav-simples" id="bottomNavSimples">
-        <button class="nav-item-bottom active" data-section="dashboard" onclick="adminSimples.mudarAba('dashboard'); adminSimples.updateBottomNav('dashboard');">
-            <div class="icon-wrapper"><i class="fas fa-home"></i></div>
-            <span class="nav-label">Início</span>
-        </button>
-
-        <button class="nav-item-bottom" data-section="usuarios" onclick="adminSimples.mudarAba('usuarios'); adminSimples.updateBottomNav('usuarios');">
-            <div class="icon-wrapper"><i class="fas fa-users"></i></div>
-            <span class="nav-label">Usuários</span>
-        </button>
-
-        <button class="nav-item-bottom" data-section="turmas" onclick="adminSimples.mudarAba('turmas'); adminSimples.updateBottomNav('turmas');">
-            <div class="icon-wrapper"><i class="fas fa-school"></i></div>
-            <span class="nav-label">Turmas</span>
-        </button>
-
-        <button class="nav-item-bottom" data-section="provas" onclick="adminSimples.mudarAba('provas'); adminSimples.updateBottomNav('provas');">
-            <div class="icon-wrapper"><i class="fas fa-file-alt"></i></div>
-            <span class="nav-label">Provas</span>
-        </button>
-
-        <button class="nav-item-bottom" data-section="menu" onclick="adminSimples.abrirMenuLateral()">
-            <div class="icon-wrapper"><i class="fas fa-bars"></i></div>
-            <span class="nav-label">Menu</span>
-        </button>
-    </nav>
-
-    <!-- ============================================ -->
-    <!-- 🎨 OVERLAY DO MENU                           -->
-    <!-- ============================================ -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="adminSimples.fecharMenuLateral()"></div>
 
-    <!-- Modal -->
+    <!-- MODAIS -->
     <div class="modal" id="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -326,7 +312,6 @@
         </div>
     </div>
 
-    <!-- Confirm Modal -->
     <div class="modal" id="confirmModal">
         <div class="modal-content" style="max-width: 400px;">
             <div class="modal-header">
@@ -341,426 +326,340 @@
         </div>
     </div>
 
-    <!-- JS EXTERNO -->
+    <!-- JS -->
     <script src="js/admin-simples.js"></script>
-
-    <!-- Acessibilidade -->
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
     <script src="js/draggable.js"></script>
-
-    <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
     <script src="js/dialog-helper.js"></script>
     <script src="/js/core-security.js"></script>
 
+    <!-- ============================================ -->
+    <!-- HEADER + PERFIL (com foto) — CARREGAMENTO     -->
+    <!-- ============================================ -->
     <script>
     // ============================================
-    // PULL-TO-REFRESH
+    // PREENCHER HEADER E SIDEBAR COM DADOS DO USUÁRIO
+    // (roda ANTES do admin-simples.js para não ter "Carregando...")
     // ============================================
-    let touchStartY = 0;
-    let touchCurrentY = 0;
-    let isPulling = false;
-    const PULL_THRESHOLD = 600;
-    const TOP_TOLERANCE = 100;
+    (async function preencherHeaderUsuario() {
+        const usuario = JSON.parse(localStorage.getItem('user_data') || '{}');
+        const token = localStorage.getItem('auth_token');
 
-    document.addEventListener('touchstart', function(e) {
-        if (window.scrollY <= TOP_TOLERANCE) {
-            touchStartY = e.touches[0].clientY;
-            isPulling = true;
+        const nomeCompleto = usuario.nome || 'Admin';
+        const primeiroNome = nomeCompleto.split(' ')[0];
+        const roleLabel = usuario.role === 'super_admin' ? 'Super Admin' : 'Admin';
+        const email = usuario.email || '';
+
+        // Preenche nome / email / role na sidebar
+        const adminNome = document.getElementById('adminNome');
+        const adminEmail = document.getElementById('adminEmail');
+        if (adminNome) adminNome.textContent = nomeCompleto;
+        if (adminEmail) adminEmail.textContent = email;
+
+        // Preenche nome / role no header
+        const userName = document.getElementById('userName');
+        const userRole = document.getElementById('userRole');
+        if (userName) userName.textContent = primeiroNome;
+        if (userRole) userRole.textContent = roleLabel;
+
+        // Foto do usuário (se tiver em user_data)
+        if (usuario.fotoPerfil) {
+            aplicarFotoNoHeader(usuario.fotoPerfil);
+            aplicarFotoNaSidebar(usuario.fotoPerfil);
         }
-    }, { passive: true });
 
-    document.addEventListener('touchmove', function(e) {
-        if (!isPulling) return;
-        
-        touchCurrentY = e.touches[0].clientY;
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        if (pullDistance > 0) {
-            if (pullDistance > 50) {
-                mostrarIndicadorPull(pullDistance);
+        // Buscar foto oficial da API
+        if (token) {
+            try {
+                const resp = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.success && data.perfil) {
+                        const foto = data.perfil.fotoPerfil;
+                        const nomeApi = data.perfil.nome;
+                        const emailApi = data.perfil.email;
+                        const roleApi = data.perfil.role;
+
+                        if (foto) {
+                            aplicarFotoNoHeader(foto);
+                            aplicarFotoNaSidebar(foto);
+                            // salva no localStorage para próxima vez
+                            usuario.fotoPerfil = foto;
+                            localStorage.setItem('user_data', JSON.stringify(usuario));
+                        }
+                        if (nomeApi && adminNome) adminNome.textContent = nomeApi;
+                        if (nomeApi && userName) userName.textContent = nomeApi.split(' ')[0];
+                        if (emailApi && adminEmail) adminEmail.textContent = emailApi;
+                        if (roleApi && userRole) {
+                            userRole.textContent = roleApi === 'super_admin' ? 'Super Admin' : 'Admin';
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Não foi possível buscar foto:', err);
             }
-            
-            if (pullDistance > PULL_THRESHOLD) {
-                e.preventDefault();
-                atualizarPagina();
-            }
-        }
-    }, { passive: true });
-
-    document.addEventListener('touchend', function(e) {
-        if (!isPulling) return;
-        
-        const pullDistance = touchCurrentY - touchStartY;
-        
-        if (pullDistance < PULL_THRESHOLD) {
-            esconderIndicadorPull();
-        }
-        
-        isPulling = false;
-        touchStartY = 0;
-        touchCurrentY = 0;
-    }, { passive: true });
-
-    function atualizarPagina() {
-        mostrarMensagem('Atualizando página...');
-        document.body.style.opacity = '0.7';
-        document.body.style.transition = 'opacity 0.3s';
-        setTimeout(() => {
-            location.reload();
-        }, 500);
-    }
-
-    function mostrarIndicadorPull(distancia) {
-        let indicador = document.getElementById('pull-indicator');
-        if (!indicador) {
-            indicador = document.createElement('div');
-            indicador.id = 'pull-indicator';
-            indicador.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                background: #4f46e5;
-                color: white;
-                text-align: center;
-                padding: 10px;
-                font-size: 14px;
-                z-index: 9999;
-                transform: translateY(-100%);
-                transition: transform 0.2s;
-            `;
-            indicador.innerHTML = '↓ Solte para atualizar';
-            document.body.appendChild(indicador);
-        }
-        
-        if (distancia > 50) {
-            indicador.style.transform = 'translateY(0)';
-        }
-    }
-
-    function esconderIndicadorPull() {
-        const indicador = document.getElementById('pull-indicator');
-        if (indicador) {
-            indicador.style.transform = 'translateY(-100%)';
-        }
-    }
-
-    function mostrarMensagem(texto) {
-        const msg = document.createElement('div');
-        msg.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #10b981;
-            color: white;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-weight: bold;
-            z-index: 10000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        `;
-        msg.textContent = texto;
-        document.body.appendChild(msg);
-        setTimeout(() => msg.remove(), 1500);
-    }
-    </script>
-
-    <script>
-    // ============================================
-    // NOTIFICAÇÕES PUSH PARA CELULAR
-    // ============================================
-    (function() {
-        if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-            console.log('📱 Push não suportado neste navegador');
-            return;
-        }
-
-        console.log('📱 Push notifications disponível');
-
-        if (Notification.permission === 'granted') {
-            console.log('✅ Notificações já permitidas');
-            registrarPushSubscription();
-        } else if (Notification.permission === 'default') {
-            setTimeout(solicitarPermissaoNotificacao, 3000);
-        } else {
-            setTimeout(mostrarBotaoAtivarNotificacoes, 5000);
         }
     })();
 
-    async function solicitarPermissaoNotificacao() {
-        try {
-            console.log('📱 Solicitando permissão de notificação...');
-            const permission = await Notification.requestPermission();
-            
-            console.log('📋 Resposta:', permission);
-            
-            if (permission === 'granted') {
-                console.log('✅ Permissão concedida!');
-                await registrarPushSubscription();
-                mostrarNotificacaoBoasVindas();
-            } else {
-                console.log('❌ Permissão negada');
-            }
-        } catch (error) {
-            console.error('❌ Erro ao solicitar permissão:', error);
-        }
+    function aplicarFotoNoHeader(fotoUrl) {
+        const avatar = document.getElementById('userAvatar');
+        if (!avatar) return;
+        avatar.innerHTML = `<img src="${fotoUrl}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-user-shield\\'></i>';" />`;
     }
 
-    async function registrarPushSubscription() {
+    function aplicarFotoNaSidebar(fotoUrl) {
+        const img = document.getElementById('adminFotoPerfil');
+        const icon = document.getElementById('adminAvatarIcon');
+        if (!img || !icon) return;
+        img.src = fotoUrl;
+        img.style.display = 'block';
+        icon.style.display = 'none';
+        img.onerror = () => {
+            img.style.display = 'none';
+            icon.style.display = 'block';
+        };
+    }
+
+    // ============================================
+    // RELÓGIO
+    // ============================================
+    function atualizarRelogioHeader() {
+        const tempo = document.getElementById('relogioTempoReal');
+        const data = document.getElementById('relogioData');
+        if (!tempo) return;
+        const agora = new Date();
+        tempo.textContent =
+            String(agora.getHours()).padStart(2, '0') + ':' +
+            String(agora.getMinutes()).padStart(2, '0') + ':' +
+            String(agora.getSeconds()).padStart(2, '0');
+        if (data) {
+            data.textContent = agora.toLocaleDateString('pt-BR', {
+                weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+            }).replace(/\./g, '').replace(/,/g, ' •');
+        }
+    }
+    setInterval(atualizarRelogioHeader, 1000);
+    atualizarRelogioHeader();
+
+    // ============================================
+    // MENU DO USUÁRIO
+    // ============================================
+    function toggleUserMenu(event) {
+        if (event) event.stopPropagation();
+        const dropdown = document.getElementById('userDropdown');
+        const chevron = document.getElementById('userChevron');
+        if (!dropdown) return;
+        const isShowing = dropdown.classList.contains('active');
+        dropdown.classList.toggle('active');
+        if (chevron) chevron.style.transform = isShowing ? 'rotate(0deg)' : 'rotate(180deg)';
+    }
+
+    document.addEventListener('click', (e) => {
+        const container = document.getElementById('userMenuContainer');
+        const dropdown = document.getElementById('userDropdown');
+        const chevron = document.getElementById('userChevron');
+        if (container && !container.contains(e.target)) {
+            dropdown?.classList.remove('active');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+    });
+
+    // ============================================
+    // NOTIFICAÇÕES
+    // ============================================
+    function atualizarBadgeHeader(total) {
+        const badge = document.getElementById('notificacoesBadge');
+        const menuBadge = document.getElementById('menuNotifBadge');
+        const userBadge = document.getElementById('userNotificationBadge');
+        if (badge) { badge.textContent = total > 99 ? '99+' : total; badge.style.display = total > 0 ? 'inline-block' : 'none'; }
+        if (menuBadge) { menuBadge.textContent = total > 99 ? '99+' : total; menuBadge.style.display = total > 0 ? 'inline-flex' : 'none'; }
+        if (userBadge) userBadge.style.display = total > 0 ? 'block' : 'none';
+    }
+
+    function abrirNotificacoes() {
+        document.getElementById('notificacoesDropdown')?.classList.toggle('active');
+    }
+
+    function fecharNotificacoes() {
+        document.getElementById('notificacoesDropdown')?.classList.remove('active');
+    }
+
+    function abrirMenuNotificacoesSeguro(event) {
+        if (event) event.stopPropagation();
+        document.getElementById('userDropdown')?.classList.remove('active');
+        const d = document.getElementById('notificacoesDropdown');
+        if (d) { d.classList.add('active'); carregarNotificacoesHeader(); }
+    }
+
+    async function carregarNotificacoesHeader() {
+        const lista = document.getElementById('notificacoesLista');
+        if (!lista) return;
+        const token = localStorage.getItem('auth_token');
+        if (!token) { lista.innerHTML = '<p style="text-align:center;padding:20px;">Faça login.</p>'; return; }
         try {
-            const registration = await navigator.serviceWorker.ready;
-            
-            let subscription = await registration.pushManager.getSubscription();
-            
-            if (!subscription) {
-                console.log('🆕 Criando nova inscrição push...');
-                
-                const vapidPublicKey = urlBase64ToUint8Array('BFV6eF6W3rqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQ');
-                
-                subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: vapidPublicKey
-                });
-                
-                console.log('✅ Inscrição criada:', subscription);
-                
+            const res = await fetch('/api/notificacoes?limite=20', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            if (data.success) {
+                const naoLidas = (data.notificacoes || []).filter(n => !n.lida).length;
+                atualizarBadgeHeader(naoLidas);
+                if (!data.notificacoes || data.notificacoes.length === 0) {
+                    lista.innerHTML = `<div class="notif-loading">
+                        <i class="fas fa-bell-slash"></i>
+                        <p>Nenhuma notificação</p></div>`;
+                    return;
+                }
+                lista.innerHTML = data.notificacoes.map(n => {
+                    const diffMin = Math.floor((new Date() - new Date(n.createdAt)) / 60000);
+                    let tempo = 'agora';
+                    if (diffMin >= 1 && diffMin < 60) tempo = `há ${diffMin} min`;
+                    else if (diffMin >= 60 && diffMin < 1440) tempo = `há ${Math.floor(diffMin / 60)} h`;
+                    else if (diffMin >= 1440) tempo = `há ${Math.floor(diffMin / 1440)} d`;
+                    const naoLida = !n.lida ? 'background:#eff6ff;border-left:3px solid #0d6efd;' : '';
+                    const link = (n.link || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+                    const id = (n._id || '').replace(/'/g, '');
+                    return `<div class="notif-item" style="${naoLida}" onclick="abrirNotificacaoHeader('${id}','${link}')">
+                        <div class="notif-icon" style="background:${n.cor || '#0d6efd'};">
+                            <i class="fas ${n.icone || 'fa-bell'}"></i>
+                        </div>
+                        <div class="notif-content">
+                            <div class="notif-title">${n.titulo || 'Notificação'}</div>
+                            <div class="notif-message">${n.mensagem || ''}</div>
+                            <div class="notif-time"><i class="far fa-clock"></i> ${tempo}</div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function abrirNotificacaoHeader(id, link) {
+        const token = localStorage.getItem('auth_token');
+        try {
+            if (id) await fetch(`/api/notificacoes/${id}/lida`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+            if (link && link !== '#' && link !== 'null' && link !== 'undefined') {
+                fecharNotificacoes(); window.location.href = link;
+            } else {
+                carregarNotificacoesHeader();
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function marcarTodasLidasHeader(event) {
+        if (event) event.stopPropagation();
+        const token = localStorage.getItem('auth_token');
+        try {
+            await fetch('/api/notificacoes/marcar-todas-lidas', { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+            atualizarBadgeHeader(0); carregarNotificacoesHeader();
+        } catch (e) { console.error(e); }
+    }
+
+    async function limparMinhasNotificacoes(event) {
+        if (event) event.stopPropagation();
+        if (!confirm('Excluir TODAS as notificações?')) return;
+        const token = localStorage.getItem('auth_token');
+        try {
+            await fetch('/api/notificacoes/limpar-minhas', { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            atualizarBadgeHeader(0); carregarNotificacoesHeader();
+        } catch (e) { console.error(e); }
+    }
+
+    setInterval(async () => {
+        const token = localStorage.getItem('auth_token');
+        if (!token) return;
+        try {
+            const res = await fetch('/api/notificacoes/nao-lidas/contador', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) { const d = await res.json(); atualizarBadgeHeader(d.count || 0); }
+        } catch (e) {}
+    }, 30000);
+
+    document.addEventListener('DOMContentLoaded', () => setTimeout(carregarNotificacoesHeader, 1500));
+    </script>
+
+    <!-- PULL TO REFRESH -->
+    <script>
+    let touchStartY = 0, touchCurrentY = 0, isPulling = false;
+    const PULL_THRESHOLD = 600, TOP_TOLERANCE = 100;
+
+    document.addEventListener('touchstart', e => {
+        if (window.scrollY <= TOP_TOLERANCE) { touchStartY = e.touches[0].clientY; isPulling = true; }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', e => {
+        if (!isPulling) return;
+        touchCurrentY = e.touches[0].clientY;
+        const d = touchCurrentY - touchStartY;
+        if (d > 0) {
+            if (d > 50) {
+                let i = document.getElementById('pull-indicator');
+                if (!i) {
+                    i = document.createElement('div');
+                    i.id = 'pull-indicator';
+                    i.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#4f46e5;color:white;text-align:center;padding:10px;font-size:14px;z-index:9999;transform:translateY(-100%);transition:transform 0.2s;';
+                    i.textContent = '↓ Solte para atualizar';
+                    document.body.appendChild(i);
+                }
+                i.style.transform = 'translateY(0)';
+            }
+            if (d > PULL_THRESHOLD) { e.preventDefault(); location.reload(); }
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+        if (!isPulling) return;
+        const i = document.getElementById('pull-indicator');
+        if (i) i.style.transform = 'translateY(-100%)';
+        isPulling = false;
+    }, { passive: true });
+    </script>
+
+    <!-- PUSH -->
+    <script>
+    (function() {
+        if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        if (Notification.permission === 'granted') registrarPush();
+        else if (Notification.permission === 'default') {
+            setTimeout(() => Notification.requestPermission().then(p => { if (p === 'granted') registrarPush(); }), 3000);
+        }
+    })();
+
+    async function registrarPush() {
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+                const key = urlB64ToUint8Array('BFV6eF6W3rqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQrqy3VZ4yK3VW9QjJp8nQ');
+                sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
                 await fetch('/api/push/subscribe', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
                     },
-                    body: JSON.stringify(subscription)
+                    body: JSON.stringify(sub)
                 });
-                
-                console.log('✅ Inscrição enviada ao servidor');
-                
-            } else {
-                console.log('✅ Já inscrito em push');
             }
-        } catch (error) {
-            console.error('❌ Erro ao registrar push:', error);
-        }
+        } catch (e) { console.error(e); }
     }
 
-    function mostrarNotificacaoBoasVindas() {
-        if (Notification.permission === 'granted') {
-            new Notification('📱 Notificações ativadas!', {
-                body: 'Você receberá alertas de provas, resultados e mensagens importantes',
-                icon: '/icons/favicon.ico',
-                badge: '/icons/favicon.ico',
-                vibrate: [200, 100, 200],
-                tag: 'boas-vindas-push',
-                silent: false,
-                requireInteraction: false
-            });
-        }
+    function urlB64ToUint8Array(s) {
+        while (s.length % 4 !== 0) s += '=';
+        s = s.replace(/\-/g, '+').replace(/_/g, '/');
+        const raw = window.atob(s);
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
+        return arr;
     }
-
-    function mostrarBotaoAtivarNotificacoes() {
-        if (document.getElementById('push-banner')) return;
-        
-        const banner = document.createElement('div');
-        banner.id = 'push-banner';
-        banner.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
-            padding: 20px;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            z-index: 10000;
-            animation: slideUp 0.3s ease;
-            max-width: 400px;
-            margin: 0 auto;
-        `;
-        
-        banner.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                <div style="
-                    width: 50px;
-                    height: 50px;
-                    background: rgba(255,255,255,0.2);
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 24px;
-                ">
-                    <i class="fas fa-bell-slash"></i>
-                </div>
-                <div style="flex: 1;">
-                    <strong style="font-size: 16px;">🔕 Notificações bloqueadas</strong>
-                    <p style="margin: 5px 0 0; font-size: 13px; opacity: 0.9;">
-                        Você não está recebendo alertas de provas e resultados
-                    </p>
-                </div>
-                <button onclick="this.parentElement.parentElement.remove()" style="
-                    background: none;
-                    border: none;
-                    color: white;
-                    font-size: 20px;
-                    cursor: pointer;
-                    opacity: 0.7;
-                ">×</button>
-            </div>
-            
-            <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                <p style="margin: 0 0 10px; font-size: 14px;">
-                    <i class="fas fa-lock"></i> 
-                    <strong>Como ativar no Microsoft Edge:</strong>
-                </p>
-                <ol style="margin: 0; padding-left: 20px; font-size: 13px;">
-                    <li>Clique no <strong>cadeado 🔒</strong> ao lado da URL</li>
-                    <li>Vá em <strong>"Permissões para este site"</strong></li>
-                    <li>Em <strong>"Notificações"</strong>, escolha <strong>"Permitir"</strong></li>
-                    <li>Recarregue a página</li>
-                </ol>
-            </div>
-            
-            <button onclick="window.location.reload()" style="
-                width: 100%;
-                padding: 12px;
-                background: white;
-                color: #667eea;
-                border: none;
-                border-radius: 30px;
-                font-weight: bold;
-                font-size: 14px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-            ">
-                <i class="fas fa-sync-alt"></i>
-                Já permiti - Recarregar
-            </button>
-        `;
-        
-        document.body.appendChild(banner);
-        
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideUp {
-                from { transform: translateY(100px); opacity: 0; }
-                to { transform: translateY(0); opacity: 1; }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    function urlBase64ToUint8Array(base64String) {
-        while (base64String.length % 4 !== 0) {
-            base64String += '=';
-        }
-        base64String = base64String.replace(/\-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64String);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
-    }
-
-    window.testarNotificacao = function() {
-        if (Notification.permission === 'granted') {
-            new Notification('🔔 Teste manual', {
-                body: 'Notificação de teste',
-                icon: '/icons/favicon.ico'
-            });
-            console.log('✅ Notificação enviada');
-        } else {
-            console.log('❌ Sem permissão');
-            solicitarPermissaoNotificacao();
-        }
-    };
-    </script>
-
-    <script>
-    // ============================================
-    // SISTEMA DE ESCALONAMENTO PROPORCIONAL - APENAS MOBILE
-    // ============================================
-    (function() {
-        if (window.innerWidth > 768) {
-            console.log('📐 Desktop detectado - escalonamento desativado');
-            return;
-        }
-        
-        console.log('📐 Inicializando sistema de escalonamento proporcional (mobile)...');
-        
-        function calcularEscalaMobile() {
-            const width = window.innerWidth;
-            const baseWidth = 768;
-            let escala = Math.max(0.5, Math.min(1, width / baseWidth));
-            
-            if (width <= 320) escala = 0.55;
-            else if (width <= 360) escala = 0.6;
-            else if (width <= 400) escala = 0.65;
-            else if (width <= 500) escala = 0.75;
-            else if (width <= 600) escala = 0.85;
-            else if (width <= 700) escala = 0.95;
-            else escala = 1;
-            
-            return escala;
-        }
-        
-        function aplicarEscalaMobile() {
-            if (window.innerWidth > 768) return;
-            
-            const escala = calcularEscalaMobile();
-            document.documentElement.style.setProperty('--scale-ratio', escala);
-            document.documentElement.style.setProperty('--current-width', window.innerWidth);
-            
-            console.log(`📐 Mobile: escala ${escala.toFixed(2)} | largura: ${window.innerWidth}px`);
-        }
-        
-        aplicarEscalaMobile();
-        
-        let timeout;
-        window.addEventListener('resize', function() {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => {
-                if (window.innerWidth <= 768) {
-                    aplicarEscalaMobile();
-                } else {
-                    document.documentElement.style.setProperty('--scale-ratio', '1');
-                    console.log('📐 Modo desktop - escala resetada');
-                }
-            }, 100);
-        });
-        
-        window.addEventListener('orientationchange', function() {
-            setTimeout(() => {
-                if (window.innerWidth <= 768) {
-                    aplicarEscalaMobile();
-                }
-            }, 200);
-        });
-        
-        console.log('✅ Sistema de escalonamento mobile ativo!');
-    })();
     </script>
 
     <script>
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js')
-                .then(reg => console.log('✅ Service Worker ativo'))
-                .catch(err => console.log('❌ Erro:', err));
-        });
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
     }
-
-    window.addEventListener('online', () => console.log('🌐 Online'));
-    window.addEventListener('offline', () => console.log('📴 Offline'));
     </script>
-
 </body>
 </html>

@@ -882,6 +882,7 @@ class AdminSimples {
             protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: todosUsuarios.filter(u => u.role === 'biblioteca').length,
             secretaria: todosUsuarios.filter(u => u.role === 'secretaria').length,
+            'gestao-adm': todosUsuarios.filter(u => u.role === 'gestao-adm').length,
             recepcao: todosUsuarios.filter(u => u.role === 'recepcao').length
         };
 
@@ -1054,6 +1055,11 @@ class AdminSimples {
                             style="padding:12px;border:2px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;text-align:left;">
                             <div style="font-weight:700;color:#0891b2;font-size:0.9rem;">🛎️ Recepção</div>
                             <div style="font-size:0.75rem;color:#6b7280;margin-top:3px;">${c.recepcao} usuários</div>
+                        </button>
+                        <button type="button" class="perfil-notif-btn" data-role="gestao-adm" onclick="admin.filtrarNotificacaoPorRole('gestao-adm')"
+                            style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                            <div style="font-weight: 700; color: #4f46e5; font-size: 0.9rem;">🧑‍💼 Gestão ADM</div>
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c['gestao-adm']} usuários</div>
                         </button>
                     </div>
                 </div>
@@ -1323,7 +1329,7 @@ class AdminSimples {
             'gestao_geral': '📊', 'enfermaria': '🏥', 'supervisao': '🛡️',
             'psicologia': '🧠', 'assistente-social': '🤝', 'protagonismo': '⭐',
             'biblioteca': '📚', 'secretaria': '🎓',
-            'recepcao': '🛎️'
+            'recepcao': '🛎️', 'gestao-adm': '🧑‍💼'
         };
         return icons[role] || '👤';
     }
@@ -1357,7 +1363,7 @@ class AdminSimples {
             'supervisao': '🛡️ Supervisão', 'psicologia': '🧠 Psicologia',
             'assistente-social': '🤝 Assistente Social', 'protagonismo': '⭐ Protagonismo',
             'biblioteca': '📚 Biblioteca', 'secretaria': '🎓 Secretaria',
-            'recepcao': '🛎️ Recepção', 'recepcao': '🛎️ Recepção',
+            'recepcao': '🛎️ Recepção', 'recepcao': '🛎️ Recepção', 'gestao-adm': '🧑‍💼 Gestão ADM'
         };
 
         const infoEl = document.getElementById('infoDestinatariosNotificacao');
@@ -1993,6 +1999,7 @@ class AdminSimples {
                             <option value="protagonismo">Protagonismo</option>
                             <option value="biblioteca">Biblioteca</option>
                             <option value="secretaria">Secretaria</option>
+                            <option value="gestao-adm">Gestão ADM</option>
                             <option value="recepcao">Recepção</option>
                             <option value="admin">Admins</option>
                         </select>
@@ -2074,6 +2081,7 @@ class AdminSimples {
                 'protagonismo': { class: 'protagonismo', icon: 'fa-star', label: 'Protagonismo' },
                 'biblioteca': { class: 'biblioteca', icon: 'fa-book-reader', label: 'Biblioteca' },
                 'secretaria': { class: 'secretaria', icon: 'fa-graduation-cap', label: 'Secretaria' },
+                'gestao-adm': { class: 'gestao-adm', icon: 'fa-user-tie', label: 'Gestão ADM' },
                 'recepcao': { class: 'recepcao', icon: 'fa-concierge-bell', label: 'Recepção' }
             };
 
@@ -2650,6 +2658,7 @@ class AdminSimples {
                             <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
                             <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>Biblioteca</option>
                             <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>Secretaria</option>
+                            <option value="gestao-adm" ${role === 'gestao-adm' ? 'selected' : ''}>Gestão ADM</option>
                             <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>Recepção</option>
                         </select>
                     </div>
@@ -2835,7 +2844,8 @@ class AdminSimples {
             'protagonismo': 'protagonismoFields',
             'biblioteca': 'bibliotecaFields',
             'secretaria': 'secretariaFields',
-            'recepcao': 'recepcaoFields'
+            'recepcao': 'recepcaoFields',
+            'gestao-adm': 'gestao-admFields'
         };
         Object.entries(map).forEach(([roleKey, fieldId]) => {
             const el = document.getElementById(fieldId);
@@ -2851,7 +2861,7 @@ class AdminSimples {
             'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria',
             'supervisao': 'Supervisão', 'psicologia': 'Psicologia',
             'assistente-social': 'Assistente Social', 'protagonismo': 'Protagonismo',
-            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção'
+            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção', 'gestao-adm': 'Gestão ADM'
         };
         return labels[role] || role || 'Desconhecido';
     }
@@ -2864,7 +2874,7 @@ class AdminSimples {
             'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria',
             'supervisao': 'Supervisão', 'psicologia': 'Psicologia',
             'assistente-social': 'Assist. Social', 'protagonismo': 'Protagonismo',
-            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção'
+            'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção', 'gestao-adm': 'Gestão ADM'
         };
         return labels[role] || role;
     }
@@ -2885,6 +2895,7 @@ class AdminSimples {
             'biblioteca': '📚 Biblioteca',
             'secretaria': '🎓 Secretaria',
             'recepcao': '🛎️ Recepção',
+            'gestao-adm': '🧑‍💼 Gestão ADM',
             'admin': '👑 Área Administrativa',
             'super_admin': '⭐ Super Administrador'
         };

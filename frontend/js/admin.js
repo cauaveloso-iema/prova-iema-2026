@@ -291,6 +291,17 @@ class AdminPanel {
                     { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirGestaoGeralNovaAba', tipo: 'white' }
                 ]
             },
+            'gestao-adm': {
+                titulo: 'Painel de Gestão ADM',
+                subtitulo: 'Acesso total - Gestão administrativa',
+                icone: 'fas fa-user-tie',
+                gradiente: 'gradient-navy',
+                src: '/gestao-adm.html',
+                actions: [
+                    { label: 'Recarregar', icone: 'fas fa-sync-alt', metodo: 'recarregarGestaoAdm', tipo: 'primary' },
+                    { label: 'Nova Aba', icone: 'fas fa-external-link-alt', metodo: 'abrirGestaoAdmNovaAba', tipo: 'white' }
+                ]
+            },
             'assistente-social': {
                 titulo: 'Painel do Assistente Social',
                 subtitulo: 'Acesso total - Evasão e vulnerabilidades',
@@ -520,6 +531,7 @@ class AdminPanel {
             'total-biblioteca': stats.totalBiblioteca,
             'total-secretaria': stats.totalSecretaria,
             'total-recepcao': stats.totalRecepcao,
+            'total-gestao-adm': stats.totalGestaoAdm,
             
             // Turmas
             'total-turmas': stats.totalTurmas,
@@ -746,6 +758,7 @@ class AdminPanel {
             'qrcode-management': 'Gerenciamento de QR Codes',
             'secretaria': 'Painel da Secretaria',
             'recepcao': 'Painel da Recepção',
+            'gestao-adm': 'Gestão ADM',
             'admin-simples': 'Admin Simples'
         };
         
@@ -861,6 +874,9 @@ class AdminPanel {
                 break;
             case 'recepcao':
                 await this.loadRecepcao();
+                break;
+            case 'gestao-adm':
+                await this.loadGestaoAdm();
                 break;
             case 'gestao-professores':
                 await this.loadGestaoProfessores();
@@ -1354,6 +1370,7 @@ class AdminPanel {
                 protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
                 biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
                 secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+                'gestao-adm': usuarios.filter(u => u.role === 'gestao-adm').length,
                 recepcao: usuarios.filter(u => u.role === 'recepcao').length  
             };
             
@@ -1465,6 +1482,10 @@ class AdminPanel {
                                     style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #10b981;">
                                     🎓 Secretaria (${contagemPorPerfil.secretaria || 0})
                                 </button>
+                                <button type="button" class="perfil-vincular-btn" data-role="gestao-adm" onclick="admin.filtrarVincularPorRole('gestao-adm')"
+                                    style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #4f46e5;">
+                                    🧑‍💼 Gestão ADM (${contagemPorPerfil['gestao-adm']})
+                                </button>
                                 <button type="button" class="perfil-vincular-btn" data-role="recepcao" onclick="admin.filtrarVincularPorRole('recepcao')"
                                     style="padding: 8px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: #0891b2;">
                                     🛎️ Recepção (${contagemPorPerfil.recepcao || 0})
@@ -1562,6 +1583,7 @@ class AdminPanel {
             'protagonismo': 'Protagonismo',
             'biblioteca': 'Biblioteca',
             'secretaria': 'Secretaria',
+            'gestao-adm': 'Gestão ADM',
             'recepcao': 'Recepção',
         };
         return labels[role] || role;
@@ -3269,6 +3291,7 @@ class AdminPanel {
                 { id: 'total-protagonismo', label: 'Protagonismo', valor: stats.totalProtagonismo, icone: '⭐', cor: '#ea580c' },
                 { id: 'total-biblioteca', label: 'Biblioteca', valor: stats.totalBiblioteca, icone: '📚', cor: '#0ea5e9' },
                 { id: 'total-secretaria', label: 'Secretaria', valor: stats.totalSecretaria, icone: '🎓', cor: '#10b981' },
+                { id: 'total-gestao-adm', label: 'Gestão ADM', valor: stats.totalGestaoAdm, icone: '🧑‍💼', cor: '#4f46e5' },
                 { id: 'total-recepcao', label: 'Recepção', valor: stats.totalRecepcao, icone: '🛎️', cor: '#0891b2' },
             ];
 
@@ -4073,6 +4096,7 @@ class AdminPanel {
                                 <option value="protagonismo">⭐ Protagonismo</option>
                                 <option value="biblioteca">📚 Biblioteca</option>
                                 <option value="secretaria">🎓 Secretaria</option>
+                                <option value="gestao-adm">🧑‍💼 Gestão ADM</option>
                                 <option value="recepcao">🛎️ Recepção</option>
                             </select>
                         </div>
@@ -4689,6 +4713,7 @@ class AdminPanel {
                                 <option value="protagonismo">⭐ Protagonismo</option>
                                 <option value="biblioteca">📚 Biblioteca</option>
                                 <option value="secretaria">🎓 Secretaria</option>
+                                <option value="gestao-adm">🧑‍💼 Gestão ADM</option>
                                 <option value="recepcao">🛎️ Recepcao</option>
                             </select>
                             
@@ -5087,6 +5112,14 @@ class AdminPanel {
                 corGradiente: 'linear-gradient(135deg, #10b981, #059669)'
             },
 
+            'gestao-adm': { 
+                icone: '🧑‍💼', 
+                label: 'Gestão ADM', 
+                corBg: '#e0e7ff', 
+                corTexto: '#4f46e5',
+                corGradiente: 'linear-gradient(135deg, #4f46e5, #4338ca)'
+            },
+
             'recepcao': { 
                 icone: '🛎️', 
                 label: 'Recepção', 
@@ -5225,7 +5258,7 @@ class AdminPanel {
                 setor_pedagogico: 0, coordenacao_patio: 0, cozinha: 0,
                 gestao_geral: 0, enfermaria: 0, supervisao: 0,
                 psicologia: 0, 'assistente-social': 0, protagonismo: 0,
-                biblioteca: 0, secretaria: 0, recepcao: 0
+                biblioteca: 0, secretaria: 0, recepcao: 0, 'gestao-adm': 0
             };
 
             usuariosParaStats.forEach(u => {
@@ -5280,6 +5313,7 @@ class AdminPanel {
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
             secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            'gestao-adm': usuarios.filter(u => u.role === 'gestao-adm').length,  
             recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
@@ -5420,6 +5454,7 @@ class AdminPanel {
                                 <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>🎓 Secretaria</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>👑 Admin</option>
                                 <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>⭐ Super Admin</option>
+                                <option value="gestao-adm" ${role === 'gestao-adm' ? 'selected' : ''}>🧑‍💼 Gestão ADM</option>
                                 <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>🛎️ Recepção</option>
                             </select>
                         </div>
@@ -10062,6 +10097,7 @@ class AdminPanel {
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
             secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            'gestao-adm': usuarios.filter(u => u.role === 'gestao-adm').length,  
             recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
@@ -10080,6 +10116,7 @@ class AdminPanel {
             { role: 'protagonismo', label: 'Protagonismo', icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
             { role: 'biblioteca', label: 'Biblioteca', icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
             { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' },
+            { role: 'gestao-adm', label: 'Gestão ADM', icon: '🧑‍💼', cor: '#4f46e5', bg: '#e0e7ff' },
             { role: 'recepcao', label: 'Recepção', icon: '🛎️', cor: '#0891b2', bg: '#cffafe' }
         ];
         
@@ -10309,6 +10346,7 @@ class AdminPanel {
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
             secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            'gestao-adm': usuarios.filter(u => u.role === 'gestao-adm').length,
             recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
@@ -10331,6 +10369,7 @@ class AdminPanel {
             'protagonismoCard': contagem.protagonismo,
             'bibliotecaCard': contagem.biblioteca,
             'secretariaCard': contagem.secretaria,
+            'gestao-admCard': contagem.gestao-adm,
             'recepcaoCard': contagem.recepcao
         };
         
@@ -10591,6 +10630,7 @@ class AdminPanel {
             protagonismo: usuarios.filter(u => u.role === 'protagonismo').length,
             biblioteca: usuarios.filter(u => u.role === 'biblioteca').length,
             secretaria: usuarios.filter(u => u.role === 'secretaria').length,
+            'gestao-adm': usuarios.filter(u => u.role === 'gestao-adm').length,
             recepcao: usuarios.filter(u => u.role === 'recepcao').length  
         };
         
@@ -10609,6 +10649,7 @@ class AdminPanel {
             { role: 'protagonismo', label: 'Protagonismo', icon: '⭐', cor: '#ea580c', bg: '#ffedd5' },
             { role: 'biblioteca', label: 'Biblioteca', icon: '📚', cor: '#0284c7', bg: '#e0f2fe' },
             { role: 'secretaria', label: 'Secretaria', icon: '🎓', cor: '#065f46', bg: '#d1fae5' },
+            { role: 'gestao-adm', label: 'Gestão ADM', icon: '🧑‍💼', cor: '#4f46e5', bg: '#e0e7ff' },
             { role: 'recepcao', label: 'Recepção', icon: '🛎️', cor: '#0891b2', bg: '#cffafe' }
         ];
         
@@ -10860,6 +10901,7 @@ class AdminPanel {
             'protagonismo': 'Protagonismo',
             'biblioteca': 'Biblioteca',
             'secretaria': 'Secretaria',
+            'gestao-adm': 'Gestão ADM',
             'recepcao': 'Recepção'
         };
         return labels[role] || role || 'Desconhecido';
@@ -11665,6 +11707,7 @@ class AdminPanel {
                             <option value="protagonismo" ${role === 'protagonismo' ? 'selected' : ''}>Protagonismo</option>
                             <option value="biblioteca" ${role === 'biblioteca' ? 'selected' : ''}>Biblioteca</option>
                             <option value="secretaria" ${role === 'secretaria' ? 'selected' : ''}>Secretaria</option>
+                            <option value="gestao-adm" ${role === 'gestao-adm' ? 'selected' : ''}>Gestão ADM</option>
                             <option value="recepcao" ${role === 'recepcao' ? 'selected' : ''}>Recepção</option>
                         </select>
                     </div>
@@ -11973,6 +12016,26 @@ class AdminPanel {
                 </div>
 
                 <!-- ============================================ -->
+                <!-- GESTÃO ADM -->
+                <!-- ============================================ -->
+                <div id="gestaoAdmFields" class="role-specific" style="${role === 'gestao-adm' ? 'display: block;' : 'display: none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-building"></i> Departamento</label>
+                            <input type="text" id="userDepartamento" class="form-control" value="${escapeStr(departamento)}">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-id-card"></i> Matrícula</label>
+                            <input type="text" id="userMatricula" class="form-control" value="${escapeStr(matricula)}" maxlength="6" placeholder="6 dígitos">
+                        </div>
+                    </div>
+                    <div class="info-card" style="background: #e0e7ff; margin-top: 10px;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Gestão ADM gerencia funcionalidades administrativas específicas.</span>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
                 <!-- COORDENAÇÃO DE PÁTIO -->
                 <!-- ============================================ -->
                 <div id="coordenacaoPatioFields" class="role-specific" style="${role === 'coordenacao_patio' ? 'display: block;' : 'display: none;'}">
@@ -12129,6 +12192,7 @@ class AdminPanel {
         const protagonismoFields = document.getElementById('protagonismoFields');
         const bibliotecaFields = document.getElementById('bibliotecaFields');
         const secretariaFields = document.getElementById('secretariaFields');
+        const gestaoAdmFields = document.getElementById('gestaoAdmFields');
         const recepcaoFields = document.getElementById('recepcaoFields'); // 🔥 NOVO
         
         // Ocultar/mostrar todos
@@ -12145,6 +12209,7 @@ class AdminPanel {
         if (protagonismoFields) protagonismoFields.style.display = role === 'protagonismo' ? 'block' : 'none';
         if (bibliotecaFields) bibliotecaFields.style.display = role === 'biblioteca' ? 'block' : 'none';
         if (secretariaFields) secretariaFields.style.display = role === 'secretaria' ? 'block' : 'none';
+        if (gestaoAdmFields) gestaoAdmFields.style.display = role === 'gestao-adm' ? 'block' : 'none';
         if (recepcaoFields) recepcaoFields.style.display = role === 'recepcao' ? 'block' : 'none'; // 🔥 NOVO
     }
 
@@ -12298,6 +12363,10 @@ class AdminPanel {
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
 
             } else if (role === 'recepcao') {
+                dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
+                dados.matricula = document.getElementById('userMatricula')?.value || undefined;
+
+            } else if (role === 'gestao-adm') {
                 dados.departamento = document.getElementById('userDepartamento')?.value || undefined;
                 dados.matricula = document.getElementById('userMatricula')?.value || undefined;
             
@@ -23948,6 +24017,7 @@ class AdminPanel {
                 protagonismo: todosUsuarios.filter(u => u.role === 'protagonismo').length,
                 biblioteca: todosUsuarios.filter(u => u.role === 'biblioteca').length,
                 secretaria: todosUsuarios.filter(u => u.role === 'secretaria').length,
+                'gestao-adm': todosUsuarios.filter(u => u.role === 'gestao-adm').length,
                 recepcao: todosUsuarios.filter(u => u.role === 'recepcao').length
             };
             
@@ -24094,6 +24164,12 @@ class AdminPanel {
                                 style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                                 <div style="font-weight: 700; color: #10b981; font-size: 0.9rem;">🎓 Secretaria</div>
                                 <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c.secretaria} usuários</div>
+                            </button>
+
+                            <button type="button" class="perfil-notif-btn" data-role="gestao-adm" onclick="admin.filtrarNotificacaoPorRole('gestao-adm')"
+                                style="padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                                <div style="font-weight: 700; color: #4f46e5; font-size: 0.9rem;">🧑‍💼 Gestão ADM</div>
+                                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 3px;">${c['gestao-adm']} usuários</div>
                             </button>
 
                             <button type="button" class="perfil-notif-btn" data-role="recepcao" onclick="admin.filtrarNotificacaoPorRole('recepcao')"
@@ -24411,6 +24487,7 @@ class AdminPanel {
                 'protagonismo': '⭐',
                 'biblioteca': '📚',
                 'secretaria': '🎓',
+                'gestao-adm': '🧑‍💼',
                 'recepcao': '🛎️'
             };
             return icons[role] || '👤';
@@ -24462,6 +24539,7 @@ class AdminPanel {
                 'protagonismo': '⭐ Protagonismo',
                 'biblioteca': '📚 Biblioteca',
                 'secretaria': '🎓 Secretaria',
+                'gestao-adm': '🧑‍💼 Gestão ADM',
                 'recepcao': '🛎️ Recepção'
             };
             
@@ -31306,6 +31384,7 @@ class AdminPanel {
             { role: 'coordenacao_patio', label: 'Coord. Pátio', icon: '🏃' },
             { role: 'secretaria', label: 'Secretaria', icon: '🎓' },
             { role: 'recepcao', label: 'Recepção', icon: '🛎️' },
+            { role: 'gestao-adm', label: 'Gestão ADM', icon: '🧑‍💼'},
             { role: 'enfermaria', label: 'Enfermaria', icon: '🏥' },
             { role: 'cozinha', label: 'Cozinha', icon: '🍽️' },
             { role: 'assistente-social', label: 'Assistente Social', icon: '🤝' },
@@ -38812,6 +38891,7 @@ class AdminPanel {
                                 <option value="biblioteca">📚 Biblioteca</option>
                                 <option value="secretaria">🎓 Secretaria</option>
                                 <option value="recepcao">🛎️ Recepção'</option>
+                                <option value="gestao-adm">🧑‍💼 Gestão ADM'</option>
                                 <option value="admin">👑 Administradores</option>
                             </select>
                         </div>
@@ -40777,8 +40857,7 @@ class AdminPanel {
         const labels = {
             'aluno': 'Aluno', 'professor': 'Professor', 'admin': 'Admin', 'super_admin': 'Super Admin',
             'setor_pedagogico': 'Setor Pedagógico', 'coordenacao_patio': 'Coord. Pátio',
-            'cozinha': 'Cozinha', 'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria', 'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção'
-        };
+            'cozinha': 'Cozinha', 'gestao_geral': 'Gestão Geral', 'enfermaria': 'Enfermaria', 'biblioteca': 'Biblioteca', 'secretaria': 'Secretaria', 'recepcao': 'Recepção', 'gestao-adm': 'Gestão ADM'        };
         return labels[role] || role;
     }
 
@@ -43363,6 +43442,19 @@ class AdminPanel {
     }
 
     // ============================================
+    // MÓDULO: GESTÃO ADM (via iframe)
+    // ============================================
+    async loadGestaoAdm() {
+        document.getElementById('contentArea').innerHTML = this.renderIframeModule('gestao-adm');
+    }
+
+    // ============================================
+    // MÉTODO AUXILIAR: RECARREGAR IFRAME DA GESTÃO ADM
+    // ============================================
+    recarregarGestaoAdm() { this.recarregarIframe('gestao-adm'); }
+    abrirGestaoAdmNovaAba() { this.abrirIframeNovaAba('gestao-adm'); }
+
+    // ============================================
     // MÉTODO AUXILIAR: RECARREGAR IFRAME DA RECEPÇÃO
     // ============================================
     recarregarRecepcao() { this.recarregarIframe('recepcao'); }
@@ -43861,6 +43953,7 @@ class AdminPanel {
                     { icone: 'fa-hospital-user', label: 'Enfermaria', section: 'enfermaria-monitoramento' },
                     { icone: 'fa-chart-line', label: 'Cozinha', section: 'cozinha-monitoramento' },
                     { icone: 'fa-user-graduate', label: 'Matrículas', section: 'matriculas' },
+                    { icone: 'fas fa-user-tie', label: 'Gestão ADM', section: 'gestao-adm' }
                 ]
             },
             {

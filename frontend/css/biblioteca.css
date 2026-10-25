@@ -946,3 +946,8 @@ body {
     50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.05), 0 4px 15px rgba(0, 0, 0, 0.05); }
     100% { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15), 0 4px 15px rgba(0, 0, 0, 0.05); }
 }
+/* ===================== COR LARANJA (CARDÁPIO) ===================== */
+.icon-box.bg-orange {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}

@@ -1,87 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EducaPleno">
     <meta name="mobile-web-app-capable" content="yes">
-
-    <!-- FAVICON LOCAL -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link rel="shortcut icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/favicon.ico">
-
-    <!-- Meta básicos -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>Dashboard Professor | EducaPleno</title>
-
-    <!-- ========== ONE SIGNAL - NOTIFICAÇÕES PUSH ========== -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-
-    <!-- ========== CSS ========== -->
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/index.css">
     <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Ícones para PWA -->
     <link rel="icon" type="image/png" sizes="192x192" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
-
-    <!-- ========== SCRIPTS EXTERNOS ========== -->
-    <!-- Biblioteca para gerar Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-    <!-- ========== SCRIPTS INTERNOS (ORDEM IMPORTA) ========== -->
-    <!-- 🛡️ Core Security — DEVE SER O PRIMEIRO (proteção global) -->
     <script src="js/core-security.js"></script>
-    
-    <!-- Sistema de Acessibilidade -->
     <script src="js/acessibilidade.js"></script>
-    
-    <!-- VLibras Oficial -->
     <script src="js/vlibras-oficial.js"></script>
-    
-    <!-- Cliente Push -->
     <script src="js/push-client.js"></script>
-    
-    <!-- Chatbot -->
     <script src="js/chatbot-frontend.js"></script>
-    
-    <!-- Dialog helper -->
     <script src="js/dialog-helper.js"></script>
 </head>
-
 <body>
-    <!-- Loading overlay -->
-    <div id="loading-overlay">
-        <div class="loading-spinner-large"></div>
-        <p>Carregando dashboard do professor...</p>
-    </div>
+    <div id="loading-overlay"><div class="loading-spinner-large"></div><p>Carregando dashboard do professor...</p></div>
+    <button id="btnScrollToBottom" onclick="scrollToBottom()"><i class="fas fa-arrow-down"></i></button>
     
-    <!-- Botão Rolar para Baixo (Seta Pulsante) -->
-    <button id="btnScrollToBottom" onclick="scrollToBottom()">
-        <i class="fas fa-arrow-down"></i>
-    </button>
-
     <div class="container">
-        <!-- Sidebar -->
+        <!-- SIDEBAR LIMPA (Sem os botões de ação) -->
         <aside class="sidebar">
-            <!-- LOGO EDUCAPLENO -->
             <div class="sidebar-logo">
-                <div class="logo-icon">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
-                <div class="logo-text">
-                    <span class="logo-name">EducaPleno</span>
-                    <span class="logo-subtitle">Dashboard do Professor</span>
-                </div>
+                <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
+                <div class="logo-text"><span class="logo-name">EducaPleno</span><span class="logo-subtitle">Dashboard do Professor</span></div>
             </div>
-
             <div class="professor-info">
                 <div class="professor-avatar" id="professorAvatar">
                     <img id="professorFotoPerfil" class="foto-perfil-sidebar" style="display: none; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
@@ -91,2160 +48,390 @@
                 <p id="professorEmail">carregando...</p>
                 <span id="professorEixo" class="eixo-badge">Eixo</span>
             </div>
-            
-            <!-- Menu de navegação -->
             <nav>
-                <button class="nav-item active" onclick="mostrarTab('nova-prova')">
-                    <i class="fas fa-plus-circle"></i> Nova Prova
-                </button>
-                <button class="nav-item" onclick="mostrarTab('nova-turma')">
-                    <i class="fas fa-plus"></i> Nova Turma
-                </button>
-                <button class="nav-item" onclick="mostrarTab('minhas-provas')">
-                    <i class="fas fa-file-alt"></i> Minhas Provas
-                </button>
-                <button class="nav-item" onclick="mostrarTab('turmas')">
-                    <i class="fas fa-school"></i> Minhas Turmas
-                </button>
-                <button class="nav-item" onclick="mostrarTab('resultados-gerais')">
-                    <i class="fas fa-chart-bar"></i> Resultados
-                </button>
+                <button class="nav-item active" onclick="mostrarTab('nova-prova')"><i class="fas fa-plus-circle"></i> Nova Prova</button>
+                <button class="nav-item" onclick="mostrarTab('nova-turma')"><i class="fas fa-plus"></i> Nova Turma</button>
+                <button class="nav-item" onclick="mostrarTab('minhas-provas')"><i class="fas fa-file-alt"></i> Minhas Provas</button>
+                <button class="nav-item" onclick="mostrarTab('turmas')"><i class="fas fa-school"></i> Minhas Turmas</button>
+                <button class="nav-item" onclick="mostrarTab('resultados-gerais')"><i class="fas fa-chart-bar"></i> Resultados</button>
             </nav>
-
-            <!-- BOTÕES DE AÇÃO RÁPIDA -->
-            <div class="sidebar-actions">
-                <div class="sidebar-actions-label">
-                    <i class="fas fa-bolt"></i> Ações Rápidas
-                </div>
-
-                <button class="sidebar-action-btn btn-acompanhamento" onclick="mostrarTab('acompanhamento')" id="btnAcompanhamentoTopo">
-                    <span class="action-icon">
-                        <i class="fas fa-user-clock"></i>
-                    </span>
-                    <span class="action-text">Acompanhamento</span>
-                    <span id="badgeAcompanhamentoTopo" class="sidebar-badge">0</span>
-                </button>
-
-                <button class="sidebar-action-btn btn-adaptar" onclick="abrirModalUploadAdaptarDocumento()">
-                    <span class="action-icon">
-                        <i class="fas fa-universal-access"></i>
-                    </span>
-                    <span class="action-text">Adaptar Documento</span>
-                </button>
-
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="sidebar-action-btn btn-baixar-app">
-                    <span class="action-icon">
-                        <i class="fas fa-download"></i>
-                    </span>
-                    <span class="action-text">Baixar App</span>
-                </a>
-            </div>
-
-            <button class="btn-editar-perfil" onclick="window.location.href='editar-perfil.html'">
-                <i class="fas fa-user-edit"></i> Editar Perfil
-            </button>
-            
-            <!-- Botão logout -->
-            <button class="btn-logout" id="btnLogout">
-                <i class="fas fa-sign-out-alt"></i> Sair do Sistema
-            </button>
         </aside>
         
         <main class="main-content">
-            <!-- Header -->
-            <div class="content-header">
-                <h1 class="header-title">Dashboard do Professor</h1>
-                <p class="header-subtitle">Gerencie suas provas, turmas e resultados de forma eficiente</p>
-            </div>
-            
-            <!-- Tabs de Navegação -->
-            <div class="content-tabs">
-                <button class="content-tab active" onclick="mostrarTab('nova-prova')">
-                    <i class="fas fa-plus-circle"></i> Nova Prova
-                </button>
-                <button class="content-tab" onclick="mostrarTab('nova-turma')">
-                    <i class="fas fa-plus"></i> Nova Turma
-                </button>
-                <button class="content-tab" onclick="mostrarTab('minhas-provas')">
-                    <i class="fas fa-file-alt"></i> Minhas Provas
-                </button>
-                <button class="content-tab" onclick="mostrarTab('turmas')">
-                    <i class="fas fa-school"></i> Minhas Turmas
-                </button>
-                <button class="content-tab" onclick="window.location.href='calendario.html'">
-                    <i class="fas fa-calendar-alt"></i> Meu Calendário
-                </button>
-                <button class="content-tab" onclick="mostrarTab('resultados-gerais')">
-                    <i class="fas fa-chart-bar"></i> Resultados
-                </button>
-            </div>
-
-            <!-- NOTIFICAÇÕES POSICIONADAS NO CANTO SUPERIOR DIREITO -->
-            <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <!-- INDICADOR DE PUSH -->
+            <div class="content-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 20px;">
+                <div>
+                    <h1 class="header-title">Dashboard do Professor</h1>
+                    <p class="header-subtitle">Gerencie suas provas, turmas e resultados de forma eficiente</p>
+                </div>
+                
+                <!-- NOTIFICAÇÕES E MENU DE PERFIL NO TOPO DIREITO -->
+                <div style="display: flex; gap: 12px; align-items: center;">
                     <div class="push-indicator-container" id="pushIndicatorContainer" style="display: none;">
-                        <div class="push-indicator" title="Push desativado pelo administrador">
-                            <i class="fas fa-bell-slash"></i>
-                            <span class="push-text">Push desativado</span>
+                        <div class="push-indicator" title="Push desativado pelo administrador"><i class="fas fa-bell-slash"></i><span class="push-text">Push desativado</span></div>
+                    </div>
+                    
+                    <div class="notificacoes-container">
+                        <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" style="background: white; border: 1px solid #e5e7eb; width: 44px; height: 44px; border-radius: 50%; color: #4b5563; font-size: 16px; cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <i class="fas fa-bell"></i><span class="notificacoes-badge" id="notificacoesBadge" style="display: none;">0</span>
+                        </button>
+                        <div class="notificacoes-dropdown" id="notificacoesDropdown">
+                            <div class="notificacoes-header"><h3><i class="fas fa-bell"></i> Notificações</h3><button onclick="marcarTodasLidas()" class="btn-marcar-todas"><i class="fas fa-check-double"></i> Marcar todas</button></div>
+                            <div class="notificacoes-lista" id="notificacoesLista"><div style="text-align: center; padding: 40px; color: #6c757d;"><i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i><p style="font-size: 1rem;">Carregando notificações...</p></div></div>
+                            <div class="notificacao-footer"><a href="#" onclick="verTodasNotificacoes(event)"><i class="fas fa-eye"></i> Ver todas</a><button onclick="limparMinhasNotificacoes(event)" class="btn-limpar-notificacoes"><i class="fas fa-trash"></i> Limpar todas</button></div>
                         </div>
                     </div>
-
-                    <div class="notificacoes-container">
-                        <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn">
-                            <i class="fas fa-bell"></i>
-                            <span class="notificacoes-badge" id="notificacoesBadge" style="display: none;">0</span>
-                        </button>
+                    
+                    <!-- MENU DE PERFIL COM OS BOTÕES QUE SAÍRAM DA SIDEBAR -->
+                    <div class="user-menu-container" id="professorUserMenu" style="position: relative;">
+                        <div class="user-trigger" onclick="toggleUserMenu(event)" style="display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 6px; background: white; border: 1px solid #e5e7eb; border-radius: 50px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <div class="user-avatar" id="professorHeaderAvatar" style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; color: white; font-size: 15px; font-weight: 700; overflow: hidden;">
+                                <i class="fas fa-chalkboard-teacher"></i>
+                            </div>
+                            <div class="user-details" style="text-align: left; line-height: 1.1;">
+                                <div class="user-name" id="professorNomeHeader" style="font-size: 13px; font-weight: 600; color: #0f172a;">Professor</div>
+                                <div class="user-role" style="font-size: 11px; color: #64748b;">Professor</div>
+                            </div>
+                            <i class="fas fa-chevron-down" style="font-size: 11px; color: #94a3b8; transition: transform 0.2s;"></i>
+                        </div>
                         
-                        <div class="notificacoes-dropdown" id="notificacoesDropdown">
-                            <div class="notificacoes-header">
-                                <h3><i class="fas fa-bell"></i> Notificações</h3>
-                                <button onclick="marcarTodasLidas()" class="btn-marcar-todas">
-                                    <i class="fas fa-check-double"></i> Marcar todas
-                                </button>
+                        <!-- DROPDOWN COM TUDO -->
+                        <div class="user-dropdown-menu" id="userDropdown" style="position: absolute; top: calc(100% + 10px); right: 0; background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12); padding: 8px; min-width: 240px; opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.2s; z-index: 9999;">
+                            <!-- Acompanhamento -->
+                            <div class="dropdown-item" onclick="mostrarTab('acompanhamento'); toggleUserMenu(event);" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: #1e293b; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #0d9488, #0f766e); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-user-clock"></i></div>
+                                <div class="item-text">Acompanhamento</div>
+                                <span id="badgeAcompanhamentoTopo" class="sidebar-badge" style="margin-left: auto; background: #ef4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px;">0</span>
                             </div>
-                            
-                            <div class="notificacoes-lista" id="notificacoesLista">
-                                <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                    <i class="fas fa-bell-slash" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>
-                                    <p style="font-size: 1rem;">Carregando notificações...</p>
-                                </div>
+                            <!-- Adaptar Documento -->
+                            <div class="dropdown-item" onclick="abrirModalUploadAdaptarDocumento(); toggleUserMenu(event);" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: #1e293b; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-universal-access"></i></div>
+                                <div class="item-text">Adaptar Documento</div>
                             </div>
+                            <!-- Baixar App -->
+                            <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="dropdown-item" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: #1e293b; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #10b981, #059669); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-download"></i></div>
+                                <div class="item-text">Baixar App</div>
+                            </a>
+                            <!-- Calendário -->
+                            <a href="calendario.html" class="dropdown-item" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: #1e293b; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-calendar-alt"></i></div>
+                                <div class="item-text">Calendário</div>
+                            </a>
+                            <!-- Cardápio -->
+                            <a href="cardapio.html" class="dropdown-item" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: #1e293b; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-utensils"></i></div>
+                                <div class="item-text">Cardápio</div>
+                            </a>
                             
-                            <div class="notificacao-footer">
-                                <a href="#" onclick="verTodasNotificacoes(event)">
-                                    <i class="fas fa-eye"></i> Ver todas
-                                </a>
-                                
-                                <button onclick="limparMinhasNotificacoes(event)" class="btn-limpar-notificacoes">
-                                    <i class="fas fa-trash"></i> Limpar todas
-                                </button>
+                            <div style="height: 1px; background: #e2e8f0; margin: 6px 0;"></div>
+                            
+                            <!-- Editar Perfil -->
+                            <a href="editar-perfil.html" class="dropdown-item" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: #1e293b; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-user-edit"></i></div>
+                                <div class="item-text">Editar Perfil</div>
+                            </a>
+                            <!-- Sair -->
+                            <div class="dropdown-item" onclick="logout()" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: #ef4444; font-size: 14px; font-weight: 500;">
+                                <div class="icon-box" style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px;"><i class="fas fa-sign-out-alt"></i></div>
+                                <div class="item-text">Sair do Sistema</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Conteúdo da Aba Nova Prova -->
+            <div class="content-tabs">
+                <button class="content-tab active" onclick="mostrarTab('nova-prova')"><i class="fas fa-plus-circle"></i> Nova Prova</button>
+                <button class="content-tab" onclick="mostrarTab('nova-turma')"><i class="fas fa-plus"></i> Nova Turma</button>
+                <button class="content-tab" onclick="mostrarTab('minhas-provas')"><i class="fas fa-file-alt"></i> Minhas Provas</button>
+                <button class="content-tab" onclick="mostrarTab('turmas')"><i class="fas fa-school"></i> Minhas Turmas</button>
+                <button class="content-tab" onclick="mostrarTab('resultados-gerais')"><i class="fas fa-chart-bar"></i> Resultados</button>
+            </div>
+
             <div id="nova-prova" class="tab-content active">
-                <div class="theme-card">
-                    <div class="theme-header">
-                        <div class="theme-icon">
-                            <i class="fas fa-robot"></i>
-                        </div>
-                        <div>
-                            <h2>Gerar Prova com IA</h2>
-                            <p>Crie provas personalizadas automaticamente</p>
-                        </div>
-                    </div>
-                    <div class="theme-info">
-                        <p><strong>Como funciona:</strong> Descreva o tema da prova e a IA irá gerar questões automaticamente. Personalize quantidade, dificuldade e turma.</p>
-                    </div>
-                </div>
-                
-                <!-- Alertas -->
+                <div class="theme-card"><div class="theme-header"><div class="theme-icon"><i class="fas fa-robot"></i></div><div><h2>Gerar Prova com IA</h2><p>Crie provas personalizadas automaticamente</p></div></div><div class="theme-info"><p><strong>Como funciona:</strong> Descreva o tema da prova e a IA irá gerar questões automaticamente. Personalize quantidade, dificuldade e turma.</p></div></div>
                 <div id="mostrarAlertaGeralProva" class="mostrarAlertaGeral"></div>
-                
-                <!-- Formulário Nova Prova -->
                 <div class="form-container">
                     <form id="formNovaProva">
                         <div class="form-grid" style="grid-template-columns: repeat(3, 1fr);">
-                            <div class="form-group" style="grid-column: span 3;">
-                                <label for="temaProva" class="form-label">
-                                    <i class="fas fa-lightbulb"></i> Tema da Prova
-                                </label>
-                                <textarea 
-                                    id="temaProva" 
-                                    class="form-control" 
-                                    placeholder="Ex: 'Equações do 2º grau', 'Segunda Guerra Mundial', 'Fotossíntese', 'Estrutura atômica'..."
-                                    required
-                                    rows="3"
-                                ></textarea>
-                                <small style="color: var(--gray-500); display: block; margin-top: 0.5rem; font-size: 0.875rem;">
-                                    Seja específico para melhores resultados. Ex: "Funções trigonométricas - seno, cosseno e tangente"
-                                </small>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="tituloProva" class="form-label">
-                                    <i class="fas fa-heading"></i> Título da Prova
-                                </label>
-                                <input 
-                                    type="text" 
-                                    id="tituloProva" 
-                                    class="form-control" 
-                                    placeholder="Ex: Prova Bimestral de Matemática"
-                                    required
-                                >
-                            </div>
-
-                            <div class="form-group">
-                                <label for="periodoProva" class="form-label">
-                                    <i class="fas fa-calendar-week"></i> Período Letivo
-                                </label>
-                                <select id="periodoProva" class="form-control" required>
-                                    <option value="">Selecione o período...</option>
-                                    <option value="1">1º Período</option>
-                                    <option value="2">2º Período</option>
-                                    <option value="3">3º Período</option>
-                                    <option value="4">4º Período</option>
-                                </select>
-                                <small style="color: var(--gray-500); display: block; margin-top: 0.3rem; font-size: 0.8rem;">
-                                    Indique em qual período letivo esta prova será aplicada
-                                </small>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="tipoProva" class="form-label">
-                                    <i class="fas fa-file-alt"></i> Tipo de Prova
-                                </label>
-                                <select id="tipoProva" class="form-control" required onchange="mudarTipoProva()">
-                                    <option value="simples">Prova Simples (5 alternativas)</option>
-                                    <option value="enem">Formato ENEM (com texto base)</option>
-                                    <option value="adaptada">🎯 Prova Adaptada - Acessibilidade (3 alternativas)</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="quantidadeQuestoes" class="form-label">
-                                    <i class="fas fa-question-circle"></i> Quantidade
-                                </label>
-                                <select id="quantidadeQuestoes" class="form-control" required>
-                                    <option value="5">5 questões</option>
-                                    <option value="10" selected>10 questões</option>
-                                    <option value="15">15 questões</option>
-                                    <option value="20">20 questões</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="dificuldade" class="form-label">
-                                    <i class="fas fa-chart-line"></i> Dificuldade
-                                </label>
-                                <select id="dificuldade" class="form-control" required>
-                                    <option value="facil">Fácil</option>
-                                    <option value="media" selected>Médio</option>
-                                    <option value="dificil">Difícil</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="turmaProva" class="form-label">
-                                    <i class="fas fa-school"></i> Turma
-                                </label>
-                                <select id="turmaProva" class="form-control" required>
-                                    <option value="">Selecione uma turma...</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="dataLimite" class="form-label">
-                                    <i class="fas fa-calendar-alt"></i> Data Limite
-                                </label>
-                                <input 
-                                    type="date" 
-                                    id="dataLimite" 
-                                    class="form-control"
-                                >
-                            </div>
-
-                            <div class="form-group">
-                                <label for="horarioInicio" class="form-label">
-                                    <i class="fas fa-clock"></i> Horário Início
-                                </label>
-                                <input 
-                                    type="time" 
-                                    id="horarioInicio" 
-                                    class="form-control" 
-                                    value="08:00"
-                                    required
-                                >
-                            </div>
-
-                            <div class="form-group">
-                                <label for="horarioTermino" class="form-label">
-                                    <i class="fas fa-clock"></i> Horário Término
-                                </label>
-                                <input 
-                                    type="time" 
-                                    id="horarioTermino" 
-                                    class="form-control" 
-                                    value="09:30"
-                                    required
-                                >
-                            </div>
-
-                            <div class="form-group" style="grid-column: span 3;">
-                                <label class="form-label">
-                                    <i class="fas fa-hourglass-half"></i> Duração Calculada
-                                </label>
-                                <div id="duracaoCalculada" style="
-                                    padding: 10px;
-                                    background: #f3f4f6;
-                                    border-radius: 6px;
-                                    font-weight: 600;
-                                    color: #4f46e5;
-                                    text-align: center;
-                                ">
-                                    Calculando...
-                                </div>
-                            </div>
+                            <div class="form-group" style="grid-column: span 3;"><label for="temaProva" class="form-label"><i class="fas fa-lightbulb"></i> Tema da Prova</label><textarea id="temaProva" class="form-control" placeholder="Ex: 'Equações do 2º grau'..." required rows="3"></textarea><small style="color: var(--gray-500); display: block; margin-top: 0.5rem; font-size: 0.875rem;">Seja específico para melhores resultados. Ex: "Funções trigonométricas - seno, cosseno e tangente"</small></div>
+                            <div class="form-group"><label for="tituloProva" class="form-label"><i class="fas fa-heading"></i> Título da Prova</label><input type="text" id="tituloProva" class="form-control" placeholder="Ex: Prova Bimestral de Matemática" required></div>
+                            <div class="form-group"><label for="periodoProva" class="form-label"><i class="fas fa-calendar-week"></i> Período Letivo</label><select id="periodoProva" class="form-control" required><option value="">Selecione o período...</option><option value="1">1º Período</option><option value="2">2º Período</option><option value="3">3º Período</option><option value="4">4º Período</option></select></div>
+                            <div class="form-group"><label for="tipoProva" class="form-label"><i class="fas fa-file-alt"></i> Tipo de Prova</label><select id="tipoProva" class="form-control" required onchange="mudarTipoProva()"><option value="simples">Prova Simples (5 alternativas)</option><option value="enem">Formato ENEM (com texto base)</option><option value="adaptada">🎯 Prova Adaptada - Acessibilidade (3 alternativas)</option></select></div>
+                            <div class="form-group"><label for="quantidadeQuestoes" class="form-label"><i class="fas fa-question-circle"></i> Quantidade</label><select id="quantidadeQuestoes" class="form-control" required><option value="5">5 questões</option><option value="10" selected>10 questões</option><option value="15">15 questões</option><option value="20">20 questões</option></select></div>
+                            <div class="form-group"><label for="dificuldade" class="form-label"><i class="fas fa-chart-line"></i> Dificuldade</label><select id="dificuldade" class="form-control" required><option value="facil">Fácil</option><option value="media" selected>Médio</option><option value="dificil">Difícil</option></select></div>
+                            <div class="form-group"><label for="turmaProva" class="form-label"><i class="fas fa-school"></i> Turma</label><select id="turmaProva" class="form-control" required><option value="">Selecione uma turma...</option></select></div>
+                            <div class="form-group"><label for="dataLimite" class="form-label"><i class="fas fa-calendar-alt"></i> Data Limite</label><input type="date" id="dataLimite" class="form-control"></div>
+                            <div class="form-group"><label for="horarioInicio" class="form-label"><i class="fas fa-clock"></i> Horário Início</label><input type="time" id="horarioInicio" class="form-control" value="08:00" required></div>
+                            <div class="form-group"><label for="horarioTermino" class="form-label"><i class="fas fa-clock"></i> Horário Término</label><input type="time" id="horarioTermino" class="form-control" value="09:30" required></div>
+                            <div class="form-group" style="grid-column: span 3;"><label class="form-label"><i class="fas fa-hourglass-half"></i> Duração Calculada</label><div id="duracaoCalculada" style="padding: 10px; background: #f3f4f6; border-radius: 6px; font-weight: 600; color: #4f46e5; text-align: center;">Calculando...</div></div>
                         </div>
-                        
-                        <!-- Seção de Anexos (visível apenas para ENEM) -->
                         <div id="secaoAnexos" class="secao-anexos-container" style="display: none;">
-                            <div class="anexos-header">
-                                <div class="anexos-icon">
-                                    <i class="fas fa-paperclip"></i>
-                                </div>
-                                <div class="anexos-title">
-                                    <h3>Materiais de Referência</h3>
-                                    <p>Adicione arquivos, textos ou links para a IA usar como base na criação das questões no formato ENEM</p>
-                                </div>
-                            </div>
-                            
+                            <div class="anexos-header"><div class="anexos-icon"><i class="fas fa-paperclip"></i></div><div class="anexos-title"><h3>Materiais de Referência</h3><p>Adicione arquivos, textos ou links para a IA usar como base na criação das questões no formato ENEM</p></div></div>
                             <div class="anexos-tabs">
-                                <button type="button" class="anexo-tab active" onclick="mostrarTabAnexo('upload')">
-                                    <i class="fas fa-upload"></i> Upload de Arquivos
-                                </button>
-                                <button type="button" class="anexo-tab" onclick="mostrarTabAnexo('texto')">
-                                    <i class="fas fa-file-alt"></i> Texto Direto
-                                </button>
-                                <button type="button" class="anexo-tab" onclick="mostrarTabAnexo('link')">
-                                    <i class="fas fa-link"></i> Links
-                                </button>
+                                <button type="button" class="anexo-tab active" onclick="mostrarTabAnexo('upload')"><i class="fas fa-upload"></i> Upload de Arquivos</button>
+                                <button type="button" class="anexo-tab" onclick="mostrarTabAnexo('texto')"><i class="fas fa-file-alt"></i> Texto Direto</button>
+                                <button type="button" class="anexo-tab" onclick="mostrarTabAnexo('link')"><i class="fas fa-link"></i> Links</button>
                             </div>
-                            
                             <div id="tab-upload" class="tab-anexo-content active">
                                 <div class="tab-content-inner">
-                                    <div class="tab-header">
-                                        <h4><i class="fas fa-cloud-upload-alt"></i> Enviar Arquivos</h4>
-                                        <p>Envie PDFs, imagens ou documentos. Formatos aceitos: PDF, JPG, PNG, TXT, DOC, DOCX (até 10MB cada)</p>
-                                    </div>
-                                    
-                                    <div class="drop-zone" 
-                                        onclick="document.getElementById('fileInput').click()"
-                                        id="dropZone"
-                                        ondrop="handleDrop(event)"
-                                        ondragover="handleDragOver(event)"
-                                        ondragleave="handleDragLeave(event)">
-                                        <i class="fas fa-cloud-upload-alt"></i>
-                                        <h4>Arraste e solte arquivos aqui</h4>
-                                        <p>ou clique para selecionar do computador</p>
-                                        <button type="button" class="btn btn-primary">
-                                            <i class="fas fa-folder-open"></i> Selecionar Arquivos
-                                        </button>
-                                    </div>
-                                    
-                                    <input type="file" id="fileInput" multiple style="display: none;" 
-                                        accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx" onchange="handleFileSelect(event)">
-                                    
-                                    <div id="uploadProgress" class="upload-progress" style="display: none;">
-                                        <div class="progress-header">
-                                            <span>Enviando arquivos...</span>
-                                            <span id="uploadPercentage">0%</span>
-                                        </div>
-                                        <div class="progress-bar">
-                                            <div id="uploadBar" class="progress-fill"></div>
-                                        </div>
-                                    </div>
+                                    <div class="tab-header"><h4><i class="fas fa-cloud-upload-alt"></i> Enviar Arquivos</h4><p>Envie PDFs, imagens ou documentos. Formatos aceitos: PDF, JPG, PNG, TXT, DOC, DOCX (até 10MB cada)</p></div>
+                                    <div class="drop-zone" onclick="document.getElementById('fileInput').click()" id="dropZone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"><i class="fas fa-cloud-upload-alt"></i><h4>Arraste e solte arquivos aqui</h4><p>ou clique para selecionar do computador</p><button type="button" class="btn btn-primary"><i class="fas fa-folder-open"></i> Selecionar Arquivos</button></div>
+                                    <input type="file" id="fileInput" multiple style="display: none;" accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx" onchange="handleFileSelect(event)">
+                                    <div id="uploadProgress" class="upload-progress" style="display: none;"><div class="progress-header"><span>Enviando arquivos...</span><span id="uploadPercentage">0%</span></div><div class="progress-bar"><div id="uploadBar" class="progress-fill"></div></div></div>
                                 </div>
                             </div>
-                            
                             <div id="tab-texto" class="tab-anexo-content">
                                 <div class="tab-content-inner">
-                                    <div class="tab-header">
-                                        <h4><i class="fas fa-file-alt"></i> Adicionar Texto Diretamente</h4>
-                                        <p>Cole textos, artigos ou qualquer conteúdo que deseja usar como referência para as questões</p>
-                                    </div>
-                                    
+                                    <div class="tab-header"><h4><i class="fas fa-file-alt"></i> Adicionar Texto Diretamente</h4><p>Cole textos, artigos ou qualquer conteúdo que deseja usar como referência para as questões</p></div>
                                     <div class="form-grid">
-                                        <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label class="form-label">
-                                                <i class="fas fa-heading"></i> Título do Texto
-                                            </label>
-                                            <input type="text" id="textoTitulo" class="form-control" placeholder="Ex: Artigo sobre fotossíntese">
-                                        </div>
-                                        
-                                        <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label class="form-label">
-                                                <i class="fas fa-align-left"></i> Conteúdo
-                                            </label>
-                                            <textarea id="textoConteudo" class="form-control" rows="6" 
-                                                    placeholder="Cole o texto completo aqui..."></textarea>
-                                            <small class="char-count">
-                                                Limite: 10,000 caracteres (restantes: <span id="charCount">10000</span>)
-                                            </small>
-                                        </div>
-                                        
-                                        <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label class="form-label">
-                                                <i class="fas fa-info-circle"></i> Descrição (opcional)
-                                            </label>
-                                            <textarea id="textoDescricao" class="form-control" rows="2" 
-                                                    placeholder="Descreva brevemente este texto..."></textarea>
-                                        </div>
+                                        <div class="form-group" style="grid-column: 1 / -1;"><label class="form-label"><i class="fas fa-heading"></i> Título do Texto</label><input type="text" id="textoTitulo" class="form-control" placeholder="Ex: Artigo sobre fotossíntese"></div>
+                                        <div class="form-group" style="grid-column: 1 / -1;"><label class="form-label"><i class="fas fa-align-left"></i> Conteúdo</label><textarea id="textoConteudo" class="form-control" rows="6" placeholder="Cole o texto completo aqui..."></textarea><small class="char-count">Limite: 10,000 caracteres (restantes: <span id="charCount">10000</span>)</small></div>
+                                        <div class="form-group" style="grid-column: 1 / -1;"><label class="form-label"><i class="fas fa-info-circle"></i> Descrição (opcional)</label><textarea id="textoDescricao" class="form-control" rows="2" placeholder="Descreva brevemente este texto..."></textarea></div>
                                     </div>
-                                    
-                                    <button type="button" class="btn btn-success btn-add" onclick="adicionarTexto()">
-                                        <i class="fas fa-plus"></i> Adicionar Texto
-                                    </button>
+                                    <button type="button" class="btn btn-success btn-add" onclick="adicionarTexto()"><i class="fas fa-plus"></i> Adicionar Texto</button>
                                 </div>
                             </div>
-                            
                             <div id="tab-link" class="tab-anexo-content">
                                 <div class="tab-content-inner">
-                                    <div class="tab-header">
-                                        <h4><i class="fas fa-link"></i> Adicionar Links de Referência</h4>
-                                        <p>Adicione URLs de artigos, vídeos, sites ou qualquer recurso online relevante</p>
-                                    </div>
-                                    
+                                    <div class="tab-header"><h4><i class="fas fa-link"></i> Adicionar Links de Referência</h4><p>Adicione URLs de artigos, vídeos, sites ou qualquer recurso online relevante</p></div>
                                     <div class="form-grid">
-                                        <div class="form-group">
-                                            <label class="form-label">
-                                                <i class="fas fa-heading"></i> Título
-                                            </label>
-                                            <input type="text" id="linkTitulo" class="form-control" placeholder="Ex: Artigo da NASA sobre Marte">
-                                        </div>
-                                        
-                                        <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label class="form-label">
-                                                <i class="fas fa-globe"></i> URL
-                                            </label>
-                                            <input type="url" id="linkURL" class="form-control" placeholder="https://exemplo.com/artigo">
-                                        </div>
-                                        
-                                        <div class="form-group" style="grid-column: 1 / -1;">
-                                            <label class="form-label">
-                                                <i class="fas fa-info-circle"></i> Descrição (opcional)
-                                            </label>
-                                            <textarea id="linkDescricao" class="form-control" rows="2" 
-                                                    placeholder="Descreva o que este link contém..."></textarea>
-                                        </div>
+                                        <div class="form-group"><label class="form-label"><i class="fas fa-heading"></i> Título</label><input type="text" id="linkTitulo" class="form-control" placeholder="Ex: Artigo da NASA sobre Marte"></div>
+                                        <div class="form-group" style="grid-column: 1 / -1;"><label class="form-label"><i class="fas fa-globe"></i> URL</label><input type="url" id="linkURL" class="form-control" placeholder="https://exemplo.com/artigo"></div>
+                                        <div class="form-group" style="grid-column: 1 / -1;"><label class="form-label"><i class="fas fa-info-circle"></i> Descrição (opcional)</label><textarea id="linkDescricao" class="form-control" rows="2" placeholder="Descreva o que este link contém..."></textarea></div>
                                     </div>
-                                    
-                                    <button type="button" class="btn btn-primary btn-add" onclick="adicionarLink()">
-                                        <i class="fas fa-plus"></i> Adicionar Link
-                                    </button>
+                                    <button type="button" class="btn btn-primary btn-add" onclick="adicionarLink()"><i class="fas fa-plus"></i> Adicionar Link</button>
                                 </div>
                             </div>
-                            
                             <div class="anexos-lista-container">
-                                <div class="anexos-lista-header">
-                                    <h4><i class="fas fa-list-check"></i> Materiais Adicionados</h4>
-                                    <span id="contadorAnexos" class="anexos-count">0</span>
-                                    <button onclick="limparTodosAnexos()" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
-                                        <i class="fas fa-trash"></i> Limpar Tudo
-                                    </button>
-                                </div>
-                                
-                                <div id="listaAnexos" class="anexos-lista">
-                                    <div id="emptyAnexos" class="empty-anexos">
-                                        <i class="fas fa-inbox"></i>
-                                        <h4>Nenhum material adicionado</h4>
-                                        <p>Adicione arquivos, textos ou links para enriquecer sua prova no formato ENEM</p>
-                                    </div>
-                                </div>
+                                <div class="anexos-lista-header"><h4><i class="fas fa-list-check"></i> Materiais Adicionados</h4><span id="contadorAnexos" class="anexos-count">0</span><button onclick="limparTodosAnexos()" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;"><i class="fas fa-trash"></i> Limpar Tudo</button></div>
+                                <div id="listaAnexos" class="anexos-lista"><div id="emptyAnexos" class="empty-anexos"><i class="fas fa-inbox"></i><h4>Nenhum material adicionado</h4><p>Adicione arquivos, textos ou links para enriquecer sua prova no formato ENEM</p></div></div>
                             </div>
-                            
-                            <div class="info-card anexos-info">
-                                <h4><i class="fas fa-lightbulb"></i> Como a IA usa os materiais</h4>
-                                <ul>
-                                    <li>A IA analisará estes materiais para criar questões contextualizadas</li>
-                                    <li>Arquivos PDF e imagens serão processados por OCR quando necessário</li>
-                                    <li>Textos diretos são usados imediatamente como base para as questões</li>
-                                    <li>Links são visitados pela IA para extrair conteúdo relevante</li>
-                                    <li>Quanto mais materiais relevantes, mais precisas e diversificadas serão as questões</li>
-                                </ul>
-                            </div>
+                            <div class="info-card anexos-info"><h4><i class="fas fa-lightbulb"></i> Como a IA usa os materiais</h4><ul><li>A IA analisará estes materiais para criar questões contextualizadas</li><li>Arquivos PDF e imagens serão processados por OCR quando necessário</li><li>Textos diretos são usados imediatamente como base para as questões</li><li>Links são visitados pela IA para extrair conteúdo relevante</li><li>Quanto mais materiais relevantes, mais precisas e diversificadas serão as questões</li></ul></div>
                         </div>
-                        
-                        <div class="info-card">
-                            <h4><i class="fas fa-robot"></i> Sobre a IA</h4>
-                            <p>A prova será gerada automaticamente usando inteligência artificial:</p>
-                            <ul>
-                                <li>Criação de questões de múltipla escolha com 5 alternativas</li>
-                                <li>Inclusão de resposta correta e explicação detalhada</li>
-                                <li>Ajuste automático do nível de dificuldade</li>
-                                <li>Salvamento automático no banco de dados</li>
-                            </ul>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-success btn-full" id="btnGerarProva">
-                            <i class="fas fa-magic"></i> Gerar Prova com IA
-                        </button>
+                        <div class="info-card"><h4><i class="fas fa-robot"></i> Sobre a IA</h4><p>A prova será gerada automaticamente usando inteligência artificial:</p><ul><li>Criação de questões de múltipla escolha com 5 alternativas</li><li>Inclusão de resposta correta e explicação detalhada</li><li>Ajuste automático do nível de dificuldade</li><li>Salvamento automático no banco de dados</li></ul></div>
+                        <button type="submit" class="btn btn-success btn-full" id="btnGerarProva"><i class="fas fa-magic"></i> Gerar Prova com IA</button>
                     </form>
-                    
                     <div id="previewQuestoes" class="preview-container" style="display: none;">
-                        <div class="preview-header">
-                            <i class="fas fa-eye"></i>
-                            <h3>Pré-visualização da Prova</h3>
-                        </div>
-                        <div id="questoesPreview">
-                        </div>
+                        <div class="preview-header"><i class="fas fa-eye"></i><h3>Pré-visualização da Prova</h3></div>
+                        <div id="questoesPreview"></div>
                         <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                            <button class="btn btn-success" onclick="publicarProva()" style="flex: 1;">
-                                <i class="fas fa-paper-plane"></i> Publicar para a Turma
-                            </button>
-                            <button class="btn btn-warning" onclick="abrirEdicaoQuestoesPreview()" style="flex: 1; min-width: 200px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;">
-                                <i class="fas fa-edit"></i> Editar Questões (Avançado)
-                            </button>
-                            <button class="btn btn-danger" onclick="regenerarProva()" style="flex: 1;">
-                                <i class="fas fa-redo"></i> Regenerar Prova
-                            </button>
+                            <button class="btn btn-success" onclick="publicarProva()" style="flex: 1;"><i class="fas fa-paper-plane"></i> Publicar para a Turma</button>
+                            <button class="btn btn-warning" onclick="abrirEdicaoQuestoesPreview()" style="flex: 1; min-width: 200px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white;"><i class="fas fa-edit"></i> Editar Questões (Avançado)</button>
+                            <button class="btn btn-danger" onclick="regenerarProva()" style="flex: 1;"><i class="fas fa-redo"></i> Regenerar Prova</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Aba Nova Turma -->
             <div id="nova-turma" class="tab-content">
-                <div class="turma-hero" style="
-                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                    border-radius: 24px;
-                    padding: 30px;
-                    margin: 0 0 30px 0;
-                    color: white;
-                    position: relative;
-                    overflow: hidden;
-                    box-shadow: 0 20px 40px rgba(16, 185, 129, 0.2);
-                    width: 100%;
-                    box-sizing: border-box;
-                ">
-                    <div style="
-                        position: absolute;
-                        top: -50px;
-                        right: -50px;
-                        width: 200px;
-                        height: 200px;
-                        background: rgba(255, 255, 255, 0.1);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    <div style="
-                        position: absolute;
-                        bottom: -80px;
-                        left: -80px;
-                        width: 300px;
-                        height: 300px;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    
+                <div class="turma-hero" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 24px; padding: 30px; margin: 0 0 30px 0; color: white; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(16, 185, 129, 0.2); width: 100%; box-sizing: border-box;">
+                    <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255, 255, 255, 0.1); border-radius: 50%; z-index: 1;"></div>
+                    <div style="position: absolute; bottom: -80px; left: -80px; width: 300px; height: 300px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; z-index: 1;"></div>
                     <div style="position: relative; z-index: 2; width: 100%;">
                         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-                            <div style="
-                                width: 60px;
-                                height: 60px;
-                                background: rgba(255, 255, 255, 0.2);
-                                border-radius: 18px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 28px;
-                                backdrop-filter: blur(10px);
-                                flex-shrink: 0;
-                            ">
-                                <i class="fas fa-school"></i>
-                            </div>
-                            <div>
-                                <h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Criar Nova Turma</h2>
-                                <p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">
-                                    Organize seus alunos e atribua provas de forma eficiente
-                                </p>
-                            </div>
+                            <div style="width: 60px; height: 60px; background: rgba(255, 255, 255, 0.2); border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; backdrop-filter: blur(10px); flex-shrink: 0;"><i class="fas fa-school"></i></div>
+                            <div><h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Criar Nova Turma</h2><p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">Organize seus alunos e atribua provas de forma eficiente</p></div>
                         </div>
-                        
-                        <div style="
-                            display: flex;
-                            gap: 20px;
-                            margin-top: 20px;
-                            flex-wrap: wrap;
-                        ">
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-users"></i>
-                                <span>Organize seus alunos</span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-door-open"></i>
-                                <span>Código único por turma</span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-infinity"></i>
-                                <span>Quantidade ilimitada</span>
-                            </div>
+                        <div style="display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap;">
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-users"></i><span>Organize seus alunos</span></div>
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-door-open"></i><span>Código único por turma</span></div>
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-infinity"></i><span>Quantidade ilimitada</span></div>
                         </div>
                     </div>
                 </div>
-                
                 <div id="mostrarAlertaGeralTurma" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
-                
-                <div style="
-                    background: white;
-                    border-radius: 24px;
-                    padding: 25px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-                    border: 1px solid #f0f0f0;
-                    width: 100%;
-                    box-sizing: border-box;
-                ">
+                <div style="background: white; border-radius: 24px; padding: 25px; margin-bottom: 30px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); border: 1px solid #f0f0f0; width: 100%; box-sizing: border-box;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-                        <div style="
-                            width: 40px;
-                            height: 40px;
-                            background: linear-gradient(135deg, #10b981, #059669);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                        ">
-                            <i class="fas fa-plus"></i>
-                        </div>
-                        <h3 style="margin: 0; color: #1f2937; font-size: 1.2rem; font-weight: 600;">
-                            Informações da Turma
-                        </h3>
-                        <span style="
-                            background: #e5e7eb;
-                            color: #6b7280;
-                            padding: 4px 12px;
-                            border-radius: 30px;
-                            font-size: 0.8rem;
-                            font-weight: 600;
-                            margin-left: auto;
-                        ">Novo cadastro</span>
+                        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white;"><i class="fas fa-plus"></i></div>
+                        <h3 style="margin: 0; color: #1f2937; font-size: 1.2rem; font-weight: 600;">Informações da Turma</h3>
+                        <span style="background: #e5e7eb; color: #6b7280; padding: 4px 12px; border-radius: 30px; font-size: 0.8rem; font-weight: 600; margin-left: auto;">Novo cadastro</span>
                     </div>
-                    
                     <form id="formNovaTurma">
-                        <div style="
-                            display: grid;
-                            grid-template-columns: repeat(2, 1fr);
-                            gap: 20px;
-                            margin-bottom: 20px;
-                        ">
-                            <div style="grid-column: span 2;">
-                                <label style="
-                                    display: block;
-                                    margin-bottom: 8px;
-                                    font-weight: 600;
-                                    color: #374151;
-                                    font-size: 0.85rem;
-                                ">
-                                    <i class="fas fa-graduation-cap" style="color: #10b981; margin-right: 5px;"></i>
-                                    Nome da Turma
-                                </label>
-                                <input 
-                                    type="text" 
-                                    id="nomeTurma" 
-                                    class="form-control" 
-                                    placeholder="Ex: 1º Ano A, Turma de Cálculo I"
-                                    required
-                                    style="
-                                        width: 100%;
-                                        padding: 12px 16px;
-                                        border: 2px solid #e5e7eb;
-                                        border-radius: 16px;
-                                        font-size: 0.95rem;
-                                        transition: all 0.3s;
-                                        background: white;
-                                        box-sizing: border-box;
-                                    "
-                                    onfocus="this.style.borderColor='#10b981'; this.style.boxShadow='0 0 0 4px rgba(16,185,129,0.1)'"
-                                    onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
-                                >
-                            </div>
-                            
-                            <div>
-                                <label style="
-                                    display: block;
-                                    margin-bottom: 8px;
-                                    font-weight: 600;
-                                    color: #374151;
-                                    font-size: 0.85rem;
-                                ">
-                                    <i class="fas fa-book" style="color: #10b981; margin-right: 5px;"></i>
-                                    Disciplina
-                                </label>
-                                <input 
-                                    type="text" 
-                                    id="disciplinaTurma" 
-                                    class="form-control" 
-                                    placeholder="Ex: Matemática, História"
-                                    required
-                                    style="
-                                        width: 100%;
-                                        padding: 12px 16px;
-                                        border: 2px solid #e5e7eb;
-                                        border-radius: 16px;
-                                        font-size: 0.95rem;
-                                        transition: all 0.3s;
-                                        background: white;
-                                        box-sizing: border-box;
-                                    "
-                                    onfocus="this.style.borderColor='#10b981'; this.style.boxShadow='0 0 0 4px rgba(16,185,129,0.1)'"
-                                    onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
-                                >
-                            </div>
-                            
-                            <div>
-                                <label style="
-                                    display: block;
-                                    margin-bottom: 8px;
-                                    font-weight: 600;
-                                    color: #374151;
-                                    font-size: 0.85rem;
-                                ">
-                                    <i class="fas fa-sitemap" style="color: #10b981; margin-right: 5px;"></i>
-                                    Eixo
-                                </label>
-                                <select 
-                                    id="eixoTurma" 
-                                    class="form-control" 
-                                    required
-                                    style="
-                                        width: 100%;
-                                        padding: 12px 16px;
-                                        border: 2px solid #e5e7eb;
-                                        border-radius: 16px;
-                                        font-size: 0.95rem;
-                                        transition: all 0.3s;
-                                        background: white;
-                                        cursor: pointer;
-                                        box-sizing: border-box;
-                                    "
-                                    onfocus="this.style.borderColor='#10b981'; this.style.boxShadow='0 0 0 4px rgba(16,185,129,0.1)'"
-                                    onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
-                                >
-                                    <option value="">Carregando eixos...</option>
-                                </select>
-                            </div>
-                            
-                            <div style="grid-column: span 2;">
-                                <label style="
-                                    display: block;
-                                    margin-bottom: 8px;
-                                    font-weight: 600;
-                                    color: #374151;
-                                    font-size: 0.85rem;
-                                ">
-                                    <i class="fas fa-align-left" style="color: #10b981; margin-right: 5px;"></i>
-                                    Descrição (opcional)
-                                </label>
-                                <textarea 
-                                    id="descricaoTurma" 
-                                    class="form-control" 
-                                    placeholder="Descreva a turma, objetivos, etc..."
-                                    rows="4"
-                                    style="
-                                        width: 100%;
-                                        padding: 12px 16px;
-                                        border: 2px solid #e5e7eb;
-                                        border-radius: 16px;
-                                        font-size: 0.95rem;
-                                        transition: all 0.3s;
-                                        background: white;
-                                        resize: vertical;
-                                        font-family: inherit;
-                                        box-sizing: border-box;
-                                    "
-                                    onfocus="this.style.borderColor='#10b981'; this.style.boxShadow='0 0 0 4px rgba(16,185,129,0.1)'"
-                                    onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
-                                ></textarea>
-                            </div>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;">
+                            <div style="grid-column: span 2;"><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-graduation-cap" style="color: #10b981; margin-right: 5px;"></i> Nome da Turma</label><input type="text" id="nomeTurma" class="form-control" placeholder="Ex: 1º Ano A" required style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"></div>
+                            <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-book" style="color: #10b981; margin-right: 5px;"></i> Disciplina</label><input type="text" id="disciplinaTurma" class="form-control" placeholder="Ex: Matemática" required style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"></div>
+                            <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-sitemap" style="color: #10b981; margin-right: 5px;"></i> Eixo</label><select id="eixoTurma" class="form-control" required style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="">Carregando eixos...</option></select></div>
+                            <div style="grid-column: span 2;"><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-align-left" style="color: #10b981; margin-right: 5px;"></i> Descrição (opcional)</label><textarea id="descricaoTurma" class="form-control" placeholder="Descreva a turma..." rows="4" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"></textarea></div>
                         </div>
-                        
-                        <div style="
-                            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-                            border-radius: 20px;
-                            padding: 20px;
-                            margin: 20px 0 20px;
-                            border: 1px solid #bbf7d0;
-                            position: relative;
-                            overflow: hidden;
-                        ">
-                            <div style="
-                                position: absolute;
-                                top: -20px;
-                                right: -20px;
-                                width: 100px;
-                                height: 100px;
-                                background: rgba(16, 185, 129, 0.1);
-                                border-radius: 50%;
-                            "></div>
-                            
-                            <div style="position: relative; z-index: 2;">
-                                <h4 style="
-                                    color: #065f46;
-                                    margin: 0 0 15px 0;
-                                    font-size: 1rem;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                ">
-                                    <i class="fas fa-info-circle" style="color: #10b981;"></i>
-                                    Informações Importantes
-                                </h4>
-                                
-                                <div style="
-                                    display: grid;
-                                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                                    gap: 15px;
-                                ">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="
-                                            width: 32px;
-                                            height: 32px;
-                                            background: rgba(16, 185, 129, 0.2);
-                                            border-radius: 10px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            color: #065f46;
-                                        ">
-                                            <i class="fas fa-hashtag"></i>
-                                        </div>
-                                        <div>
-                                            <div style="font-weight: 600; color: #065f46; font-size: 0.9rem;">Código Único</div>
-                                            <div style="font-size: 0.8rem; color: #047857;">Gerado automaticamente</div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="
-                                            width: 32px;
-                                            height: 32px;
-                                            background: rgba(16, 185, 129, 0.2);
-                                            border-radius: 10px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            color: #065f46;
-                                        ">
-                                            <i class="fas fa-door-open"></i>
-                                        </div>
-                                        <div>
-                                            <div style="font-weight: 600; color: #065f46; font-size: 0.9rem;">Acesso dos Alunos</div>
-                                            <div style="font-size: 0.8rem; color: #047857;">Usam o código para entrar</div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="
-                                            width: 32px;
-                                            height: 32px;
-                                            background: rgba(16, 185, 129, 0.2);
-                                            border-radius: 10px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            color: #065f46;
-                                        ">
-                                            <i class="fas fa-infinity"></i>
-                                        </div>
-                                        <div>
-                                            <div style="font-weight: 600; color: #065f46; font-size: 0.9rem;">Quantidade Ilimitada</div>
-                                            <div style="font-size: 0.8rem; color: #047857;">Crie quantas turmas precisar</div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <div style="
-                                            width: 32px;
-                                            height: 32px;
-                                            background: rgba(16, 185, 129, 0.2);
-                                            border-radius: 10px;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            color: #065f46;
-                                        ">
-                                            <i class="fas fa-file-alt"></i>
-                                        </div>
-                                        <div>
-                                            <div style="font-weight: 600; color: #065f46; font-size: 0.9rem;">Provas Específicas</div>
-                                            <div style="font-size: 0.8rem; color: #047857;">Atribua provas por turma</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; align-items: center;">
-                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                <button type="button" onclick="limparFormularioTurma()" style="
-                                    padding: 10px 20px;
-                                    background: #f3f4f6;
-                                    color: #4b5563;
-                                    border: none;
-                                    border-radius: 30px;
-                                    font-weight: 600;
-                                    font-size: 0.9rem;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                    transition: all 0.2s;
-                                ">
-                                    <i class="fas fa-eraser"></i> Limpar
-                                </button>
-                            </div>
-                            
-                            <button type="submit" id="btnCriarTurma" style="
-                                padding: 12px 30px;
-                                background: linear-gradient(135deg, #10b981, #059669);
-                                color: white;
-                                border: none;
-                                border-radius: 40px;
-                                font-weight: 600;
-                                font-size: 1rem;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                transition: all 0.2s;
-                                box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
-                            ">
-                                <i class="fas fa-plus-circle"></i> Criar Turma
-                            </button>
+                            <button type="button" onclick="limparFormularioTurma()" style="padding: 10px 20px; background: #f3f4f6; color: #4b5563; border: none; border-radius: 30px; font-weight: 600; font-size: 0.9rem; cursor: pointer;"><i class="fas fa-eraser"></i> Limpar</button>
+                            <button type="submit" id="btnCriarTurma" style="padding: 12px 30px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 40px; font-weight: 600; font-size: 1rem; cursor: pointer;"><i class="fas fa-plus-circle"></i> Criar Turma</button>
                         </div>
-                        
-                        <div id="loadingCriarTurma" style="
-                            display: none;
-                            text-align: center;
-                            margin-top: 20px;
-                        ">
-                            <div style="
-                                width: 40px;
-                                height: 40px;
-                                border: 3px solid #e5e7eb;
-                                border-top-color: #10b981;
-                                border-radius: 50%;
-                                animation: spin 1s linear infinite;
-                                margin: 0 auto 10px;
-                            "></div>
-                            <p style="color: #6b7280; font-size: 0.9rem;">Criando turma...</p>
-                        </div>
+                        <div id="loadingCriarTurma" style="display: none; text-align: center; margin-top: 20px;"><div style="width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div><p style="color: #6b7280; font-size: 0.9rem;">Criando turma...</p></div>
                     </form>
                 </div>
             </div>
 
-            <!-- Aba Minhas Turmas -->
             <div id="turmas" class="tab-content">
-                <div class="turmas-hero" style="
-                    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
-                    border-radius: 24px;
-                    padding: 30px;
-                    margin: 0 0 30px 0;
-                    color: white;
-                    position: relative;
-                    overflow: hidden;
-                    box-shadow: 0 20px 40px rgba(139, 92, 246, 0.2);
-                    width: 100%;
-                    box-sizing: border-box;
-                ">
-                    <div style="
-                        position: absolute;
-                        top: -50px;
-                        right: -50px;
-                        width: 200px;
-                        height: 200px;
-                        background: rgba(255, 255, 255, 0.1);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    <div style="
-                        position: absolute;
-                        bottom: -80px;
-                        left: -80px;
-                        width: 300px;
-                        height: 300px;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    
+                <div class="turmas-hero" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border-radius: 24px; padding: 30px; margin: 0 0 30px 0; color: white; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(139, 92, 246, 0.2); width: 100%; box-sizing: border-box;">
+                    <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255, 255, 255, 0.1); border-radius: 50%; z-index: 1;"></div>
+                    <div style="position: absolute; bottom: -80px; left: -80px; width: 300px; height: 300px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; z-index: 1;"></div>
                     <div style="position: relative; z-index: 2; width: 100%;">
                         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-                            <div style="
-                                width: 60px;
-                                height: 60px;
-                                background: rgba(255, 255, 255, 0.2);
-                                border-radius: 18px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 28px;
-                                backdrop-filter: blur(10px);
-                                flex-shrink: 0;
-                            ">
-                                <i class="fas fa-school"></i>
-                            </div>
-                            <div>
-                                <h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Minhas Turmas</h2>
-                                <p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">
-                                    Gerencie suas turmas e acompanhe seus alunos
-                                </p>
-                            </div>
+                            <div style="width: 60px; height: 60px; background: rgba(255, 255, 255, 0.2); border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; backdrop-filter: blur(10px); flex-shrink: 0;"><i class="fas fa-school"></i></div>
+                            <div><h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Minhas Turmas</h2><p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">Gerencie suas turmas e acompanhe seus alunos</p></div>
                         </div>
-                        
-                        <div style="
-                            display: flex;
-                            gap: 20px;
-                            margin-top: 20px;
-                            flex-wrap: wrap;
-                        ">
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-users"></i>
-                                <span>Total de Alunos: <strong id="heroTotalAlunos">0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-door-open"></i>
-                                <span>Turmas Ativas: <strong id="heroTurmasAtivas">0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-chart-line"></i>
-                                <span>Total de Turmas: <strong id="heroTotalTurmas">0</strong></span>
-                            </div>
+                        <div style="display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap;">
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-users"></i><span>Total de Alunos: <strong id="heroTotalAlunos">0</strong></span></div>
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-door-open"></i><span>Turmas Ativas: <strong id="heroTurmasAtivas">0</strong></span></div>
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-chart-line"></i><span>Total de Turmas: <strong id="heroTotalTurmas">0</strong></span></div>
                         </div>
                     </div>
                 </div>
-                
                 <div id="mostrarAlertaGeralMinhasTurmas" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
-                
                 <div id="listaTurmas" style="width: 100%; min-height: 400px;">
-                    <div class="loading-state" style="
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        padding: 60px 20px;
-                        background: white;
-                        border-radius: 24px;
-                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-                        width: 100%;
-                        box-sizing: border-box;
-                    ">
-                        <div style="
-                            width: 60px;
-                            height: 60px;
-                            border: 3px solid #e5e7eb;
-                            border-top-color: #8b5cf6;
-                            border-radius: 50%;
-                            animation: spin 1s linear infinite;
-                            margin-bottom: 20px;
-                        "></div>
-                        <p style="color: #6b7280; font-size: 1rem;">Carregando suas turmas...</p>
-                    </div>
+                    <div class="loading-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; background: white; border-radius: 24px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); width: 100%; box-sizing: border-box;"><div style="width: 60px; height: 60px; border: 3px solid #e5e7eb; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div><p style="color: #6b7280; font-size: 1rem;">Carregando suas turmas...</p></div>
                 </div>
             </div>
             
-            <!-- Aba Minhas Provas -->
             <div id="minhas-provas" class="tab-content">
-                <div class="provas-hero" style="
-                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-                    border-radius: 24px;
-                    padding: 30px;
-                    margin: 0 0 30px 0;
-                    color: white;
-                    position: relative;
-                    overflow: hidden;
-                    box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2);
-                    width: 100%;
-                    box-sizing: border-box;
-                ">
-                    <div style="
-                        position: absolute;
-                        top: -50px;
-                        right: -50px;
-                        width: 200px;
-                        height: 200px;
-                        background: rgba(255, 255, 255, 0.1);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    <div style="
-                        position: absolute;
-                        bottom: -80px;
-                        left: -80px;
-                        width: 300px;
-                        height: 300px;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    
+                <div class="provas-hero" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border-radius: 24px; padding: 30px; margin: 0 0 30px 0; color: white; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2); width: 100%; box-sizing: border-box;">
+                    <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255, 255, 255, 0.1); border-radius: 50%; z-index: 1;"></div>
+                    <div style="position: absolute; bottom: -80px; left: -80px; width: 300px; height: 300px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; z-index: 1;"></div>
                     <div style="position: relative; z-index: 2; width: 100%;">
                         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-                            <div style="
-                                width: 60px;
-                                height: 60px;
-                                background: rgba(255, 255, 255, 0.2);
-                                border-radius: 18px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 28px;
-                                backdrop-filter: blur(10px);
-                                flex-shrink: 0;
-                            ">
-                                <i class="fas fa-file-alt"></i>
-                            </div>
-                            <div>
-                                <h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Minhas Provas</h2>
-                                <p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">
-                                    Gerencie todas as suas provas com filtros inteligentes
-                                </p>
-                            </div>
+                            <div style="width: 60px; height: 60px; background: rgba(255, 255, 255, 0.2); border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; backdrop-filter: blur(10px); flex-shrink: 0;"><i class="fas fa-file-alt"></i></div>
+                            <div><h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Minhas Provas</h2><p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">Gerencie todas as suas provas com filtros inteligentes</p></div>
                         </div>
-                        
-                        <div style="
-                            display: flex;
-                            gap: 20px;
-                            margin-top: 20px;
-                            flex-wrap: wrap;
-                        ">
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-file-alt"></i>
-                                <span>Total de Provas: <strong id="totalProvasCount">0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-play-circle"></i>
-                                <span>Ativas: <strong id="ativasCount">0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Concluídas: <strong id="concluidasCount">0</strong></span>
-                            </div>
-                            
-                            <div style="
-                                background: rgba(255, 255, 255, 0.15);
-                                backdrop-filter: blur(10px);
-                                padding: 12px 20px;
-                                border-radius: 30px;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                border: 1px solid rgba(255, 255, 255, 0.2);
-                            ">
-                                <i class="fas fa-pencil-alt"></i>
-                                <span>Rascunhos: <strong id="rascunhosCount">0</strong></span>
-                            </div>
+                        <div style="display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap;">
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-file-alt"></i><span>Total de Provas: <strong id="totalProvasCount">0</strong></span></div>
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-play-circle"></i><span>Ativas: <strong id="ativasCount">0</strong></span></div>
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-check-circle"></i><span>Concluídas: <strong id="concluidasCount">0</strong></span></div>
+                            <div style="background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255, 255, 255, 0.2);"><i class="fas fa-pencil-alt"></i><span>Rascunhos: <strong id="rascunhosCount">0</strong></span></div>
                         </div>
                     </div>
                 </div>
-                
-                <div style="
-                    background: white;
-                    border-radius: 24px;
-                    padding: 25px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-                    border: 1px solid #f0f0f0;
-                    width: 100%;
-                    box-sizing: border-box;
-                ">
+                <div style="background: white; border-radius: 24px; padding: 25px; margin-bottom: 30px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); border: 1px solid #f0f0f0; width: 100%; box-sizing: border-box;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-                        <div style="
-                            width: 40px;
-                            height: 40px;
-                            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                            border-radius: 12px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                        ">
-                            <i class="fas fa-sliders-h"></i>
-                        </div>
-                        <h3 style="margin: 0; color: #1f2937; font-size: 1.2rem; font-weight: 600;">
-                            Filtros Inteligentes
-                        </h3>
-                        <span style="
-                            background: #e5e7eb;
-                            color: #6b7280;
-                            padding: 4px 12px;
-                            border-radius: 30px;
-                            font-size: 0.8rem;
-                            font-weight: 600;
-                            margin-left: auto;
-                        " id="resultadosFiltrados">0 resultados</span>
+                        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white;"><i class="fas fa-sliders-h"></i></div>
+                        <h3 style="margin: 0; color: #1f2937; font-size: 1.2rem; font-weight: 600;">Filtros Inteligentes</h3>
+                        <span style="background: #e5e7eb; color: #6b7280; padding: 4px 12px; border-radius: 30px; font-size: 0.8rem; font-weight: 600; margin-left: auto;" id="resultadosFiltrados">0 resultados</span>
                     </div>
-                    
-                    <div style="
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                        gap: 15px;
-                        margin-bottom: 20px;
-                    ">
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.85rem;
-                            ">
-                                <i class="fas fa-circle" style="color: #3b82f6; margin-right: 5px;"></i>
-                                Status
-                            </label>
-                            <select id="filtroStatus" class="filtro-select" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                background: white;
-                                cursor: pointer;
-                                padding-right: 40px;
-                            ">
-                                <option value="todos">📋 Todos os status</option>
-                                <option value="ativas">▶️ Ativas</option>
-                                <option value="concluidas">✅ Concluídas</option>
-                                <option value="rascunhos">✏️ Rascunhos</option>
-                                <option value="canceladas">❌ Canceladas</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.85rem;
-                            ">
-                                <i class="fas fa-chart-line" style="color: #3b82f6; margin-right: 5px;"></i>
-                                Dificuldade
-                            </label>
-                            <select id="filtroDificuldade" class="filtro-select" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                background: white;
-                                cursor: pointer;
-                                padding-right: 40px;
-                            ">
-                                <option value="todas">⚖️ Todas</option>
-                                <option value="facil">🟢 Fácil</option>
-                                <option value="media">🟡 Médio</option>
-                                <option value="dificil">🔴 Difícil</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.85rem;
-                            ">
-                                <i class="fas fa-file-alt" style="color: #3b82f6; margin-right: 5px;"></i>
-                                Tipo de Prova
-                            </label>
-                            <select id="filtroTipo" class="filtro-select" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                background: white;
-                                cursor: pointer;
-                                padding-right: 40px;
-                            ">
-                                <option value="todos">📚 Todos</option>
-                                <option value="simples">📄 Simples</option>
-                                <option value="enem">🎯 Formato ENEM</option>
-                                <option value="adaptada">♿ Adaptada</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.85rem;
-                            ">
-                                <i class="fas fa-calendar-week" style="color: #3b82f6; margin-right: 5px;"></i>
-                                Período
-                            </label>
-                            <select id="filtroPeriodoProvas" class="filtro-select" onchange="aplicarFiltrosProvas()" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                background: white;
-                                cursor: pointer;
-                                padding-right: 40px;
-                            ">
-                                <option value="todos">📅 Todos os períodos</option>
-                                <option value="1">1º Período</option>
-                                <option value="2">2º Período</option>
-                                <option value="3">3º Período</option>
-                                <option value="4">4º Período</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.85rem;
-                            ">
-                                <i class="fas fa-school" style="color: #3b82f6; margin-right: 5px;"></i>
-                                Turma
-                            </label>
-                            <select id="filtroTurmaProvas" class="filtro-select" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                background: white;
-                                cursor: pointer;
-                                padding-right: 40px;
-                            ">
-                                <option value="todas">🏫 Todas as turmas</option>
-                            </select>
-                        </div>
-                        
-                        <div style="grid-column: span 2;">
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.85rem;
-                            ">
-                                <i class="fas fa-search" style="color: #3b82f6; margin-right: 5px;"></i>
-                                Buscar por título ou conteúdo
-                            </label>
-                            <div style="position: relative;">
-                                <input type="text" id="buscaProva" placeholder="Digite palavras-chave..." style="
-                                    width: 100%;
-                                    padding: 12px 16px 12px 45px;
-                                    border: 2px solid #e5e7eb;
-                                    border-radius: 16px;
-                                    font-size: 0.95rem;
-                                    background: white;
-                                "
-                                onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 4px rgba(59,130,246,0.1)'"
-                                onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
-                                onkeyup="aplicarFiltrosProvas()">
-                                <i class="fas fa-search" style="
-                                    position: absolute;
-                                    left: 16px;
-                                    top: 50%;
-                                    transform: translateY(-50%);
-                                    color: #9ca3af;
-                                "></i>
-                            </div>
-                        </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-circle" style="color: #3b82f6; margin-right: 5px;"></i> Status</label><select id="filtroStatus" class="filtro-select" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="todos">📋 Todos os status</option><option value="ativas">▶️ Ativas</option><option value="concluidas">✅ Concluídas</option><option value="rascunhos">✏️ Rascunhos</option><option value="canceladas">❌ Canceladas</option></select></div>
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-chart-line" style="color: #3b82f6; margin-right: 5px;"></i> Dificuldade</label><select id="filtroDificuldade" class="filtro-select" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="todas">⚖️ Todas</option><option value="facil">🟢 Fácil</option><option value="media">🟡 Médio</option><option value="dificil">🔴 Difícil</option></select></div>
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-file-alt" style="color: #3b82f6; margin-right: 5px;"></i> Tipo de Prova</label><select id="filtroTipo" class="filtro-select" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="todos">📚 Todos</option><option value="simples">📄 Simples</option><option value="enem">🎯 Formato ENEM</option><option value="adaptada">♿ Adaptada</option></select></div>
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-calendar-week" style="color: #3b82f6; margin-right: 5px;"></i> Período</label><select id="filtroPeriodoProvas" class="filtro-select" onchange="aplicarFiltrosProvas()" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="todos">📅 Todos os períodos</option><option value="1">1º Período</option><option value="2">2º Período</option><option value="3">3º Período</option><option value="4">4º Período</option></select></div>
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-school" style="color: #3b82f6; margin-right: 5px;"></i> Turma</label><select id="filtroTurmaProvas" class="filtro-select" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="todas">🏫 Todas as turmas</option></select></div>
+                        <div style="grid-column: span 2;"><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.85rem;"><i class="fas fa-search" style="color: #3b82f6; margin-right: 5px;"></i> Buscar por título ou conteúdo</label><div style="position: relative;"><input type="text" id="buscaProva" placeholder="Digite palavras-chave..." style="width: 100%; padding: 12px 16px 12px 45px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;" onkeyup="aplicarFiltrosProvas()"><i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af;"></i></div></div>
                     </div>
-                    
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; align-items: center;">
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button onclick="limparFiltrosProvas()" style="
-                                padding: 10px 20px;
-                                background: #f3f4f6;
-                                color: #4b5563;
-                                border: none;
-                                border-radius: 30px;
-                                font-weight: 600;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                            ">
-                                <i class="fas fa-eraser"></i> Limpar Filtros
-                            </button>
-                            
-                            <button onclick="alternarRascunhos()" id="btnToggleRascunhos" style="
-                                padding: 10px 20px;
-                                background: #dbeafe;
-                                color: #1e40af;
-                                border: none;
-                                border-radius: 30px;
-                                font-weight: 600;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                            ">
-                                <i class="fas fa-eye-slash"></i> Ocultar Rascunhos
-                            </button>
+                            <button onclick="limparFiltrosProvas()" style="padding: 10px 20px; background: #f3f4f6; color: #4b5563; border: none; border-radius: 30px; font-weight: 600; font-size: 0.9rem; cursor: pointer;"><i class="fas fa-eraser"></i> Limpar Filtros</button>
+                            <button onclick="alternarRascunhos()" id="btnToggleRascunhos" style="padding: 10px 20px; background: #dbeafe; color: #1e40af; border: none; border-radius: 30px; font-weight: 600; font-size: 0.9rem; cursor: pointer;"><i class="fas fa-eye-slash"></i> Ocultar Rascunhos</button>
                         </div>
-                        
-                        <button onclick="mostrarOpcoesExportacao()" style="
-                            padding: 10px 20px;
-                            background: linear-gradient(135deg, #10b981, #059669);
-                            color: white;
-                            border: none;
-                            border-radius: 30px;
-                            font-weight: 600;
-                            font-size: 0.9rem;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                            transition: all 0.3s;
-                        ">
-                            <i class="fas fa-download"></i> Exportar Relatório
-                        </button>
+                        <button onclick="mostrarOpcoesExportacao()" style="padding: 10px 20px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 30px; font-weight: 600; font-size: 0.9rem; cursor: pointer;"><i class="fas fa-download"></i> Exportar Relatório</button>
                     </div>
                 </div>
-                
                 <div id="mostrarAlertaGeralMinhasProvas" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
-                
-                <div id="listaProvas" style="width: 100%; min-height: 400px;">
-                    <div style="
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        padding: 60px 20px;
-                        background: white;
-                        border-radius: 24px;
-                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-                    ">
-                        <div style="
-                            width: 60px;
-                            height: 60px;
-                            border: 3px solid #e5e7eb;
-                            border-top-color: #3b82f6;
-                            border-radius: 50%;
-                            animation: spin 1s linear infinite;
-                            margin-bottom: 20px;
-                        "></div>
-                        <p style="color: #6b7280; font-size: 1rem;">Carregando suas provas...</p>
-                    </div>
-                </div>
+                <div id="listaProvas" style="width: 100%; min-height: 400px;"><div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; background: white; border-radius: 24px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);"><div style="width: 60px; height: 60px; border: 3px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div><p style="color: #6b7280; font-size: 1rem;">Carregando suas provas...</p></div></div>
             </div>
             
-            <!-- Aba Resultados Gerais -->
             <div id="resultados-gerais" class="tab-content">
-                <div class="resultados-hero" style="
-                    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-                    border-radius: 24px;
-                    padding: 30px;
-                    margin: 0 0 30px 0;
-                    color: white;
-                    position: relative;
-                    overflow: hidden;
-                    box-shadow: 0 20px 40px rgba(249, 115, 22, 0.2);
-                    width: 100%;
-                    box-sizing: border-box;
-                ">
-                    <div style="
-                        position: absolute;
-                        top: -50px;
-                        right: -50px;
-                        width: 200px;
-                        height: 200px;
-                        background: rgba(255, 255, 255, 0.1);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    <div style="
-                        position: absolute;
-                        bottom: -80px;
-                        left: -80px;
-                        width: 300px;
-                        height: 300px;
-                        background: rgba(255, 255, 255, 0.05);
-                        border-radius: 50%;
-                        z-index: 1;
-                    "></div>
-                    
+                <div class="resultados-hero" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); border-radius: 24px; padding: 30px; margin: 0 0 30px 0; color: white; position: relative; overflow: hidden; box-shadow: 0 20px 40px rgba(249, 115, 22, 0.2); width: 100%; box-sizing: border-box;">
+                    <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: rgba(255, 255, 255, 0.1); border-radius: 50%; z-index: 1;"></div>
+                    <div style="position: absolute; bottom: -80px; left: -80px; width: 300px; height: 300px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; z-index: 1;"></div>
                     <div style="position: relative; z-index: 2; width: 100%;">
                         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-                            <div style="
-                                width: 60px;
-                                height: 60px;
-                                background: rgba(255, 255, 255, 0.2);
-                                border-radius: 18px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 28px;
-                                backdrop-filter: blur(10px);
-                                flex-shrink: 0;
-                            ">
-                                <i class="fas fa-chart-bar"></i>
-                            </div>
-                            <div>
-                                <h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Resultados Gerais</h2>
-                                <p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">
-                                    Desempenho geral dos alunos por turma e disciplina
-                                </p>
-                            </div>
+                            <div style="width: 60px; height: 60px; background: rgba(255, 255, 255, 0.2); border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; backdrop-filter: blur(10px); flex-shrink: 0;"><i class="fas fa-chart-bar"></i></div>
+                            <div><h2 style="font-size: 2rem; font-weight: 700; margin: 0;">Resultados Gerais</h2><p style="font-size: 1rem; opacity: 0.9; margin: 5px 0 0 0;">Desempenho geral dos alunos por turma e disciplina</p></div>
                         </div>
                     </div>
                 </div>
-                
                 <div id="mostrarAlertaGeralResultados" class="mostrarAlertaGeral" style="display: none; margin-bottom: 25px;"></div>
-
                 <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
-                    <button onclick="exportarNotasAlunosExcel()" 
-                            style="
-                                background: linear-gradient(135deg, #10b981, #059669);
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                padding: 12px 24px;
-                                font-weight: 600;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                                transition: all 0.3s;
-                                box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(16,185,129,0.4)'"
-                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(16,185,129,0.3)'">
-                        <i class="fas fa-file-excel"></i>
-                        Exportar Notas (Excel)
-                    </button>
+                    <button onclick="exportarNotasAlunosExcel()" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 12px; padding: 12px 24px; font-weight: 600; font-size: 0.9rem; cursor: pointer;"><i class="fas fa-file-excel"></i> Exportar Notas (Excel)</button>
                 </div>
-                
-                <div style="
-                    background: white;
-                    border-radius: 24px;
-                    padding: 25px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-                    border: 1px solid #f0f0f0;
-                    width: 100%;
-                    box-sizing: border-box;
-                ">
-                    <h3 style="margin: 0 0 20px 0; color: #374151; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-filter" style="color: #f97316;"></i> 
-                        Filtros
-                    </h3>
-                    
-                    <div style="
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                        gap: 20px;
-                    ">
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.9rem;
-                            ">
-                                <i class="fas fa-school" style="color: #f97316; margin-right: 8px;"></i>
-                                Turma
-                            </label>
-                            <select id="filtroTurma" class="form-control" onchange="filtrarResultados()" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                transition: all 0.3s;
-                                background: white;
-                                cursor: pointer;
-                            ">
-                                <option value="">Todas as turmas</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.9rem;
-                            ">
-                                <i class="fas fa-book" style="color: #f97316; margin-right: 8px;"></i>
-                                Disciplina
-                            </label>
-                            <select id="filtroDisciplina" class="form-control" onchange="filtrarResultados()" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                transition: all 0.3s;
-                                background: white;
-                                cursor: pointer;
-                            ">
-                                <option value="">Todas as disciplinas</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label style="
-                                display: block;
-                                margin-bottom: 8px;
-                                font-weight: 600;
-                                color: #374151;
-                                font-size: 0.9rem;
-                            ">
-                                <i class="fas fa-calendar-week" style="color: #f97316; margin-right: 8px;"></i>
-                                Período Letivo
-                            </label>
-                            <select id="filtroPeriodoResultados" class="form-control" onchange="filtrarResultados()" style="
-                                width: 100%;
-                                padding: 12px 16px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 16px;
-                                font-size: 0.95rem;
-                                transition: all 0.3s;
-                                background: white;
-                                cursor: pointer;
-                            ">
-                                <option value="">Todos os períodos</option>
-                                <option value="1">1º Período</option>
-                                <option value="2">2º Período</option>
-                                <option value="3">3º Período</option>
-                                <option value="4">4º Período</option>
-                            </select>
-                        </div>
+                <div style="background: white; border-radius: 24px; padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border: 1px solid #f0f0f0; width: 100%; box-sizing: border-box;">
+                    <h3 style="margin: 0 0 20px 0; color: #374151; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;"><i class="fas fa-filter" style="color: #f97316;"></i> Filtros</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.9rem;"><i class="fas fa-school" style="color: #f97316; margin-right: 8px;"></i> Turma</label><select id="filtroTurma" class="form-control" onchange="filtrarResultados()" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="">Todas as turmas</option></select></div>
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.9rem;"><i class="fas fa-book" style="color: #f97316; margin-right: 8px;"></i> Disciplina</label><select id="filtroDisciplina" class="form-control" onchange="filtrarResultados()" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="">Todas as disciplinas</option></select></div>
+                        <div><label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.9rem;"><i class="fas fa-calendar-week" style="color: #f97316; margin-right: 8px;"></i> Período Letivo</label><select id="filtroPeriodoResultados" class="form-control" onchange="filtrarResultados()" style="width: 100%; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 16px; font-size: 0.95rem;"><option value="">Todos os períodos</option><option value="1">1º Período</option><option value="2">2º Período</option><option value="3">3º Período</option><option value="4">4º Período</option></select></div>
                     </div>
                 </div>
-                
-                <div style="
-                    display: flex;
-                    background: #f3f4f6;
-                    border-radius: 16px;
-                    padding: 5px;
-                    margin-bottom: 25px;
-                    gap: 5px;
-                    flex-wrap: wrap;
-                ">
-                    <button class="result-tab active" onclick="mostrarTabResultados('por-turma')" style="
-                        flex: 1;
-                        padding: 12px 20px;
-                        border: none;
-                        border-radius: 12px;
-                        background: white;
-                        color: #f97316;
-                        font-weight: 600;
-                        font-size: 0.95rem;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        gap: 8px;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                        min-width: 120px;
-                        transition: all 0.2s;
-                    ">
-                        <i class="fas fa-school"></i> Por Turma
-                    </button>
-                    
-                    <button class="result-tab" onclick="mostrarTabResultados('por-aluno')" style="
-                        flex: 1;
-                        padding: 12px 20px;
-                        border: none;
-                        border-radius: 12px;
-                        background: transparent;
-                        color: #6b7280;
-                        font-weight: 600;
-                        font-size: 0.95rem;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        gap: 8px;
-                        min-width: 120px;
-                        transition: all 0.2s;
-                    ">
-                        <i class="fas fa-user-graduate"></i> Por Aluno
-                    </button>
-                    
-                    <button class="result-tab" onclick="mostrarTabResultados('por-disciplina')" style="
-                        flex: 1;
-                        padding: 12px 20px;
-                        border: none;
-                        border-radius: 12px;
-                        background: transparent;
-                        color: #6b7280;
-                        font-weight: 600;
-                        font-size: 0.95rem;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        gap: 8px;
-                        min-width: 120px;
-                        transition: all 0.2s;
-                    ">
-                        <i class="fas fa-book"></i> Por Disciplina
-                    </button>
+                <div style="display: flex; background: #f3f4f6; border-radius: 16px; padding: 5px; margin-bottom: 25px; gap: 5px; flex-wrap: wrap;">
+                    <button class="result-tab active" onclick="mostrarTabResultados('por-turma')" style="flex: 1; padding: 12px 20px; border: none; border-radius: 12px; background: white; color: #f97316; font-weight: 600; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-school"></i> Por Turma</button>
+                    <button class="result-tab" onclick="mostrarTabResultados('por-aluno')" style="flex: 1; padding: 12px 20px; border: none; border-radius: 12px; background: transparent; color: #6b7280; font-weight: 600; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-user-graduate"></i> Por Aluno</button>
+                    <button class="result-tab" onclick="mostrarTabResultados('por-disciplina')" style="flex: 1; padding: 12px 20px; border: none; border-radius: 12px; background: transparent; color: #6b7280; font-weight: 600; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"><i class="fas fa-book"></i> Por Disciplina</button>
                 </div>
-                
-                <div id="conteudo-por-turma" class="conteudo-resultados">
-                    <div id="listaTurmasResultados" style="width: 100%;">
-                        <div style="
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                            justify-content: center;
-                            padding: 60px 20px;
-                            background: white;
-                            border-radius: 24px;
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-                        ">
-                            <div style="
-                                width: 60px;
-                                height: 60px;
-                                border: 3px solid #e5e7eb;
-                                border-top-color: #f97316;
-                                border-radius: 50%;
-                                animation: spin 1s linear infinite;
-                                margin-bottom: 20px;
-                            "></div>
-                            <p style="color: #6b7280; font-size: 1rem;">Carregando resultados por turma...</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="conteudo-por-aluno" class="conteudo-resultados" style="display: none;">
-                    <div style="margin-bottom: 20px;">
-                        <input type="text" id="buscaAluno" class="form-control" placeholder="🔍 Buscar aluno por nome ou matrícula..." 
-                            style="
-                                width: 100%;
-                                padding: 14px 18px;
-                                border: 2px solid #e5e7eb;
-                                border-radius: 20px;
-                                font-size: 1rem;
-                                transition: all 0.3s;
-                                background: white;
-                            "
-                            onfocus="this.style.borderColor='#f97316'; this.style.boxShadow='0 0 0 4px rgba(249,115,22,0.1)'"
-                            onblur="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'"
-                            onkeyup="filtrarAlunos()">
-                    </div>
-                    
-                    <div id="listaAlunosResultados" style="width: 100%;">
-                        <div style="
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                            justify-content: center;
-                            padding: 60px 20px;
-                            background: white;
-                            border-radius: 24px;
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-                        ">
-                            <div style="
-                                width: 60px;
-                                height: 60px;
-                                border: 3px solid #e5e7eb;
-                                border-top-color: #f97316;
-                                border-radius: 50%;
-                                animation: spin 1s linear infinite;
-                                margin-bottom: 20px;
-                            "></div>
-                            <p style="color: #6b7280; font-size: 1rem;">Carregando resultados por aluno...</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="conteudo-por-disciplina" class="conteudo-resultados" style="display: none;">
-                    <div id="listaDisciplinasResultados" style="width: 100%;">
-                        <div style="
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                            justify-content: center;
-                            padding: 60px 20px;
-                            background: white;
-                            border-radius: 24px;
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-                        ">
-                            <div style="
-                                width: 60px;
-                                height: 60px;
-                                border: 3px solid #e5e7eb;
-                                border-top-color: #f97316;
-                                border-radius: 50%;
-                                animation: spin 1s linear infinite;
-                                margin-bottom: 20px;
-                            "></div>
-                            <p style="color: #6b7280; font-size: 1rem;">Carregando resultados por disciplina...</p>
-                        </div>
-                    </div>
-                </div>
+                <div id="conteudo-por-turma" class="conteudo-resultados"><div id="listaTurmasResultados" style="width: 100%;"><div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; background: white; border-radius: 24px;"><div style="width: 60px; height: 60px; border: 3px solid #e5e7eb; border-top-color: #f97316; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div><p style="color: #6b7280; font-size: 1rem;">Carregando resultados por turma...</p></div></div></div>
+                <div id="conteudo-por-aluno" class="conteudo-resultados" style="display: none;"><div style="margin-bottom: 20px;"><input type="text" id="buscaAluno" class="form-control" placeholder="🔍 Buscar aluno por nome ou matrícula..." style="width: 100%; padding: 14px 18px; border: 2px solid #e5e7eb; border-radius: 20px; font-size: 1rem;" onkeyup="filtrarAlunos()"></div><div id="listaAlunosResultados" style="width: 100%;"><div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; background: white; border-radius: 24px;"><div style="width: 60px; height: 60px; border: 3px solid #e5e7eb; border-top-color: #f97316; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div><p style="color: #6b7280; font-size: 1rem;">Carregando resultados por aluno...</p></div></div></div>
+                <div id="conteudo-por-disciplina" class="conteudo-resultados" style="display: none;"><div id="listaDisciplinasResultados" style="width: 100%;"><div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; background: white; border-radius: 24px;"><div style="width: 60px; height: 60px; border: 3px solid #e5e7eb; border-top-color: #f97316; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div><p style="color: #6b7280; font-size: 1rem;">Carregando resultados por disciplina...</p></div></div></div>
             </div>
 
-            <!-- Aba Acompanhamento -->
             <div id="acompanhamento" class="tab-content">
-                <div class="acompanhamento-hero">
-                    <div class="acompanhamento-hero-left">
-                        <div class="acompanhamento-hero-icon">
-                            <i class="fas fa-user-clock"></i>
-                        </div>
-                        <div>
-                            <h2>Acompanhamento de Alunos</h2>
-                            <p>Veja em tempo real onde seus alunos estão sendo atendidos</p>
-                        </div>
-                    </div>
-                    <div class="acompanhamento-hero-right">
-                        <div class="acompanhamento-status">
-                            <span class="status-dot"></span>
-                            <span id="acompanhamentoStatusTexto">Conectando...</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="acompanhamento-stats" id="acompanhamentoStats">
-                    <div class="acompanhamento-stat-card">
-                        <div class="acompanhamento-stat-icon" style="background: linear-gradient(135deg, #4f46e5, #7c3aed);">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <div>
-                            <div class="acompanhamento-stat-value" id="acompanhamentoTotal">0</div>
-                            <div class="acompanhamento-stat-label">Alunos em Atendimento</div>
-                        </div>
-                    </div>
-                    <div class="acompanhamento-stat-card">
-                        <div class="acompanhamento-stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
-                            <i class="fas fa-hospital"></i>
-                        </div>
-                        <div>
-                            <div class="acompanhamento-stat-value" id="acompanhamentoPorSetor">0</div>
-                            <div class="acompanhamento-stat-label">Setores Ativos</div>
-                        </div>
-                    </div>
-                </div>
-
+                <div class="acompanhamento-hero"><div class="acompanhamento-hero-left"><div class="acompanhamento-hero-icon"><i class="fas fa-user-clock"></i></div><div><h2>Acompanhamento de Alunos</h2><p>Veja em tempo real onde seus alunos estão sendo atendidos</p></div></div><div class="acompanhamento-hero-right"><div class="acompanhamento-status"><span class="status-dot"></span><span id="acompanhamentoStatusTexto">Conectando...</span></div></div></div>
+                <div class="acompanhamento-stats" id="acompanhamentoStats"><div class="acompanhamento-stat-card"><div class="acompanhamento-stat-icon" style="background: linear-gradient(135deg, #4f46e5, #7c3aed);"><i class="fas fa-users"></i></div><div><div class="acompanhamento-stat-value" id="acompanhamentoTotal">0</div><div class="acompanhamento-stat-label">Alunos em Atendimento</div></div></div><div class="acompanhamento-stat-card"><div class="acompanhamento-stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);"><i class="fas fa-hospital"></i></div><div><div class="acompanhamento-stat-value" id="acompanhamentoPorSetor">0</div><div class="acompanhamento-stat-label">Setores Ativos</div></div></div></div>
                 <div class="acompanhamento-filtros">
-                    <div class="acompanhamento-filtro-item">
-                        <label><i class="fas fa-school"></i> Turma</label>
-                        <select id="acompanhamentoFiltroTurma" onchange="aplicarFiltrosAcompanhamento()">
-                            <option value="">Todas as turmas</option>
-                        </select>
-                    </div>
-                    <div class="acompanhamento-filtro-item">
-                        <label><i class="fas fa-building"></i> Setor</label>
-                        <select id="acompanhamentoFiltroSetor" onchange="aplicarFiltrosAcompanhamento()">
-                            <option value="todos">Todos os setores</option>
-                            <option value="enfermaria">🏥 Enfermaria</option>
-                            <option value="psicologia">🧠 Psicologia</option>
-                            <option value="gestao_geral">📊 Gestão Geral</option>
-                            <option value="supervisao">🛡️ Supervisão</option>
-                            <option value="assistente_social">🤝 Assistente Social</option>
-                            <option value="biblioteca">📚 Biblioteca</option>
-                        </select>
-                    </div>
-                    <div class="acompanhamento-filtro-item acompanhamento-filtro-busca">
-                        <label><i class="fas fa-search"></i> Buscar</label>
-                        <input type="text" id="acompanhamentoFiltroBusca" 
-                            placeholder="Nome ou matrícula..."
-                            oninput="aplicarFiltrosAcompanhamento()">
-                    </div>
-                    <button class="acompanhamento-btn-refresh" onclick="carregarAcompanhamento()" title="Atualizar agora">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
+                    <div class="acompanhamento-filtro-item"><label><i class="fas fa-school"></i> Turma</label><select id="acompanhamentoFiltroTurma" onchange="aplicarFiltrosAcompanhamento()"><option value="">Todas as turmas</option></select></div>
+                    <div class="acompanhamento-filtro-item"><label><i class="fas fa-building"></i> Setor</label><select id="acompanhamentoFiltroSetor" onchange="aplicarFiltrosAcompanhamento()"><option value="todos">Todos os setores</option><option value="enfermaria">🏥 Enfermaria</option><option value="psicologia">🧠 Psicologia</option><option value="gestao_geral">📊 Gestão Geral</option><option value="supervisao">🛡️ Supervisão</option><option value="assistente_social">🤝 Assistente Social</option><option value="biblioteca">📚 Biblioteca</option></select></div>
+                    <div class="acompanhamento-filtro-item acompanhamento-filtro-busca"><label><i class="fas fa-search"></i> Buscar</label><input type="text" id="acompanhamentoFiltroBusca" placeholder="Nome ou matrícula..." oninput="aplicarFiltrosAcompanhamento()"></div>
+                    <button class="acompanhamento-btn-refresh" onclick="carregarAcompanhamento()" title="Atualizar agora"><i class="fas fa-sync-alt"></i></button>
                 </div>
-
-                <div id="acompanhamentoLista" class="acompanhamento-lista">
-                    <div class="acompanhamento-empty">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>Carregando...</p>
-                    </div>
-                </div>
+                <div id="acompanhamentoLista" class="acompanhamento-lista"><div class="acompanhamento-empty"><i class="fas fa-spinner fa-spin"></i><p>Carregando...</p></div></div>
             </div>
         </main>
     </div>
 
     <div id="mostrarAlertaGeralGeral" class="mostrarAlertaGeral" style="display: none;"></div>
 
-    <!-- ========== MODAIS FALTANTES (adicionados) ========== -->
+    <div class="modal" id="modalExcluirTurma" style="display: none;"><div class="modal-content" style="max-width: 500px;"><div class="modal-header"><h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;"><i class="fas fa-exclamation-triangle"></i> Excluir Turma</h3><button class="modal-close" onclick="fecharModal('modalExcluirTurma')">&times;</button></div><div id="modalExcluirConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div><div style="display: flex; gap: 1rem; margin-top: 1.5rem;"><button class="btn btn-danger" onclick="confirmarExclusaoTurma()" style="flex: 1; background: #ef4444; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-trash"></i> Excluir Turma</button><button class="btn" onclick="fecharModal('modalExcluirTurma')" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-times"></i> Cancelar</button></div></div></div>
+    <div class="modal" id="modalDetalhesTurma" style="display: none;"><div class="modal-content" style="max-width: 650px; max-height: 85vh; overflow-y: auto;"><div class="modal-header"><h3 style="margin: 0; color: #4f46e5; display: flex; align-items: center; gap: 10px;"><i class="fas fa-school"></i> Detalhes da Turma</h3><button class="modal-close" onclick="fecharModal('modalDetalhesTurma')">&times;</button></div><div id="detalhesTurmaContent" style="padding: 20px;"></div></div></div>
+    <div class="modal" id="modalIniciarProva" style="display: none;"><div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;"><div class="modal-header"><h3 style="margin: 0; color: #4f46e5;"><i class="fas fa-play-circle"></i> Iniciar Prova</h3><button class="modal-close" onclick="fecharModal('modalIniciarProva')">&times;</button></div><div id="modalProvaInfo" style="padding: 20px;"></div><div style="display: flex; gap: 1rem; padding: 0 20px 20px;"><button class="btn btn-success" onclick="iniciarProvaSelecionada()" style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-play"></i> Iniciar Prova</button><button class="btn" onclick="fecharModal('modalIniciarProva')" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-times"></i> Cancelar</button></div></div></div>
+    <div class="modal" id="modalEntrarTurma" style="display: none;"><div class="modal-content" style="max-width: 500px;"><div class="modal-header"><h3 style="margin: 0; color: #10b981; display: flex; align-items: center; gap: 10px;"><i class="fas fa-door-open"></i> Entrar em uma Turma</h3><button class="modal-close" onclick="fecharModal('modalEntrarTurma')">&times;</button></div><div style="padding: 20px;"><label style="display: block; margin-bottom: 10px; font-weight: 600; color: #374151;">Código da Turma</label><input type="text" id="codigoTurma" placeholder="Ex: ABC123" style="width: 100%; padding: 14px 18px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; text-align: center; font-weight: 600;" maxlength="10"><small style="display: block; margin-top: 8px; color: #6b7280; font-size: 0.85rem;">Digite o código fornecido pelo seu professor</small></div><div style="display: flex; gap: 1rem; padding: 0 20px 20px;"><button class="btn btn-success" onclick="entrarNaTurma()" style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-sign-in-alt"></i> Entrar</button><button class="btn" onclick="fecharModal('modalEntrarTurma')" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-times"></i> Cancelar</button></div></div></div>
+    <div class="modal" id="modalExcluirProva" style="display: none;"><div class="modal-content" style="max-width: 500px;"><div class="modal-header"><h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;"><i class="fas fa-exclamation-triangle"></i> Excluir Prova</h3><button class="modal-close" onclick="fecharModal('modalExcluirProva')">&times;</button></div><div id="modalExcluirProvaConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div><div style="display: flex; gap: 1rem; margin-top: 1.5rem;"><button class="btn" onclick="confirmarExclusaoProva()" style="flex: 1; background: #ef4444; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-trash"></i> Excluir Prova</button><button class="btn" onclick="fecharModal('modalExcluirProva')" style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;"><i class="fas fa-times"></i> Cancelar</button></div></div></div>
+    <div class="modal" id="modalEditarProvaProfessor" style="display: none;"><div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;"><div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px;"><h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-edit"></i> Editar Prova</h3><button class="modal-close" onclick="fecharModal('modalEditarProvaProfessor')" style="color: white; background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button></div><div id="modalEditarProvaConteudo" style="padding: 25px;"></div></div></div>
 
-    <!-- Modal de Exclusão de Turma -->
-    <div class="modal" id="modalExcluirTurma" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-exclamation-triangle"></i> Excluir Turma
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalExcluirTurma')">&times;</button>
-            </div>
-            <div id="modalExcluirConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div>
-            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                <button class="btn btn-danger" onclick="confirmarExclusaoTurma()" style="flex: 1; background: #ef4444; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-trash"></i> Excluir Turma
-                </button>
-                <button class="btn" onclick="fecharModal('modalExcluirTurma')" 
-                        style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Detalhes da Turma -->
-    <div class="modal" id="modalDetalhesTurma" style="display: none;">
-        <div class="modal-content" style="max-width: 650px; max-height: 85vh; overflow-y: auto;">
-            <div class="modal-header">
-                <h3 style="margin: 0; color: #4f46e5; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-school"></i> Detalhes da Turma
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalDetalhesTurma')">&times;</button>
-            </div>
-            <div id="detalhesTurmaContent" style="padding: 20px;"></div>
-        </div>
-    </div>
-
-    <!-- Modal de Iniciar Prova -->
-    <div class="modal" id="modalIniciarProva" style="display: none;">
-        <div class="modal-content" style="max-width: 600px; max-height: 85vh; overflow-y: auto;">
-            <div class="modal-header">
-                <h3 style="margin: 0; color: #4f46e5;">
-                    <i class="fas fa-play-circle"></i> Iniciar Prova
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalIniciarProva')">&times;</button>
-            </div>
-            <div id="modalProvaInfo" style="padding: 20px;"></div>
-            <div style="display: flex; gap: 1rem; padding: 0 20px 20px;">
-                <button class="btn btn-success" onclick="iniciarProvaSelecionada()" style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-play"></i> Iniciar Prova
-                </button>
-                <button class="btn" onclick="fecharModal('modalIniciarProva')" 
-                        style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Entrar em Turma -->
-    <div class="modal" id="modalEntrarTurma" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3 style="margin: 0; color: #10b981; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-door-open"></i> Entrar em uma Turma
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalEntrarTurma')">&times;</button>
-            </div>
-            <div style="padding: 20px;">
-                <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #374151;">
-                    Código da Turma
-                </label>
-                <input type="text" id="codigoTurma" placeholder="Ex: ABC123" 
-                    style="width: 100%; padding: 14px 18px; border: 2px solid #e5e7eb; border-radius: 12px; font-size: 1rem; text-transform: uppercase; letter-spacing: 2px; text-align: center; font-weight: 600;"
-                    maxlength="10">
-                <small style="display: block; margin-top: 8px; color: #6b7280; font-size: 0.85rem;">
-                    Digite o código fornecido pelo seu professor
-                </small>
-            </div>
-            <div style="display: flex; gap: 1rem; padding: 0 20px 20px;">
-                <button class="btn btn-success" onclick="entrarNaTurma()" 
-                    style="flex: 1; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-sign-in-alt"></i> Entrar
-                </button>
-                <button class="btn" onclick="fecharModal('modalEntrarTurma')" 
-                    style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Exclusão de Prova -->
-    <div class="modal" id="modalExcluirProva" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3 style="margin: 0; color: #dc2626; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-exclamation-triangle"></i> Excluir Prova
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalExcluirProva')">&times;</button>
-            </div>
-            <div id="modalExcluirProvaConteudo" style="margin: 1.5rem 0; line-height: 1.6;"></div>
-            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                <button class="btn" onclick="confirmarExclusaoProva()" 
-                    style="flex: 1; background: #ef4444; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-trash"></i> Excluir Prova
-                </button>
-                <button class="btn" onclick="fecharModal('modalExcluirProva')" 
-                    style="flex: 1; background: #e5e7eb; color: #374151; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    <i class="fas fa-times"></i> Cancelar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Edição de Prova (Professor) -->
-    <div class="modal" id="modalEditarProvaProfessor" style="display: none;">
-        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
-            <div class="modal-header" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 20px;">
-                <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-edit"></i> Editar Prova
-                </h3>
-                <button class="modal-close" onclick="fecharModal('modalEditarProvaProfessor')" style="color: white; background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
-            </div>
-            <div id="modalEditarProvaConteudo" style="padding: 25px;"></div>
-        </div>
-    </div>
-
-    <!-- ========== MENU MOBILE PARA PROFESSOR ========== -->
     <div class="professor-mobile-menu">
-        <button class="professor-mobile-menu-toggle" id="professorMobileMenuToggle">
-            <i class="fas fa-bars"></i>
-        </button>
-        
+        <button class="professor-mobile-menu-toggle" id="professorMobileMenuToggle"><i class="fas fa-bars"></i></button>
         <div class="professor-mobile-overlay" id="professorMobileOverlay"></div>
-        
         <div class="professor-mobile-sidebar" id="professorMobileSidebar">
-            <div class="professor-mobile-sidebar-header">
-                <div class="professor-mobile-avatar">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
-                <div class="professor-mobile-info">
-                    <h3 id="mobileProfessorNome">EducaPleno</h3>
-                    <p id="mobileProfessorEmail">Dashboard do Professor</p>
-                </div>
-                <button class="professor-mobile-close" id="professorMobileClose">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
+            <div class="professor-mobile-sidebar-header"><div class="professor-mobile-avatar"><i class="fas fa-graduation-cap"></i></div><div class="professor-mobile-info"><h3 id="mobileProfessorNome">EducaPleno</h3><p id="mobileProfessorEmail">Dashboard do Professor</p></div><button class="professor-mobile-close" id="professorMobileClose"><i class="fas fa-times"></i></button></div>
             <div class="professor-mobile-menu-items">
-                <a href="#" onclick="mostrarTabMobile('nova-prova'); return false;" class="mobile-menu-item active">
-                    <i class="fas fa-plus-circle"></i>
-                    <span>Nova Prova</span>
-                </a>
-                <a href="#" onclick="mostrarTabMobile('nova-turma'); return false;" class="mobile-menu-item">
-                    <i class="fas fa-plus"></i>
-                    <span>Nova Turma</span>
-                </a>
-                <a href="#" onclick="mostrarTabMobile('minhas-provas'); return false;" class="mobile-menu-item">
-                    <i class="fas fa-file-alt"></i>
-                    <span>Minhas Provas</span>
-                </a>
-                <a href="#" onclick="mostrarTabMobile('turmas'); return false;" class="mobile-menu-item">
-                    <i class="fas fa-school"></i>
-                    <span>Minhas Turmas</span>
-                </a>
-                <a href="#" onclick="window.location.href='calendario.html'" class="mobile-menu-item">
-                    <i class="fas fa-calendar-alt"></i>
-                    <span>Meu Calendário</span>
-                </a>
-                <a href="#" onclick="mostrarTabMobile('resultados-gerais'); return false;" class="mobile-menu-item">
-                    <i class="fas fa-chart-bar"></i>
-                    <span>Resultados</span>
-                </a>
+                <a href="#" onclick="mostrarTabMobile('nova-prova'); return false;" class="mobile-menu-item active"><i class="fas fa-plus-circle"></i><span>Nova Prova</span></a>
+                <a href="#" onclick="mostrarTabMobile('nova-turma'); return false;" class="mobile-menu-item"><i class="fas fa-plus"></i><span>Nova Turma</span></a>
+                <a href="#" onclick="mostrarTabMobile('minhas-provas'); return false;" class="mobile-menu-item"><i class="fas fa-file-alt"></i><span>Minhas Provas</span></a>
+                <a href="#" onclick="mostrarTabMobile('turmas'); return false;" class="mobile-menu-item"><i class="fas fa-school"></i><span>Minhas Turmas</span></a>
+                <a href="#" onclick="mostrarTabMobile('resultados-gerais'); return false;" class="mobile-menu-item"><i class="fas fa-chart-bar"></i><span>Resultados</span></a>
+                <div class="mobile-menu-divider" style="height: 1px; background: #e5e7eb; margin: 12px 16px;"></div>
+                <a href="calendario.html" class="mobile-menu-item"><i class="fas fa-calendar-alt"></i><span>Calendário</span></a>
+                <a href="cardapio.html" class="mobile-menu-item"><i class="fas fa-utensils"></i><span>Cardápio</span></a>
             </div>
-            
-            <div class="professor-mobile-sidebar-footer">
-                <button class="mobile-logout-btn" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Sair</span>
-                </button>
-            </div>
+            <div class="professor-mobile-sidebar-footer"><button class="mobile-logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>Sair</span></button></div>
         </div>
     </div>
 
-    <!-- ========== SCRIPTS FINAIS ========== -->
     <script src="js/toggle-buttons.js"></script>
     <script src="js/draggable.js"></script>
     <script src="js/index.js"></script>
+    <script>
+        function toggleUserMenu(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('userDropdown');
+            if (!dropdown) return;
+            const isOpen = dropdown.style.opacity === '1';
+            if (isOpen) { dropdown.style.opacity = '0'; dropdown.style.visibility = 'hidden'; dropdown.style.transform = 'translateY(-10px)'; } else { dropdown.style.opacity = '1'; dropdown.style.visibility = 'visible'; dropdown.style.transform = 'translateY(0)'; }
+        }
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('professorUserMenu');
+            const dropdown = document.getElementById('userDropdown');
+            if (container && !container.contains(e.target)) {
+                if (dropdown) { dropdown.style.opacity = '0'; dropdown.style.visibility = 'hidden'; dropdown.style.transform = 'translateY(-10px)'; }
+            }
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                const nome = userData.nome || 'Professor';
+                const foto = userData.fotoPerfil;
+                const nomeHeader = document.getElementById('professorNomeHeader');
+                if (nomeHeader) nomeHeader.textContent = nome.split(' ')[0];
+                const avatarHeader = document.getElementById('professorHeaderAvatar');
+                if (avatarHeader && foto) { avatarHeader.innerHTML = `<img src="${foto}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" onerror="this.parentElement.innerHTML='<i class=\\'fas fa-chalkboard-teacher\\'></i>';" />`; }
+            } catch(e) { console.warn('Erro ao carregar dados do usuário no header:', e); }
+        });
+    </script>
 </body>
 </html>

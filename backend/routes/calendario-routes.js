@@ -18,7 +18,7 @@ const calendarioNotificacaoService = new CalendarioNotificacaoService();
 const SETORES_ADM_EXTRA = [
     'supervisao', 'coordenacao_patio', 'secretaria', 'recepcao',
     'enfermaria', 'cozinha', 'assistente-social', 'psicologia',
-    'protagonismo', 'biblioteca'
+    'protagonismo', 'biblioteca','gestao-adm'
 ];
 
 const authenticateToken = (req, res, next) => {

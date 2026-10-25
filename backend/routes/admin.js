@@ -414,6 +414,7 @@ router.get('/dashboard', authenticateTokenLocal, isSuperAdmin, async (req, res) 
         case 'assistente-social': stats.totalAssistenteSocial = count; break;
         case 'protagonismo': stats.totalProtagonismo = count; break;
         case 'secretaria': stats.totalSecretaria = count; break;
+        case 'gestao-adm': stats.totalGestaoAdm = count; break;
         case 'recepcao': stats.totalRecepcao = count; break;
         default:
           logger.info(`   ⚠️ Role não mapeado: ${role} (${count} usuários)`);

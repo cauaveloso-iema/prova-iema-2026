@@ -276,6 +276,7 @@ function obterDestinoPorPerfil(role) {
     'protagonismo': '/protagonismo.html',
     'secretaria': '/secretaria.html',
     'recepcao': '/recepcao.html',
+    'gestao-adm': '/gestao-adm.html',
     'aluno': '/aluno.html'
   };
   return redirectMap[role] || '/login.html';
@@ -726,7 +727,7 @@ router.post('/auth/login', limiterLogin, async (req, res) => {
         'admin', 'professor', 'setor_pedagogico', 'coordenacao_patio',
         'cozinha', 'gestao_geral', 'enfermaria', 'supervisao',
         'psicologia', 'assistente-social', 'protagonismo',
-        'biblioteca', 'secretaria','recepcao'
+        'biblioteca', 'secretaria','recepcao', 'gestao-adm'
       );
     }
 

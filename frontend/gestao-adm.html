@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f766e">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Gestão ADM - EducaPleno</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
+
+    <script src="js/vlibras-oficial.js"></script>
+    <script src="js/acessibilidade.js"></script>
+    <script src="js/toggle-buttons.js"></script>
+    <script src="js/draggable.js"></script>
+    <script src="js/chatbot-frontend.js"></script>
+    <script src="js/push-client.js"></script>
+    <script src="js/helpers-formatacao.js"></script>
+    <script src="js/dialog-helper.js"></script>
+    <script src="/js/core-security.js"></script>
+
+    <link rel="stylesheet" href="css/gestao-geral.css">
+    <link rel="stylesheet" href="css/gestao-adm.css">
+</head>
+<body class="gestao-adm-theme">
+    <div class="container">
+
+        <!-- HEADER -->
+        <div class="header-top">
+            <div class="relogio-card">
+                <i class="far fa-clock"></i>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <div class="notificacoes-container" id="containerSinoOriginal" style="position: relative;">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                            title="Notificações e Lembretes" style="display: none;">
+                        <i class="fas fa-bell"></i>
+                        <span class="notificacoes-badge" id="notificacoesBadge">0</span>
+                    </button>
+
+                    <div class="notificacoes-dropdown" id="notificacoesDropdown"
+                         style="position: absolute; top: 100%; right: 0; z-index: 9999;">
+                        <div class="notificacoes-header">
+                            <h3><i class="fas fa-bell" style="color: #0f766e;"></i> Notificações</h3>
+                            <div style="display: flex; gap: 10px;">
+                                <button onclick="marcarTodasLidas()"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    title="Marcar todas como lidas">
+                                    <i class="fas fa-check-double"></i> Ler todas
+                                </button>
+                                <button onclick="limparMinhasNotificacoes(event)"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    title="Excluir todas">
+                                    <i class="fas fa-trash"></i> Limpar
+                                </button>
+                                <button onclick="fecharNotificacoes()"
+                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="notificacoesLista" style="max-height: 400px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 40px; color: #6c757d;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                                <p>Carregando...</p>
+                            </div>
+                        </div>
+
+                        <div class="notificacao-footer">
+                            <a href="/notificacoes.html">
+                                <i class="fas fa-eye"></i> Ver todas as notificações
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenu(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar gestao-avatar" id="userAvatar">
+                                <i class="fas fa-user-tie"></i>
+                            </div>
+                            <span class="user-notification-badge" id="userNotificationBadge"></span>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Gestão ADM</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-3 text-muted" id="userChevron"></i>
+                    </div>
+
+                    <div class="user-dropdown-menu" id="userDropdown">
+                        <a href="calendario.html" class="dropdown-item" title="Calendário Acadêmico">
+                            <div class="icon-box bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+                        <a href="cardapio.html" class="dropdown-item" title="Cardápio Escolar">
+                            <div class="icon-box bg-orange"><i class="fas fa-utensils"></i></div>
+                            <div class="item-text">Cardápio</div>
+                        </a>
+
+                        <div class="dropdown-item" onclick="abrirMenuNotificacoesSeguro(event)" title="Notificações">
+                            <div class="icon-box bg-blue"><i class="fas fa-bell"></i></div>
+                            <div class="item-text">Notificações</div>
+                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item" title="Baixar App">
+                            <div class="icon-box bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item" title="Editar Perfil">
+                            <div class="icon-box bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-divider"></div>
+
+                        <div class="dropdown-item text-danger" onclick="logout()" title="Sair do Sistema">
+                            <div class="icon-box bg-red"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BANNER -->
+        <div class="gestao-adm-banner">
+            <div class="banner-icon">
+                <i class="fas fa-user-tie"></i>
+            </div>
+            <div class="banner-text">
+                <h2>Gestão ADM</h2>
+                <p>Administração do Cardápio Escolar</p>
+            </div>
+
+            <div class="d-flex align-items-center gap-3 ms-auto" style="flex-wrap: wrap;">
+                <span class="fw-bold" style="font-size: 14px; color: white !important;">
+                    <i class="fas fa-smile me-1" style="color: #fde047;"></i>
+                    Bem-vindo(a), <span id="headerNomeUsuario" style="color: white !important;">Gestor(a)</span>
+                </span>
+
+                <span class="badge bg-light text-dark shadow-sm border"
+                      style="font-size: 12px; padding: 6px 12px; border-radius: 20px;">
+                    <i class="fas fa-sun text-warning me-1" id="headerTurnoIcone"></i>
+                    Turno: <span id="headerTurno" class="fw-bold">Matutino</span>
+                </span>
+            </div>
+
+            <div class="banner-date" style="margin-left: 15px; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 15px;">
+                <i class="fas fa-calendar-alt" style="margin-right: 6px; opacity: 0.9;"></i>
+                <span id="dataAtual">--/--/----</span>
+            </div>
+        </div>
+
+        <!-- CONTEÚDO -->
+        <div class="card gestao-adm-card">
+            <div class="card-body">
+
+                <!-- MÉTRICAS -->
+                <div class="row mb-4">
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card gestao-adm-metric">
+                            <i class="fas fa-utensils fa-2x text-warning mb-2"></i>
+                            <div class="metric-value" id="metricTotal">0</div>
+                            <div class="metric-label">Total de Cardápios</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card gestao-adm-metric">
+                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                            <div class="metric-value" id="metricHoje" style="font-size: 1.1rem;">—</div>
+                            <div class="metric-label">Cardápio de Hoje</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card gestao-adm-metric">
+                            <i class="fas fa-calendar-week fa-2x text-primary mb-2"></i>
+                            <div class="metric-value" id="metricSemana">0</div>
+                            <div class="metric-label">Esta Semana</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="metric-card gestao-adm-metric">
+                            <i class="fas fa-clock fa-2x text-info mb-2"></i>
+                            <div class="metric-value" id="metricUltima" style="font-size: 1.1rem;">—</div>
+                            <div class="metric-label">Última Atualização</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AÇÕES -->
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <div>
+                        <h5 class="mb-1" style="color: #374151; font-weight: 700;">
+                            <i class="fas fa-list" style="color: #0f766e;"></i> Cardápios Cadastrados
+                        </h5>
+                        <small class="text-muted" id="badgeCount">0 registros</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="gestaoAdm.carregarCardapios()" title="Atualizar">
+                            <i class="fas fa-sync-alt"></i> Atualizar
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="gestaoAdm.abrirModal()" style="background: linear-gradient(135deg, #0f766e, #115e59); border: none;">
+                            <i class="fas fa-plus-circle"></i> Novo Cardápio
+                        </button>
+                    </div>
+                </div>
+
+                <!-- FILTROS -->
+                <div class="filtros-avancados-card mb-3">
+                    <div class="filtros-avancados-header">
+                        <i class="fas fa-filter"></i>
+                        <strong>Filtros</strong>
+                        <button type="button" class="btn-limpar-filtros" onclick="gestaoAdm.limparFiltros()">
+                            <i class="fas fa-times-circle"></i> Limpar
+                        </button>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><i class="fas fa-calendar"></i> Mês/Ano</label>
+                            <input type="month" id="filtroMes" class="form-control gestao-adm-input">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><i class="fas fa-search"></i> Buscar</label>
+                            <input type="text" id="filtroBusca" class="form-control gestao-adm-input"
+                                placeholder="Buscar por conteúdo..." oninput="gestaoAdm.filtrarLocal()">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" onclick="gestaoAdm.filtrarPorMes()" style="background: linear-gradient(135deg, #0f766e, #115e59); border: none;">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TABELA -->
+                <div class="card gestao-adm-lista-card">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 gestao-adm-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Semana</th>
+                                        <th>☕ Manhã</th>
+                                        <th>🍽️ Almoço</th>
+                                        <th>🍪 Tarde</th>
+                                        <th style="width: 100px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaBody">
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4 text-muted">
+                                            <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL -->
+    <div class="modal" id="modal" style="display: none;">
+        <div class="modal-content gestao-adm-modal">
+            <div class="modal-header gestao-adm-modal-header">
+                <h2 id="modalTitle"><i class="fas fa-utensils"></i> Cardápio</h2>
+                <button class="modal-close" onclick="gestaoAdm.fecharModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
+    <!-- CONFIRM MODAL -->
+    <div class="modal" id="confirmModal" style="display: none;">
+        <div class="modal-content gestao-adm-modal" style="max-width: 420px;">
+            <div class="modal-header gestao-adm-modal-header">
+                <h2 id="confirmTitle">Confirmação</h2>
+                <button class="modal-close" onclick="gestaoAdm.fecharConfirmModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="confirmMessage"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="gestaoAdm.fecharConfirmModal()">Cancelar</button>
+                <button class="btn btn-danger" id="confirmBtn">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/gestao-adm.js?v=2024"></script>
+</body>
+</html>

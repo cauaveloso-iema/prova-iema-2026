@@ -90,7 +90,7 @@ const PERFIS_ADMIN_PADRAO = [
     'admin', 'super_admin', 'setor_pedagogico', 'gestao_geral',
     'supervisao', 'coordenacao_patio', 'secretaria', 'recepcao',
     'enfermaria', 'cozinha', 'assistente-social', 'psicologia',
-    'protagonismo', 'biblioteca'
+    'protagonismo', 'biblioteca', 'gestao-adm'
 ];
 
 // GET - Listar todos os perfis administrativos configurados

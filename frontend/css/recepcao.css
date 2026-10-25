@@ -1106,3 +1106,9 @@ body {
         gap: 8px;
     }
 }
+
+/* ===================== COR LARANJA (CARDÁPIO) ===================== */
+.icon-box.bg-orange {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
