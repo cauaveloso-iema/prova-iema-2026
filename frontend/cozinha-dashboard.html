@@ -138,38 +138,72 @@
                     </div>
                 </div>
 
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="btn-app">
-                    <i class="fas fa-download"></i> <span>App</span>
-                </a>
-                <div class="user-info">
-                    <div class="user-name" id="userName">Carregando...</div>
-                    <div class="user-role" id="userRole">Cozinha</div>
-                </div>
-                <div class="user-avatar" id="userAvatar" onclick="toggleDropdown()">
-                    <i class="fas fa-user"></i>
-                </div>
-            </div>
-        </div>
+                <!-- ========== NOVO: DROPDOWN ESTILIZADO (padrão protagonismo) ========== -->
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleDropdownCozinha(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Cozinha</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-2 text-muted" id="userChevron"></i>
+                    </div>
 
-        <div class="dropdown-menu-custom" id="dropdownMenu">
-            <div class="dropdown-item" onclick="window.location.href='editar-perfil.html'">
-                <i class="fas fa-user-edit"></i> Editar Perfil
-            </div>
-            <div class="dropdown-item" onclick="gerarRelatorioPDF()">
-                <i class="fas fa-file-pdf"></i> Exportar Relatório (PDF)
-            </div>
-            <div class="dropdown-item" onclick="exportarCSV()">
-                <i class="fas fa-file-csv"></i> Exportar Dados (CSV)
-            </div>
-            <div class="dropdown-item" onclick="abrirModalFaltantes()">
-                <i class="fas fa-users-slash"></i> Ver Faltantes do Dia
-            </div>
-            <div class="dropdown-item" onclick="mostrarQRCodeFeedback()">
-                <i class="fas fa-qrcode"></i> QR Code para Alunos
-            </div>
-            <hr>
-            <div class="dropdown-item danger" onclick="logout()">
-                <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+                    <div class="user-dropdown-menu" id="userDropdownCozinha">
+                        <a href="calendario.html" class="dropdown-item-cozinha" title="Calendário Acadêmico">
+                            <div class="icon-box-cozinha bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+
+                        <a href="cardapio.html" class="dropdown-item-cozinha" title="Cardápio Escolar">
+                            <div class="icon-box-cozinha bg-orange"><i class="fas fa-utensils"></i></div>
+                            <div class="item-text">Cardápio</div>
+                        </a>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item-cozinha" title="Baixar App">
+                            <div class="icon-box-cozinha bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item-cozinha" title="Editar Perfil">
+                            <div class="icon-box-cozinha bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-item-cozinha" onclick="gerarRelatorioPDF()" title="Exportar Relatório">
+                            <div class="icon-box-cozinha bg-red"><i class="fas fa-file-pdf"></i></div>
+                            <div class="item-text">Relatório PDF</div>
+                        </div>
+
+                        <div class="dropdown-item-cozinha" onclick="exportarCSV()" title="Exportar Dados">
+                            <div class="icon-box-cozinha bg-blue"><i class="fas fa-file-csv"></i></div>
+                            <div class="item-text">Exportar CSV</div>
+                        </div>
+
+                        <div class="dropdown-item-cozinha" onclick="abrirModalFaltantes()" title="Ver Faltantes">
+                            <div class="icon-box-cozinha bg-yellow"><i class="fas fa-users-slash"></i></div>
+                            <div class="item-text">Faltantes do Dia</div>
+                        </div>
+
+                        <div class="dropdown-item-cozinha" onclick="mostrarQRCodeFeedback()" title="QR Code Alunos">
+                            <div class="icon-box-cozinha bg-green"><i class="fas fa-qrcode"></i></div>
+                            <div class="item-text">QR Code Alunos</div>
+                        </div>
+
+                        <div class="dropdown-divider-cozinha"></div>
+
+                        <div class="dropdown-item-cozinha text-danger" onclick="logout()" title="Sair">
+                            <div class="icon-box-cozinha bg-red-dark"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair do Sistema</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- ========== FIM DO NOVO DROPDOWN ========== -->
             </div>
         </div>
 
@@ -855,6 +889,70 @@
                 const ativos = localStorage.getItem('cozinha_filtros_analise');
                 window.carregarAnaliseTurmas(ativos ? JSON.parse(ativos) : null);
             }
+        });
+    })();
+    </script>
+
+    <!-- ========== NOVO: SCRIPT DO DROPDOWN ========== -->
+    <script>
+    (function() {
+        'use strict';
+
+        // Toggle do dropdown do usuário
+        window.toggleDropdownCozinha = function(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('userDropdownCozinha');
+            const chevron = document.getElementById('userChevron');
+
+            if (dropdown) {
+                const isShowing = dropdown.classList.contains('show');
+                if (isShowing) {
+                    dropdown.classList.remove('show');
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                } else {
+                    dropdown.classList.add('show');
+                    if (chevron) chevron.style.transform = 'rotate(180deg)';
+                }
+            }
+        };
+
+        // Fecha ao clicar fora
+        document.addEventListener('click', function(event) {
+            const container = document.getElementById('userMenuContainer');
+            const dropdown = document.getElementById('userDropdownCozinha');
+            const chevron = document.getElementById('userChevron');
+
+            if (container && !container.contains(event.target)) {
+                if (dropdown) dropdown.classList.remove('show');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        });
+
+        // Carregar foto de perfil no avatar do dropdown
+        async function carregarFotoPerfilCozinha() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+
+                const response = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                    const avatar = document.getElementById('userAvatar');
+                    if (avatar) {
+                        avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar foto:', error);
+            }
+        }
+
+        // Executar após o DOM carregar
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(carregarFotoPerfilCozinha, 800);
         });
     })();
     </script>

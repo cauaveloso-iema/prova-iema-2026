@@ -10369,7 +10369,7 @@ class AdminPanel {
             'protagonismoCard': contagem.protagonismo,
             'bibliotecaCard': contagem.biblioteca,
             'secretariaCard': contagem.secretaria,
-            'gestao-admCard': contagem.gestao-adm,
+            'gestao-admCard': contagem['gestao-adm'],
             'recepcaoCard': contagem.recepcao
         };
         

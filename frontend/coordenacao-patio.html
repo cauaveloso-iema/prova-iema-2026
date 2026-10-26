@@ -18,35 +18,42 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    
+
     <script src="js/vlibras-oficial.js"></script>
     <script src="js/acessibilidade.js"></script>
     <script src="js/toggle-buttons.js"></script>
     <script src="js/draggable.js"></script>
     <script src="js/chatbot-frontend.js"></script>
     <script src="js/push-client.js"></script>
-    <script src="js/dialog-helper.js"></script> 
+    <script src="js/dialog-helper.js"></script>
     <script src="/js/core-security.js"></script>
 
     <link rel="stylesheet" href="css/coordenacao-patio.css">
 </head>
 <body>
     <div class="container">
-        <!-- Header com informações do usuário e botões -->
-        <div class="header-top">
-            <div class="user-info-card">
-                <div class="user-avatar" id="userAvatar">
-                    <i class="fas fa-user-shield"></i>
-                </div>
-                <div class="user-details">
-                    <div class="user-name" id="userName">Carregando...</div>
-                    <div class="user-role" id="userRole">Coordenação de Pátio</div>
+
+        <!-- ============================================= -->
+        <!-- HEADER: RELÓGIO À ESQUERDA / PERFIL À DIREITA -->
+        <!-- ============================================= -->
+        <div class="header-top-novo">
+
+            <!-- Relógio em tempo real -->
+            <div class="relogio-card">
+                <i class="far fa-clock"></i>
+                <div>
+                    <div class="relogio-tempo" id="relogioTempoReal">00:00:00</div>
+                    <div class="relogio-data" id="relogioData">Carregando...</div>
                 </div>
             </div>
-            <div class="btn-actions">
-                <!-- 🔔 SINO DE NOTIFICAÇÕES -->
-                <div class="notificacoes-container">
-                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn" title="Notificações">
+
+            <!-- Notificações + Perfil -->
+            <div class="d-flex align-items-center gap-3">
+
+                <!-- 🔔 SINO (aberto pelo menu do usuário) -->
+                <div class="container-sino-oculto" id="containerSinoOriginal">
+                    <button class="notificacoes-btn" onclick="abrirNotificacoes()" id="notificacoesBtn"
+                            title="Notificações" style="display: none;">
                         <i class="fas fa-bell"></i>
                         <span class="notificacoes-badge" id="notificacoesBadge">0</span>
                     </button>
@@ -54,23 +61,34 @@
                     <div class="notificacoes-dropdown" id="notificacoesDropdown">
                         <div class="notificacoes-header">
                             <h3>
-                                <i class="fas fa-bell"></i>
+                                <i class="fas fa-bell" style="color: #667eea;"></i>
                                 Notificações
                             </h3>
                             <div style="display: flex; gap: 10px;">
-                                <button onclick="marcarTodasLidas()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Marcar todas as notificações como lidas">
+                                <button onclick="marcarTodasLidas()"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Marcar todas como lidas">
                                     <i class="fas fa-check-double"></i> Ler todas
                                 </button>
-                                <button onclick="limparMinhasNotificacoes(event)" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'" title="Excluir todas as notificações">
+                                <button onclick="limparMinhasNotificacoes(event)"
+                                    style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'"
+                                    title="Excluir todas">
                                     <i class="fas fa-trash"></i> Limpar
                                 </button>
-                                <button onclick="fecharNotificacoes()" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">
+                                <button onclick="fecharNotificacoes()"
+                                    style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; border-radius: 6px;"
+                                    onmouseover="this.style.background='#f3f4f6'"
+                                    onmouseout="this.style.background='none'">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <div id="notificacoesLista" style="max-height: 500px; overflow-y: auto;">
+                        <div id="notificacoesLista" style="max-height: 400px; overflow-y: auto;">
                             <div style="text-align: center; padding: 40px; color: #6c757d;">
                                 <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
                                 <p>Carregando...</p>
@@ -85,32 +103,77 @@
                     </div>
                 </div>
 
-                <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing" target="_blank" class="btn-icon" style="
-                    background: linear-gradient(135deg, #10b981, #059669);
-                    border-radius: 50%;
-                    width: 40px;
-                    height: 40px;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    text-decoration: none;
-                    color: white;
-                    transition: all 0.3s;
-                    border: none;
-                    cursor: pointer;
-                " title="Baixar App">
-                    <i class="fas fa-download"></i>
-                </a>
-                <button class="btn-icon" onclick="window.location.href='editar-perfil.html'" title="Editar Perfil">
-                    <i class="fas fa-user-edit"></i>
-                </button>
-                <button class="btn-icon danger" onclick="logout()" title="Sair do Sistema">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
+                <!-- Perfil do Usuário (dropdown estilizado) -->
+                <div class="user-menu-container" id="userMenuContainer">
+                    <div class="user-trigger" id="userTrigger" onclick="toggleUserMenuPatio(event)">
+                        <div class="user-avatar-wrapper">
+                            <div class="user-avatar" id="userAvatar">
+                                <i class="fas fa-user-shield"></i>
+                            </div>
+                        </div>
+                        <div class="user-details">
+                            <div class="user-name" id="userName">Carregando...</div>
+                            <div class="user-role" id="userRole">Coordenação de Pátio</div>
+                        </div>
+                        <i class="fas fa-chevron-down ms-2 text-muted" id="userChevron"></i>
+                    </div>
+
+                    <div class="user-dropdown-menu" id="userDropdownPatio">
+                        <a href="calendario.html" class="dropdown-item-patio" title="Calendário Acadêmico">
+                            <div class="icon-box-patio bg-purple"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="item-text">Calendário</div>
+                        </a>
+
+                        <a href="cardapio.html" class="dropdown-item-patio" title="Cardápio Escolar">
+                            <div class="icon-box-patio bg-orange"><i class="fas fa-utensils"></i></div>
+                            <div class="item-text">Cardápio</div>
+                        </a>
+
+                        <a href="https://drive.google.com/file/d/1uN-lWAtxcf61Kzu1FCBB8cQMrkXrg81I/view?usp=sharing"
+                           target="_blank" class="dropdown-item-patio" title="Baixar App">
+                            <div class="icon-box-patio bg-green"><i class="fas fa-download"></i></div>
+                            <div class="item-text">Baixar App</div>
+                        </a>
+
+                        <a href="editar-perfil.html" class="dropdown-item-patio" title="Editar Perfil">
+                            <div class="icon-box-patio bg-gray"><i class="fas fa-user-edit"></i></div>
+                            <div class="item-text">Editar Perfil</div>
+                        </a>
+
+                        <div class="dropdown-item-patio" onclick="abrirMenuNotificacoesSeguro(event)" title="Notificações">
+                            <div class="icon-box-patio bg-blue"><i class="fas fa-bell"></i></div>
+                            <div class="item-text">Notificações</div>
+                            <span class="badge-count" id="menuNotifBadge" style="display: none;">0</span>
+                        </div>
+
+                        <div class="dropdown-divider-patio"></div>
+
+                        <div class="dropdown-item-patio text-danger" onclick="logout()" title="Sair">
+                            <div class="icon-box-patio bg-red-dark"><i class="fas fa-sign-out-alt"></i></div>
+                            <div class="item-text">Sair do Sistema</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <!-- Título da página -->
+
+        <!-- ============================================= -->
+        <!-- CARD DE BOAS-VINDAS COM TURNO DINÂMICO       -->
+        <!-- ============================================= -->
+        <div class="card-boas-vindas">
+            <div class="boas-vindas-texto">
+                <i class="fas fa-smile"></i>
+                <span>Bem-vindo(a), <strong id="headerNomeUsuario">Coordenação</strong>!</span>
+            </div>
+            <div class="turno-badge">
+                <i class="fas fa-sun text-warning" id="headerTurnoIcone"></i>
+                Turno: <strong id="headerTurno">Matutino</strong>
+            </div>
+        </div>
+
+        <!-- ============================================= -->
+        <!-- CARD DE TÍTULO DA PÁGINA                     -->
+        <!-- ============================================= -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
@@ -122,7 +185,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Modo de operação -->
         <div class="card">
             <div class="card-body">
@@ -136,7 +199,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- MODO AUTOMÁTICO (QR CODE) -->
         <div id="modoAutomatico">
             <div class="card">
@@ -151,8 +214,8 @@
                 </div>
             </div>
         </div>
-        
-        <!-- MODO MANUAL (Selecionar Aluno por Turma) -->
+
+        <!-- MODO MANUAL -->
         <div id="modoManual" style="display: none;">
             <div class="card">
                 <div class="card-body">
@@ -160,10 +223,10 @@
                         <i class="fas fa-users me-2"></i> Selecionar Aluno por Turma
                     </h5>
                     <p class="text-muted mb-3">
-                        <i class="fas fa-info-circle"></i> 
+                        <i class="fas fa-info-circle"></i>
                         Selecione uma turma e clique no aluno para registrar a refeição diretamente.
                     </p>
-                    
+
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Turma</label>
@@ -176,7 +239,7 @@
                             <input type="text" id="filtroBuscaManual" class="form-control" placeholder="Digite o nome do aluno...">
                         </div>
                     </div>
-                    
+
                     <div id="listaAlunosManual" class="mt-3">
                         <div class="text-center py-3">
                             <div class="loading"></div>
@@ -186,7 +249,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Informações do Aluno -->
         <div id="alunoInfo" style="display: none;">
             <div class="aluno-card">
@@ -205,15 +268,15 @@
                         </p>
                     </div>
                 </div>
-                
+
                 <div id="horarioInfo"></div>
-                
+
                 <button id="btnRegistrar" class="btn-registrar" onclick="registrarRefeicao()">
                     <i class="fas fa-check-circle me-2"></i> Registrar Refeição
                 </button>
             </div>
         </div>
-        
+
         <!-- Contador do Dia -->
         <div class="card">
             <div class="card-body">
@@ -251,7 +314,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Últimos Registros -->
         <div class="card">
             <div class="card-body">
@@ -264,21 +327,193 @@
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- ============================================ -->
-    <!-- 🏫 SCRIPT PRINCIPAL DA COORDENAÇÃO DE PÁTIO -->
-    <!-- ============================================ -->
+
+    <!-- SCRIPT PRINCIPAL -->
     <script src="js/coordenacao-patio.js"></script>
-    
+
     <!-- ============================================ -->
-    <!-- 📱 ESCALA MOBILE (INLINE - PEQUENO)         -->
+    <!-- 🕐 RELÓGIO EM TEMPO REAL + BOAS-VINDAS        -->
+    <!-- ============================================ -->
+    <script>
+    (function() {
+        'use strict';
+
+        function atualizarRelogio() {
+            const elTempo = document.getElementById('relogioTempoReal');
+            const elData = document.getElementById('relogioData');
+            if (!elTempo) return;
+
+            const agora = new Date();
+            const horas = String(agora.getHours()).padStart(2, '0');
+            const minutos = String(agora.getMinutes()).padStart(2, '0');
+            const segundos = String(agora.getSeconds()).padStart(2, '0');
+
+            elTempo.textContent = `${horas}:${minutos}:${segundos}`;
+
+            if (elData) {
+                const dataFormatada = agora.toLocaleDateString('pt-BR', {
+                    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
+                });
+                elData.textContent = dataFormatada.replace(/\./g, '').replace(/,/g, ' •');
+            }
+        }
+        setInterval(atualizarRelogio, 1000);
+        atualizarRelogio();
+
+        function atualizarBoasVindasETurno() {
+            const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+            const nomeEl = document.getElementById('headerNomeUsuario');
+            if (nomeEl && userData.nome) {
+                nomeEl.textContent = userData.nome.split(' ')[0];
+            }
+
+            const agora = new Date();
+            const hora = agora.getHours();
+            let turno = 'Matutino';
+            let icone = 'fa-sun text-warning';
+
+            if (hora >= 12 && hora < 18) {
+                turno = 'Vespertino';
+                icone = 'fa-cloud-sun text-warning';
+            } else if (hora >= 18 || hora < 5) {
+                turno = 'Noturno';
+                icone = 'fa-moon text-primary';
+            }
+
+            const turnoEl = document.getElementById('headerTurno');
+            const iconeEl = document.getElementById('headerTurnoIcone');
+
+            if (turnoEl) turnoEl.textContent = turno;
+            if (iconeEl) iconeEl.className = `fas ${icone} me-1`;
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            atualizarBoasVindasETurno();
+            setInterval(atualizarBoasVindasETurno, 60000);
+        });
+    })();
+    </script>
+
+    <!-- ============================================ -->
+    <!-- 👤 DROPDOWN DO USUÁRIO (CORRIGIDO)            -->
+    <!-- ============================================ -->
+    <script>
+    (function() {
+        'use strict';
+
+        // Toggle do dropdown
+        window.toggleUserMenuPatio = function(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('userDropdownPatio');
+            const chevron = document.getElementById('userChevron');
+
+            if (dropdown) {
+                const isShowing = dropdown.classList.contains('show');
+                if (isShowing) {
+                    dropdown.classList.remove('show');
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                } else {
+                    dropdown.classList.add('show');
+                    if (chevron) chevron.style.transform = 'rotate(180deg)';
+                }
+            }
+        };
+
+        // Fecha ao clicar fora
+        document.addEventListener('click', function(event) {
+            const container = document.getElementById('userMenuContainer');
+            const dropdown = document.getElementById('userDropdownPatio');
+            const chevron = document.getElementById('userChevron');
+
+            if (container && !container.contains(event.target)) {
+                if (dropdown) dropdown.classList.remove('show');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        });
+
+        // 🔔 Abre o sino de notificações pelo menu do usuário (VERSÃO SIMPLIFICADA)
+        window.abrirMenuNotificacoesSeguro = function(event) {
+            if (event) event.stopPropagation();
+
+            // 1) Fecha o menu do usuário
+            const userDropdown = document.getElementById('userDropdownPatio');
+            const chevron = document.getElementById('userChevron');
+            if (userDropdown) userDropdown.classList.remove('show');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+
+            // 2) Abre o sino usando a função do coordenacao-patio.js
+            if (typeof window.abrirNotificacoes === 'function') {
+                window.abrirNotificacoes();
+                return;
+            }
+
+            // 3) Fallback: força display só se o JS principal não existir
+            const notifDropdown = document.getElementById('notificacoesDropdown');
+            if (notifDropdown) {
+                notifDropdown.classList.add('show');
+            }
+        };
+
+        // Carregar foto de perfil no avatar
+        async function carregarFotoPerfilPatio() {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) return;
+
+                const response = await fetch('/api/perfil/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (data.success && data.perfil && data.perfil.fotoPerfil) {
+                    const avatar = document.getElementById('userAvatar');
+                    if (avatar) {
+                        avatar.innerHTML = `<img src="${data.perfil.fotoPerfil}" alt="Foto">`;
+                    }
+                }
+
+                if (data.success && data.perfil) {
+                    const nomeEl = document.getElementById('userName');
+                    const roleEl = document.getElementById('userRole');
+                    if (nomeEl && data.perfil.nome) nomeEl.textContent = data.perfil.nome;
+                    if (roleEl) roleEl.textContent = 'Coordenação de Pátio';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar foto:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(carregarFotoPerfilPatio, 800);
+
+            // Sincroniza o badge de notificações no menu
+            const badgeMenu = document.getElementById('menuNotifBadge');
+            if (badgeMenu) {
+                setInterval(() => {
+                    const badgeSino = document.getElementById('notificacoesBadge');
+                    if (badgeSino) {
+                        const total = parseInt(badgeSino.textContent) || 0;
+                        if (total > 0) {
+                            badgeMenu.style.display = 'inline-block';
+                            badgeMenu.textContent = total > 99 ? '99+' : total;
+                        } else {
+                            badgeMenu.style.display = 'none';
+                        }
+                    }
+                }, 2000);
+            }
+        });
+    })();
+    </script>
+
+    <!-- ============================================ -->
+    <!-- 📱 ESCALA MOBILE                              -->
     <!-- ============================================ -->
     <script>
         (function() {
             if (window.innerWidth > 768) return;
-            
+
             function calcularEscalaMobile() {
                 const width = window.innerWidth;
                 if (width <= 320) return 0.55;
@@ -289,10 +524,10 @@
                 if (width <= 700) return 0.95;
                 return 1;
             }
-            
+
             const escala = calcularEscalaMobile();
             document.documentElement.style.setProperty('--scale-ratio', escala);
-            
+
             let timeout;
             window.addEventListener('resize', () => {
                 clearTimeout(timeout);
@@ -312,7 +547,7 @@
             navigator.serviceWorker.getRegistrations().then(registrations => {
                 registrations.forEach(reg => reg.unregister());
             });
-            
+
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
                     .then(reg => console.log('✅ Service Worker ativo'))

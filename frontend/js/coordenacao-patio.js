@@ -16,31 +16,28 @@ let alunosPorTurma = [];
 // ============================================
 (function protegerContraAlertNativo() {
     let __emProgresso = false;
-    
+
     window.mostrarToastPatio = function(mensagem) {
         if (__emProgresso) {
             console.log('[ALERT-RECURSÃO-EVITADA]', mensagem);
             return;
         }
         __emProgresso = true;
-        
+
         try {
             const isWebView = /wv|WebView|Android.*Version\/[\d.]+.*Chrome/i.test(navigator.userAgent) ||
                             (typeof window.AppInventor !== 'undefined');
-            
-            // Se existe toast global, usa ele
+
             if (typeof window.mostrarToastPatio === 'function') {
                 window.mostrarToastPatio(String(mensagem), 'info');
                 return;
             }
-            
-            // Desktop: só log
+
             if (!isWebView) {
                 console.log('%c[ALERT] ' + mensagem, 'background:#667eea;color:white;padding:4px 8px;border-radius:4px;');
                 return;
             }
-            
-            // WebView sem toast: modal simples
+
             const modal = document.createElement('div');
             modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;
                 background:rgba(0,0,0,0.6);display:flex;align-items:center;
@@ -62,7 +59,7 @@ let alunosPorTurma = [];
             __emProgresso = false;
         }
     };
-    
+
     console.log('🛡️ [Proteção] window.mostrarToastPatio sobrescrito (coordenação de pátio)');
 })();
 
@@ -70,19 +67,18 @@ let alunosPorTurma = [];
 // 🍞 TOAST CUSTOMIZADO
 // ============================================
 function mostrarToastPatio(mensagem, tipo = 'info', duracao = 3500) {
-    // Remove toast anterior
     const anterior = document.getElementById('toastPatio');
     if (anterior) anterior.remove();
-    
+
     const cores = {
         success: { bg: '#10b981', icone: 'fa-check-circle' },
         error:   { bg: '#ef4444', icone: 'fa-exclamation-circle' },
         warning: { bg: '#f59e0b', icone: 'fa-exclamation-triangle' },
         info:    { bg: '#667eea', icone: 'fa-info-circle' }
     };
-    
+
     const cor = cores[tipo] || cores.info;
-    
+
     const toast = document.createElement('div');
     toast.id = 'toastPatio';
     toast.style.cssText = `
@@ -105,31 +101,28 @@ function mostrarToastPatio(mensagem, tipo = 'info', duracao = 3500) {
         max-width: 90%;
         transition: transform 0.3s ease;
     `;
-    
+
     const icone = document.createElement('i');
     icone.className = `fas ${cor.icone}`;
     icone.style.fontSize = '18px';
-    
+
     const span = document.createElement('span');
     span.textContent = mensagem;
-    
+
     toast.appendChild(icone);
     toast.appendChild(span);
     document.body.appendChild(toast);
-    
-    // Animação de entrada
+
     setTimeout(() => {
         toast.style.transform = 'translateX(-50%) translateY(0)';
     }, 50);
-    
-    // Animação de saída
+
     setTimeout(() => {
         toast.style.transform = 'translateX(-50%) translateY(-100px)';
         setTimeout(() => toast.remove(), 300);
     }, duracao);
 }
 
-// Expõe globalmente
 window.mostrarToastPatio = mostrarToastPatio;
 
 // ============================================
@@ -152,28 +145,28 @@ function escapeHTML(str) {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     if (!token) { window.location.href = '/login.html'; return; }
-    
+
     const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
     if (userData.role !== 'coordenacao_patio' && userData.role !== 'super_admin') {
         mostrarToastPatio('Acesso negado.');
         window.location.href = '/login.html';
         return;
     }
-    
+
     document.getElementById('userName').textContent = userData.nome || 'Usuário';
     document.getElementById('dataAtual').textContent = new Date().toLocaleDateString('pt-BR');
-    
+
     await carregarFotoPerfil();
     await carregarContadores();
     await carregarTurmasParaManual();
-    
+
     iniciarScannerAutomatico();
-    
+
     setInterval(carregarContadores, 30000);
-    
+
     document.getElementById('modoAutomaticoBtn').addEventListener('click', () => setModo('automatico'));
     document.getElementById('modoManualBtn').addEventListener('click', () => setModo('manual'));
-    
+
     document.getElementById('filtroTurmaManual').addEventListener('change', () => carregarAlunosPorTurma());
     document.getElementById('filtroBuscaManual').addEventListener('input', () => filtrarAlunosManual());
 });
@@ -187,7 +180,7 @@ async function carregarFotoPerfil() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (data.success && data.perfil && data.perfil.fotoPerfil) {
             const avatarDiv = document.getElementById('userAvatar');
             if (avatarDiv) {
@@ -204,12 +197,14 @@ async function carregarFotoPerfil() {
 // ============================================
 async function iniciarScannerAutomatico() {
     const qrContainer = document.getElementById('qr-reader-auto');
+    if (!qrContainer) return;
+
     qrContainer.innerHTML = '<div id="qr-reader-auto-new" style="width: 100%;"></div>';
-    
+
     scannerAuto = new Html5Qrcode("qr-reader-auto-new");
-    
+
     const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
-    
+
     try {
         await scannerAuto.start({ facingMode: "environment" }, config, onScanSuccessAuto, () => {});
         scannerAutoAtivo = true;
@@ -236,7 +231,7 @@ async function pararScannerAutomatico() {
 
 async function onScanSuccessAuto(decodedText) {
     console.log('QR Code escaneado (Automático):', decodedText);
-    
+
     let alunoId = null;
     if (decodedText.match(/^[a-f0-9]{24}$/i)) alunoId = decodedText;
     else if (decodedText.includes('aluno=')) {
@@ -246,12 +241,12 @@ async function onScanSuccessAuto(decodedText) {
         const match = decodedText.match(/[?&]id=([a-f0-9]{24})/i);
         if (match) alunoId = match[1];
     }
-    
-    if (!alunoId) { 
-        mostrarToastPatio('QR Code inválido'); 
-        return; 
+
+    if (!alunoId) {
+        mostrarToastPatio('QR Code inválido');
+        return;
     }
-    
+
     await pararScannerAutomatico();
     await buscarAluno(alunoId);
 }
@@ -261,25 +256,25 @@ async function onScanSuccessAuto(decodedText) {
 // ============================================
 async function setModo(modo) {
     modoAtual = modo;
-    
+
     document.getElementById('alunoInfo').style.display = 'none';
     currentAluno = null;
-    
+
     if (modo === 'automatico') {
         document.getElementById('modoAutomaticoBtn').classList.add('active');
         document.getElementById('modoManualBtn').classList.remove('active');
         document.getElementById('modoAutomatico').style.display = 'block';
         document.getElementById('modoManual').style.display = 'none';
-        
+
         await iniciarScannerAutomatico();
     } else {
         document.getElementById('modoManualBtn').classList.add('active');
         document.getElementById('modoAutomaticoBtn').classList.remove('active');
         document.getElementById('modoAutomatico').style.display = 'none';
         document.getElementById('modoManual').style.display = 'block';
-        
+
         await pararScannerAutomatico();
-        
+
         const turmaSelecionada = document.getElementById('filtroTurmaManual').value;
         if (turmaSelecionada) {
             await carregarAlunosPorTurma();
@@ -298,7 +293,7 @@ async function carregarTurmasParaManual() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (data.success && data.turmas) {
             turmasDisponiveis = data.turmas;
             const turmaSelect = document.getElementById('filtroTurmaManual');
@@ -314,20 +309,20 @@ async function carregarTurmasParaManual() {
 
 async function carregarAlunosPorTurma() {
     const turmaSelecionada = document.getElementById('filtroTurmaManual').value;
-    
+
     if (!turmaSelecionada) {
         document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3">Selecione uma turma para ver os alunos</div>';
         return;
     }
-    
+
     document.getElementById('listaAlunosManual').innerHTML = '<div class="text-center py-3"><div class="loading"></div><p>Carregando alunos...</p></div>';
-    
+
     try {
         const response = await fetch(`/api/coordenacao-patio/alunos?turma=${encodeURIComponent(turmaSelecionada)}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (data.success && data.alunos) {
             alunosPorTurma = data.alunos;
             filtrarAlunosManual();
@@ -342,27 +337,27 @@ async function carregarAlunosPorTurma() {
 
 function filtrarAlunosManual() {
     if (!Array.isArray(alunosPorTurma)) return;
-    
+
     const busca = (document.getElementById('filtroBuscaManual').value || '').toLowerCase();
-    
+
     let alunosFiltrados = alunosPorTurma;
     if (busca) {
         alunosFiltrados = alunosFiltrados.filter(a => (a.nome || '').toLowerCase().includes(busca));
     }
-    
+
     alunosFiltrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-    
+
     const container = document.getElementById('listaAlunosManual');
-    
+
     if (alunosFiltrados.length === 0) {
         container.innerHTML = '<div class="text-center text-muted py-3">Nenhum aluno encontrado</div>';
         return;
     }
-    
+
     let html = '<div class="list-group">';
     alunosFiltrados.forEach(aluno => {
         html += `
-            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" 
+            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                  data-aluno-id="${aluno.id}"
                  data-aluno-nome="${escapeHTML(aluno.nome)}"
                  style="cursor: pointer;">
@@ -376,9 +371,9 @@ function filtrarAlunosManual() {
         `;
     });
     html += '</div>';
-    
+
     container.innerHTML = html;
-    
+
     container.querySelectorAll('.list-group-item').forEach(item => {
         item.addEventListener('click', () => {
             const id = item.getAttribute('data-aluno-id');
@@ -390,7 +385,7 @@ function filtrarAlunosManual() {
 
 async function selecionarAluno(alunoId, alunoNome, itemEl) {
     console.log(`🎯 Aluno selecionado: ${alunoNome} (${alunoId})`);
-    
+
     if (itemEl) {
         itemEl.style.background = '#ede9fe';
         itemEl.style.borderColor = '#667eea';
@@ -404,7 +399,7 @@ async function selecionarAluno(alunoId, alunoNome, itemEl) {
             <i class="fas fa-spinner fa-spin fa-2x" style="color: #667eea;"></i>
         `;
     }
-    
+
     try {
         await buscarAluno(alunoId);
     } catch (error) {
@@ -418,20 +413,20 @@ async function selecionarAluno(alunoId, alunoNome, itemEl) {
 async function buscarAluno(alunoId) {
     try {
         await pararScannerAutomatico();
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
+
         const response = await fetch(`/api/coordenacao-patio/aluno/${alunoId}`, {
             headers: { 'Authorization': `Bearer ${token}` },
             signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        
+
         if (data.success) {
             currentAluno = data.aluno;
             exibirAluno(data);
@@ -446,13 +441,13 @@ async function buscarAluno(alunoId) {
         }
     } catch (error) {
         console.error('Erro:', error);
-        
+
         if (error.name === 'AbortError') {
             mostrarToastPatio('Tempo esgotado ao buscar aluno. Tente novamente.');
         } else {
             mostrarToastPatio('Erro ao buscar usuário');
         }
-        
+
         if (modoAtual === 'automatico') {
             await iniciarScannerAutomatico();
         } else {
@@ -467,7 +462,7 @@ async function buscarAluno(alunoId) {
 function exibirAluno(data) {
     const aluno = data.aluno;
     const horario = data.horario;
-    
+
     const fotoEl = document.getElementById('alunoFoto');
     if (fotoEl) {
         fotoEl.onerror = null;
@@ -477,17 +472,17 @@ function exibirAluno(data) {
             this.src = gerarAvatarSVG(aluno.nome);
         };
     }
-    
+
     document.getElementById('alunoNome').textContent = aluno.nome;
     document.getElementById('alunoMatricula').textContent = aluno.matricula || 'Não informada';
     document.getElementById('alunoTurma').textContent = aluno.turma || 'Não informada';
     document.getElementById('alunoCurso').textContent = aluno.curso || 'Não informado';
-    
+
     let classeCard = 'horario-card';
     if (horario.horarioPermitido) {
         classeCard = horario.tipoRefeicao === 'almoco' ? 'horario-card obrigatorio' : 'horario-card permitido';
     }
-    
+
     document.getElementById('horarioInfo').innerHTML = `
         <div class="${classeCard}">
             <div class="d-flex align-items-center">
@@ -502,7 +497,7 @@ function exibirAluno(data) {
             </div>
         </div>
     `;
-    
+
     const btn = document.getElementById('btnRegistrar');
     if (horario.podeRegistrar && !horario.jaComeu) {
         btn.disabled = false;
@@ -515,7 +510,7 @@ function exibirAluno(data) {
             btn.innerHTML = `<i class="fas fa-times-circle me-2"></i> FORA DO HORÁRIO`;
         }
     }
-    
+
     document.getElementById('alunoInfo').style.display = 'block';
     document.getElementById('alunoInfo').scrollIntoView({ behavior: 'smooth' });
 }
@@ -525,13 +520,13 @@ function exibirAluno(data) {
 // ============================================
 async function registrarRefeicaoAutomatico() {
     if (!currentAluno) return;
-    
+
     const hora = new Date().getHours();
     let tipoRefeicao = null;
     if (hora >= 8 && hora <= 10) tipoRefeicao = 'manha';
     else if (hora >= 11 && hora <= 13) tipoRefeicao = 'almoco';
     else if (hora >= 14 && hora <= 16) tipoRefeicao = 'tarde';
-    
+
     if (!tipoRefeicao) {
         mostrarToastPatio('Fora do horário de refeição');
         if (modoAtual === 'automatico') {
@@ -539,7 +534,7 @@ async function registrarRefeicaoAutomatico() {
         }
         return;
     }
-    
+
     try {
         const response = await fetch('/api/coordenacao-patio/registrar-refeicao', {
             method: 'POST',
@@ -547,14 +542,14 @@ async function registrarRefeicaoAutomatico() {
             body: JSON.stringify({ alunoId: currentAluno.id, tipoRefeicao })
         });
         const data = await response.json();
-        
+
         if (data.success) {
             mostrarToastPatio(`✅ ${data.message}`);
             document.getElementById('alunoInfo').style.display = 'none';
             currentAluno = null;
-            
+
             await carregarContadores();
-            
+
             if (modoAtual === 'automatico') {
                 await iniciarScannerAutomatico();
             } else {
@@ -563,7 +558,7 @@ async function registrarRefeicaoAutomatico() {
         } else {
             if (data.rodizio && !data.rodizio.pode) {
                 mostrarToastPatio(`❌ ${data.error}\n\n📋 Motivo: ${data.rodizio.mensagem}`);
-                
+
                 const horarioDiv = document.getElementById('horarioInfo');
                 if (horarioDiv) {
                     horarioDiv.innerHTML = `
@@ -582,7 +577,7 @@ async function registrarRefeicaoAutomatico() {
             } else {
                 mostrarToastPatio(`❌ ${data.error}`);
             }
-            
+
             if (modoAtual === 'automatico') {
                 await iniciarScannerAutomatico();
             } else {
@@ -613,13 +608,13 @@ async function carregarContadores() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         if (data.success) {
             document.getElementById('contManha').textContent = data.contagem.manha || 0;
             document.getElementById('contAlmoco').textContent = data.contagem.almoco || 0;
             document.getElementById('contTarde').textContent = data.contagem.tarde || 0;
             document.getElementById('totalRefeicoes').textContent = data.contagem.total || 0;
-            
+
             if (data.registros && data.registros.length > 0) {
                 document.getElementById('ultimosRegistros').innerHTML = data.registros.slice(0, 10).map(r => `
                     <div class="list-group-item d-flex justify-content-between align-items-center">
@@ -683,14 +678,14 @@ document.addEventListener('keydown', (e) => {
 
     function mostrarNotificacaoInterna(mensagem, tipo = 'info') {
         if (!isWebViewNotif()) { mostrarToastPatio(mensagem); return; }
-        
+
         const modal = document.createElement('div');
         modal.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
             z-index: 999999; padding: 20px; box-sizing: border-box;`;
         const icones = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
         const cores = { success: '#10b981', error: '#dc2626', warning: '#f59e0b', info: '#667eea' };
-        
+
         modal.innerHTML = `
             <div style="background: white; border-radius: 16px; padding: 25px; max-width: 380px; width: 100%;
                         box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;">
@@ -709,7 +704,7 @@ document.addEventListener('keydown', (e) => {
         return new Promise((resolve) => {
             const old = document.getElementById('confirmInternoModalNotif');
             if (old) old.remove();
-            
+
             const modalHtml = `
                 <div class="modal fade" id="confirmInternoModalNotif" tabindex="-1" data-bs-backdrop="static">
                     <div class="modal-dialog modal-dialog-centered">
@@ -728,11 +723,11 @@ document.addEventListener('keydown', (e) => {
                     </div>
                 </div>`;
             document.body.insertAdjacentHTML('beforeend', modalHtml);
-            
+
             const modalEl = document.getElementById('confirmInternoModalNotif');
             const modal = new bootstrap.Modal(modalEl);
             modal.show();
-            
+
             const finalizar = (resultado) => {
                 modal.hide();
                 setTimeout(() => modalEl.remove(), 300);
@@ -745,16 +740,19 @@ document.addEventListener('keydown', (e) => {
 
     function iniciarSistemaNotificacoes() {
         if (!document.getElementById('notificacoesBtn')) return;
-        
+
         carregarTudo();
         if (notificacoesInterval) clearInterval(notificacoesInterval);
         notificacoesInterval = setInterval(carregarTudo, 30000);
-        
+
         document.addEventListener('click', function(event) {
             const dropdown = document.getElementById('notificacoesDropdown');
             const btn = document.getElementById('notificacoesBtn');
-            if (dropdown && btn && !btn.contains(event.target) && !dropdown.contains(event.target)) {
-                dropdown.classList.remove('show');
+            const containerSino = document.getElementById('containerSinoOriginal');
+            if (dropdown && dropdown.classList.contains('show')) {
+                if (containerSino && !containerSino.contains(event.target)) {
+                    fecharNotificacoes();
+                }
             }
         });
     }
@@ -769,7 +767,7 @@ document.addEventListener('keydown', (e) => {
         try {
             const token = localStorage.getItem('auth_token');
             if (!token) return;
-            
+
             const response = await fetch('/api/notificacoes?apenasNaoLidas=false&limite=20', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -785,7 +783,7 @@ document.addEventListener('keydown', (e) => {
     function renderizarSino() {
         const lista = document.getElementById('notificacoesLista');
         if (!lista) return;
-        
+
         if (__notificacoesCache.length === 0) {
             lista.innerHTML = `
                 <div class="notificacoes-vazio">
@@ -794,7 +792,7 @@ document.addEventListener('keydown', (e) => {
                 </div>`;
             return;
         }
-        
+
         let html = `
             <div class="notificacoes-secao">
                 <div class="notificacoes-secao-titulo">
@@ -802,7 +800,7 @@ document.addEventListener('keydown', (e) => {
                     <span>Notificações</span>
                     <span class="badge-count">${__notificacoesCache.filter(n => !n.lida).length} não lidas</span>
                 </div>`;
-        
+
         __notificacoesCache.forEach(notif => {
             const data = new Date(notif.createdAt);
             const agora = new Date();
@@ -810,15 +808,15 @@ document.addEventListener('keydown', (e) => {
             const diffMin = Math.floor(diffMs / 60000);
             const diffHr = Math.floor(diffMs / 3600000);
             const diffDia = Math.floor(diffMs / 86400000);
-            
+
             let tempoTexto;
             if (diffMin < 1) tempoTexto = 'agora mesmo';
             else if (diffMin < 60) tempoTexto = `há ${diffMin} min`;
             else if (diffHr < 24) tempoTexto = `há ${diffHr} h`;
             else tempoTexto = `há ${diffDia} d`;
-            
+
             const classeLida = notif.lida ? '' : 'nao-lida';
-            
+
             html += `
                 <div class="notificacao-item ${classeLida}"
                      data-notif-id="${notif._id}"
@@ -834,10 +832,10 @@ document.addEventListener('keydown', (e) => {
                     </div>
                 </div>`;
         });
-        
+
         html += `</div>`;
         lista.innerHTML = html;
-        
+
         lista.querySelectorAll('.notificacao-item').forEach(item => {
             item.addEventListener('click', () => {
                 const id = item.getAttribute('data-notif-id');
@@ -851,31 +849,45 @@ document.addEventListener('keydown', (e) => {
         const badge = document.getElementById('notificacoesBadge');
         const btn = document.getElementById('notificacoesBtn');
         if (!badge || !btn) return;
-        
+
         const total = __notificacoesCache.filter(n => !n.lida).length;
-        
+
         if (total > 0) {
             badge.textContent = total > 99 ? '99+' : total;
             badge.style.display = 'inline-flex';
-            btn.classList.remove('tem-notificacao');
             badge.style.background = '#ef4444';
         } else {
             badge.style.display = 'none';
-            btn.classList.remove('tem-notificacao');
         }
     }
 
     function abrirNotificacoes() {
         const dropdown = document.getElementById('notificacoesDropdown');
         if (!dropdown) return;
-        dropdown.classList.toggle('show');
+
+        // Se já está aberto, fecha
         if (dropdown.classList.contains('show')) {
-            carregarTudo();
+            fecharNotificacoes();
+            return;
         }
+
+        // Abre (usa classe .show — o CSS cuida do display: block)
+        dropdown.classList.add('show');
+        dropdown.style.display = '';   // limpa qualquer display inline anterior
+
+        // Carrega a lista
+        carregarTudo();
     }
 
+    // 🔥 CORREÇÃO PRINCIPAL: fecharNotificacoes robusto
     function fecharNotificacoes() {
-        document.getElementById('notificacoesDropdown')?.classList.remove('show');
+        const dropdown = document.getElementById('notificacoesDropdown');
+        if (dropdown) {
+            dropdown.classList.remove('show');
+            dropdown.style.display = '';   // ← limpa display inline (impedia fechar!)
+        }
+        const btn = document.getElementById('notificacoesBtn');
+        if (btn) btn.classList.remove('active');
     }
 
     async function abrirNotificacao(id, link) {
@@ -886,8 +898,11 @@ document.addEventListener('keydown', (e) => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             fecharNotificacoes();
-            if (link && link !== '#') window.location.href = link;
-            carregarTudo();
+            if (link && link !== '#' && link !== 'null' && link !== 'undefined') {
+                window.location.href = link;
+            } else {
+                carregarTudo();
+            }
         } catch (error) {
             console.error('Erro ao abrir notificação:', error);
         }
@@ -915,16 +930,16 @@ document.addEventListener('keydown', (e) => {
             const token = localStorage.getItem('auth_token');
             const confirmacao = await confirmarInternoNotif('🗑️ Deseja excluir TODAS as suas notificações?\n\nEsta ação não pode ser desfeita.');
             if (!confirmacao) return;
-            
+
             const response = await fetch('/api/notificacoes/limpar-minhas', {
                 method: 'DELETE',
-                headers: { 
+                headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
             const data = await response.json();
-            
+
             if (data.success) {
                 __notificacoesCache = [];
                 await carregarTudo();
@@ -946,6 +961,7 @@ document.addEventListener('keydown', (e) => {
         if (notificacoesInterval) clearInterval(notificacoesInterval);
     });
 
+    // Expor globalmente
     window.abrirNotificacoes = abrirNotificacoes;
     window.abrirNotificacao = abrirNotificacao;
     window.marcarTodasLidas = marcarTodasLidas;
