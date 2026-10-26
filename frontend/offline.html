@@ -171,15 +171,47 @@
     </main>
 
     <script>
-        // ================== LÓGICA DE CONEXÃO ==================
+        // ================== LÓGICA DE CONEXÃO BLINDADA ==================
         let intervalo;
         let tempoRestante = 5;
+        let verificandoConexao = false;
 
         function voltarParaLogin() {
             window.location.href = '/login.html';
         }
 
+        // Função que testa a internet de verdade
+        async function verificarInternetReal() {
+            if (verificandoConexao) return;
+            verificandoConexao = true;
+            
+            try {
+                // Tenta buscar um arquivo pequeno no seu próprio servidor (Render)
+                // Usamos o cache-buster '?t=' para não pegar do cache do navegador
+                const response = await fetch('/manifest.json?t=' + Date.now(), { 
+                    method: 'HEAD', 
+                    cache: 'no-store',
+                    signal: AbortSignal.timeout(3000) // Se demorar mais de 3s, consideramos offline
+                });
+                
+                // Se o servidor responder, estamos online!
+                if (response.ok) {
+                    quandoOnline();
+                } else {
+                    quandoOffline();
+                }
+            } catch (error) {
+                // Se der erro (Failed to fetch, timeout, etc), estamos offline
+                quandoOffline();
+            } finally {
+                verificandoConexao = false;
+            }
+        }
+
         function quandoOnline() {
+            // Só muda a tela se não estiver já no estado online
+            if (document.getElementById('backBtn').style.display === 'inline-flex') return;
+
             document.getElementById('statusTitle').innerHTML = '✅ Conexão <span style="color:#10b981">restaurada!</span>';
             document.getElementById('statusMessage').innerHTML = 'Aguarde, estamos te levando de volta...';
             document.getElementById('iconContainer').classList.add('online');
@@ -205,6 +237,9 @@
         }
 
         function quandoOffline() {
+            // Só muda a tela se não estiver já no estado offline
+            if (document.getElementById('reloadBtn').style.display === 'inline-flex') return;
+
             document.getElementById('statusTitle').innerHTML = '📴 Você está <span>offline</span>';
             document.getElementById('statusMessage').innerHTML = 'Parece que sua internet caiu. Não se preocupe, você pode continuar se divertindo!';
             document.getElementById('iconContainer').classList.remove('online');
@@ -216,9 +251,17 @@
             if (intervalo) clearInterval(intervalo);
         }
 
-        window.addEventListener('online', quandoOnline);
-        window.addEventListener('offline', quandoOffline);
-        if (navigator.onLine) { quandoOnline(); } else { quandoOffline(); }
+        // Em vez de confiar no navigator.onLine (que mente), verificamos a cada 3 segundos
+        setInterval(verificarInternetReal, 3000);
+        
+        // Verifica imediatamente ao abrir
+        verificarInternetReal();
+
+        // O evento 'online' nativo do navegador ainda serve como um gatilho extra
+        window.addEventListener('online', () => {
+            // Espera 1 segundo e confirma se realmente voltou
+            setTimeout(verificarInternetReal, 1000);
+        });
 
         // ================== LÓGICA DO JOGO ==================
         const canvas = document.getElementById('gameCanvas');
@@ -291,7 +334,7 @@
         canvas.addEventListener('pointerup', () => { teclas.left = false; teclas.right = false; });
         canvas.addEventListener('pointerleave', () => { teclas.left = false; teclas.right = false; });
 
-        // ===== DESENHANDO O NOVO PERSONAGEM (CHAPÉU DE FORMATURA DETALHADO) =====
+        // ===== DESENHANDO O PERSONAGEM (CHAPÉU DE FORMATURA) =====
         function desenharPersonagem() {
             const x = logo.x;
             const y = logo.y;
@@ -309,7 +352,7 @@
             ctx.shadowBlur = 10;
             ctx.shadowOffsetY = 4;
 
-            // Base do chapéu (parte de baixo, onde fica a cabeça)
+            // Base do chapéu
             ctx.fillStyle = gameOver ? '#b91c1c' : '#0b5ed7';
             ctx.beginPath();
             if (ctx.roundRect) {
@@ -319,17 +362,17 @@
             }
             ctx.fill();
 
-            // Tábua do chapéu (losango azul claro)
+            // Tábua do chapéu (losango)
             ctx.fillStyle = gameOver ? '#ef4444' : '#0d6efd';
             ctx.beginPath();
-            ctx.moveTo(x + w/2, y);               // Ponto superior
-            ctx.lineTo(x + w, y + 14);            // Ponto direito
-            ctx.lineTo(x + w/2, y + 28);          // Ponto inferior
-            ctx.lineTo(x, y + 14);                // Ponto esquerdo
+            ctx.moveTo(x + w/2, y);
+            ctx.lineTo(x + w, y + 14);
+            ctx.lineTo(x + w/2, y + 28);
+            ctx.lineTo(x, y + 14);
             ctx.closePath();
             ctx.fill();
 
-            // Linha de detalhe na tábua (mais clara)
+            // Linha de detalhe
             ctx.strokeStyle = gameOver ? '#fca5a5' : '#3b82f6';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -340,38 +383,34 @@
             ctx.closePath();
             ctx.stroke();
 
-            // Carinha (Olhinhos e boquinha) na base do chapéu
-            ctx.shadowBlur = 0; // Desliga a sombra para a carinha ficar nítida
+            // Carinha
+            ctx.shadowBlur = 0; 
             ctx.fillStyle = '#ffffff';
-            // Olho esquerdo
             ctx.beginPath(); ctx.arc(x + 14, y + 28, 2.5, 0, Math.PI*2); ctx.fill();
-            // Olho direito
             ctx.beginPath(); ctx.arc(x + 26, y + 28, 2.5, 0, Math.PI*2); ctx.fill();
 
-            // Boquinha (sorriso) ou carinha de triste se der Game Over
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             if (gameOver) {
-                ctx.arc(x + 20, y + 35, 3, Math.PI, 0); // Boca triste
+                ctx.arc(x + 20, y + 35, 3, Math.PI, 0);
             } else {
-                ctx.arc(x + 20, y + 32, 3, 0, Math.PI); // Sorriso
+                ctx.arc(x + 20, y + 32, 3, 0, Math.PI);
             }
             ctx.stroke();
 
-            // Cordão do chapéu (Tassel) balançando
+            // Tassel
             const tasselX = x + w - 4;
-            const tasselSway = Math.sin(animacaoTempo * 0.1) * 3; // Balança com o tempo
+            const tasselSway = Math.sin(animacaoTempo * 0.1) * 3;
             const tasselY = y + 14;
             
-            ctx.strokeStyle = '#f59e0b'; // Cor laranja
+            ctx.strokeStyle = '#f59e0b';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(tasselX, tasselY);
             ctx.quadraticCurveTo(tasselX + 8, tasselY + 10, tasselX + 6 + tasselSway, tasselY + 20);
             ctx.stroke();
 
-            // Bolinha do tassel
             ctx.fillStyle = '#f59e0b';
             ctx.beginPath();
             ctx.arc(tasselX + 6 + tasselSway, tasselY + 20, 3, 0, Math.PI*2);
@@ -383,7 +422,7 @@
         function desenhar() {
             ctx.clearRect(0, 0, W, H);
             
-            // Nuvens de fundo (parallax)
+            // Nuvens de fundo
             ctx.fillStyle = 'rgba(255,255,255,0.4)';
             for (let i = 0; i < 5; i++) {
                 const nx = ((i * 137 + cameraY * 0.2) % (W + 100)) - 50;
@@ -412,7 +451,6 @@
                 if (part.raio <= 0) particulas.splice(index, 1);
             });
 
-            // Desenha o novo personagem
             desenharPersonagem();
             
             // HUD
@@ -424,7 +462,7 @@
             ctx.fillStyle = '#0d6efd'; ctx.font = 'bold 16px Inter, sans-serif'; ctx.textAlign = 'right';
             ctx.fillText(`Nível ${nivel}`, W - 12, 30);
 
-            // Game Over Overlay
+            // Game Over
             if (gameOver) {
                 ctx.fillStyle = 'rgba(15, 23, 42, 0.75)'; ctx.fillRect(0, 0, W, H);
                 ctx.fillStyle = '#fff'; ctx.font = 'bold 28px Inter, sans-serif'; ctx.textAlign = 'center';
