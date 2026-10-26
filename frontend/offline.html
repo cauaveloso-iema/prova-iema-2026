@@ -1,173 +1,528 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Offline - EducaPleno</title>
     
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d6efd">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="EducaPleno">
-
-    <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
-    <link rel="shortcut icon" href="/icons/favicon.ico">
-    <link rel="apple-touch-icon" href="/icons/favicon.ico">
 
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-    <!-- CSS (Certifique-se de que o arquivo está na pasta css/ e com 2 'f') -->
-    <link rel="stylesheet" href="css/offline.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            padding: 24px 16px; background: #0b1120; color: #0f172a;
+            overflow-x: hidden; position: relative;
+        }
+        
+        /* Fundo Animado */
+        .bg-gradient { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.55; animation: float 20s infinite; }
+        .bg-1 { width: 520px; height: 520px; background: #0d6efd; top: -180px; left: -180px; }
+        .bg-2 { width: 480px; height: 480px; background: #10b981; bottom: -180px; right: -180px; }
+        @keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(40px, -40px); } }
+
+        /* Card Principal */
+        .offline-card {
+            position: relative; z-index: 2; background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(24px); border-radius: 28px; padding: 40px 30px 30px;
+            max-width: 640px; width: 100%; text-align: center;
+            box-shadow: 0 30px 70px -20px rgba(0,0,0,0.55); animation: cardIn 0.5s ease;
+        }
+        @keyframes cardIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Status Conexão */
+        .icon-status {
+            width: 70px; height: 70px; margin: 0 auto 16px; border-radius: 50%;
+            background: linear-gradient(135deg, #fef3c7, #fde68a); display: flex;
+            align-items: center; justify-content: center; font-size: 30px; color: #f59e0b;
+            box-shadow: 0 10px 30px -8px rgba(245, 158, 11, 0.45);
+            transition: all 0.4s ease;
+        }
+        .icon-status.online { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #10b981; box-shadow: 0 10px 30px -8px rgba(16, 185, 129, 0.45); }
+
+        h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 8px; }
+        h1 span { color: #0d6efd; }
+        p.subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 24px; }
+
+        /* Botões de Ação */
+        .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
+        .btn {
+            padding: 12px 24px; border-radius: 12px; border: none; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+            background: #0d6efd; color: white; display: inline-flex; align-items: center; gap: 8px;
+            box-shadow: 0 6px 18px -4px rgba(13, 110, 253, 0.45); transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-success { background: #10b981; box-shadow: 0 6px 18px -4px rgba(16, 185, 129, 0.45); }
+        
+        .progress-bar { width: 100%; max-width: 300px; height: 6px; background: #e2e8f0; border-radius: 999px; margin: 16px auto; display: none; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0%; background: #10b981; transition: width 1s linear; }
+
+        /* Área do Jogo */
+        .game-section { 
+            padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; 
+            border-radius: 20px; text-align: left; margin-bottom: 24px; 
+        }
+        .game-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+        .game-badge { width: 44px; height: 44px; border-radius: 12px; background: #0d6efd; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+        .game-title h3 { font-size: 1.05rem; margin: 0; color: #0f172a; }
+        .game-title p { font-size: 0.8rem; margin: 0; color: #64748b; }
+        
+        .game-frame { position: relative; padding: 6px; background: #fff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
+        canvas { width: 100%; max-width: 400px; height: auto; background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 60%, #93c5fd 100%); border-radius: 12px; display: block; margin: 0 auto; touch-action: none; }
+        
+        /* Overlay de Início do Jogo */
+        .game-overlay {
+            position: absolute; inset: 6px; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-radius: 12px; color: white; text-align: center; padding: 20px;
+            transition: opacity 0.3s ease;
+        }
+        .game-overlay.hidden { opacity: 0; pointer-events: none; }
+        .game-overlay h2 { font-size: 1.4rem; margin-bottom: 10px; color: #fff; }
+        .game-overlay p { font-size: 0.85rem; color: #cbd5e1; margin-bottom: 20px; line-height: 1.4; }
+        .btn-start-game {
+            background: #10b981; color: white; border: none; padding: 12px 28px;
+            font-size: 1rem; font-weight: 700; border-radius: 50px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+            transition: transform 0.2s;
+        }
+        .btn-start-game:hover { transform: scale(1.05); }
+
+        /* Dicas */
+        .dicas { text-align: left; background: #fefce8; border: 1px solid #fde68a; border-radius: 16px; padding: 18px 22px; }
+        .dicas h3 { font-size: 0.95rem; color: #92400e; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        .dicas ul { list-style: none; }
+        .dicas li { font-size: 0.85rem; color: #78350f; margin-bottom: 8px; padding-left: 22px; position: relative; }
+        .dicas li::before { content: "✓"; position: absolute; left: 0; top: 0; width: 16px; height: 16px; background: #10b981; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: bold; }
+
+        @media (max-width: 600px) {
+            .offline-card { padding: 30px 20px; }
+            .actions { flex-direction: column; }
+            .btn { width: 100%; justify-content: center; }
+        }
+    </style>
 </head>
 <body>
-    <div class="offline-card">
-        <div class="icon" id="iconContainer">
+
+    <div class="bg-gradient bg-1"></div>
+    <div class="bg-gradient bg-2"></div>
+
+    <main class="offline-card">
+        <!-- Status de Conexão -->
+        <div class="icon-status" id="iconContainer">
             <i class="fas fa-wifi-slash"></i>
         </div>
-        
-        <h1 id="statusTitle">📴 Você está offline</h1>
-        <p id="statusMessage">Não foi possível carregar esta página. Conecte-se à internet e tente novamente.</p>
-        
+        <h1 id="statusTitle">📴 Você está <span>offline</span></h1>
+        <p class="subtitle" id="statusMessage">Parece que sua internet caiu. Não se preocupe, você pode continuar se divertindo!</p>
+
         <div class="progress-bar" id="progressBar">
             <div class="progress-fill" id="progressFill"></div>
         </div>
-        
-        <div id="countdownDisplay" class="countdown"></div>
-        
+
         <div class="actions">
             <button class="btn" onclick="window.location.reload()" id="reloadBtn">
                 <i class="fas fa-sync-alt"></i> Tentar novamente
             </button>
-
-            <button class="btn btn-success" onclick="voltarParaPaginaAnterior()" id="backBtn" style="display: none;">
-                <i class="fas fa-arrow-left"></i> Voltar para página anterior
-            </button> 
+            <button class="btn btn-success" onclick="voltarParaLogin()" id="backBtn" style="display: none;">
+                <i class="fas fa-arrow-left"></i> Ir para o Login
+            </button>
         </div>
 
-        <div class="dicas">
-            <h3><i class="fas fa-lightbulb" style="color: #f59e0b;"></i> Dicas:</h3>
+        <!-- Jogo -->
+        <section class="game-section">
+            <div class="game-header">
+                <div class="game-badge"><i class="fas fa-graduation-cap"></i></div>
+                <div class="game-title">
+                    <h3>EducaPleno Jump</h3>
+                    <p>O tempo passa mais rápido a cada nível! Cuidado!</p>
+                </div>
+            </div>
+            
+            <div class="game-frame">
+                <canvas id="gameCanvas" width="400" height="500"></canvas>
+                <!-- Tela de Início (Overlay) -->
+                <div class="game-overlay" id="gameOverlay">
+                    <h2><i class="fas fa-gamepad"></i> Pronto para o desafio?</h2>
+                    <p>Use as <strong>setas do teclado</strong> (← →)<br>ou <strong>toque nas laterais</strong> da tela para mover.<br><br>Suba o mais alto que puder!</p>
+                    <button class="btn-start-game" id="startGameBtn">
+                        <i class="fas fa-play"></i> Iniciar Jogo
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dicas -->
+        <aside class="dicas">
+            <h3><i class="fas fa-lightbulb" style="color: #f59e0b;"></i> Enquanto isso:</h3>
             <ul>
-                <li>Verifique sua conexão WiFi</li>
+                <li>Verifique sua conexão Wi-Fi</li>
                 <li>Desative o modo avião</li>
-                <li>Provas em andamento continuam disponíveis</li>
-                <li>Seus dados serão sincronizados automaticamente</li>
+                <li>Seus dados serão sincronizados automaticamente quando a rede voltar</li>
             </ul>
-        </div>
-    </div>
+        </aside>
+    </main>
 
     <script>
-        // Variáveis de controle
+        // ================== LÓGICA DE CONEXÃO ==================
         let intervalo;
         let tempoRestante = 5;
-        let paginaAnterior = document.referrer || localStorage.getItem('ultimaPagina') || '/';
-        
-        // Elementos DOM
-        const statusTitle = document.getElementById('statusTitle');
-        const statusMessage = document.getElementById('statusMessage');
-        const reloadBtn = document.getElementById('reloadBtn');
-        const backBtn = document.getElementById('backBtn');
-        const progressBar = document.getElementById('progressBar');
-        const progressFill = document.getElementById('progressFill');
-        const countdownDisplay = document.getElementById('countdownDisplay');
-        const iconContainer = document.getElementById('iconContainer');
-        
-        // Salvar página atual como última visitada
-        localStorage.setItem('ultimaPagina', window.location.pathname);
-        
-        // Verificar conexão real
-        async function verificarConexao() {
-            try {
-                await fetch('/api/health-check', {
-                    method: 'GET',
-                    mode: 'no-cors',
-                    cache: 'no-cache',
-                    signal: AbortSignal.timeout(3000)
-                });
-                return navigator.onLine;
-            } catch (error) {
-                return false;
-            }
+
+        function voltarParaLogin() {
+            window.location.href = '/login.html';
         }
-        
-        // Voltar para página anterior
-        function voltarParaPaginaAnterior() {
-            if (paginaAnterior && paginaAnterior !== window.location.href && paginaAnterior !== 'about:blank') {
-                window.location.href = paginaAnterior;
-            } else {
-                window.location.href = '/';
-            }
-        }
-        
-        // Interface quando online
+
         function quandoOnline() {
-            statusTitle.innerHTML = '✅ Conexão restaurada!';
-            statusTitle.style.color = '#10b981';
-            statusMessage.innerHTML = 'Redirecionando para a página anterior...';
+            document.getElementById('statusTitle').innerHTML = '✅ Conexão <span style="color:#10b981">restaurada!</span>';
+            document.getElementById('statusMessage').innerHTML = 'Aguarde, estamos te levando de volta...';
+            document.getElementById('iconContainer').classList.add('online');
+            document.getElementById('iconContainer').innerHTML = '<i class="fas fa-check-circle"></i>';
             
-            // Muda o ícone para verde de sucesso
-            iconContainer.style.color = '#10b981';
-            iconContainer.innerHTML = '<i class="fas fa-check-circle"></i>';
-            
-            reloadBtn.style.display = 'none';
-            backBtn.style.display = 'inline-block';
-            progressBar.style.display = 'block';
-            
+            document.getElementById('reloadBtn').style.display = 'none';
+            document.getElementById('backBtn').style.display = 'inline-flex';
+            document.getElementById('progressBar').style.display = 'block';
+
+            if (typeof pausarJogo === 'function') pausarJogo();
+
             tempoRestante = 5;
-            countdownDisplay.innerHTML = `Redirecionando em ${tempoRestante} segundos...`;
+            if (intervalo) clearInterval(intervalo);
             
             intervalo = setInterval(() => {
                 tempoRestante--;
-                const progresso = ((5 - tempoRestante) / 5) * 100;
-                progressFill.style.width = progresso + '%';
-                countdownDisplay.innerHTML = `Redirecionando em ${tempoRestante} segundos...`;
-                
+                document.getElementById('progressFill').style.width = (((5 - tempoRestante) / 5) * 100) + '%';
                 if (tempoRestante <= 0) {
                     clearInterval(intervalo);
-                    voltarParaPaginaAnterior();
+                    voltarParaLogin();
                 }
             }, 1000);
         }
-        
-        // Interface quando offline
+
         function quandoOffline() {
-            statusTitle.innerHTML = '📴 Você está offline';
-            statusTitle.style.color = '#1f2937';
-            statusMessage.innerHTML = 'Não foi possível carregar esta página. Conecte-se à internet e tente novamente.';
+            document.getElementById('statusTitle').innerHTML = '📴 Você está <span>offline</span>';
+            document.getElementById('statusMessage').innerHTML = 'Parece que sua internet caiu. Não se preocupe, você pode continuar se divertindo!';
+            document.getElementById('iconContainer').classList.remove('online');
+            document.getElementById('iconContainer').innerHTML = '<i class="fas fa-wifi-slash"></i>';
             
-            // Volta o ícone para o original laranja
-            iconContainer.style.color = '#f59e0b';
-            iconContainer.innerHTML = '<i class="fas fa-wifi-slash"></i>';
-            
-            reloadBtn.style.display = 'inline-block';
-            backBtn.style.display = 'none';
-            progressBar.style.display = 'none';
-            countdownDisplay.innerHTML = '';
-            
+            document.getElementById('reloadBtn').style.display = 'inline-flex';
+            document.getElementById('backBtn').style.display = 'none';
+            document.getElementById('progressBar').style.display = 'none';
             if (intervalo) clearInterval(intervalo);
         }
-        
-        // Monitorar mudanças de conexão
-        window.addEventListener('online', async () => {
-            const realmenteOnline = await verificarConexao();
-            if (realmenteOnline) quandoOnline();
-        });
-        
+
+        window.addEventListener('online', quandoOnline);
         window.addEventListener('offline', quandoOffline);
+        if (navigator.onLine) { quandoOnline(); } else { quandoOffline(); }
+
+        // ================== LÓGICA DO JOGO ==================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('gameOverlay');
+        const startBtn = document.getElementById('startGameBtn');
+        const W = canvas.width, H = canvas.height;
+
+        let jogoIniciado = false;
+        let jogando = false; 
+        let gameOver = false;
+        let pontos = 0;
+        let nivel = 1;
+        let cameraY = 0;
+        let velocidadeBase = 5; 
+        let spawnTimer = 0;
+        let animacaoTempo = 0;
         
-        // Verificar conexão inicial
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (navigator.onLine) {
-                const realmenteOnline = await verificarConexao();
-                if (realmenteOnline) quandoOnline();
+        let recorde = parseInt(localStorage.getItem('educapleno_jump_recorde') || '0', 10);
+
+        const logo = { x: W/2 - 20, y: H - 100, w: 40, h: 40, vx: 0, vy: 0, speed: 6, jumpForce: -13, gravidade: 0.6 };
+        let plataformas = [];
+        let particulas = [];
+        let teclas = { left: false, right: false };
+
+        function pausarJogo() {
+            jogando = false;
+            overlay.classList.remove('hidden');
+        }
+
+        function criarNuvem(y, tipo) {
+            return { 
+                x: Math.random() * (W - 80), y: y, w: 80, h: 18, 
+                vel: tipo === 'movel' ? (Math.random() < 0.5 ? -1 : 1) * (1 + Math.random()) : 0, 
+                tipo: tipo, usada: false 
+            };
+        }
+
+        function resetarJogo() {
+            gameOver = false; jogoIniciado = true; jogando = true; 
+            pontos = 0; nivel = 1; cameraY = 0; velocidadeBase = 5; spawnTimer = 0;
+            
+            logo.x = W / 2 - 20; logo.y = H - 100; logo.vx = 0; logo.vy = 0;
+            
+            plataformas = [{ x: 0, y: H - 20, w: W, h: 20, vel: 0, tipo: 'base', usada: true }];
+            for (let i = 0; i < 6; i++) {
+                plataformas.push(criarNuvem(H - 60 - i * 70, i % 4 === 0 ? 'movel' : 'fixa'));
+            }
+            particulas = [];
+            overlay.classList.add('hidden');
+        }
+
+        startBtn.addEventListener('click', resetarJogo);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') { teclas.left = true; }
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') { teclas.right = true; }
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowLeft' || e.code === 'KeyA') { teclas.left = false; }
+            if (e.code === 'ArrowRight' || e.code === 'KeyD') { teclas.right = false; }
+        });
+
+        canvas.addEventListener('pointerdown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            if (x < rect.width / 2) teclas.left = true;
+            else teclas.right = true;
+        });
+        canvas.addEventListener('pointerup', () => { teclas.left = false; teclas.right = false; });
+        canvas.addEventListener('pointerleave', () => { teclas.left = false; teclas.right = false; });
+
+        // ===== DESENHANDO O NOVO PERSONAGEM (CHAPÉU DE FORMATURA DETALHADO) =====
+        function desenharPersonagem() {
+            const x = logo.x;
+            const y = logo.y;
+            const w = logo.w;
+            const h = logo.h;
+            
+            ctx.save();
+
+            // Sombra suave embaixo
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.beginPath(); ctx.ellipse(x + w/2, y + h + 5, w/2, 5, 0, 0, Math.PI*2); ctx.fill();
+
+            // Glow (Brilho) do personagem
+            ctx.shadowColor = gameOver ? 'rgba(239,68,68,0.5)' : 'rgba(13,110,253,0.4)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetY = 4;
+
+            // Base do chapéu (parte de baixo, onde fica a cabeça)
+            ctx.fillStyle = gameOver ? '#b91c1c' : '#0b5ed7';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(x + 8, y + 22, 24, 18, [0, 0, 6, 6]);
+            } else {
+                ctx.rect(x + 8, y + 22, 24, 18);
+            }
+            ctx.fill();
+
+            // Tábua do chapéu (losango azul claro)
+            ctx.fillStyle = gameOver ? '#ef4444' : '#0d6efd';
+            ctx.beginPath();
+            ctx.moveTo(x + w/2, y);               // Ponto superior
+            ctx.lineTo(x + w, y + 14);            // Ponto direito
+            ctx.lineTo(x + w/2, y + 28);          // Ponto inferior
+            ctx.lineTo(x, y + 14);                // Ponto esquerdo
+            ctx.closePath();
+            ctx.fill();
+
+            // Linha de detalhe na tábua (mais clara)
+            ctx.strokeStyle = gameOver ? '#fca5a5' : '#3b82f6';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + w/2, y + 4);
+            ctx.lineTo(x + w - 8, y + 14);
+            ctx.lineTo(x + w/2, y + 24);
+            ctx.lineTo(x + 8, y + 14);
+            ctx.closePath();
+            ctx.stroke();
+
+            // Carinha (Olhinhos e boquinha) na base do chapéu
+            ctx.shadowBlur = 0; // Desliga a sombra para a carinha ficar nítida
+            ctx.fillStyle = '#ffffff';
+            // Olho esquerdo
+            ctx.beginPath(); ctx.arc(x + 14, y + 28, 2.5, 0, Math.PI*2); ctx.fill();
+            // Olho direito
+            ctx.beginPath(); ctx.arc(x + 26, y + 28, 2.5, 0, Math.PI*2); ctx.fill();
+
+            // Boquinha (sorriso) ou carinha de triste se der Game Over
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            if (gameOver) {
+                ctx.arc(x + 20, y + 35, 3, Math.PI, 0); // Boca triste
+            } else {
+                ctx.arc(x + 20, y + 32, 3, 0, Math.PI); // Sorriso
+            }
+            ctx.stroke();
+
+            // Cordão do chapéu (Tassel) balançando
+            const tasselX = x + w - 4;
+            const tasselSway = Math.sin(animacaoTempo * 0.1) * 3; // Balança com o tempo
+            const tasselY = y + 14;
+            
+            ctx.strokeStyle = '#f59e0b'; // Cor laranja
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(tasselX, tasselY);
+            ctx.quadraticCurveTo(tasselX + 8, tasselY + 10, tasselX + 6 + tasselSway, tasselY + 20);
+            ctx.stroke();
+
+            // Bolinha do tassel
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(tasselX + 6 + tasselSway, tasselY + 20, 3, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function desenhar() {
+            ctx.clearRect(0, 0, W, H);
+            
+            // Nuvens de fundo (parallax)
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            for (let i = 0; i < 5; i++) {
+                const nx = ((i * 137 + cameraY * 0.2) % (W + 100)) - 50;
+                const ny = ((i * 211 + cameraY * 0.1) % (H + 100)) - 50;
+                ctx.beginPath(); ctx.ellipse(nx, ny, 40, 12, 0, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Plataformas
+            plataformas.forEach(p => {
+                ctx.fillStyle = p.tipo === 'base' ? '#10b981' : (p.tipo === 'movel' ? '#fff7ed' : '#ffffff');
+                ctx.strokeStyle = p.tipo === 'base' ? '#10b981' : (p.tipo === 'movel' ? '#fb923c' : '#cbd5e1');
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                if (p.tipo === 'base') { ctx.fillRect(p.x, p.y, p.w, p.h); return; }
+                ctx.ellipse(p.x + p.w * 0.25, p.y + p.h * 0.6, p.w * 0.28, p.h * 0.7, 0, 0, Math.PI * 2);
+                ctx.ellipse(p.x + p.w * 0.55, p.y + p.h * 0.4, p.w * 0.32, p.h * 0.9, 0, 0, Math.PI * 2);
+                ctx.ellipse(p.x + p.w * 0.8, p.y + p.h * 0.6, p.w * 0.25, p.h * 0.7, 0, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+            });
+
+            // Partículas
+            particulas.forEach((part, index) => {
+                ctx.fillStyle = part.cor;
+                ctx.beginPath(); ctx.arc(part.x, part.y, part.raio, 0, Math.PI * 2); ctx.fill();
+                part.y += part.velY; part.raio -= 0.1;
+                if (part.raio <= 0) particulas.splice(index, 1);
+            });
+
+            // Desenha o novo personagem
+            desenharPersonagem();
+            
+            // HUD
+            ctx.fillStyle = '#1e293b'; ctx.font = 'bold 20px Inter, sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(`🏆 ${pontos}`, 12, 30);
+            ctx.font = '14px Inter, sans-serif'; ctx.fillStyle = '#64748b'; 
+            ctx.fillText(`Recorde: ${recorde}`, 12, 50);
+            
+            ctx.fillStyle = '#0d6efd'; ctx.font = 'bold 16px Inter, sans-serif'; ctx.textAlign = 'right';
+            ctx.fillText(`Nível ${nivel}`, W - 12, 30);
+
+            // Game Over Overlay
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.75)'; ctx.fillRect(0, 0, W, H);
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 28px Inter, sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('Game Over!', W / 2, H / 2 - 30);
+                ctx.font = '16px Inter, sans-serif'; ctx.fillStyle = '#cbd5e1';
+                ctx.fillText(`Você chegou ao Nível ${nivel} com ${pontos} pontos`, W / 2, H / 2 + 10);
+                ctx.fillStyle = '#10b981'; ctx.font = 'bold 16px Inter, sans-serif';
+                ctx.fillText('Toque na tela para reiniciar', W / 2, H / 2 + 50);
+            }
+        }
+
+        function atualizar() {
+            animacaoTempo++;
+            if (!jogando || gameOver) return;
+
+            if (teclas.left) logo.vx = -logo.speed; 
+            else if (teclas.right) logo.vx = logo.speed; 
+            else logo.vx *= 0.8;
+            
+            logo.x += logo.vx;
+            if (logo.x < -logo.w) logo.x = W; 
+            if (logo.x > W) logo.x = -logo.w;
+
+            logo.vy += logo.gravidade; 
+            logo.y += logo.vy;
+
+            if (logo.vy > 0) {
+                for (const p of plataformas) {
+                    if (logo.x + logo.w > p.x && logo.x < p.x + p.w && logo.y + logo.h >= p.y && logo.y + logo.h <= p.y + p.h + 10) {
+                        logo.y = p.y - logo.h; 
+                        logo.vy = logo.jumpForce;
+                        
+                        for(let i=0; i<5; i++) {
+                            particulas.push({ x: logo.x + 20, y: logo.y + logo.h, raio: Math.random()*3 + 2, velY: Math.random()*2 + 1, cor: p.tipo === 'movel' ? '#fb923c' : '#3b82f6' });
+                        }
+
+                        if (!p.usada && p.tipo !== 'base') { 
+                            pontos += 15; 
+                            p.usada = true; 
+                            
+                            if (pontos >= nivel * 500) {
+                                nivel++;
+                                velocidadeBase += 0.8; 
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            plataformas.forEach(p => {
+                if (p.vel !== 0) { 
+                    p.x += p.vel + (p.vel > 0 ? velocidadeBase * 0.1 : -velocidadeBase * 0.1); 
+                    if (p.x < 0 || p.x + p.w > W) p.vel *= -1; 
+                }
+            });
+
+            if (logo.y < H / 2) {
+                const diff = H / 2 - logo.y; 
+                logo.y = H / 2; 
+                cameraY += diff;
+                plataformas.forEach(p => p.y += diff);
+            }
+
+            plataformas = plataformas.filter(p => p.y < H + 50);
+            
+            spawnTimer -= velocidadeBase * 0.5;
+            if (spawnTimer <= 0 && plataformas.length > 0) {
+                const minY = Math.min(...plataformas.map(p => p.y));
+                plataformas.push(criarNuvem(minY - (60 + Math.random() * 30), Math.random() < 0.35 ? 'movel' : 'fixa'));
+                spawnTimer = 70 - (nivel * 3); 
+                if (spawnTimer < 30) spawnTimer = 30;
+            }
+
+            if (logo.y > H + 50) { 
+                gameOver = true; 
+                jogando = false; 
+                if (pontos > recorde) { 
+                    recorde = pontos; 
+                    localStorage.setItem('educapleno_jump_recorde', recorde); 
+                } 
+            }
+        }
+
+        canvas.addEventListener('pointerdown', () => {
+            if (gameOver) {
+                gameOver = false;
+                overlay.classList.remove('hidden');
             }
         });
 
-        // Tornar função global
-        window.voltarParaPaginaAnterior = voltarParaPaginaAnterior;
+        function loop() { 
+            desenhar(); 
+            atualizar(); 
+            requestAnimationFrame(loop); 
+        }
+        
+        loop();
     </script>
 </body>
 </html>
