@@ -54,6 +54,25 @@ class AdminPanel {
 
     async init() {
         console.log('🚀 Inicializando Super Admin Panel...');
+        
+        // 🔥 NOVO: Verificar se é uma URL de assinatura de tablet (MODO PÚBLICO)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessaoAssinaturaTablet = urlParams.get('assinatura-tablet');
+        
+        if (sessaoAssinaturaTablet) {
+            console.log('📱 Modo assinatura de tablet detectado:', sessaoAssinaturaTablet);
+            // Aguarda o tablets.js carregar e delega a função
+            setTimeout(() => {
+                if (typeof window.mostrarTelaAssinaturaTablet === 'function') {
+                    window.mostrarTelaAssinaturaTablet(sessaoAssinaturaTablet);
+                } else {
+                    console.error('❌ função mostrarTelaAssinaturaTablet não encontrada');
+                }
+            }, 500);
+            return; // 🚫 Para aqui: NÃO carrega o painel admin
+        }
+        
+        // ============ Resto do init() original ============
         await this.checkAuth();
         this.setupEventListeners();
         this.setupMobileMenu();
@@ -69,11 +88,8 @@ class AdminPanel {
         setTimeout(() => this.verificarConexaoWebSocket(), 2000);
         setTimeout(() => this.mostrarStatusConexao(), 3000);
         setTimeout(() => this.verificarVinculoPlayerId(), 1000);
-        
-        // ===== 🔥 ADICIONAR ESTA LINHA - GARANTIR QUE A FOTO CARREGUE =====
         setTimeout(() => this.carregarFotoPerfilAdmin(), 1000);
         
-        // Atualizar foto quando voltar da página de edição
         window.addEventListener('pageshow', async function(event) {
             if (event.persisted || (document.referrer && document.referrer.includes('editar-perfil'))) {
                 console.log('🔄 Página restaurada, recarregando foto...');
@@ -825,6 +841,9 @@ class AdminPanel {
                 break;
             case 'omr-debug':
                 await this.loadOMRDebug();
+                break;
+            case 'tablets':
+                this.renderTabletsSection();
                 break;
             case 'qrcode-management':
                 await this.loadQRCodeManagement();
@@ -3150,6 +3169,123 @@ class AdminPanel {
                 </button>
             </div>
         `;
+    }
+
+    //TABLES
+
+    renderTabletsSection() {
+        const contentArea = document.getElementById('contentArea');
+        if (!contentArea) return;
+        
+        contentArea.innerHTML = `
+            <div class="tablets-container" style="padding: 20px;">
+                <!-- Cards de Estatísticas -->
+                <div class="row g-3 mb-4" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div style="background: white; padding: 18px; border-radius: 12px; border-left: 4px solid #8b5cf6; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Total</div>
+                                <div style="font-size: 26px; font-weight: 700; color: #1f2937;" id="statTabletsTotal">0</div>
+                            </div>
+                            <div style="width: 48px; height: 48px; border-radius: 12px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-tablet-alt fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 18px; border-radius: 12px; border-left: 4px solid #f59e0b; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Pendentes</div>
+                                <div style="font-size: 26px; font-weight: 700; color: #f59e0b;" id="statTabletsPendentes">0</div>
+                            </div>
+                            <div style="width: 48px; height: 48px; border-radius: 12px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-clock fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 18px; border-radius: 12px; border-left: 4px solid #10b981; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Entregues</div>
+                                <div style="font-size: 26px; font-weight: 700; color: #10b981;" id="statTabletsEntregues">0</div>
+                            </div>
+                            <div style="width: 48px; height: 48px; border-radius: 12px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-check-circle fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 18px; border-radius: 12px; border-left: 4px solid #7c3aed; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Assinados</div>
+                                <div style="font-size: 26px; font-weight: 700; color: #7c3aed;" id="statTabletsAssinados">0</div>
+                                <div style="font-size: 11px; color: #9ca3af;" id="statTabletsPercentualAssinado">0%</div>
+                            </div>
+                            <div style="width: 48px; height: 48px; border-radius: 12px; background: #ddd6fe; color: #5b21b6; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-signature fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card Principal -->
+                <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                    <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+                        <h5 style="margin: 0; display: flex; align-items: center; gap: 10px; font-size: 16px;">
+                            <i class="fas fa-tablet-alt"></i> Gerenciamento de Tablets
+                            <span style="background: white; color: #7c3aed; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 700;" id="contadorTablets">0</span>
+                        </h5>
+                        <button onclick="admin.abrirModalNovoTablet()" 
+                                style="background: white; color: #7c3aed; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px;">
+                            <i class="fas fa-plus"></i> Novo Tablet
+                        </button>
+                    </div>
+                    <div style="padding: 20px;">
+                        <!-- Filtros -->
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 15px;">
+                            <input type="text" id="filtroTabletBusca" placeholder="🔍 Buscar número, responsável..." 
+                                style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px;">
+                            <select id="filtroTabletSetor" style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
+                                <option value="todos">Todos os setores</option>
+                            </select>
+                            <select id="filtroTabletStatus" style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
+                                <option value="todos">Todos os status</option>
+                                <option value="pendente">Pendente</option>
+                                <option value="entregue">Entregue</option>
+                                <option value="devolvido">Devolvido</option>
+                                <option value="manutencao">Manutenção</option>
+                                <option value="perdido">Perdido</option>
+                            </select>
+                            <select id="filtroTabletAssinado" style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
+                                <option value="">Assinatura</option>
+                                <option value="sim">Assinados</option>
+                                <option value="nao">Sem assinatura</option>
+                            </select>
+                            <select id="filtroTabletOrdenar" style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: white;">
+                                <option value="recente">Mais recentes</option>
+                                <option value="antigo">Mais antigos</option>
+                                <option value="numero">Número</option>
+                                <option value="responsavel">Responsável</option>
+                            </select>
+                            <button onclick="admin.limparFiltrosTablets()" 
+                                    style="padding: 8px 12px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer;" title="Limpar filtros">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div id="listaTablets"></div>
+                        <div style="display: flex; justify-content: flex-end; margin-top: 15px;" id="paginacaoTablets"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        setTimeout(() => {
+            if (typeof window.inicializarModuloTablets === 'function') {
+                window.inicializarModuloTablets();
+            } else {
+                console.error('[Tablets] js/tablets.js não carregado!');
+            }
+        }, 100);
     }
 
 
@@ -44120,7 +44256,19 @@ class AdminPanel {
 
 }
 
-
+// ============================================================================
+// TABLETS - INTEGRAÇÃO COM ABA DO ADMIN
+// ============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const tabletsTab = document.getElementById('tablets-tab');
+    if (tabletsTab) {
+        tabletsTab.addEventListener('shown.bs.tab', () => {
+            if (typeof window.inicializarModuloTablets === 'function') {
+                window.inicializarModuloTablets();
+            }
+        });
+    }
+});
 
 // ============================================
 // FUNÇÕES DE FORMATAÇÃO GLOBAIS

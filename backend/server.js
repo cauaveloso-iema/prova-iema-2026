@@ -1111,6 +1111,8 @@ app.use('/api', omrRoutes);
 
 // ── Rotas Administrativas Finais ──
 app.use('/api/admin', require('./routes/admin'));
+const tabletsRoutes = require('./routes/tablets-routes');
+app.use('/api/tablets', tabletsRoutes);
 
 logger.info('✅ Todos os routers migrados foram registrados');
 

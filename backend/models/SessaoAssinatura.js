@@ -23,7 +23,8 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
             'assistente_social',
             'supervisao',
             'supervisao_participante',
-            'biblioteca'
+            'biblioteca',
+            'tablet'  // 🆕 NOVO TIPO
         ],
         required: true 
     },
@@ -34,7 +35,6 @@ const SessaoAssinaturaSchema = new mongoose.Schema({
         index: true
     },
     
-    // 🆕 MUDANÇA CRUCIAL: O Mixed aceita TUDO
     dadosAtendimento: {
         type: mongoose.Schema.Types.Mixed,
         default: {}

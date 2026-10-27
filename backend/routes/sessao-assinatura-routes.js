@@ -55,7 +55,8 @@ const verificarGestaoGeral = (req, res, next) => {
 const TIPOS_VALIDOS = [
     'autorizacao', 'justificativa', 'segunda_chamada', 'atraso', 'atraso_aluno',
     'uniforme', 'atendimento', 'atendimento_aluno',
-    'psicologia', 'assistente_social', 'supervisao', 'supervisao_participante', 'biblioteca'
+    'psicologia', 'assistente_social', 'supervisao', 'supervisao_participante', 'biblioteca',
+    'tablet'  // 🆕 NOVO
 ];
 
 // ============================================
@@ -66,7 +67,7 @@ router.get('/health', (req, res) => {
         success: true, 
         status: 'online', 
         service: 'Sessões de Assinatura (QR Code)',
-        versao: '2.2-dados-completos',
+        versao: '2.3-tablets',
         tiposSuportados: TIPOS_VALIDOS,
         timestamp: new Date().toISOString()
     });
@@ -112,7 +113,6 @@ router.post('/', authenticateToken, verificarGestaoGeral, async (req, res) => {
             expiraEm: new Date(Date.now() + 30 * 60 * 1000)
         });
         
-        // 🔥 A MÁGICA ACONTECE AQUI: Força o Mongo a salvar o objeto inteiro
         sessao.markModified('dadosAtendimento');
         
         await sessao.save();
@@ -278,6 +278,40 @@ router.put('/:sessaoId/assinar', async (req, res) => {
         await sessao.save();
         
         console.log(`✍️ Sessão ${sessao.sessaoId} (${sessao.tipo}) assinada por ${sessao.assinadaPorNome}`);
+        
+        // 🆕 SE FOR TABLET, ATUALIZA O TABLET AUTOMATICAMENTE
+        if (sessao.tipo === 'tablet' && sessao.dadosAtendimento?.tabletId) {
+            try {
+                const Tablet = require('../models/Tablet');
+                const tablet = await Tablet.findById(sessao.dadosAtendimento.tabletId);
+                
+                if (tablet) {
+                    tablet.termo = {
+                        ...tablet.termo,
+                        sessaoId: sessao.sessaoId,
+                        assinaturaBase64: assinaturaBase64,
+                        assinadaPorNome: sessao.assinadaPorNome,
+                        assinadaEm: sessao.assinadaEm,
+                        temAssinatura: true,
+                        aceiteTermo: true,
+                        dataAceite: sessao.assinadaEm,
+                        ipAceite: req.ip || req.connection?.remoteAddress || null,
+                        userAgentAceite: req.headers['user-agent'] || null
+                    };
+                    
+                    if (tablet.status === 'pendente') {
+                        tablet.status = 'entregue';
+                        tablet.dataEntrega = tablet.dataEntrega || sessao.assinadaEm;
+                    }
+                    
+                    await tablet.save();
+                    console.log(`✅ Tablet ${tablet.numero} atualizado com assinatura`);
+                }
+            } catch (tabletErr) {
+                console.error('⚠️ Erro ao atualizar tablet:', tabletErr.message);
+                // Não falha a resposta — assinatura já foi salva
+            }
+        }
         
         res.json({ 
             success: true, 

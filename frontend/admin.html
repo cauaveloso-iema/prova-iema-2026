@@ -222,6 +222,13 @@
                     </a>
                 </li>
 
+                <li class="nav-item">
+                    <a class="nav-link" data-section="tablets">
+                        <i class="fas fa-tablet-alt"></i>
+                        <span>Tablets</span>
+                    </a>
+                </li>
+
                 <!-- ===== SETORES ===== -->
                 <li class="nav-section-title">
                     <span class="nav-section-dot" data-color="#10b981"></span>
@@ -522,6 +529,177 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- MODAIS DO MÓDULO TABLETS                                     -->
+    <!-- ============================================================ -->
+
+    <!-- MODAL: NOVO/EDITAR TABLET -->
+    <div class="modal" id="modalTablet">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
+                <h2 id="modalNovoTabletTitulo"><i class="fas fa-plus"></i> Novo Tablet</h2>
+                <button class="modal-close" onclick="admin.fecharModalTablet()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="tabletId">
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div>
+                        <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                            Número do Tablet <span style="color: #ef4444;">*</span>
+                        </label>
+                        <input type="text" id="tabletNumero" class="admin-input" placeholder="Ex: TAB-001" 
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                            Marca
+                        </label>
+                        <input type="text" id="tabletMarca" class="admin-input" placeholder="Ex: Samsung"
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div>
+                        <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                            Modelo
+                        </label>
+                        <input type="text" id="tabletModelo" class="admin-input" placeholder="Ex: Galaxy Tab A8"
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                            IMEI
+                        </label>
+                        <input type="text" id="tabletImei" class="admin-input" placeholder="Opcional"
+                               style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                        Patrimônio
+                    </label>
+                    <input type="text" id="tabletPatrimonio" class="admin-input" placeholder="Opcional"
+                           style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div>
+                        <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                            Setor <span style="color: #ef4444;">*</span>
+                        </label>
+                        <select id="tabletSetor" 
+                                style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; background: white;">
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                            Responsável <span style="color: #ef4444;">*</span>
+                        </label>
+                        <select id="tabletResponsavel" disabled
+                                style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; background: #f9fafb;">
+                            <option value="">Selecione o setor primeiro...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label style="font-weight: 600; font-size: 13px; color: #374151; display: block; margin-bottom: 6px;">
+                        Observações
+                    </label>
+                    <textarea id="tabletObservacoes" rows="3" placeholder="Informações adicionais..."
+                              style="width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="admin.fecharModalTablet()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="btn-save" id="btnSalvarTablet" onclick="admin.salvarTablet()"
+                        style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: VER TABLET -->
+    <div class="modal" id="modalVerTablet">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white;">
+                <h2><i class="fas fa-tablet-alt"></i> Detalhes do Tablet</h2>
+                <button class="modal-close" onclick="admin.fecharModalVerTablet()">&times;</button>
+            </div>
+            <div class="modal-body" id="conteudoVerTablet" 
+                 style="max-height: 65vh; overflow-y: auto;"></div>
+            <div class="modal-footer" id="footerVerTablet"></div>
+        </div>
+    </div>
+
+    <!-- MODAL: QR CODE PARA ASSINATURA -->
+    <div class="modal" id="modalQRTablet">
+        <div class="modal-content" style="max-width: 480px; border-radius: 20px; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; padding: 20px 25px;">
+                <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-qrcode"></i> Aguardando Assinatura
+                </h2>
+                <button class="modal-close" onclick="admin.fecharModalQRTablet()" style="color: white;">&times;</button>
+            </div>
+            
+            <div class="modal-body" style="padding: 25px; text-align: center;">
+                <div id="modalQRStatus" style="margin-bottom: 15px;">
+                    <div style="background: #fef3c7; border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
+                        <div style="width: 36px; height: 36px; border-radius: 50%; border: 3px solid #f59e0b; border-top-color: transparent; animation: spinTabletQR 1s linear infinite; flex-shrink: 0;"></div>
+                        <div>
+                            <strong style="color: #92400e;">Aguardando assinatura...</strong>
+                            <p style="margin: 3px 0 0; font-size: 13px; color: #78350f;">
+                                Peça para o responsável escanear o QR Code
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 12px; padding: 12px; margin-bottom: 15px; text-align: left; font-size: 13px;">
+                    <div style="margin-bottom: 6px;"><strong>Tablet:</strong> <span id="qrTabletNumero">-</span></div>
+                    <div style="margin-bottom: 6px;"><strong>Setor:</strong> <span id="qrTabletSetor">-</span></div>
+                    <div><strong>Responsável:</strong> <span id="qrTabletResponsavel">-</span></div>
+                </div>
+                
+                <div style="background: white; border: 2px solid #e2e8f0; border-radius: 16px; padding: 15px; display: inline-block;">
+                    <img id="qrTabletImagem" src="" alt="QR Code" 
+                         style="width: 250px; height: 250px; display: block;">
+                    <p style="margin: 10px 0 0; font-size: 12px; color: #64748b;">
+                        <i class="fas fa-mobile-alt"></i> Aponte a câmera do celular
+                    </p>
+                </div>
+                
+                <p id="qrTabletExpira" style="margin: 10px 0 0; font-size: 12px; color: #9ca3af;"></p>
+                
+                <div style="margin-top: 15px;">
+                    <input type="text" id="qrTabletLink" readonly 
+                           style="width: 100%; padding: 8px 10px; font-size: 11px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb; color: #6b7280; margin-bottom: 8px; box-sizing: border-box;">
+                    <button onclick="admin.copiarLinkTablet()" 
+                            style="width: 100%; padding: 8px; background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                        <i class="fas fa-copy"></i> Copiar link de assinatura
+                    </button>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 15px 25px; display: flex; justify-content: space-between;">
+                <button class="btn-cancel" onclick="admin.fecharModalQRTablet()" style="flex: 1;">
+                    <i class="fas fa-eye-slash"></i> Ocultar
+                </button>
+                <button class="btn-danger" onclick="admin.cancelarSessaoTablet()" 
+                        style="flex: 1; margin-left: 10px;">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Modal -->
@@ -1544,9 +1722,16 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="js/websocket-manager.js"></script>
     <script src="js/admin.js"></script>
+    <script src="js/tablets.js"></script>
     <script src="/js/admin-cozinha-monitoramento.js"></script>
     <script src="js/admin-enfermaria-monitoramento.js"></script>
     <script src="js/admin-banco-dados.js"></script>
+
+    <style>
+    @keyframes spinTabletQR {
+        to { transform: rotate(360deg); }
+    }
+    </style>
 
     <!-- BOTTOM NAVIGATION -->
     <nav class="bottom-nav" id="bottomNav">
